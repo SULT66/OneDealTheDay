@@ -1,0 +1,1 @@
+const c=require("./config"),{refreshProducts}=require("./refresh");refreshProducts(c).then(x=>{console.log(x);process.exit()}).catch(e=>{console.error(e.message);process.exit(1)});

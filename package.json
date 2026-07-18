@@ -1,0 +1,1 @@
+{"name":"onedealtheday-auto","version":"1.0.0","private":true,"main":"src/server.js","scripts":{"start":"node src/server.js","refresh":"node src/refresh-cli.js"},"dependencies":{"better-sqlite3":"^11.8.1","dotenv":"^16.4.7","express":"^4.21.2","helmet":"^8.0.0","node-cron":"^3.0.3"},"engines":{"node":">=20"}}
