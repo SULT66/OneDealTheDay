@@ -4,6 +4,30 @@ const money=(v,c="USD")=>v==null?"See current price":new Intl.NumberFormat("en-U
 let allProducts=[];
 let activeCategory="All";
 
+const renderFeatured=()=>{
+  const p=allProducts[0];
+  if(!p){
+    featuredDeal.innerHTML='<div class="featured-body">No featured deal is available yet.</div>';
+    return;
+  }
+  featuredDeal.innerHTML=`
+    <div class="featured-media">
+      <img src="${esc(p.image_url)}" alt="${esc(p.title)}">
+      <span class="featured-ribbon">DEAL OF THE DAY</span>
+    </div>
+    <div class="featured-body">
+      <p class="cat">${esc(p.category)}</p>
+      <h2>${esc(p.title)}</h2>
+      <p class="description">${esc(p.description)}</p>
+      <p class="stats">★ ${esc(p.rating)} · ${Number(p.review_count||0).toLocaleString()} reviews · Score ${esc(p.score)}</p>
+      <div class="featured-price-row">
+        <span class="featured-price">${money(p.current_price,p.currency)}</span>
+        ${p.original_price?`<span class="old">${money(p.original_price,p.currency)}</span>`:""}
+      </div>
+      <a class="featured-button" href="/go/${encodeURIComponent(p.id)}" rel="nofollow sponsored">View today’s deal</a>
+    </div>`;
+};
+
 const render=()=>{
   const q=searchInput.value.trim().toLowerCase();
   const filtered=allProducts.filter(p=>{
@@ -52,14 +76,16 @@ if(localStorage.getItem("theme")==="dark"||(!localStorage.getItem("theme")&&matc
 fetch("/api/products")
   .then(r=>{if(!r.ok)throw new Error(`HTTP ${r.status}`);return r.json()})
   .then(ps=>{
-    allProducts=Array.isArray(ps)?ps:[];
+    allProducts=Array.isArray(ps)?ps.slice(0,10):[];
     if(allProducts[0]?.updated_at)updated.textContent=`Updated ${new Date(allProducts[0].updated_at).toLocaleString()}`;
     else updated.textContent="Today’s selection is ready";
+    renderFeatured();
     renderFilters();
     render();
   })
   .catch(error=>{
     updated.textContent="Could not load the latest update";
-    products.innerHTML=`<div class="empty-state">Unable to load products. Please refresh the page.</div>`;
+    featuredDeal.innerHTML='<div class="featured-body">Unable to load today’s featured deal.</div>';
+    products.innerHTML='<div class="empty-state">Unable to load products. Please refresh the page.</div>';
     console.error(error);
   });
