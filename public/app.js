@@ -1,5 +1,6 @@
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const money=(v,c="USD")=>v==null?"See current price":new Intl.NumberFormat("en-US",{style:"currency",currency:c}).format(v);
+const discount=p=>p.original_price&&p.current_price&&p.original_price>p.current_price?Math.round((1-p.current_price/p.original_price)*100):0;
 
 let allProducts=[];
 let activeCategory="All";
@@ -10,10 +11,12 @@ const renderFeatured=()=>{
     featuredDeal.innerHTML='<div class="featured-body">No featured deal is available yet.</div>';
     return;
   }
+  const saving=discount(p);
   featuredDeal.innerHTML=`
     <div class="featured-media">
       <img src="${esc(p.image_url)}" alt="${esc(p.title)}">
       <span class="featured-ribbon">DEAL OF THE DAY</span>
+      ${p.badge?`<span class="featured-badge">${esc(p.badge)}</span>`:""}
     </div>
     <div class="featured-body">
       <p class="cat">${esc(p.category)}</p>
@@ -23,8 +26,9 @@ const renderFeatured=()=>{
       <div class="featured-price-row">
         <span class="featured-price">${money(p.current_price,p.currency)}</span>
         ${p.original_price?`<span class="old">${money(p.original_price,p.currency)}</span>`:""}
+        ${saving?`<span class="save-pill">SAVE ${saving}%</span>`:""}
       </div>
-      <a class="featured-button" href="/go/${encodeURIComponent(p.id)}" rel="nofollow sponsored">View today’s deal</a>
+      <a class="featured-button" href="/go/${encodeURIComponent(p.id)}" rel="nofollow sponsored">Buy this deal</a>
     </div>`;
 };
 
@@ -40,6 +44,7 @@ const render=()=>{
   emptyState.hidden=filtered.length!==0;
   products.innerHTML=filtered.map((p)=>{
     const rank=allProducts.indexOf(p)+1;
+    const saving=discount(p);
     return `<article class="card">
       <div class="image-wrap"><img src="${esc(p.image_url)}" alt="${esc(p.title)}" loading="lazy"></div>
       <div class="card-content">
@@ -48,8 +53,8 @@ const render=()=>{
         <h3>${esc(p.title)}</h3>
         <p class="description">${esc(p.description)}</p>
         <p class="stats">★ ${esc(p.rating)} · ${Number(p.review_count||0).toLocaleString()} reviews · Score ${esc(p.score)}</p>
-        <span class="price">${money(p.current_price,p.currency)}</span>${p.original_price?`<span class="old">${money(p.original_price,p.currency)}</span>`:""}
-        <a class="button" href="/go/${encodeURIComponent(p.id)}" rel="nofollow sponsored">View current offer</a>
+        <span class="price">${money(p.current_price,p.currency)}</span>${p.original_price?`<span class="old">${money(p.original_price,p.currency)}</span>`:""}${saving?`<span class="save-pill">SAVE ${saving}%</span>`:""}
+        <a class="button" href="/go/${encodeURIComponent(p.id)}" rel="nofollow sponsored">Buy now</a>
       </div>
     </article>`;
   }).join("");
@@ -64,6 +69,19 @@ const renderFilters=()=>{
     render();
   }));
 };
+
+const updateCountdown=()=>{
+  const now=new Date();
+  const next=new Date(now);
+  next.setHours(24,0,0,0);
+  const ms=Math.max(0,next-now);
+  const h=Math.floor(ms/3600000);
+  const m=Math.floor((ms%3600000)/60000);
+  const s=Math.floor((ms%60000)/1000);
+  countdown.textContent=`${String(h).padStart(2,"0")}h ${String(m).padStart(2,"0")}m ${String(s).padStart(2,"0")}s`;
+};
+setInterval(updateCountdown,1000);
+updateCountdown();
 
 searchInput.addEventListener("input",render);
 
