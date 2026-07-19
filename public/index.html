@@ -3,15 +3,16 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="description" content="A fresh, independently ranked selection of ten purchase-ready products, updated every day.">
+  <meta name="description" content="One standout deal plus a fresh, independently ranked selection of ten purchase-ready products, updated every day.">
   <meta name="theme-color" content="#ff5a1f">
-  <title>OneDealTheDay — Today's Top 10 Finds</title>
+  <title>OneDealTheDay — One Big Deal + Today's Top 10</title>
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
   <header class="site-header">
-    <a class="brand" href="#top"><span>1</span><strong>OneDealTheDay</strong></a>
+    <a class="brand" href="#featured"><span>1</span><strong>OneDealTheDay</strong></a>
     <nav>
+      <a href="#featured">Deal of the day</a>
       <a href="#top">Top 10</a>
       <a href="#method">How it works</a>
       <button id="themeToggle" class="icon-button" type="button" aria-label="Toggle dark mode">◐</button>
@@ -19,21 +20,24 @@
   </header>
 
   <main>
-    <section class="hero">
-      <div class="eyebrow">UPDATED AUTOMATICALLY EVERY DAY</div>
-      <h1>Today’s <em>Top 10</em> finds.</h1>
-      <p>Popular, highly rated and purchase-ready products selected from shopping signals, customer proof and overall value.</p>
-      <div class="hero-meta">
-        <span id="updated">Loading latest selection…</span>
-        <a href="#top">Explore today’s list ↓</a>
+    <section id="featured" class="hero">
+      <div class="hero-copy">
+        <div class="eyebrow">ONE BIG DEAL · UPDATED DAILY</div>
+        <h1>One standout deal.<br><em>Plus today’s Top 10.</em></h1>
+        <p>Start with our strongest value pick of the day, then explore ten highly rated, purchase-ready discoveries.</p>
+        <div class="hero-meta">
+          <span id="updated">Loading latest selection…</span>
+          <a href="#top">Explore today’s Top 10 ↓</a>
+        </div>
       </div>
+      <div id="featuredDeal" class="featured-deal" aria-live="polite">Loading today’s featured deal…</div>
     </section>
 
     <section id="top" class="deals-section">
       <div class="section-heading">
         <div>
-          <p class="eyebrow">CURATED FOR TODAY</p>
-          <h2>Best discoveries today</h2>
+          <p class="eyebrow">TODAY’S COMPLETE LIST</p>
+          <h2>Top 10 finds</h2>
         </div>
         <label class="search-box">
           <span>Search</span>
@@ -59,7 +63,7 @@
   </main>
 
   <footer>
-    <div><b>OneDealTheDay</b><p>Ten useful finds. One fresh list. Every day.</p></div>
+    <div><b>OneDealTheDay</b><p>One standout deal. Ten useful finds. Every day.</p></div>
     <p class="disclosure">As an Amazon Associate, OneDealTheDay earns from qualifying purchases. Prices and availability may change.</p>
   </footer>
 
