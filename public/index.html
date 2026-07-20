@@ -6,7 +6,30 @@
   <meta name="description" content="One standout Amazon deal plus today's Top 10, selected and updated automatically every day.">
   <meta name="theme-color" content="#111111">
   <title>OneDealTheDay — One standout deal + Today's Top 10</title>
-  <link rel="stylesheet" href="/styles.css?v=20260720-2">
+  <link rel="stylesheet" href="/styles.css?v=20260720-3">
+  <style>
+    .hero h1 .deal-word {
+      display: block;
+      color: var(--accent);
+      font-size: 1.22em;
+      line-height: 0.86;
+      font-weight: 900;
+      letter-spacing: -0.065em;
+      text-transform: uppercase;
+      margin: 0.03em 0 0.08em;
+    }
+
+    .hero h1 .hero-rest {
+      display: block;
+      color: var(--text);
+    }
+
+    @media (max-width: 640px) {
+      .hero h1 .deal-word {
+        font-size: 1.12em;
+      }
+    }
+  </style>
 </head>
 <body>
   <header class="site-header">
@@ -26,7 +49,11 @@
     <section id="featured" class="hero">
       <div class="hero-copy">
         <p class="eyebrow">ONE DEAL. EVERY DAY.</p>
-        <h1>One standout deal.<br><span>Plus today’s Top 10.</span></h1>
+        <h1>
+          <span class="hero-rest">One standout</span>
+          <span class="deal-word">DEAL.</span>
+          <span class="hero-rest">Plus today’s Top 10.</span>
+        </h1>
         <p class="hero-intro">Real Amazon deals selected using price, ratings, reviews and current buying signals.</p>
 
         <div class="hero-actions">
