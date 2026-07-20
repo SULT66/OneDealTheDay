@@ -49,7 +49,7 @@ const comparisonButton=group=>group.comparable
   ?`<button class="deal-compare-button" type="button" data-deal-key="${esc(group.key)}">DEAL · Compare prices</button>`
   :"";
 
-const shopLabel=p=>`Shop on ${storeName(p)}`;
+const shopLabel=()=>"DEAL";
 
 const renderFeatured=()=>{
   const group=productGroups[0];
