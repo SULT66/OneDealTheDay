@@ -3,18 +3,21 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="description" content="One standout deal plus a fresh, independently ranked selection of ten purchase-ready products, updated every day.">
-  <meta name="theme-color" content="#ff5a1f">
-  <title>OneDealTheDay — One Big Deal + Today's Top 10</title>
-  <link rel="stylesheet" href="/styles.css">
+  <meta name="description" content="One standout Amazon deal plus today's Top 10, selected and updated automatically every day.">
+  <meta name="theme-color" content="#111111">
+  <title>OneDealTheDay — One standout deal + Today's Top 10</title>
+  <link rel="stylesheet" href="/styles.css?v=20260720-2">
 </head>
 <body>
   <header class="site-header">
-    <a class="brand" href="#featured"><span>1</span><strong>OneDealTheDay</strong></a>
-    <nav>
-      <a href="#featured">Deal of the day</a>
+    <a class="brand" href="#featured" aria-label="OneDealTheDay home">
+      <span>1</span>
+      <strong>OneDealTheDay</strong>
+    </a>
+    <nav aria-label="Primary navigation">
+      <a href="#featured">Deal of the Day</a>
       <a href="#top">Top 10</a>
-      <a href="#method">How it works</a>
+      <a href="#method">About</a>
       <button id="themeToggle" class="icon-button" type="button" aria-label="Toggle dark mode">◐</button>
     </nav>
   </header>
@@ -22,26 +25,33 @@
   <main>
     <section id="featured" class="hero">
       <div class="hero-copy">
-        <div class="eyebrow">ONE BIG DEAL · UPDATED DAILY</div>
-        <h1>One standout deal.<br><em>Plus today’s Top 10.</em></h1>
-        <p>Start with our strongest value pick of the day, then explore ten highly rated, purchase-ready discoveries.</p>
+        <p class="eyebrow">ONE DEAL. EVERY DAY.</p>
+        <h1>One standout deal.<br><span>Plus today’s Top 10.</span></h1>
+        <p class="hero-intro">Real Amazon deals selected using price, ratings, reviews and current buying signals.</p>
+
+        <div class="hero-actions">
+          <a class="primary-cta" href="#featuredDeal">Shop today’s deal</a>
+          <a class="secondary-cta" href="#top">Browse Top 10</a>
+        </div>
+
         <div class="hero-meta">
           <span id="updated">Loading latest selection…</span>
-          <a href="#top">Explore today’s Top 10 ↓</a>
         </div>
+
         <div class="countdown-card">
           <span>Next daily update</span>
           <strong id="countdown">--h --m --s</strong>
         </div>
       </div>
+
       <div id="featuredDeal" class="featured-deal" aria-live="polite">Loading today’s featured deal…</div>
     </section>
 
     <section id="top" class="deals-section">
       <div class="section-heading">
         <div>
-          <p class="eyebrow">TODAY’S COMPLETE LIST</p>
-          <h2>Top 10 finds</h2>
+          <p class="eyebrow">UPDATED DAILY</p>
+          <h2>Today’s Top 10</h2>
         </div>
         <label class="search-box">
           <span>Search</span>
@@ -56,12 +66,12 @@
     </section>
 
     <section id="method" class="how">
-      <p class="eyebrow">OUR METHOD</p>
-      <h2>Why this deal rises to the top</h2>
+      <p class="eyebrow">WHY TRUST THE PICK</p>
+      <h2>Better signals. Less scrolling.</h2>
       <div class="method-grid">
-        <article><span>01</span><b>Real shopper demand</b><p>Strong current interest and purchase intent help identify products people actually want.</p></article>
+        <article><span>01</span><b>Real shopper demand</b><p>Current interest and buying intent help identify products people actually want.</p></article>
         <article><span>02</span><b>Customer confidence</b><p>Ratings, review volume and reliability signals help reduce guesswork.</p></article>
-        <article><span>03</span><b>Better overall value</b><p>Price, discount, usefulness and category position shape the final score.</p></article>
+        <article><span>03</span><b>Stronger overall value</b><p>Price, discount, usefulness and category position shape the final ranking.</p></article>
       </div>
     </section>
   </main>
@@ -71,6 +81,6 @@
     <p class="disclosure">As an Amazon Associate, OneDealTheDay earns from qualifying purchases. Prices and availability may change.</p>
   </footer>
 
-  <script src="/app.js"></script>
+  <script src="/app.js?v=20260720-2"></script>
 </body>
 </html>
