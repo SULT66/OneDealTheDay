@@ -1,0 +1,23 @@
+name: Daily product refresh
+
+on:
+  schedule:
+    - cron: "15 6 * * *"
+      timezone: "America/New_York"
+  workflow_dispatch:
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger OneDealTheDay refresh
+        env:
+          ADMIN_KEY: ${{ secrets.ONEDEAL_ADMIN_KEY }}
+        run: |
+          set -euo pipefail
+          response=$(curl --fail-with-body --silent --show-error \
+            --retry 4 --retry-delay 15 --retry-all-errors \
+            -X POST \
+            -H "x-admin-key: ${ADMIN_KEY}" \
+            "https://onedealtheday-g3dme0aghzerc3a2.centralus-01.azurewebsites.net/api/admin/refresh")
+          echo "$response"
