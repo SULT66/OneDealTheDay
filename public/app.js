@@ -72,7 +72,7 @@ const renderFeatured=()=>{
         ${p.original_price?`<span class="old">${money(p.original_price,p.currency)}</span>`:""}
         ${saving?`<span class="save-pill">SAVE ${saving}%</span>`:""}
       </div>
-      <a class="featured-button" href="/go/${encodeURIComponent(p.id)}" rel="nofollow sponsored">${esc(shopLabel(p))} →</a>
+      <a class="featured-button" href="/go/${encodeURIComponent(p.id)}" rel="nofollow sponsored">${esc(shopLabel(p))}</a>
       ${comparisonButton(group)}
     </div>`;
 };
@@ -101,7 +101,7 @@ const render=()=>{
         <p class="description">${esc(p.description)}</p>
         <p class="stats">★ ${esc(p.rating)} · ${Number(p.review_count||0).toLocaleString()} reviews · Score ${esc(p.score)}</p>
         <span class="price">${money(p.current_price,p.currency)}</span>${p.original_price?`<span class="old">${money(p.original_price,p.currency)}</span>`:""}${saving?`<span class="save-pill">SAVE ${saving}%</span>`:""}
-        <a class="button" href="/go/${encodeURIComponent(p.id)}" rel="nofollow sponsored">${esc(shopLabel(p))} →</a>
+        <a class="button" href="/go/${encodeURIComponent(p.id)}" rel="nofollow sponsored">${esc(shopLabel(p))}</a>
         ${comparisonButton(group)}
       </div>
     </article>`;
