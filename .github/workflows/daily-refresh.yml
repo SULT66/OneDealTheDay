@@ -2,22 +2,58 @@ name: Daily product refresh
 
 on:
   schedule:
-    - cron: "15 6 * * *"
-      timezone: "America/New_York"
+    # GitHub Actions cron uses UTC. This runs daily at 12:15 UTC
+    # (8:15 AM New York during daylight saving time, 7:15 AM in winter).
+    - cron: "15 12 * * *"
   workflow_dispatch:
+
+concurrency:
+  group: daily-product-refresh
+  cancel-in-progress: false
 
 jobs:
   refresh:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+
     steps:
+      - name: Validate admin secret
+        env:
+          ADMIN_KEY: ${{ secrets.ONEDEAL_ADMIN_KEY }}
+        run: |
+          if [ -z "${ADMIN_KEY}" ]; then
+            echo "ONEDEAL_ADMIN_KEY secret is missing"
+            exit 1
+          fi
+
+      - name: Wake Azure App Service
+        run: |
+          curl --fail --silent --show-error \
+            --retry 5 --retry-delay 15 --retry-all-errors \
+            "https://onedealtheday-g3dme0aghzerc3a2.centralus-01.azurewebsites.net/api/status" \
+            > /dev/null
+
       - name: Trigger OneDealTheDay refresh
         env:
           ADMIN_KEY: ${{ secrets.ONEDEAL_ADMIN_KEY }}
         run: |
           set -euo pipefail
           response=$(curl --fail-with-body --silent --show-error \
-            --retry 4 --retry-delay 15 --retry-all-errors \
+            --retry 4 --retry-delay 20 --retry-all-errors \
+            --max-time 300 \
             -X POST \
             -H "x-admin-key: ${ADMIN_KEY}" \
             "https://onedealtheday-g3dme0aghzerc3a2.centralus-01.azurewebsites.net/api/admin/refresh")
-          echo "$response"
+          echo "Refresh response: ${response}"
+
+      - name: Verify refreshed products
+        run: |
+          set -euo pipefail
+          status=$(curl --fail --silent --show-error \
+            --retry 3 --retry-delay 10 --retry-all-errors \
+            "https://onedealtheday-g3dme0aghzerc3a2.centralus-01.azurewebsites.net/api/status")
+          echo "Status after refresh: ${status}"
+          echo "${status}" | grep -q '"products"' || {
+            echo "Refresh verification failed: products field is missing"
+            exit 1
+          }
