@@ -14,7 +14,7 @@ function score(product) {
     clamp(Math.log10(reviews + 1) / 5, 0, 1) * 25 +
     clamp(1 - (position - 1) / 50, 0, 1) * 20 +
     clamp(original > current && current > 0 ? (original - current) / original / 0.5 : 0, 0, 1) * 15 +
-    (/best|choice|popular|deal/i.test(product.badge || "") ? 10 : 0)
+    (/best|choice|popular|deal/i.test(String(product.badge || "")) ? 10 : 0)
   ) * 10) / 10;
 }
 
@@ -25,16 +25,103 @@ function retailer(product) {
   return source || "other";
 }
 
+function normalizedTitle(title) {
+  return String(title || "")
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\b(newest|new|renewed|refurbished|amazon|walmart|exclusive|pack|count)\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function titleTokens(title) {
+  return new Set(
+    normalizedTitle(title)
+      .split(" ")
+      .filter(token => token.length > 2)
+  );
+}
+
+function similarity(left, right) {
+  const a = titleTokens(left);
+  const b = titleTokens(right);
+  if (!a.size || !b.size) return 0;
+
+  const intersection = [...a].filter(token => b.has(token)).length;
+  const union = new Set([...a, ...b]).size;
+  return union ? intersection / union : 0;
+}
+
+function exactMatchKey(product) {
+  const value =
+    product.product_key ||
+    product.gtin ||
+    product.upc ||
+    product.ean ||
+    product.model_number ||
+    product.model;
+
+  return value
+    ? String(value).toLowerCase().replace(/[^a-z0-9]/g, "")
+    : "";
+}
+
 function prepare(items) {
   const unique = new Map();
 
   for (const item of items || []) {
     if (!item?.title || !item?.image_url || !item?.affiliate_url) continue;
+
     const key = `${retailer(item)}:${item.external_id || item.title}`;
     unique.set(key, { ...item, score: score(item) });
   }
 
   return [...unique.values()].sort((a, b) => b.score - a.score);
+}
+
+function findComparisonPairs(amazon, walmart) {
+  const pairs = [];
+  const usedAmazon = new Set();
+  const usedWalmart = new Set();
+
+  for (let amazonIndex = 0; amazonIndex < amazon.length; amazonIndex += 1) {
+    const amazonProduct = amazon[amazonIndex];
+    const amazonExact = exactMatchKey(amazonProduct);
+    let bestMatch = null;
+
+    for (let walmartIndex = 0; walmartIndex < walmart.length; walmartIndex += 1) {
+      if (usedWalmart.has(walmartIndex)) continue;
+
+      const walmartProduct = walmart[walmartIndex];
+      const walmartExact = exactMatchKey(walmartProduct);
+      const exact = Boolean(amazonExact && walmartExact && amazonExact === walmartExact);
+      const titleScore = similarity(amazonProduct.title, walmartProduct.title);
+
+      if (!exact && titleScore < 0.72) continue;
+
+      const matchScore = exact ? 2 : titleScore;
+      if (!bestMatch || matchScore > bestMatch.matchScore) {
+        bestMatch = { walmartIndex, walmartProduct, matchScore };
+      }
+    }
+
+    if (bestMatch) {
+      usedAmazon.add(amazonIndex);
+      usedWalmart.add(bestMatch.walmartIndex);
+      pairs.push({
+        amazon: amazonProduct,
+        walmart: bestMatch.walmartProduct,
+        score: Math.max(Number(amazonProduct.score) || 0, Number(bestMatch.walmartProduct.score) || 0),
+        exact: bestMatch.matchScore === 2
+      });
+    }
+  }
+
+  return pairs.sort((a, b) => {
+    if (a.exact !== b.exact) return a.exact ? -1 : 1;
+    return b.score - a.score;
+  });
 }
 
 exports.rankProducts = (items, limit = 10) => {
@@ -44,23 +131,39 @@ exports.rankProducts = (items, limit = 10) => {
 
   if (!amazon.length || !walmart.length) return ranked.slice(0, limit);
 
+  const selected = [];
+  const selectedKeys = new Set();
+  const keyFor = product => `${retailer(product)}:${product.external_id || product.title}`;
+  const add = product => {
+    const key = keyFor(product);
+    if (selected.length >= limit || selectedKeys.has(key)) return;
+    selected.push(product);
+    selectedKeys.add(key);
+  };
+
+  const pairs = findComparisonPairs(amazon, walmart);
+  const maximumPairProducts = Math.min(limit, 12);
+
+  for (const pair of pairs) {
+    if (selected.length + 2 > maximumPairProducts) break;
+    add(pair.amazon);
+    add(pair.walmart);
+  }
+
   const amazonQuota = Math.ceil(limit / 2);
   const walmartQuota = Math.floor(limit / 2);
-  const selected = [
-    ...amazon.slice(0, amazonQuota),
-    ...walmart.slice(0, walmartQuota)
-  ];
 
-  if (selected.length < limit) {
-    const selectedKeys = new Set(selected.map(product => `${retailer(product)}:${product.external_id || product.title}`));
-    for (const product of ranked) {
-      const key = `${retailer(product)}:${product.external_id || product.title}`;
-      if (!selectedKeys.has(key)) {
-        selected.push(product);
-        selectedKeys.add(key);
-      }
-      if (selected.length >= limit) break;
-    }
+  for (let index = 0; selected.length < limit && (index < amazon.length || index < walmart.length); index += 1) {
+    const amazonCount = selected.filter(product => retailer(product) === "amazon").length;
+    const walmartCount = selected.filter(product => retailer(product) === "walmart").length;
+
+    if (index < amazon.length && amazonCount < amazonQuota) add(amazon[index]);
+    if (index < walmart.length && walmartCount < walmartQuota) add(walmart[index]);
+  }
+
+  for (const product of ranked) {
+    add(product);
+    if (selected.length >= limit) break;
   }
 
   return selected.slice(0, limit);
