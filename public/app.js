@@ -86,7 +86,7 @@ const buildGroups = products => {
   });
 };
 
-const selectVisibleGroups = (groups, limit = 10) => {
+const selectVisibleGroups = (groups, limit = 20) => {
   const selected = [];
   const comparable = groups.filter(group => group.comparable);
   selected.push(...comparable.slice(0, limit));
@@ -269,7 +269,7 @@ fetch("/api/products")
   })
   .then(productsResponse => {
     allProducts = Array.isArray(productsResponse) ? productsResponse : [];
-    productGroups = selectVisibleGroups(buildGroups(allProducts), 10);
+    productGroups = selectVisibleGroups(buildGroups(allProducts), 20);
     if (productGroups[0]?.primary?.updated_at) updated.textContent = `Updated ${new Date(productGroups[0].primary.updated_at).toLocaleString()}`;
     else updated.textContent = "Today’s selection is ready";
     renderFeatured();
