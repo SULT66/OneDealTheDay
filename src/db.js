@@ -15,6 +15,10 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS products(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     external_id TEXT UNIQUE,
+    product_key TEXT,
+    upc TEXT,
+    gtin TEXT,
+    model_number TEXT,
     title TEXT,
     category TEXT,
     description TEXT,
@@ -49,6 +53,11 @@ db.exec(`
     user_agent TEXT
   );
 `);
+
+const productColumns = new Set(db.prepare("PRAGMA table_info(products)").all().map(column => column.name));
+for (const column of ["product_key", "upc", "gtin", "model_number"]) {
+  if (!productColumns.has(column)) db.exec(`ALTER TABLE products ADD COLUMN ${column} TEXT`);
+}
 
 console.log(`Database: ${dbPath}`);
 module.exports = db;
