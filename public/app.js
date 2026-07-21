@@ -2,8 +2,17 @@ const esc = value => String(value ?? "").replace(/[&<>"']/g, char => ({
   "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
 }[char]));
 
+const cleanText = value => {
+  const html = String(value ?? "");
+  const element = document.createElement("div");
+  element.innerHTML = html;
+  return (element.textContent || element.innerText || "")
+    .replace(/\s+/g, " ")
+    .trim();
+};
+
 const money = (value, currency = "USD") => value == null
-  ? "See current price"
+  ? "Check price"
   : new Intl.NumberFormat("en-US", { style: "currency", currency: currency || "USD" }).format(value);
 
 const discount = product => product.original_price && product.current_price && product.original_price > product.current_price
@@ -12,7 +21,7 @@ const discount = product => product.original_price && product.current_price && p
 
 let allProducts = [];
 let productGroups = [];
-let activeCategory = "All";
+let activeCategory = "Top 10";
 
 const storeName = product => {
   const source = String(product.source || "").toLowerCase();
@@ -86,32 +95,9 @@ const buildGroups = products => {
   });
 };
 
-const selectVisibleGroups = (groups, limit = 20) => {
-  const selected = [];
-  const comparable = groups.filter(group => group.comparable);
-  selected.push(...comparable.slice(0, limit));
-
-  const remaining = groups.filter(group => !selected.includes(group));
-  const amazon = remaining.filter(group => storeName(group.primary) === "Amazon");
-  const walmart = remaining.filter(group => storeName(group.primary) === "Walmart");
-  const targetPerStore = Math.floor(limit / 2);
-
-  for (let index = 0; selected.length < limit && (index < amazon.length || index < walmart.length); index += 1) {
-    if (index < amazon.length && selected.filter(group => storeName(group.primary) === "Amazon").length < targetPerStore) selected.push(amazon[index]);
-    if (selected.length < limit && index < walmart.length && selected.filter(group => storeName(group.primary) === "Walmart").length < targetPerStore) selected.push(walmart[index]);
-  }
-
-  for (const group of remaining) {
-    if (!selected.includes(group)) selected.push(group);
-    if (selected.length >= limit) break;
-  }
-
-  return selected.slice(0, limit);
-};
-
 const actionButton = (group, product, className) => group.comparable
-  ? `<button class="${className} deal-action" type="button" data-deal-key="${esc(group.key)}">DEAL</button>`
-  : `<a class="${className}" href="/go/${encodeURIComponent(product.id)}" rel="nofollow sponsored">DEAL</a>`;
+  ? `<button class="${className} deal-action" type="button" data-deal-key="${esc(group.key)}">COMPARE PRICES</button>`
+  : `<a class="${className}" href="/go/${encodeURIComponent(product.id)}" rel="nofollow sponsored">VIEW DEAL</a>`;
 
 const renderFeatured = () => {
   const group = productGroups[0];
@@ -131,7 +117,7 @@ const renderFeatured = () => {
     <div class="featured-body">
       <p class="cat">${esc(product.category)} · ${esc(storeName(product))}</p>
       <h2>${esc(product.title)}</h2>
-      <p class="description">${esc(product.description)}</p>
+      <p class="description">${esc(cleanText(product.description))}</p>
       <p class="stats">★ ${esc(product.rating)} · ${Number(product.review_count || 0).toLocaleString()} reviews · Score ${esc(product.score)}</p>
       <div class="featured-price-row">
         <span class="featured-price">${money(product.current_price, product.currency)}</span>
@@ -142,18 +128,34 @@ const renderFeatured = () => {
     </div>`;
 };
 
+const groupsForView = query => {
+  if (query) {
+    return productGroups.filter(group => {
+      const product = group.primary;
+      const text = `${product.title} ${cleanText(product.description)} ${product.category} ${storeName(product)}`.toLowerCase();
+      return text.includes(query);
+    });
+  }
+
+  if (activeCategory === "Top 10") return productGroups.slice(0, 10);
+  return productGroups.filter(group => group.primary.category === activeCategory);
+};
+
 const render = () => {
   const query = searchInput.value.trim().toLowerCase();
-  const filtered = productGroups.filter(group => {
-    const product = group.primary;
-    const categoryMatch = activeCategory === "All" || product.category === activeCategory;
-    const text = `${product.title} ${product.description} ${product.category} ${storeName(product)}`.toLowerCase();
-    return categoryMatch && (!query || text.includes(query));
-  });
+  const visible = groupsForView(query);
 
-  resultCount.textContent = `Showing ${filtered.length} of ${productGroups.length} products`;
-  emptyState.hidden = filtered.length !== 0;
-  products.innerHTML = filtered.map(group => {
+  const heading = document.getElementById("dealsTitle");
+  if (heading) heading.textContent = query ? "Search results" : activeCategory === "Top 10" ? "Today’s Top 10" : activeCategory;
+
+  resultCount.textContent = query
+    ? `Found ${visible.length} products`
+    : activeCategory === "Top 10"
+      ? `Showing the 10 best products of ${productGroups.length}`
+      : `Showing ${visible.length} products in ${activeCategory}`;
+
+  emptyState.hidden = visible.length !== 0;
+  products.innerHTML = visible.map(group => {
     const product = group.primary;
     const rank = productGroups.indexOf(group) + 1;
     const saving = discount(product);
@@ -164,7 +166,7 @@ const render = () => {
         <div class="card-top"><span class="rank">#${rank}</span>${product.badge ? `<span class="badge">${esc(product.badge)}</span>` : ""}</div>
         <p class="cat">${esc(product.category)} · ${esc(storeName(product))}</p>
         <h3>${esc(product.title)}</h3>
-        <p class="description">${esc(product.description)}</p>
+        <p class="description">${esc(cleanText(product.description))}</p>
         <p class="stats">★ ${esc(product.rating)} · ${Number(product.review_count || 0).toLocaleString()} reviews · Score ${esc(product.score)}</p>
         <span class="price">${money(product.current_price, product.currency)}</span>
         ${product.original_price ? `<span class="old">${money(product.original_price, product.currency)}</span>` : ""}
@@ -176,10 +178,15 @@ const render = () => {
 };
 
 const renderFilters = () => {
-  const categories = ["All", ...new Set(productGroups.map(group => group.primary.category).filter(Boolean))];
-  categoryFilters.innerHTML = categories.map(category => `<button class="filter${category === activeCategory ? " active" : ""}" type="button" data-category="${esc(category)}">${esc(category)}</button>`).join("");
+  const categories = ["Top 10", ...new Set(productGroups.map(group => group.primary.category).filter(Boolean))];
+  categoryFilters.innerHTML = categories.map(category => {
+    const count = category === "Top 10" ? 10 : productGroups.filter(group => group.primary.category === category).length;
+    return `<button class="filter${category === activeCategory ? " active" : ""}" type="button" data-category="${esc(category)}">${esc(category)} <span>${count}</span></button>`;
+  }).join("");
+
   categoryFilters.querySelectorAll(".filter").forEach(button => button.addEventListener("click", () => {
     activeCategory = button.dataset.category;
+    searchInput.value = "";
     renderFilters();
     render();
   }));
@@ -269,7 +276,7 @@ fetch("/api/products")
   })
   .then(productsResponse => {
     allProducts = Array.isArray(productsResponse) ? productsResponse : [];
-    productGroups = selectVisibleGroups(buildGroups(allProducts), 20);
+    productGroups = buildGroups(allProducts);
     if (productGroups[0]?.primary?.updated_at) updated.textContent = `Updated ${new Date(productGroups[0].primary.updated_at).toLocaleString()}`;
     else updated.textContent = "Today’s selection is ready";
     renderFeatured();
