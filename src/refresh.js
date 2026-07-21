@@ -110,7 +110,7 @@ exports.refreshProducts = async c => {
 
     const found = await loadProducts(c);
 
-    const top = rankProducts(found, 30);
+    const top = rankProducts(found, 60);
 
     if (!Array.isArray(found) || found.length < 10 || top.length < 10) {
       throw new Error(
