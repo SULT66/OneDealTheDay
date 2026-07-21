@@ -54,6 +54,89 @@ function numberValue(value) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function validHttpUrl(value) {
+  if (typeof value !== "string") return "";
+
+  const text = value.trim();
+  if (!/^https?:\/\//i.test(text)) return "";
+  if (/function\s+\w*\s*\(|\[native code\]/i.test(text)) return "";
+
+  try {
+    const parsed = new URL(text);
+    return parsed.protocol === "http:" || parsed.protocol === "https:"
+      ? parsed.href
+      : "";
+  } catch {
+    return "";
+  }
+}
+
+function extractUrl(value, depth = 0) {
+  if (value == null || depth > 4) return "";
+
+  const direct = validHttpUrl(value);
+  if (direct) return direct;
+
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      const found = extractUrl(entry, depth + 1);
+      if (found) return found;
+    }
+    return "";
+  }
+
+  if (typeof value === "object") {
+    const preferredKeys = [
+      "url",
+      "link",
+      "src",
+      "image_url",
+      "imageUrl",
+      "thumbnail",
+      "large",
+      "medium",
+      "small",
+      "original"
+    ];
+
+    for (const key of preferredKeys) {
+      const found = extractUrl(value[key], depth + 1);
+      if (found) return found;
+    }
+
+    for (const entry of Object.values(value)) {
+      const found = extractUrl(entry, depth + 1);
+      if (found) return found;
+    }
+  }
+
+  return "";
+}
+
+function walmartImageUrl(item, raw) {
+  const candidates = [
+    item.image_url,
+    item.product_image,
+    item.primary_image,
+    item.thumbnail,
+    item.images,
+    item.image,
+    raw.image_url,
+    raw.product_image,
+    raw.primary_image,
+    raw.thumbnail,
+    raw.images,
+    raw.image
+  ];
+
+  for (const candidate of candidates) {
+    const url = extractUrl(candidate);
+    if (url) return url;
+  }
+
+  return "";
+}
+
 function normalize(raw, keyword, index) {
   const item = raw.product || raw;
 
@@ -147,20 +230,15 @@ function normalize(raw, keyword, index) {
         ? "Best Seller"
         : item.badge || "",
 
-    image_url:
-      item.image ||
-      item.image_url ||
-      item.thumbnail ||
-      item.product_image ||
-      item.primary_image ||
-      item.images?.[0]?.link ||
-      item.images?.[0]?.url ||
-      "",
+    image_url: walmartImageUrl(item, raw),
 
     affiliate_url:
-      item.link ||
-      item.url ||
-      item.product_url ||
+      extractUrl(item.link) ||
+      extractUrl(item.url) ||
+      extractUrl(item.product_url) ||
+      extractUrl(raw.link) ||
+      extractUrl(raw.url) ||
+      extractUrl(raw.product_url) ||
       (itemId
         ? `https://www.walmart.com/ip/${itemId}`
         : ""),
