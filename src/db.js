@@ -59,5 +59,20 @@ for (const column of ["product_key", "upc", "gtin", "model_number"]) {
   if (!productColumns.has(column)) db.exec(`ALTER TABLE products ADD COLUMN ${column} TEXT`);
 }
 
+// Products are a permanent catalog. A refresh may update or add products,
+// but it must never remove older products from their categories.
+db.exec(`
+  UPDATE products SET status='published' WHERE status='archived';
+  DROP TRIGGER IF EXISTS prevent_product_archiving;
+  CREATE TRIGGER prevent_product_archiving
+  BEFORE UPDATE OF status ON products
+  WHEN NEW.status='archived'
+  BEGIN
+    SELECT RAISE(IGNORE);
+  END;
+  CREATE INDEX IF NOT EXISTS idx_products_status_score ON products(status, score DESC);
+  CREATE INDEX IF NOT EXISTS idx_products_category_score ON products(category, score DESC);
+`);
+
 console.log(`Database: ${dbPath}`);
 module.exports = db;
