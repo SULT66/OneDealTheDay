@@ -3,9 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="description" content="One standout deal plus today's Top 10 from Amazon and Walmart, selected and updated automatically every day.">
+  <meta name="description" content="One standout deal plus today's Top 10 and categorized Amazon and Walmart products, updated automatically every day.">
   <meta name="theme-color" content="#111111">
-  <title>OneDealTheDay — One standout deal + Today's Top 10</title>
+  <title>OneDealTheDay — Today's Top 10 and category deals</title>
   <link rel="stylesheet" href="/styles.css?v=20260721-1">
   <link rel="stylesheet" href="/compact.css?v=20260721-2">
   <style>
@@ -16,13 +16,14 @@
     .deal-modal-title{margin:0 46px 6px 0;font-size:28px;letter-spacing:-.03em}.deal-modal-product{margin:0 0 20px;color:var(--muted);line-height:1.4}
     .offer-list{display:grid;gap:12px}.offer-row{display:grid;grid-template-columns:1fr auto;gap:16px;align-items:center;padding:16px;border:1px solid var(--line);border-radius:18px}.offer-store{font-weight:900}.offer-price{font-size:24px;font-weight:900}.offer-meta{margin-top:4px;color:var(--muted);font-size:12px}.best-price{display:inline-block;margin-left:8px;padding:4px 7px;border-radius:999px;background:var(--success-soft);color:var(--success);font-size:10px;font-weight:900}.store-button{display:inline-flex;align-items:center;justify-content:center;min-width:145px;padding:12px 15px;border-radius:12px;color:#fff;font-weight:900}.store-button.amazon{background:#ff9900;color:#111}.store-button.walmart{background:#0071dc}.store-button.other{background:var(--text);color:var(--bg)}
     .deal-summary{margin-top:16px;padding:14px 16px;border-radius:14px;background:var(--accent-soft);color:var(--text);font-weight:800}
+    .filter span{display:inline-grid;place-items:center;min-width:20px;height:20px;margin-left:5px;padding:0 5px;border-radius:999px;background:var(--accent-soft);color:var(--accent);font-size:10px}.filter.active span{background:rgba(255,255,255,.18);color:inherit}
     @media(max-width:640px){.hero h1 .deal-word{font-size:1.12em}.offer-row{grid-template-columns:1fr}.store-button{width:100%}}
   </style>
 </head>
 <body>
   <header class="site-header">
     <a class="brand" href="#featured" aria-label="OneDealTheDay home"><span>1</span><strong>OneDealTheDay</strong></a>
-    <nav aria-label="Primary navigation"><a href="#featured">Deal of the Day</a><a href="#top">Top 10</a><a href="#method">About</a><button id="themeToggle" class="icon-button" type="button" aria-label="Toggle dark mode">◐</button></nav>
+    <nav aria-label="Primary navigation"><a href="#featured">Deal of the Day</a><a href="#top">Top 10 & Categories</a><a href="#method">About</a><button id="themeToggle" class="icon-button" type="button" aria-label="Toggle dark mode">◐</button></nav>
   </header>
   <main>
     <section id="featured" class="hero">
@@ -37,7 +38,7 @@
       <div id="featuredDeal" class="featured-deal" aria-live="polite">Loading today’s featured deal…</div>
     </section>
     <section id="top" class="deals-section">
-      <div class="section-heading"><div><p class="eyebrow">UPDATED DAILY</p><h2>Today’s Top 10</h2></div><label class="search-box"><span>Search</span><input id="searchInput" type="search" placeholder="Product or category" autocomplete="off"></label></div>
+      <div class="section-heading"><div><p class="eyebrow">TOP PICKS & CATEGORIES</p><h2 id="dealsTitle">Today’s Top 10</h2></div><label class="search-box"><span>Search</span><input id="searchInput" type="search" placeholder="Product or category" autocomplete="off"></label></div>
       <div id="categoryFilters" class="filters" aria-label="Product categories"></div><div id="resultCount" class="result-count"></div><div id="products" class="grid" aria-live="polite">Loading today’s products…</div><div id="emptyState" class="empty-state" hidden>No products match that search.</div>
     </section>
     <section id="method" class="how"><p class="eyebrow">WHY TRUST THE PICK</p><h2>Better signals. Less scrolling.</h2><div class="method-grid"><article><span>01</span><b>Real shopper demand</b><p>Current interest and buying intent help identify products people actually want.</p></article><article><span>02</span><b>Customer confidence</b><p>Ratings, review volume and reliability signals help reduce guesswork.</p></article><article><span>03</span><b>Stronger overall value</b><p>Price, discount, usefulness and category position shape the final ranking.</p></article></div></section>
@@ -55,7 +56,7 @@
     </div>
   </div>
 
-  <script src="/app.js?v=20260721-1"></script>
+  <script src="/app.js?v=20260721-3"></script>
   <script src="/enhancements.js?v=20260721-2"></script>
 </body>
 </html>
