@@ -3,60 +3,92 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="description" content="One standout deal plus today's Top 10 and categorized Amazon and Walmart products, updated automatically every day.">
-  <meta name="theme-color" content="#111111">
-  <title>OneDealTheDay — Today's Top 10 and category deals</title>
-  <link rel="stylesheet" href="/styles.css?v=20260721-1">
-  <link rel="stylesheet" href="/compact.css?v=20260721-2">
-  <style>
-    .hero h1 .deal-word{display:block;color:var(--accent);font-size:1.22em;line-height:.86;font-weight:900;letter-spacing:-.065em;text-transform:uppercase;margin:.03em 0 .08em}.hero h1 .hero-rest{display:block;color:var(--text)}
-    .deal-action{border:0;cursor:pointer;font:inherit}.deal-modal[hidden]{display:none}.deal-modal{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;padding:20px}.deal-modal-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.58);backdrop-filter:blur(7px)}
-    .deal-modal-panel{position:relative;width:min(560px,100%);max-height:90vh;overflow:auto;border:1px solid var(--line);border-radius:26px;background:var(--surface);box-shadow:0 30px 90px rgba(0,0,0,.35);padding:26px}
-    .deal-modal-close{position:absolute;right:16px;top:14px;width:40px;height:40px;border:1px solid var(--line);border-radius:50%;background:var(--surface);color:var(--text);font-size:24px;cursor:pointer}
-    .deal-modal-title{margin:0 46px 6px 0;font-size:28px;letter-spacing:-.03em}.deal-modal-product{margin:0 0 20px;color:var(--muted);line-height:1.4}
-    .offer-list{display:grid;gap:12px}.offer-row{display:grid;grid-template-columns:1fr auto;gap:16px;align-items:center;padding:16px;border:1px solid var(--line);border-radius:18px}.offer-store{font-weight:900}.offer-price{font-size:24px;font-weight:900}.offer-meta{margin-top:4px;color:var(--muted);font-size:12px}.best-price{display:inline-block;margin-left:8px;padding:4px 7px;border-radius:999px;background:var(--success-soft);color:var(--success);font-size:10px;font-weight:900}.store-button{display:inline-flex;align-items:center;justify-content:center;min-width:145px;padding:12px 15px;border-radius:12px;color:#fff;font-weight:900}.store-button.amazon{background:#ff9900;color:#111}.store-button.walmart{background:#0071dc}.store-button.other{background:var(--text);color:var(--bg)}
-    .deal-summary{margin-top:16px;padding:14px 16px;border-radius:14px;background:var(--accent-soft);color:var(--text);font-weight:800}
-    .filter span{display:inline-grid;place-items:center;min-width:20px;height:20px;margin-left:5px;padding:0 5px;border-radius:999px;background:var(--accent-soft);color:var(--accent);font-size:10px}.filter.active span{background:rgba(255,255,255,.18);color:inherit}
-    @media(max-width:640px){.hero h1 .deal-word{font-size:1.12em}.offer-row{grid-template-columns:1fr}.store-button{width:100%}}
-  </style>
+  <meta name="description" content="OneDailyDrop finds the best deals every day from Amazon, Walmart and other leading retailers.">
+  <meta name="theme-color" content="#ff6b00">
+  <title>OneDailyDrop — The Best Deals. Every Day.</title>
+  <link rel="stylesheet" href="/styles.css?v=20260721-v2">
 </head>
 <body>
   <header class="site-header">
-    <a class="brand" href="#featured" aria-label="OneDealTheDay home"><span>1</span><strong>OneDealTheDay</strong></a>
-    <nav aria-label="Primary navigation"><a href="#featured">Deal of the Day</a><a href="#top">Top 10 & Categories</a><a href="#method">About</a><button id="themeToggle" class="icon-button" type="button" aria-label="Toggle dark mode">◐</button></nav>
+    <div class="header-top">
+      <a class="brand" href="#today" aria-label="OneDailyDrop home">
+        <span class="brand-mark">D</span>
+        <span class="brand-copy"><strong>OneDailyDrop</strong><small>The Best Deals. Every Day.</small></span>
+      </a>
+      <label class="header-search"><span>⌕</span><input id="searchInput" type="search" placeholder="Search all products..." autocomplete="off"></label>
+      <button id="themeToggle" class="icon-button" type="button" aria-label="Toggle dark mode">◐</button>
+    </div>
+    <nav class="main-nav" aria-label="Primary navigation">
+      <a href="#today">Today's Drop</a>
+      <a href="#top">Top 10</a>
+      <div class="category-menu">
+        <button id="categoryMenuButton" type="button" aria-expanded="false">Categories <span>⌄</span></button>
+        <div id="categoryMenu" class="mega-menu" hidden></div>
+      </div>
+      <a href="#trending">Trending</a>
+      <a href="#price-drops">Price Drops</a>
+      <a href="#new-drops">New Drops</a>
+      <a href="#about">About</a>
+    </nav>
   </header>
+
   <main>
-    <section id="featured" class="hero">
+    <section id="today" class="hero">
       <div class="hero-copy">
-        <p class="eyebrow">ONE DEAL. EVERY DAY.</p>
-        <h1><span class="hero-rest">One standout</span><span class="deal-word">DEAL.</span><span class="hero-rest">Plus today’s Top 10.</span></h1>
-        <p class="hero-intro">Real Amazon and Walmart deals selected using price, ratings, reviews and current buying signals.</p>
-        <div class="hero-actions"><a class="primary-cta" href="#featuredDeal">Shop today’s deal</a><a class="secondary-cta" href="#top">Browse Top 10</a></div>
+        <p class="eyebrow">TODAY'S DROP</p>
+        <h1>The best deal.<br><span>Every day.</span></h1>
+        <p class="hero-intro">One standout offer selected from today’s strongest prices, ratings, reviews and buying signals.</p>
+        <div class="hero-actions"><a class="primary-cta" href="#featuredDeal">View today’s drop</a><a class="secondary-cta" href="#top">Browse Top 10</a></div>
         <div class="hero-meta"><span id="updated">Loading latest selection…</span></div>
-        <div class="countdown-card"><span>Next daily update</span><strong id="countdown">--h --m --s</strong></div>
+        <div class="countdown-card"><span>Next drop</span><strong id="countdown">--h --m --s</strong></div>
       </div>
       <div id="featuredDeal" class="featured-deal" aria-live="polite">Loading today’s featured deal…</div>
     </section>
+
     <section id="top" class="deals-section">
-      <div class="section-heading"><div><p class="eyebrow">TOP PICKS & CATEGORIES</p><h2 id="dealsTitle">Today’s Top 10</h2></div><label class="search-box"><span>Search</span><input id="searchInput" type="search" placeholder="Product or category" autocomplete="off"></label></div>
-      <div id="categoryFilters" class="filters" aria-label="Product categories"></div><div id="resultCount" class="result-count"></div><div id="products" class="grid" aria-live="polite">Loading today’s products…</div><div id="emptyState" class="empty-state" hidden>No products match that search.</div>
+      <div class="section-heading"><div><p class="eyebrow">EDITOR'S DAILY PICKS</p><h2 id="dealsTitle">Top 10 Drops Today</h2></div><div id="resultCount" class="result-count"></div></div>
+      <div id="products" class="grid" aria-live="polite">Loading today’s products…</div>
+      <div id="emptyState" class="empty-state" hidden>No products match that search.</div>
     </section>
-    <section id="method" class="how"><p class="eyebrow">WHY TRUST THE PICK</p><h2>Better signals. Less scrolling.</h2><div class="method-grid"><article><span>01</span><b>Real shopper demand</b><p>Current interest and buying intent help identify products people actually want.</p></article><article><span>02</span><b>Customer confidence</b><p>Ratings, review volume and reliability signals help reduce guesswork.</p></article><article><span>03</span><b>Stronger overall value</b><p>Price, discount, usefulness and category position shape the final ranking.</p></article></div></section>
+
+    <section id="trending" class="collection-section">
+      <div class="section-heading"><div><p class="eyebrow">POPULAR RIGHT NOW</p><h2>Trending Drops</h2></div></div>
+      <div id="trendingProducts" class="mini-grid"></div>
+    </section>
+
+    <section id="price-drops" class="collection-section">
+      <div class="section-heading"><div><p class="eyebrow">BIGGEST SAVINGS</p><h2>Price Drops</h2></div></div>
+      <div id="priceDropProducts" class="mini-grid"></div>
+    </section>
+
+    <section id="new-drops" class="collection-section">
+      <div class="section-heading"><div><p class="eyebrow">JUST ADDED</p><h2>New Drops</h2></div></div>
+      <div id="newProducts" class="mini-grid"></div>
+    </section>
+
+    <section id="about" class="how">
+      <p class="eyebrow">WHY ONEDAILYDROP</p><h2>Better signals. Less scrolling.</h2>
+      <div class="method-grid">
+        <article><span>01</span><b>Real shopper demand</b><p>Current interest and buying intent help surface products people actually want.</p></article>
+        <article><span>02</span><b>Customer confidence</b><p>Ratings, review volume and reliability signals help reduce guesswork.</p></article>
+        <article><span>03</span><b>OneDailyDrop Score</b><p>Price, discount, usefulness and category strength combine into one simple score.</p></article>
+      </div>
+    </section>
   </main>
-  <footer><div><b>OneDealTheDay</b><p>One standout deal. Ten useful finds. Every day.</p></div><p class="disclosure">OneDealTheDay may earn commissions from qualifying Amazon and Walmart purchases. Prices and availability may change.</p></footer>
+
+  <footer><div><b>OneDailyDrop</b><p>The Best Deals. Every Day.</p></div><p class="disclosure">OneDailyDrop may earn commissions from qualifying purchases. Prices and availability may change.</p></footer>
 
   <div id="dealModal" class="deal-modal" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="dealModalTitle">
     <div class="deal-modal-backdrop" data-close-deal-modal></div>
     <div class="deal-modal-panel">
       <button class="deal-modal-close" type="button" aria-label="Close comparison" data-close-deal-modal>×</button>
-      <h2 id="dealModalTitle" class="deal-modal-title">Compare this deal</h2>
+      <h2 id="dealModalTitle" class="deal-modal-title">Compare this drop</h2>
       <p id="dealModalProduct" class="deal-modal-product"></p>
       <div id="dealModalOffers" class="offer-list"></div>
       <div id="dealModalSummary" class="deal-summary"></div>
     </div>
   </div>
 
-  <script src="/app.js?v=20260721-3"></script>
-  <script src="/enhancements.js?v=20260721-2"></script>
+  <script src="/app.js?v=20260721-v2"></script>
 </body>
 </html>
