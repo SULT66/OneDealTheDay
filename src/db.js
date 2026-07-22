@@ -19,6 +19,11 @@ db.exec(`
     upc TEXT,
     gtin TEXT,
     model_number TEXT,
+    brand TEXT,
+    brand_slug TEXT,
+    manufacturer TEXT,
+    mpn TEXT,
+    ean TEXT,
     title TEXT,
     category TEXT,
     description TEXT,
@@ -65,7 +70,7 @@ db.exec(`
 `);
 
 const productColumns = new Set(db.prepare("PRAGMA table_info(products)").all().map(column => column.name));
-for (const column of ["product_key", "upc", "gtin", "model_number"]) {
+for (const column of ["product_key", "upc", "gtin", "model_number", "brand", "brand_slug", "manufacturer", "mpn", "ean"]) {
   if (!productColumns.has(column)) db.exec(`ALTER TABLE products ADD COLUMN ${column} TEXT`);
 }
 
@@ -82,6 +87,8 @@ db.exec(`
   END;
   CREATE INDEX IF NOT EXISTS idx_products_status_score ON products(status, score DESC);
   CREATE INDEX IF NOT EXISTS idx_products_category_score ON products(category, score DESC);
+  CREATE INDEX IF NOT EXISTS idx_products_brand_score ON products(brand_slug, score DESC);
+  CREATE INDEX IF NOT EXISTS idx_products_brand_name ON products(brand);
   CREATE INDEX IF NOT EXISTS idx_price_history_product_date ON price_history(product_id, observed_at DESC);
 `);
 
