@@ -1,81 +1,30 @@
-const path = require("path");
-const express = require("express");
-const helmet = require("helmet");
-const cron = require("node-cron");
-const db = require("./db");
-const c = require("./config");
-const { refreshProducts } = require("./refresh");
-
-const app = express();
-const publicDir = path.join(__dirname, "..", "public");
-const pagesDir = path.join(publicDir, "pages");
-
-app.use(helmet({ contentSecurityPolicy: false }));
-app.use(express.json());
-app.use(express.static(publicDir));
-
-const trustPages = {
-  "/about": "about.html",
-  "/contact": "contact.html",
-  "/privacy": "privacy.html",
-  "/terms": "terms.html",
-  "/affiliate-disclosure": "affiliate-disclosure.html",
-  "/editorial-policy": "editorial-policy.html",
-  "/how-we-select-deals": "how-we-select-deals.html",
-  "/price-disclaimer": "price-disclaimer.html"
-};
-Object.entries(trustPages).forEach(([route, file]) => app.get(route, (req, res) => res.sendFile(path.join(pagesDir, file))));
-
-const esc = value => String(value ?? "").replace(/[&<>"']/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
-const money = (value, currency = "USD") => {
-  const number = Number(value);
-  if (!Number.isFinite(number)) return "Check latest price";
-  try { return new Intl.NumberFormat("en-US", { style: "currency", currency: String(currency || "USD").toUpperCase() }).format(number); }
-  catch { return `$${number.toFixed(2)}`; }
-};
-const shortTitle = title => {
-  const cleaned = String(title || "").replace(/\s+/g, " ").trim();
-  if (cleaned.length <= 78) return cleaned;
-  const cut = cleaned.slice(0, 78).replace(/[,;:|\-][^,;:|\-]*$/, "").trim();
-  return `${cut || cleaned.slice(0, 75).trim()}…`;
-};
-const storeName = product => {
-  const source = String(product.source || "").toLowerCase();
-  if (source.includes("amazon") || source.includes("rainforest")) return "Amazon";
-  if (source.includes("walmart") || source.includes("bluecart")) return "Walmart";
-  return product.source || "Retailer";
-};
-const dealLabel = product => Number(product.original_price) > Number(product.current_price) && Number(product.current_price) > 0 ? "Verified discount" : "Popular pick";
-const whyPicked = product => {
-  const parts = [];
-  if (Number(product.rating) >= 4.5) parts.push(`strong ${Number(product.rating).toFixed(1)}-star customer rating`);
-  if (Number(product.review_count) >= 1000) parts.push(`${Number(product.review_count).toLocaleString()}+ reviews`);
-  if (Number(product.score) >= 80) parts.push(`high OneDailyDrop Score of ${Math.round(Number(product.score))}`);
-  if (Number(product.original_price) > Number(product.current_price)) parts.push("a currently verified price reduction");
-  return parts.length ? `We selected this product for its ${parts.join(", ")}.` : "We selected this product after reviewing its price, customer feedback, availability and overall value.";
-};
-
-app.get("/deal/:id", (req, res) => {
-  const product = db.prepare("SELECT * FROM products WHERE id=? AND status='published'").get(req.params.id);
-  if (!product) return res.status(404).send("Product not found");
-  const title = shortTitle(product.title);
-  const store = storeName(product);
-  const updated = product.updated_at ? new Date(product.updated_at).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" }) : "Recently";
-  const description = String(product.description || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-  const canonical = `https://www.onedailydrop.com/deal/${encodeURIComponent(product.id)}`;
-  const schema = JSON.stringify({
-    "@context":"https://schema.org","@type":"Product",name:title,image:product.image_url ? [product.image_url] : undefined,
-    description:description || whyPicked(product),aggregateRating:Number(product.rating) ? {"@type":"AggregateRating",ratingValue:Number(product.rating),reviewCount:Number(product.review_count || 0)} : undefined,
-    offers:{"@type":"Offer",url:canonical,priceCurrency:String(product.currency || "USD").toUpperCase(),price:Number(product.current_price) || undefined,availability:"https://schema.org/InStock",seller:{"@type":"Organization",name:store}}
-  });
-  res.type("html").send(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)} | OneDailyDrop</title><meta name="description" content="${esc((description || whyPicked(product)).slice(0,155))}"><link rel="canonical" href="${canonical}"><meta property="og:type" content="product"><meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc((description || whyPicked(product)).slice(0,180))}"><meta property="og:image" content="${esc(product.image_url)}"><meta property="og:url" content="${canonical}"><link rel="stylesheet" href="/styles.css?v=20260722-product"><script type="application/ld+json">${schema.replace(/</g,"\\u003c")}</script></head><body><header class="site-header"><div class="header-top"><a class="brand" href="/"><span class="brand-mark">D</span><span class="brand-copy"><strong>OneDailyDrop</strong><small>The Best Deals. Every Day.</small></span></a></div></header><main class="product-page"><nav class="breadcrumb"><a href="/">Home</a><span>›</span><span>${esc(product.category || "Deals")}</span><span>›</span><span>${esc(title)}</span></nav><article class="product-detail"><div class="product-detail-media"><img src="${esc(product.image_url)}" alt="${esc(title)}"></div><div class="product-detail-content"><p class="eyebrow">${esc(dealLabel(product))} · ${esc(store)}</p><h1>${esc(title)}</h1><div class="product-score"><strong>${esc(Math.round(Number(product.score) || 0))}/100</strong><span>OneDailyDrop Score</span></div><p class="product-lead">${esc(description || whyPicked(product))}</p><section class="editorial-box"><h2>Why we picked it</h2><p>${esc(whyPicked(product))}</p></section><div class="detail-grid"><section><h3>Best for</h3><p>${esc(product.category || "Everyday shoppers")}</p></section><section><h3>Pros</h3><p>Strong shopper signals, easy retailer access and current availability.</p></section><section><h3>Things to know</h3><p>Prices, shipping and availability can change after you leave OneDailyDrop.</p></section><section><h3>Price verified</h3><p>${esc(updated)} · Source: ${esc(store)}</p></section></div><div class="product-price-box"><span class="product-price">${money(product.current_price, product.currency)}</span>${product.original_price ? `<span class="old">${money(product.original_price, product.currency)}</span>` : ""}<small>Final price is confirmed on the retailer's website.</small></div><a class="featured-button" href="/go/${encodeURIComponent(product.id)}" rel="nofollow sponsored">See deal on ${esc(store)} →</a><p class="inline-disclosure">We may earn a commission from qualifying purchases at no extra cost to you.</p></div></article></main><footer><div><b>OneDailyDrop</b><p>The Best Deals. Every Day.</p></div><p><a href="/affiliate-disclosure">Affiliate Disclosure</a> · <a href="/price-disclaimer">Price Disclaimer</a></p></footer></body></html>`);
-});
-
-const admin = (req, res, next) => (req.headers["x-admin-key"] || req.query.key) === c.adminKey ? next() : res.status(401).json({ error: "Unauthorized" });
-app.get("/api/products", (req, res) => res.json(db.prepare("SELECT * FROM products WHERE status='published' ORDER BY score DESC, updated_at DESC").all()));
-app.get("/api/status", (req, res) => res.json({provider:c.provider,products:db.prepare("SELECT COUNT(*) n FROM products WHERE status='published'").get().n,clicks:db.prepare("SELECT COUNT(*) n FROM clicks").get().n,lastRun:db.prepare("SELECT * FROM refresh_runs ORDER BY id DESC LIMIT 1").get()}));
-app.post("/api/admin/refresh", admin, async (req, res) => { try { res.json(await refreshProducts(c)); } catch (error) { res.status(500).json({ error: error.message }); } });
-app.get("/go/:id", (req, res) => { const product=db.prepare("SELECT * FROM products WHERE id=? AND status='published'").get(req.params.id); if(!product)return res.sendStatus(404); db.prepare("INSERT INTO clicks(product_id,clicked_at,referrer,user_agent) VALUES(?,?,?,?)").run(product.id,new Date().toISOString(),req.get("referer")||"",req.get("user-agent")||""); res.redirect(302,product.affiliate_url); });
-app.get("/admin", (req, res) => res.sendFile(path.join(publicDir, "admin.html")));
-cron.schedule(c.refreshCron, () => refreshProducts(c).catch(error => console.error(error.message)), { timezone: c.timezone });
-(async()=>{if(!db.prepare("SELECT COUNT(*) n FROM products WHERE status='published'").get().n)await refreshProducts(c).catch(console.error);app.listen(c.port,()=>console.log(`http://localhost:${c.port}`));})();
+const path=require("path");
+const express=require("express");
+const helmet=require("helmet");
+const cron=require("node-cron");
+const db=require("./db");
+const c=require("./config");
+const{refreshProducts}=require("./refresh");
+const app=express(),publicDir=path.join(__dirname,"..","public"),pagesDir=path.join(publicDir,"pages"),SITE="https://www.onedailydrop.com";
+app.use(helmet({contentSecurityPolicy:false}));app.use(express.json());app.use(express.static(publicDir));
+const trustPages={"/about":"about.html","/contact":"contact.html","/privacy":"privacy.html","/terms":"terms.html","/affiliate-disclosure":"affiliate-disclosure.html","/editorial-policy":"editorial-policy.html","/how-we-select-deals":"how-we-select-deals.html","/price-disclaimer":"price-disclaimer.html"};Object.entries(trustPages).forEach(([r,f])=>app.get(r,(q,s)=>s.sendFile(path.join(pagesDir,f))));
+const esc=v=>String(v??"").replace(/[&<>"']/g,x=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[x]));
+const slug=v=>String(v||"").normalize("NFKD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/&/g," and ").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,90)||"deal";
+const dealPath=p=>`/deal/${slug(p.title)}-${p.id}`,catPath=v=>`/category/${slug(v)}`;
+const money=(v,cur="USD")=>{const n=Number(v);if(!Number.isFinite(n))return"Check latest price";try{return new Intl.NumberFormat("en-US",{style:"currency",currency:String(cur||"USD").toUpperCase()}).format(n)}catch{return`$${n.toFixed(2)}`}};
+const clean=v=>String(v||"").replace(/<[^>]+>/g," ").replace(/\s+/g," ").trim();
+const shortTitle=v=>{const t=clean(v);return t.length<=78?t:`${t.slice(0,75).trim()}…`};
+const storeName=p=>{const s=String(p.source||"").toLowerCase();if(s.includes("amazon")||s.includes("rainforest"))return"Amazon";if(s.includes("walmart")||s.includes("bluecart"))return"Walmart";return p.source||"Retailer"};
+const whyPicked=p=>{const a=[];if(Number(p.rating)>=4.5)a.push(`strong ${Number(p.rating).toFixed(1)}-star rating`);if(Number(p.review_count)>=1000)a.push(`${Number(p.review_count).toLocaleString()}+ reviews`);if(Number(p.score)>=80)a.push(`high OneDailyDrop Score of ${Math.round(Number(p.score))}`);if(Number(p.original_price)>Number(p.current_price))a.push("a currently verified price reduction");return a.length?`We selected this product for its ${a.join(", ")}.`:"We selected this product after reviewing its price, customer feedback, availability and overall value."};
+const shell=(title,description,canonical,body,schema,image="")=>`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)}</title><meta name="description" content="${esc(description.slice(0,160))}"><link rel="canonical" href="${canonical}"><meta property="og:type" content="website"><meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(description.slice(0,180))}"><meta property="og:url" content="${canonical}">${image?`<meta property="og:image" content="${esc(image)}">`:""}<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="${esc(title)}"><meta name="twitter:description" content="${esc(description.slice(0,180))}"><link rel="stylesheet" href="/styles.css?v=20260722-seo"><script type="application/ld+json">${JSON.stringify(schema).replace(/</g,"\\u003c")}</script></head><body><header class="site-header"><div class="header-top"><a class="brand" href="/"><span class="brand-mark">D</span><span class="brand-copy"><strong>OneDailyDrop</strong><small>The Best Deals. Every Day.</small></span></a></div></header>${body}<footer><div><b>OneDailyDrop</b><p>The Best Deals. Every Day.</p></div><p><a href="/affiliate-disclosure">Affiliate Disclosure</a> · <a href="/price-disclaimer">Price Disclaimer</a></p></footer></body></html>`;
+const findProduct=param=>{const id=String(param).match(/-(\d+)$/)?.[1]||(/^\d+$/.test(param)?param:null);return id?db.prepare("SELECT * FROM products WHERE id=? AND status='published'").get(id):null};
+app.get("/deal/:slug",(req,res)=>{const p=findProduct(req.params.slug);if(!p)return res.status(404).send("Product not found");const canonical=SITE+dealPath(p);if(req.path!==dealPath(p))return res.redirect(301,dealPath(p));const title=shortTitle(p.title),description=clean(p.description)||whyPicked(p),store=storeName(p),category=p.category||"Deals";const productSchema={"@context":"https://schema.org","@graph":[{"@type":"Product",name:title,image:p.image_url?[p.image_url]:undefined,description,aggregateRating:Number(p.rating)?{"@type":"AggregateRating",ratingValue:Number(p.rating),reviewCount:Number(p.review_count||0)}:undefined,offers:{"@type":"Offer",url:canonical,priceCurrency:String(p.currency||"USD").toUpperCase(),price:Number(p.current_price)||undefined,availability:"https://schema.org/InStock",seller:{"@type":"Organization",name:store}}},{"@type":"BreadcrumbList",itemListElement:[{"@type":"ListItem",position:1,name:"Home",item:SITE},{"@type":"ListItem",position:2,name:category,item:SITE+catPath(category)},{"@type":"ListItem",position:3,name:title,item:canonical}]}]};const body=`<main class="product-page"><nav class="breadcrumb"><a href="/">Home</a><span>›</span><a href="${catPath(category)}">${esc(category)}</a><span>›</span><span>${esc(title)}</span></nav><article class="product-detail"><div class="product-detail-media"><img src="${esc(p.image_url)}" alt="${esc(title)}"></div><div class="product-detail-content"><p class="eyebrow">${esc(store)}</p><h1>${esc(title)}</h1><div class="product-score"><strong>${Math.round(Number(p.score)||0)}/100</strong><span>OneDailyDrop Score</span></div><p class="product-lead">${esc(description)}</p><section class="editorial-box"><h2>Why we picked it</h2><p>${esc(whyPicked(p))}</p></section><div class="detail-grid"><section><h3>Best for</h3><p>${esc(category)} shoppers</p></section><section><h3>Price verified</h3><p>${esc(p.updated_at?new Date(p.updated_at).toLocaleString("en-US"):"Recently")} · ${esc(store)}</p></section></div><div class="product-price-box"><span class="product-price">${money(p.current_price,p.currency)}</span>${p.original_price?`<span class="old">${money(p.original_price,p.currency)}</span>`:""}<small>Final price is confirmed on the retailer website.</small></div><a class="featured-button" href="/go/${p.id}" rel="nofollow sponsored">See deal on ${esc(store)} →</a></div></article></main>`;res.send(shell(`${title} | OneDailyDrop`,description,canonical,body,productSchema,p.image_url))});
+app.get("/category/:slug",(req,res)=>{const all=db.prepare("SELECT * FROM products WHERE status='published' ORDER BY score DESC,updated_at DESC").all();const categories=[...new Set(all.map(p=>p.category).filter(Boolean))];const category=categories.find(x=>slug(x)===req.params.slug);if(!category)return res.status(404).send("Category not found");const products=all.filter(p=>p.category===category),canonical=SITE+catPath(category),description=`Browse the best ${category} deals selected by OneDailyDrop.`;const cards=products.map((p,i)=>`<article class="card"><a class="image-wrap" href="${dealPath(p)}"><img src="${esc(p.image_url)}" alt="${esc(shortTitle(p.title))}"></a><div class="card-content"><span class="rank">#${i+1}</span><h3><a href="${dealPath(p)}">${esc(shortTitle(p.title))}</a></h3><p class="description">${esc(whyPicked(p))}</p><span class="price">${money(p.current_price,p.currency)}</span></div></article>`).join("");const schema={"@context":"https://schema.org","@type":"ItemList",name:`Best ${category} Deals`,itemListElement:products.map((p,i)=>({"@type":"ListItem",position:i+1,url:SITE+dealPath(p),name:shortTitle(p.title)}))};res.send(shell(`Best ${category} Deals | OneDailyDrop`,description,canonical,`<main><section class="deals-section"><div class="section-heading"><div><p class="eyebrow">CATEGORY</p><h1>${esc(category)} Deals</h1></div><p class="result-count">${products.length} products</p></div><div class="grid">${cards}</div></section></main>`,schema))});
+app.get("/robots.txt",(req,res)=>res.type("text/plain").send(`User-agent: *\nAllow: /\nDisallow: /admin\nDisallow: /api/\nSitemap: ${SITE}/sitemap.xml\n`));
+app.get("/sitemap.xml",(req,res)=>{const products=db.prepare("SELECT id,title,category,updated_at FROM products WHERE status='published'").all(),cats=[...new Set(products.map(p=>p.category).filter(Boolean))],staticUrls=["/",...Object.keys(trustPages)];const urls=[...staticUrls.map(loc=>({loc:SITE+loc})),...cats.map(x=>({loc:SITE+catPath(x)})),...products.map(p=>({loc:SITE+dealPath(p),lastmod:p.updated_at}))];res.type("application/xml").send(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls.map(u=>`<url><loc>${esc(u.loc)}</loc>${u.lastmod?`<lastmod>${new Date(u.lastmod).toISOString()}</lastmod>`:""}</url>`).join("")}</urlset>`)});
+const admin=(req,res,next)=>(req.headers["x-admin-key"]||req.query.key)===c.adminKey?next():res.status(401).json({error:"Unauthorized"});
+app.get("/api/products",(req,res)=>res.json(db.prepare("SELECT * FROM products WHERE status='published' ORDER BY score DESC,updated_at DESC").all().map(p=>({...p,slug:slug(p.title),deal_url:dealPath(p),category_url:catPath(p.category||"deals")}))));
+app.get("/api/status",(req,res)=>res.json({provider:c.provider,products:db.prepare("SELECT COUNT(*) n FROM products WHERE status='published'").get().n,clicks:db.prepare("SELECT COUNT(*) n FROM clicks").get().n,lastRun:db.prepare("SELECT * FROM refresh_runs ORDER BY id DESC LIMIT 1").get()}));
+app.post("/api/admin/refresh",admin,async(req,res)=>{try{res.json(await refreshProducts(c))}catch(e){res.status(500).json({error:e.message})}});
+app.get("/go/:id",(req,res)=>{const p=db.prepare("SELECT * FROM products WHERE id=? AND status='published'").get(req.params.id);if(!p)return res.sendStatus(404);db.prepare("INSERT INTO clicks(product_id,clicked_at,referrer,user_agent) VALUES(?,?,?,?)").run(p.id,new Date().toISOString(),req.get("referer")||"",req.get("user-agent")||"");res.redirect(302,p.affiliate_url)});
+app.get("/admin",(req,res)=>res.sendFile(path.join(publicDir,"admin.html")));cron.schedule(c.refreshCron,()=>refreshProducts(c).catch(e=>console.error(e.message)),{timezone:c.timezone});(async()=>{if(!db.prepare("SELECT COUNT(*) n FROM products WHERE status='published'").get().n)await refreshProducts(c).catch(console.error);app.listen(c.port,()=>console.log(`http://localhost:${c.port}`))})();
