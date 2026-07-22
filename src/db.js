@@ -52,6 +52,16 @@ db.exec(`
     referrer TEXT,
     user_agent TEXT
   );
+  CREATE TABLE IF NOT EXISTS price_history(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    product_id INTEGER NOT NULL,
+    price REAL NOT NULL,
+    original_price REAL,
+    currency TEXT NOT NULL DEFAULT 'USD',
+    source TEXT,
+    observed_at TEXT NOT NULL,
+    FOREIGN KEY(product_id) REFERENCES products(id)
+  );
 `);
 
 const productColumns = new Set(db.prepare("PRAGMA table_info(products)").all().map(column => column.name));
@@ -72,6 +82,19 @@ db.exec(`
   END;
   CREATE INDEX IF NOT EXISTS idx_products_status_score ON products(status, score DESC);
   CREATE INDEX IF NOT EXISTS idx_products_category_score ON products(category, score DESC);
+  CREATE INDEX IF NOT EXISTS idx_price_history_product_date ON price_history(product_id, observed_at DESC);
+`);
+
+// Seed one observation for existing products so price intelligence works
+// immediately after deployment without discarding any catalog data.
+db.exec(`
+  INSERT INTO price_history(product_id, price, original_price, currency, source, observed_at)
+  SELECT p.id, p.current_price, p.original_price, COALESCE(NULLIF(p.currency,''),'USD'), p.source,
+         COALESCE(NULLIF(p.updated_at,''), datetime('now'))
+  FROM products p
+  WHERE p.current_price IS NOT NULL
+    AND p.current_price > 0
+    AND NOT EXISTS (SELECT 1 FROM price_history h WHERE h.product_id=p.id);
 `);
 
 console.log(`Database: ${dbPath}`);
