@@ -1,5 +1,6 @@
 const db = require("./db");
 const { rankProducts } = require("./ranker");
+const { detectBrand, normalizeBrand, slugifyBrand } = require("./brandDetector");
 
 async function loadProducts(c) {
   if (c.provider !== "multi") {
@@ -49,10 +50,11 @@ exports.refreshProducts = async c => {
       const productByExternalId = db.prepare("SELECT id,current_price,original_price,currency,source FROM products WHERE external_id=?");
       const insertHistory = db.prepare("INSERT INTO price_history(product_id,price,original_price,currency,source,observed_at) VALUES(?,?,?,?,?,?)");
       const stmt = db.prepare(`
-        INSERT INTO products(external_id,product_key,upc,gtin,model_number,title,category,description,image_url,affiliate_url,rating,review_count,current_price,original_price,currency,badge,score,source,status,updated_at)
-        VALUES(@external_id,@product_key,@upc,@gtin,@model_number,@title,@category,@description,@image_url,@affiliate_url,@rating,@review_count,@current_price,@original_price,@currency,@badge,@score,@source,'published',@updated_at)
+        INSERT INTO products(external_id,product_key,upc,gtin,model_number,brand,brand_slug,manufacturer,mpn,ean,title,category,description,image_url,affiliate_url,rating,review_count,current_price,original_price,currency,badge,score,source,status,updated_at)
+        VALUES(@external_id,@product_key,@upc,@gtin,@model_number,@brand,@brand_slug,@manufacturer,@mpn,@ean,@title,@category,@description,@image_url,@affiliate_url,@rating,@review_count,@current_price,@original_price,@currency,@badge,@score,@source,'published',@updated_at)
         ON CONFLICT(external_id) DO UPDATE SET
           product_key=excluded.product_key,upc=excluded.upc,gtin=excluded.gtin,model_number=excluded.model_number,
+          brand=excluded.brand,brand_slug=excluded.brand_slug,manufacturer=excluded.manufacturer,mpn=excluded.mpn,ean=excluded.ean,
           title=excluded.title,category=excluded.category,description=excluded.description,image_url=excluded.image_url,
           affiliate_url=excluded.affiliate_url,rating=excluded.rating,review_count=excluded.review_count,
           current_price=excluded.current_price,original_price=excluded.original_price,currency=excluded.currency,
@@ -60,9 +62,12 @@ exports.refreshProducts = async c => {
       `);
 
       for (const product of top) {
+        const brand = normalizeBrand(detectBrand(product));
         const safe = {
           external_id: textValue(product.external_id), product_key: textValue(product.product_key), upc: textValue(product.upc),
-          gtin: textValue(product.gtin), model_number: textValue(product.model_number), title: textValue(product.title),
+          gtin: textValue(product.gtin), model_number: textValue(product.model_number || product.model),
+          brand, brand_slug: slugifyBrand(brand), manufacturer: textValue(product.manufacturer),
+          mpn: textValue(product.mpn || product.part_number), ean: textValue(product.ean), title: textValue(product.title),
           category: textValue(product.category), description: textValue(product.description), image_url: textValue(product.image_url),
           affiliate_url: textValue(product.affiliate_url), rating: numberValue(product.rating, 0),
           review_count: Math.round(numberValue(product.review_count, 0)),
@@ -81,7 +86,7 @@ exports.refreshProducts = async c => {
     })();
 
     db.prepare("UPDATE refresh_runs SET finished_at=?,found_count=?,published_count=?,status='success',message=? WHERE id=?")
-      .run(new Date().toISOString(), found.length, top.length, "Products refreshed and price changes recorded", runId);
+      .run(new Date().toISOString(), found.length, top.length, "Products refreshed with brand and price intelligence", runId);
     return { provider: c.provider, found: found.length, published: top.length };
   } catch (err) {
     db.prepare("UPDATE refresh_runs SET finished_at=?,status='failed',message=? WHERE id=?").run(new Date().toISOString(), err.message, runId);
