@@ -41,6 +41,10 @@ const editorialWhyPicked = product => {
   const second = evidence.length ? `We selected it based on its ${evidence.join(", ")}${savings ? ` and a verified ${savings}% price reduction` : ""}.` : "We selected it after comparing current price, product relevance and available shopper feedback.";
   return `${first} ${second}`;
 };
+const anchorOffsetStyle = `<style id="homepage-anchor-offset">
+#today,#featuredDeal,#top,#trending,#price-drops,#new-drops,#about{scroll-margin-top:112px}
+@media(max-width:720px){#today,#featuredDeal,#top,#trending,#price-drops,#new-drops,#about{scroll-margin-top:164px}}
+</style>`;
 
 module.exports = function homepageSeo(req, res) {
   const originalSend = res.send.bind(res);
@@ -52,6 +56,8 @@ module.exports = function homepageSeo(req, res) {
       '<link rel="canonical" href="https://www.onedailydrop.com/">',
       '<link rel="canonical" href="https://www.onedailydrop.com/"><link rel="icon" href="/favicon.svg" type="image/svg+xml"><meta property="og:site_name" content="OneDailyDrop">'
     );
+
+    enhanced = enhanced.replace("</head>", `${anchorOffsetStyle}</head>`);
 
     if (!config.demoMode) {
       const top = db.prepare("SELECT * FROM products WHERE status='published' AND LOWER(COALESCE(source,''))<>'demo' ORDER BY score DESC, updated_at DESC LIMIT 10").all();
