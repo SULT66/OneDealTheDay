@@ -5,7 +5,9 @@
   "main": "app.js",
   "scripts": {
     "start": "node app.js",
-    "refresh": "node src/refresh-cli.js"
+    "refresh": "node src/refresh-cli.js",
+    "test": "node scripts/validate-production-catalog.js",
+    "build": "node scripts/validate-production-catalog.js"
   },
   "dependencies": {
     "better-sqlite3": "^11.8.1",
