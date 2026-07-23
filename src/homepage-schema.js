@@ -60,11 +60,15 @@ module.exports = function buildHomepageSchema({ SITE, top, dealPath, shortTitle,
         name: "Top 10 Drops Today",
         itemListOrder: "https://schema.org/ItemListOrderDescending",
         numberOfItems: top.length,
-        itemListElement: top.map((product, index) => ({
-          "@type": "ListItem",
-          position: index + 1,
-          item: { "@id": `${SITE + dealPath(product)}#product` }
-        }))
+        itemListElement: top.map((product, index) => {
+          const canonical = SITE + dealPath(product);
+          return {
+            "@type": "ListItem",
+            position: index + 1,
+            url: canonical,
+            item: { "@id": `${canonical}#product` }
+          };
+        })
       },
       ...productNodes
     ]
