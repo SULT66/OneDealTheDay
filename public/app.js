@@ -1,38 +1,246 @@
 (() => {
   const $ = id => document.getElementById(id);
-  const els = {searchInput:$("searchInput"),themeToggle:$("themeToggle"),categoryMenuButton:$("categoryMenuButton"),categoryMenu:$("categoryMenu"),featuredDeal:$("featuredDeal"),updated:$("updated"),countdown:$("countdown"),dealsTitle:$("dealsTitle"),resultCount:$("resultCount"),products:$("products"),emptyState:$("emptyState"),trendingProducts:$("trendingProducts"),priceDropProducts:$("priceDropProducts"),newProducts:$("newProducts"),dealModal:$("dealModal"),dealModalProduct:$("dealModalProduct"),dealModalOffers:$("dealModalOffers"),dealModalSummary:$("dealModalSummary")};
-  const esc=value=>String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-  const cleanText=value=>{const d=document.createElement("div");d.innerHTML=String(value??"");return(d.textContent||d.innerText||"").replace(/\s+/g," ").trim();};
-  const shortTitle=value=>{const t=cleanText(value);if(t.length<=78)return t;const cut=t.slice(0,78).replace(/[,;:|\-][^,;:|\-]*$/,"").trim();return`${cut||t.slice(0,75).trim()}…`;};
-  const money=(value,currency="USD")=>{if(value==null||value==="")return"Check price";const amount=Number(value);if(!Number.isFinite(amount))return"Check price";try{return new Intl.NumberFormat("en-US",{style:"currency",currency:String(currency||"USD").toUpperCase()}).format(amount);}catch{return`$${amount.toFixed(2)}`;}};
-  const discount=p=>Number(p.original_price)>Number(p.current_price)&&Number(p.current_price)>0?Math.round((1-Number(p.current_price)/Number(p.original_price))*100):0;
-  const storeName=p=>{const s=String(p.source||"").toLowerCase();if(s.includes("walmart")||s.includes("bluecart"))return"Walmart";if(s.includes("amazon")||s.includes("rainforest"))return"Amazon";return p.source?String(p.source):"Store";};
-  const storeClass=n=>n.toLowerCase()==="amazon"?"amazon":n.toLowerCase()==="walmart"?"walmart":"other";
-  const normalizedTitle=t=>String(t||"").toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g," ").replace(/\b(newest|new|renewed|refurbished|amazon|walmart|exclusive|pack|count)\b/g," ").replace(/\s+/g," ").trim();
-  const titleTokens=t=>new Set(normalizedTitle(t).split(" ").filter(x=>x.length>2));
-  const similarity=(l,r)=>{const a=titleTokens(l),b=titleTokens(r);if(!a.size||!b.size)return 0;const i=[...a].filter(x=>b.has(x)).length;return i/new Set([...a,...b]).size;};
-  const exactMatchKey=p=>{const x=p.product_key||p.gtin||p.upc||p.ean||p.model_number||p.model;return x?String(x).toLowerCase().replace(/[^a-z0-9]/g,""):"";};
-  const verifiedText=p=>p.updated_at?`Price verified ${new Date(p.updated_at).toLocaleString()}`:"Price recently verified";
-  const whyPicked=p=>{const reasons=[];if(Number(p.rating)>=4.5)reasons.push(`${Number(p.rating).toFixed(1)}-star rating`);if(Number(p.review_count)>=1000)reasons.push(`${Number(p.review_count).toLocaleString()}+ reviews`);if(Number(p.score)>=80)reasons.push(`score ${Math.round(Number(p.score))}/100`);if(discount(p))reasons.push(`${discount(p)}% verified discount`);return reasons.length?`Picked for its ${reasons.join(", ")}.`:`Picked for its price, shopper feedback and overall value.`;};
-  const badgeFor=p=>discount(p)>=25?"VERIFIED DEAL":Number(p.score)>=90?"EDITOR'S PICK":Number(p.review_count)>=5000?"TRENDING":"POPULAR PICK";
-  let productGroups=[],activeCategory="Top 10";
-  const buildGroups=products=>{const groups=[];for(const product of[...products].filter(p=>p&&p.title).sort((a,b)=>(Number(b.score)||0)-(Number(a.score)||0))){const store=storeName(product),exact=exactMatchKey(product);let group=groups.find(g=>{if(g.offers.some(o=>storeName(o)===store))return false;const e=g.offers.map(exactMatchKey).find(Boolean);return Boolean(exact&&e&&exact===e)||similarity(product.title,g.primary.title)>=0.72;});if(!group){group={key:`group-${groups.length}`,primary:product,offers:[],comparable:false};groups.push(group);}group.offers.push(product);group.offers.sort((a,b)=>(Number(b.score)||0)-(Number(a.score)||0));group.primary=group.offers[0];const stores=new Set(group.offers.map(storeName));group.comparable=stores.has("Amazon")&&stores.has("Walmart");}return groups.sort((a,b)=>a.comparable!==b.comparable?(a.comparable?-1:1):(Number(b.primary.score)||0)-(Number(a.primary.score)||0));};
-  const actionButton=(g,p,cls)=>`<div class="card-actions"><a class="${cls}" href="/deal/${encodeURIComponent(p.id)}">VIEW DETAILS</a>${g.comparable?`<button class="${cls} secondary-action deal-action" type="button" data-deal-key="${esc(g.key)}">COMPARE PRICES</button>`:`<a class="${cls} secondary-action" href="/go/${encodeURIComponent(p.id)}" rel="nofollow sponsored">SEE DEAL ON ${esc(storeName(p))}</a>`}</div>`;
-  const renderFeatured=()=>{const g=productGroups[0],p=g?.primary;if(!p){els.featuredDeal.innerHTML='<div class="featured-body">No featured drop is available yet.</div>';return;}const save=discount(p);els.featuredDeal.innerHTML=`<div class="featured-media"><a href="/deal/${encodeURIComponent(p.id)}"><img src="${esc(p.image_url)}" alt="${esc(shortTitle(p.title))}"></a><span class="featured-ribbon">TODAY'S DROP</span><span class="featured-badge">${esc(badgeFor(p))}</span></div><div class="featured-body"><p class="cat">${esc(p.category)} · ${esc(storeName(p))}</p><h2><a href="/deal/${encodeURIComponent(p.id)}">${esc(shortTitle(p.title))}</a></h2><p class="description">${esc(whyPicked(p))}</p><p class="stats">★ ${esc(p.rating||"—")} · ${Number(p.review_count||0).toLocaleString()} reviews</p><div class="score-strip"><strong>${esc(Math.round(Number(p.score)||0))}/100</strong><span>OneDailyDrop Score</span></div><div class="featured-price-row"><span class="featured-price">${money(p.current_price,p.currency)}</span>${p.original_price?`<span class="old">${money(p.original_price,p.currency)}</span>`:""}${save?`<span class="save-pill">SAVE ${save}%</span>`:""}</div><p class="verification">${esc(verifiedText(p))} · Source: ${esc(storeName(p))}</p>${actionButton(g,p,"featured-button")}</div>`;};
-  const groupsForView=q=>q?productGroups.filter(g=>{const p=g.primary;return`${p.title} ${cleanText(p.description)} ${p.category||""} ${storeName(p)}`.toLowerCase().includes(q);}):activeCategory==="Top 10"?productGroups.slice(0,10):productGroups.filter(g=>g.primary.category===activeCategory);
-  const renderMain=()=>{const q=els.searchInput.value.trim().toLowerCase(),visible=groupsForView(q);els.dealsTitle.textContent=q?"Search results":activeCategory==="Top 10"?"Top 10 Drops Today":activeCategory;els.resultCount.textContent=q?`Found ${visible.length} products`:activeCategory==="Top 10"?`Showing the 10 best unique drops of ${productGroups.length}`:`Showing ${visible.length} unique products`;els.emptyState.hidden=visible.length!==0;els.products.innerHTML=visible.map(g=>{const p=g.primary,rank=productGroups.indexOf(g)+1,save=discount(p);return`<article class="card"><a class="image-wrap" href="/deal/${encodeURIComponent(p.id)}"><img src="${esc(p.image_url)}" alt="${esc(shortTitle(p.title))}" loading="lazy"></a><div class="card-content"><div class="card-top"><span class="rank">#${rank}</span><span class="badge">${esc(badgeFor(p))}</span></div><p class="cat">${esc(p.category)} · ${esc(storeName(p))}</p><h3><a href="/deal/${encodeURIComponent(p.id)}">${esc(shortTitle(p.title))}</a></h3><p class="description"><strong>Why we picked it:</strong> ${esc(whyPicked(p))}</p><p class="stats">★ ${esc(p.rating||"—")} · ${Number(p.review_count||0).toLocaleString()} reviews · Score ${esc(Math.round(Number(p.score)||0))}/100</p><span class="price">${money(p.current_price,p.currency)}</span>${p.original_price?`<span class="old">${money(p.original_price,p.currency)}</span>`:""}${save?`<span class="save-pill">SAVE ${save}%</span>`:""}<p class="verification">${esc(verifiedText(p))} · ${esc(storeName(p))}</p>${actionButton(g,p,"button")}</div></article>`;}).join("");};
-  const miniCard=g=>{const p=g.primary,save=discount(p);return`<article class="mini-card"><a href="/deal/${encodeURIComponent(p.id)}"><img src="${esc(p.image_url)}" alt="${esc(shortTitle(p.title))}" loading="lazy"></a><div class="mini-card-body"><p class="cat">${esc(p.category)} · ${esc(storeName(p))}</p><h3><a href="/deal/${encodeURIComponent(p.id)}">${esc(shortTitle(p.title))}</a></h3><p class="mini-meta">★ ${esc(p.rating||"—")} · Score ${esc(Math.round(Number(p.score)||0))}/100${save?` · Save ${save}%`:""}</p><div><span class="mini-price">${money(p.current_price,p.currency)}</span>${p.original_price?`<span class="old">${money(p.original_price,p.currency)}</span>`:""}</div><a class="mini-action" href="/deal/${encodeURIComponent(p.id)}">VIEW DETAILS</a></div></article>`;};
-  const takeUnique=(source,count,used)=>{const chosen=[];for(const group of source){if(chosen.length>=count)break;if(used.has(group.key))continue;used.add(group.key);chosen.push(group);}return chosen;};
-  const renderCollections=()=>{const used=new Set(productGroups.slice(0,10).map(g=>g.key));const trending=takeUnique([...productGroups].sort((a,b)=>(Number(b.primary.review_count)||0)-(Number(a.primary.review_count)||0)),4,used);const priceDrops=takeUnique([...productGroups].filter(g=>discount(g.primary)>0).sort((a,b)=>discount(b.primary)-discount(a.primary)),4,used);const newest=takeUnique([...productGroups].sort((a,b)=>new Date(b.primary.updated_at||0)-new Date(a.primary.updated_at||0)),4,used);els.trendingProducts.innerHTML=trending.map(miniCard).join("")||'<p class="empty-state">More unique trending products will appear after the next catalog refresh.</p>';els.priceDropProducts.innerHTML=priceDrops.map(miniCard).join("")||'<p class="empty-state">Verified price drops will appear when original prices are available.</p>';els.newProducts.innerHTML=newest.map(miniCard).join("")||'<p class="empty-state">More unique new products will appear after the next refresh.</p>';};
-  const renderCategoryMenu=()=>{const cats=[...new Set(productGroups.map(g=>g.primary.category).filter(Boolean))];els.categoryMenu.innerHTML=[`<button data-category="Top 10">Top 10 Drops</button>`,...cats.map(c=>`<button data-category="${esc(c)}">${esc(c)}</button>`)].join("");els.categoryMenu.querySelectorAll("button").forEach(b=>b.addEventListener("click",()=>{activeCategory=b.dataset.category;els.searchInput.value="";els.categoryMenu.hidden=true;els.categoryMenuButton.setAttribute("aria-expanded","false");renderMain();document.querySelector("#top").scrollIntoView({behavior:"smooth"});}));};
-  const openDealModal=key=>{const g=productGroups.find(x=>x.key===key&&x.comparable);if(!g)return;const offers=g.offers.filter(p=>["Amazon","Walmart"].includes(storeName(p))),priced=offers.filter(p=>Number.isFinite(Number(p.current_price))),low=priced.length?Math.min(...priced.map(p=>Number(p.current_price))):null,high=priced.length?Math.max(...priced.map(p=>Number(p.current_price))):null,best=low==null?null:priced.find(p=>Number(p.current_price)===low);els.dealModalProduct.textContent=shortTitle(g.primary.title);els.dealModalOffers.innerHTML=offers.map(p=>{const n=storeName(p),isBest=low!=null&&Number(p.current_price)===low;return`<div class="offer-row"><div><div class="offer-store">${esc(n)}${isBest?'<span class="best-price">BEST PRICE</span>':""}</div><div class="offer-price">${money(p.current_price,p.currency)}</div><div class="offer-meta">${esc(verifiedText(p))}</div></div><a class="store-button ${storeClass(n)}" href="/go/${encodeURIComponent(p.id)}" rel="nofollow sponsored">Buy on ${esc(n)}</a></div>`;}).join("");els.dealModalSummary.textContent=best&&high>low?`Best price: ${storeName(best)}. Save ${money(high-low,best.currency)} compared with the other store.`:best?"The price is currently the same at Amazon and Walmart.":"Open either store to see the latest price.";els.dealModal.hidden=false;els.dealModal.setAttribute("aria-hidden","false");document.body.style.overflow="hidden";};
-  const closeDealModal=()=>{els.dealModal.hidden=true;els.dealModal.setAttribute("aria-hidden","true");document.body.style.overflow="";};
-  els.categoryMenuButton.addEventListener("click",()=>{const open=els.categoryMenu.hidden;els.categoryMenu.hidden=!open;els.categoryMenuButton.setAttribute("aria-expanded",String(open));});
-  document.addEventListener("click",e=>{if(!e.target.closest(".category-menu")){els.categoryMenu.hidden=true;els.categoryMenuButton.setAttribute("aria-expanded","false");}const t=e.target.closest("[data-deal-key]");if(t)openDealModal(t.dataset.dealKey);if(e.target.closest("[data-close-deal-modal]"))closeDealModal();});
-  document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!els.dealModal.hidden)closeDealModal();});
-  els.searchInput.addEventListener("input",()=>{activeCategory="Top 10";renderMain();document.querySelector("#top").scrollIntoView({behavior:"smooth",block:"start"});});
-  els.themeToggle.addEventListener("click",()=>{document.body.classList.toggle("dark");localStorage.setItem("theme",document.body.classList.contains("dark")?"dark":"light");});
-  if(localStorage.getItem("theme")==="dark"||(!localStorage.getItem("theme")&&matchMedia("(prefers-color-scheme: dark)").matches))document.body.classList.add("dark");
-  const updateCountdown=()=>{const now=new Date(),next=new Date(now);next.setHours(24,0,0,0);const ms=Math.max(0,next-now),h=Math.floor(ms/36e5),m=Math.floor(ms%36e5/6e4),s=Math.floor(ms%6e4/1e3);els.countdown.textContent=`${String(h).padStart(2,"0")}h ${String(m).padStart(2,"0")}m ${String(s).padStart(2,"0")}s`;};setInterval(updateCountdown,1000);updateCountdown();
-  fetch("/api/products",{headers:{Accept:"application/json"}}).then(async r=>{if(!r.ok)throw new Error(`Products API returned HTTP ${r.status}`);const text=await r.text();try{return JSON.parse(text);}catch{throw new Error("Products API returned invalid JSON");}}).then(data=>{productGroups=buildGroups(Array.isArray(data)?data:[]);els.updated.textContent=productGroups[0]?.primary?.updated_at?`Updated ${new Date(productGroups[0].primary.updated_at).toLocaleString()}`:"Today’s selection is ready";renderFeatured();renderCategoryMenu();renderMain();renderCollections();}).catch(err=>{console.error("OneDailyDrop load error:",err);els.updated.textContent="Could not load the latest update";els.featuredDeal.innerHTML='<div class="featured-body"><h2>Today’s drop is temporarily unavailable.</h2><p class="description">Please refresh the page in a moment.</p></div>';els.products.innerHTML='<div class="empty-state">Unable to load products. Please refresh the page.</div>';});
+  const els = {
+    searchInput: $("searchInput"),
+    themeToggle: $("themeToggle"),
+    categoryMenuButton: $("categoryMenuButton"),
+    categoryMenu: $("categoryMenu"),
+    featuredDeal: $("featuredDeal"),
+    updated: $("updated"),
+    countdown: $("countdown"),
+    dealsTitle: $("dealsTitle"),
+    resultCount: $("resultCount"),
+    products: $("products"),
+    emptyState: $("emptyState"),
+    trendingProducts: $("trendingProducts"),
+    priceDropProducts: $("priceDropProducts"),
+    newProducts: $("newProducts")
+  };
+
+  const esc = value => String(value ?? "").replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
+  const cleanText = value => {
+    const element = document.createElement("div");
+    element.innerHTML = String(value ?? "");
+    return (element.textContent || element.innerText || "").replace(/\s+/g, " ").trim();
+  };
+  const fullTitle = value => cleanText(value);
+  const isDemo = product => String(product?.source || "").toLowerCase() === "demo";
+  const money = (value, currency = "USD") => {
+    if (value == null || value === "") return "Check price";
+    const amount = Number(value);
+    if (!Number.isFinite(amount)) return "Check price";
+    try {
+      return new Intl.NumberFormat("en-US", { style: "currency", currency: String(currency || "USD").toUpperCase() }).format(amount);
+    } catch {
+      return `$${amount.toFixed(2)}`;
+    }
+  };
+  const discount = product => Number(product.original_price) > Number(product.current_price) && Number(product.current_price) > 0
+    ? Math.round((1 - Number(product.current_price) / Number(product.original_price)) * 100)
+    : 0;
+  const storeName = product => {
+    if (isDemo(product)) return "Preview catalog";
+    const source = String(product.source || "").toLowerCase();
+    if (source.includes("walmart") || source.includes("bluecart")) return "Walmart";
+    if (source.includes("amazon") || source.includes("rainforest")) return "Amazon";
+    return product.source ? String(product.source) : "Retailer";
+  };
+  const badgeFor = product => {
+    if (isDemo(product)) return "DEMO PREVIEW";
+    if (discount(product) >= 25) return "VERIFIED DEAL";
+    if (Number(product.score) >= 90) return "EDITOR'S PICK";
+    if (Number(product.review_count) >= 5000) return "TRENDING";
+    return "POPULAR PICK";
+  };
+  const statusText = product => isDemo(product)
+    ? "Sample price · Preview data"
+    : product.updated_at
+      ? `Price verified ${new Date(product.updated_at).toLocaleString()}`
+      : "Price recently verified";
+  const priceLabel = product => isDemo(product) ? "Sample price" : "Current price";
+  const whyPicked = product => {
+    const reasons = [];
+    if (Number(product.rating) >= 4.5) reasons.push(`${Number(product.rating).toFixed(1)}-star ${isDemo(product) ? "sample " : ""}rating`);
+    if (Number(product.review_count) >= 1000) reasons.push(`${Number(product.review_count).toLocaleString()} ${isDemo(product) ? "sample " : ""}reviews`);
+    if (Number(product.score) >= 80) reasons.push(`${Math.round(Number(product.score))}/100 ${isDemo(product) ? "preview " : "OneDailyDrop "}score`);
+    if (discount(product)) reasons.push(`${discount(product)}% ${isDemo(product) ? "sample savings" : "verified discount"}`);
+    return isDemo(product)
+      ? `Preview selection based on its ${reasons.join(", ") || "sample shopping signals"}.`
+      : `Picked for its ${reasons.join(", ") || "price, shopper feedback and overall value"}.`;
+  };
+  const dealUrl = product => product.deal_url || `/deal/${encodeURIComponent(product.id)}`;
+  const actionButton = (product, className) => isDemo(product)
+    ? `<a class="${className}" href="${esc(dealUrl(product))}">VIEW PRODUCT PREVIEW</a>`
+    : `<a class="${className}" href="/go/${encodeURIComponent(product.id)}" rel="nofollow sponsored">SEE DEAL ON ${esc(storeName(product))}</a>`;
+
+  let products = [];
+  let activeCategory = "Top 10";
+
+  const renderFeatured = () => {
+    const product = products[0];
+    if (!product) {
+      els.featuredDeal.innerHTML = '<div class="featured-body"><h2>No featured drop is available yet.</h2></div>';
+      return;
+    }
+    const save = discount(product);
+    els.featuredDeal.innerHTML = `
+      <div class="featured-media">
+        <a href="${esc(dealUrl(product))}"><img src="${esc(product.image_url)}" alt="${esc(fullTitle(product.title))}"></a>
+        <span class="featured-ribbon">TODAY'S DROP</span><span class="featured-badge">${esc(badgeFor(product))}</span>
+      </div>
+      <div class="featured-body">
+        <p class="cat">${esc(product.category || "Deals")} · ${esc(storeName(product))}</p>
+        <h2><a href="${esc(dealUrl(product))}">${esc(fullTitle(product.title))}</a></h2>
+        <p class="description">${esc(whyPicked(product))}</p>
+        <p class="stats">★ ${esc(product.rating || "—")} · ${Number(product.review_count || 0).toLocaleString()} ${isDemo(product) ? "sample reviews" : "reviews"}</p>
+        <div class="score-strip"><strong>${Math.round(Number(product.score) || 0)}/100</strong><span>${isDemo(product) ? "Preview score" : "OneDailyDrop Score"}</span></div>
+        <div class="featured-price-row"><span class="price-label">${priceLabel(product)}</span><span class="featured-price">${money(product.current_price, product.currency)}</span>${product.original_price ? `<span class="old">${money(product.original_price, product.currency)}</span>` : ""}${save ? `<span class="save-pill">${isDemo(product) ? "SAMPLE " : "SAVE "}${save}%</span>` : ""}</div>
+        <p class="verification">${esc(statusText(product))}</p>
+        <div class="card-actions">${actionButton(product, "featured-button")}</div>
+      </div>`;
+  };
+
+  const mainCard = (product, rank) => {
+    const save = discount(product);
+    return `
+      <article class="card">
+        <a class="image-wrap" href="${esc(dealUrl(product))}"><img src="${esc(product.image_url)}" alt="${esc(fullTitle(product.title))}" loading="lazy"></a>
+        <div class="card-content">
+          <div class="card-top"><span class="rank">#${rank}</span><span class="badge">${esc(badgeFor(product))}</span></div>
+          <p class="cat">${esc(product.category || "Deals")} · ${esc(storeName(product))}</p>
+          <h3><a href="${esc(dealUrl(product))}">${esc(fullTitle(product.title))}</a></h3>
+          <p class="description"><strong>Why we picked it:</strong> ${esc(whyPicked(product))}</p>
+          <p class="stats">★ ${esc(product.rating || "—")} · ${Number(product.review_count || 0).toLocaleString()} ${isDemo(product) ? "sample reviews" : "reviews"} · Score ${Math.round(Number(product.score) || 0)}/100</p>
+          <div class="price-row"><span class="price-label">${priceLabel(product)}</span><span class="price">${money(product.current_price, product.currency)}</span>${product.original_price ? `<span class="old">${money(product.original_price, product.currency)}</span>` : ""}${save ? `<span class="save-pill">${isDemo(product) ? "SAMPLE " : "SAVE "}${save}%</span>` : ""}</div>
+          <p class="verification">${esc(statusText(product))}</p>
+          <div class="card-actions">${actionButton(product, "button")}</div>
+        </div>
+      </article>`;
+  };
+
+  const miniCard = product => {
+    const save = discount(product);
+    return `
+      <article class="mini-card">
+        <a href="${esc(dealUrl(product))}"><img src="${esc(product.image_url)}" alt="${esc(fullTitle(product.title))}" loading="lazy"></a>
+        <div class="mini-card-body">
+          <p class="cat">${esc(product.category || "Deals")} · ${esc(storeName(product))}</p>
+          <h3><a href="${esc(dealUrl(product))}">${esc(fullTitle(product.title))}</a></h3>
+          <p class="mini-meta">★ ${esc(product.rating || "—")} · Preview score ${Math.round(Number(product.score) || 0)}/100${save ? ` · Sample ${save}% off` : ""}</p>
+          <div class="mini-price-row"><span class="mini-price-label">${priceLabel(product)}</span><span class="mini-price">${money(product.current_price, product.currency)}</span>${product.original_price ? `<span class="old">${money(product.original_price, product.currency)}</span>` : ""}</div>
+          <a class="mini-action" href="${esc(dealUrl(product))}">VIEW PRODUCT PREVIEW</a>
+        </div>
+      </article>`;
+  };
+
+  const visibleProducts = query => {
+    if (query) {
+      return products.filter(product => `${product.title} ${cleanText(product.description)} ${product.category || ""}`.toLowerCase().includes(query));
+    }
+    if (activeCategory === "Top 10") return products.slice(0, 10);
+    return products.filter(product => product.category === activeCategory);
+  };
+
+  const renderMain = () => {
+    const query = els.searchInput.value.trim().toLowerCase();
+    const visible = visibleProducts(query);
+    els.dealsTitle.textContent = query ? "Search results" : activeCategory === "Top 10" ? "Top 10 Drops Today" : `${activeCategory} Preview`;
+    els.resultCount.textContent = query ? `Found ${visible.length} products` : activeCategory === "Top 10" ? `Showing 10 of ${products.length} preview products` : `Showing ${visible.length} products`;
+    els.emptyState.hidden = visible.length !== 0;
+    els.products.innerHTML = visible.map(product => mainCard(product, products.indexOf(product) + 1)).join("");
+  };
+
+  const takeUnique = (source, count, used) => {
+    const chosen = [];
+    for (const product of source) {
+      if (chosen.length >= count) break;
+      if (used.has(product.id)) continue;
+      used.add(product.id);
+      chosen.push(product);
+    }
+    return chosen;
+  };
+
+  const renderCollections = () => {
+    const used = new Set(products.slice(0, 10).map(product => product.id));
+    const trending = takeUnique([...products].sort((a, b) => Number(b.review_count || 0) - Number(a.review_count || 0)), 4, used);
+    const priceDrops = takeUnique([...products].filter(product => discount(product) > 0).sort((a, b) => discount(b) - discount(a)), 4, used);
+    const newest = takeUnique([...products].sort((a, b) => Number(b.id) - Number(a.id)), 4, used);
+    els.trendingProducts.innerHTML = trending.map(miniCard).join("");
+    els.priceDropProducts.innerHTML = priceDrops.map(miniCard).join("");
+    els.newProducts.innerHTML = newest.map(miniCard).join("");
+  };
+
+  const renderCategoryMenu = () => {
+    const categories = [...new Set(products.map(product => product.category).filter(Boolean))];
+    els.categoryMenu.innerHTML = [`<button data-category="Top 10">Top 10 Drops</button>`, ...categories.map(category => `<button data-category="${esc(category)}">${esc(category)}</button>`)].join("");
+    els.categoryMenu.querySelectorAll("button").forEach(button => button.addEventListener("click", () => {
+      activeCategory = button.dataset.category;
+      els.searchInput.value = "";
+      els.categoryMenu.hidden = true;
+      els.categoryMenuButton.setAttribute("aria-expanded", "false");
+      renderMain();
+      document.querySelector("#top").scrollIntoView({ behavior: "smooth" });
+    }));
+  };
+
+  const currentUrl = new URL(window.location.href);
+  if (currentUrl.searchParams.has("country")) {
+    currentUrl.searchParams.delete("country");
+    history.replaceState({}, "", `${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}`);
+  }
+
+  els.categoryMenuButton.addEventListener("click", () => {
+    const open = els.categoryMenu.hidden;
+    els.categoryMenu.hidden = !open;
+    els.categoryMenuButton.setAttribute("aria-expanded", String(open));
+  });
+  document.addEventListener("click", event => {
+    if (!event.target.closest(".category-menu")) {
+      els.categoryMenu.hidden = true;
+      els.categoryMenuButton.setAttribute("aria-expanded", "false");
+    }
+  });
+  els.searchInput.addEventListener("input", () => {
+    activeCategory = "Top 10";
+    renderMain();
+  });
+  els.themeToggle.addEventListener("click", () => {
+    document.body.classList.toggle("dark");
+    localStorage.setItem("theme", document.body.classList.contains("dark") ? "dark" : "light");
+  });
+  if (localStorage.getItem("theme") === "dark" || (!localStorage.getItem("theme") && matchMedia("(prefers-color-scheme: dark)").matches)) {
+    document.body.classList.add("dark");
+  }
+
+  const updateCountdown = () => {
+    const now = new Date();
+    const next = new Date(now);
+    next.setHours(24, 0, 0, 0);
+    const milliseconds = Math.max(0, next - now);
+    const hours = Math.floor(milliseconds / 36e5);
+    const minutes = Math.floor(milliseconds % 36e5 / 6e4);
+    const seconds = Math.floor(milliseconds % 6e4 / 1e3);
+    els.countdown.textContent = `${String(hours).padStart(2, "0")}h ${String(minutes).padStart(2, "0")}m ${String(seconds).padStart(2, "0")}s`;
+  };
+  setInterval(updateCountdown, 1000);
+  updateCountdown();
+
+  fetch("/api/products", { headers: { Accept: "application/json" } })
+    .then(async response => {
+      if (!response.ok) throw new Error(`Products API returned HTTP ${response.status}`);
+      return response.json();
+    })
+    .then(data => {
+      products = (Array.isArray(data) ? data : []).filter(product => product && product.title).sort((a, b) => Number(b.score || 0) - Number(a.score || 0));
+      els.updated.textContent = products[0] ? statusText(products[0]) : "Today's selection is being prepared";
+      renderFeatured();
+      renderCategoryMenu();
+      renderMain();
+      renderCollections();
+    })
+    .catch(error => {
+      console.error("OneDailyDrop load error:", error);
+      els.updated.textContent = "Could not load the preview catalog";
+    });
 })();
