@@ -2,7 +2,7 @@ require("dotenv").config();
 
 const isAzure = Boolean(process.env.WEBSITE_SITE_NAME || process.env.WEBSITE_INSTANCE_ID);
 
-module.exports = {
+const config = {
   port: Number(process.env.PORT || 8088),
   adminKey: process.env.ADMIN_KEY || "change-this-private-key",
   affiliateTag: process.env.AFFILIATE_TAG || "YOURTAG-20",
@@ -16,3 +16,13 @@ module.exports = {
     .map(x => x.trim())
     .filter(Boolean)
 };
+
+module.exports = config;
+
+if (isAzure && config.provider !== "demo") {
+  setImmediate(() => {
+    require("./catalogRecovery")(config).catch(error => {
+      console.error(`Production catalog recovery error: ${error.message}`);
+    });
+  });
+}
