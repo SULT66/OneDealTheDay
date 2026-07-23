@@ -5,18 +5,39 @@ const { detectBrand, normalizeBrand, slugifyBrand } = require("./brandDetector")
 async function loadProducts(c) {
   if (c.provider !== "multi") {
     if (c.provider === "rainforest" && !c.rainforestApiKey) throw new Error("RAINFOREST_API_KEY is missing; existing published products were kept");
+    if (c.provider === "walmart" && !c.bluecartApiKey) throw new Error("BLUECART_API_KEY is missing; existing published products were kept");
     const provider = require(`./providers/${c.provider}`);
-    return provider.searchProducts({ apiKey: c.rainforestApiKey, affiliateTag: c.affiliateTag, keywords: c.searchKeywords });
+    const apiKey = c.provider === "walmart" ? c.bluecartApiKey : c.rainforestApiKey;
+    return provider.searchProducts({ apiKey, affiliateTag: c.affiliateTag, keywords: c.searchKeywords });
   }
-  if (!c.rainforestApiKey) throw new Error("RAINFOREST_API_KEY is missing");
-  if (!c.bluecartApiKey) throw new Error("BLUECART_API_KEY is missing");
-  const amazon = require("./providers/rainforest");
-  const walmart = require("./providers/walmart");
-  const [amazonProducts, walmartProducts] = await Promise.all([
-    amazon.searchProducts({ apiKey: c.rainforestApiKey, affiliateTag: c.affiliateTag, keywords: c.searchKeywords }),
-    walmart.searchProducts({ apiKey: c.bluecartApiKey, keywords: c.searchKeywords })
-  ]);
-  return [...amazonProducts, ...walmartProducts];
+
+  const jobs = [];
+  if (c.rainforestApiKey) {
+    const amazon = require("./providers/rainforest");
+    jobs.push({
+      name: "Amazon",
+      promise: amazon.searchProducts({ apiKey: c.rainforestApiKey, affiliateTag: c.affiliateTag, keywords: c.searchKeywords })
+    });
+  }
+  if (c.bluecartApiKey) {
+    const walmart = require("./providers/walmart");
+    jobs.push({
+      name: "Walmart",
+      promise: walmart.searchProducts({ apiKey: c.bluecartApiKey, keywords: c.searchKeywords })
+    });
+  }
+  if (!jobs.length) throw new Error("No live retailer API keys are configured");
+
+  const results = await Promise.allSettled(jobs.map(job => job.promise));
+  const products = [];
+  const failures = [];
+  results.forEach((result, index) => {
+    if (result.status === "fulfilled") products.push(...result.value);
+    else failures.push(`${jobs[index].name}: ${result.reason?.message || "refresh failed"}`);
+  });
+  if (!products.length) throw new Error(`All live retailer feeds failed. ${failures.join(" | ")}`);
+  if (failures.length) console.error(`Partial catalog refresh: ${failures.join(" | ")}`);
+  return products;
 }
 
 function textValue(value) {
