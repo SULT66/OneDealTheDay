@@ -89,6 +89,22 @@ app.get("/api/brands", (req,res) => res.json(db.prepare("SELECT brand,brand_slug
 app.get("/api/brands/:slug", (req,res) => { const products = db.prepare("SELECT * FROM products WHERE status='published' AND brand_slug=? ORDER BY score DESC").all(req.params.slug); if (!products.length) return res.status(404).json({error:"Brand not found"}); const brand = products[0].brand; res.json({brand,slug:req.params.slug,url:brandPath(brand),summary:{products:products.length,average_price:products.reduce((s,p)=>s+Number(p.current_price||0),0)/products.length,average_rating:products.reduce((s,p)=>s+Number(p.rating||0),0)/products.length,average_discount:products.reduce((s,p)=>s+discountPercent(p),0)/products.length,total_clicks:db.prepare("SELECT COUNT(*) n FROM clicks c JOIN products p ON p.id=c.product_id WHERE p.brand_slug=?").get(req.params.slug).n},products:products.map(p=>({...p,deal_url:dealPath(p)}))}); });
 app.get("/api/products/:id/price-history", (req,res) => { const product = db.prepare("SELECT id,title,current_price,currency FROM products WHERE id=? AND status='published'").get(req.params.id); if (!product) return res.status(404).json({error:"Product not found"}); const history = historyFor(product.id); res.json({product,summary:{observations:history.length,lowest_30_days:minSince(history,30),lowest_90_days:minSince(history,90),lowest_ever:history.length?Math.min(...history.map(row=>Number(row.price)).filter(Number.isFinite)):null},history}); });
 app.get("/api/status", (req,res) => res.json({provider:c.provider,products:db.prepare("SELECT COUNT(*) n FROM products WHERE status='published'").get().n,brands:db.prepare("SELECT COUNT(DISTINCT brand_slug) n FROM products WHERE status='published' AND brand_slug<>''").get().n,clicks:db.prepare("SELECT COUNT(*) n FROM clicks").get().n,priceObservations:db.prepare("SELECT COUNT(*) n FROM price_history").get().n,lastRun:db.prepare("SELECT * FROM refresh_runs ORDER BY id DESC LIMIT 1").get()}));
+app.post("/api/subscribe", (req,res) => {
+  const email = String(req.body?.email || "").trim().toLowerCase();
+  const requested = Array.isArray(req.body?.categories) ? req.body.categories : [];
+  const categories = [...new Set(requested.map(value => String(value).trim()).filter(Boolean))].slice(0, 12);
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i.test(email) || email.length > 254) {
+    return res.status(400).json({error:"Enter a valid email address."});
+  }
+  const now = new Date().toISOString();
+  db.prepare(`
+    INSERT INTO subscribers(email,categories,status,source,created_at,updated_at)
+    VALUES(?,?,?,?,?,?)
+    ON CONFLICT(email) DO UPDATE SET
+      categories=excluded.categories,status='active',updated_at=excluded.updated_at
+  `).run(email, JSON.stringify(categories), "active", "homepage", now, now);
+  res.status(201).json({ok:true,message:"You're on the Daily Drop list.",categories});
+});
 app.post("/api/admin/refresh", admin, async (req,res) => { try { res.json(await refreshProducts(c)); } catch (error) { res.status(500).json({error:error.message}); } });
 app.get("/go/:id", (req,res) => { const product = db.prepare("SELECT * FROM products WHERE id=? AND status='published'").get(req.params.id); if (!product) return res.sendStatus(404); db.prepare("INSERT INTO clicks(product_id,clicked_at,referrer,user_agent) VALUES(?,?,?,?)").run(product.id,new Date().toISOString(),req.get("referer")||"",req.get("user-agent")||""); res.redirect(302,product.affiliate_url); });
 app.get("/admin", (req,res) => res.sendFile(path.join(publicDir,"admin.html")));

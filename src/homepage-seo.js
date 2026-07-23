@@ -42,8 +42,8 @@ const editorialWhyPicked = product => {
   return `${first} ${second}`;
 };
 const anchorOffsetStyle = `<style id="homepage-anchor-offset">
-#today,#featuredDeal,#top,#trending,#price-drops,#new-drops,#about{scroll-margin-top:112px}
-@media(max-width:720px){#today,#featuredDeal,#top,#trending,#price-drops,#new-drops,#about{scroll-margin-top:164px}}
+#today,#featuredDeal,#subscribe,#top,#score,#archive,#trending,#price-drops,#new-drops,#about{scroll-margin-top:112px}
+@media(max-width:720px){#today,#featuredDeal,#subscribe,#top,#score,#archive,#trending,#price-drops,#new-drops,#about{scroll-margin-top:164px}}
 </style>`;
 
 module.exports = function homepageSeo(req, res) {
@@ -73,8 +73,8 @@ module.exports = function homepageSeo(req, res) {
     }
 
     enhanced = enhanced.replace(
-      '<script src="/app.js?v=20260723-demo-polish"></script>',
-      '<script>(function(){const q=new URLSearchParams(location.search).get("q");if(!q)return;const input=document.getElementById("searchInput");if(input)input.value=q;})();</script><script src="/app.js?v=20260723-demo-polish"></script>'
+      '<script src="/app.js?v=20260723-habit"></script>',
+      '<script>(function(){const q=new URLSearchParams(location.search).get("q");if(!q)return;const input=document.getElementById("searchInput");if(input)input.value=q;})();</script><script src="/app.js?v=20260723-habit"></script>'
     );
 
     return originalSend(enhanced);

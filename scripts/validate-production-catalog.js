@@ -40,6 +40,15 @@ const styles = fs.readFileSync(path.join(root, "public/styles.css"), "utf8");
 if (!styles.includes(".demo-banner")) throw new Error("Demo disclosure banner styles are missing");
 if (!styles.includes("margin-top:auto")) throw new Error("Card action alignment is missing");
 if (!styles.includes("overflow-wrap:anywhere")) throw new Error("Long product title wrapping is missing");
+if (!styles.includes(".habit-section")) throw new Error("Daily return habit section styles are missing");
+
+const database = fs.readFileSync(path.join(root, "src/db.js"), "utf8");
+if (!database.includes("CREATE TABLE IF NOT EXISTS subscribers")) throw new Error("Subscriber storage is missing");
+const server = fs.readFileSync(path.join(root, "src/server.js"), "utf8");
+if (!server.includes('app.post("/api/subscribe"')) throw new Error("Subscriber API is missing");
+for (const required of ["Check here", "MAKE IT YOUR DAILY CHECK", "THE ONEDAILYDROP SCORE", "PAST DAILY PICKS"]) {
+  if (!homepage.includes(required)) throw new Error(`Habit-building homepage content is missing: ${required}`);
+}
 
 const trustPages = [
   "about.html",

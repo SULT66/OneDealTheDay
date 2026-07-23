@@ -213,6 +213,35 @@
     document.body.classList.add("dark");
   }
 
+  const subscribeForm = $("subscribeForm");
+  if (subscribeForm) {
+    subscribeForm.addEventListener("submit", async event => {
+      event.preventDefault();
+      const status = $("subscribeStatus");
+      const button = subscribeForm.querySelector("button[type=submit]");
+      const email = $("subscribeEmail").value.trim();
+      const categories = [...subscribeForm.querySelectorAll('input[name="categories"]:checked')].map(input => input.value);
+      button.disabled = true;
+      status.textContent = "Saving your preferences…";
+      try {
+        const response = await fetch("/api/subscribe", {
+          method: "POST",
+          headers: {"Content-Type": "application/json", Accept: "application/json"},
+          body: JSON.stringify({email, categories})
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "Could not subscribe.");
+        subscribeForm.classList.add("is-success");
+        status.textContent = result.message;
+        localStorage.setItem("dailyDropInterests", JSON.stringify(categories));
+      } catch (error) {
+        status.textContent = error.message;
+      } finally {
+        button.disabled = false;
+      }
+    });
+  }
+
   const updateCountdown = () => {
     const now = new Date();
     const next = new Date(now);
