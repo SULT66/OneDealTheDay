@@ -1,36 +1,43 @@
-const data = [
-  ["D001", "Cordless Car Vacuum", "Automotive", 4.7, 18640, 39.99, 59.99, "Best Seller", "https://images.unsplash.com/photo-1503736334956-4c8f8e92946d?auto=format&fit=crop&w=1200&q=80"],
-  ["D002", "Rechargeable Milk Frother", "Kitchen", 4.6, 28400, 14.99, 19.99, "Popular", "https://images.unsplash.com/photo-1577805947697-89e18249d767?auto=format&fit=crop&w=1200&q=80"],
-  ["D003", "Wi-Fi Smart Plug 4-Pack", "Smart Home", 4.7, 83200, 24.99, 34.99, "Amazon's Choice", "https://images.unsplash.com/photo-1558002038-1055907df827?auto=format&fit=crop&w=1200&q=80"],
-  ["D004", "Portable USB-C Blender", "Kitchen", 4.5, 12100, 29.99, 39.99, "Deal", "https://images.unsplash.com/photo-1570197788417-0e82375c9371?auto=format&fit=crop&w=1200&q=80"],
-  ["D005", "Pet Water Fountain", "Pets", 4.7, 52600, 27.99, 39.99, "Best Seller", "https://images.unsplash.com/photo-1518791841217-8f162f1e1131?auto=format&fit=crop&w=1200&q=80"],
-  ["D006", "Magnetic Phone Car Mount", "Automotive", 4.6, 46100, 18.99, 25.99, "Popular", "https://images.unsplash.com/photo-1523206489230-c012c64b2b48?auto=format&fit=crop&w=1200&q=80"],
-  ["D007", "Mini Electric Screwdriver Set", "Tools", 4.7, 9700, 42.99, 59.99, "Deal", "https://images.unsplash.com/photo-1504148455328-c376907d081c?auto=format&fit=crop&w=1200&q=80"],
-  ["D008", "Packing Cubes Travel Set", "Travel", 4.8, 37800, 21.99, 29.99, "Best Seller", "https://images.unsplash.com/photo-1488646953014-85cb44e25828?auto=format&fit=crop&w=1200&q=80"],
-  ["D009", "LED Desk Lamp with Wireless Charger", "Office", 4.6, 14200, 32.99, 49.99, "Amazon's Choice", "https://images.unsplash.com/photo-1507473885765-e6ed057f782c?auto=format&fit=crop&w=1200&q=80"],
-  ["D010", "Digital Kitchen Scale", "Kitchen", 4.7, 94500, 12.99, 17.99, "Best Seller", "https://images.unsplash.com/photo-1556911220-bff31c812dba?auto=format&fit=crop&w=1200&q=80"],
-  ["D011", "Resistance Bands Set", "Fitness", 4.6, 33500, 19.99, 29.99, "Popular", "https://images.unsplash.com/photo-1598289431512-b97b0917affc?auto=format&fit=crop&w=1200&q=80"]
+const products = [
+  ["D001", "Cordless Handheld Car Vacuum with LED Light and Washable Filter", "Automotive", 4.7, 18640, 39.99, 59.99, "https://images.unsplash.com/photo-1503736334956-4c8f8e92946d?auto=format&fit=crop&w=1200&q=80"],
+  ["D002", "Rechargeable Milk Frother for Coffee, Matcha and Hot Chocolate", "Kitchen", 4.6, 28400, 14.99, 19.99, "https://images.unsplash.com/photo-1577805947697-89e18249d767?auto=format&fit=crop&w=1200&q=80"],
+  ["D003", "Wi-Fi Smart Plug Four-Pack with Voice and App Control", "Smart Home", 4.7, 83200, 24.99, 34.99, "https://images.unsplash.com/photo-1558002038-1055907df827?auto=format&fit=crop&w=1200&q=80"],
+  ["D004", "Portable USB-C Personal Blender with Travel Lid", "Kitchen", 4.5, 12100, 29.99, 39.99, "https://images.unsplash.com/photo-1570197788417-0e82375c9371?auto=format&fit=crop&w=1200&q=80"],
+  ["D005", "Quiet Pet Water Fountain with Multi-Stage Filter", "Pets", 4.7, 52600, 27.99, 39.99, "https://images.unsplash.com/photo-1518791841217-8f162f1e1131?auto=format&fit=crop&w=1200&q=80"],
+  ["D006", "Magnetic Dashboard Phone Mount with Adjustable Viewing Angle", "Automotive", 4.6, 46100, 18.99, 25.99, "https://images.unsplash.com/photo-1523206489230-c012c64b2b48?auto=format&fit=crop&w=1200&q=80"],
+  ["D007", "Mini Electric Precision Screwdriver Set with Storage Case", "Tools", 4.7, 9700, 42.99, 59.99, "https://images.unsplash.com/photo-1504148455328-c376907d081c?auto=format&fit=crop&w=1200&q=80"],
+  ["D008", "Compression Packing Cubes Travel Organizer Set", "Travel", 4.8, 37800, 21.99, 29.99, "https://images.unsplash.com/photo-1488646953014-85cb44e25828?auto=format&fit=crop&w=1200&q=80"],
+  ["D009", "LED Desk Lamp with Wireless Charging Pad and USB Port", "Office", 4.6, 14200, 32.99, 49.99, "https://images.unsplash.com/photo-1507473885765-e6ed057f782c?auto=format&fit=crop&w=1200&q=80"],
+  ["D010", "Digital Kitchen Scale with Stainless Steel Platform", "Kitchen", 4.7, 94500, 12.99, 17.99, "https://images.unsplash.com/photo-1556911220-bff31c812dba?auto=format&fit=crop&w=1200&q=80"],
+  ["D011", "Resistance Bands Workout Set with Handles and Door Anchor", "Fitness", 4.6, 33500, 19.99, 29.99, "https://images.unsplash.com/photo-1598289431512-b97b0917affc?auto=format&fit=crop&w=1200&q=80"],
+  ["D012", "Compact Air Fryer with Digital Controls and Nonstick Basket", "Kitchen", 4.8, 41700, 69.99, 99.99, "https://images.unsplash.com/photo-1585515320310-259814833e62?auto=format&fit=crop&w=1200&q=80"],
+  ["D013", "Smart Indoor Security Camera with Motion Alerts and Night Vision", "Smart Home", 4.5, 27400, 34.99, 49.99, "https://images.unsplash.com/photo-1557324232-b8917d3c3dcb?auto=format&fit=crop&w=1200&q=80"],
+  ["D014", "Insulated Stainless Steel Travel Mug with Leakproof Lid", "Travel", 4.7, 63800, 23.99, 32.99, "https://images.unsplash.com/photo-1514228742587-6b1558fcca3d?auto=format&fit=crop&w=1200&q=80"],
+  ["D015", "Ergonomic Wireless Mouse with Silent Click Buttons", "Office", 4.6, 22100, 26.99, 36.99, "https://images.unsplash.com/photo-1527864550417-7fd91fc51a46?auto=format&fit=crop&w=1200&q=80"],
+  ["D016", "Portable Bluetooth Speaker with Water-Resistant Design", "Electronics", 4.7, 55900, 44.99, 64.99, "https://images.unsplash.com/photo-1608043152269-423dbba4e7e1?auto=format&fit=crop&w=1200&q=80"],
+  ["D017", "Automatic Pet Feeder with Programmable Meal Schedule", "Pets", 4.5, 11800, 54.99, 79.99, "https://images.unsplash.com/photo-1545249390-6bdfa286032f?auto=format&fit=crop&w=1200&q=80"],
+  ["D018", "Rechargeable Motion Sensor Closet Lights Three-Pack", "Home", 4.6, 30600, 28.99, 42.99, "https://images.unsplash.com/photo-1519710164239-da123dc03ef4?auto=format&fit=crop&w=1200&q=80"],
+  ["D019", "Compact Cordless Drill Driver Kit with Two Batteries", "Tools", 4.7, 16800, 79.99, 109.99, "https://images.unsplash.com/photo-1504148455328-c376907d081c?auto=format&fit=crop&w=1200&q=80"],
+  ["D020", "Memory Foam Seat Cushion for Office and Car Chairs", "Office", 4.5, 24500, 31.99, 44.99, "https://images.unsplash.com/photo-1505843490538-5133c6c7d0e1?auto=format&fit=crop&w=1200&q=80"],
+  ["D021", "Foldable Laptop Stand with Adjustable Height and Angle", "Office", 4.8, 19700, 35.99, 49.99, "https://images.unsplash.com/photo-1496181133206-80ce9b88a853?auto=format&fit=crop&w=1200&q=80"],
+  ["D022", "Electric Heating Pad with Multiple Heat Settings", "Wellness", 4.6, 48100, 27.99, 38.99, "https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?auto=format&fit=crop&w=1200&q=80"],
+  ["D023", "Reusable Food Storage Container Set with Airtight Lids", "Kitchen", 4.7, 35200, 38.99, 54.99, "https://images.unsplash.com/photo-1498837167922-ddd27525d352?auto=format&fit=crop&w=1200&q=80"],
+  ["D024", "Compact Power Bank with Fast USB-C Charging", "Electronics", 4.6, 71400, 29.99, 39.99, "https://images.unsplash.com/photo-1609091839311-d5365f9ff1c5?auto=format&fit=crop&w=1200&q=80"]
 ];
 
-exports.searchProducts = async ({ affiliateTag }) => data.map((product, index) => {
-  const search = new URL("https://www.amazon.com/s");
-  search.searchParams.set("k", product[1]);
-  if (affiliateTag) search.searchParams.set("tag", affiliateTag);
-
-  return {
-    external_id: product[0],
-    title: product[1],
-    category: product[2],
-    description: `Preview ${product[2].toLowerCase()} product used while OneDailyDrop is under development.`,
-    rating: product[3],
-    review_count: product[4],
-    current_price: product[5],
-    original_price: product[6],
-    currency: "USD",
-    badge: product[7],
-    image_url: product[8],
-    affiliate_url: search.toString(),
-    source: "demo",
-    source_rank: index + 1
-  };
-});
+exports.searchProducts = async () => products.map((product, index) => ({
+  external_id: product[0],
+  title: product[1],
+  category: product[2],
+  description: `Sample ${product[2].toLowerCase()} product used to preview the OneDailyDrop shopping experience before live retailer feeds are enabled.`,
+  rating: product[3],
+  review_count: product[4],
+  current_price: product[5],
+  original_price: product[6],
+  currency: "USD",
+  badge: "Demo Preview",
+  image_url: product[7],
+  affiliate_url: "/",
+  source: "demo",
+  source_rank: index + 1
+}));
