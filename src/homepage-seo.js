@@ -28,6 +28,10 @@ const editorialWhyPicked = product => {
   return `${first} ${second}`;
 };
 
+const countrySelector = `<label class="country-selector" aria-label="Select your country"><span>🌍</span><select id="countrySelector"><option value="US">United States</option><option value="CA">Canada</option><option value="GB">United Kingdom</option><option value="DE">Germany</option><option value="FR">France</option><option value="ES">Spain</option><option value="IT">Italy</option><option value="NL">Netherlands</option><option value="PL">Poland</option><option value="SE">Sweden</option><option value="AU">Australia</option><option value="NZ">New Zealand</option><option value="JP">Japan</option><option value="KR">South Korea</option><option value="SG">Singapore</option><option value="IN">India</option><option value="AE">United Arab Emirates</option><option value="BR">Brazil</option><option value="MX">Mexico</option><option value="AR">Argentina</option><option value="ZA">South Africa</option><option value="TR">Türkiye</option></select></label>`;
+
+const countryScript = `<script>(function(){const select=document.getElementById('countrySelector');if(!select)return;const supported=new Set(Array.from(select.options).map(o=>o.value));const saved=localStorage.getItem('odd-country');const browser=(navigator.language||'en-US').split('-')[1];const initial=supported.has(saved)?saved:(supported.has(browser)?browser:'US');select.value=initial;document.documentElement.dataset.country=initial;select.addEventListener('change',function(){localStorage.setItem('odd-country',this.value);document.documentElement.dataset.country=this.value;const url=new URL(location.href);url.searchParams.set('country',this.value);history.replaceState({},'',url);window.dispatchEvent(new CustomEvent('odd:countrychange',{detail:{country:this.value}}));});const q=new URLSearchParams(location.search).get('q');if(q){const input=document.getElementById('searchInput');if(input)input.value=q;}})();</script>`;
+
 module.exports = function homepageSeo(req, res) {
   const originalSend = res.send.bind(res);
 
@@ -48,13 +52,23 @@ module.exports = function homepageSeo(req, res) {
       '<link rel="canonical" href="https://www.onedailydrop.com/"><link rel="icon" href="/favicon.svg" type="image/svg+xml"><meta property="og:site_name" content="OneDailyDrop">'
     );
 
+    enhanced = enhanced.replace(
+      '<label class="header-search">',
+      `${countrySelector}<label class="header-search">`
+    );
+
+    enhanced = enhanced.replace(
+      '</head>',
+      '<style>.country-selector{display:flex;align-items:center;gap:.45rem;border:1px solid rgba(127,127,127,.28);border-radius:999px;padding:.55rem .8rem;background:var(--surface,#fff);min-width:170px}.country-selector select{border:0;background:transparent;color:inherit;font:inherit;max-width:145px;outline:none;cursor:pointer}@media(max-width:800px){.country-selector{min-width:auto}.country-selector select{max-width:115px}}</style></head>'
+    );
+
     for (const product of top) {
       enhanced = enhanced.split(esc(oldWhyPicked(product))).join(esc(editorialWhyPicked(product)));
     }
 
     enhanced = enhanced.replace(
       '<script src="/app.js?v=20260721-v2"></script>',
-      `<script>(function(){const q=new URLSearchParams(location.search).get('q');if(!q)return;const input=document.getElementById('searchInput');if(input)input.value=q;})();</script><script src="/app.js?v=20260721-v2"></script>`
+      `${countryScript}<script src="/app.js?v=20260721-v2"></script>`
     );
 
     return originalSend(enhanced);
