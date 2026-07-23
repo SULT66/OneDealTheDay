@@ -28,8 +28,8 @@ const editorialWhyPicked = product => {
   return `${first} ${second}`;
 };
 
-const marketControl = `<div class="market-control"><label for="marketSelect"><span id="marketFlag" class="market-flag" aria-hidden="true">🌍</span><span class="sr-only">Shopping market</span><select id="marketSelect" aria-label="Select shopping market"></select></label></div>`;
-const marketStatus = `<p id="marketStatus" class="market-status" role="status" aria-live="polite">Shopping market: United States · Currency: USD</p>`;
+const marketControl = `<div class="market-control" id="marketControl"><button id="marketButton" class="market-button" type="button" aria-haspopup="listbox" aria-expanded="false"><span id="marketFlag" class="market-flag" aria-hidden="true">🌍</span><span class="market-button-copy"><small>Shopping market</small><strong id="marketButtonText">United States · USD</strong></span><span class="market-chevron" aria-hidden="true">⌄</span></button><div id="marketMenu" class="market-menu" role="listbox" aria-label="Select shopping market" hidden><div class="market-menu-title">Select your country</div><div id="marketOptions" class="market-options"></div></div></div>`;
+const marketStatus = `<div class="market-status" role="status" aria-live="polite"><span id="marketStatus">Shopping in United States · Currency: USD</span><span class="market-status-note">Prices stay in the retailer’s original currency until local store feeds are connected.</span></div>`;
 
 module.exports = function homepageSeo(req, res) {
   const originalSend = res.send.bind(res);
@@ -48,7 +48,7 @@ module.exports = function homepageSeo(req, res) {
 
     enhanced = enhanced.replace(
       '<link rel="canonical" href="https://www.onedailydrop.com/">',
-      '<link rel="canonical" href="https://www.onedailydrop.com/"><link rel="icon" href="/favicon.svg" type="image/svg+xml"><meta property="og:site_name" content="OneDailyDrop"><link rel="stylesheet" href="/global-market.css?v=1">'
+      '<link rel="canonical" href="https://www.onedailydrop.com/"><link rel="icon" href="/favicon.svg" type="image/svg+xml"><meta property="og:site_name" content="OneDailyDrop"><link rel="stylesheet" href="/global-market.css?v=2">'
     );
 
     enhanced = enhanced.replace(
@@ -67,7 +67,7 @@ module.exports = function homepageSeo(req, res) {
 
     enhanced = enhanced.replace(
       '<script src="/app.js?v=20260721-v2"></script>',
-      '<script src="/global-market.js?v=1"></script><script>(function(){const q=new URLSearchParams(location.search).get("q");if(!q)return;const input=document.getElementById("searchInput");if(input)input.value=q;})();</script><script src="/app.js?v=20260721-v2"></script>'
+      '<script src="/global-market.js?v=2"></script><script>(function(){const q=new URLSearchParams(location.search).get("q");if(!q)return;const input=document.getElementById("searchInput");if(input)input.value=q;})();</script><script src="/app.js?v=20260721-v2"></script>'
     );
 
     return originalSend(enhanced);
