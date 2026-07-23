@@ -39,38 +39,37 @@
     ? Math.round((1 - Number(product.current_price) / Number(product.original_price)) * 100)
     : 0;
   const storeName = product => {
-    if (isDemo(product)) return "Preview catalog";
+    if (isDemo(product)) return "OneDailyDrop";
     const source = String(product.source || "").toLowerCase();
     if (source.includes("walmart") || source.includes("bluecart")) return "Walmart";
     if (source.includes("amazon") || source.includes("rainforest")) return "Amazon";
     return product.source ? String(product.source) : "Retailer";
   };
   const badgeFor = product => {
-    if (isDemo(product)) return "DEMO PREVIEW";
+    if (isDemo(product)) return "DAILY PICK";
     if (discount(product) >= 25) return "VERIFIED DEAL";
     if (Number(product.score) >= 90) return "EDITOR'S PICK";
     if (Number(product.review_count) >= 5000) return "TRENDING";
     return "POPULAR PICK";
   };
   const statusText = product => isDemo(product)
-    ? "Sample price · Preview data"
+    ? "Retailer availability coming soon"
     : product.updated_at
       ? `Price verified ${new Date(product.updated_at).toLocaleString()}`
       : "Price recently verified";
-  const priceLabel = product => isDemo(product) ? "Sample price" : "Current price";
+  const priceLabel = product => isDemo(product) ? "Retailer price" : "Current price";
   const whyPicked = product => {
+    if (isDemo(product)) return "Selected for its practical value and relevance to everyday shoppers.";
     const reasons = [];
-    if (Number(product.rating) >= 4.5) reasons.push(`${Number(product.rating).toFixed(1)}-star ${isDemo(product) ? "sample " : ""}rating`);
-    if (Number(product.review_count) >= 1000) reasons.push(`${Number(product.review_count).toLocaleString()} ${isDemo(product) ? "sample " : ""}reviews`);
-    if (Number(product.score) >= 80) reasons.push(`${Math.round(Number(product.score))}/100 ${isDemo(product) ? "preview " : "OneDailyDrop "}score`);
-    if (discount(product)) reasons.push(`${discount(product)}% ${isDemo(product) ? "sample savings" : "verified discount"}`);
-    return isDemo(product)
-      ? `Preview selection based on its ${reasons.join(", ") || "sample shopping signals"}.`
-      : `Picked for its ${reasons.join(", ") || "price, shopper feedback and overall value"}.`;
+    if (Number(product.rating) >= 4.5) reasons.push(`${Number(product.rating).toFixed(1)}-star rating`);
+    if (Number(product.review_count) >= 1000) reasons.push(`${Number(product.review_count).toLocaleString()} reviews`);
+    if (Number(product.score) >= 80) reasons.push(`${Math.round(Number(product.score))}/100 OneDailyDrop score`);
+    if (discount(product)) reasons.push(`${discount(product)}% verified discount`);
+    return `Picked for its ${reasons.join(", ") || "price, shopper feedback and overall value"}.`;
   };
   const dealUrl = product => product.deal_url || `/deal/${encodeURIComponent(product.id)}`;
   const actionButton = (product, className) => isDemo(product)
-    ? `<a class="${className}" href="${esc(dealUrl(product))}">VIEW PRODUCT PREVIEW</a>`
+    ? `<a class="${className}" href="${esc(dealUrl(product))}">VIEW DETAILS</a>`
     : `<a class="${className}" href="/go/${encodeURIComponent(product.id)}" rel="nofollow sponsored">SEE DEAL ON ${esc(storeName(product))}</a>`;
 
   let products = [];
@@ -92,9 +91,9 @@
         <p class="cat">${esc(product.category || "Deals")} · ${esc(storeName(product))}</p>
         <h2><a href="${esc(dealUrl(product))}">${esc(fullTitle(product.title))}</a></h2>
         <p class="description">${esc(whyPicked(product))}</p>
-        <p class="stats">★ ${esc(product.rating || "—")} · ${Number(product.review_count || 0).toLocaleString()} ${isDemo(product) ? "sample reviews" : "reviews"}</p>
-        <div class="score-strip"><strong>${Math.round(Number(product.score) || 0)}/100</strong><span>${isDemo(product) ? "Preview score" : "OneDailyDrop Score"}</span></div>
-        <div class="featured-price-row"><span class="price-label">${priceLabel(product)}</span><span class="featured-price">${money(product.current_price, product.currency)}</span>${product.original_price ? `<span class="old">${money(product.original_price, product.currency)}</span>` : ""}${save ? `<span class="save-pill">${isDemo(product) ? "SAMPLE " : "SAVE "}${save}%</span>` : ""}</div>
+        <p class="stats">★ ${esc(product.rating || "—")} · ${Number(product.review_count || 0).toLocaleString()} reviews</p>
+        <div class="score-strip"><strong>${Math.round(Number(product.score) || 0)}/100</strong><span>OneDailyDrop Score</span></div>
+        <div class="featured-price-row"><span class="price-label">${priceLabel(product)}</span><span class="featured-price">${money(product.current_price, product.currency)}</span>${product.original_price ? `<span class="old">${money(product.original_price, product.currency)}</span>` : ""}${save ? `<span class="save-pill">SAVE ${save}%</span>` : ""}</div>
         <p class="verification">${esc(statusText(product))}</p>
         <div class="card-actions">${actionButton(product, "featured-button")}</div>
       </div>`;
@@ -110,8 +109,8 @@
           <p class="cat">${esc(product.category || "Deals")} · ${esc(storeName(product))}</p>
           <h3><a href="${esc(dealUrl(product))}">${esc(fullTitle(product.title))}</a></h3>
           <p class="description"><strong>Why we picked it:</strong> ${esc(whyPicked(product))}</p>
-          <p class="stats">★ ${esc(product.rating || "—")} · ${Number(product.review_count || 0).toLocaleString()} ${isDemo(product) ? "sample reviews" : "reviews"} · Score ${Math.round(Number(product.score) || 0)}/100</p>
-          <div class="price-row"><span class="price-label">${priceLabel(product)}</span><span class="price">${money(product.current_price, product.currency)}</span>${product.original_price ? `<span class="old">${money(product.original_price, product.currency)}</span>` : ""}${save ? `<span class="save-pill">${isDemo(product) ? "SAMPLE " : "SAVE "}${save}%</span>` : ""}</div>
+          <p class="stats">★ ${esc(product.rating || "—")} · ${Number(product.review_count || 0).toLocaleString()} reviews · Score ${Math.round(Number(product.score) || 0)}/100</p>
+          <div class="price-row"><span class="price-label">${priceLabel(product)}</span><span class="price">${money(product.current_price, product.currency)}</span>${product.original_price ? `<span class="old">${money(product.original_price, product.currency)}</span>` : ""}${save ? `<span class="save-pill">SAVE ${save}%</span>` : ""}</div>
           <p class="verification">${esc(statusText(product))}</p>
           <div class="card-actions">${actionButton(product, "button")}</div>
         </div>
@@ -126,9 +125,9 @@
         <div class="mini-card-body">
           <p class="cat">${esc(product.category || "Deals")} · ${esc(storeName(product))}</p>
           <h3><a href="${esc(dealUrl(product))}">${esc(fullTitle(product.title))}</a></h3>
-          <p class="mini-meta">★ ${esc(product.rating || "—")} · Preview score ${Math.round(Number(product.score) || 0)}/100${save ? ` · Sample ${save}% off` : ""}</p>
+          <p class="mini-meta">★ ${esc(product.rating || "—")} · Score ${Math.round(Number(product.score) || 0)}/100${save ? ` · ${save}% off` : ""}</p>
           <div class="mini-price-row"><span class="mini-price-label">${priceLabel(product)}</span><span class="mini-price">${money(product.current_price, product.currency)}</span>${product.original_price ? `<span class="old">${money(product.original_price, product.currency)}</span>` : ""}</div>
-          <a class="mini-action" href="${esc(dealUrl(product))}">VIEW PRODUCT PREVIEW</a>
+          <a class="mini-action" href="${esc(dealUrl(product))}">VIEW DETAILS</a>
         </div>
       </article>`;
   };
@@ -144,8 +143,8 @@
   const renderMain = () => {
     const query = els.searchInput.value.trim().toLowerCase();
     const visible = visibleProducts(query);
-    els.dealsTitle.textContent = query ? "Search results" : activeCategory === "Top 10" ? "Top 10 Drops Today" : `${activeCategory} Preview`;
-    els.resultCount.textContent = query ? `Found ${visible.length} products` : activeCategory === "Top 10" ? `Showing 10 of ${products.length} preview products` : `Showing ${visible.length} products`;
+    els.dealsTitle.textContent = query ? "Search results" : activeCategory === "Top 10" ? "Top 10 Drops Today" : activeCategory;
+    els.resultCount.textContent = query ? `Found ${visible.length} products` : activeCategory === "Top 10" ? `Showing 10 of ${products.length} products` : `Showing ${visible.length} products`;
     els.emptyState.hidden = visible.length !== 0;
     els.products.innerHTML = visible.map(product => mainCard(product, products.indexOf(product) + 1)).join("");
   };
@@ -270,6 +269,6 @@
     })
     .catch(error => {
       console.error("OneDailyDrop load error:", error);
-      els.updated.textContent = "Could not load the preview catalog";
+      els.updated.textContent = "Could not load today's selections";
     });
 })();
