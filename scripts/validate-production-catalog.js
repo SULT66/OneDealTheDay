@@ -4,42 +4,60 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const root = path.resolve(__dirname, "..");
-const files = ["app.js", "src/config.js", "src/refresh.js", "src/catalogRecovery.js"];
+const files = ["app.js", "src/config.js", "src/refresh.js", "src/catalogRecovery.js", "src/providers/demo.js"];
 
 for (const relative of files) {
   const source = fs.readFileSync(path.join(root, relative), "utf8");
   new vm.Script(source, { filename: relative });
 }
 
-const refresh = fs.readFileSync(path.join(root, "src/refresh.js"), "utf8");
-if (!refresh.includes("Promise.allSettled")) throw new Error("Partial retailer-feed recovery is missing");
-if (!refresh.includes("No live retailer API keys are configured")) throw new Error("Live key validation is missing");
-
-const recovery = fs.readFileSync(path.join(root, "src/catalogRecovery.js"), "utf8");
-if (!recovery.includes("DELETE FROM products")) throw new Error("Persisted demo cleanup is missing");
-if (!recovery.includes("Public production pages must never display")) throw new Error("Production demo purge policy is missing");
-
 const app = fs.readFileSync(path.join(root, "app.js"), "utf8");
-if (!app.includes("LOWER(COALESCE(source,''))<>'demo'")) throw new Error("Public live-only catalog filter is missing");
-if (!app.includes("affiliateTagConfigured")) throw new Error("Safe production diagnostics are missing");
-if (!app.includes("status(503)")) throw new Error("Empty live catalog protection is missing");
+if (!app.includes("config.demoMode")) throw new Error("Demo-mode routing guard is missing");
+if (!app.includes("config.liveRefreshEnabled")) throw new Error("Live refresh guard is missing");
 
 const configProbe = `
   const c = require('./src/config');
-  process.stdout.write(JSON.stringify({ provider: c.provider, keywords: c.searchKeywords.length }));
+  process.stdout.write(JSON.stringify({
+    provider: c.provider,
+    siteMode: c.siteMode,
+    demoMode: c.demoMode,
+    liveRefreshEnabled: c.liveRefreshEnabled,
+    keywords: c.searchKeywords.length
+  }));
 `;
-const env = {
+
+const demoEnv = {
   ...process.env,
   WEBSITE_SITE_NAME: "production-test",
-  PRODUCT_PROVIDER: "demo",
+  SITE_MODE: "demo",
+  PRODUCT_PROVIDER: "multi",
+  LIVE_REFRESH_ENABLED: "true",
   RAINFOREST_API_KEY: "amazon-key",
   BLUECART_API_KEY: "walmart-key",
   SEARCH_KEYWORDS: ""
 };
-const result = spawnSync(process.execPath, ["-e", configProbe], { cwd: root, env, encoding: "utf8" });
-if (result.status !== 0) throw new Error(result.stderr || "Production config probe failed");
-const parsed = JSON.parse(result.stdout);
-if (parsed.provider !== "multi") throw new Error(`Azure demo provider was not overridden: ${parsed.provider}`);
-if (parsed.keywords < 5) throw new Error("Default production search categories are missing");
+const demoResult = spawnSync(process.execPath, ["-e", configProbe], { cwd: root, env: demoEnv, encoding: "utf8" });
+if (demoResult.status !== 0) throw new Error(demoResult.stderr || "Demo config probe failed");
+const demo = JSON.parse(demoResult.stdout);
+if (demo.provider !== "demo" || !demo.demoMode || demo.liveRefreshEnabled) {
+  throw new Error(`Demo mode could spend retailer credits: ${demoResult.stdout}`);
+}
+if (demo.keywords < 5) throw new Error("Default demo categories are missing");
 
-console.log("Production catalog recovery validation passed.");
+const liveEnv = {
+  ...process.env,
+  WEBSITE_SITE_NAME: "production-test",
+  SITE_MODE: "live",
+  PRODUCT_PROVIDER: "auto",
+  LIVE_REFRESH_ENABLED: "true",
+  RAINFOREST_API_KEY: "amazon-key",
+  BLUECART_API_KEY: "walmart-key"
+};
+const liveResult = spawnSync(process.execPath, ["-e", configProbe], { cwd: root, env: liveEnv, encoding: "utf8" });
+if (liveResult.status !== 0) throw new Error(liveResult.stderr || "Live config probe failed");
+const live = JSON.parse(liveResult.stdout);
+if (live.provider !== "multi" || live.demoMode || !live.liveRefreshEnabled) {
+  throw new Error(`Live mode activation is invalid: ${liveResult.stdout}`);
+}
+
+console.log("Catalog mode validation passed.");
