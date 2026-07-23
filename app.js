@@ -1,7 +1,7 @@
 // Bluehost cPanel / Phusion Passenger entry point.
 // Register the SEO homepage before src/server adds express.static().
 const express = require("express");
-const renderHomepage = require("./src/homepage");
+const renderHomepage = require("./src/homepage-seo");
 const createExpressApp = express;
 
 function expressWithHomepage(...args) {
