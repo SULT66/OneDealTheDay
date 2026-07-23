@@ -10,7 +10,7 @@ const clean = value => String(value || "").replace(/<[^>]+>/g, " ").replace(/\s+
 const fullTitle = value => clean(value);
 const storeName = product => {
   const source = String(product.source || "").toLowerCase();
-  if (source === "demo") return "Preview catalog";
+  if (source === "demo") return "OneDailyDrop";
   if (source.includes("amazon") || source.includes("rainforest")) return "Amazon";
   if (source.includes("walmart") || source.includes("bluecart")) return "Walmart";
   return product.source || "Retailer";
