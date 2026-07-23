@@ -3,8 +3,23 @@
 const express = require("express");
 const db = require("./src/db");
 const config = require("./src/config");
+const { refreshProducts } = require("./src/refresh");
 const renderHomepage = require("./src/homepage-seo");
 const createExpressApp = express;
+
+if (config.demoMode) {
+  setImmediate(async () => {
+    const demoProducts = Number(db.prepare("SELECT COUNT(*) n FROM products WHERE status='published' AND LOWER(COALESCE(source,''))='demo'").get().n || 0);
+    if (demoProducts < 24) {
+      try {
+        await refreshProducts({ ...config, provider: "demo" });
+        console.log("Preview catalog seeded without retailer API calls.");
+      } catch (error) {
+        console.error(`Preview catalog seed error: ${error.message}`);
+      }
+    }
+  });
+}
 
 if (config.isProduction && !config.demoMode && config.liveRefreshEnabled) {
   setImmediate(() => {
