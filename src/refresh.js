@@ -86,10 +86,15 @@ exports.refreshProducts = async c => {
     })();
 
     db.prepare("UPDATE refresh_runs SET finished_at=?,found_count=?,published_count=?,status='success',message=? WHERE id=?")
-      .run(new Date().toISOString(), found.length, top.length, "Products refreshed with brand and price intelligence", runId);
+      .run(new Date().toISOString(), found.length, top.length, `Products refreshed with ${c.provider} catalog data`, runId);
     return { provider: c.provider, found: found.length, published: top.length };
   } catch (err) {
     db.prepare("UPDATE refresh_runs SET finished_at=?,status='failed',message=? WHERE id=?").run(new Date().toISOString(), err.message, runId);
+    const published = db.prepare("SELECT COUNT(*) n FROM products WHERE status='published'").get().n;
+    if (!published && c.provider !== "demo") {
+      console.error(`Primary catalog refresh failed (${c.provider}): ${err.message}. Loading emergency catalog.`);
+      return exports.refreshProducts({ ...c, provider: "demo" });
+    }
     throw err;
   }
 };
