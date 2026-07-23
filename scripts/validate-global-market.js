@@ -22,7 +22,8 @@ const homepageSeo = fs.readFileSync(path.join(root, 'src/homepage-seo.js'), 'utf
 new vm.Script(homepageSeo, { filename: 'src/homepage-seo.js' });
 
 const requiredMarkers = [
-  'id="marketSelect"',
+  'id="marketButton"',
+  'id="marketOptions"',
   '/global-market.css',
   '/global-market.js',
   'onedailydrop:marketchange'
