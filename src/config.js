@@ -4,6 +4,10 @@ const isAzure = Boolean(process.env.WEBSITE_SITE_NAME || process.env.WEBSITE_INS
 const rainforestApiKey = String(process.env.RAINFOREST_API_KEY || "").trim();
 const bluecartApiKey = String(process.env.BLUECART_API_KEY || "").trim();
 const requestedProvider = String(process.env.PRODUCT_PROVIDER || "").trim().toLowerCase();
+const siteMode = String(process.env.SITE_MODE || "demo").trim().toLowerCase();
+const demoMode = siteMode !== "live";
+const liveRefreshEnabled = !demoMode && String(process.env.LIVE_REFRESH_ENABLED || "false").trim().toLowerCase() === "true";
+
 const defaultKeywords = [
   "home gadgets",
   "kitchen gadgets",
@@ -17,14 +21,8 @@ const defaultKeywords = [
   "gifts under 25"
 ];
 
-function resolveProvider() {
-  if (!isAzure) return requestedProvider || "demo";
-
-  // Demo data is never allowed on the public Azure site, even when an old
-  // PRODUCT_PROVIDER=demo application setting is still present.
-  if (requestedProvider && !["demo", "auto"].includes(requestedProvider)) {
-    return requestedProvider;
-  }
+function resolveLiveProvider() {
+  if (requestedProvider && !["demo", "auto"].includes(requestedProvider)) return requestedProvider;
   if (rainforestApiKey && bluecartApiKey) return "multi";
   if (rainforestApiKey) return "rainforest";
   if (bluecartApiKey) return "walmart";
@@ -41,8 +39,11 @@ module.exports = {
   adminKey: process.env.ADMIN_KEY || "change-this-private-key",
   affiliateTag: String(process.env.AFFILIATE_TAG || "").trim(),
   affiliateTagConfigured: Boolean(String(process.env.AFFILIATE_TAG || "").trim()),
-  provider: resolveProvider(),
+  provider: demoMode ? "demo" : resolveLiveProvider(),
   requestedProvider: requestedProvider || "auto",
+  siteMode: demoMode ? "demo" : "live",
+  demoMode,
+  liveRefreshEnabled,
   rainforestApiKey,
   bluecartApiKey,
   isProduction: isAzure,
