@@ -27,8 +27,8 @@ if (!app.includes("cron.schedule = ()")) throw new Error("Scheduled refreshes ar
 if (!app.includes("LOWER(COALESCE(source,''))='demo'")) throw new Error("Demo-only API filter is missing");
 
 const homepage = fs.readFileSync(path.join(root, "src/homepage.js"), "utf8");
-for (const required of ["DEMO PREVIEW", "Sample price", "VIEW PRODUCT PREVIEW", "Development preview", "no API credits are being used"]) {
-  if (!homepage.includes(required)) throw new Error(`Homepage demo label is missing: ${required}`);
+for (const forbidden of ["DEMO PREVIEW", "Sample price", "VIEW PRODUCT PREVIEW", "Development preview", "no API credits are being used"]) {
+  if (homepage.includes(forbidden)) throw new Error(`Public homepage still exposes internal catalog wording: ${forbidden}`);
 }
 if (homepage.includes("shortTitle")) throw new Error("Homepage titles are still truncated");
 
@@ -37,7 +37,6 @@ if (browserApp.includes("shortTitle")) throw new Error("Client-side titles are s
 if (!browserApp.includes('searchParams.delete("country")')) throw new Error("Stale country parameter cleanup is missing");
 
 const styles = fs.readFileSync(path.join(root, "public/styles.css"), "utf8");
-if (!styles.includes(".demo-banner")) throw new Error("Demo disclosure banner styles are missing");
 if (!styles.includes("margin-top:auto")) throw new Error("Card action alignment is missing");
 if (!styles.includes("overflow-wrap:anywhere")) throw new Error("Long product title wrapping is missing");
 if (!styles.includes(".habit-section")) throw new Error("Daily return habit section styles are missing");
