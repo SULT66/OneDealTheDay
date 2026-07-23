@@ -6,6 +6,14 @@ const config = require("./src/config");
 const renderHomepage = require("./src/homepage-seo");
 const createExpressApp = express;
 
+if (config.isProduction) {
+  setImmediate(() => {
+    require("./src/catalogRecovery")(config).catch(error => {
+      console.error(`Production catalog recovery error: ${error.message}`);
+    });
+  });
+}
+
 function countProducts(where = "1=1") {
   return Number(db.prepare(`SELECT COUNT(*) n FROM products WHERE status='published' AND ${where}`).get().n || 0);
 }
