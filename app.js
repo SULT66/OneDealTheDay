@@ -1,11 +1,16 @@
 // Bluehost cPanel / Phusion Passenger entry point.
 // Register catalog mode safeguards and the SEO homepage before src/server adds express.static().
 const express = require("express");
+const cron = require("node-cron");
 const db = require("./src/db");
 const config = require("./src/config");
 const { refreshProducts } = require("./src/refresh");
 const renderHomepage = require("./src/homepage-seo");
 const createExpressApp = express;
+
+if (!config.liveRefreshEnabled) {
+  cron.schedule = () => ({ start() {}, stop() {}, destroy() {} });
+}
 
 if (config.demoMode) {
   setImmediate(async () => {
