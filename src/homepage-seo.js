@@ -25,6 +25,13 @@ module.exports = function homepageSeo(req, res) {
     );
 
     enhanced = enhanced.replace(
+      '<link rel="canonical" href="https://www.onedailydrop.com/">',
+      '<link rel="canonical" href="https://www.onedailydrop.com/"><link rel="icon" href="/favicon.svg" type="image/svg+xml"><meta property="og:site_name" content="OneDailyDrop">'
+    );
+
+    enhanced = enhanced.replace(/Picked for its/g, "Selected for");
+
+    enhanced = enhanced.replace(
       '<script src="/app.js?v=20260721-v2"></script>',
       `<script>(function(){const q=new URLSearchParams(location.search).get('q');if(!q)return;const input=document.getElementById('searchInput');if(input)input.value=q;})();</script><script src="/app.js?v=20260721-v2"></script>`
     );
