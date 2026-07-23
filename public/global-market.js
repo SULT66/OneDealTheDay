@@ -31,27 +31,62 @@
   const browserRegion = String(navigator.language || "en-US").split("-")[1]?.toUpperCase() || "US";
   const initialCode = byCode.has(requested) ? requested : byCode.has(saved) ? saved : byCode.has(browserRegion) ? browserRegion : "US";
 
-  const select = document.getElementById("marketSelect");
+  const control = document.getElementById("marketControl");
+  const button = document.getElementById("marketButton");
+  const buttonText = document.getElementById("marketButtonText");
+  const menu = document.getElementById("marketMenu");
+  const options = document.getElementById("marketOptions");
   const status = document.getElementById("marketStatus");
   const flag = document.getElementById("marketFlag");
 
-  if (!select) return;
+  if (!control || !button || !menu || !options) return;
 
-  for (const market of MARKETS) {
-    const option = document.createElement("option");
-    option.value = market.code;
-    option.textContent = `${market.flag} ${market.name} · ${market.currency}`;
-    select.appendChild(option);
+  function closeMenu() {
+    menu.hidden = true;
+    button.setAttribute("aria-expanded", "false");
+  }
+
+  function openMenu() {
+    menu.hidden = false;
+    button.setAttribute("aria-expanded", "true");
+    const selected = options.querySelector('[aria-selected="true"]');
+    if (selected) selected.scrollIntoView({ block: "nearest" });
+  }
+
+  function decoratePage(market) {
+    document.querySelectorAll(".market-context").forEach(node => node.remove());
+    document.querySelectorAll(".card, .mini-card, .featured-deal").forEach(card => {
+      const note = document.createElement("div");
+      note.className = "market-context";
+      note.textContent = `${market.flag} Selected market: ${market.name}`;
+      const target = card.querySelector(".card-content, .mini-card-body, .featured-body") || card;
+      target.appendChild(note);
+    });
+
+    const heroIntro = document.querySelector(".hero-intro");
+    if (heroIntro) heroIntro.textContent = `Daily product research for shoppers in ${market.name}. Prices shown below remain in each retailer’s original currency until local retailer feeds are connected.`;
+
+    const dealsTitle = document.getElementById("dealsTitle");
+    if (dealsTitle) dealsTitle.textContent = `Top 10 Drops for ${market.name}`;
   }
 
   function applyMarket(code, updateUrl) {
     const market = byCode.get(code) || byCode.get("US");
-    select.value = market.code;
     localStorage.setItem("odd_market", market.code);
     document.documentElement.dataset.market = market.code;
     document.documentElement.dataset.currency = market.currency;
+    document.documentElement.lang = market.locale.split("-")[0];
     if (flag) flag.textContent = market.flag;
-    if (status) status.textContent = `Shopping market: ${market.name} · Currency: ${market.currency}`;
+    if (buttonText) buttonText.textContent = `${market.name} · ${market.currency}`;
+    if (status) status.textContent = `Shopping in ${market.name} · Currency: ${market.currency}`;
+
+    options.querySelectorAll(".market-option").forEach(option => {
+      const selected = option.dataset.code === market.code;
+      option.setAttribute("aria-selected", String(selected));
+      option.classList.toggle("is-selected", selected);
+    });
+
+    decoratePage(market);
 
     if (updateUrl) {
       const url = new URL(window.location.href);
@@ -59,9 +94,34 @@
       history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
     }
 
+    closeMenu();
     window.dispatchEvent(new CustomEvent("onedailydrop:marketchange", { detail: market }));
   }
 
-  select.addEventListener("change", () => applyMarket(select.value, true));
+  for (const market of MARKETS) {
+    const option = document.createElement("button");
+    option.type = "button";
+    option.className = "market-option";
+    option.dataset.code = market.code;
+    option.setAttribute("role", "option");
+    option.setAttribute("aria-selected", "false");
+    option.innerHTML = `<span class="market-option-flag">${market.flag}</span><span class="market-option-name">${market.name}</span><span class="market-option-currency">${market.currency}</span><span class="market-option-check">✓</span>`;
+    option.addEventListener("click", () => applyMarket(market.code, true));
+    options.appendChild(option);
+  }
+
+  button.addEventListener("click", event => {
+    event.stopPropagation();
+    menu.hidden ? openMenu() : closeMenu();
+  });
+
+  document.addEventListener("click", event => {
+    if (!control.contains(event.target)) closeMenu();
+  });
+
+  document.addEventListener("keydown", event => {
+    if (event.key === "Escape") closeMenu();
+  });
+
   applyMarket(initialCode, requested !== initialCode);
 })();
