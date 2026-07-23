@@ -66,6 +66,11 @@ module.exports = function homepageSeo(req, res) {
       }
     }
 
+    enhanced = enhanced.replace(
+      '<script src="/app.js?v=20260723-demo-polish"></script>',
+      '<script>(function(){const q=new URLSearchParams(location.search).get("q");if(!q)return;const input=document.getElementById("searchInput");if(input)input.value=q;})();</script><script src="/app.js?v=20260723-demo-polish"></script>'
+    );
+
     return originalSend(enhanced);
   };
 
