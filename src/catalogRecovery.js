@@ -22,27 +22,47 @@ function removeDemoProducts() {
   return demoIds.length;
 }
 
+function recordConfigurationFailure(config, message) {
+  const now = new Date().toISOString();
+  db.prepare("INSERT INTO refresh_runs(provider,started_at,finished_at,found_count,published_count,status,message) VALUES(?,?,?,?,?,'failed',?)")
+    .run(config.provider, now, now, 0, 0, message);
+}
+
 module.exports = async function recoverProductionCatalog(config) {
   const demoCount = countDemoProducts();
-  if (!demoCount || config.provider === "demo") return { demoCount, liveCount: countLiveProducts(), removed: 0 };
-
   let liveCount = countLiveProducts();
-  if (!liveCount) {
-    console.log(`Production catalog contains ${demoCount} demo products. Refreshing live retailer feeds.`);
+  let refreshError = "";
+
+  if (!liveCount && config.provider !== "unconfigured") {
+    console.log(`Refreshing live production catalog with provider ${config.provider}.`);
     try {
       await refreshProducts(config);
     } catch (error) {
-      console.error(`Live catalog recovery failed: ${error.message}`);
+      refreshError = error.message;
+      console.error(`Live catalog recovery failed: ${refreshError}`);
     }
     liveCount = countLiveProducts();
+  } else if (!liveCount && config.provider === "unconfigured") {
+    refreshError = "No live retailer API keys are configured in Azure App Settings";
+    recordConfigurationFailure(config, refreshError);
+    console.error(refreshError);
   }
 
-  if (!liveCount) {
-    console.error("Demo catalog was not removed because no live retailer products are available yet.");
-    return { demoCount, liveCount: 0, removed: 0 };
-  }
-
+  // Public production pages must never display invented demo prices, ratings,
+  // reviews or affiliate links. Remove them even when live feeds are not ready.
   const removed = removeDemoProducts();
-  console.log(`Removed ${removed} persisted demo products; ${liveCount} live products remain.`);
-  return { demoCount, liveCount, removed };
+  if (removed) console.log(`Removed ${removed} demo products from the production database.`);
+
+  liveCount = countLiveProducts();
+  if (!liveCount) {
+    console.error(`Production catalog is empty. ${refreshError || "No live retailer products were returned."}`);
+  }
+
+  return {
+    provider: config.provider,
+    demoCount,
+    liveCount,
+    removed,
+    refreshError
+  };
 };
