@@ -36,7 +36,7 @@ const configuredKeywords = String(process.env.SEARCH_KEYWORDS || "")
   .map(value => value.trim())
   .filter(Boolean);
 
-const config = {
+module.exports = {
   port: Number(process.env.PORT || 8088),
   adminKey: process.env.ADMIN_KEY || "change-this-private-key",
   affiliateTag: String(process.env.AFFILIATE_TAG || "").trim(),
@@ -50,13 +50,3 @@ const config = {
   timezone: process.env.TIMEZONE || "America/New_York",
   searchKeywords: configuredKeywords.length ? configuredKeywords : defaultKeywords
 };
-
-module.exports = config;
-
-if (isAzure) {
-  setImmediate(() => {
-    require("./catalogRecovery")(config).catch(error => {
-      console.error(`Production catalog recovery error: ${error.message}`);
-    });
-  });
-}
