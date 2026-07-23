@@ -4,7 +4,16 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const root = path.resolve(__dirname, "..");
-const files = ["app.js", "src/config.js", "src/refresh.js", "src/catalogRecovery.js", "src/providers/demo.js"];
+const files = [
+  "app.js",
+  "src/config.js",
+  "src/refresh.js",
+  "src/catalogRecovery.js",
+  "src/providers/demo.js",
+  "src/homepage.js",
+  "src/homepage-seo.js",
+  "public/app.js"
+];
 
 for (const relative of files) {
   const source = fs.readFileSync(path.join(root, relative), "utf8");
@@ -14,6 +23,39 @@ for (const relative of files) {
 const app = fs.readFileSync(path.join(root, "app.js"), "utf8");
 if (!app.includes("config.demoMode")) throw new Error("Demo-mode routing guard is missing");
 if (!app.includes("config.liveRefreshEnabled")) throw new Error("Live refresh guard is missing");
+if (!app.includes("cron.schedule = ()")) throw new Error("Scheduled refreshes are not disabled in demo mode");
+if (!app.includes("LOWER(COALESCE(source,''))='demo'")) throw new Error("Demo-only API filter is missing");
+
+const homepage = fs.readFileSync(path.join(root, "src/homepage.js"), "utf8");
+for (const required of ["DEMO PREVIEW", "Sample price", "VIEW PRODUCT PREVIEW", "Development preview", "no API credits are being used"]) {
+  if (!homepage.includes(required)) throw new Error(`Homepage demo label is missing: ${required}`);
+}
+if (homepage.includes("shortTitle")) throw new Error("Homepage titles are still truncated");
+
+const browserApp = fs.readFileSync(path.join(root, "public/app.js"), "utf8");
+if (browserApp.includes("shortTitle")) throw new Error("Client-side titles are still truncated");
+if (!browserApp.includes('searchParams.delete("country")')) throw new Error("Stale country parameter cleanup is missing");
+
+const styles = fs.readFileSync(path.join(root, "public/styles.css"), "utf8");
+if (!styles.includes(".demo-banner")) throw new Error("Demo disclosure banner styles are missing");
+if (!styles.includes("margin-top:auto")) throw new Error("Card action alignment is missing");
+if (!styles.includes("overflow-wrap:anywhere")) throw new Error("Long product title wrapping is missing");
+
+const demoProbe = `
+  require('./src/providers/demo').searchProducts({}).then(products => {
+    process.stdout.write(JSON.stringify({
+      count: products.length,
+      sources: [...new Set(products.map(product => product.source))],
+      externalLinks: products.filter(product => /^https?:/i.test(product.affiliate_url || '')).length
+    }));
+  });
+`;
+const demoCatalogResult = spawnSync(process.execPath, ["-e", demoProbe], { cwd: root, encoding: "utf8" });
+if (demoCatalogResult.status !== 0) throw new Error(demoCatalogResult.stderr || "Demo catalog probe failed");
+const demoCatalog = JSON.parse(demoCatalogResult.stdout);
+if (demoCatalog.count < 24) throw new Error(`Preview catalog is too small: ${demoCatalog.count}`);
+if (demoCatalog.sources.length !== 1 || demoCatalog.sources[0] !== "demo") throw new Error("Preview catalog contains a live retailer source");
+if (demoCatalog.externalLinks !== 0) throw new Error("Preview catalog contains external retailer links");
 
 const configProbe = `
   const c = require('./src/config');
@@ -60,4 +102,4 @@ if (live.provider !== "multi" || live.demoMode || !live.liveRefreshEnabled) {
   throw new Error(`Live mode activation is invalid: ${liveResult.stdout}`);
 }
 
-console.log("Catalog mode validation passed.");
+console.log("Catalog mode and homepage demo validation passed.");
