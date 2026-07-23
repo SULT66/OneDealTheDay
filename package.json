@@ -6,8 +6,8 @@
   "scripts": {
     "start": "node app.js",
     "refresh": "node src/refresh-cli.js",
-    "test": "node scripts/validate-global-market.js",
-    "build": "node scripts/validate-global-market.js"
+    "test": "node scripts/validate-global-market.js && node scripts/validate-catalog-recovery.js",
+    "build": "node scripts/validate-global-market.js && node scripts/validate-catalog-recovery.js"
   },
   "dependencies": {
     "better-sqlite3": "^11.8.1",
