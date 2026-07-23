@@ -1,5 +1,20 @@
 module.exports = function buildHomepageSchema({ SITE, top, dealPath, shortTitle, storeName }) {
-  const productNodes = top.map((product, index) => {
+  const cleanText = value => String(value || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  const schemaDescription = product => {
+    const supplied = cleanText(product.description);
+    if (supplied) return supplied;
+    const category = cleanText(product.category) || "online shopping";
+    const rating = Number(product.rating);
+    const reviews = Number(product.review_count || 0);
+    const signals = [];
+    if (rating > 0) signals.push(`${rating.toFixed(1)}-star customer rating`);
+    if (reviews > 0) signals.push(`${reviews.toLocaleString("en-US")} customer reviews`);
+    return signals.length
+      ? `A ${category} product selected by OneDailyDrop using price, availability and ${signals.join(" with ")}.`
+      : `A ${category} product selected by OneDailyDrop after reviewing price, availability and overall value.`;
+  };
+
+  const productNodes = top.map(product => {
     const price = Number(product.current_price);
     const rating = Number(product.rating);
     const reviewCount = Number(product.review_count || 0);
@@ -8,9 +23,9 @@ module.exports = function buildHomepageSchema({ SITE, top, dealPath, shortTitle,
       "@type": "Product",
       "@id": `${canonical}#product`,
       url: canonical,
-      name: shortTitle(product.title),
+      name: cleanText(product.title),
       image: product.image_url ? [product.image_url] : undefined,
-      description: product.description || undefined,
+      description: schemaDescription(product),
       brand: product.brand ? { "@type": "Brand", name: product.brand } : undefined,
       sku: product.product_key || String(product.id),
       gtin: product.gtin || product.ean || product.upc || undefined,
