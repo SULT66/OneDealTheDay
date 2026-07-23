@@ -41,6 +41,40 @@ if (!styles.includes(".demo-banner")) throw new Error("Demo disclosure banner st
 if (!styles.includes("margin-top:auto")) throw new Error("Card action alignment is missing");
 if (!styles.includes("overflow-wrap:anywhere")) throw new Error("Long product title wrapping is missing");
 
+const trustPages = [
+  "about.html",
+  "contact.html",
+  "privacy.html",
+  "terms.html",
+  "affiliate-disclosure.html",
+  "editorial-policy.html",
+  "how-we-select-deals.html",
+  "price-disclaimer.html"
+];
+const footerLinks = [
+  'href="/"',
+  'href="/about"',
+  'href="/contact"',
+  'href="/privacy"',
+  'href="/terms"',
+  'href="/affiliate-disclosure"',
+  'href="/editorial-policy"',
+  'href="/how-we-select-deals"',
+  'href="/price-disclaimer"'
+];
+for (const file of trustPages) {
+  const html = fs.readFileSync(path.join(root, "public", "pages", file), "utf8");
+  if (!html.includes('<nav class="footer-links" aria-label="Footer navigation">')) {
+    throw new Error(`Accessible footer navigation is missing from ${file}`);
+  }
+  for (const link of footerLinks) {
+    if (!html.includes(link)) throw new Error(`Footer link ${link} is missing from ${file}`);
+  }
+}
+const trustStyles = fs.readFileSync(path.join(root, "public", "trust.css"), "utf8");
+if (!trustStyles.includes("flex-wrap:wrap")) throw new Error("Trust-page footer links cannot wrap");
+if (!trustStyles.includes("row-gap:12px")) throw new Error("Trust-page footer row spacing is missing");
+
 const demoProbe = `
   require('./src/providers/demo').searchProducts({}).then(products => {
     process.stdout.write(JSON.stringify({
@@ -102,4 +136,4 @@ if (live.provider !== "multi" || live.demoMode || !live.liveRefreshEnabled) {
   throw new Error(`Live mode activation is invalid: ${liveResult.stdout}`);
 }
 
-console.log("Catalog mode and homepage demo validation passed.");
+console.log("Catalog, homepage demo and trust-page footer validation passed.");
