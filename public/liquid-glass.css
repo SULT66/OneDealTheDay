@@ -151,9 +151,9 @@ summary:focus-visible {
 .site-header,
 body > header,
 .page-header {
-  top: 0 !important;
+  top: 12px !important;
   width: min(1380px, calc(100% - 28px)) !important;
-  margin: 0 auto !important;
+  margin: 12px auto 0 !important;
   overflow: visible !important;
   border: 1px solid var(--glass-border) !important;
   border-radius: var(--radius-lg) !important;
@@ -1043,9 +1043,9 @@ footer a:hover,
   .site-header,
   body > header,
   .page-header {
-    top: 7px !important;
+    top: 8px !important;
     width: calc(100% - 14px) !important;
-    margin-top: 7px !important;
+    margin-top: 8px !important;
     border-radius: 18px !important;
   }
 
