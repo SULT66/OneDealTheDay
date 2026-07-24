@@ -4,6 +4,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const root = path.resolve(__dirname, "..");
+const hasLiquidGlass = source => /\/liquid-glass\.css\?v=[^"'`\s>]+/.test(source);
 const files = [
   "app.js",
   "src/config.js",
@@ -32,7 +33,7 @@ for (const forbidden of ["DEMO PREVIEW", "Sample price", "VIEW PRODUCT PREVIEW",
   if (homepage.includes(forbidden)) throw new Error(`Public homepage still exposes internal catalog wording: ${forbidden}`);
 }
 if (homepage.includes("shortTitle")) throw new Error("Homepage titles are still truncated");
-if (!homepage.includes('/liquid-glass.css?v=20260723-serious2')) {
+if (!hasLiquidGlass(homepage)) {
   throw new Error("Server-rendered homepage is missing the Liquid Glass design system");
 }
 
@@ -51,7 +52,7 @@ const server = fs.readFileSync(path.join(root, "src/server.js"), "utf8");
 if (!server.includes('app.post("/api/subscribe"')) throw new Error("Subscriber API is missing");
 if (!server.includes("passwordError(password)")) throw new Error("Strong server-side password validation is missing");
 if (!server.includes("passwordResetEmail")) throw new Error("Password recovery email delivery is missing");
-if (!server.includes('/liquid-glass.css?v=20260723-serious2')) {
+if (!hasLiquidGlass(server)) {
   throw new Error("Dynamic product, category and brand pages are missing Liquid Glass");
 }
 const accountScript = fs.readFileSync(path.join(root, "public/account.js"), "utf8");
@@ -84,7 +85,7 @@ const footerLinks = [
 ];
 for (const file of trustPages) {
   const html = fs.readFileSync(path.join(root, "public", "pages", file), "utf8");
-  if (!html.includes('/liquid-glass.css?v=20260723-serious2')) {
+  if (!hasLiquidGlass(html)) {
     throw new Error(`Liquid Glass is missing from ${file}`);
   }
   if (!html.includes('<nav class="footer-links" aria-label="Footer navigation">')) {
@@ -96,13 +97,20 @@ for (const file of trustPages) {
 }
 for (const file of ["index.html", "club.html", "account.html", "admin.html"]) {
   const html = fs.readFileSync(path.join(root, "public", file), "utf8");
-  if (!html.includes('/liquid-glass.css?v=20260723-serious2')) {
+  if (!hasLiquidGlass(html)) {
     throw new Error(`Liquid Glass is missing from public/${file}`);
   }
 }
 const liquidGlass = fs.readFileSync(path.join(root, "public", "liquid-glass.css"), "utf8");
 for (const selector of [".hero-copy", ".featured-deal", ".card", ".club-plan", ".account-card", ".content-card", ".deal-modal-panel", ".page-footer"]) {
   if (!liquidGlass.includes(selector)) throw new Error(`Liquid Glass coverage is missing ${selector}`);
+}
+if (!liquidGlass.includes("content: none !important")) throw new Error("Decorative background circles are still enabled");
+if (!liquidGlass.includes(".live-card h2") || !liquidGlass.includes(".rules h2")) {
+  throw new Error("Club glass-card heading contrast is not protected");
+}
+if (!liquidGlass.includes("@media (hover: hover) and (pointer: fine)")) {
+  throw new Error("Mouse hover highlighting is missing");
 }
 const trustStyles = fs.readFileSync(path.join(root, "public", "trust.css"), "utf8");
 if (!trustStyles.includes("flex-wrap:wrap")) throw new Error("Trust-page footer links cannot wrap");

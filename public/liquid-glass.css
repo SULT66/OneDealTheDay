@@ -21,6 +21,7 @@
   --glass-fill: linear-gradient(145deg, rgba(255, 255, 255, .58), rgba(255, 255, 255, .22));
   --glass-fill-strong: linear-gradient(145deg, rgba(255, 255, 255, .76), rgba(244, 248, 255, .42));
   --glass-fill-soft: linear-gradient(145deg, rgba(255, 255, 255, .4), rgba(255, 255, 255, .14));
+  --glass-hover-fill: linear-gradient(145deg, rgba(255, 255, 255, .88), rgba(229, 237, 255, .58));
   --glass-border: rgba(255, 255, 255, .72);
   --glass-inner: rgba(255, 255, 255, .82);
   --glass-hairline: rgba(41, 58, 91, .12);
@@ -62,6 +63,7 @@ body.dark {
   --glass-fill: linear-gradient(145deg, rgba(27, 39, 64, .62), rgba(10, 17, 31, .42));
   --glass-fill-strong: linear-gradient(145deg, rgba(38, 51, 79, .75), rgba(14, 22, 39, .59));
   --glass-fill-soft: linear-gradient(145deg, rgba(29, 42, 69, .44), rgba(9, 16, 29, .28));
+  --glass-hover-fill: linear-gradient(145deg, rgba(48, 65, 101, .82), rgba(16, 25, 45, .68));
   --glass-border: rgba(198, 214, 255, .16);
   --glass-inner: rgba(255, 255, 255, .13);
   --glass-hairline: rgba(191, 207, 255, .13);
@@ -115,37 +117,8 @@ body.dark {
 
 body::before,
 body::after {
-  content: "";
-  position: fixed;
-  z-index: -2;
-  pointer-events: none;
-  border-radius: 50%;
-  filter: blur(2px);
-}
-
-body::before {
-  width: 36rem;
-  height: 36rem;
-  top: 18%;
-  right: -20rem;
-  border: 1px solid rgba(255, 255, 255, .32);
-  background: linear-gradient(145deg, rgba(255, 255, 255, .12), rgba(125, 151, 217, .08));
-  box-shadow: inset 0 0 80px rgba(255, 255, 255, .12);
-}
-
-body::after {
-  width: 29rem;
-  height: 29rem;
-  bottom: 8%;
-  left: -17rem;
-  border: 1px solid rgba(255, 255, 255, .28);
-  background: linear-gradient(145deg, rgba(255, 255, 255, .1), rgba(80, 117, 205, .08));
-}
-
-body.dark::before,
-body.dark::after {
-  border-color: rgba(180, 201, 255, .09);
-  box-shadow: inset 0 0 80px rgba(128, 153, 226, .05);
+  content: none !important;
+  display: none !important;
 }
 
 a,
@@ -735,6 +708,27 @@ body.dark .product-detail-media img {
   border-color: var(--accent) !important;
 }
 
+/* Club contrast: old Club styles used white text on what is now light glass. */
+.live-card,
+.rules {
+  color: var(--text) !important;
+}
+
+.live-card h2,
+.live-card .live-top b,
+.rules h2,
+.feature h3,
+.plan-card h3 {
+  color: var(--text) !important;
+  -webkit-text-fill-color: currentColor !important;
+}
+
+.live-card > p,
+.timeline span,
+.rules p {
+  color: var(--muted) !important;
+}
+
 .rules span,
 .profile-avatar {
   background: var(--brand-fill) !important;
@@ -921,6 +915,79 @@ footer a,
 footer a:hover,
 .page-footer a:hover {
   color: #aebfff !important;
+}
+
+/* A visible but restrained glass response for mouse users. */
+@media (hover: hover) and (pointer: fine) {
+  .featured-deal,
+  .card,
+  .mini-card,
+  .feature,
+  .plan-card,
+  .method-grid article,
+  .confidence-grid article,
+  .contact-item,
+  .live-card,
+  .rules,
+  .account-card,
+  .content-card,
+  .subscribe-card {
+    transition:
+      transform .24s cubic-bezier(.2, .8, .2, 1),
+      border-color .24s ease,
+      background .24s ease,
+      box-shadow .24s ease,
+      filter .24s ease;
+  }
+
+  .featured-deal:hover,
+  .card:hover,
+  .mini-card:hover,
+  .feature:hover,
+  .plan-card:hover,
+  .method-grid article:hover,
+  .confidence-grid article:hover,
+  .contact-item:hover,
+  .live-card:hover,
+  .rules:hover,
+  .account-card:hover,
+  .content-card:hover,
+  .subscribe-card:hover {
+    transform: translateY(-6px) scale(1.006);
+    border-color: color-mix(in srgb, var(--accent) 58%, var(--glass-border)) !important;
+    background: var(--glass-hover-fill) !important;
+    box-shadow:
+      0 34px 90px rgba(29, 45, 82, .22),
+      0 0 0 1px color-mix(in srgb, var(--accent) 24%, transparent),
+      inset 0 1px 0 rgba(255, 255, 255, .94) !important;
+  }
+
+  body.dark .featured-deal:hover,
+  body.dark .card:hover,
+  body.dark .mini-card:hover,
+  body.dark .feature:hover,
+  body.dark .plan-card:hover,
+  body.dark .method-grid article:hover,
+  body.dark .confidence-grid article:hover,
+  body.dark .contact-item:hover,
+  body.dark .live-card:hover,
+  body.dark .rules:hover,
+  body.dark .account-card:hover,
+  body.dark .content-card:hover,
+  body.dark .subscribe-card:hover {
+    box-shadow:
+      0 38px 100px rgba(0, 0, 0, .58),
+      0 0 0 1px color-mix(in srgb, var(--accent) 42%, transparent),
+      inset 0 1px 0 rgba(255, 255, 255, .18) !important;
+  }
+
+  .feature:hover > span,
+  .plan-card:hover > .eyebrow,
+  .card:hover .rank,
+  .mini-card:hover h3,
+  .method-grid article:hover > span {
+    color: color-mix(in srgb, var(--accent) 86%, var(--text)) !important;
+  }
 }
 
 @supports not ((backdrop-filter: blur(2px)) or (-webkit-backdrop-filter: blur(2px))) {
