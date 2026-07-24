@@ -3,6 +3,7 @@ const crypto = require("crypto");
 const express = require("express");
 const helmet = require("helmet");
 const cron = require("node-cron");
+const Stripe = require("stripe");
 const db = require("./db");
 const c = require("./config");
 const { refreshProducts } = require("./refresh");
@@ -13,8 +14,47 @@ const app = express();
 const publicDir = path.join(__dirname, "..", "public");
 const pagesDir = path.join(publicDir, "pages");
 const SITE = "https://www.onedailydrop.com";
+const stripeSecretKey = String(process.env.STRIPE_SECRET_KEY || "").trim();
+const stripeWebhookSecret = String(process.env.STRIPE_WEBHOOK_SECRET || "").trim();
+const stripePriceId = String(process.env.STRIPE_CLUB_PRICE_ID || "").trim();
+const stripe = stripeSecretKey ? new Stripe(stripeSecretKey) : null;
 
 app.use(helmet({ contentSecurityPolicy: false }));
+app.post("/api/stripe/webhook", express.raw({type:"application/json"}), (req, res) => {
+  if (!stripe || !stripeWebhookSecret) return res.status(503).send("Stripe webhook is not configured.");
+  let event;
+  try {
+    event = stripe.webhooks.constructEvent(req.body, req.headers["stripe-signature"], stripeWebhookSecret);
+  } catch (error) {
+    return res.status(400).send(`Webhook Error: ${error.message}`);
+  }
+
+  const object = event.data.object;
+  const activate = subscription => {
+    const userId = Number(subscription.metadata?.user_id);
+    const active = ["active", "trialing"].includes(subscription.status);
+    const customerId = typeof subscription.customer === "string" ? subscription.customer : subscription.customer?.id;
+    if (userId) {
+      db.prepare(`UPDATE users SET membership=?,stripe_customer_id=?,stripe_subscription_id=?,stripe_subscription_status=? WHERE id=?`)
+        .run(active ? "club" : "free", customerId || null, subscription.id, subscription.status, userId);
+    } else if (customerId) {
+      db.prepare(`UPDATE users SET membership=?,stripe_subscription_id=?,stripe_subscription_status=? WHERE stripe_customer_id=?`)
+        .run(active ? "club" : "free", subscription.id, subscription.status, customerId);
+    }
+  };
+
+  if (["customer.subscription.created", "customer.subscription.updated", "customer.subscription.deleted"].includes(event.type)) {
+    activate(object);
+  }
+  if (event.type === "checkout.session.completed" && object.mode === "subscription") {
+    const userId = Number(object.client_reference_id || object.metadata?.user_id);
+    if (userId) {
+      db.prepare("UPDATE users SET stripe_customer_id=?,stripe_subscription_id=? WHERE id=?")
+        .run(String(object.customer || ""), String(object.subscription || ""), userId);
+    }
+  }
+  res.json({received:true});
+});
 app.use(express.json());
 app.use(express.static(publicDir));
 
@@ -141,6 +181,41 @@ app.post("/api/auth/reset-password", (req, res) => {
   res.json({ok:true});
 });
 app.get("/api/me", (req, res) => res.json({user:currentUser(req)}));
+app.post("/api/club/checkout", requireUser, async (req, res) => {
+  if (!stripe || !stripePriceId) return res.status(503).json({error:"Secure Club checkout is being connected. Please try again shortly."});
+  if (req.user.membership === "club") return res.status(409).json({error:"Your Club membership is already active."});
+  try {
+    const stored = db.prepare("SELECT stripe_customer_id FROM users WHERE id=?").get(req.user.id);
+    const session = await stripe.checkout.sessions.create({
+      mode:"subscription",
+      line_items:[{price:stripePriceId,quantity:1}],
+      customer:stored?.stripe_customer_id || undefined,
+      customer_email:stored?.stripe_customer_id ? undefined : req.user.email,
+      client_reference_id:String(req.user.id),
+      metadata:{user_id:String(req.user.id)},
+      subscription_data:{metadata:{user_id:String(req.user.id)}},
+      success_url:`${SITE}/account?checkout=success`,
+      cancel_url:`${SITE}/club?checkout=cancelled`,
+      allow_promotion_codes:true
+    });
+    res.json({url:session.url});
+  } catch (error) {
+    console.error("Stripe checkout error:", error.message);
+    res.status(502).json({error:"We couldn’t open secure checkout. Please try again."});
+  }
+});
+app.post("/api/club/billing-portal", requireUser, async (req, res) => {
+  if (!stripe) return res.status(503).json({error:"Billing management is not configured."});
+  const stored = db.prepare("SELECT stripe_customer_id FROM users WHERE id=?").get(req.user.id);
+  if (!stored?.stripe_customer_id) return res.status(404).json({error:"No Club billing account was found."});
+  try {
+    const session = await stripe.billingPortal.sessions.create({customer:stored.stripe_customer_id,return_url:`${SITE}/account`});
+    res.json({url:session.url});
+  } catch (error) {
+    console.error("Stripe portal error:", error.message);
+    res.status(502).json({error:"We couldn’t open billing management. Please try again."});
+  }
+});
 app.post("/api/club/interest", requireUser, (req, res) => res.json({ok:true,membership:req.user.membership}));
 app.post("/api/club/participate", requireClub, (req, res) => res.json({ok:true,message:"You are in. Every Club member receives access at the same time."}));
 app.post("/api/price-alerts", requireClub, (req, res) => {
