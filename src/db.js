@@ -90,6 +90,13 @@ db.exec(`
     expires_at TEXT NOT NULL,
     FOREIGN KEY(user_id) REFERENCES users(id)
   );
+  CREATE TABLE IF NOT EXISTS password_reset_tokens(
+    token_hash TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    expires_at TEXT NOT NULL,
+    used_at TEXT,
+    FOREIGN KEY(user_id) REFERENCES users(id)
+  );
   CREATE TABLE IF NOT EXISTS price_alerts(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
@@ -123,6 +130,7 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_price_history_product_date ON price_history(product_id, observed_at DESC);
   CREATE INDEX IF NOT EXISTS idx_subscribers_status ON subscribers(status, created_at DESC);
   CREATE INDEX IF NOT EXISTS idx_user_sessions_expiry ON user_sessions(expires_at);
+  CREATE INDEX IF NOT EXISTS idx_password_reset_user ON password_reset_tokens(user_id, expires_at DESC);
   CREATE INDEX IF NOT EXISTS idx_price_alerts_user ON price_alerts(user_id, created_at DESC);
 `);
 

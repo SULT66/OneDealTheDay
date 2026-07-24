@@ -7,10 +7,12 @@
     clubLink.textContent = "Club $2.99";
     clubLink.className = "club-nav-link";
     primaryNav.appendChild(clubLink);
-    const accountLink = document.createElement("a");
-    accountLink.href = "/account";
-    accountLink.textContent = "Account";
-    primaryNav.appendChild(accountLink);
+    const accountMount = document.createElement("span");
+    accountMount.dataset.accountNav = "";
+    primaryNav.appendChild(accountMount);
+    const authScript = document.createElement("script");
+    authScript.src = "/auth-ui.js?v=20260723";
+    document.body.appendChild(authScript);
   }
   const els = {
     searchInput: $("searchInput"),

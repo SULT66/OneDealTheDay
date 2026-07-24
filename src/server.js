@@ -58,6 +58,7 @@ const trustPages = {"/about":"about.html","/contact":"contact.html","/privacy":"
 Object.entries(trustPages).forEach(([route, file]) => app.get(route, (req, res) => res.sendFile(path.join(pagesDir, file))));
 app.get("/club", (req, res) => res.sendFile(path.join(publicDir, "club.html")));
 app.get("/account", (req, res) => res.sendFile(path.join(publicDir, "account.html")));
+app.get("/reset-password", (req, res) => res.sendFile(path.join(publicDir, "account.html")));
 
 app.post("/api/auth/register", (req, res) => {
   const name = String(req.body?.name || "").trim().slice(0, 80);
@@ -87,6 +88,56 @@ app.post("/api/auth/logout", (req, res) => {
   const token = parseCookies(req).odd_session;
   if (token) db.prepare("DELETE FROM user_sessions WHERE token_hash=?").run(tokenHash(token));
   res.clearCookie("odd_session");
+  res.json({ok:true});
+});
+app.post("/api/auth/forgot-password", async (req, res) => {
+  const email = String(req.body?.email || "").trim().toLowerCase();
+  const user = db.prepare("SELECT id,email,name FROM users WHERE email=?").get(email);
+  const response = {ok:true,message:"If that email belongs to an account, a password reset link is on its way."};
+  if (!user) return res.json(response);
+
+  const token = crypto.randomBytes(32).toString("base64url");
+  const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+  db.prepare("DELETE FROM password_reset_tokens WHERE user_id=? OR expires_at<=?").run(user.id, new Date().toISOString());
+  db.prepare("INSERT INTO password_reset_tokens(token_hash,user_id,expires_at) VALUES(?,?,?)")
+    .run(tokenHash(token), user.id, expiresAt);
+
+  const apiKey = process.env.SENDGRID_API_KEY;
+  const from = process.env.PASSWORD_RESET_FROM_EMAIL || "account@onedailydrop.com";
+  if (apiKey) {
+    try {
+      await fetch("https://api.sendgrid.com/v3/mail/send", {
+        method:"POST",
+        headers:{"Authorization":`Bearer ${apiKey}`,"Content-Type":"application/json"},
+        body:JSON.stringify({
+          personalizations:[{to:[{email:user.email,name:user.name}]}],
+          from:{email:from,name:"OneDailyDrop"},
+          subject:"Reset your OneDailyDrop password",
+          content:[{type:"text/html",value:`<p>Hi ${esc(user.name)},</p><p>Use the secure link below to choose a new OneDailyDrop password. It expires in one hour.</p><p><a href="${SITE}/reset-password?token=${encodeURIComponent(token)}">Reset my password</a></p><p>If you did not request this, you can ignore this email.</p>`}]
+        })
+      });
+    } catch (error) {
+      console.error("Password reset email could not be sent:", error.message);
+    }
+  } else {
+    console.warn("SENDGRID_API_KEY is not configured; password reset email was not sent.");
+  }
+  res.json(response);
+});
+app.post("/api/auth/reset-password", (req, res) => {
+  const token = String(req.body?.token || "");
+  const password = String(req.body?.password || "");
+  if (password.length < 8) return res.status(400).json({error:"Password must contain at least 8 characters."});
+  const reset = db.prepare("SELECT * FROM password_reset_tokens WHERE token_hash=? AND used_at IS NULL AND expires_at>?")
+    .get(tokenHash(token), new Date().toISOString());
+  if (!reset) return res.status(400).json({error:"This reset link is invalid or has expired."});
+  const now = new Date().toISOString();
+  db.transaction(() => {
+    db.prepare("UPDATE users SET password_hash=? WHERE id=?").run(passwordHash(password), reset.user_id);
+    db.prepare("UPDATE password_reset_tokens SET used_at=? WHERE token_hash=?").run(now, reset.token_hash);
+    db.prepare("DELETE FROM user_sessions WHERE user_id=?").run(reset.user_id);
+  })();
+  startSession(res, reset.user_id);
   res.json({ok:true});
 });
 app.get("/api/me", (req, res) => res.json({user:currentUser(req)}));

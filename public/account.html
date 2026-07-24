@@ -1,1 +1,36 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Your OneDailyDrop Account</title><link rel="stylesheet" href="/club.css?v=20260723"><style>.account-main{min-height:78vh;display:grid;place-items:center}.account-card{width:min(520px,100%);padding:32px;border:1px solid var(--line);border-radius:24px;background:var(--surface)}.tabs{display:flex;gap:8px;margin:22px 0}.tabs button{flex:1;padding:12px;border:1px solid var(--line);border-radius:10px;background:transparent;color:var(--text);font-weight:800}.tabs button.active{background:var(--text);color:var(--bg)}label{display:block;margin:14px 0;font-size:12px;font-weight:850}input{width:100%;min-height:48px;margin-top:7px;padding:0 13px;border:1px solid var(--line);border-radius:11px;background:var(--bg);color:var(--text)}form .primary{width:100%;margin-top:12px}.status{color:var(--muted);text-align:center}.plan-note{padding:14px;border-radius:12px;background:var(--soft);color:var(--muted)}</style></head><body><header><a class="brand" href="/"><span>D</span><b>OneDailyDrop</b></a><nav><a href="/club">Club $2.99</a></nav></header><main class="account-main"><section class="account-card"><p class="eyebrow">FREE ACCOUNT</p><h1 id="title">Create your account</h1><p class="plan-note" id="planNote" hidden>First create your free account. Then you can join OneDailyDrop Club for $2.99/month.</p><div class="tabs"><button id="registerTab" class="active">Create account</button><button id="loginTab">Sign in</button></div><form id="authForm"><label id="nameLabel">Name<input id="name" autocomplete="name"></label><label>Email<input id="email" type="email" required autocomplete="email"></label><label>Password<input id="password" type="password" required minlength="8" autocomplete="new-password"></label><button class="primary" type="submit">Create free account</button><p class="status" id="status">Free forever. Club is optional.</p></form></section></main><script src="/account.js?v=20260723"></script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Your OneDailyDrop Account</title>
+  <link rel="stylesheet" href="/club.css?v=20260723-account"><link rel="stylesheet" href="/account-nav.css?v=20260723">
+  <style>
+    .account-main{min-height:78vh;display:grid;place-items:center;padding:44px 24px}.account-card{width:min(540px,100%);padding:32px;border:1px solid var(--line);border-radius:24px;background:var(--surface);box-shadow:0 22px 70px rgba(20,22,26,.08)}.tabs{display:flex;gap:8px;margin:22px 0}.tabs button{flex:1;padding:12px;border:1px solid var(--line);border-radius:10px;background:transparent;color:var(--text);font-weight:800;cursor:pointer}.tabs button.active{background:var(--text);color:var(--bg)}label{display:block;margin:14px 0;font-size:12px;font-weight:850}input{width:100%;min-height:48px;margin-top:7px;padding:0 13px;border:1px solid var(--line);border-radius:11px;background:var(--bg);color:var(--text)}form .primary{width:100%;margin-top:12px}.status{color:var(--muted);text-align:center;line-height:1.45}.plan-note{padding:14px;border-radius:12px;background:var(--soft);color:var(--muted)}.forgot{display:block;margin:-3px 0 13px;text-align:right;color:var(--orange);font-size:13px;font-weight:800}.back-button{padding:0;border:0;background:none;color:var(--orange);font-weight:800;cursor:pointer}.profile-card{text-align:center}.profile-avatar{display:grid;place-items:center;width:74px;height:74px;margin:0 auto 18px;border-radius:50%;background:var(--orange);color:#fff;font-size:30px;font-weight:950}.profile-email{color:var(--muted)}.profile-plan{margin:22px 0;padding:18px;border-radius:16px;background:var(--soft);text-align:left}.profile-actions{display:grid;gap:10px}.profile-actions a,.profile-actions button{min-height:48px;border-radius:12px;font-weight:900}.profile-actions a{display:grid;place-items:center}.logout-button{border:1px solid var(--line);background:transparent;color:var(--text);cursor:pointer}
+  </style>
+</head>
+<body>
+  <header><a class="brand" href="/"><span>D</span><b>OneDailyDrop</b></a><nav><a class="primary compact-subscribe" href="/club">Subscribe — $2.99/month</a><span data-account-nav></span></nav></header>
+  <main class="account-main">
+    <section class="account-card" id="authCard">
+      <p class="eyebrow">FREE ACCOUNT</p><h1 id="title">Create your account</h1>
+      <p class="plan-note" id="planNote" hidden>First create your free account. Then you can join OneDailyDrop Club for $2.99/month.</p>
+      <div class="tabs" id="tabs"><button id="registerTab" class="active" type="button">Create account</button><button id="loginTab" type="button">Sign In</button></div>
+      <form id="authForm">
+        <label id="nameLabel">Name<input id="name" autocomplete="name"></label>
+        <label>Email<input id="email" type="email" required autocomplete="email"></label>
+        <label>Password<input id="password" type="password" required minlength="8" autocomplete="new-password"></label>
+        <a class="forgot" id="forgotLink" href="#" hidden>Forgot password?</a>
+        <button class="primary" type="submit">Create free account</button>
+        <p class="status" id="status">Free forever. Club is optional.</p>
+      </form>
+    </section>
+    <section class="account-card profile-card" id="profileCard" hidden>
+      <div class="profile-avatar" id="profileAvatar"></div><p class="eyebrow">YOU ARE SIGNED IN</p><h1 id="profileName"></h1><p class="profile-email" id="profileEmail"></p>
+      <div class="profile-plan"><b id="profilePlan"></b><p id="profilePlanText"></p></div>
+      <div class="profile-actions"><a class="primary" id="profileSubscribe" href="/club">Subscribe — $2.99/month</a><button class="logout-button" id="profileLogout" type="button">Log Out</button></div>
+    </section>
+  </main>
+  <script src="/auth-ui.js?v=20260723"></script><script src="/account.js?v=20260723-account"></script>
+</body>
+</html>
