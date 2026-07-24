@@ -29,7 +29,7 @@ exports.searchProducts = async () => products.map((product, index) => ({
   external_id: product[0],
   title: product[1],
   category: product[2],
-  description: `A curated ${product[2].toLowerCase()} product profile selected for the OneDailyDrop catalog.`,
+  description: `A ${product[2].toLowerCase()} product currently listed in the OneDailyDrop catalog.`,
   rating: product[3],
   review_count: product[4],
   current_price: product[5],
