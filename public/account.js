@@ -41,7 +41,7 @@
     passwordRules.hidden = forgotMode || mode === "login";
     passwordInput.autocomplete = mode === "login" ? "current-password" : "new-password";
     forgot.hidden = mode !== "login";
-    document.getElementById("title").textContent = reset ? "Choose a new password" : forgotMode ? "Reset your password" : mode === "register" ? "Create your account" : "Welcome back";
+    document.getElementById("title").textContent = reset ? "Choose a new password" : forgotMode ? "Reset your password" : mode === "register" ? "Create your free account" : "Welcome back";
     submit.textContent = reset ? "Save new password" : forgotMode ? "Send reset link" : mode === "register" ? "Create free account" : "Sign In";
     document.getElementById("registerTab").classList.toggle("active", mode === "register");
     document.getElementById("loginTab").classList.toggle("active", mode === "login");
@@ -54,7 +54,6 @@
   document.getElementById("registerTab").onclick = () => setMode("register");
   document.getElementById("loginTab").onclick = () => setMode("login");
   forgot.onclick = event => { event.preventDefault(); setMode("forgot"); };
-  if (params.get("plan") === "club") document.getElementById("planNote").hidden = false;
   if (location.pathname === "/reset-password" && params.get("token")) setMode("reset");
   else if (params.get("mode") === "login") setMode("login");
   passwordInput.addEventListener("input", updatePasswordRules);
