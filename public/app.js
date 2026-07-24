@@ -234,6 +234,11 @@
       const button = subscribeForm.querySelector("button[type=submit]");
       const email = $("subscribeEmail").value.trim();
       const categories = [...subscribeForm.querySelectorAll('input[name="categories"]:checked')].map(input => input.value);
+      if (!$("subscribeEmail").checkValidity()) {
+        $("subscribeEmail").reportValidity();
+        status.textContent = "Enter a valid email address.";
+        return;
+      }
       button.disabled = true;
       status.textContent = "Saving your preferences…";
       try {
@@ -247,6 +252,7 @@
         subscribeForm.classList.add("is-success");
         status.textContent = result.message;
         localStorage.setItem("dailyDropInterests", JSON.stringify(categories));
+        subscribeForm.reset();
       } catch (error) {
         status.textContent = error.message;
       } finally {

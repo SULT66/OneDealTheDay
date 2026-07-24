@@ -7,6 +7,23 @@
   const passwordLabel = document.getElementById("password").closest("label");
   const submit = form.querySelector("button[type=submit]");
   const forgot = document.getElementById("forgotLink");
+  const nameInput = document.getElementById("name");
+  const emailInput = document.getElementById("email");
+  const passwordInput = document.getElementById("password");
+  const passwordRules = document.getElementById("passwordRules");
+
+  const updatePasswordRules = () => {
+    const password = passwordInput.value;
+    const rules = {
+      length: password.length >= 12,
+      lower: /[a-z]/.test(password),
+      upper: /[A-Z]/.test(password),
+      number: /\d/.test(password),
+      symbol: /[^A-Za-z0-9]/.test(password)
+    };
+    passwordRules.querySelectorAll("[data-rule]").forEach(item => item.classList.toggle("met", rules[item.dataset.rule]));
+    return Object.values(rules).every(Boolean);
+  };
 
   const setMode = next => {
     mode = next;
@@ -14,16 +31,24 @@
     const forgotMode = mode === "forgot";
     document.getElementById("tabs").hidden = reset || forgotMode;
     nameLabel.hidden = mode !== "register";
-    document.getElementById("name").required = mode === "register";
+    form.reset();
+    status.classList.remove("is-error");
+    submit.hidden = false;
+    submit.disabled = false;
+    nameInput.required = mode === "register";
     passwordLabel.hidden = forgotMode;
-    document.getElementById("password").required = !forgotMode;
+    passwordInput.required = !forgotMode;
+    passwordRules.hidden = forgotMode || mode === "login";
+    passwordInput.autocomplete = mode === "login" ? "current-password" : "new-password";
     forgot.hidden = mode !== "login";
     document.getElementById("title").textContent = reset ? "Choose a new password" : forgotMode ? "Reset your password" : mode === "register" ? "Create your account" : "Welcome back";
     submit.textContent = reset ? "Save new password" : forgotMode ? "Send reset link" : mode === "register" ? "Create free account" : "Sign In";
     document.getElementById("registerTab").classList.toggle("active", mode === "register");
     document.getElementById("loginTab").classList.toggle("active", mode === "login");
-    status.innerHTML = forgotMode ? 'We will email a secure link that expires in one hour.<br><button class="back-button" type="button">Back to Sign In</button>' : reset ? "Use at least 8 characters." : mode === "register" ? "Free forever. Club is optional." : "Enter the email and password for your account.";
+    status.innerHTML = forgotMode ? 'We will email a secure link that expires in one hour.<br><button class="back-button" type="button">Back to Sign In</button>' : reset ? "Create a strong password for your account." : mode === "register" ? "Free forever. Club is optional." : "Enter the email and password for your account.";
     status.querySelector(".back-button")?.addEventListener("click", () => setMode("login"));
+    updatePasswordRules();
+    (mode === "register" ? nameInput : emailInput).focus();
   };
 
   document.getElementById("registerTab").onclick = () => setMode("register");
@@ -32,6 +57,7 @@
   if (params.get("plan") === "club") document.getElementById("planNote").hidden = false;
   if (location.pathname === "/reset-password" && params.get("token")) setMode("reset");
   else if (params.get("mode") === "login") setMode("login");
+  passwordInput.addEventListener("input", updatePasswordRules);
 
   fetch("/api/me").then(r => r.json()).then(({user}) => {
     if (!user || mode === "reset") return;
@@ -49,6 +75,13 @@
 
   form.addEventListener("submit", async event => {
     event.preventDefault();
+    status.classList.remove("is-error");
+    if ((mode === "register" || mode === "reset") && !updatePasswordRules()) {
+      status.textContent = "Your password must meet all five requirements.";
+      status.classList.add("is-error");
+      passwordInput.focus();
+      return;
+    }
     submit.disabled = true;
     status.textContent = mode === "register" ? "Creating your account…" : mode === "login" ? "Signing in…" : mode === "forgot" ? "Sending your secure link…" : "Saving your new password…";
     const endpoint = mode === "forgot" ? "/api/auth/forgot-password" : mode === "reset" ? "/api/auth/reset-password" : `/api/auth/${mode}`;
@@ -65,6 +98,7 @@
       }
     } catch (error) {
       status.textContent = error.message;
+      status.classList.add("is-error");
       submit.disabled = false;
     }
   });

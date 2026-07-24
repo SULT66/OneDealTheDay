@@ -7,6 +7,7 @@ const db = require("./db");
 const c = require("./config");
 const { refreshProducts } = require("./refresh");
 const { detectBrand, normalizeBrand, slugifyBrand } = require("./brandDetector");
+const { passwordResetEmail, subscriptionEmail } = require("./mailer");
 
 const app = express();
 const publicDir = path.join(__dirname, "..", "public");
@@ -22,6 +23,16 @@ const parseCookies = req => Object.fromEntries(String(req.headers.cookie || "").
   return [decodeURIComponent(value.slice(0, index)), decodeURIComponent(value.slice(index + 1))];
 }));
 const tokenHash = token => crypto.createHash("sha256").update(token).digest("hex");
+const commonPasswords = new Set(["12345678", "123456789", "password", "password1", "qwerty123", "qwertyuiop", "letmein123", "onedailydrop"]);
+const passwordError = password => {
+  if (password.length < 12) return "Use at least 12 characters.";
+  if (!/[a-z]/.test(password)) return "Add at least one lowercase letter.";
+  if (!/[A-Z]/.test(password)) return "Add at least one uppercase letter.";
+  if (!/\d/.test(password)) return "Add at least one number.";
+  if (!/[^A-Za-z0-9]/.test(password)) return "Add at least one symbol.";
+  if (commonPasswords.has(password.toLowerCase()) || /(.)\1{5,}/.test(password)) return "Choose a less common password.";
+  return null;
+};
 const passwordHash = password => {
   const salt = crypto.randomBytes(16).toString("hex");
   return `${salt}:${crypto.scryptSync(password, salt, 64).toString("hex")}`;
@@ -66,7 +77,8 @@ app.post("/api/auth/register", (req, res) => {
   const password = String(req.body?.password || "");
   if (name.length < 2) return res.status(400).json({error:"Enter your name."});
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i.test(email)) return res.status(400).json({error:"Enter a valid email address."});
-  if (password.length < 8) return res.status(400).json({error:"Password must contain at least 8 characters."});
+  const invalidPassword = passwordError(password);
+  if (invalidPassword) return res.status(400).json({error:invalidPassword});
   try {
     const result = db.prepare("INSERT INTO users(email,name,password_hash,membership,created_at) VALUES(?,?,?,?,?)")
       .run(email, name, passwordHash(password), "free", new Date().toISOString());
@@ -102,32 +114,20 @@ app.post("/api/auth/forgot-password", async (req, res) => {
   db.prepare("INSERT INTO password_reset_tokens(token_hash,user_id,expires_at) VALUES(?,?,?)")
     .run(tokenHash(token), user.id, expiresAt);
 
-  const apiKey = process.env.SENDGRID_API_KEY;
-  const from = process.env.PASSWORD_RESET_FROM_EMAIL || "account@onedailydrop.com";
-  if (apiKey) {
-    try {
-      await fetch("https://api.sendgrid.com/v3/mail/send", {
-        method:"POST",
-        headers:{"Authorization":`Bearer ${apiKey}`,"Content-Type":"application/json"},
-        body:JSON.stringify({
-          personalizations:[{to:[{email:user.email,name:user.name}]}],
-          from:{email:from,name:"OneDailyDrop"},
-          subject:"Reset your OneDailyDrop password",
-          content:[{type:"text/html",value:`<p>Hi ${esc(user.name)},</p><p>Use the secure link below to choose a new OneDailyDrop password. It expires in one hour.</p><p><a href="${SITE}/reset-password?token=${encodeURIComponent(token)}">Reset my password</a></p><p>If you did not request this, you can ignore this email.</p>`}]
-        })
-      });
-    } catch (error) {
-      console.error("Password reset email could not be sent:", error.message);
-    }
-  } else {
-    console.warn("SENDGRID_API_KEY is not configured; password reset email was not sent.");
+  try {
+    await passwordResetEmail({name:user.name,email:user.email,token});
+  } catch (error) {
+    db.prepare("DELETE FROM password_reset_tokens WHERE token_hash=?").run(tokenHash(token));
+    console.error("Password reset email could not be sent:", error.code, error.message, error.details || "");
+    return res.status(503).json({error:"We couldn’t send the reset email right now. Please try again shortly."});
   }
   res.json(response);
 });
 app.post("/api/auth/reset-password", (req, res) => {
   const token = String(req.body?.token || "");
   const password = String(req.body?.password || "");
-  if (password.length < 8) return res.status(400).json({error:"Password must contain at least 8 characters."});
+  const invalidPassword = passwordError(password);
+  if (invalidPassword) return res.status(400).json({error:invalidPassword});
   const reset = db.prepare("SELECT * FROM password_reset_tokens WHERE token_hash=? AND used_at IS NULL AND expires_at>?")
     .get(tokenHash(token), new Date().toISOString());
   if (!reset) return res.status(400).json({error:"This reset link is invalid or has expired."});
@@ -222,7 +222,7 @@ app.get("/api/brands", (req,res) => res.json(db.prepare("SELECT brand,brand_slug
 app.get("/api/brands/:slug", (req,res) => { const products = db.prepare("SELECT * FROM products WHERE status='published' AND brand_slug=? ORDER BY score DESC").all(req.params.slug); if (!products.length) return res.status(404).json({error:"Brand not found"}); const brand = products[0].brand; res.json({brand,slug:req.params.slug,url:brandPath(brand),summary:{products:products.length,average_price:products.reduce((s,p)=>s+Number(p.current_price||0),0)/products.length,average_rating:products.reduce((s,p)=>s+Number(p.rating||0),0)/products.length,average_discount:products.reduce((s,p)=>s+discountPercent(p),0)/products.length,total_clicks:db.prepare("SELECT COUNT(*) n FROM clicks c JOIN products p ON p.id=c.product_id WHERE p.brand_slug=?").get(req.params.slug).n},products:products.map(p=>({...p,deal_url:dealPath(p)}))}); });
 app.get("/api/products/:id/price-history", (req,res) => { const product = db.prepare("SELECT id,title,current_price,currency FROM products WHERE id=? AND status='published'").get(req.params.id); if (!product) return res.status(404).json({error:"Product not found"}); const history = historyFor(product.id); res.json({product,summary:{observations:history.length,lowest_30_days:minSince(history,30),lowest_90_days:minSince(history,90),lowest_ever:history.length?Math.min(...history.map(row=>Number(row.price)).filter(Number.isFinite)):null},history}); });
 app.get("/api/status", (req,res) => res.json({provider:c.provider,products:db.prepare("SELECT COUNT(*) n FROM products WHERE status='published'").get().n,brands:db.prepare("SELECT COUNT(DISTINCT brand_slug) n FROM products WHERE status='published' AND brand_slug<>''").get().n,clicks:db.prepare("SELECT COUNT(*) n FROM clicks").get().n,priceObservations:db.prepare("SELECT COUNT(*) n FROM price_history").get().n,lastRun:db.prepare("SELECT * FROM refresh_runs ORDER BY id DESC LIMIT 1").get()}));
-app.post("/api/subscribe", (req,res) => {
+app.post("/api/subscribe", async (req,res) => {
   const email = String(req.body?.email || "").trim().toLowerCase();
   const requested = Array.isArray(req.body?.categories) ? req.body.categories : [];
   const categories = [...new Set(requested.map(value => String(value).trim()).filter(Boolean))].slice(0, 12);
@@ -236,7 +236,19 @@ app.post("/api/subscribe", (req,res) => {
     ON CONFLICT(email) DO UPDATE SET
       categories=excluded.categories,status='active',updated_at=excluded.updated_at
   `).run(email, JSON.stringify(categories), "active", "homepage", now, now);
-  res.status(201).json({ok:true,message:"You're on the Daily Drop list.",categories});
+  let emailSent = false;
+  try {
+    await subscriptionEmail({email, categories});
+    emailSent = true;
+  } catch (error) {
+    console.error("Subscription confirmation email could not be sent:", error.code, error.message, error.details || "");
+  }
+  res.status(201).json({
+    ok:true,
+    message:emailSent ? "You're subscribed. Check your inbox for confirmation." : "You're subscribed to the Daily Drop.",
+    categories,
+    emailSent
+  });
 });
 app.post("/api/admin/refresh", admin, async (req,res) => { try { res.json(await refreshProducts(c)); } catch (error) { res.status(500).json({error:error.message}); } });
 app.get("/go/:id", (req,res) => { const product = db.prepare("SELECT * FROM products WHERE id=? AND status='published'").get(req.params.id); if (!product) return res.sendStatus(404); db.prepare("INSERT INTO clicks(product_id,clicked_at,referrer,user_agent) VALUES(?,?,?,?)").run(product.id,new Date().toISOString(),req.get("referer")||"",req.get("user-agent")||""); res.redirect(302,product.affiliate_url); });

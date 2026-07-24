@@ -12,6 +12,7 @@ const files = [
   "src/providers/demo.js",
   "src/homepage.js",
   "src/homepage-seo.js",
+  "src/mailer.js",
   "public/app.js"
 ];
 
@@ -45,6 +46,11 @@ const database = fs.readFileSync(path.join(root, "src/db.js"), "utf8");
 if (!database.includes("CREATE TABLE IF NOT EXISTS subscribers")) throw new Error("Subscriber storage is missing");
 const server = fs.readFileSync(path.join(root, "src/server.js"), "utf8");
 if (!server.includes('app.post("/api/subscribe"')) throw new Error("Subscriber API is missing");
+if (!server.includes("passwordError(password)")) throw new Error("Strong server-side password validation is missing");
+if (!server.includes("passwordResetEmail")) throw new Error("Password recovery email delivery is missing");
+const accountScript = fs.readFileSync(path.join(root, "public/account.js"), "utf8");
+if (!accountScript.includes("form.reset()")) throw new Error("Auth fields are not cleared when switching modes");
+if (!accountScript.includes("updatePasswordRules")) throw new Error("Password requirements UI is missing");
 for (const required of ["Check here", "MAKE IT YOUR DAILY CHECK", "THE ONEDAILYDROP SCORE", "PAST DAILY PICKS"]) {
   if (!homepage.includes(required)) throw new Error(`Habit-building homepage content is missing: ${required}`);
 }
