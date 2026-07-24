@@ -52,6 +52,9 @@ const server = fs.readFileSync(path.join(root, "src/server.js"), "utf8");
 if (!server.includes('app.post("/api/subscribe"')) throw new Error("Subscriber API is missing");
 if (!server.includes("passwordError(password)")) throw new Error("Strong server-side password validation is missing");
 if (!server.includes("passwordResetEmail")) throw new Error("Password recovery email delivery is missing");
+if (!server.includes('if (!currentUser(req)) return res.redirect(302, "/account?mode=login&plan=club")')) {
+  throw new Error("Anonymous visitors can still open the account-only Club page");
+}
 if (!hasLiquidGlass(server)) {
   throw new Error("Dynamic product, category and brand pages are missing Liquid Glass");
 }

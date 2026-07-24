@@ -107,7 +107,10 @@ const startSession = (res, userId) => {
 
 const trustPages = {"/about":"about.html","/contact":"contact.html","/privacy":"privacy.html","/terms":"terms.html","/affiliate-disclosure":"affiliate-disclosure.html","/editorial-policy":"editorial-policy.html","/how-we-select-deals":"how-we-select-deals.html","/price-disclaimer":"price-disclaimer.html"};
 Object.entries(trustPages).forEach(([route, file]) => app.get(route, (req, res) => res.sendFile(path.join(pagesDir, file))));
-app.get("/club", (req, res) => res.sendFile(path.join(publicDir, "club.html")));
+app.get("/club", (req, res) => {
+  if (!currentUser(req)) return res.redirect(302, "/account?mode=login&plan=club");
+  return res.sendFile(path.join(publicDir, "club.html"));
+});
 app.get("/account", (req, res) => res.sendFile(path.join(publicDir, "account.html")));
 app.get("/reset-password", (req, res) => res.sendFile(path.join(publicDir, "account.html")));
 
