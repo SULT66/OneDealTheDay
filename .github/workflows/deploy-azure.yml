@@ -1,4 +1,4 @@
-name: Deploy OneDealTheDay to Azure
+name: Deploy OneDailyDrop to Azure
 
 on:
   push:
@@ -10,9 +10,13 @@ concurrency:
   group: onedealtheday-production
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
-  build-and-deploy:
+  deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
       - name: Check out repository
@@ -27,9 +31,20 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Validate production build
+        run: npm test
+
       - name: Deploy to Azure App Service
         uses: azure/webapps-deploy@v3
         with:
           app-name: onedealtheday
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
           package: .
+
+      - name: Verify production health
+        run: |
+          curl --fail --silent --show-error \
+            --retry 8 --retry-delay 10 --retry-all-errors \
+            --max-time 20 \
+            "https://onedealtheday-g3dme0aghzerc3a2.centralus-01.azurewebsites.net/api/status" \
+            > /dev/null
