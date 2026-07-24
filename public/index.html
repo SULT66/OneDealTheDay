@@ -27,7 +27,7 @@
         <span class="brand-mark">D</span>
         <span class="brand-copy"><strong>OneDailyDrop</strong><small>The Best Deals. Every Day.</small></span>
       </a>
-      <label class="header-search"><span>⌕</span><input id="searchInput" type="search" placeholder="Search all products..." autocomplete="off"></label>
+      <form class="header-search" id="searchForm" action="/search"><span>⌕</span><input id="searchInput" name="q" type="search" placeholder="Search all products..." autocomplete="off"><button id="searchClear" class="search-clear" type="button" aria-label="Clear search" hidden>×</button></form>
       <a class="header-subscribe" href="/club">Join Club · $2.99</a>
       <button id="themeToggle" class="icon-button" type="button" aria-label="Switch to dark mode" title="Dark mode">☾</button>
     </div>
@@ -41,6 +41,7 @@
       <a href="#trending">Trending</a>
       <a href="#price-drops">Price Drops</a>
       <a href="#new-drops">New Drops</a>
+      <a href="/archive">Yesterday’s Drops</a>
       <a href="/about">About</a>
     </nav>
   </header>

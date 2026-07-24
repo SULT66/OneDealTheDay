@@ -58,6 +58,17 @@ app.post("/api/stripe/webhook", express.raw({type:"application/json"}), (req, re
 app.use(express.json());
 app.use(express.static(publicDir));
 
+const authAttempts = new Map();
+const authRateLimit = (req, res, next) => {
+  const key = `${req.ip}:${req.path}`;
+  const now = Date.now();
+  const recent = (authAttempts.get(key) || []).filter(time => now - time < 15 * 60 * 1000);
+  if (recent.length >= 12) return res.status(429).json({error:"Too many attempts. Please wait a few minutes and try again."});
+  recent.push(now);
+  authAttempts.set(key, recent);
+  next();
+};
+
 const parseCookies = req => Object.fromEntries(String(req.headers.cookie || "").split(";").map(value => value.trim()).filter(Boolean).map(value => {
   const index = value.indexOf("=");
   return [decodeURIComponent(value.slice(0, index)), decodeURIComponent(value.slice(index + 1))];
@@ -111,10 +122,10 @@ app.get("/club", (req, res) => {
   if (!currentUser(req)) return res.redirect(302, "/account?mode=login&plan=club");
   return res.sendFile(path.join(publicDir, "club.html"));
 });
-app.get("/account", (req, res) => res.sendFile(path.join(publicDir, "account.html")));
-app.get("/reset-password", (req, res) => res.sendFile(path.join(publicDir, "account.html")));
+app.get("/account", (req, res) => res.set("X-Robots-Tag", "noindex, nofollow").sendFile(path.join(publicDir, "account.html")));
+app.get("/reset-password", (req, res) => res.set("X-Robots-Tag", "noindex, nofollow").sendFile(path.join(publicDir, "account.html")));
 
-app.post("/api/auth/register", (req, res) => {
+app.post("/api/auth/register", authRateLimit, (req, res) => {
   const name = String(req.body?.name || "").trim().slice(0, 80);
   const email = String(req.body?.email || "").trim().toLowerCase();
   const password = String(req.body?.password || "");
@@ -132,7 +143,7 @@ app.post("/api/auth/register", (req, res) => {
     throw error;
   }
 });
-app.post("/api/auth/login", (req, res) => {
+app.post("/api/auth/login", authRateLimit, (req, res) => {
   const email = String(req.body?.email || "").trim().toLowerCase();
   const user = db.prepare("SELECT * FROM users WHERE email=?").get(email);
   if (!user || !passwordMatches(String(req.body?.password || ""), user.password_hash)) return res.status(401).json({error:"Email or password is incorrect."});
@@ -145,7 +156,7 @@ app.post("/api/auth/logout", (req, res) => {
   res.clearCookie("odd_session");
   res.json({ok:true});
 });
-app.post("/api/auth/forgot-password", async (req, res) => {
+app.post("/api/auth/forgot-password", authRateLimit, async (req, res) => {
   const email = String(req.body?.email || "").trim().toLowerCase();
   const user = db.prepare("SELECT id,email,name FROM users WHERE email=?").get(email);
   const response = {ok:true,message:"If that email belongs to an account, a password reset link is on its way."};
@@ -166,7 +177,7 @@ app.post("/api/auth/forgot-password", async (req, res) => {
   }
   res.json(response);
 });
-app.post("/api/auth/reset-password", (req, res) => {
+app.post("/api/auth/reset-password", authRateLimit, (req, res) => {
   const token = String(req.body?.token || "");
   const password = String(req.body?.password || "");
   const invalidPassword = passwordError(password);
@@ -242,9 +253,12 @@ const storeName = product => { const source = String(product.source || "").toLow
 const discountPercent = product => Number(product.original_price) > Number(product.current_price) ? Math.round((1 - Number(product.current_price) / Number(product.original_price)) * 100) : 0;
 const whyPicked = product => { const points = []; if (Number(product.rating) >= 4.5) points.push(`strong ${Number(product.rating).toFixed(1)}-star rating`); if (Number(product.review_count) >= 1000) points.push(`${Number(product.review_count).toLocaleString()}+ reviews`); if (Number(product.score) >= 80) points.push(`high OneDailyDrop Score of ${Math.round(Number(product.score))}`); if (discountPercent(product) > 0) points.push(`${discountPercent(product)}% verified price reduction`); return points.length ? `We selected this product for its ${points.join(", ")}.` : "We selected this product after reviewing its price, customer feedback, availability and overall value."; };
 
-const shell = (title, description, canonical, body, schema, image = "") => `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0a1020"><title>${esc(title)}</title><meta name="description" content="${esc(description.slice(0,160))}"><link rel="canonical" href="${canonical}"><meta property="og:type" content="website"><meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(description.slice(0,180))}"><meta property="og:url" content="${canonical}">${image ? `<meta property="og:image" content="${esc(image)}">` : ""}<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="${esc(title)}"><meta name="twitter:description" content="${esc(description.slice(0,180))}"><link rel="stylesheet" href="/styles.css?v=20260722-brand"><link rel="stylesheet" href="/brand-theme.css?v=20260723"><link rel="stylesheet" href="/liquid-glass.css?v=20260723-polish1"><script type="application/ld+json">${JSON.stringify(schema).replace(/</g,"\\u003c")}</script></head><body><header class="site-header"><div class="header-top"><a class="brand" href="/"><span class="brand-mark">D</span><span class="brand-copy"><strong>OneDailyDrop</strong><small>The Best Deals. Every Day.</small></span></a><button id="themeToggle" class="icon-button" type="button" aria-label="Switch to dark mode" title="Dark mode">☾</button></div></header>${body}<footer><div><b>OneDailyDrop</b><p>The Best Deals. Every Day.</p></div><p><a href="/affiliate-disclosure">Affiliate Disclosure</a> · <a href="/price-disclaimer">Price Disclaimer</a></p></footer><script src="/theme.js?v=20260723-polish1"></script></body></html>`;
+const navCategories = () => db.prepare("SELECT DISTINCT category FROM products WHERE status='published' AND category<>'' ORDER BY category").all().map(row => row.category);
+const sharedHeader = () => `<header class="site-header"><div class="header-top"><a class="brand" href="/"><span class="brand-mark">D</span><span class="brand-copy"><strong>OneDailyDrop</strong><small>The Best Deals. Every Day.</small></span></a><form class="header-search" action="/search"><span aria-hidden="true">⌕</span><input name="q" type="search" placeholder="Search deals" aria-label="Search deals"></form><a class="header-subscribe" href="/#subscribe">Get Daily Drops</a><button id="themeToggle" class="icon-button" type="button" aria-label="Switch to dark mode" title="Dark mode">☾</button></div><nav class="main-nav" aria-label="Primary navigation"><a href="/">Today</a><div class="category-menu"><button type="button" aria-expanded="false">Categories <span>⌄</span></button><div class="mega-menu" hidden>${navCategories().map(category => `<a href="${catPath(category)}">${esc(category)}</a>`).join("")}</div></div><a href="/#trending">Trending</a><a href="/archive">Yesterday’s Drops</a><a href="/about">About</a><span data-account-nav></span></nav></header>`;
+const sharedFooter = () => `<footer><div class="footer-brand"><b>OneDailyDrop</b><p>The Best Deals. Every Day.</p><div class="footer-links"><a href="/about">About</a><a href="/contact">Contact</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/affiliate-disclosure">Affiliate Disclosure</a><a href="/editorial-policy">Editorial Policy</a></div></div><p class="disclosure">Preview products and prices are sample data while OneDailyDrop is being built.</p></footer>`;
+const shell = (title, description, canonical, body, schema = null, image = "", robots = "") => `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0a1020"><title>${esc(title)}</title><meta name="description" content="${esc(description.slice(0,160))}"><link rel="canonical" href="${canonical}">${robots ? `<meta name="robots" content="${robots}">` : ""}<meta property="og:type" content="website"><meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(description.slice(0,180))}"><meta property="og:url" content="${canonical}">${image ? `<meta property="og:image" content="${esc(image)}">` : ""}<meta name="twitter:card" content="summary_large_image"><link rel="stylesheet" href="/styles.css?v=20260724"><link rel="stylesheet" href="/brand-theme.css?v=20260723"><link rel="stylesheet" href="/liquid-glass.css?v=20260723-polish1">${schema ? `<script type="application/ld+json">${JSON.stringify(schema).replace(/</g,"\\u003c")}</script>` : ""}</head><body>${sharedHeader()}${body}${sharedFooter()}<script src="/theme.js?v=20260723-polish1"></script><script src="/site-shell.js?v=20260724"></script><script src="/auth-ui.js?v=20260723"></script></body></html>`;
 
-const productCard = (product, index = 0) => `<article class="card"><a class="image-wrap" href="${dealPath(product)}"><img src="${esc(product.image_url)}" alt="${esc(shortTitle(product.title))}"></a><div class="card-content">${index ? `<span class="rank">#${index}</span>` : ""}${product.brand ? `<a class="eyebrow" href="${brandPath(product.brand)}">${esc(product.brand)}</a>` : ""}<h3><a href="${dealPath(product)}">${esc(shortTitle(product.title))}</a></h3><p class="description">${esc(whyPicked(product))}</p><span class="price">${money(product.current_price, product.currency)}</span></div></article>`;
+const productCard = (product, index = 0) => `<article class="card"><a class="image-wrap" href="${dealPath(product)}"><img src="${esc(product.image_url)}" alt="${esc(shortTitle(product.title))}"></a><div class="card-content">${index ? `<span class="rank">#${index}</span>` : ""}${product.brand ? `<a class="eyebrow" href="${brandPath(product.brand)}">${esc(product.brand)}</a>` : ""}<h2 class="card-title"><a href="${dealPath(product)}">${esc(shortTitle(product.title))}</a></h2><p class="description">${esc(whyPicked(product))}</p><span class="price">${money(product.current_price, product.currency)}</span><a class="button" href="${dealPath(product)}">View details</a></div></article>`;
 const findProduct = param => { const id = String(param).match(/-(\d+)$/)?.[1] || (/^\d+$/.test(param) ? param : null); return id ? db.prepare("SELECT * FROM products WHERE id=? AND status='published'").get(id) : null; };
 const historyFor = id => db.prepare("SELECT price,original_price,currency,source,observed_at FROM price_history WHERE product_id=? ORDER BY observed_at ASC").all(id);
 const minSince = (rows, days) => { const cutoff = Date.now() - days * 86400000; const values = rows.filter(row => new Date(row.observed_at).getTime() >= cutoff).map(row => Number(row.price)).filter(Number.isFinite); return values.length ? Math.min(...values) : null; };
@@ -270,7 +284,31 @@ app.get("/category/:slug", (req, res) => {
   if (!category) return res.status(404).send("Category not found");
   const products = all.filter(product => product.category === category), canonical = SITE + catPath(category), description = `Browse the best ${category} deals selected by OneDailyDrop.`;
   const schema = {"@context":"https://schema.org","@type":"ItemList",name:`Best ${category} Deals`,itemListElement:products.map((product,index)=>({"@type":"ListItem",position:index+1,url:SITE+dealPath(product),name:shortTitle(product.title)}))};
-  res.send(shell(`Best ${category} Deals | OneDailyDrop`, description, canonical, `<main><section class="deals-section"><div class="section-heading"><div><p class="eyebrow">CATEGORY</p><h1>${esc(category)} Deals</h1></div><p class="result-count">${products.length} products</p></div><div class="grid">${products.map((product,index)=>productCard(product,index+1)).join("")}</div></section></main>`, schema));
+  const categoryTitle = category.toLowerCase() === "pets" ? "Pet" : category;
+  const count = `${products.length} ${products.length === 1 ? "product" : "products"}`;
+  res.send(shell(`Best ${categoryTitle} Deals | OneDailyDrop`, description, canonical, `<main><section class="deals-section"><div class="section-heading"><div><p class="eyebrow">CATEGORY</p><h1>Best ${esc(categoryTitle)} Deals</h1></div><p class="result-count">${count}</p></div><div class="grid">${products.map((product,index)=>productCard(product,index+1)).join("")}</div></section></main>`, schema));
+});
+
+app.get("/search", (req, res) => {
+  const query = clean(req.query.q).slice(0, 80);
+  const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
+  const all = db.prepare("SELECT * FROM products WHERE status='published' ORDER BY score DESC,updated_at DESC").all();
+  const products = query ? all.filter(product => terms.every(term => `${product.title} ${product.description || ""} ${product.category || ""} ${product.brand || ""}`.toLowerCase().includes(term))) : [];
+  const count = `${products.length} ${products.length === 1 ? "result" : "results"}`;
+  const empty = query ? `No deals matched “${esc(query)}”. Try a product type, brand, or category.` : "Enter a product, brand, or category above.";
+  const body = `<main><section class="deals-section"><div class="section-heading"><div><p class="eyebrow">SEARCH</p><h1>${query ? `Results for “${esc(query)}”` : "Search deals"}</h1></div><p class="result-count">${count}</p></div>${products.length ? `<div class="grid">${products.map((product,index)=>productCard(product,index+1)).join("")}</div>` : `<div class="empty-state">${empty}<div class="empty-actions"><a class="primary-cta" href="/">Back to today’s drop</a></div></div>`}</section></main>`;
+  res.send(shell(`${query ? `${query} Deals` : "Search"} | OneDailyDrop`, `Search OneDailyDrop preview deals${query ? ` for ${query}` : ""}.`, `${SITE}/search${query ? `?q=${encodeURIComponent(query)}` : ""}`, body, null, "", "noindex,follow"));
+});
+
+app.get("/archive", (req, res) => {
+  const products = db.prepare("SELECT * FROM products WHERE status='published' ORDER BY updated_at DESC,id DESC LIMIT 7").all();
+  const dates = products.map((product, index) => {
+    const date = new Date(Date.now() - (index + 1) * 86400000);
+    const label = date.toLocaleDateString("en-US", {month:"long", day:"numeric", timeZone:"America/New_York"});
+    return `<article class="archive-row"><time datetime="${date.toISOString().slice(0,10)}">${label}</time>${productCard(product)}</article>`;
+  }).join("");
+  const body = `<main><section class="deals-section"><div class="section-heading"><div><p class="eyebrow">ARCHIVE</p><h1>Yesterday’s Drops</h1><p class="description">A dated preview of recent daily selections.</p></div></div><div class="archive-list">${dates || '<div class="empty-state">The archive is being prepared.</div>'}</div></section></main>`;
+  res.send(shell("Yesterday’s Drops | OneDailyDrop", "Browse recent OneDailyDrop daily selections by date.", `${SITE}/archive`, body, null));
 });
 
 app.get("/brand/:slug", (req, res) => {
@@ -331,6 +369,12 @@ app.post("/api/subscribe", async (req,res) => {
 app.post("/api/admin/refresh", admin, async (req,res) => { try { res.json(await refreshProducts(c)); } catch (error) { res.status(500).json({error:error.message}); } });
 app.get("/go/:id", (req,res) => { const product = db.prepare("SELECT * FROM products WHERE id=? AND status='published'").get(req.params.id); if (!product) return res.sendStatus(404); db.prepare("INSERT INTO clicks(product_id,clicked_at,referrer,user_agent) VALUES(?,?,?,?)").run(product.id,new Date().toISOString(),req.get("referer")||"",req.get("user-agent")||""); res.redirect(302,product.affiliate_url); });
 app.get("/admin", (req,res) => res.sendFile(path.join(publicDir,"admin.html")));
+
+app.use((req, res) => {
+  if (req.path.startsWith("/api/")) return res.status(404).json({error:"Not found"});
+  const body = `<main class="not-found"><p class="eyebrow">404 ERROR</p><h1>This drop got away.</h1><p>That page does not exist or may have moved. Let’s get you back to the deals.</p><div class="hero-actions"><a class="primary-cta" href="/">Back to Today’s Drop</a><a class="secondary-cta" href="/search">Search deals</a></div></main>`;
+  res.status(404).send(shell("Page Not Found | OneDailyDrop", "The requested OneDailyDrop page could not be found.", `${SITE}${req.path}`, body, null, "", "noindex,nofollow"));
+});
 
 function backfillBrands() {
   const rows = db.prepare("SELECT id,title,description,brand,manufacturer FROM products WHERE status='published' AND (brand_slug IS NULL OR brand_slug='')").all();

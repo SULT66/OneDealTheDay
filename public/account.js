@@ -11,6 +11,8 @@
   const emailInput = document.getElementById("email");
   const passwordInput = document.getElementById("password");
   const passwordRules = document.getElementById("passwordRules");
+  const termsLabel = document.getElementById("termsLabel");
+  const termsAccepted = document.getElementById("termsAccepted");
 
   const updatePasswordRules = () => {
     const password = passwordInput.value;
@@ -39,6 +41,8 @@
     passwordLabel.hidden = forgotMode;
     passwordInput.required = !forgotMode;
     passwordRules.hidden = forgotMode || mode === "login";
+    termsLabel.hidden = mode !== "register";
+    termsAccepted.required = mode === "register";
     passwordInput.autocomplete = mode === "login" ? "current-password" : "new-password";
     forgot.hidden = mode !== "login";
     document.getElementById("title").textContent = reset ? "Choose a new password" : forgotMode ? "Reset your password" : mode === "register" ? "Create your free account" : "Welcome back";
@@ -79,6 +83,12 @@
       status.textContent = "Your password must meet all five requirements.";
       status.classList.add("is-error");
       passwordInput.focus();
+      return;
+    }
+    if (mode === "register" && !termsAccepted.checked) {
+      status.textContent = "Please agree to the Terms and Privacy Policy.";
+      status.classList.add("is-error");
+      termsAccepted.focus();
       return;
     }
     submit.disabled = true;

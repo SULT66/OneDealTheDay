@@ -16,6 +16,8 @@
   }
   const els = {
     searchInput: $("searchInput"),
+    searchForm: $("searchForm"),
+    searchClear: $("searchClear"),
     themeToggle: $("themeToggle"),
     categoryMenuButton: $("categoryMenuButton"),
     categoryMenu: $("categoryMenu"),
@@ -186,15 +188,8 @@
 
   const renderCategoryMenu = () => {
     const categories = [...new Set(products.map(product => product.category).filter(Boolean))];
-    els.categoryMenu.innerHTML = [`<button data-category="Top 10">Top 10 Drops</button>`, ...categories.map(category => `<button data-category="${esc(category)}">${esc(category)}</button>`)].join("");
-    els.categoryMenu.querySelectorAll("button").forEach(button => button.addEventListener("click", () => {
-      activeCategory = button.dataset.category;
-      els.searchInput.value = "";
-      els.categoryMenu.hidden = true;
-      els.categoryMenuButton.setAttribute("aria-expanded", "false");
-      renderMain();
-      document.querySelector("#top").scrollIntoView({ behavior: "smooth" });
-    }));
+    const categoryUrl = category => `/category/${category.toLowerCase().replace(/&/g, " and ").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`;
+    els.categoryMenu.innerHTML = [`<a href="#top">Top 10 Drops</a>`, ...categories.map(category => `<a href="${esc(categoryUrl(category))}">${esc(category)}</a>`)].join("");
   };
 
   const currentUrl = new URL(window.location.href);
@@ -214,9 +209,27 @@
       els.categoryMenuButton.setAttribute("aria-expanded", "false");
     }
   });
+  document.addEventListener("keydown", event => {
+    if (event.key === "Escape") {
+      els.categoryMenu.hidden = true;
+      els.categoryMenuButton.setAttribute("aria-expanded", "false");
+      els.categoryMenuButton.focus();
+    }
+  });
   els.searchInput.addEventListener("input", () => {
     activeCategory = "Top 10";
+    els.searchClear.hidden = !els.searchInput.value;
     renderMain();
+    if (els.searchInput.value.trim()) document.querySelector("#top").scrollIntoView({behavior:"smooth"});
+  });
+  els.searchClear.addEventListener("click", () => {
+    els.searchInput.value = "";
+    els.searchClear.hidden = true;
+    renderMain();
+    els.searchInput.focus();
+  });
+  els.searchForm.addEventListener("submit", event => {
+    if (!els.searchInput.value.trim()) event.preventDefault();
   });
   els.themeToggle.addEventListener("click", () => {
     document.body.classList.toggle("dark");
