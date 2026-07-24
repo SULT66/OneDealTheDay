@@ -239,11 +239,22 @@
       const button = subscribeForm.querySelector("button[type=submit]");
       const email = $("subscribeEmail").value.trim();
       const categories = [...subscribeForm.querySelectorAll('input[name="categories"]:checked')].map(input => input.value);
+      const interestFieldset = $("interestFieldset");
+      const categoryError = $("categoryError");
       if (!$("subscribeEmail").checkValidity()) {
         $("subscribeEmail").reportValidity();
         status.textContent = "Enter a valid email address.";
         return;
       }
+      if (!categories.length) {
+        interestFieldset.classList.add("has-error");
+        categoryError.hidden = false;
+        status.textContent = "Choose at least one category before subscribing.";
+        subscribeForm.querySelector('input[name="categories"]').focus();
+        return;
+      }
+      interestFieldset.classList.remove("has-error");
+      categoryError.hidden = true;
       button.disabled = true;
       status.textContent = "Saving your preferences…";
       try {
@@ -264,6 +275,14 @@
         button.disabled = false;
       }
     });
+    subscribeForm.querySelectorAll('input[name="categories"]').forEach(input => {
+      input.addEventListener("change", () => {
+        if (!subscribeForm.querySelector('input[name="categories"]:checked')) return;
+        $("interestFieldset").classList.remove("has-error");
+        $("categoryError").hidden = true;
+        $("subscribeStatus").textContent = "No spam. Unsubscribe anytime.";
+      });
+    });
   }
 
   const updateCountdown = () => {
@@ -278,10 +297,6 @@
   };
   setInterval(updateCountdown, 1000);
   updateCountdown();
-
-  document.querySelectorAll('a[href="#archive"]').forEach(link => {
-    link.href = "/archive";
-  });
 
   fetch("/api/products", { headers: { Accept: "application/json" } })
     .then(async response => {
