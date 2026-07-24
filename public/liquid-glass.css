@@ -258,6 +258,12 @@ header nav > a:not(.primary):hover,
   -webkit-text-fill-color: currentColor !important;
 }
 
+.brand-copy {
+  border: 0 !important;
+  background: none !important;
+  box-shadow: none !important;
+}
+
 .brand-copy small {
   color: var(--muted) !important;
 }
@@ -774,6 +780,14 @@ body.dark .product-detail-media img {
 }
 
 body.dark .account-avatar {
+  color: #0c1427 !important;
+}
+
+.main-nav a.club-nav-link {
+  color: #fff !important;
+}
+
+body.dark .main-nav a.club-nav-link {
   color: #0c1427 !important;
 }
 
