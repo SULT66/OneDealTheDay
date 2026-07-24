@@ -32,6 +32,9 @@ for (const forbidden of ["DEMO PREVIEW", "Sample price", "VIEW PRODUCT PREVIEW",
   if (homepage.includes(forbidden)) throw new Error(`Public homepage still exposes internal catalog wording: ${forbidden}`);
 }
 if (homepage.includes("shortTitle")) throw new Error("Homepage titles are still truncated");
+if (!homepage.includes('/liquid-glass.css?v=20260723-serious2')) {
+  throw new Error("Server-rendered homepage is missing the Liquid Glass design system");
+}
 
 const browserApp = fs.readFileSync(path.join(root, "public/app.js"), "utf8");
 if (browserApp.includes("shortTitle")) throw new Error("Client-side titles are still truncated");
@@ -48,6 +51,9 @@ const server = fs.readFileSync(path.join(root, "src/server.js"), "utf8");
 if (!server.includes('app.post("/api/subscribe"')) throw new Error("Subscriber API is missing");
 if (!server.includes("passwordError(password)")) throw new Error("Strong server-side password validation is missing");
 if (!server.includes("passwordResetEmail")) throw new Error("Password recovery email delivery is missing");
+if (!server.includes('/liquid-glass.css?v=20260723-serious2')) {
+  throw new Error("Dynamic product, category and brand pages are missing Liquid Glass");
+}
 const accountScript = fs.readFileSync(path.join(root, "public/account.js"), "utf8");
 if (!accountScript.includes("form.reset()")) throw new Error("Auth fields are not cleared when switching modes");
 if (!accountScript.includes("updatePasswordRules")) throw new Error("Password requirements UI is missing");
@@ -78,12 +84,25 @@ const footerLinks = [
 ];
 for (const file of trustPages) {
   const html = fs.readFileSync(path.join(root, "public", "pages", file), "utf8");
+  if (!html.includes('/liquid-glass.css?v=20260723-serious2')) {
+    throw new Error(`Liquid Glass is missing from ${file}`);
+  }
   if (!html.includes('<nav class="footer-links" aria-label="Footer navigation">')) {
     throw new Error(`Accessible footer navigation is missing from ${file}`);
   }
   for (const link of footerLinks) {
     if (!html.includes(link)) throw new Error(`Footer link ${link} is missing from ${file}`);
   }
+}
+for (const file of ["index.html", "club.html", "account.html", "admin.html"]) {
+  const html = fs.readFileSync(path.join(root, "public", file), "utf8");
+  if (!html.includes('/liquid-glass.css?v=20260723-serious2')) {
+    throw new Error(`Liquid Glass is missing from public/${file}`);
+  }
+}
+const liquidGlass = fs.readFileSync(path.join(root, "public", "liquid-glass.css"), "utf8");
+for (const selector of [".hero-copy", ".featured-deal", ".card", ".club-plan", ".account-card", ".content-card", ".deal-modal-panel", ".page-footer"]) {
+  if (!liquidGlass.includes(selector)) throw new Error(`Liquid Glass coverage is missing ${selector}`);
 }
 const trustStyles = fs.readFileSync(path.join(root, "public", "trust.css"), "utf8");
 if (!trustStyles.includes("flex-wrap:wrap")) throw new Error("Trust-page footer links cannot wrap");
