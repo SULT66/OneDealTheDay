@@ -49,7 +49,7 @@
     submit.textContent = reset ? "Save new password" : forgotMode ? "Send reset link" : mode === "register" ? "Create free account" : "Sign In";
     document.getElementById("registerTab").classList.toggle("active", mode === "register");
     document.getElementById("loginTab").classList.toggle("active", mode === "login");
-    status.innerHTML = forgotMode ? 'We will email you a reset link. It expires in one hour.<br><button class="back-button" type="button">Back to Sign In</button>' : reset ? "Choose a strong password for your account." : mode === "register" ? "Your account is free. Club is optional." : "Enter your email and password.";
+    status.innerHTML = forgotMode ? 'We will email a secure link that expires in one hour.<br><button class="back-button" type="button">Back to Sign In</button>' : reset ? "Create a strong password for your account." : mode === "register" ? "Free forever. Club is optional." : "Enter the email and password for your account.";
     status.querySelector(".back-button")?.addEventListener("click", () => setMode("login"));
     updatePasswordRules();
     (mode === "register" ? nameInput : emailInput).focus();
