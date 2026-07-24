@@ -151,9 +151,9 @@ summary:focus-visible {
 .site-header,
 body > header,
 .page-header {
-  top: 12px !important;
+  top: 0 !important;
   width: min(1380px, calc(100% - 28px)) !important;
-  margin: 12px auto 0 !important;
+  margin: 0 auto !important;
   overflow: visible !important;
   border: 1px solid var(--glass-border) !important;
   border-radius: var(--radius-lg) !important;
@@ -1137,29 +1137,4 @@ footer a:hover,
     padding: 28px 22px !important;
     border-radius: 19px !important;
   }
-}
-
-/* Categories must remain readable over product photography. */
-.mega-menu {
-  background: #f7f9fd !important;
-  -webkit-backdrop-filter: none !important;
-  backdrop-filter: none !important;
-  border-color: rgba(82, 99, 140, .24) !important;
-  box-shadow: 0 24px 60px rgba(28, 39, 68, .24) !important;
-}
-
-body.dark .mega-menu {
-  background: #182033 !important;
-  border-color: rgba(168, 184, 223, .22) !important;
-  box-shadow: 0 28px 70px rgba(0, 0, 0, .52) !important;
-}
-
-.mega-menu a,
-.mega-menu button {
-  background: rgba(255, 255, 255, .9) !important;
-}
-
-body.dark .mega-menu a,
-body.dark .mega-menu button {
-  background: #222c43 !important;
 }
