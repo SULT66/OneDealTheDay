@@ -85,7 +85,7 @@
   };
   const dealUrl = product => product.deal_url || `/deal/${encodeURIComponent(product.id)}`;
   const actionButton = (product, className) => isDemo(product)
-    ? `<a class="${className}" href="${esc(dealUrl(product))}">SEE DETAILS</a>`
+    ? `<a class="${className}" href="${esc(dealUrl(product))}">VIEW DETAILS</a>`
     : `<a class="${className}" href="/go/${encodeURIComponent(product.id)}" rel="nofollow sponsored">SEE DEAL ON ${esc(storeName(product))}</a>`;
 
   let products = [];
@@ -119,10 +119,10 @@
         <span class="featured-ribbon">TODAY'S DROP</span><span class="featured-badge">${esc(badgeFor(product))}</span>
       </div>
       <div class="featured-body">
-        <p class="cat">${esc(product.category || "Deals")} | ${esc(storeName(product))}</p>
+        <p class="cat">${esc(product.category || "Deals")} · ${esc(storeName(product))}</p>
         <h2><a href="${esc(dealUrl(product))}">${esc(fullTitle(product.title))}</a></h2>
         <p class="description">${esc(whyPicked(product))}</p>
-        <p class="stats">★ ${esc(product.rating || "-")} | ${Number(product.review_count || 0).toLocaleString()} reviews</p>
+        <p class="stats">★ ${esc(product.rating || " - ")} · ${Number(product.review_count || 0).toLocaleString()} reviews</p>
         <div class="score-strip"><strong>${Math.round(Number(product.score) || 0)}/100</strong><span>OneDailyDrop Score</span></div>
         <div class="featured-price-row"><span class="price-label">${priceLabel(product)}</span><span class="featured-price">${money(product.current_price, product.currency)}</span>${product.original_price ? `<span class="old">${money(product.original_price, product.currency)}</span>` : ""}${save ? `<span class="save-pill">SAVE ${save}%</span>` : ""}</div>
         <p class="verification">${esc(statusText(product))}</p>
@@ -137,10 +137,10 @@
         <a class="image-wrap" href="${esc(dealUrl(product))}"><img src="${esc(product.image_url)}" alt="${esc(fullTitle(product.title))}" loading="lazy"></a>
         <div class="card-content">
           <div class="card-top"><span class="rank">#${rank}</span><span class="badge">${esc(badgeFor(product))}</span></div>
-          <p class="cat">${esc(product.category || "Deals")} | ${esc(storeName(product))}</p>
+          <p class="cat">${esc(product.category || "Deals")} · ${esc(storeName(product))}</p>
           <h3><a href="${esc(dealUrl(product))}">${esc(fullTitle(product.title))}</a></h3>
-          <p class="description"><strong>Why it made the list:</strong> ${esc(whyPicked(product))}</p>
-          <p class="stats">★ ${esc(product.rating || "-")} | ${Number(product.review_count || 0).toLocaleString()} reviews | Score ${Math.round(Number(product.score) || 0)}/100</p>
+          <p class="description"><strong>Why we picked it:</strong> ${esc(whyPicked(product))}</p>
+          <p class="stats">★ ${esc(product.rating || " - ")} · ${Number(product.review_count || 0).toLocaleString()} reviews · Score ${Math.round(Number(product.score) || 0)}/100</p>
           <div class="price-row"><span class="price-label">${priceLabel(product)}</span><span class="price">${money(product.current_price, product.currency)}</span>${product.original_price ? `<span class="old">${money(product.original_price, product.currency)}</span>` : ""}${save ? `<span class="save-pill">SAVE ${save}%</span>` : ""}</div>
           <p class="verification">${esc(statusText(product))}</p>
           <div class="card-actions">${actionButton(product, "button")}</div>
@@ -154,11 +154,11 @@
       <article class="mini-card">
         <a href="${esc(dealUrl(product))}"><img src="${esc(product.image_url)}" alt="${esc(fullTitle(product.title))}" loading="lazy"></a>
         <div class="mini-card-body">
-          <p class="cat">${esc(product.category || "Deals")} | ${esc(storeName(product))}</p>
+          <p class="cat">${esc(product.category || "Deals")} · ${esc(storeName(product))}</p>
           <h3><a href="${esc(dealUrl(product))}">${esc(fullTitle(product.title))}</a></h3>
-          <p class="mini-meta">★ ${esc(product.rating || "-")} | Score ${Math.round(Number(product.score) || 0)}/100${save ? ` | ${save}% off` : ""}</p>
+          <p class="mini-meta">★ ${esc(product.rating || " - ")} · Score ${Math.round(Number(product.score) || 0)}/100${save ? ` · ${save}% off` : ""}</p>
           <div class="mini-price-row"><span class="mini-price-label">${priceLabel(product)}</span><span class="mini-price">${money(product.current_price, product.currency)}</span>${product.original_price ? `<span class="old">${money(product.original_price, product.currency)}</span>` : ""}</div>
-          <a class="mini-action" href="${esc(dealUrl(product))}">SEE DETAILS</a>
+          <a class="mini-action" href="${esc(dealUrl(product))}">VIEW DETAILS</a>
         </div>
       </article>`;
   };
