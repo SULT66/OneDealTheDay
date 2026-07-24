@@ -29,7 +29,10 @@
       </a>
       <form class="header-search" id="searchForm" action="/search"><span>⌕</span><input id="searchInput" name="q" type="search" placeholder="Search all products..." autocomplete="off"><button id="searchClear" class="search-clear" type="button" aria-label="Clear search" hidden>×</button></form>
       <a class="header-subscribe" href="/club">Join Club · $2.99</a>
-      <button id="themeToggle" class="icon-button" type="button" aria-label="Switch to dark mode" title="Dark mode">☾</button>
+      <button id="themeToggle" class="theme-button" type="button" aria-label="Switch to dark mode" title="Dark mode">
+        <span class="theme-button-icon" aria-hidden="true">☾</span>
+        <span class="theme-button-label">Dark</span>
+      </button>
     </div>
     <nav class="main-nav" aria-label="Primary navigation">
       <a href="#today">Today's Drop</a>
@@ -106,6 +109,7 @@
     </div>
   </div>
 
-  <script src="/app.js?v=20260721-v2"></script>
+  <script src="/theme.js?v=20260724-header"></script>
+  <script src="/app.js?v=20260724-theme-fix"></script>
 </body>
 </html>

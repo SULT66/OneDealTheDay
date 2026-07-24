@@ -9,7 +9,11 @@
 
   const render = () => {
     const dark = document.body.classList.contains("dark");
-    button.textContent = dark ? "☀" : "☾";
+    const icon = button.querySelector(".theme-button-icon");
+    const label = button.querySelector(".theme-button-label");
+    if (icon) icon.textContent = dark ? "☀" : "☾";
+    else button.textContent = dark ? "☀" : "☾";
+    if (label) label.textContent = dark ? "Light" : "Dark";
     button.setAttribute("aria-label", dark ? "Switch to light mode" : "Switch to dark mode");
     button.title = dark ? "Light mode" : "Dark mode";
   };

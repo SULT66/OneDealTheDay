@@ -60,14 +60,14 @@ body{
   background:linear-gradient(135deg,var(--brand-coral),var(--brand-violet));
 }
 
-.icon-button,#themeToggle{
+.icon-button{
   display:grid;
   place-items:center;
   flex:0 0 auto;
   transition:background .2s,border-color .2s,transform .2s;
 }
 
-.icon-button:hover,#themeToggle:hover{
+.icon-button:hover{
   border-color:var(--brand-violet);
   background:var(--accent-soft);
   transform:rotate(8deg);
@@ -126,5 +126,5 @@ body.dark input{
 
 @media(max-width:720px){
   body{background:var(--bg)}
-  #themeToggle{width:40px;height:40px}
+  .icon-button{width:40px;height:40px}
 }
