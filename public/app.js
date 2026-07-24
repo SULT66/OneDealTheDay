@@ -1,5 +1,17 @@
 (() => {
   const $ = id => document.getElementById(id);
+  const primaryNav = document.querySelector(".main-nav");
+  if (primaryNav && !primaryNav.querySelector('[href="/club"]')) {
+    const clubLink = document.createElement("a");
+    clubLink.href = "/club";
+    clubLink.textContent = "Club $2.99";
+    clubLink.className = "club-nav-link";
+    primaryNav.appendChild(clubLink);
+    const accountLink = document.createElement("a");
+    accountLink.href = "/account";
+    accountLink.textContent = "Account";
+    primaryNav.appendChild(accountLink);
+  }
   const els = {
     searchInput: $("searchInput"),
     themeToggle: $("themeToggle"),

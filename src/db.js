@@ -76,6 +76,28 @@ db.exec(`
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS users(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    email TEXT NOT NULL UNIQUE COLLATE NOCASE,
+    name TEXT NOT NULL,
+    password_hash TEXT NOT NULL,
+    membership TEXT NOT NULL DEFAULT 'free',
+    created_at TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS user_sessions(
+    token_hash TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    expires_at TEXT NOT NULL,
+    FOREIGN KEY(user_id) REFERENCES users(id)
+  );
+  CREATE TABLE IF NOT EXISTS price_alerts(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    product_url TEXT NOT NULL,
+    target_price REAL,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY(user_id) REFERENCES users(id)
+  );
 `);
 
 const productColumns = new Set(db.prepare("PRAGMA table_info(products)").all().map(column => column.name));
@@ -100,6 +122,8 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_products_brand_name ON products(brand);
   CREATE INDEX IF NOT EXISTS idx_price_history_product_date ON price_history(product_id, observed_at DESC);
   CREATE INDEX IF NOT EXISTS idx_subscribers_status ON subscribers(status, created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_user_sessions_expiry ON user_sessions(expires_at);
+  CREATE INDEX IF NOT EXISTS idx_price_alerts_user ON price_alerts(user_id, created_at DESC);
 `);
 
 // Seed one observation for existing products so price intelligence works

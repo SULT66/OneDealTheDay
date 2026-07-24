@@ -1,4 +1,5 @@
 const path = require("path");
+const crypto = require("crypto");
 const express = require("express");
 const helmet = require("helmet");
 const cron = require("node-cron");
@@ -16,8 +17,89 @@ app.use(helmet({ contentSecurityPolicy: false }));
 app.use(express.json());
 app.use(express.static(publicDir));
 
+const parseCookies = req => Object.fromEntries(String(req.headers.cookie || "").split(";").map(value => value.trim()).filter(Boolean).map(value => {
+  const index = value.indexOf("=");
+  return [decodeURIComponent(value.slice(0, index)), decodeURIComponent(value.slice(index + 1))];
+}));
+const tokenHash = token => crypto.createHash("sha256").update(token).digest("hex");
+const passwordHash = password => {
+  const salt = crypto.randomBytes(16).toString("hex");
+  return `${salt}:${crypto.scryptSync(password, salt, 64).toString("hex")}`;
+};
+const passwordMatches = (password, stored) => {
+  const [salt, expected] = String(stored || "").split(":");
+  if (!salt || !expected) return false;
+  const actual = crypto.scryptSync(password, salt, 64);
+  return crypto.timingSafeEqual(actual, Buffer.from(expected, "hex"));
+};
+const currentUser = req => {
+  const token = parseCookies(req).odd_session;
+  if (!token) return null;
+  return db.prepare(`SELECT u.id,u.email,u.name,u.membership FROM user_sessions s
+    JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>?`).get(tokenHash(token), new Date().toISOString()) || null;
+};
+const requireUser = (req, res, next) => {
+  req.user = currentUser(req);
+  return req.user ? next() : res.status(401).json({error:"Create a free account or sign in first."});
+};
+const requireClub = (req, res, next) => {
+  req.user = currentUser(req);
+  if (!req.user) return res.status(401).json({error:"Create a free account or sign in first."});
+  return req.user.membership === "club" ? next() : res.status(403).json({error:"This action is included with OneDailyDrop Club."});
+};
+const startSession = (res, userId) => {
+  const token = crypto.randomBytes(32).toString("base64url");
+  const expires = new Date(Date.now() + 30 * 86400000);
+  db.prepare("INSERT INTO user_sessions(token_hash,user_id,expires_at) VALUES(?,?,?)").run(tokenHash(token), userId, expires.toISOString());
+  res.cookie("odd_session", token, {httpOnly:true, sameSite:"lax", secure:process.env.NODE_ENV === "production", maxAge:30 * 86400000});
+};
+
 const trustPages = {"/about":"about.html","/contact":"contact.html","/privacy":"privacy.html","/terms":"terms.html","/affiliate-disclosure":"affiliate-disclosure.html","/editorial-policy":"editorial-policy.html","/how-we-select-deals":"how-we-select-deals.html","/price-disclaimer":"price-disclaimer.html"};
 Object.entries(trustPages).forEach(([route, file]) => app.get(route, (req, res) => res.sendFile(path.join(pagesDir, file))));
+app.get("/club", (req, res) => res.sendFile(path.join(publicDir, "club.html")));
+app.get("/account", (req, res) => res.sendFile(path.join(publicDir, "account.html")));
+
+app.post("/api/auth/register", (req, res) => {
+  const name = String(req.body?.name || "").trim().slice(0, 80);
+  const email = String(req.body?.email || "").trim().toLowerCase();
+  const password = String(req.body?.password || "");
+  if (name.length < 2) return res.status(400).json({error:"Enter your name."});
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i.test(email)) return res.status(400).json({error:"Enter a valid email address."});
+  if (password.length < 8) return res.status(400).json({error:"Password must contain at least 8 characters."});
+  try {
+    const result = db.prepare("INSERT INTO users(email,name,password_hash,membership,created_at) VALUES(?,?,?,?,?)")
+      .run(email, name, passwordHash(password), "free", new Date().toISOString());
+    startSession(res, result.lastInsertRowid);
+    res.status(201).json({user:{id:result.lastInsertRowid,email,name,membership:"free"}});
+  } catch (error) {
+    if (String(error.message).includes("UNIQUE")) return res.status(409).json({error:"An account with this email already exists."});
+    throw error;
+  }
+});
+app.post("/api/auth/login", (req, res) => {
+  const email = String(req.body?.email || "").trim().toLowerCase();
+  const user = db.prepare("SELECT * FROM users WHERE email=?").get(email);
+  if (!user || !passwordMatches(String(req.body?.password || ""), user.password_hash)) return res.status(401).json({error:"Email or password is incorrect."});
+  startSession(res, user.id);
+  res.json({user:{id:user.id,email:user.email,name:user.name,membership:user.membership}});
+});
+app.post("/api/auth/logout", (req, res) => {
+  const token = parseCookies(req).odd_session;
+  if (token) db.prepare("DELETE FROM user_sessions WHERE token_hash=?").run(tokenHash(token));
+  res.clearCookie("odd_session");
+  res.json({ok:true});
+});
+app.get("/api/me", (req, res) => res.json({user:currentUser(req)}));
+app.post("/api/club/interest", requireUser, (req, res) => res.json({ok:true,membership:req.user.membership}));
+app.post("/api/club/participate", requireClub, (req, res) => res.json({ok:true,message:"You are in. Every Club member receives access at the same time."}));
+app.post("/api/price-alerts", requireClub, (req, res) => {
+  const productUrl = String(req.body?.productUrl || "").trim().slice(0, 1000);
+  const targetPrice = Number(req.body?.targetPrice);
+  if (!/^https?:\/\//i.test(productUrl)) return res.status(400).json({error:"Enter a valid product link."});
+  db.prepare("INSERT INTO price_alerts(user_id,product_url,target_price,created_at) VALUES(?,?,?,?)")
+    .run(req.user.id, productUrl, Number.isFinite(targetPrice) ? targetPrice : null, new Date().toISOString());
+  res.status(201).json({ok:true});
+});
 
 const esc = value => String(value ?? "").replace(/[&<>"']/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
 const slug = value => String(value || "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/&/g, " and ").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 90) || "deal";
