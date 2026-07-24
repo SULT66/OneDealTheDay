@@ -61,7 +61,7 @@ if (!hasLiquidGlass(server)) {
 const accountScript = fs.readFileSync(path.join(root, "public/account.js"), "utf8");
 if (!accountScript.includes("form.reset()")) throw new Error("Auth fields are not cleared when switching modes");
 if (!accountScript.includes("updatePasswordRules")) throw new Error("Password requirements UI is missing");
-for (const required of ["Check here", "MAKE IT YOUR DAILY CHECK", "THE ONEDAILYDROP SCORE", "PAST DAILY PICKS"]) {
+for (const required of ["Before you buy", "GET THE DEALS YOU ACTUALLY WANT", "HOW THE SCORE WORKS", "PAST DAILY PICKS"]) {
   if (!homepage.includes(required)) throw new Error(`Habit-building homepage content is missing: ${required}`);
 }
 
