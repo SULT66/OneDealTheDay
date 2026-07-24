@@ -25,4 +25,23 @@
   });
 
   render();
+
+  const scrollButton = document.createElement("button");
+  scrollButton.type = "button";
+  scrollButton.className = "scroll-top-button";
+  scrollButton.setAttribute("aria-label", "Back to top");
+  scrollButton.title = "Back to top";
+  scrollButton.innerHTML = '<span aria-hidden="true">↑</span>';
+  document.body.appendChild(scrollButton);
+
+  const updateScrollButton = () => {
+    const scrollable = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
+    const progress = Math.min(1, Math.max(0, window.scrollY / scrollable));
+    scrollButton.style.setProperty("--scroll-progress", `${progress * 360}deg`);
+    scrollButton.classList.toggle("is-visible", window.scrollY > Math.min(420, window.innerHeight * 0.55));
+  };
+  scrollButton.addEventListener("click", () => window.scrollTo({top: 0, behavior: "smooth"}));
+  window.addEventListener("scroll", updateScrollButton, {passive: true});
+  window.addEventListener("resize", updateScrollButton);
+  updateScrollButton();
 })();

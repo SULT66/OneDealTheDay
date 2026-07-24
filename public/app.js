@@ -90,6 +90,21 @@
 
   let products = [];
   let activeCategory = "Top 10";
+  const searchAliases = {
+    cat: ["cat", "cats", "pet", "pets"],
+    cats: ["cat", "cats", "pet", "pets"],
+    dog: ["dog", "dogs", "pet", "pets"],
+    dogs: ["dog", "dogs", "pet", "pets"],
+    phone: ["phone", "phones", "smartphone", "smartphones", "mobile"],
+    tv: ["tv", "television", "televisions"],
+    car: ["car", "cars", "automotive", "auto"]
+  };
+  const searchTerms = value => String(value || "").toLowerCase().trim().split(/\s+/).filter(Boolean)
+    .map(term => searchAliases[term] || [term, term.endsWith("s") ? term.slice(0, -1) : `${term}s`]);
+  const matchesSearch = (product, query) => {
+    const haystack = `${product.title || ""} ${cleanText(product.description)} ${product.category || ""} ${product.brand || ""}`.toLowerCase();
+    return searchTerms(query).every(alternatives => alternatives.some(term => haystack.includes(term)));
+  };
 
   const renderFeatured = () => {
     const product = products[0];
@@ -150,7 +165,7 @@
 
   const visibleProducts = query => {
     if (query) {
-      return products.filter(product => `${product.title} ${cleanText(product.description)} ${product.category || ""}`.toLowerCase().includes(query));
+      return products.filter(product => matchesSearch(product, query));
     }
     if (activeCategory === "Top 10") return products.slice(0, 10);
     return products.filter(product => product.category === activeCategory);
@@ -220,7 +235,6 @@
     activeCategory = "Top 10";
     els.searchClear.hidden = !els.searchInput.value;
     renderMain();
-    if (els.searchInput.value.trim()) document.querySelector("#top").scrollIntoView({behavior:"smooth"});
   });
   els.searchClear.addEventListener("click", () => {
     els.searchInput.value = "";
@@ -228,9 +242,11 @@
     renderMain();
     els.searchInput.focus();
   });
-  els.searchForm.addEventListener("submit", event => {
-    if (!els.searchInput.value.trim()) event.preventDefault();
-  });
+  if (els.searchForm) {
+    els.searchForm.addEventListener("submit", event => {
+      if (!els.searchInput.value.trim()) event.preventDefault();
+    });
+  }
   const subscribeForm = $("subscribeForm");
   if (subscribeForm) {
     subscribeForm.addEventListener("submit", async event => {
