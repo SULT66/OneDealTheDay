@@ -763,17 +763,37 @@ body.dark .product-detail-media img {
   padding: 14px !important;
 }
 
+.mega-menu {
+  background: #f3f6fb !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+body.dark .mega-menu {
+  background: #111a2b !important;
+}
+
 .mega-menu a,
 .mega-menu button {
   border: 1px solid var(--glass-border) !important;
-  background: var(--glass-fill-soft) !important;
+  background: #e7ecf5 !important;
   color: var(--text) !important;
+}
+
+body.dark .mega-menu a,
+body.dark .mega-menu button {
+  background: #172238 !important;
 }
 
 .mega-menu a:hover,
 .mega-menu button:hover {
   border-color: color-mix(in srgb, var(--accent) 38%, var(--glass-border)) !important;
-  background: var(--glass-fill-strong) !important;
+  background: #dce5f5 !important;
+}
+
+body.dark .mega-menu a:hover,
+body.dark .mega-menu button:hover {
+  background: #21304d !important;
 }
 
 .account-avatar {
