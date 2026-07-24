@@ -279,6 +279,10 @@
   setInterval(updateCountdown, 1000);
   updateCountdown();
 
+  document.querySelectorAll('a[href="#archive"]').forEach(link => {
+    link.href = "/archive";
+  });
+
   fetch("/api/products", { headers: { Accept: "application/json" } })
     .then(async response => {
       if (!response.ok) throw new Error(`Products API returned HTTP ${response.status}`);
