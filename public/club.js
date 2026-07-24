@@ -91,6 +91,15 @@
   document.getElementById("themeToggle").onclick = () => {
     document.body.classList.toggle("dark");
     localStorage.setItem("theme", document.body.classList.contains("dark") ? "dark" : "light");
+    updateThemeToggle();
   };
-  if (localStorage.getItem("theme") === "dark") document.body.classList.add("dark");
+  const updateThemeToggle = () => {
+    const button = document.getElementById("themeToggle");
+    const dark = document.body.classList.contains("dark");
+    button.textContent = dark ? "☀" : "☾";
+    button.setAttribute("aria-label", dark ? "Switch to light mode" : "Switch to dark mode");
+    button.title = dark ? "Light mode" : "Dark mode";
+  };
+  if (localStorage.getItem("theme") === "dark" || (!localStorage.getItem("theme") && matchMedia("(prefers-color-scheme: dark)").matches)) document.body.classList.add("dark");
+  updateThemeToggle();
 })();
