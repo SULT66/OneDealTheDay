@@ -153,7 +153,7 @@ body > header,
 .page-header {
   top: 12px !important;
   width: min(1380px, calc(100% - 28px)) !important;
-  margin: 12px auto 0 !important;
+  margin: 0 auto !important;
   overflow: visible !important;
   border: 1px solid var(--glass-border) !important;
   border-radius: var(--radius-lg) !important;
@@ -161,6 +161,18 @@ body > header,
   -webkit-backdrop-filter: var(--glass-blur) !important;
   backdrop-filter: var(--glass-blur) !important;
   box-shadow: var(--glass-shadow) !important;
+}
+
+/*
+ * Keep the floating header 12px below the viewport without letting its top
+ * margin collapse through <body>. A real body inset is painted with the page
+ * background, so the gap stays dark in dark mode instead of becoming a white
+ * strip from the browser canvas.
+ */
+body:has(> .site-header),
+body:has(> header),
+body:has(> .page-header) {
+  padding-top: 12px !important;
 }
 
 .site-header::after,
@@ -1045,8 +1057,14 @@ footer a:hover,
   .page-header {
     top: 8px !important;
     width: calc(100% - 14px) !important;
-    margin-top: 8px !important;
+    margin-top: 0 !important;
     border-radius: 18px !important;
+  }
+
+  body:has(> .site-header),
+  body:has(> header),
+  body:has(> .page-header) {
+    padding-top: 8px !important;
   }
 
   header nav {
