@@ -82,6 +82,9 @@ db.exec(`
     name TEXT NOT NULL,
     password_hash TEXT NOT NULL,
     membership TEXT NOT NULL DEFAULT 'free',
+    stripe_customer_id TEXT,
+    stripe_subscription_id TEXT,
+    stripe_subscription_status TEXT,
     created_at TEXT NOT NULL
   );
   CREATE TABLE IF NOT EXISTS user_sessions(
@@ -106,6 +109,11 @@ db.exec(`
     FOREIGN KEY(user_id) REFERENCES users(id)
   );
 `);
+
+const userColumns = new Set(db.prepare("PRAGMA table_info(users)").all().map(column => column.name));
+for (const column of ["stripe_customer_id", "stripe_subscription_id", "stripe_subscription_status"]) {
+  if (!userColumns.has(column)) db.exec(`ALTER TABLE users ADD COLUMN ${column} TEXT`);
+}
 
 const productColumns = new Set(db.prepare("PRAGMA table_info(products)").all().map(column => column.name));
 for (const column of ["product_key", "upc", "gtin", "model_number", "brand", "brand_slug", "manufacturer", "mpn", "ean"]) {
