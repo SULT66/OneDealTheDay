@@ -70,11 +70,21 @@
         location.href = "/account?plan=club";
         return;
       }
-      title.textContent = "Club checkout is not connected yet";
-      text.textContent = "Your Free account is active. Secure $2.99/month payment will open here after Stripe is connected.";
-      action.href = "#compare";
-      action.textContent = "Review Club benefits";
-      showModal();
+      link.setAttribute("aria-busy", "true");
+      try {
+        const response = await fetch("/api/club/checkout", {method:"POST"});
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "Secure checkout is unavailable.");
+        location.href = result.url;
+      } catch (error) {
+        title.textContent = "Club checkout";
+        text.textContent = error.message;
+        action.href = "#compare";
+        action.textContent = "Review Club benefits";
+        showModal();
+      } finally {
+        link.removeAttribute("aria-busy");
+      }
     });
   });
 
