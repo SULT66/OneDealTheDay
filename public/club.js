@@ -39,7 +39,7 @@
       body: JSON.stringify({feature: button.dataset.feature})
     });
     const result = await response.json();
-    title.textContent = response.ok ? `${button.dataset.feature} unlocked` : user ? `Unlock ${button.dataset.feature}` : "Create your free account";
+    title.textContent = response.ok ? `${button.dataset.feature} is ready` : user ? `Use ${button.dataset.feature}` : "Create your free account";
     text.textContent = response.ok ? result.message : result.error;
     setGateAction();
     showModal();
