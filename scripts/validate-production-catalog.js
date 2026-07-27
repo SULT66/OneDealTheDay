@@ -34,6 +34,12 @@ const homepage = fs.readFileSync(path.join(root, "src/homepage.js"), "utf8");
 for (const forbidden of ["DEMO PREVIEW", "Sample price", "VIEW PRODUCT PREVIEW", "Development preview", "no API credits are being used"]) {
   if (homepage.includes(forbidden)) throw new Error(`Public homepage still exposes internal catalog wording: ${forbidden}`);
 }
+if (homepage.includes('content="noindex')) {
+  throw new Error("Country homepages must remain indexable in demo and live modes");
+}
+if (!homepage.includes('<meta name="robots" content="index,follow,max-image-preview:large">')) {
+  throw new Error("Country homepages are missing the required indexable robots directive");
+}
 if (homepage.includes("shortTitle")) throw new Error("Homepage titles are still truncated");
 if (!hasLiquidGlass(homepage)) {
   throw new Error("Server-rendered homepage is missing the Liquid Glass design system");
