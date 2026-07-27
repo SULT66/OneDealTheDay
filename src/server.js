@@ -8,7 +8,8 @@ const db = require("./db");
 const c = require("./config");
 const { refreshProducts } = require("./refresh");
 const { detectBrand, normalizeBrand, slugifyBrand } = require("./brandDetector");
-const { passwordResetEmail, subscriptionEmail } = require("./mailer");
+const { reasonFor } = require("./demoEditorial");
+const { passwordResetEmail, subscriptionEmail, clubWaitlistEmail } = require("./mailer");
 
 const app = express();
 const publicDir = path.join(__dirname, "..", "public");
@@ -18,6 +19,7 @@ const stripeSecretKey = String(process.env.STRIPE_SECRET_KEY || "").trim();
 const stripeWebhookSecret = String(process.env.STRIPE_WEBHOOK_SECRET || "").trim();
 const stripePriceId = String(process.env.STRIPE_CLUB_PRICE_ID || "").trim();
 const stripe = stripeSecretKey ? new Stripe(stripeSecretKey) : null;
+const clubEnrollmentOpen = String(process.env.CLUB_ENROLLMENT_OPEN || "false").trim().toLowerCase() === "true";
 
 app.use(helmet({ contentSecurityPolicy: false }));
 app.post("/api/stripe/webhook", express.raw({type:"application/json"}), (req, res) => {
@@ -118,10 +120,7 @@ const startSession = (res, userId) => {
 
 const trustPages = {"/about":"about.html","/contact":"contact.html","/privacy":"privacy.html","/terms":"terms.html","/affiliate-disclosure":"affiliate-disclosure.html","/editorial-policy":"editorial-policy.html","/how-we-select-deals":"how-we-select-deals.html","/price-disclaimer":"price-disclaimer.html"};
 Object.entries(trustPages).forEach(([route, file]) => app.get(route, (req, res) => res.sendFile(path.join(pagesDir, file))));
-app.get("/club", (req, res) => {
-  if (!currentUser(req)) return res.redirect(302, "/account?mode=login&plan=club");
-  return res.sendFile(path.join(publicDir, "club.html"));
-});
+app.get("/club", (req, res) => res.sendFile(path.join(publicDir, "club.html")));
 app.get("/account", (req, res) => res.set("X-Robots-Tag", "noindex, nofollow").sendFile(path.join(publicDir, "account.html")));
 app.get("/reset-password", (req, res) => res.set("X-Robots-Tag", "noindex, nofollow").sendFile(path.join(publicDir, "account.html")));
 
@@ -196,6 +195,7 @@ app.post("/api/auth/reset-password", authRateLimit, (req, res) => {
 });
 app.get("/api/me", (req, res) => res.json({user:currentUser(req)}));
 app.post("/api/club/checkout", requireUser, async (req, res) => {
+  if (!clubEnrollmentOpen) return res.status(503).json({error:"Club enrollment is not open yet. Join the waitlist for launch news."});
   if (!stripe || !stripePriceId) return res.status(503).json({error:"Secure Club checkout is being connected. Please try again shortly."});
   if (req.user.membership === "club") return res.status(409).json({error:"Your Club membership is already active."});
   try {
@@ -230,7 +230,37 @@ app.post("/api/club/billing-portal", requireUser, async (req, res) => {
     res.status(502).json({error:"We couldn’t open billing management. Please try again."});
   }
 });
-app.post("/api/club/interest", requireUser, (req, res) => res.json({ok:true,membership:req.user.membership}));
+app.post("/api/club/interest", authRateLimit, async (req, res) => {
+  const email = String(req.body?.email || "").trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i.test(email) || email.length > 254) {
+    return res.status(400).json({error:"Enter a valid email address."});
+  }
+  const now = new Date().toISOString();
+  db.prepare(`
+    INSERT INTO subscribers(email,categories,status,source,created_at,updated_at)
+    VALUES(?,?,'active','club-waitlist',?,?)
+    ON CONFLICT(email) DO UPDATE SET
+      status='active',
+      source=CASE
+        WHEN instr(subscribers.source,'club-waitlist')>0 THEN subscribers.source
+        WHEN subscribers.source='' THEN 'club-waitlist'
+        ELSE subscribers.source||',club-waitlist'
+      END,
+      updated_at=excluded.updated_at
+  `).run(email, "[]", now, now);
+  let emailSent = false;
+  try {
+    await clubWaitlistEmail({email});
+    emailSent = true;
+  } catch (error) {
+    console.error("Club waitlist confirmation email could not be sent:", error.code, error.message, error.details || "");
+  }
+  return res.status(201).json({
+    ok:true,
+    message:emailSent ? "You're on the Club waitlist. Check your inbox." : "You're on the Club waitlist.",
+    emailSent
+  });
+});
 app.post("/api/club/participate", requireClub, (req, res) => res.json({ok:true,message:"You are in. Every Club member receives access at the same time."}));
 app.post("/api/price-alerts", requireClub, (req, res) => {
   const productUrl = String(req.body?.productUrl || "").trim().slice(0, 1000);
@@ -251,7 +281,17 @@ const clean = value => String(value || "").replace(/<[^>]+>/g, " ").replace(/\s+
 const shortTitle = value => { const text = clean(value); return text.length <= 78 ? text : `${text.slice(0, 75).trim()}…`; };
 const storeName = product => { const source = String(product.source || "").toLowerCase(); if (source.includes("amazon") || source.includes("rainforest")) return "Amazon"; if (source.includes("walmart") || source.includes("bluecart")) return "Walmart"; return product.source || "Retailer"; };
 const discountPercent = product => Number(product.original_price) > Number(product.current_price) ? Math.round((1 - Number(product.current_price) / Number(product.original_price)) * 100) : 0;
-const whyPicked = product => { const points = []; if (Number(product.rating) >= 4.5) points.push(`strong ${Number(product.rating).toFixed(1)}-star rating`); if (Number(product.review_count) >= 1000) points.push(`${Number(product.review_count).toLocaleString()}+ reviews`); if (Number(product.score) >= 80) points.push(`high OneDailyDrop Score of ${Math.round(Number(product.score))}`); if (discountPercent(product) > 0) points.push(`${discountPercent(product)}% verified price reduction`); return points.length ? `We selected this product for its ${points.join(", ")}.` : "We selected this product after reviewing its price, customer feedback, availability and overall value."; };
+const whyPicked = product => {
+  if (String(product?.source || "").toLowerCase() === "demo") return reasonFor(product);
+  const points = [];
+  if (Number(product.rating) >= 4.5) points.push(`strong ${Number(product.rating).toFixed(1)}-star rating`);
+  if (Number(product.review_count) >= 1000) points.push(`${Number(product.review_count).toLocaleString()}+ reviews`);
+  if (Number(product.score) >= 80) points.push(`high OneDailyDrop Score of ${Math.round(Number(product.score))}`);
+  if (discountPercent(product) > 0) points.push(`${discountPercent(product)}% verified price reduction`);
+  return points.length
+    ? `We selected this product for its ${points.join(", ")}.`
+    : "We selected this product after reviewing its price, customer feedback, availability and overall value.";
+};
 const searchAliases = {cat:["cat","cats","pet","pets"],cats:["cat","cats","pet","pets"],dog:["dog","dogs","pet","pets"],dogs:["dog","dogs","pet","pets"],phone:["phone","phones","smartphone","smartphones","mobile"],tv:["tv","television","televisions"],car:["car","cars","automotive","auto"]};
 const matchesSearch = (product, terms) => {
   const haystack = `${product.title || ""} ${product.description || ""} ${product.category || ""} ${product.brand || ""}`.toLowerCase();

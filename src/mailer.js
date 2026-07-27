@@ -68,4 +68,16 @@ const subscriptionEmail = ({email, categories}) => sendEmail({
     </div>`
 });
 
-module.exports = { passwordResetEmail, subscriptionEmail };
+const clubWaitlistEmail = ({email}) => sendEmail({
+  to: email,
+  subject: "You’re on the OneDailyDrop Club waitlist",
+  html: `
+    <div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;color:#17191d">
+      <h1 style="font-size:24px">You’re on the Club waitlist</h1>
+      <p>We’ll let <strong>${escapeHtml(email)}</strong> know when OneDailyDrop Club is ready.</p>
+      <p>Until then, the Daily Drop and all public product picks remain free.</p>
+      <p><a href="${SITE}" style="color:#d95600;font-weight:bold">Visit OneDailyDrop</a></p>
+    </div>`
+});
+
+module.exports = { passwordResetEmail, subscriptionEmail, clubWaitlistEmail };

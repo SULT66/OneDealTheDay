@@ -1,12 +1,7 @@
 (() => {
   const $ = id => document.getElementById(id);
   const primaryNav = document.querySelector(".main-nav");
-  if (primaryNav && !primaryNav.querySelector('[href="/club"]')) {
-    const clubLink = document.createElement("a");
-    clubLink.href = "/club";
-    clubLink.textContent = "Club $2.99";
-    clubLink.className = "club-nav-link";
-    primaryNav.appendChild(clubLink);
+  if (primaryNav && !primaryNav.querySelector("[data-account-nav]")) {
     const accountMount = document.createElement("span");
     accountMount.dataset.accountNav = "";
     primaryNav.appendChild(accountMount);
@@ -62,7 +57,7 @@
     return product.source ? String(product.source) : "Retailer";
   };
   const badgeFor = product => {
-    if (isDemo(product)) return "DAILY PICK";
+    if (isDemo(product)) return "";
     if (discount(product) >= 25) return "VERIFIED DEAL";
     if (Number(product.score) >= 90) return "EDITOR'S PICK";
     if (Number(product.review_count) >= 5000) return "TRENDING";
@@ -75,7 +70,7 @@
       : "Price recently verified";
   const priceLabel = product => isDemo(product) ? "Retailer price" : "Current price";
   const whyPicked = product => {
-    if (isDemo(product)) return "Selected for its practical value and relevance to everyday shoppers.";
+    if (isDemo(product)) return cleanText(product.description) || "Chosen for clear everyday usefulness and straightforward features.";
     const reasons = [];
     if (Number(product.rating) >= 4.5) reasons.push(`${Number(product.rating).toFixed(1)}-star rating`);
     if (Number(product.review_count) >= 1000) reasons.push(`${Number(product.review_count).toLocaleString()} reviews`);
@@ -116,7 +111,7 @@
     els.featuredDeal.innerHTML = `
       <div class="featured-media">
         <a href="${esc(dealUrl(product))}"><img src="${esc(product.image_url)}" alt="${esc(fullTitle(product.title))}"></a>
-        <span class="featured-ribbon">TODAY'S DROP</span><span class="featured-badge">${esc(badgeFor(product))}</span>
+        <span class="featured-ribbon">TODAY'S DROP</span>${badgeFor(product) ? `<span class="featured-badge">${esc(badgeFor(product))}</span>` : ""}
       </div>
       <div class="featured-body">
         <p class="cat">${esc(product.category || "Deals")} · ${esc(storeName(product))}</p>
@@ -136,7 +131,7 @@
       <article class="card">
         <a class="image-wrap" href="${esc(dealUrl(product))}"><img src="${esc(product.image_url)}" alt="${esc(fullTitle(product.title))}" loading="lazy"></a>
         <div class="card-content">
-          <div class="card-top"><span class="rank">#${rank}</span><span class="badge">${esc(badgeFor(product))}</span></div>
+          <div class="card-top"><span class="rank">#${rank}</span>${badgeFor(product) ? `<span class="badge">${esc(badgeFor(product))}</span>` : ""}</div>
           <p class="cat">${esc(product.category || "Deals")} · ${esc(storeName(product))}</p>
           <h3><a href="${esc(dealUrl(product))}">${esc(fullTitle(product.title))}</a></h3>
           <p class="description"><strong>Why we picked it:</strong> ${esc(whyPicked(product))}</p>

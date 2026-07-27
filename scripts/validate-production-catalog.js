@@ -55,10 +55,38 @@ if (!browserApp.includes("return products.slice(1, 10);")) {
 if (browserApp.includes("Top 10 Drops Today")) {
   throw new Error("Client-side rendering still labels the additional products as Top 10");
 }
+if (browserApp.includes("Club $2.99") || browserApp.includes('clubLink.href = "/club"')) {
+  throw new Error("Club is still promoted in the main navigation");
+}
+if (browserApp.includes('return "DAILY PICK"')) {
+  throw new Error("Additional demo cards still use the Daily Pick badge");
+}
 
 const staticHomepage = fs.readFileSync(path.join(root, "public/index.html"), "utf8");
 if (!staticHomepage.includes("9 More Worth Seeing") || staticHomepage.includes("Top 10 Drops Today")) {
   throw new Error("Static homepage fallback is not aligned with the 1 + 9 product structure");
+}
+if (staticHomepage.includes("Join Club · $2.99")) {
+  throw new Error("Static homepage still promotes the Club price");
+}
+
+const demoEditorial = require(path.join(root, "src", "demoEditorial"));
+if (Object.keys(demoEditorial.reasons).length !== 24 || new Set(Object.values(demoEditorial.reasons)).size !== 24) {
+  throw new Error("Demo products do not have 24 unique editorial reasons");
+}
+for (const forbidden of ['if (isDemo(product)) return "DAILY PICK"', "Selected for its practical value and relevance to everyday shoppers."]) {
+  if (homepage.includes(forbidden) || browserApp.includes(forbidden)) {
+    throw new Error(`Generic demo-card wording is still present: ${forbidden}`);
+  }
+}
+
+const clubPage = fs.readFileSync(path.join(root, "public", "club.html"), "utf8");
+if (!clubPage.includes("CLUB COMING SOON") || !clubPage.includes("clubWaitlistForm") || /\$2\.99/i.test(clubPage)) {
+  throw new Error("Club page is not a price-free coming-soon waitlist");
+}
+const liquidGlassSource = fs.readFileSync(path.join(root, "public", "liquid-glass.css"), "utf8");
+if (liquidGlassSource.includes('content: "Club $2.99"')) {
+  throw new Error("Responsive styles can still restore the old Club price");
 }
 
 const styles = fs.readFileSync(path.join(root, "public/styles.css"), "utf8");
@@ -72,8 +100,14 @@ const server = fs.readFileSync(path.join(root, "src/server.js"), "utf8");
 if (!server.includes('app.post("/api/subscribe"')) throw new Error("Subscriber API is missing");
 if (!server.includes("passwordError(password)")) throw new Error("Strong server-side password validation is missing");
 if (!server.includes("passwordResetEmail")) throw new Error("Password recovery email delivery is missing");
-if (!server.includes('if (!currentUser(req)) return res.redirect(302, "/account?mode=login&plan=club")')) {
-  throw new Error("Anonymous visitors can still open the account-only Club page");
+if (!server.includes('app.get("/club", (req, res) => res.sendFile(path.join(publicDir, "club.html")))')) {
+  throw new Error("Public Club waitlist route is missing");
+}
+if (!server.includes('app.post("/api/club/interest", authRateLimit')) {
+  throw new Error("Club waitlist API is missing");
+}
+if (!server.includes("if (!clubEnrollmentOpen)")) {
+  throw new Error("Club checkout is not disabled before launch");
 }
 if (!hasLiquidGlass(server)) {
   throw new Error("Dynamic product, category and brand pages are missing Liquid Glass");

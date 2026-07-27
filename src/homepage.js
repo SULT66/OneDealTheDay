@@ -1,6 +1,7 @@
 const db = require("./db");
 const config = require("./config");
 const { slugifyBrand } = require("./brandDetector");
+const { reasonFor } = require("./demoEditorial");
 
 const SITE = "https://www.onedailydrop.com";
 const esc = value => String(value ?? "").replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
@@ -31,14 +32,14 @@ const discount = product => Number(product.original_price) > Number(product.curr
   ? Math.round((1 - Number(product.current_price) / Number(product.original_price)) * 100)
   : 0;
 const badge = product => {
-  if (isDemo(product)) return "DAILY PICK";
+  if (isDemo(product)) return "";
   if (discount(product) >= 25) return "VERIFIED DEAL";
   if (Number(product.score) >= 90) return "EDITOR'S PICK";
   if (Number(product.review_count) >= 5000) return "TRENDING";
   return "POPULAR PICK";
 };
 const whyPicked = product => {
-  if (isDemo(product)) return "Selected for its practical value and relevance to everyday shoppers.";
+  if (isDemo(product)) return reasonFor(product);
   const reasons = [];
   if (Number(product.rating) >= 4.5) reasons.push(`${Number(product.rating).toFixed(1)}-star rating`);
   if (Number(product.review_count) >= 1000) reasons.push(`${Number(product.review_count).toLocaleString("en-US")} reviews`);
@@ -62,7 +63,7 @@ const mainCard = (product, index) => `
   <article class="card">
     <a class="image-wrap" href="${dealPath(product)}"><img src="${esc(product.image_url)}" alt="${esc(fullTitle(product.title))}" loading="lazy"></a>
     <div class="card-content">
-      <div class="card-top"><span class="rank">#${index}</span><span class="badge">${esc(badge(product))}</span></div>
+      <div class="card-top"><span class="rank">#${index}</span>${badge(product) ? `<span class="badge">${esc(badge(product))}</span>` : ""}</div>
       <p class="cat"><a href="${categoryPath(product.category || "Deals")}">${esc(product.category || "Deals")}</a> · ${esc(storeName(product))}</p>
       <h3><a href="${dealPath(product)}">${esc(fullTitle(product.title))}</a></h3>
       <p class="description"><strong>Why we picked it:</strong> ${esc(whyPicked(product))}</p>
@@ -111,7 +112,7 @@ module.exports = function homepage(req, res) {
   const featuredHtml = featured ? `
     <div class="featured-media">
       <a href="${dealPath(featured)}"><img src="${esc(featured.image_url)}" alt="${esc(fullTitle(featured.title))}"></a>
-      <span class="featured-ribbon">TODAY'S DROP</span><span class="featured-badge">${esc(badge(featured))}</span>
+      <span class="featured-ribbon">TODAY'S DROP</span>${badge(featured) ? `<span class="featured-badge">${esc(badge(featured))}</span>` : ""}
     </div>
     <div class="featured-body">
       <p class="cat"><a href="${categoryPath(featured.category || "Deals")}">${esc(featured.category || "Deals")}</a> · ${esc(storeName(featured))}</p>

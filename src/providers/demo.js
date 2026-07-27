@@ -1,3 +1,5 @@
+const { reasonFor } = require("../demoEditorial");
+
 const products = [
   ["D001", "Cordless Handheld Car Vacuum with LED Light and Washable Filter", "Automotive", 4.7, 18640, 39.99, 59.99, "https://images.unsplash.com/photo-1503736334956-4c8f8e92946d?auto=format&fit=crop&w=1200&q=80"],
   ["D002", "Rechargeable Milk Frother for Coffee, Matcha and Hot Chocolate", "Kitchen", 4.6, 28400, 14.99, 19.99, "https://images.unsplash.com/photo-1577805947697-89e18249d767?auto=format&fit=crop&w=1200&q=80"],
@@ -29,13 +31,13 @@ exports.searchProducts = async () => products.map((product, index) => ({
   external_id: product[0],
   title: product[1],
   category: product[2],
-  description: `A curated ${product[2].toLowerCase()} product profile selected for the OneDailyDrop catalog.`,
+  description: reasonFor({ external_id: product[0], category: product[2] }),
   rating: product[3],
   review_count: product[4],
   current_price: product[5],
   original_price: product[6],
   currency: "USD",
-  badge: "Daily Pick",
+  badge: "",
   image_url: product[7],
   affiliate_url: "/",
   source: "demo",

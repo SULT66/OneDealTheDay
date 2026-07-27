@@ -5,6 +5,7 @@ const cron = require("node-cron");
 const db = require("./src/db");
 const config = require("./src/config");
 const { refreshProducts } = require("./src/refresh");
+const { reasonFor } = require("./src/demoEditorial");
 const renderHomepage = require("./src/homepage-seo");
 const createExpressApp = express;
 
@@ -73,7 +74,7 @@ function expressWithHomepage(...args) {
     if (!config.isProduction) return next();
     if (config.demoMode) {
       const products = db.prepare("SELECT * FROM products WHERE status='published' AND LOWER(COALESCE(source,''))='demo' ORDER BY score DESC,updated_at DESC").all();
-      return res.json(products);
+      return res.json(products.map(product => ({ ...product, description: reasonFor(product), badge: "" })));
     }
     const products = db.prepare("SELECT * FROM products WHERE status='published' AND LOWER(COALESCE(source,''))<>'demo' ORDER BY score DESC,updated_at DESC").all();
     return res.json(products);

@@ -1097,7 +1097,7 @@ footer a:hover,
   }
 
   .compact-subscribe::before {
-    content: "Club $2.99";
+    content: "Join waitlist";
     font-size: 12px;
   }
 }
