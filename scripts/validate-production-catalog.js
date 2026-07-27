@@ -8,6 +8,8 @@ const hasLiquidGlass = source => /\/liquid-glass\.css\?v=[^"'`\s>]+/.test(source
 const files = [
   "app.js",
   "src/config.js",
+  "src/markets.js",
+  "src/ranker.js",
   "src/refresh.js",
   "src/catalogRecovery.js",
   "src/providers/demo.js",
@@ -36,10 +38,10 @@ if (homepage.includes("shortTitle")) throw new Error("Homepage titles are still 
 if (!hasLiquidGlass(homepage)) {
   throw new Error("Server-rendered homepage is missing the Liquid Glass design system");
 }
-if (!homepage.includes("const featured = products[0] || null;")) {
+if (!homepage.includes("const featured = dailyProducts[0] || null;")) {
   throw new Error("Homepage is missing its single Today's Drop selection");
 }
-if (!homepage.includes("const moreWorthSeeing = products.slice(1, 10);")) {
+if (!homepage.includes("const moreWorthSeeing = dailyProducts.slice(1, 10);")) {
   throw new Error("Homepage does not exclude Today's Drop from the nine additional products");
 }
 if (!homepage.includes("9 More Worth Seeing")) {
@@ -111,12 +113,29 @@ if (!styles.includes(".habit-section")) throw new Error("Daily return habit sect
 
 const database = fs.readFileSync(path.join(root, "src/db.js"), "utf8");
 if (!database.includes("CREATE TABLE IF NOT EXISTS subscribers")) throw new Error("Subscriber storage is missing");
+if (!database.includes("CREATE TABLE IF NOT EXISTS daily_drops")) throw new Error("Permanent daily-drop archive storage is missing");
+for (const field of ["market", "score_breakdown", "selection_reason", "provider_external_id"]) {
+  if (!database.includes(field)) throw new Error(`Market-aware product selection field is missing from the database: ${field}`);
+}
 for (const field of ["retailer_name", "seller_name", "shipping_summary", "return_summary", "availability", "checked_at"]) {
   if (!database.includes(field)) throw new Error(`Live offer field is missing from the database: ${field}`);
 }
 const refresh = fs.readFileSync(path.join(root, "src/refresh.js"), "utf8");
 for (const field of ["@retailer_name", "@seller_name", "@shipping_summary", "@return_summary", "@availability", "@checked_at"]) {
   if (!refresh.includes(field)) throw new Error(`Live offer field is not persisted during refresh: ${field}`);
+}
+for (const required of ["selectDailyProducts", "INSERT INTO daily_drops", "minimumScore: config.provider === \"demo\" ? 0 : 60", "preserveDailySelection", "existingSnapshots"]) {
+  if (!refresh.includes(required)) throw new Error(`Daily country selection workflow is missing: ${required}`);
+}
+const ranker = fs.readFileSync(path.join(root, "src/ranker.js"), "utf8");
+for (const required of ["price_quality", "product_quality", "review_confidence", "seller_reliability", "demand_usefulness", "shipping_returns"]) {
+  if (!ranker.includes(required)) throw new Error(`OneDailyDrop Score component is missing: ${required}`);
+}
+for (const required of ["trackedReference > 0 ? 20 : 10", "* 17", "* 12", "return (knownRetailer ? 6 : 0)", "return rankPoints + reviewDemand + badge", "return (shipping ? 4 : 0)"]) {
+  if (!ranker.includes(required)) throw new Error(`OneDailyDrop Score weighting is incomplete: ${required}`);
+}
+if (!ranker.includes("result.total < number(options.minimumScore, 60)")) {
+  throw new Error("Live products below the minimum OneDailyDrop Score are not excluded");
 }
 const server = fs.readFileSync(path.join(root, "src/server.js"), "utf8");
 if (!server.includes('app.post("/api/subscribe"')) throw new Error("Subscriber API is missing");
@@ -134,6 +153,15 @@ if (!server.includes("if (!clubEnrollmentOpen)")) {
 if (!hasLiquidGlass(server)) {
   throw new Error("Dynamic product, category and brand pages are missing Liquid Glass");
 }
+for (const required of ["daily_drops", "Past Drops in ${selectedMarket.name} | OneDailyDrop", "xhtml:link", "timezone:selectedMarket.timezone", "market:selectedMarket.code"]) {
+  if (!server.includes(required)) throw new Error(`Country archive or local SEO behavior is missing: ${required}`);
+}
+if (!server.includes('"/about.html": "/about"') || !server.includes('"/contact.html": "/contact"')) {
+  throw new Error("Legacy HTML title URLs are not redirected to their canonical pages");
+}
+if (server.includes('data-account-nav href="/account"')) {
+  throw new Error("Sign In is still exposed in the public site header");
+}
 for (const required of ['id="price-history"', "retailer-detail-grid", "View Deal at"]) {
   if (!server.includes(required)) throw new Error(`Product deal page is missing: ${required}`);
 }
@@ -143,6 +171,19 @@ if (!homepageSeo.includes("OneDailyDrop does not sell products.")) {
 }
 if (!homepageSeo.includes('/<section class="confidence-section">[\\s\\S]*?<\\/section>/')) {
   throw new Error("The repeated trust/score explanation is not removed");
+}
+for (const required of ["marketFromRequest", "alternateLinks", "window.__ODD_MARKET__", "selected automatically from your IP location"]) {
+  if (!homepageSeo.includes(required)) throw new Error(`Country homepage SEO behavior is missing: ${required}`);
+}
+const markets = require(path.join(root, "src", "markets"));
+if (markets.marketFromIp({ headers: { "x-forwarded-for": "2.0.0.1" } }).code !== "fr") {
+  throw new Error("A French visitor IP does not resolve to the France market");
+}
+if (markets.normalizeMarket("fra") !== "fr" || markets.marketPath("fr", "/search") !== "/fr/search") {
+  throw new Error("Country aliases or localized paths are invalid");
+}
+if (markets.codes.join(",") !== "us,ca,uk,fr,de") {
+  throw new Error(`Unexpected supported country list: ${markets.codes.join(",")}`);
 }
 const accountScript = fs.readFileSync(path.join(root, "public/account.js"), "utf8");
 if (!accountScript.includes("form.reset()")) throw new Error("Auth fields are not cleared when switching modes");

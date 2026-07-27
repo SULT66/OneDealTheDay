@@ -56,3 +56,8 @@ body.dark .archive-card-media{background:#23272e}
 .retailer-detail-grid{grid-template-columns:repeat(2,minmax(0,1fr));margin:24px 0}
 .retailer-detail-grid section:last-child:nth-child(odd){grid-column:1/-1}
 @media(max-width:720px){.offer-facts,.retailer-detail-grid{grid-template-columns:1fr}.retailer-detail-grid section:last-child:nth-child(odd){grid-column:auto}}
+.market-note{display:inline-flex;margin:16px 0 0;padding:8px 11px;border:1px solid var(--line);border-radius:999px;background:var(--surface);color:var(--muted);font-size:11px;font-weight:800}
+.archive-day-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+.archive-meta{margin:8px 0;color:var(--muted);font-size:12px;font-weight:800}
+.archive-status{display:inline-flex;width:max-content;margin:0 0 12px;padding:6px 9px;border-radius:999px;background:var(--accent-soft);color:var(--accent);font-size:10px;font-weight:900}
+@media(max-width:980px){.archive-day-grid{grid-template-columns:1fr}}

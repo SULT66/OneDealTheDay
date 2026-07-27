@@ -15,6 +15,8 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS products(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     external_id TEXT UNIQUE,
+    provider_external_id TEXT,
+    market TEXT NOT NULL DEFAULT 'us',
     product_key TEXT,
     upc TEXT,
     gtin TEXT,
@@ -42,13 +44,18 @@ db.exec(`
     currency TEXT,
     badge TEXT,
     score REAL,
+    score_breakdown TEXT,
+    selection_reason TEXT,
     source TEXT,
     status TEXT,
-    updated_at TEXT
+    updated_at TEXT,
+    first_seen_at TEXT,
+    last_seen_at TEXT
   );
   CREATE TABLE IF NOT EXISTS refresh_runs(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     provider TEXT,
+    market TEXT NOT NULL DEFAULT 'us',
     started_at TEXT,
     finished_at TEXT,
     found_count INTEGER,
@@ -59,6 +66,7 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS clicks(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     product_id INTEGER,
+    market TEXT NOT NULL DEFAULT 'us',
     clicked_at TEXT,
     referrer TEXT,
     user_agent TEXT
@@ -79,6 +87,7 @@ db.exec(`
     categories TEXT NOT NULL DEFAULT '[]',
     status TEXT NOT NULL DEFAULT 'active',
     source TEXT NOT NULL DEFAULT 'homepage',
+    market TEXT NOT NULL DEFAULT 'us',
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
   );
@@ -88,6 +97,7 @@ db.exec(`
     name TEXT NOT NULL,
     password_hash TEXT NOT NULL,
     membership TEXT NOT NULL DEFAULT 'free',
+    market TEXT NOT NULL DEFAULT 'us',
     stripe_customer_id TEXT,
     stripe_subscription_id TEXT,
     stripe_subscription_status TEXT,
@@ -114,12 +124,38 @@ db.exec(`
     created_at TEXT NOT NULL,
     FOREIGN KEY(user_id) REFERENCES users(id)
   );
+  CREATE TABLE IF NOT EXISTS daily_drops(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    market TEXT NOT NULL,
+    drop_date TEXT NOT NULL,
+    product_id INTEGER NOT NULL,
+    rank INTEGER NOT NULL,
+    score REAL NOT NULL,
+    current_price REAL,
+    original_price REAL,
+    currency TEXT,
+    selection_reason TEXT,
+    availability_status TEXT NOT NULL DEFAULT 'Available',
+    selected_at TEXT NOT NULL,
+    UNIQUE(market, drop_date, rank),
+    UNIQUE(market, drop_date, product_id),
+    FOREIGN KEY(product_id) REFERENCES products(id)
+  );
 `);
 
 const userColumns = new Set(db.prepare("PRAGMA table_info(users)").all().map(column => column.name));
-for (const column of ["stripe_customer_id", "stripe_subscription_id", "stripe_subscription_status"]) {
+for (const column of ["stripe_customer_id", "stripe_subscription_id", "stripe_subscription_status", "market"]) {
   if (!userColumns.has(column)) db.exec(`ALTER TABLE users ADD COLUMN ${column} TEXT`);
 }
+
+const subscriberColumns = new Set(db.prepare("PRAGMA table_info(subscribers)").all().map(column => column.name));
+if (!subscriberColumns.has("market")) db.exec("ALTER TABLE subscribers ADD COLUMN market TEXT NOT NULL DEFAULT 'us'");
+
+const refreshRunColumns = new Set(db.prepare("PRAGMA table_info(refresh_runs)").all().map(column => column.name));
+if (!refreshRunColumns.has("market")) db.exec("ALTER TABLE refresh_runs ADD COLUMN market TEXT NOT NULL DEFAULT 'us'");
+
+const clickColumns = new Set(db.prepare("PRAGMA table_info(clicks)").all().map(column => column.name));
+if (!clickColumns.has("market")) db.exec("ALTER TABLE clicks ADD COLUMN market TEXT NOT NULL DEFAULT 'us'");
 
 const productColumns = new Set(db.prepare("PRAGMA table_info(products)").all().map(column => column.name));
 for (const column of [
@@ -138,9 +174,34 @@ for (const column of [
   "return_summary",
   "availability",
   "checked_at"
+  ,"provider_external_id"
+  ,"market"
+  ,"score_breakdown"
+  ,"selection_reason"
+  ,"first_seen_at"
+  ,"last_seen_at"
 ]) {
   if (!productColumns.has(column)) db.exec(`ALTER TABLE products ADD COLUMN ${column} TEXT`);
 }
+
+// Older catalogs used the retailer ID globally. Prefix it once so the same
+// ASIN/SKU can safely exist in several country catalogs.
+db.exec(`
+  UPDATE products
+  SET provider_external_id=external_id
+  WHERE COALESCE(provider_external_id,'')='';
+  UPDATE products
+  SET market='us'
+  WHERE COALESCE(market,'')='';
+  UPDATE products
+  SET external_id=market || ':' || provider_external_id
+  WHERE external_id NOT LIKE market || ':%';
+  UPDATE products
+  SET first_seen_at=COALESCE(NULLIF(first_seen_at,''), NULLIF(updated_at,''), datetime('now')),
+      last_seen_at=COALESCE(NULLIF(last_seen_at,''), NULLIF(updated_at,''), datetime('now'));
+  UPDATE subscribers SET market='us' WHERE COALESCE(market,'')='';
+  UPDATE users SET market='us' WHERE COALESCE(market,'')='';
+`);
 
 // Products are a permanent catalog. A refresh may update or add products,
 // but it must never remove older products from their categories.
@@ -154,6 +215,8 @@ db.exec(`
     SELECT RAISE(IGNORE);
   END;
   CREATE INDEX IF NOT EXISTS idx_products_status_score ON products(status, score DESC);
+  CREATE INDEX IF NOT EXISTS idx_products_market_status_score ON products(market, status, score DESC);
+  CREATE INDEX IF NOT EXISTS idx_products_market_provider_id ON products(market, provider_external_id);
   CREATE INDEX IF NOT EXISTS idx_products_category_score ON products(category, score DESC);
   CREATE INDEX IF NOT EXISTS idx_products_brand_score ON products(brand_slug, score DESC);
   CREATE INDEX IF NOT EXISTS idx_products_brand_name ON products(brand);
@@ -162,6 +225,8 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_user_sessions_expiry ON user_sessions(expires_at);
   CREATE INDEX IF NOT EXISTS idx_password_reset_user ON password_reset_tokens(user_id, expires_at DESC);
   CREATE INDEX IF NOT EXISTS idx_price_alerts_user ON price_alerts(user_id, created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_daily_drops_market_date_rank ON daily_drops(market, drop_date DESC, rank);
+  CREATE INDEX IF NOT EXISTS idx_daily_drops_product ON daily_drops(product_id, drop_date DESC);
 `);
 
 // Seed one observation for existing products so price intelligence works

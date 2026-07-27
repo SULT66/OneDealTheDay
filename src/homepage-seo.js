@@ -1,47 +1,7 @@
-const db = require("./db");
-const config = require("./config");
 const renderHomepage = require("./homepage");
-const buildHomepageSchema = require("./homepage-schema");
+const { marketFromRequest, marketPath, alternateLinks } = require("./markets");
 
 const SITE = "https://www.onedailydrop.com";
-const slug = value => String(value || "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/&/g, " and ").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 90) || "deal";
-const dealPath = product => `/deal/${slug(product.title)}-${product.id}`;
-const clean = value => String(value || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-const fullTitle = value => clean(value);
-const storeName = product => {
-  const source = String(product.source || "").toLowerCase();
-  if (source === "demo") return "OneDailyDrop";
-  if (clean(product.retailer_name)) return clean(product.retailer_name);
-  if (source.includes("amazon") || source.includes("rainforest")) return "Amazon";
-  if (source.includes("walmart") || source.includes("bluecart")) return "Walmart";
-  return product.source || "Retailer";
-};
-const esc = value => String(value ?? "").replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
-const discount = product => Number(product.original_price) > Number(product.current_price) && Number(product.current_price) > 0 ? Math.round((1 - Number(product.current_price) / Number(product.original_price)) * 100) : 0;
-const oldWhyPicked = product => {
-  const reasons = [];
-  if (Number(product.rating) >= 4.5) reasons.push(`${Number(product.rating).toFixed(1)}-star rating`);
-  if (Number(product.review_count) >= 1000) reasons.push(`${Number(product.review_count).toLocaleString()}+ reviews`);
-  if (Number(product.score) >= 80) reasons.push(`score ${Math.round(Number(product.score))}/100`);
-  if (discount(product)) reasons.push(`${discount(product)}% verified discount`);
-  return reasons.length ? `Picked for its ${reasons.join(", ")}.` : "Picked for its price, shopper feedback and overall value.";
-};
-const editorialWhyPicked = product => {
-  const title = clean(product.title) || "This product";
-  const category = clean(product.category) || "its category";
-  const retailer = clean(storeName(product));
-  const rating = Number(product.rating || 0);
-  const reviews = Number(product.review_count || 0);
-  const score = Math.round(Number(product.score || 0));
-  const savings = discount(product);
-  const evidence = [];
-  if (rating > 0) evidence.push(`${rating.toFixed(1)}-star customer rating`);
-  if (reviews > 0) evidence.push(`${reviews.toLocaleString("en-US")} customer reviews`);
-  if (score > 0) evidence.push(`${score}/100 OneDailyDrop Score`);
-  const first = `${title} stands out among today’s ${category} offers${retailer ? ` from ${retailer}` : ""}.`;
-  const second = evidence.length ? `We selected it based on its ${evidence.join(", ")}${savings ? ` and a verified ${savings}% price reduction` : ""}.` : "We selected it after comparing current price, product relevance and available shopper feedback.";
-  return `${first} ${second}`;
-};
 const anchorOffsetStyle = `<style id="homepage-anchor-offset">
 #today,#featuredDeal,#subscribe,#top,#score,#archive,#trending,#price-drops,#new-drops,#about{scroll-margin-top:112px}
 @media(max-width:720px){#today,#featuredDeal,#subscribe,#top,#score,#archive,#trending,#price-drops,#new-drops,#about{scroll-margin-top:164px}}
@@ -49,49 +9,42 @@ const anchorOffsetStyle = `<style id="homepage-anchor-offset">
 
 module.exports = function homepageSeo(req, res) {
   const originalSend = res.send.bind(res);
+  const selectedMarket = marketFromRequest(req);
+  req.market = selectedMarket.code;
 
   res.send = body => {
     if (typeof body !== "string" || !body.includes("application/ld+json")) return originalSend(body);
 
-    let enhanced = body.replace(
-      '<link rel="canonical" href="https://www.onedailydrop.com/">',
-      '<link rel="canonical" href="https://www.onedailydrop.com/"><link rel="icon" href="/favicon.svg" type="image/svg+xml"><meta property="og:site_name" content="OneDailyDrop">'
-    );
+    const homePath = marketPath(selectedMarket.code);
+    const canonical = SITE + homePath;
+    const appScript = `<script>window.__ODD_MARKET__=${JSON.stringify(selectedMarket.code)};window.__ODD_MARKET_TIMEZONE__=${JSON.stringify(selectedMarket.timezone)};</script><script>(function(){const q=new URLSearchParams(location.search).get("q");if(!q)return;const input=document.getElementById("searchInput");if(input)input.value=q;})();</script><script src="/app.js?v=20260727-markets"></script>`;
+    let enhanced = body
+      .replace(
+        '<link rel="canonical" href="https://www.onedailydrop.com/">',
+        `<link rel="canonical" href="${canonical}"><link rel="icon" href="/favicon.svg" type="image/svg+xml"><meta property="og:site_name" content="OneDailyDrop">${alternateLinks("/")}`
+      )
+      .replace(`<meta property="og:url" content="${SITE}/">`, `<meta property="og:url" content="${canonical}">`)
+      .replace('href="/" aria-label="OneDailyDrop home"', `href="${homePath}" aria-label="OneDailyDrop home"`)
+      .replace('action="/search"', `action="${marketPath(selectedMarket.code, "/search")}"`)
+      .replace(/href="\/us\/category\//g, `href="/${selectedMarket.code}/category/`)
+      .replace('<a href="#archive">Past Drops</a>', `<a href="${marketPath(selectedMarket.code, "/archive")}">Past Drops</a>`)
+      .replace(
+        '<p class="eyebrow">ONE GENUINELY GOOD DEAL, CHECKED DAILY</p>',
+        `<p class="eyebrow">ONE GENUINELY GOOD DEAL IN ${selectedMarket.name.toUpperCase()}, CHECKED DAILY</p>`
+      )
+      .replace(
+        '<p class="hero-intro">We compare the price, product quality and seller signals - so your first stop before buying is a smarter one.</p>',
+        `<p class="hero-intro">We compare local ${selectedMarket.name} prices, product quality and seller signals, so your first stop before buying is a smarter one.</p><p class="market-note">Deals, currency and retailers are selected automatically from your IP location: ${selectedMarket.name}.</p>`
+      )
+      .replace('<div class="trust-inline">', '<p class="shopping-model-note">OneDailyDrop does not sell products. When you choose a deal, we send you to the local retailer.</p><div class="trust-inline">')
+      .replace(/<section class="confidence-section">[\s\S]*?<\/section>/, "")
+      .replace(/<div id="resultCount" class="result-count">[^<]*<\/div>/, '<div id="resultCount" class="result-count"></div>')
+      .replace('<span style="--weight:25%"><b>25%</b> Product quality</span>', '<span style="--weight:20%"><b>20%</b> Product quality</span>')
+      .replace('<span style="--weight:15%"><b>15%</b> Customer feedback</span>', '<span style="--weight:15%"><b>15%</b> Review confidence</span>')
+      .replace('<span style="--weight:10%"><b>10%</b> Shipping & returns</span><span style="--weight:5%"><b>5%</b> Freshness</span>', '<span style="--weight:10%"><b>10%</b> Demand & usefulness</span><span style="--weight:10%"><b>10%</b> Shipping & returns</span>')
+      .replace(/<script src="\/app\.js\?v=[^"]+"><\/script>/, appScript);
 
     enhanced = enhanced.replace("</head>", `${anchorOffsetStyle}</head>`);
-    enhanced = enhanced.replace(
-      '<div class="trust-inline">',
-      '<p class="shopping-model-note">OneDailyDrop does not sell products. When you choose a deal, we send you to the retailer.</p><div class="trust-inline">'
-    );
-    enhanced = enhanced.replace(
-      /<section class="confidence-section">[\s\S]*?<\/section>/,
-      ""
-    );
-    enhanced = enhanced.replace(
-      /<div id="resultCount" class="result-count">[^<]*<\/div>/,
-      '<div id="resultCount" class="result-count"></div>'
-    );
-
-    if (!config.demoMode) {
-      const selections = db.prepare("SELECT * FROM products WHERE status='published' AND LOWER(COALESCE(source,''))<>'demo' ORDER BY score DESC, updated_at DESC LIMIT 10").all();
-      const featured = selections[0] || null;
-      const moreWorthSeeing = selections.slice(1);
-      const schema = buildHomepageSchema({ SITE, featured, moreWorthSeeing, dealPath, storeName });
-      const json = JSON.stringify(schema).replace(/</g, "\\u003c");
-      enhanced = enhanced.replace(
-        /<script type="application\/ld\+json">[\s\S]*?<\/script>/,
-        `<script type="application/ld+json">${json}</script>`
-      );
-      for (const product of selections) {
-        enhanced = enhanced.split(esc(oldWhyPicked(product))).join(esc(editorialWhyPicked(product)));
-      }
-    }
-
-    enhanced = enhanced.replace(
-      '<script src="/app.js?v=20260727-nine-more"></script>',
-      '<script>(function(){const q=new URLSearchParams(location.search).get("q");if(!q)return;const input=document.getElementById("searchInput");if(input)input.value=q;})();</script><script src="/app.js?v=20260727-offer-details"></script>'
-    );
-
     return originalSend(enhanced);
   };
 

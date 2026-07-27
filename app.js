@@ -7,6 +7,7 @@ const config = require("./src/config");
 const { refreshProducts } = require("./src/refresh");
 const { reasonFor } = require("./src/demoEditorial");
 const renderHomepage = require("./src/homepage-seo");
+const { codes: marketCodes, normalizeMarket, marketFromIp, marketFromRequest, marketPath } = require("./src/markets");
 const createExpressApp = express;
 
 if (!config.liveRefreshEnabled) {
@@ -15,13 +16,14 @@ if (!config.liveRefreshEnabled) {
 
 if (config.demoMode) {
   setImmediate(async () => {
-    const demoProducts = Number(db.prepare("SELECT COUNT(*) n FROM products WHERE status='published' AND LOWER(COALESCE(source,''))='demo'").get().n || 0);
-    if (demoProducts < 24) {
+    for (const marketCode of config.markets) {
+      const demoProducts = Number(db.prepare("SELECT COUNT(*) n FROM products WHERE market=? AND status='published' AND LOWER(COALESCE(source,''))='demo'").get(marketCode).n || 0);
+      if (demoProducts >= 24) continue;
       try {
-        await refreshProducts({ ...config, provider: "demo" });
-        console.log("Preview catalog seeded without retailer API calls.");
+        await refreshProducts({ ...config, provider: "demo" }, { market: marketCode });
+        console.log(`${marketCode.toUpperCase()} preview catalog seeded without retailer API calls.`);
       } catch (error) {
-        console.error(`Preview catalog seed error: ${error.message}`);
+        console.error(`${marketCode.toUpperCase()} preview catalog seed error: ${error.message}`);
       }
     }
   });
@@ -35,22 +37,25 @@ if (config.isProduction && !config.demoMode && config.liveRefreshEnabled) {
   });
 }
 
-function countProducts(where = "1=1") {
-  return Number(db.prepare(`SELECT COUNT(*) n FROM products WHERE status='published' AND ${where}`).get().n || 0);
+function countProducts(where = "1=1", params = []) {
+  return Number(db.prepare(`SELECT COUNT(*) n FROM products WHERE status='published' AND ${where}`).get(...params).n || 0);
 }
 
-function catalogStatus() {
+function catalogStatus(marketCode = "") {
+  const marketWhere = marketCode ? "market=? AND " : "";
+  const params = marketCode ? [marketCode] : [];
   return {
     siteMode: config.siteMode,
     provider: config.provider,
     requestedProvider: config.requestedProvider,
     liveRefreshEnabled: Boolean(config.liveRefreshEnabled),
-    products: countProducts(),
-    liveProducts: countProducts("LOWER(COALESCE(source,''))<>'demo'"),
-    demoProducts: countProducts("LOWER(COALESCE(source,''))='demo'"),
+    market: marketCode || "all",
+    products: countProducts(`${marketWhere}1=1`, params),
+    liveProducts: countProducts(`${marketWhere}LOWER(COALESCE(source,''))<>'demo'`, params),
+    demoProducts: countProducts(`${marketWhere}LOWER(COALESCE(source,''))='demo'`, params),
     amazonApiConfigured: Boolean(config.rainforestApiKey),
     walmartApiConfigured: Boolean(config.bluecartApiKey),
-    affiliateTagConfigured: Boolean(config.affiliateTagConfigured),
+    affiliateTagConfigured: marketCode ? Boolean(config.affiliateTagForMarket(marketCode)) : Boolean(config.affiliateTagConfigured),
     searchKeywordCount: config.searchKeywords.length,
     lastRun: db.prepare("SELECT provider,started_at,finished_at,found_count,published_count,status,message FROM refresh_runs ORDER BY id DESC LIMIT 1").get() || null
   };
@@ -67,16 +72,39 @@ function unavailablePage(status) {
 
 function expressWithHomepage(...args) {
   const app = createExpressApp(...args);
+  app.set("trust proxy", 1);
 
-  app.get("/api/status", (req, res) => res.json(catalogStatus()));
+  app.get("/api/status", (req, res) => {
+    const marketCode = normalizeMarket(req.query.market) || marketFromIp(req).code;
+    res.json(catalogStatus(marketCode));
+  });
 
   app.get("/api/products", (req, res, next) => {
     if (!config.isProduction) return next();
+    const selectedMarket = normalizeMarket(req.query.market) || marketFromIp(req).code;
+    const sourceCondition = config.demoMode
+      ? "LOWER(COALESCE(source,''))='demo'"
+      : "LOWER(COALESCE(source,''))<>'demo'";
+    const daily = db.prepare(`
+      SELECT p.*,d.rank AS daily_rank,d.selection_reason AS daily_selection_reason
+      FROM daily_drops d
+      JOIN products p ON p.id=d.product_id
+      WHERE d.market=? AND d.drop_date=(SELECT MAX(drop_date) FROM daily_drops WHERE market=?)
+      ORDER BY d.rank
+    `).all(selectedMarket, selectedMarket);
+    const dailyIds = new Set(daily.map(product => product.id));
+    const catalog = db.prepare(`
+      SELECT * FROM products
+      WHERE market=? AND status='published' AND ${sourceCondition}
+      ORDER BY score DESC,updated_at DESC
+    `).all(selectedMarket).filter(product => !dailyIds.has(product.id));
+    const products = [...daily.map(product => ({
+      ...product,
+      selection_reason: product.daily_selection_reason || product.selection_reason
+    })), ...catalog];
     if (config.demoMode) {
-      const products = db.prepare("SELECT * FROM products WHERE status='published' AND LOWER(COALESCE(source,''))='demo' ORDER BY score DESC,updated_at DESC").all();
       return res.json(products.map(product => ({ ...product, description: reasonFor(product), badge: "" })));
     }
-    const products = db.prepare("SELECT * FROM products WHERE status='published' AND LOWER(COALESCE(source,''))<>'demo' ORDER BY score DESC,updated_at DESC").all();
     return res.json(products);
   });
 
@@ -101,7 +129,13 @@ function expressWithHomepage(...args) {
   });
 
   app.get("/", (req, res) => {
-    const status = catalogStatus();
+    res.set("Cache-Control", "private, no-store");
+    res.redirect(302, marketPath(marketFromIp(req).code));
+  });
+
+  app.get(`/:market(${marketCodes.join("|")})`, (req, res) => {
+    req.market = marketFromRequest(req).code;
+    const status = catalogStatus(req.market);
     if (config.isProduction && !config.demoMode && status.liveProducts === 0) {
       return res.status(503).type("html").send(unavailablePage(status));
     }

@@ -38,11 +38,12 @@ function compactText(value, depth = 0) {
   return "";
 }
 
-async function searchOne(keyword, apiKey, affiliateTag) {
+async function searchOne(keyword, apiKey, affiliateTag, market) {
+  const amazonDomain = market?.amazonDomain || "amazon.com";
   const query = new URLSearchParams({
     api_key: apiKey,
     type: "search",
-    amazon_domain: "amazon.com",
+    amazon_domain: amazonDomain,
     search_term: keyword,
     sort_by: "featured",
     page: "1"
@@ -67,27 +68,29 @@ async function searchOne(keyword, apiKey, affiliateTag) {
       review_count: item.ratings_total || 0,
       current_price: item.price?.value ?? null,
       original_price: item.rrp?.value ?? null,
-      currency: item.price?.currency || "USD",
+      currency: item.price?.currency || market?.currency || "USD",
       badge: item.is_best_seller ? "Best Seller" : item.is_amazon_choice ? "Amazon's Choice" : "",
       image_url: item.image,
-      affiliate_url: `https://www.amazon.com/dp/${item.asin}?tag=${affiliateTag}`,
+      affiliate_url: `https://www.${amazonDomain}/dp/${item.asin}?tag=${encodeURIComponent(affiliateTag)}`,
       retailer_name: "Amazon",
       seller_name: sellerName,
       shipping_summary: shippingSummary,
       return_summary: returnSummary,
       availability,
       checked_at: new Date().toISOString(),
+      market: market?.code || "us",
       source: "rainforest",
       source_rank: index + 1
     };
   });
 }
 
-exports.searchProducts = async ({ apiKey, affiliateTag, keywords }) => {
+exports.searchProducts = async ({ apiKey, affiliateTag, keywords, market }) => {
   if (!apiKey) throw new Error("RAINFOREST_API_KEY is missing");
+  if (!affiliateTag) throw new Error(`Amazon affiliate tag is missing for ${market?.code || "us"}`);
   const all = [];
   for (const keyword of keywords) {
-    all.push(...await searchOne(keyword, apiKey, affiliateTag));
+    all.push(...await searchOne(keyword, apiKey, affiliateTag, market));
   }
   return all;
 };

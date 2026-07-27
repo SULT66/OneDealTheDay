@@ -153,7 +153,7 @@ function walmartImageUrl(item, raw) {
   return "";
 }
 
-function normalize(raw, keyword, index) {
+function normalize(raw, keyword, index, market) {
   const item = raw.product || raw;
 
   const itemId =
@@ -262,7 +262,7 @@ function normalize(raw, keyword, index) {
       item.currency ||
       item.price?.currency ||
       primaryOffer.currency ||
-      "USD",
+      market?.currency || "USD",
 
     badge:
       item.is_best_seller
@@ -279,7 +279,7 @@ function normalize(raw, keyword, index) {
       extractUrl(raw.url) ||
       extractUrl(raw.product_url) ||
       (itemId
-        ? `https://www.walmart.com/ip/${itemId}`
+        ? `https://www.${market?.walmartDomain || "walmart.com"}/ip/${itemId}`
         : ""),
 
     retailer_name: "Walmart",
@@ -288,16 +288,17 @@ function normalize(raw, keyword, index) {
     return_summary: returnSummary,
     availability,
     checked_at: new Date().toISOString(),
+    market: market?.code || "us",
     source: "walmart",
     source_rank: index + 1
   };
 }
 
-async function searchOne(keyword, apiKey) {
+async function searchOne(keyword, apiKey, market) {
   const query = new URLSearchParams({
     api_key: apiKey,
     type: "search",
-    walmart_domain: "walmart.com",
+    walmart_domain: market?.walmartDomain || "walmart.com",
     search_term: keyword,
     sort_by: "best_seller",
     page: "1"
@@ -314,7 +315,7 @@ async function searchOne(keyword, apiKey) {
       return (json.search_results || [])
         .slice(0, 20)
         .map((item, index) =>
-          normalize(item, keyword, index)
+          normalize(item, keyword, index, market)
         )
         .filter(
           item =>
@@ -346,7 +347,8 @@ async function searchOne(keyword, apiKey) {
 
 exports.searchProducts = async ({
   apiKey,
-  keywords
+  keywords,
+  market
 }) => {
   if (!apiKey) {
     throw new Error("BLUECART_API_KEY is missing");
@@ -359,7 +361,8 @@ exports.searchProducts = async ({
     try {
       const products = await searchOne(
         keyword,
-        apiKey
+        apiKey,
+        market
       );
 
       all.push(...products);

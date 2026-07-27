@@ -2,13 +2,15 @@ const db = require("./db");
 const config = require("./config");
 const { slugifyBrand } = require("./brandDetector");
 const { reasonFor } = require("./demoEditorial");
+const { marketFromRequest, marketPath, alternateLinks, market } = require("./markets");
+const { localDate } = require("./refresh");
 
 const SITE = "https://www.onedailydrop.com";
 const esc = value => String(value ?? "").replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 const slug = value => String(value || "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/&/g, " and ").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 90) || "deal";
-const dealPath = product => `/deal/${slug(product.title)}-${product.id}`;
-const categoryPath = value => `/category/${slug(value)}`;
-const brandPath = value => `/brand/${slugifyBrand(value)}`;
+const dealPath = product => marketPath(product.market || "us", `/deal/${slug(product.title)}-${product.id}`);
+const categoryPath = (value, code = "us") => marketPath(code, `/category/${slug(value)}`);
+const brandPath = (value, code = "us") => marketPath(code, `/brand/${slugifyBrand(value)}`);
 const clean = value => String(value || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
 const fullTitle = value => clean(value);
 const isDemo = product => String(product?.source || "").toLowerCase() === "demo";
@@ -41,6 +43,7 @@ const badge = product => {
 };
 const whyPicked = product => {
   if (isDemo(product)) return reasonFor(product);
+  if (clean(product.selection_reason)) return clean(product.selection_reason);
   const reasons = [];
   if (Number(product.rating) >= 4.5) reasons.push(`${Number(product.rating).toFixed(1)}-star rating`);
   if (Number(product.review_count) >= 1000) reasons.push(`${Number(product.review_count).toLocaleString("en-US")} reviews`);
@@ -58,7 +61,7 @@ const statusText = product => isDemo(product)
 const priceLabel = product => isDemo(product) ? "Retailer price" : "Current price";
 const action = (product, className) => isDemo(product)
   ? `<a class="${className}" href="${dealPath(product)}">VIEW DETAILS</a>`
-  : `<a class="${className}" href="/go/${product.id}" rel="nofollow sponsored">VIEW DEAL AT ${esc(storeName(product))}</a>`;
+  : `<a class="${className}" href="${marketPath(product.market || "us", `/go/${product.id}`)}" rel="nofollow sponsored">VIEW DEAL AT ${esc(storeName(product))}</a>`;
 const priceHistoryAction = product => isDemo(product)
   ? ""
   : `<a class="price-history-link" href="${dealPath(product)}#price-history">PRICE HISTORY</a>`;
@@ -79,7 +82,7 @@ const mainCard = (product, index) => `
     <a class="image-wrap" href="${dealPath(product)}"><img src="${esc(product.image_url)}" alt="${esc(fullTitle(product.title))}" loading="lazy"></a>
     <div class="card-content">
       <div class="card-top"><span class="rank">#${index}</span>${badge(product) ? `<span class="badge">${esc(badge(product))}</span>` : ""}</div>
-      <p class="cat"><a href="${categoryPath(product.category || "Deals")}">${esc(product.category || "Deals")}</a> · ${esc(storeName(product))}</p>
+      <p class="cat"><a href="${categoryPath(product.category || "Deals", product.market)}">${esc(product.category || "Deals")}</a> · ${esc(storeName(product))}</p>
       <h3><a href="${dealPath(product)}">${esc(fullTitle(product.title))}</a></h3>
       <p class="description"><strong>Why we picked it:</strong> ${esc(whyPicked(product))}</p>
       <p class="stats">★ ${esc(product.rating || " - ")} · ${Number(product.review_count || 0).toLocaleString("en-US")} reviews · Score ${Math.round(Number(product.score) || 0)}/100</p>
@@ -94,7 +97,7 @@ const miniCard = product => `
   <article class="mini-card">
     <a href="${dealPath(product)}"><img src="${esc(product.image_url)}" alt="${esc(fullTitle(product.title))}" loading="lazy"></a>
     <div class="mini-card-body">
-      <p class="cat"><a href="${categoryPath(product.category || "Deals")}">${esc(product.category || "Deals")}</a> · ${esc(storeName(product))}</p>
+      <p class="cat"><a href="${categoryPath(product.category || "Deals", product.market)}">${esc(product.category || "Deals")}</a> · ${esc(storeName(product))}</p>
       <h3><a href="${dealPath(product)}">${esc(fullTitle(product.title))}</a></h3>
       <p class="mini-meta">★ ${esc(product.rating || " - ")} · Score ${Math.round(Number(product.score) || 0)}/100${discount(product) ? ` · ${discount(product)}% off` : ""}</p>
       <div class="mini-price-row"><span class="mini-price-label">${priceLabel(product)}</span><span class="mini-price">${money(product.current_price, product.currency)}</span>${product.original_price ? `<span class="old">${money(product.original_price, product.currency)}</span>` : ""}</div>
@@ -103,10 +106,25 @@ const miniCard = product => `
   </article>`;
 
 module.exports = function homepage(req, res) {
+  const selectedMarket = marketFromRequest(req);
   const sourceFilter = config.demoMode ? " AND LOWER(COALESCE(source,''))='demo'" : "";
-  const products = db.prepare(`SELECT * FROM products WHERE status='published'${sourceFilter} ORDER BY score DESC, updated_at DESC`).all();
-  const featured = products[0] || null;
-  const moreWorthSeeing = products.slice(1, 10);
+  const products = db.prepare(`SELECT * FROM products WHERE market=? AND status='published'${sourceFilter} ORDER BY score DESC, updated_at DESC`).all(selectedMarket.code);
+  const today = localDate(selectedMarket.timezone);
+  let dailyProducts = db.prepare(`
+    SELECT p.*,d.rank,d.selection_reason AS daily_selection_reason,d.drop_date
+    FROM daily_drops d
+    JOIN products p ON p.id=d.product_id
+    WHERE d.market=? AND d.drop_date=(
+      SELECT MAX(drop_date) FROM daily_drops WHERE market=? AND drop_date<=?
+    )
+    ORDER BY d.rank
+  `).all(selectedMarket.code, selectedMarket.code, today).map(product => ({
+    ...product,
+    selection_reason: product.daily_selection_reason || product.selection_reason
+  }));
+  if (dailyProducts.length < 10) dailyProducts = products.slice(0, 10);
+  const featured = dailyProducts[0] || null;
+  const moreWorthSeeing = dailyProducts.slice(1, 10);
   const demoMode = Boolean(featured && isDemo(featured));
   const used = new Set([featured, ...moreWorthSeeing].filter(Boolean).map(product => product.id));
   const take = rows => rows.filter(product => !used.has(product.id)).slice(0, 4).map(product => {
@@ -118,12 +136,24 @@ module.exports = function homepage(req, res) {
   const newest = take([...products].sort((a, b) => Number(b.id) - Number(a.id)));
   const categories = [...new Set(products.map(product => product.category).filter(Boolean))];
   const categoryChoices = categories.slice(0, 10);
-  const archive = products.slice(1, 5);
-  const title = "OneDailyDrop - The Best Deals. Every Day.";
-  const description = "OneDailyDrop finds useful products and the best available deals from leading retailers.";
+  const archive = db.prepare(`
+    SELECT p.*,d.drop_date,d.selection_reason AS daily_selection_reason
+    FROM daily_drops d
+    JOIN products p ON p.id=d.product_id
+    WHERE d.market=? AND d.rank=1 AND d.drop_date<?
+    ORDER BY d.drop_date DESC
+    LIMIT 4
+  `).all(selectedMarket.code, today).map(product => ({
+    ...product,
+    selection_reason: product.daily_selection_reason || product.selection_reason
+  }));
+  const title = `Best Daily Deals in ${selectedMarket.name} | OneDailyDrop`;
+  const description = `OneDailyDrop checks local prices, product quality and seller signals to find one strong daily deal in ${selectedMarket.name}, plus nine more products worth seeing.`;
+  const canonicalPath = marketPath(selectedMarket.code);
+  const canonical = SITE + canonicalPath;
   const schema = demoMode
-    ? { "@context": "https://schema.org", "@graph": [{ "@type": "Organization", "@id": `${SITE}/#organization`, name: "OneDailyDrop", url: SITE }, { "@type": "WebSite", "@id": `${SITE}/#website`, url: SITE, name: "OneDailyDrop", publisher: { "@id": `${SITE}/#organization` } }] }
-    : { "@context": "https://schema.org", "@graph": [{ "@type": "Organization", "@id": `${SITE}/#organization`, name: "OneDailyDrop", url: SITE }, { "@type": "WebSite", "@id": `${SITE}/#website`, url: SITE, name: "OneDailyDrop", publisher: { "@id": `${SITE}/#organization` } }, { "@type": "ItemList", name: "9 More Worth Seeing", itemListElement: moreWorthSeeing.map((product, index) => ({ "@type": "ListItem", position: index + 1, url: SITE + dealPath(product), name: fullTitle(product.title) })) }] };
+    ? { "@context": "https://schema.org", "@graph": [{ "@type": "Organization", "@id": `${SITE}/#organization`, name: "OneDailyDrop", url: SITE }, { "@type": "WebSite", "@id": `${canonical}/#website`, url: canonical, name: "OneDailyDrop", publisher: { "@id": `${SITE}/#organization` } }] }
+    : { "@context": "https://schema.org", "@graph": [{ "@type": "Organization", "@id": `${SITE}/#organization`, name: "OneDailyDrop", url: SITE }, { "@type": "WebSite", "@id": `${canonical}/#website`, url: canonical, name: "OneDailyDrop", publisher: { "@id": `${SITE}/#organization` } }, { "@type": "ItemList", name: "9 More Worth Seeing", itemListElement: moreWorthSeeing.map((product, index) => ({ "@type": "ListItem", position: index + 1, url: SITE + dealPath(product), name: fullTitle(product.title) })) }] };
 
   const featuredHtml = featured ? `
     <div class="featured-media">
@@ -131,7 +161,7 @@ module.exports = function homepage(req, res) {
       <span class="featured-ribbon">TODAY'S DROP</span>${badge(featured) ? `<span class="featured-badge">${esc(badge(featured))}</span>` : ""}
     </div>
     <div class="featured-body">
-      <p class="cat"><a href="${categoryPath(featured.category || "Deals")}">${esc(featured.category || "Deals")}</a> · ${esc(storeName(featured))}</p>
+      <p class="cat"><a href="${categoryPath(featured.category || "Deals", selectedMarket.code)}">${esc(featured.category || "Deals")}</a> · ${esc(storeName(featured))}</p>
       <h2><a href="${dealPath(featured)}">${esc(fullTitle(featured.title))}</a></h2>
       <p class="description">${esc(whyPicked(featured))}</p>
       <p class="stats">★ ${esc(featured.rating || " - ")} · ${Number(featured.review_count || 0).toLocaleString("en-US")} reviews</p>

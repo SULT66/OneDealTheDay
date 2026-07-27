@@ -15,6 +15,7 @@ function removeDemoProducts() {
 
   const placeholders = demoIds.map(() => "?").join(",");
   db.transaction(() => {
+    db.prepare(`DELETE FROM daily_drops WHERE product_id IN (${placeholders})`).run(...demoIds);
     db.prepare(`DELETE FROM price_history WHERE product_id IN (${placeholders})`).run(...demoIds);
     db.prepare(`DELETE FROM clicks WHERE product_id IN (${placeholders})`).run(...demoIds);
     db.prepare(`DELETE FROM products WHERE id IN (${placeholders})`).run(...demoIds);

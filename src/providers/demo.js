@@ -27,8 +27,9 @@ const products = [
   ["D024", "Compact Power Bank with Fast USB-C Charging", "Electronics", 4.6, 71400, 29.99, 39.99, "https://images.unsplash.com/photo-1609091839311-d5365f9ff1c5?auto=format&fit=crop&w=1200&q=80"]
 ];
 
-exports.searchProducts = async () => products.map((product, index) => ({
+exports.searchProducts = async ({ market = { code: "us", currency: "USD" } } = {}) => products.map((product, index) => ({
   external_id: product[0],
+  market: market.code,
   title: product[1],
   category: product[2],
   description: reasonFor({ external_id: product[0], category: product[2] }),
@@ -36,7 +37,7 @@ exports.searchProducts = async () => products.map((product, index) => ({
   review_count: product[4],
   current_price: product[5],
   original_price: product[6],
-  currency: "USD",
+  currency: market.currency || "USD",
   badge: "",
   image_url: product[7],
   affiliate_url: "/",

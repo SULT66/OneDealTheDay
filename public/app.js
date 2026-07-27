@@ -1,14 +1,8 @@
 (() => {
   const $ = id => document.getElementById(id);
-  const primaryNav = document.querySelector(".main-nav");
-  if (primaryNav && !primaryNav.querySelector("[data-account-nav]")) {
-    const accountMount = document.createElement("span");
-    accountMount.dataset.accountNav = "";
-    primaryNav.appendChild(accountMount);
-    const authScript = document.createElement("script");
-    authScript.src = "/auth-ui.js?v=20260723";
-    document.body.appendChild(authScript);
-  }
+  const marketCode = String(window.__ODD_MARKET__ || "us").toLowerCase();
+  const marketTimezone = String(window.__ODD_MARKET_TIMEZONE__ || "America/New_York");
+  const marketPath = path => `/${marketCode}${String(path || "").startsWith("/") ? path : `/${path || ""}`}`.replace(/\/$/, "");
   const els = {
     searchInput: $("searchInput"),
     searchForm: $("searchForm"),
@@ -72,6 +66,7 @@
   const priceLabel = product => isDemo(product) ? "Retailer price" : "Current price";
   const whyPicked = product => {
     if (isDemo(product)) return cleanText(product.description) || "Chosen for clear everyday usefulness and straightforward features.";
+    if (cleanText(product.selection_reason)) return cleanText(product.selection_reason);
     const reasons = [];
     if (Number(product.rating) >= 4.5) reasons.push(`${Number(product.rating).toFixed(1)}-star rating`);
     if (Number(product.review_count) >= 1000) reasons.push(`${Number(product.review_count).toLocaleString()} reviews`);
@@ -79,10 +74,10 @@
     if (discount(product)) reasons.push(`${discount(product)}% verified discount`);
     return `Picked for its ${reasons.join(", ") || "price, shopper feedback and overall value"}.`;
   };
-  const dealUrl = product => product.deal_url || `/deal/${encodeURIComponent(product.id)}`;
+  const dealUrl = product => product.deal_url || marketPath(`/deal/${encodeURIComponent(product.id)}`);
   const actionButton = (product, className) => isDemo(product)
     ? `<a class="${className}" href="${esc(dealUrl(product))}">VIEW DETAILS</a>`
-    : `<a class="${className}" href="/go/${encodeURIComponent(product.id)}" rel="nofollow sponsored">VIEW DEAL AT ${esc(storeName(product))}</a>`;
+    : `<a class="${className}" href="${marketPath(`/go/${encodeURIComponent(product.id)}`)}" rel="nofollow sponsored">VIEW DEAL AT ${esc(storeName(product))}</a>`;
   const priceHistoryAction = product => isDemo(product)
     ? ""
     : `<a class="price-history-link" href="${esc(dealUrl(product))}#price-history">PRICE HISTORY</a>`;
@@ -215,7 +210,7 @@
 
   const renderCategoryMenu = () => {
     const categories = [...new Set(products.map(product => product.category).filter(Boolean))];
-    const categoryUrl = category => `/category/${category.toLowerCase().replace(/&/g, " and ").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`;
+    const categoryUrl = category => marketPath(`/category/${category.toLowerCase().replace(/&/g, " and ").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`);
     els.categoryMenu.innerHTML = [`<a href="#top">9 More Worth Seeing</a>`, ...categories.map(category => `<a href="${esc(categoryUrl(category))}">${esc(category)}</a>`)].join("");
   };
 
@@ -286,7 +281,7 @@
       button.disabled = true;
       status.textContent = "Saving your preferences…";
       try {
-        const response = await fetch("/api/subscribe", {
+        const response = await fetch(marketPath("/api/subscribe"), {
           method: "POST",
           headers: {"Content-Type": "application/json", Accept: "application/json"},
           body: JSON.stringify({email, categories})
@@ -314,25 +309,37 @@
   }
 
   const updateCountdown = () => {
-    const now = new Date();
-    const next = new Date(now);
-    next.setHours(24, 0, 0, 0);
-    const milliseconds = Math.max(0, next - now);
-    const hours = Math.floor(milliseconds / 36e5);
-    const minutes = Math.floor(milliseconds % 36e5 / 6e4);
-    const seconds = Math.floor(milliseconds % 6e4 / 1e3);
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: marketTimezone,
+      hourCycle: "h23",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit"
+    }).formatToParts(new Date());
+    const value = type => Number(parts.find(part => part.type === type)?.value || 0);
+    const secondsNow = value("hour") * 3600 + value("minute") * 60 + value("second");
+    const targetSeconds = 15 * 60;
+    const remaining = (targetSeconds - secondsNow + 86400) % 86400 || 86400;
+    const hours = Math.floor(remaining / 3600);
+    const minutes = Math.floor(remaining % 3600 / 60);
+    const seconds = remaining % 60;
     els.countdown.textContent = `${String(hours).padStart(2, "0")}h ${String(minutes).padStart(2, "0")}m ${String(seconds).padStart(2, "0")}s`;
   };
   setInterval(updateCountdown, 1000);
   updateCountdown();
 
-  fetch("/api/products", { headers: { Accept: "application/json" } })
+  fetch(`/api/products?market=${encodeURIComponent(marketCode)}`, { headers: { Accept: "application/json" } })
     .then(async response => {
       if (!response.ok) throw new Error(`Products API returned HTTP ${response.status}`);
       return response.json();
     })
     .then(data => {
-      products = (Array.isArray(data) ? data : []).filter(product => product && product.title).sort((a, b) => Number(b.score || 0) - Number(a.score || 0));
+      products = (Array.isArray(data) ? data : []).filter(product => product && product.title).sort((a, b) => {
+        const leftRank = Number(a.daily_rank || Number.MAX_SAFE_INTEGER);
+        const rightRank = Number(b.daily_rank || Number.MAX_SAFE_INTEGER);
+        if (leftRank !== rightRank) return leftRank - rightRank;
+        return Number(b.score || 0) - Number(a.score || 0);
+      });
       els.updated.textContent = products[0] ? statusText(products[0]) : "Today's selection is being prepared";
       renderFeatured();
       renderCategoryMenu();

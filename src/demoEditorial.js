@@ -30,6 +30,9 @@ const fallback = product => {
   return `A practical ${category} option chosen for clear everyday usefulness and straightforward features.`;
 };
 
-const reasonFor = product => reasons[String(product?.external_id || "")] || fallback(product);
+const reasonFor = product => {
+  const externalId = String(product?.provider_external_id || product?.external_id || "").replace(/^[a-z]{2}:/i, "");
+  return reasons[externalId] || fallback(product);
+};
 
 module.exports = { reasons, reasonFor };
