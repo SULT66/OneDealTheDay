@@ -1,6 +1,7 @@
 const db = require("./db");
 const { rankProducts } = require("./ranker");
 const { detectBrand, normalizeBrand, slugifyBrand } = require("./brandDetector");
+const { priceIntelligence, shouldRecordObservation } = require("./priceIntelligence");
 
 function textValue(value) {
   if (value == null) return "";
@@ -104,21 +105,18 @@ function addPriceIntelligence(products, marketCode) {
   return products.map(product => {
     const existing = existingProduct.get(marketCode, textValue(product.external_id));
     if (!existing) return product;
-    const observations = history.all(existing.id, cutoff).map(row => Number(row.price)).filter(value => Number.isFinite(value) && value > 0);
+    const intelligence = priceIntelligence(history.all(existing.id, cutoff));
+    const observations = intelligence.observations;
     if (!observations.length) return product;
-    const cutoff30 = Date.now() - 30 * 86400000;
-    const observations30 = history.all(existing.id, cutoff)
-      .filter(row => new Date(row.observed_at).getTime() >= cutoff30)
-      .map(row => Number(row.price))
-      .filter(value => Number.isFinite(value) && value > 0);
     return {
       ...product,
-      average_30_day_price: observations30.length
-        ? observations30.reduce((sum, value) => sum + value, 0) / observations30.length
-        : 0,
-      lowest_30_day_price: observations30.length ? Math.min(...observations30) : 0,
-      average_90_day_price: observations.reduce((sum, value) => sum + value, 0) / observations.length,
-      lowest_90_day_price: Math.min(...observations)
+      price_history_observation_count: observations.length,
+      price_history_distinct_days: intelligence.day90.distinctDays,
+      price_history_coverage_days: intelligence.day90.coverageDays,
+      average_30_day_price: intelligence.day30.sufficient ? intelligence.day30.average : 0,
+      lowest_30_day_price: intelligence.day30.sufficient ? intelligence.day30.low : 0,
+      average_90_day_price: intelligence.day90.sufficient ? intelligence.day90.average : 0,
+      lowest_90_day_price: intelligence.day90.sufficient ? intelligence.day90.low : 0
     };
   });
 }
@@ -184,6 +182,7 @@ async function refreshMarket(config, marketCode, options = {}) {
     db.transaction(() => {
       const existing = db.prepare("SELECT id,current_price,currency FROM products WHERE external_id=?");
       const productByExternalId = db.prepare("SELECT id,current_price,original_price,currency,source FROM products WHERE external_id=?");
+      const latestHistory = db.prepare("SELECT price,currency,observed_at FROM price_history WHERE product_id=? ORDER BY observed_at DESC LIMIT 1");
       const insertHistory = db.prepare("INSERT INTO price_history(product_id,price,original_price,currency,source,observed_at) VALUES(?,?,?,?,?,?)");
       const upsertProduct = db.prepare(`
         INSERT INTO products(
@@ -260,10 +259,8 @@ async function refreshMarket(config, marketCode, options = {}) {
         const after = productByExternalId.get(safe.external_id);
         idsByProviderExternalId.set(providerExternalId, after.id);
         const validPrice = Number.isFinite(Number(after?.current_price)) && Number(after.current_price) > 0;
-        const changed = !before ||
-          Number(before.current_price) !== Number(after?.current_price) ||
-          String(before.currency || selectedMarket.currency) !== String(after?.currency || selectedMarket.currency);
-        if (after && validPrice && changed) {
+        const previousObservation = after ? latestHistory.get(after.id) : null;
+        if (after && validPrice && shouldRecordObservation(previousObservation, after.current_price, after.currency || selectedMarket.currency, updatedAt)) {
           insertHistory.run(after.id, after.current_price, after.original_price, after.currency || selectedMarket.currency, after.source || "", updatedAt);
         }
       }

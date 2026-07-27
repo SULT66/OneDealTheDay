@@ -57,20 +57,27 @@ function isEligible(product, options = {}) {
 
 function priceScore(product) {
   const current = number(product.current_price);
+  const historyCount = number(product.price_history_observation_count);
+  const historyDays = number(product.price_history_distinct_days);
+  const hasTrackedHistory = historyCount >= 2 && historyDays >= 2;
   const trackedReference = Math.max(
-    number(product.average_30_day_price),
-    number(product.average_90_day_price),
+    hasTrackedHistory ? number(product.average_30_day_price) : 0,
+    hasTrackedHistory ? number(product.average_90_day_price) : 0,
     number(product.typical_price),
     0
   );
   const listReference = number(product.original_price);
   const reference = trackedReference > 0 ? trackedReference : listReference;
   const discount = reference > current && current > 0 ? (reference - current) / reference : 0;
-  const trackedLow = Math.max(number(product.lowest_30_day_price), number(product.lowest_90_day_price));
+  const trackedLow = hasTrackedHistory
+    ? Math.max(number(product.lowest_30_day_price), number(product.lowest_90_day_price))
+    : 0;
   const nearTrackedLow = trackedLow > 0 && current <= trackedLow * 1.03;
   const discountPoints = clamp(discount / 0.4) * (trackedReference > 0 ? 20 : 10);
   const referencePoints = trackedReference > current ? 6 : listReference > current ? 2 : current > 0 ? 1 : 0;
-  return discountPoints + referencePoints + (nearTrackedLow ? 4 : 0);
+  const rawScore = discountPoints + referencePoints + (nearTrackedLow ? 4 : 0);
+  const historyConfidence = hasTrackedHistory ? 0.5 + clamp(historyDays / 30) * 0.5 : 1;
+  return rawScore * historyConfidence;
 }
 
 function productQualityScore(product) {
@@ -124,7 +131,11 @@ function scoreProduct(product) {
     demand_usefulness: Math.round(demandScore(product) * 10) / 10,
     shipping_returns: Math.round(fulfillmentScore(product) * 10) / 10
   };
-  const total = Math.round(Object.values(breakdown).reduce((sum, value) => sum + value, 0) * 10) / 10;
+  const evidencePenalty =
+    (!String(product.seller_name || product.retailer_name || "").trim() ? 3 : 0) +
+    (!String(product.shipping_summary || "").trim() ? 2 : 0) +
+    (!String(product.return_summary || "").trim() ? 2 : 0);
+  const total = Math.round((Object.values(breakdown).reduce((sum, value) => sum + value, 0) - evidencePenalty) * 10) / 10;
   return { total: clamp(total, 0, 100), breakdown };
 }
 

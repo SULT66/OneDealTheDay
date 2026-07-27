@@ -7,6 +7,7 @@
     "start": "node app.js",
     "refresh": "node src/refresh-cli.js",
     "test": "node scripts/validate-production-catalog.js",
+    "test:intelligence": "node scripts/test-price-intelligence.js",
     "build": "node scripts/validate-production-catalog.js"
   },
   "dependencies": {
