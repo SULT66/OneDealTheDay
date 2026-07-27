@@ -46,3 +46,13 @@ body.dark .featured-media,body.dark .image-wrap,body.dark .mini-card>a,body.dark
 body.dark .archive-card-media{background:#23272e}
 @media(max-width:900px){.archive-row{grid-template-columns:92px minmax(0,1fr);gap:14px}.archive-card{grid-template-columns:minmax(220px,38%) minmax(0,1fr);height:270px}.archive-card-media{height:270px}}
 @media(max-width:720px){.archive-row{grid-template-columns:1fr;gap:8px}.archive-row time{position:static;padding:0}.archive-card{grid-template-columns:1fr;height:auto}.archive-card-media{height:230px}.archive-card-content{min-height:250px;padding:18px}.archive-card-content .button{max-width:none;width:100%}}
+.shopping-model-note{max-width:590px;margin:14px 0 0;color:var(--muted);font-size:12px;line-height:1.5}
+.offer-facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:10px 0 0}
+.offer-facts div{min-width:0;padding:9px 10px;border:1px solid var(--line);border-radius:10px;background:var(--bg)}
+.offer-facts dt{color:var(--muted);font-size:9px;font-weight:900;letter-spacing:.08em;text-transform:uppercase}
+.offer-facts dd{margin:4px 0 0;overflow-wrap:anywhere;font-size:11px;font-weight:800;line-height:1.35}
+.price-history-link{display:flex;align-items:center;justify-content:center;min-height:44px;padding:10px 14px;border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--text);font-size:12px;font-weight:900;text-align:center}
+.price-history-link:hover,.price-history-link:focus-visible{border-color:var(--accent);color:var(--accent);outline:0}
+.retailer-detail-grid{grid-template-columns:repeat(2,minmax(0,1fr));margin:24px 0}
+.retailer-detail-grid section:last-child:nth-child(odd){grid-column:1/-1}
+@media(max-width:720px){.offer-facts,.retailer-detail-grid{grid-template-columns:1fr}.retailer-detail-grid section:last-child:nth-child(odd){grid-column:auto}}

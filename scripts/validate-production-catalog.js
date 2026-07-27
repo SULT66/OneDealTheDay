@@ -45,6 +45,15 @@ if (!homepage.includes("const moreWorthSeeing = products.slice(1, 10);")) {
 if (!homepage.includes("9 More Worth Seeing")) {
   throw new Error("Homepage is missing the 9 More Worth Seeing section");
 }
+if ((homepage.match(/id="subscribeForm"/g) || []).length !== 1) {
+  throw new Error("Homepage must contain exactly one Daily Drop subscription form");
+}
+if (!homepage.includes("VIEW DEAL AT") || homepage.includes("SEE DEAL ON")) {
+  throw new Error("Homepage retailer actions are not using the final View Deal wording");
+}
+if (!homepage.includes("offer-facts") || !homepage.includes("price-history-link")) {
+  throw new Error("Homepage live offer details or price-history links are missing");
+}
 
 const browserApp = fs.readFileSync(path.join(root, "public/app.js"), "utf8");
 if (browserApp.includes("shortTitle")) throw new Error("Client-side titles are still truncated");
@@ -60,6 +69,12 @@ if (browserApp.includes("Club $2.99") || browserApp.includes('clubLink.href = "/
 }
 if (browserApp.includes('return "DAILY PICK"')) {
   throw new Error("Additional demo cards still use the Daily Pick badge");
+}
+if (!browserApp.includes('activeCategory === "More Worth Seeing" ? ""')) {
+  throw new Error("The nine-pick section still shows an unnecessary product count");
+}
+if (!browserApp.includes("VIEW DEAL AT") || !browserApp.includes("offer-facts") || !browserApp.includes("PRICE HISTORY")) {
+  throw new Error("Client-side live offer details are incomplete");
 }
 
 const staticHomepage = fs.readFileSync(path.join(root, "public/index.html"), "utf8");
@@ -96,6 +111,13 @@ if (!styles.includes(".habit-section")) throw new Error("Daily return habit sect
 
 const database = fs.readFileSync(path.join(root, "src/db.js"), "utf8");
 if (!database.includes("CREATE TABLE IF NOT EXISTS subscribers")) throw new Error("Subscriber storage is missing");
+for (const field of ["retailer_name", "seller_name", "shipping_summary", "return_summary", "availability", "checked_at"]) {
+  if (!database.includes(field)) throw new Error(`Live offer field is missing from the database: ${field}`);
+}
+const refresh = fs.readFileSync(path.join(root, "src/refresh.js"), "utf8");
+for (const field of ["@retailer_name", "@seller_name", "@shipping_summary", "@return_summary", "@availability", "@checked_at"]) {
+  if (!refresh.includes(field)) throw new Error(`Live offer field is not persisted during refresh: ${field}`);
+}
 const server = fs.readFileSync(path.join(root, "src/server.js"), "utf8");
 if (!server.includes('app.post("/api/subscribe"')) throw new Error("Subscriber API is missing");
 if (!server.includes("passwordError(password)")) throw new Error("Strong server-side password validation is missing");
@@ -111,6 +133,16 @@ if (!server.includes("if (!clubEnrollmentOpen)")) {
 }
 if (!hasLiquidGlass(server)) {
   throw new Error("Dynamic product, category and brand pages are missing Liquid Glass");
+}
+for (const required of ['id="price-history"', "retailer-detail-grid", "View Deal at"]) {
+  if (!server.includes(required)) throw new Error(`Product deal page is missing: ${required}`);
+}
+const homepageSeo = fs.readFileSync(path.join(root, "src/homepage-seo.js"), "utf8");
+if (!homepageSeo.includes("OneDailyDrop does not sell products.")) {
+  throw new Error("The homepage does not explain the retailer handoff");
+}
+if (!homepageSeo.includes('/<section class="confidence-section">[\\s\\S]*?<\\/section>/')) {
+  throw new Error("The repeated trust/score explanation is not removed");
 }
 const accountScript = fs.readFileSync(path.join(root, "public/account.js"), "utf8");
 if (!accountScript.includes("form.reset()")) throw new Error("Auth fields are not cleared when switching modes");
@@ -172,6 +204,9 @@ if (!liquidGlass.includes("@media (hover: hover) and (pointer: fine)")) {
 const trustStyles = fs.readFileSync(path.join(root, "public", "trust.css"), "utf8");
 if (!trustStyles.includes("flex-wrap:wrap")) throw new Error("Trust-page footer links cannot wrap");
 if (!trustStyles.includes("row-gap:12px")) throw new Error("Trust-page footer row spacing is missing");
+for (const selector of [".shopping-model-note", ".offer-facts", ".price-history-link", ".retailer-detail-grid"]) {
+  if (!styles.includes(selector)) throw new Error(`Offer UI style is missing: ${selector}`);
+}
 
 const demoProbe = `
   require('./src/providers/demo').searchProducts({}).then(products => {

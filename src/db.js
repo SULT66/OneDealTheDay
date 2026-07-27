@@ -29,6 +29,12 @@ db.exec(`
     description TEXT,
     image_url TEXT,
     affiliate_url TEXT,
+    retailer_name TEXT,
+    seller_name TEXT,
+    shipping_summary TEXT,
+    return_summary TEXT,
+    availability TEXT,
+    checked_at TEXT,
     rating REAL,
     review_count INTEGER,
     current_price REAL,
@@ -116,7 +122,23 @@ for (const column of ["stripe_customer_id", "stripe_subscription_id", "stripe_su
 }
 
 const productColumns = new Set(db.prepare("PRAGMA table_info(products)").all().map(column => column.name));
-for (const column of ["product_key", "upc", "gtin", "model_number", "brand", "brand_slug", "manufacturer", "mpn", "ean"]) {
+for (const column of [
+  "product_key",
+  "upc",
+  "gtin",
+  "model_number",
+  "brand",
+  "brand_slug",
+  "manufacturer",
+  "mpn",
+  "ean",
+  "retailer_name",
+  "seller_name",
+  "shipping_summary",
+  "return_summary",
+  "availability",
+  "checked_at"
+]) {
   if (!productColumns.has(column)) db.exec(`ALTER TABLE products ADD COLUMN ${column} TEXT`);
 }
 

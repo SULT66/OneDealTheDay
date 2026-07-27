@@ -23,6 +23,7 @@ const money = (value, currency = "USD") => {
 };
 const storeName = product => {
   if (isDemo(product)) return "OneDailyDrop";
+  if (clean(product.retailer_name)) return clean(product.retailer_name);
   const source = String(product.source || "").toLowerCase();
   if (source.includes("amazon") || source.includes("rainforest")) return "Amazon";
   if (source.includes("walmart") || source.includes("bluecart")) return "Walmart";
@@ -51,13 +52,27 @@ const whyPicked = product => {
 };
 const statusText = product => isDemo(product)
   ? "Retailer availability coming soon"
-  : product.updated_at
-    ? `Price verified ${new Date(product.updated_at).toLocaleString("en-US")}`
+  : product.checked_at || product.updated_at
+    ? `Price checked ${new Date(product.checked_at || product.updated_at).toLocaleString("en-US")}`
     : "Price recently verified";
 const priceLabel = product => isDemo(product) ? "Retailer price" : "Current price";
 const action = (product, className) => isDemo(product)
   ? `<a class="${className}" href="${dealPath(product)}">VIEW DETAILS</a>`
-  : `<a class="${className}" href="/go/${product.id}" rel="nofollow sponsored">SEE DEAL ON ${esc(storeName(product))}</a>`;
+  : `<a class="${className}" href="/go/${product.id}" rel="nofollow sponsored">VIEW DEAL AT ${esc(storeName(product))}</a>`;
+const priceHistoryAction = product => isDemo(product)
+  ? ""
+  : `<a class="price-history-link" href="${dealPath(product)}#price-history">PRICE HISTORY</a>`;
+const offerFacts = product => {
+  if (isDemo(product)) return "";
+  const seller = clean(product.seller_name) || storeName(product);
+  const shipping = clean(product.shipping_summary) || "Confirm at retailer";
+  const returns = clean(product.return_summary) || "See retailer policy";
+  return `<dl class="offer-facts" aria-label="Offer details">
+    <div><dt>Sold by</dt><dd>${esc(seller)}</dd></div>
+    <div><dt>Delivery</dt><dd>${esc(shipping)}</dd></div>
+    <div><dt>Returns</dt><dd>${esc(returns)}</dd></div>
+  </dl>`;
+};
 
 const mainCard = (product, index) => `
   <article class="card">
@@ -70,7 +85,8 @@ const mainCard = (product, index) => `
       <p class="stats">★ ${esc(product.rating || " - ")} · ${Number(product.review_count || 0).toLocaleString("en-US")} reviews · Score ${Math.round(Number(product.score) || 0)}/100</p>
       <div class="price-row"><span class="price-label">${priceLabel(product)}</span><span class="price">${money(product.current_price, product.currency)}</span>${product.original_price ? `<span class="old">${money(product.original_price, product.currency)}</span>` : ""}${discount(product) ? `<span class="save-pill">SAVE ${discount(product)}%</span>` : ""}</div>
       <p class="verification">${esc(statusText(product))}</p>
-      <div class="card-actions">${action(product, "button")}</div>
+      ${offerFacts(product)}
+      <div class="card-actions">${action(product, "button")}${priceHistoryAction(product)}</div>
     </div>
   </article>`;
 
@@ -122,7 +138,8 @@ module.exports = function homepage(req, res) {
       <div class="score-strip"><strong>${Math.round(Number(featured.score) || 0)}/100</strong><span>OneDailyDrop Score</span></div>
       <div class="featured-price-row"><span class="price-label">${priceLabel(featured)}</span><span class="featured-price">${money(featured.current_price, featured.currency)}</span>${featured.original_price ? `<span class="old">${money(featured.original_price, featured.currency)}</span>` : ""}${discount(featured) ? `<span class="save-pill">SAVE ${discount(featured)}%</span>` : ""}</div>
       <p class="verification">${esc(statusText(featured))}</p>
-      <div class="card-actions">${action(featured, "featured-button")}</div>
+      ${offerFacts(featured)}
+      <div class="card-actions">${action(featured, "featured-button")}${priceHistoryAction(featured)}</div>
     </div>` : `<div class="featured-body"><h2>No featured drop is available yet.</h2></div>`;
 
   const collection = items => items.map(miniCard).join("");

@@ -71,13 +71,15 @@ exports.refreshProducts = async c => {
       const productByExternalId = db.prepare("SELECT id,current_price,original_price,currency,source FROM products WHERE external_id=?");
       const insertHistory = db.prepare("INSERT INTO price_history(product_id,price,original_price,currency,source,observed_at) VALUES(?,?,?,?,?,?)");
       const stmt = db.prepare(`
-        INSERT INTO products(external_id,product_key,upc,gtin,model_number,brand,brand_slug,manufacturer,mpn,ean,title,category,description,image_url,affiliate_url,rating,review_count,current_price,original_price,currency,badge,score,source,status,updated_at)
-        VALUES(@external_id,@product_key,@upc,@gtin,@model_number,@brand,@brand_slug,@manufacturer,@mpn,@ean,@title,@category,@description,@image_url,@affiliate_url,@rating,@review_count,@current_price,@original_price,@currency,@badge,@score,@source,'published',@updated_at)
+        INSERT INTO products(external_id,product_key,upc,gtin,model_number,brand,brand_slug,manufacturer,mpn,ean,title,category,description,image_url,affiliate_url,retailer_name,seller_name,shipping_summary,return_summary,availability,checked_at,rating,review_count,current_price,original_price,currency,badge,score,source,status,updated_at)
+        VALUES(@external_id,@product_key,@upc,@gtin,@model_number,@brand,@brand_slug,@manufacturer,@mpn,@ean,@title,@category,@description,@image_url,@affiliate_url,@retailer_name,@seller_name,@shipping_summary,@return_summary,@availability,@checked_at,@rating,@review_count,@current_price,@original_price,@currency,@badge,@score,@source,'published',@updated_at)
         ON CONFLICT(external_id) DO UPDATE SET
           product_key=excluded.product_key,upc=excluded.upc,gtin=excluded.gtin,model_number=excluded.model_number,
           brand=excluded.brand,brand_slug=excluded.brand_slug,manufacturer=excluded.manufacturer,mpn=excluded.mpn,ean=excluded.ean,
           title=excluded.title,category=excluded.category,description=excluded.description,image_url=excluded.image_url,
-          affiliate_url=excluded.affiliate_url,rating=excluded.rating,review_count=excluded.review_count,
+          affiliate_url=excluded.affiliate_url,retailer_name=excluded.retailer_name,seller_name=excluded.seller_name,
+          shipping_summary=excluded.shipping_summary,return_summary=excluded.return_summary,
+          availability=excluded.availability,checked_at=excluded.checked_at,rating=excluded.rating,review_count=excluded.review_count,
           current_price=excluded.current_price,original_price=excluded.original_price,currency=excluded.currency,
           badge=excluded.badge,score=excluded.score,source=excluded.source,status='published',updated_at=excluded.updated_at
       `);
@@ -90,7 +92,10 @@ exports.refreshProducts = async c => {
           brand, brand_slug: slugifyBrand(brand), manufacturer: textValue(product.manufacturer),
           mpn: textValue(product.mpn || product.part_number), ean: textValue(product.ean), title: textValue(product.title),
           category: textValue(product.category), description: textValue(product.description), image_url: textValue(product.image_url),
-          affiliate_url: textValue(product.affiliate_url), rating: numberValue(product.rating, 0),
+          affiliate_url: textValue(product.affiliate_url), retailer_name: textValue(product.retailer_name),
+          seller_name: textValue(product.seller_name), shipping_summary: textValue(product.shipping_summary),
+          return_summary: textValue(product.return_summary), availability: textValue(product.availability),
+          checked_at: textValue(product.checked_at || updatedAt), rating: numberValue(product.rating, 0),
           review_count: Math.round(numberValue(product.review_count, 0)),
           current_price: product.current_price == null ? null : numberValue(product.current_price, null),
           original_price: product.original_price == null ? null : numberValue(product.original_price, null),

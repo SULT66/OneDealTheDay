@@ -54,6 +54,22 @@ function numberValue(value) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function compactText(value, depth = 0) {
+  if (value == null || depth > 3) return "";
+  if (typeof value === "string") return value.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  if (["number", "bigint", "boolean"].includes(typeof value)) return String(value);
+  if (Array.isArray(value)) {
+    return value.map(entry => compactText(entry, depth + 1)).filter(Boolean).join(", ");
+  }
+  if (typeof value === "object") {
+    for (const key of ["text", "message", "label", "name", "display_name", "raw", "value", "title"]) {
+      const text = compactText(value[key], depth + 1);
+      if (text) return text;
+    }
+  }
+  return "";
+}
+
 function validHttpUrl(value) {
   if (typeof value !== "string") return "";
 
@@ -162,6 +178,29 @@ function normalize(raw, keyword, index) {
     item.primary_offer ||
     raw.primary_offer ||
     {};
+  const sellerName = compactText(
+    item.seller_name ||
+    item.seller ||
+    primaryOffer.seller_name ||
+    primaryOffer.seller
+  );
+  const shippingSummary = compactText(
+    item.shipping_text ||
+    item.delivery_message ||
+    item.fulfillment_options ||
+    primaryOffer.shipping_text ||
+    primaryOffer.delivery
+  );
+  const returnSummary = compactText(
+    item.return_policy_text ||
+    item.return_policy ||
+    item.returns ||
+    primaryOffer.return_policy
+  );
+  const availability = compactText(
+    item.availability ||
+    primaryOffer.availability
+  ) || (item.out_of_stock === false || primaryOffer.out_of_stock === false ? "In stock" : "");
 
   return {
     external_id: `walmart-${itemId || `${keyword}-${index}`}`,
@@ -243,6 +282,12 @@ function normalize(raw, keyword, index) {
         ? `https://www.walmart.com/ip/${itemId}`
         : ""),
 
+    retailer_name: "Walmart",
+    seller_name: sellerName,
+    shipping_summary: shippingSummary,
+    return_summary: returnSummary,
+    availability,
+    checked_at: new Date().toISOString(),
     source: "walmart",
     source_rank: index + 1
   };

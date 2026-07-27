@@ -11,6 +11,7 @@ const fullTitle = value => clean(value);
 const storeName = product => {
   const source = String(product.source || "").toLowerCase();
   if (source === "demo") return "OneDailyDrop";
+  if (clean(product.retailer_name)) return clean(product.retailer_name);
   if (source.includes("amazon") || source.includes("rainforest")) return "Amazon";
   if (source.includes("walmart") || source.includes("bluecart")) return "Walmart";
   return product.source || "Retailer";
@@ -58,6 +59,18 @@ module.exports = function homepageSeo(req, res) {
     );
 
     enhanced = enhanced.replace("</head>", `${anchorOffsetStyle}</head>`);
+    enhanced = enhanced.replace(
+      '<div class="trust-inline">',
+      '<p class="shopping-model-note">OneDailyDrop does not sell products. When you choose a deal, we send you to the retailer.</p><div class="trust-inline">'
+    );
+    enhanced = enhanced.replace(
+      /<section class="confidence-section">[\s\S]*?<\/section>/,
+      ""
+    );
+    enhanced = enhanced.replace(
+      /<div id="resultCount" class="result-count">[^<]*<\/div>/,
+      '<div id="resultCount" class="result-count"></div>'
+    );
 
     if (!config.demoMode) {
       const selections = db.prepare("SELECT * FROM products WHERE status='published' AND LOWER(COALESCE(source,''))<>'demo' ORDER BY score DESC, updated_at DESC LIMIT 10").all();
@@ -76,7 +89,7 @@ module.exports = function homepageSeo(req, res) {
 
     enhanced = enhanced.replace(
       '<script src="/app.js?v=20260727-nine-more"></script>',
-      '<script>(function(){const q=new URLSearchParams(location.search).get("q");if(!q)return;const input=document.getElementById("searchInput");if(input)input.value=q;})();</script><script src="/app.js?v=20260727-nine-more"></script>'
+      '<script>(function(){const q=new URLSearchParams(location.search).get("q");if(!q)return;const input=document.getElementById("searchInput");if(input)input.value=q;})();</script><script src="/app.js?v=20260727-offer-details"></script>'
     );
 
     return originalSend(enhanced);

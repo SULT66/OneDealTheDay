@@ -51,6 +51,7 @@
     : 0;
   const storeName = product => {
     if (isDemo(product)) return "OneDailyDrop";
+    if (cleanText(product.retailer_name)) return cleanText(product.retailer_name);
     const source = String(product.source || "").toLowerCase();
     if (source.includes("walmart") || source.includes("bluecart")) return "Walmart";
     if (source.includes("amazon") || source.includes("rainforest")) return "Amazon";
@@ -65,8 +66,8 @@
   };
   const statusText = product => isDemo(product)
     ? "Retailer availability coming soon"
-    : product.updated_at
-      ? `Price verified ${new Date(product.updated_at).toLocaleString()}`
+    : product.checked_at || product.updated_at
+      ? `Price checked ${new Date(product.checked_at || product.updated_at).toLocaleString()}`
       : "Price recently verified";
   const priceLabel = product => isDemo(product) ? "Retailer price" : "Current price";
   const whyPicked = product => {
@@ -81,7 +82,21 @@
   const dealUrl = product => product.deal_url || `/deal/${encodeURIComponent(product.id)}`;
   const actionButton = (product, className) => isDemo(product)
     ? `<a class="${className}" href="${esc(dealUrl(product))}">VIEW DETAILS</a>`
-    : `<a class="${className}" href="/go/${encodeURIComponent(product.id)}" rel="nofollow sponsored">SEE DEAL ON ${esc(storeName(product))}</a>`;
+    : `<a class="${className}" href="/go/${encodeURIComponent(product.id)}" rel="nofollow sponsored">VIEW DEAL AT ${esc(storeName(product))}</a>`;
+  const priceHistoryAction = product => isDemo(product)
+    ? ""
+    : `<a class="price-history-link" href="${esc(dealUrl(product))}#price-history">PRICE HISTORY</a>`;
+  const offerFacts = product => {
+    if (isDemo(product)) return "";
+    const seller = cleanText(product.seller_name) || storeName(product);
+    const shipping = cleanText(product.shipping_summary) || "Confirm at retailer";
+    const returns = cleanText(product.return_summary) || "See retailer policy";
+    return `<dl class="offer-facts" aria-label="Offer details">
+      <div><dt>Sold by</dt><dd>${esc(seller)}</dd></div>
+      <div><dt>Delivery</dt><dd>${esc(shipping)}</dd></div>
+      <div><dt>Returns</dt><dd>${esc(returns)}</dd></div>
+    </dl>`;
+  };
 
   let products = [];
   let activeCategory = "More Worth Seeing";
@@ -121,7 +136,8 @@
         <div class="score-strip"><strong>${Math.round(Number(product.score) || 0)}/100</strong><span>OneDailyDrop Score</span></div>
         <div class="featured-price-row"><span class="price-label">${priceLabel(product)}</span><span class="featured-price">${money(product.current_price, product.currency)}</span>${product.original_price ? `<span class="old">${money(product.original_price, product.currency)}</span>` : ""}${save ? `<span class="save-pill">SAVE ${save}%</span>` : ""}</div>
         <p class="verification">${esc(statusText(product))}</p>
-        <div class="card-actions">${actionButton(product, "featured-button")}</div>
+        ${offerFacts(product)}
+        <div class="card-actions">${actionButton(product, "featured-button")}${priceHistoryAction(product)}</div>
       </div>`;
   };
 
@@ -138,7 +154,8 @@
           <p class="stats">★ ${esc(product.rating || " - ")} · ${Number(product.review_count || 0).toLocaleString()} reviews · Score ${Math.round(Number(product.score) || 0)}/100</p>
           <div class="price-row"><span class="price-label">${priceLabel(product)}</span><span class="price">${money(product.current_price, product.currency)}</span>${product.original_price ? `<span class="old">${money(product.original_price, product.currency)}</span>` : ""}${save ? `<span class="save-pill">SAVE ${save}%</span>` : ""}</div>
           <p class="verification">${esc(statusText(product))}</p>
-          <div class="card-actions">${actionButton(product, "button")}</div>
+          ${offerFacts(product)}
+          <div class="card-actions">${actionButton(product, "button")}${priceHistoryAction(product)}</div>
         </div>
       </article>`;
   };
@@ -170,7 +187,7 @@
     const query = els.searchInput.value.trim().toLowerCase();
     const visible = visibleProducts(query);
     els.dealsTitle.textContent = query ? "Search results" : activeCategory === "More Worth Seeing" ? "9 More Worth Seeing" : activeCategory;
-    els.resultCount.textContent = query ? `Found ${visible.length} products` : activeCategory === "More Worth Seeing" ? `${visible.length} additional products` : `Showing ${visible.length} products`;
+    els.resultCount.textContent = query ? `Found ${visible.length} products` : activeCategory === "More Worth Seeing" ? "" : `${visible.length} products`;
     els.emptyState.hidden = visible.length !== 0;
     els.products.innerHTML = visible.map((product, index) => mainCard(product, index + 1)).join("");
   };
