@@ -89,7 +89,7 @@
     : `<a class="${className}" href="/go/${encodeURIComponent(product.id)}" rel="nofollow sponsored">SEE DEAL ON ${esc(storeName(product))}</a>`;
 
   let products = [];
-  let activeCategory = "Top 10";
+  let activeCategory = "More Worth Seeing";
   const searchAliases = {
     cat: ["cat", "cats", "pet", "pets"],
     cats: ["cat", "cats", "pet", "pets"],
@@ -167,17 +167,17 @@
     if (query) {
       return products.filter(product => matchesSearch(product, query));
     }
-    if (activeCategory === "Top 10") return products.slice(0, 10);
+    if (activeCategory === "More Worth Seeing") return products.slice(1, 10);
     return products.filter(product => product.category === activeCategory);
   };
 
   const renderMain = () => {
     const query = els.searchInput.value.trim().toLowerCase();
     const visible = visibleProducts(query);
-    els.dealsTitle.textContent = query ? "Search results" : activeCategory === "Top 10" ? "Top 10 Drops Today" : activeCategory;
-    els.resultCount.textContent = query ? `Found ${visible.length} products` : activeCategory === "Top 10" ? `Showing 10 of ${products.length} products` : `Showing ${visible.length} products`;
+    els.dealsTitle.textContent = query ? "Search results" : activeCategory === "More Worth Seeing" ? "9 More Worth Seeing" : activeCategory;
+    els.resultCount.textContent = query ? `Found ${visible.length} products` : activeCategory === "More Worth Seeing" ? `${visible.length} additional products` : `Showing ${visible.length} products`;
     els.emptyState.hidden = visible.length !== 0;
-    els.products.innerHTML = visible.map(product => mainCard(product, products.indexOf(product) + 1)).join("");
+    els.products.innerHTML = visible.map((product, index) => mainCard(product, index + 1)).join("");
   };
 
   const takeUnique = (source, count, used) => {
@@ -204,7 +204,7 @@
   const renderCategoryMenu = () => {
     const categories = [...new Set(products.map(product => product.category).filter(Boolean))];
     const categoryUrl = category => `/category/${category.toLowerCase().replace(/&/g, " and ").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`;
-    els.categoryMenu.innerHTML = [`<a href="#top">Top 10 Drops</a>`, ...categories.map(category => `<a href="${esc(categoryUrl(category))}">${esc(category)}</a>`)].join("");
+    els.categoryMenu.innerHTML = [`<a href="#top">9 More Worth Seeing</a>`, ...categories.map(category => `<a href="${esc(categoryUrl(category))}">${esc(category)}</a>`)].join("");
   };
 
   const currentUrl = new URL(window.location.href);
@@ -232,7 +232,7 @@
     }
   });
   els.searchInput.addEventListener("input", () => {
-    activeCategory = "Top 10";
+    activeCategory = "More Worth Seeing";
     els.searchClear.hidden = !els.searchInput.value;
     renderMain();
   });

@@ -1,4 +1,4 @@
-module.exports = function buildHomepageSchema({ SITE, top, dealPath, shortTitle, storeName }) {
+module.exports = function buildHomepageSchema({ SITE, featured, moreWorthSeeing, dealPath, storeName }) {
   const cleanText = value => String(value || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
   const schemaDescription = product => {
     const supplied = cleanText(product.description);
@@ -14,7 +14,8 @@ module.exports = function buildHomepageSchema({ SITE, top, dealPath, shortTitle,
       : `A ${category} product selected by OneDailyDrop after reviewing price, availability and overall value.`;
   };
 
-  const productNodes = top.map(product => {
+  const products = [featured, ...moreWorthSeeing].filter(Boolean);
+  const productNodes = products.map(product => {
     const price = Number(product.current_price);
     const rating = Number(product.rating);
     const reviewCount = Number(product.review_count || 0);
@@ -72,11 +73,11 @@ module.exports = function buildHomepageSchema({ SITE, top, dealPath, shortTitle,
       },
       {
         "@type": "ItemList",
-        "@id": `${SITE}/#top-drops`,
-        name: "Top 10 Drops Today",
+        "@id": `${SITE}/#more-worth-seeing`,
+        name: "9 More Worth Seeing",
         itemListOrder: "https://schema.org/ItemListOrderDescending",
-        numberOfItems: top.length,
-        itemListElement: top.map((product, index) => ({
+        numberOfItems: moreWorthSeeing.length,
+        itemListElement: moreWorthSeeing.map((product, index) => ({
           "@type": "ListItem",
           position: index + 1,
           item: { "@id": `${SITE + dealPath(product)}#product` }

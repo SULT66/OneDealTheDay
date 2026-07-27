@@ -36,10 +36,30 @@ if (homepage.includes("shortTitle")) throw new Error("Homepage titles are still 
 if (!hasLiquidGlass(homepage)) {
   throw new Error("Server-rendered homepage is missing the Liquid Glass design system");
 }
+if (!homepage.includes("const featured = products[0] || null;")) {
+  throw new Error("Homepage is missing its single Today's Drop selection");
+}
+if (!homepage.includes("const moreWorthSeeing = products.slice(1, 10);")) {
+  throw new Error("Homepage does not exclude Today's Drop from the nine additional products");
+}
+if (!homepage.includes("9 More Worth Seeing")) {
+  throw new Error("Homepage is missing the 9 More Worth Seeing section");
+}
 
 const browserApp = fs.readFileSync(path.join(root, "public/app.js"), "utf8");
 if (browserApp.includes("shortTitle")) throw new Error("Client-side titles are still truncated");
 if (!browserApp.includes('searchParams.delete("country")')) throw new Error("Stale country parameter cleanup is missing");
+if (!browserApp.includes("return products.slice(1, 10);")) {
+  throw new Error("Client-side rendering still repeats Today's Drop in the additional list");
+}
+if (browserApp.includes("Top 10 Drops Today")) {
+  throw new Error("Client-side rendering still labels the additional products as Top 10");
+}
+
+const staticHomepage = fs.readFileSync(path.join(root, "public/index.html"), "utf8");
+if (!staticHomepage.includes("9 More Worth Seeing") || staticHomepage.includes("Top 10 Drops Today")) {
+  throw new Error("Static homepage fallback is not aligned with the 1 + 9 product structure");
+}
 
 const styles = fs.readFileSync(path.join(root, "public/styles.css"), "utf8");
 if (!styles.includes("margin-top:auto")) throw new Error("Card action alignment is missing");

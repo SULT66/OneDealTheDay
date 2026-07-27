@@ -60,21 +60,23 @@ module.exports = function homepageSeo(req, res) {
     enhanced = enhanced.replace("</head>", `${anchorOffsetStyle}</head>`);
 
     if (!config.demoMode) {
-      const top = db.prepare("SELECT * FROM products WHERE status='published' AND LOWER(COALESCE(source,''))<>'demo' ORDER BY score DESC, updated_at DESC LIMIT 10").all();
-      const schema = buildHomepageSchema({ SITE, top, dealPath, shortTitle: fullTitle, storeName });
+      const selections = db.prepare("SELECT * FROM products WHERE status='published' AND LOWER(COALESCE(source,''))<>'demo' ORDER BY score DESC, updated_at DESC LIMIT 10").all();
+      const featured = selections[0] || null;
+      const moreWorthSeeing = selections.slice(1);
+      const schema = buildHomepageSchema({ SITE, featured, moreWorthSeeing, dealPath, storeName });
       const json = JSON.stringify(schema).replace(/</g, "\\u003c");
       enhanced = enhanced.replace(
         /<script type="application\/ld\+json">[\s\S]*?<\/script>/,
         `<script type="application/ld+json">${json}</script>`
       );
-      for (const product of top) {
+      for (const product of selections) {
         enhanced = enhanced.split(esc(oldWhyPicked(product))).join(esc(editorialWhyPicked(product)));
       }
     }
 
     enhanced = enhanced.replace(
-      '<script src="/app.js?v=20260723-habit"></script>',
-      '<script>(function(){const q=new URLSearchParams(location.search).get("q");if(!q)return;const input=document.getElementById("searchInput");if(input)input.value=q;})();</script><script src="/app.js?v=20260723-habit"></script>'
+      '<script src="/app.js?v=20260727-nine-more"></script>',
+      '<script>(function(){const q=new URLSearchParams(location.search).get("q");if(!q)return;const input=document.getElementById("searchInput");if(input)input.value=q;})();</script><script src="/app.js?v=20260727-nine-more"></script>'
     );
 
     return originalSend(enhanced);
