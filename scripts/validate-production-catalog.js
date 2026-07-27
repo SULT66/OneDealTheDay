@@ -78,6 +78,9 @@ if (!browserApp.includes('activeCategory === "More Worth Seeing" ? ""')) {
 if (!browserApp.includes("VIEW DEAL AT") || !browserApp.includes("offer-facts") || !browserApp.includes("PRICE HISTORY")) {
   throw new Error("Client-side live offer details are incomplete");
 }
+if (!browserApp.includes('classList.toggle("is-open", willOpen)') || !browserApp.includes('aria-label", willOpen ? "Close menu" : "Open menu"')) {
+  throw new Error("Homepage hamburger behavior is missing");
+}
 
 const staticHomepage = fs.readFileSync(path.join(root, "public/index.html"), "utf8");
 if (!staticHomepage.includes("9 More Worth Seeing") || staticHomepage.includes("Top 10 Drops Today")) {
@@ -110,6 +113,9 @@ const styles = fs.readFileSync(path.join(root, "public/styles.css"), "utf8");
 if (!styles.includes("margin-top:auto")) throw new Error("Card action alignment is missing");
 if (!styles.includes("overflow-wrap:anywhere")) throw new Error("Long product title wrapping is missing");
 if (!styles.includes(".habit-section")) throw new Error("Daily return habit section styles are missing");
+for (const required of [".mobile-menu-toggle", ".main-nav.is-open", "overflow-x:hidden!important", "grid-template-columns:1fr!important"]) {
+  if (!styles.includes(required)) throw new Error(`Mobile vertical navigation style is missing: ${required}`);
+}
 
 const database = fs.readFileSync(path.join(root, "src/db.js"), "utf8");
 if (!database.includes("CREATE TABLE IF NOT EXISTS subscribers")) throw new Error("Subscriber storage is missing");
@@ -161,6 +167,9 @@ if (!server.includes('"/about.html": "/about"') || !server.includes('"/contact.h
 }
 if (server.includes('data-account-nav href="/account"')) {
   throw new Error("Sign In is still exposed in the public site header");
+}
+if (!server.includes('aria-controls="mainNavigation"') || !server.includes('id="mainNavigation"')) {
+  throw new Error("Shared pages are missing the accessible mobile menu controls");
 }
 for (const required of ['id="price-history"', "retailer-detail-grid", "View Deal at"]) {
   if (!server.includes(required)) throw new Error(`Product deal page is missing: ${required}`);

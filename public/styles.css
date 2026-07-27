@@ -61,3 +61,40 @@ body.dark .archive-card-media{background:#23272e}
 .archive-meta{margin:8px 0;color:var(--muted);font-size:12px;font-weight:800}
 .archive-status{display:inline-flex;width:max-content;margin:0 0 12px;padding:6px 9px;border-radius:999px;background:var(--accent-soft);color:var(--accent);font-size:10px;font-weight:900}
 @media(max-width:980px){.archive-day-grid{grid-template-columns:1fr}}
+
+/* Phone navigation: compact hamburger with a vertical, sequential reveal. */
+.mobile-menu-toggle{display:none;width:44px;height:44px;padding:0;border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--text);cursor:pointer}
+.mobile-menu-toggle span{display:block;width:20px;height:2px;border-radius:999px;background:currentColor;transition:transform .22s ease,opacity .16s ease}
+.mobile-menu-toggle[aria-expanded="true"] span:nth-child(1){transform:translateY(6px) rotate(45deg)}
+.mobile-menu-toggle[aria-expanded="true"] span:nth-child(2){opacity:0;transform:scaleX(.35)}
+.mobile-menu-toggle[aria-expanded="true"] span:nth-child(3){transform:translateY(-6px) rotate(-45deg)}
+.mobile-menu-toggle:focus-visible{outline:3px solid color-mix(in srgb,var(--accent) 28%,transparent);outline-offset:2px}
+
+@media(max-width:720px){
+  .site-header .header-top{grid-template-columns:minmax(0,1fr) 44px 44px!important}
+  .site-header .brand{grid-column:1;grid-row:1;min-width:0}
+  .site-header .theme-button{grid-column:2;grid-row:1}
+  .site-header .mobile-menu-toggle{grid-column:3;grid-row:1;display:inline-flex!important;flex-direction:column;align-items:center;justify-content:center;gap:4px}
+  .site-header .header-search{grid-column:1/-1!important;grid-row:2!important}
+  .site-header .main-nav{display:grid!important;grid-template-columns:1fr;align-items:stretch;gap:0!important;width:100%;max-height:0;padding:0 10px!important;overflow:hidden!important;border-top:0!important;opacity:0;visibility:hidden;pointer-events:none;transition:max-height .32s ease,opacity .2s ease,padding .32s ease,visibility 0s linear .32s}
+  .site-header .main-nav.is-open{max-height:min(70vh,620px);padding:9px 10px 12px!important;overflow-x:hidden!important;overflow-y:auto!important;border-top:1px solid var(--glass-hairline,var(--line))!important;opacity:1;visibility:visible;pointer-events:auto;overscroll-behavior:contain;transition:max-height .38s ease,opacity .2s ease,padding .38s ease,visibility 0s}
+  .site-header .main-nav>a,
+  .site-header .main-nav>.category-menu{width:100%;min-width:0;opacity:0;transform:translateY(-9px);transition:opacity .2s ease,transform .26s ease}
+  .site-header .main-nav.is-open>a,
+  .site-header .main-nav.is-open>.category-menu{opacity:1;transform:translateY(0)}
+  .site-header .main-nav.is-open>:nth-child(1){transition-delay:.03s}
+  .site-header .main-nav.is-open>:nth-child(2){transition-delay:.07s}
+  .site-header .main-nav.is-open>:nth-child(3){transition-delay:.11s}
+  .site-header .main-nav.is-open>:nth-child(4){transition-delay:.15s}
+  .site-header .main-nav.is-open>:nth-child(5){transition-delay:.19s}
+  .site-header .main-nav.is-open>:nth-child(6){transition-delay:.23s}
+  .site-header .main-nav.is-open>:nth-child(7){transition-delay:.27s}
+  .site-header .main-nav.is-open>:nth-child(8){transition-delay:.31s}
+  .site-header .main-nav>a,
+  .site-header .category-menu>button{display:flex!important;justify-content:flex-start!important;width:100%!important;min-height:44px;padding:0 13px!important;text-align:left;white-space:normal!important}
+  .site-header .category-menu>button{align-items:center;justify-content:space-between!important}
+  .site-header .category-menu>button span{transition:transform .2s ease}
+  .site-header .category-menu>button[aria-expanded="true"] span{transform:rotate(180deg)}
+  .site-header .main-nav .mega-menu{position:static!important;left:auto!important;top:auto!important;transform:none!important;width:100%!important;max-height:38vh;margin:4px 0 7px;padding:8px!important;grid-template-columns:1fr!important;overflow-x:hidden!important;overflow-y:auto!important;border-radius:13px!important;box-shadow:none!important}
+  .site-header .main-nav .mega-menu a{display:flex!important;align-items:center;justify-content:flex-start!important;min-height:42px;width:100%;padding:9px 12px!important;text-align:left}
+}

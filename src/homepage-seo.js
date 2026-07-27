@@ -17,7 +17,7 @@ module.exports = function homepageSeo(req, res) {
 
     const homePath = marketPath(selectedMarket.code);
     const canonical = SITE + homePath;
-    const appScript = `<script>window.__ODD_MARKET__=${JSON.stringify(selectedMarket.code)};window.__ODD_MARKET_TIMEZONE__=${JSON.stringify(selectedMarket.timezone)};</script><script>(function(){const q=new URLSearchParams(location.search).get("q");if(!q)return;const input=document.getElementById("searchInput");if(input)input.value=q;})();</script><script src="/app.js?v=20260727-markets"></script>`;
+    const appScript = `<script>window.__ODD_MARKET__=${JSON.stringify(selectedMarket.code)};window.__ODD_MARKET_TIMEZONE__=${JSON.stringify(selectedMarket.timezone)};</script><script>(function(){const q=new URLSearchParams(location.search).get("q");if(!q)return;const input=document.getElementById("searchInput");if(input)input.value=q;})();</script><script src="/app.js?v=20260727-mobile-menu"></script>`;
     let enhanced = body
       .replace(
         '<link rel="canonical" href="https://www.onedailydrop.com/">',
@@ -26,6 +26,11 @@ module.exports = function homepageSeo(req, res) {
       .replace(`<meta property="og:url" content="${SITE}/">`, `<meta property="og:url" content="${canonical}">`)
       .replace('href="/" aria-label="OneDailyDrop home"', `href="${homePath}" aria-label="OneDailyDrop home"`)
       .replace('action="/search"', `action="${marketPath(selectedMarket.code, "/search")}"`)
+      .replace(
+        '</button></div><nav class="main-nav" aria-label="Primary navigation">',
+        '</button><button class="mobile-menu-toggle" type="button" aria-expanded="false" aria-controls="mainNavigation" aria-label="Open menu"><span></span><span></span><span></span></button></div><nav id="mainNavigation" class="main-nav" aria-label="Primary navigation">'
+      )
+      .replace(/\/styles\.css\?v=[^"]+/, "/styles.css?v=20260727-mobile-menu")
       .replace(/href="\/us\/category\//g, `href="/${selectedMarket.code}/category/`)
       .replace('<a href="#archive">Past Drops</a>', `<a href="${marketPath(selectedMarket.code, "/archive")}">Past Drops</a>`)
       .replace(
