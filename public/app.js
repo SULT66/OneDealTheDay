@@ -123,7 +123,7 @@
     els.featuredDeal.innerHTML = `
       <div class="featured-media">
         <a href="${esc(dealUrl(product))}"><img src="${esc(product.image_url)}" alt="${esc(fullTitle(product.title))}"></a>
-        <span class="featured-ribbon">TODAY'S DROP</span>${badgeFor(product) ? `<span class="featured-badge">${esc(badgeFor(product))}</span>` : ""}
+        <span class="featured-ribbon">TODAY'S #1 PICK</span>${badgeFor(product) ? `<span class="featured-badge">${esc(badgeFor(product))}</span>` : ""}
       </div>
       <div class="featured-body">
         <p class="cat">${esc(product.category || "Deals")} · ${esc(storeName(product))}</p>
