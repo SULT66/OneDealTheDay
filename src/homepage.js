@@ -158,7 +158,7 @@ module.exports = function homepage(req, res) {
   const featuredHtml = featured ? `
     <div class="featured-media">
       <a href="${dealPath(featured)}"><img src="${esc(featured.image_url)}" alt="${esc(fullTitle(featured.title))}"></a>
-      <span class="featured-ribbon">TODAY'S DROP</span>${badge(featured) ? `<span class="featured-badge">${esc(badge(featured))}</span>` : ""}
+      <span class="featured-ribbon">TODAY'S #1 PICK</span>${badge(featured) ? `<span class="featured-badge">${esc(badge(featured))}</span>` : ""}
     </div>
     <div class="featured-body">
       <p class="cat"><a href="${categoryPath(featured.category || "Deals", selectedMarket.code)}">${esc(featured.category || "Deals")}</a> · ${esc(storeName(featured))}</p>
