@@ -29,6 +29,9 @@ if (!app.includes("config.demoMode")) throw new Error("Demo-mode routing guard i
 if (!app.includes("config.liveRefreshEnabled")) throw new Error("Live refresh guard is missing");
 if (!app.includes("cron.schedule = ()")) throw new Error("Scheduled refreshes are not disabled in demo mode");
 if (!app.includes("LOWER(COALESCE(source,''))='demo'")) throw new Error("Demo-only API filter is missing");
+if (!app.includes('forwardedHost !== "onedailydrop.com"') || !app.includes("res.redirect(301, `https://www.onedailydrop.com")) {
+  throw new Error("The apex domain is not permanently redirected to the canonical www host");
+}
 
 const homepage = fs.readFileSync(path.join(root, "src/homepage.js"), "utf8");
 for (const forbidden of ["DEMO PREVIEW", "Sample price", "VIEW PRODUCT PREVIEW", "Development preview", "no API credits are being used"]) {
@@ -39,6 +42,9 @@ if (homepage.includes('content="noindex')) {
 }
 if (!homepage.includes('<meta name="robots" content="index,follow,max-image-preview:large">')) {
   throw new Error("Country homepages are missing the required indexable robots directive");
+}
+for (const required of ['<link rel="canonical" href="${canonical}">', 'property="og:site_name"', 'name="twitter:title"', '"@type": "WebPage"', '"@type": "SearchAction"']) {
+  if (!homepage.includes(required)) throw new Error(`Homepage SEO metadata is missing: ${required}`);
 }
 if (homepage.includes("shortTitle")) throw new Error("Homepage titles are still truncated");
 if (!hasLiquidGlass(homepage)) {
@@ -168,6 +174,12 @@ if (!hasLiquidGlass(server)) {
 for (const required of ["daily_drops", "Past Drops in ${selectedMarket.name} | OneDailyDrop", "xhtml:link", "timezone:selectedMarket.timezone", "market:selectedMarket.code"]) {
   if (!server.includes(required)) throw new Error(`Country archive or local SEO behavior is missing: ${required}`);
 }
+for (const required of ['xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"', "<image:image>", "Disallow: /go/", 'html lang="${esc(selectedMarket.locale)}"', "Customer rating", '"@id":`${canonical}#product`', "sendNotFound"]) {
+  if (!server.includes(required)) throw new Error(`Technical SEO behavior is missing: ${required}`);
+}
+if (server.includes('res.status(404).send("Product not found")') || server.includes('res.status(404).send("Category not found")')) {
+  throw new Error("A crawlable plain-text 404 response remains in a public SEO route");
+}
 if (!server.includes('"/about.html": "/about"') || !server.includes('"/contact.html": "/contact"')) {
   throw new Error("Legacy HTML title URLs are not redirected to their canonical pages");
 }
@@ -196,6 +208,10 @@ if (markets.marketFromIp({ headers: { "x-forwarded-for": "2.0.0.1" } }).code !==
 }
 if (markets.normalizeMarket("fra") !== "fr" || markets.marketPath("fr", "/search") !== "/fr/search") {
   throw new Error("Country aliases or localized paths are invalid");
+}
+const filteredAlternates = markets.alternateLinks("/category/test", ["us", "uk"]);
+if (!filteredAlternates.includes('hreflang="en-US"') || !filteredAlternates.includes('hreflang="en-GB"') || filteredAlternates.includes('hreflang="fr"')) {
+  throw new Error("Filtered category hreflang output is invalid");
 }
 if (markets.codes.join(",") !== "us,ca,uk,fr,de") {
   throw new Error(`Unexpected supported country list: ${markets.codes.join(",")}`);

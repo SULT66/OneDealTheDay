@@ -73,6 +73,15 @@ function unavailablePage(status) {
 function expressWithHomepage(...args) {
   const app = createExpressApp(...args);
   app.set("trust proxy", 1);
+  app.use((req, res, next) => {
+    const forwardedHost = String(req.headers["x-forwarded-host"] || req.headers.host || "")
+      .split(",")[0]
+      .trim()
+      .toLowerCase()
+      .replace(/:\d+$/, "");
+    if (forwardedHost !== "onedailydrop.com") return next();
+    return res.redirect(301, `https://www.onedailydrop.com${req.originalUrl || "/"}`);
+  });
 
   app.get("/api/status", (req, res) => {
     const marketCode = normalizeMarket(req.query.market) || marketFromIp(req).code;

@@ -130,10 +130,14 @@ function marketPath(code, pathname = "") {
   return `/${selected.code}${suffix.startsWith("/") ? suffix : `/${suffix}`}`;
 }
 
-function alternateLinks(pathname = "") {
-  return Object.values(definitions)
+function alternateLinks(pathname = "", marketCodes = Object.keys(definitions)) {
+  const supported = [...new Set(marketCodes.map(normalizeMarket).filter(Boolean))];
+  const defaultCode = supported.includes("us") ? "us" : supported[0];
+  if (!defaultCode) return "";
+  return supported
+    .map(code => definitions[code])
     .map(item => `<link rel="alternate" hreflang="${item.hreflang}" href="https://www.onedailydrop.com${marketPath(item.code, pathname)}">`)
-    .concat(`<link rel="alternate" hreflang="x-default" href="https://www.onedailydrop.com${marketPath("us", pathname)}">`)
+    .concat(`<link rel="alternate" hreflang="x-default" href="https://www.onedailydrop.com${marketPath(defaultCode, pathname)}">`)
     .join("");
 }
 
