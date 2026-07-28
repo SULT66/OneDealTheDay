@@ -87,6 +87,33 @@ async function run() {
   assert(homepage.includes('hreflang="en-US"'), "US homepage hreflang is missing");
   assert(homepage.includes('"@type":"WebPage"'), "Homepage WebPage schema is missing");
   assert(homepage.includes('property="og:site_name" content="OneDailyDrop"'), "Homepage Open Graph metadata is missing");
+  assert(homepage.includes('<option value="es">Español</option>'), "US Spanish language switch is missing");
+
+  const spanishResponse = await get("/us?lang=es");
+  const spanishHomepage = await spanishResponse.text();
+  assert(spanishHomepage.includes('<html lang="es-US">'), "US Spanish locale is incorrect");
+  assert(spanishHomepage.includes("Míralo aquí"), "US Spanish homepage copy is missing");
+  assert(String(spanishResponse.headers.get("set-cookie") || "").includes("odd_lang_us=es"), "US language preference cookie is missing");
+
+  const frenchHomepage = await (await get("/fr")).text();
+  assert(frenchHomepage.includes('<html lang="fr-FR">'), "France must default to French");
+  assert(frenchHomepage.includes("Vérifiez ici"), "French homepage copy is missing");
+  assert(frenchHomepage.includes('<option value="en">English</option>'), "France English switch is missing");
+
+  const franceEnglish = await (await get("/fr?lang=en")).text();
+  assert(franceEnglish.includes('<html lang="en-FR">'), "France English locale is incorrect");
+  assert(franceEnglish.includes("Check here"), "France English fallback copy is missing");
+
+  const germanHomepage = await (await get("/de")).text();
+  assert(germanHomepage.includes('<html lang="de-DE">'), "Germany must default to German");
+  assert(germanHomepage.includes("Hier prüfen"), "German homepage copy is missing");
+
+  const canadaHomepage = await (await get("/ca")).text();
+  assert(canadaHomepage.includes('<html lang="en-CA">'), "Canada must default to English");
+  assert(canadaHomepage.includes('<option value="fr">Français</option>'), "Canada French switch is missing");
+
+  const ukHomepage = await (await get("/uk")).text();
+  assert(!ukHomepage.includes('class="language-switcher"'), "UK should not show a one-option language switch");
 
   const robots = await (await get("/robots.txt")).text();
   assert(robots.includes("Disallow: /go/"), "Affiliate redirect paths are not blocked in robots.txt");
@@ -109,7 +136,7 @@ async function run() {
   const categoryPage = await (await get(categoryUrl)).text();
   assert(categoryPage.includes("How we select"), "Category SEO content is missing");
   assert(categoryPage.includes("Current price range"), "Category price summary is missing");
-  assert(!categoryPage.includes('hreflang="en-FR"'), "Category hreflang points to a market without this page");
+  assert(!categoryPage.includes('hreflang="fr-FR"'), "Category hreflang points to a market without this page");
 
   const searchPage = await (await get("/us/search?q=plug")).text();
   assert(searchPage.includes('<meta name="robots" content="noindex,follow">'), "Search result pages must be noindex");

@@ -84,13 +84,13 @@ if (browserApp.includes("Club $2.99") || browserApp.includes('clubLink.href = "/
 if (browserApp.includes('return "DAILY PICK"')) {
   throw new Error("Additional demo cards still use the Daily Pick badge");
 }
-if (!browserApp.includes('activeCategory === "More Worth Seeing" ? ""')) {
+if (!browserApp.includes('activeCategory === "More Worth Seeing"') || !browserApp.includes('? ""')) {
   throw new Error("The nine-pick section still shows an unnecessary product count");
 }
 if (!browserApp.includes("VIEW DEAL AT") || !browserApp.includes("offer-facts") || !browserApp.includes("PRICE HISTORY")) {
   throw new Error("Client-side live offer details are incomplete");
 }
-if (!browserApp.includes('classList.toggle("is-open", willOpen)') || !browserApp.includes('aria-label", willOpen ? "Close menu" : "Open menu"')) {
+if (!browserApp.includes('classList.toggle("is-open", willOpen)') || !browserApp.includes('willOpen ? tr("menu.close"')) {
   throw new Error("Homepage hamburger behavior is missing");
 }
 
@@ -174,7 +174,7 @@ if (!hasLiquidGlass(server)) {
 for (const required of ["daily_drops", "Past Drops in ${selectedMarket.name} | OneDailyDrop", "xhtml:link", "timezone:selectedMarket.timezone", "market:selectedMarket.code"]) {
   if (!server.includes(required)) throw new Error(`Country archive or local SEO behavior is missing: ${required}`);
 }
-for (const required of ['xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"', "<image:image>", "Disallow: /go/", 'html lang="${esc(selectedMarket.locale)}"', "Customer rating", '"@id":`${canonical}#product`', "sendNotFound"]) {
+for (const required of ['xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"', "<image:image>", "Disallow: /go/", 'html lang="${esc(locale)}"', "Customer rating", '"@id":`${canonical}#product`', "sendNotFound"]) {
   if (!server.includes(required)) throw new Error(`Technical SEO behavior is missing: ${required}`);
 }
 if (server.includes('res.status(404).send("Product not found")') || server.includes('res.status(404).send("Category not found")')) {
@@ -193,14 +193,21 @@ for (const required of ['id="price-history"', "retailer-detail-grid", "View Deal
   if (!server.includes(required)) throw new Error(`Product deal page is missing: ${required}`);
 }
 const homepageSeo = fs.readFileSync(path.join(root, "src/homepage-seo.js"), "utf8");
-if (!homepageSeo.includes("OneDailyDrop does not sell products.")) {
+const i18n = fs.readFileSync(path.join(root, "src/i18n.js"), "utf8");
+for (const required of ['us: ["en", "es"]', 'ca: ["en", "fr"]', 'fr: ["fr", "en"]', 'de: ["de", "en"]', "resolveLanguage", "languageSwitcher"]) {
+  if (!i18n.includes(required)) throw new Error(`Localization behavior is missing: ${required}`);
+}
+if (!i18n.includes("OneDailyDrop does not sell products.")) {
   throw new Error("The homepage does not explain the retailer handoff");
 }
 if (!homepageSeo.includes('/<section class="confidence-section">[\\s\\S]*?<\\/section>/')) {
   throw new Error("The repeated trust/score explanation is not removed");
 }
-for (const required of ["marketFromRequest", "alternateLinks", "window.__ODD_MARKET__", "selected automatically from your IP location"]) {
+for (const required of ["marketFromRequest", "alternateLinks", "window.__ODD_MARKET__"]) {
   if (!homepageSeo.includes(required)) throw new Error(`Country homepage SEO behavior is missing: ${required}`);
+}
+if (!i18n.includes("selected automatically from your IP location")) {
+  throw new Error("Country homepage location explanation is missing");
 }
 const markets = require(path.join(root, "src", "markets"));
 if (markets.marketFromIp({ headers: { "x-forwarded-for": "2.0.0.1" } }).code !== "fr") {

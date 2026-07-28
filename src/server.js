@@ -13,6 +13,14 @@ const { reasonFor } = require("./demoEditorial");
 const { priceIntelligence } = require("./priceIntelligence");
 const { passwordResetEmail, subscriptionEmail, clubWaitlistEmail } = require("./mailer");
 const { codes: marketCodes, normalizeMarket, market, marketFromIp, marketPath, alternateLinks } = require("./markets");
+const {
+  resolveLanguage,
+  languageTag,
+  clientCopy,
+  localizeHtml,
+  languageSwitcher,
+  t
+} = require("./i18n");
 
 const app = express();
 app.set("trust proxy", 1);
@@ -71,6 +79,11 @@ app.use((req, res, next) => {
   if (!match || req.url === `/${match[1]}`) return next();
   req.market = normalizeMarket(match[1]);
   req.url = req.url.slice(match[0].length) || "/";
+  next();
+});
+app.use((req, res, next) => {
+  const marketCode = req.market || marketFromIp(req).code;
+  resolveLanguage(req, res, marketCode);
   next();
 });
 app.use((req, res, next) => {
@@ -163,7 +176,10 @@ const trustTitles = {
   "/price-disclaimer": "Price Disclaimer | OneDailyDrop"
 };
 Object.entries(trustPages).forEach(([route, file]) => app.get(route, (req, res) => {
-  if (req.market) return res.redirect(301, route);
+  const selectedMarket = req.market ? market(req.market) : marketFromIp(req);
+  const language = req.language || resolveLanguage(req, res, selectedMarket.code);
+  const locale = languageTag(selectedMarket.code, language);
+  const home = marketPath(selectedMarket.code);
   let html = fs.readFileSync(path.join(pagesDir, file), "utf8")
     .replace(/<title>[^<]*<\/title>/, `<title>${trustTitles[route]}</title>`);
   const pageTitle = trustTitles[route];
@@ -192,14 +208,14 @@ Object.entries(trustPages).forEach(([route, file]) => app.get(route, (req, res) 
         url: canonical,
         name: pageTitle,
         description: pageDescription,
-        inLanguage: "en",
+        inLanguage: locale,
         isPartOf: { "@id": `${SITE}/#website` }
       }
     ]
   };
   html = html.replace(
     "</head>",
-    `<link rel="icon" href="/favicon.svg" type="image/svg+xml"><meta name="robots" content="index,follow,max-image-preview:large"><meta property="og:type" content="website"><meta property="og:site_name" content="OneDailyDrop"><meta property="og:title" content="${pageTitle}"><meta property="og:description" content="${pageDescription}"><meta property="og:url" content="${canonical}"><meta name="twitter:card" content="summary"><meta name="twitter:title" content="${pageTitle}"><meta name="twitter:description" content="${pageDescription}"><script type="application/ld+json">${JSON.stringify(pageSchema).replace(/</g, "\\u003c")}</script></head>`
+    `<link rel="icon" href="/favicon.svg" type="image/svg+xml"><meta name="robots" content="index,follow,max-image-preview:large"><meta property="og:type" content="website"><meta property="og:site_name" content="OneDailyDrop"><meta property="og:title" content="${pageTitle}"><meta property="og:description" content="${pageDescription}"><meta property="og:url" content="${canonical}"><meta name="twitter:card" content="summary"><meta name="twitter:title" content="${pageTitle}"><meta name="twitter:description" content="${pageDescription}"><script type="application/ld+json">${JSON.stringify(pageSchema).replace(/</g, "\\u003c")}</script><script>window.__ODD_LANGUAGE__=${JSON.stringify(language)};window.__ODD_LOCALE__=${JSON.stringify(locale)};window.__ODD_TEXT__=${JSON.stringify(clientCopy(language)).replace(/</g, "\\u003c")};</script></head>`
   );
   if (route === "/how-we-select-deals") {
     html = html.replace(
@@ -207,6 +223,13 @@ Object.entries(trustPages).forEach(([route, file]) => app.get(route, (req, res) 
       `<article class="content-card"><h2>1. Eligibility checks</h2><p>A product must match the visitor’s country, be in stock, have a valid current price, a usable image, a working retailer or affiliate link, a rating of at least 3.8 and at least 25 reviews. Products that fail these checks are not ranked.</p><h2>2. OneDailyDrop Score</h2><p>Every eligible product is scored out of 100 using the same six-part framework.</p><ul><li><strong>Price quality and price history: 30 points.</strong> Tracked 30–90 day prices take priority; a retailer list price by itself receives limited credit.</li><li><strong>Product quality: 20 points.</strong></li><li><strong>Review confidence: 15 points.</strong></li><li><strong>Seller reliability: 15 points.</strong></li><li><strong>Demand and usefulness: 10 points.</strong></li><li><strong>Shipping and returns: 10 points.</strong></li></ul><h2>3. Minimum standard</h2><p>A live product must score at least 60 out of 100. We remove duplicate offers and keep the stronger offer when the same product appears at more than one retailer.</p><h2>4. Daily selection</h2><p>At 12:15 a.m. local time in each supported market, the highest eligible product becomes Today’s Drop and the next nine become 9 More Worth Seeing. Recent products are held back when enough fresh qualified products are available.</p><h2>5. Clear reasons</h2><p>The system saves the Score breakdown and a product-specific explanation based on the actual price, rating, review, seller and delivery evidence used for that selection.</p><h2>6. Ongoing checks</h2><p>Price and availability can be checked between daily rotations when live offer checking is enabled. Unavailable offers can be replaced without deleting the day’s other valid selections.</p><h2>7. Permanent history</h2><p>Each daily set is saved by country and date. Previous products remain in Past Drops with their original price, original Score and current status.</p><p class="updated">Last updated: July 27, 2026</p></article>`
     );
   }
+  html = localizeHtml(html, language)
+    .replace(/<html lang="[^"]+">/, `<html lang="${locale}">`)
+    .replace(/href="\/"/g, `href="${home}"`)
+    .replace(
+      '<button id="themeToggle"',
+      `${languageSwitcher(req, selectedMarket.code, language)}<button id="themeToggle"`
+    );
   res.type("html").send(html);
 }));
 app.get("/club", (req, res) => res.sendFile(path.join(publicDir, "club.html")));
@@ -324,7 +347,7 @@ app.post("/api/club/interest", authRateLimit, async (req, res) => {
   const selectedMarket = requestMarket(req);
   const email = String(req.body?.email || "").trim().toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i.test(email) || email.length > 254) {
-    return res.status(400).json({error:"Enter a valid email address."});
+    return res.status(400).json({error:t(req.language, "form.validEmail")});
   }
   const now = new Date().toISOString();
   db.prepare(`
@@ -393,13 +416,15 @@ const matchesSearch = (product, terms) => {
 
 const requestMarket = req => req.market ? market(req.market) : marketFromIp(req);
 const navCategories = code => db.prepare("SELECT DISTINCT category FROM products WHERE market=? AND status='published' AND category<>'' ORDER BY category").all(code).map(row => row.category);
-const sharedHeader = code => {
+const sharedHeader = (code, language = "en", req = null) => {
   const home = marketPath(code);
-  return `<header class="site-header"><div class="header-top"><a class="brand" href="${home}"><span class="brand-mark">D</span><span class="brand-copy"><strong>OneDailyDrop</strong><small>The Best Deals. Every Day.</small></span></a><form class="header-search" action="${marketPath(code, "/search")}"><span aria-hidden="true">⌕</span><input name="q" type="search" placeholder="Search deals" aria-label="Search deals"></form><a class="header-subscribe" href="${home}#subscribe">Get Daily Drops</a><button id="themeToggle" class="theme-button" type="button" aria-label="Switch to dark mode" title="Dark mode"><span class="theme-button-icon" aria-hidden="true">☾</span><span class="theme-button-label">Dark</span></button><button class="mobile-menu-toggle" type="button" aria-expanded="false" aria-controls="mainNavigation" aria-label="Open menu"><span></span><span></span><span></span></button></div><nav id="mainNavigation" class="main-nav" aria-label="Primary navigation"><a href="${home}">Today</a><div class="category-menu"><button type="button" aria-expanded="false">Categories <span>⌄</span></button><div class="mega-menu" hidden>${navCategories(code).map(category => `<a href="${catPath(category, code)}">${esc(category)}</a>`).join("")}</div></div><a href="${home}#trending">Trending</a><a href="${marketPath(code, "/archive")}">Past Drops</a><a href="/about">About</a></nav></header>`;
+  return `<header class="site-header"><div class="header-top"><a class="brand" href="${home}"><span class="brand-mark">D</span><span class="brand-copy"><strong>OneDailyDrop</strong><small>The Best Deals. Every Day.</small></span></a><form class="header-search" action="${marketPath(code, "/search")}"><span aria-hidden="true">⌕</span><input name="q" type="search" placeholder="Search deals" aria-label="Search deals"></form><a class="header-subscribe" href="${home}#subscribe">Get Daily Drops</a><button id="themeToggle" class="theme-button" type="button" aria-label="Switch to dark mode" title="Dark mode"><span class="theme-button-icon" aria-hidden="true">☾</span><span class="theme-button-label">Dark</span></button>${req ? languageSwitcher(req, code, language) : ""}<button class="mobile-menu-toggle" type="button" aria-expanded="false" aria-controls="mainNavigation" aria-label="Open menu"><span></span><span></span><span></span></button></div><nav id="mainNavigation" class="main-nav" aria-label="Primary navigation"><a href="${home}">Today</a><div class="category-menu"><button type="button" aria-expanded="false">Categories <span>⌄</span></button><div class="mega-menu" hidden>${navCategories(code).map(category => `<a href="${catPath(category, code)}">${esc(category)}</a>`).join("")}</div></div><a href="${home}#trending">Trending</a><a href="${marketPath(code, "/archive")}">Past Drops</a><a href="${marketPath(code, "/about")}">About</a></nav></header>`;
 };
-const sharedFooter = () => `<footer><div class="footer-brand"><b>OneDailyDrop</b><p>The Best Deals. Every Day.</p><div class="footer-links"><a href="/about">About</a><a href="/contact">Contact</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/affiliate-disclosure">Affiliate Disclosure</a><a href="/editorial-policy">Editorial Policy</a></div></div><p class="disclosure">Preview products and prices are sample data while OneDailyDrop is being built.</p></footer>`;
-const shell = (title, description, canonical, body, schema = null, image = "", robots = "", code = "us", alternateCodes = marketCodes) => {
+const sharedFooter = code => `<footer><div class="footer-brand"><b>OneDailyDrop</b><p>The Best Deals. Every Day.</p><div class="footer-links"><a href="${marketPath(code, "/about")}">About</a><a href="${marketPath(code, "/contact")}">Contact</a><a href="${marketPath(code, "/privacy")}">Privacy</a><a href="${marketPath(code, "/terms")}">Terms</a><a href="${marketPath(code, "/affiliate-disclosure")}">Affiliate Disclosure</a><a href="${marketPath(code, "/editorial-policy")}">Editorial Policy</a></div></div><p class="disclosure">Preview products and prices are sample data while OneDailyDrop is being built.</p></footer>`;
+const shell = (title, description, canonical, body, schema = null, image = "", robots = "", code = "us", alternateCodes = marketCodes, req = null) => {
   const selectedMarket = market(code);
+  const language = req?.language || "en";
+  const locale = languageTag(code, language);
   const pathname = (() => {
     try { return new URL(canonical).pathname.replace(new RegExp(`^/(${marketCodes.join("|")})`), "") || "/"; }
     catch { return ""; }
@@ -407,7 +432,7 @@ const shell = (title, description, canonical, body, schema = null, image = "", r
   const hasCountryAlternates = /^\/(?:archive|brands|category\/[^/]+)$/.test(pathname);
   const alternates = hasCountryAlternates ? alternateLinks(pathname, alternateCodes) : "";
   const robotsContent = robots || "index,follow,max-image-preview:large";
-  const ogLocale = selectedMarket.locale.replace("-", "_");
+  const ogLocale = locale.replace("-", "_");
   const suppliedNodes = schema
     ? (Array.isArray(schema["@graph"])
       ? schema["@graph"]
@@ -436,14 +461,15 @@ const shell = (title, description, canonical, body, schema = null, image = "", r
         url: canonical,
         name: title,
         description,
-        inLanguage: selectedMarket.locale,
+        inLanguage: locale,
         isPartOf: { "@id": `${SITE}/#website` }
       },
       ...suppliedNodes
     ]
   };
   const ogType = suppliedNodes.some(node => node?.["@type"] === "Product") ? "product" : "website";
-  return `<!doctype html><html lang="${esc(selectedMarket.locale)}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0a1020"><title>${esc(title)}</title><meta name="description" content="${esc(description.slice(0,160))}"><meta name="robots" content="${esc(robotsContent)}"><link rel="canonical" href="${esc(canonical)}"><link rel="icon" href="/favicon.svg" type="image/svg+xml">${alternates}<meta property="og:type" content="${ogType}"><meta property="og:site_name" content="OneDailyDrop"><meta property="og:locale" content="${esc(ogLocale)}"><meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(description.slice(0,180))}"><meta property="og:url" content="${esc(canonical)}">${image ? `<meta property="og:image" content="${esc(image)}"><meta property="og:image:alt" content="${esc(title)}">` : ""}<meta name="twitter:card" content="${image ? "summary_large_image" : "summary"}"><meta name="twitter:title" content="${esc(title)}"><meta name="twitter:description" content="${esc(description.slice(0,180))}">${image ? `<meta name="twitter:image" content="${esc(image)}">` : ""}<link rel="stylesheet" href="/styles.css?v=20260727-mobile-menu"><link rel="stylesheet" href="/brand-theme.css?v=20260724-theme-fix"><link rel="stylesheet" href="/liquid-glass.css?v=20260724-theme-fix"><script type="application/ld+json">${JSON.stringify(pageSchema).replace(/</g,"\\u003c")}</script></head><body>${sharedHeader(code)}${body}${sharedFooter()}<script src="/theme.js?v=20260724-search-scroll"></script><script src="/site-shell.js?v=20260727-mobile-menu"></script></body></html>`;
+  const html = `<!doctype html><html lang="${esc(locale)}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0a1020"><title>${esc(title)}</title><meta name="description" content="${esc(description.slice(0,160))}"><meta name="robots" content="${esc(robotsContent)}"><link rel="canonical" href="${esc(canonical)}"><link rel="icon" href="/favicon.svg" type="image/svg+xml">${alternates}<meta property="og:type" content="${ogType}"><meta property="og:site_name" content="OneDailyDrop"><meta property="og:locale" content="${esc(ogLocale)}"><meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(description.slice(0,180))}"><meta property="og:url" content="${esc(canonical)}">${image ? `<meta property="og:image" content="${esc(image)}"><meta property="og:image:alt" content="${esc(title)}">` : ""}<meta name="twitter:card" content="${image ? "summary_large_image" : "summary"}"><meta name="twitter:title" content="${esc(title)}"><meta name="twitter:description" content="${esc(description.slice(0,180))}">${image ? `<meta name="twitter:image" content="${esc(image)}">` : ""}<link rel="stylesheet" href="/styles.css?v=20260728-i18n"><link rel="stylesheet" href="/brand-theme.css?v=20260724-theme-fix"><link rel="stylesheet" href="/liquid-glass.css?v=20260724-theme-fix"><script type="application/ld+json">${JSON.stringify(pageSchema).replace(/</g,"\\u003c")}</script><script>window.__ODD_LANGUAGE__=${JSON.stringify(language)};window.__ODD_LOCALE__=${JSON.stringify(locale)};window.__ODD_TEXT__=${JSON.stringify(clientCopy(language)).replace(/</g, "\\u003c")};</script></head><body>${sharedHeader(code, language, req)}${body}${sharedFooter(code)}<script src="/theme.js?v=20260728-i18n"></script><script src="/site-shell.js?v=20260728-i18n"></script></body></html>`;
+  return localizeHtml(html, language);
 };
 
 const productCard = (product, index = 0) => `<article class="card"><a class="image-wrap" href="${dealPath(product)}"><img src="${esc(product.image_url)}" alt="${esc(shortTitle(product.title))}"></a><div class="card-content">${index ? `<span class="rank">#${index}</span>` : ""}${product.brand ? `<a class="eyebrow" href="${brandPath(product.brand, product.market)}">${esc(product.brand)}</a>` : ""}<h2 class="card-title"><a href="${dealPath(product)}">${esc(shortTitle(product.title))}</a></h2><p class="description">${esc(whyPicked(product))}</p><span class="price card-price">${money(product.current_price, product.currency)}</span><a class="button" href="${dealPath(product)}">View details</a></div></article>`;
@@ -462,7 +488,7 @@ const sendNotFound = (req, res) => {
   const selectedMarket = requestMarket(req);
   const body = `<main class="not-found"><p class="eyebrow">404 ERROR</p><h1>This drop got away.</h1><p>That page does not exist or may have moved. Let’s get you back to the deals.</p><div class="hero-actions"><a class="primary-cta" href="${marketPath(selectedMarket.code)}">Back to Today’s Drop</a><a class="secondary-cta" href="${marketPath(selectedMarket.code, "/search")}">Search deals</a></div></main>`;
   const requestedPath = String(req.originalUrl || "/").split("?")[0];
-  return res.status(404).send(shell("Page Not Found | OneDailyDrop", "The requested OneDailyDrop page could not be found.", `${SITE}${requestedPath}`, body, null, "", "noindex,nofollow", selectedMarket.code));
+  return res.status(404).send(shell("Page Not Found | OneDailyDrop", "The requested OneDailyDrop page could not be found.", `${SITE}${requestedPath}`, body, null, "", "noindex,nofollow", selectedMarket.code, marketCodes, req));
 };
 
 app.get("/deal/:slug", (req, res) => {
@@ -471,6 +497,7 @@ app.get("/deal/:slug", (req, res) => {
   const expectedPath = dealPath(p);
   if (String(req.originalUrl || "").split("?")[0] !== expectedPath) return res.redirect(301, expectedPath);
   const canonical = SITE + dealPath(p), title = shortTitle(p.title), description = clean(p.description) || whyPicked(p), store = storeName(p), category = p.category || "Deals";
+  const pageLocale = languageTag(p.market, req.language);
   const history = historyFor(p.id), intelligence = priceIntelligence(history);
   const low30 = intelligence.day30.sufficient ? intelligence.day30.low : null;
   const low90 = intelligence.day90.sufficient ? intelligence.day90.low : null;
@@ -487,18 +514,18 @@ app.get("/deal/:slug", (req, res) => {
   const relatedBlock = related.length ? `<section class="deals-section"><div class="section-heading"><div><p class="eyebrow">MORE FROM THIS BRAND</p><h2>More ${esc(p.brand)} deals</h2></div><a href="${brandPath(p.brand, p.market)}">View all →</a></div><div class="grid">${related.map(product => productCard(product)).join("")}</div></section>` : "";
   const checkedAt = p.checked_at || p.updated_at;
   const checkedLabel = checkedAt && !Number.isNaN(new Date(checkedAt).getTime())
-    ? new Date(checkedAt).toLocaleString(market(p.market).locale)
+    ? new Date(checkedAt).toLocaleString(pageLocale)
     : "Recently";
   const retailerDetails = liveOffer ? `<div class="detail-grid retailer-detail-grid" aria-label="Retailer details"><section><h3>Retailer</h3><p>${esc(store)}</p></section><section><h3>Sold by</h3><p>${esc(clean(p.seller_name) || store)}</p></section><section><h3>Delivery</h3><p>${esc(clean(p.shipping_summary) || "Confirm at retailer")}</p></section><section><h3>Returns</h3><p>${esc(clean(p.return_summary) || "See retailer policy")}</p></section><section><h3>Availability</h3><p>${esc(clean(p.availability) || "Confirm at retailer")}</p></section><section><h3>Price checked</h3><p>${esc(checkedLabel)}</p></section></div>` : "";
   const historyLabel = stats => stats.sufficient ? money(stats.low,p.currency) : "Not enough price history yet";
   const ratingSummary = Number(p.rating)>0&&Number(p.review_count)>0
-    ? `<section><h3>Customer rating</h3><p>${Number(p.rating).toFixed(1)} / 5 from ${Number(p.review_count).toLocaleString(market(p.market).locale)} reviews</p></section>`
+    ? `<section><h3>Customer rating</h3><p>${Number(p.rating).toFixed(1)} / 5 from ${Number(p.review_count).toLocaleString(pageLocale)} reviews</p></section>`
     : "";
   const body = `<main class="product-page"><nav class="breadcrumb"><a href="${marketPath(p.market)}">Home</a><span>›</span><a href="${catPath(category,p.market)}">${esc(category)}</a>${p.brand?`<span>›</span><a href="${brandPath(p.brand,p.market)}">${esc(p.brand)}</a>`:""}<span>›</span><span>${esc(title)}</span></nav><article class="product-detail"><div class="product-detail-media"><img src="${esc(p.image_url)}" alt="${esc(title)}" decoding="async"></div><div class="product-detail-content">${brandBlock}<h1>${esc(title)}</h1><div class="product-score"><strong>${Math.round(Number(p.score)||0)}/100</strong><span>OneDailyDrop Score</span></div><p class="product-lead">${esc(description)}</p><section class="editorial-box"><h2>Why we picked it</h2><p>${esc(whyPicked(p))}</p></section><div class="detail-grid"><section><h3>Current price</h3><p>${money(p.current_price,p.currency)}</p></section>${ratingSummary}<section><h3>30-day tracked low</h3><p>${historyLabel(intelligence.day30)}</p></section><section><h3>90-day tracked low</h3><p>${historyLabel(intelligence.day90)}</p></section><section><h3>All-time tracked low</h3><p>${historyLabel(intelligence.allTime)}</p></section></div><section class="editorial-box"><h2>Price history</h2>${chartSvg(history)}<p>${history.length} tracked price observation${history.length===1?"":"s"} across ${intelligence.allTime.distinctDays} day${intelligence.allTime.distinctDays===1?"":"s"}.</p></section><div class="product-price-box"><span class="product-price">${money(p.current_price,p.currency)}</span>${p.original_price?`<span class="old">${money(p.original_price,p.currency)}</span>`:""}<small>Final price is confirmed on the retailer website.</small></div><a class="featured-button" href="${marketPath(p.market, `/go/${p.id}`)}" rel="nofollow sponsored">See deal on ${esc(store)} →</a></div></article>${relatedBlock}</main>`;
   const enrichedBody = body
     .replace('<section class="editorial-box"><h2>Price history</h2>', `${retailerDetails}<section id="price-history" class="editorial-box"><h2>Price history</h2>`)
     .replace(`See deal on ${esc(store)} →`, liveOffer ? `View Deal at ${esc(store)}` : "View details");
-  res.send(shell(`${title} | OneDailyDrop`, description, canonical, enrichedBody, productSchema, p.image_url, "", p.market));
+  res.send(shell(`${title} | OneDailyDrop`, description, canonical, enrichedBody, productSchema, p.image_url, "", p.market, marketCodes, req));
 });
 
 app.get("/category/:slug", (req, res) => {
@@ -516,7 +543,7 @@ app.get("/category/:slug", (req, res) => {
   const averageRating = ratings.length ? `${(ratings.reduce((sum, value) => sum + value, 0) / ratings.length).toFixed(1)} / 5` : "Not yet available";
   const categorySummary = `<div class="detail-grid"><section><h2>Products checked</h2><p>${products.length}</p></section><section><h2>Current price range</h2><p>${esc(priceRange)}</p></section><section><h2>Average rating</h2><p>${esc(averageRating)}</p></section></div><section class="editorial-box"><h2>How we select ${esc(categoryTitle.toLowerCase())} deals</h2><p>OneDailyDrop compares current price signals, product quality, customer feedback and seller reliability. Rankings update when stronger verified offers become available in ${esc(selectedMarket.name)}.</p></section>`;
   const alternateCodes = marketCodes.filter(code => db.prepare("SELECT 1 FROM products WHERE market=? AND status='published' AND category=? LIMIT 1").get(code, category));
-  res.send(shell(`Best ${categoryTitle} Deals in ${selectedMarket.name} | OneDailyDrop`, description, canonical, `<main><section class="deals-section"><nav class="breadcrumb"><a href="${marketPath(selectedMarket.code)}">Home</a><span>›</span><span>${esc(categoryTitle)} Deals</span></nav><div class="section-heading"><div><p class="eyebrow">${esc(selectedMarket.name.toUpperCase())} CATEGORY</p><h1>Best ${esc(categoryTitle)} Deals</h1><p>${esc(description)}</p></div><p class="result-count">${count}</p></div>${categorySummary}<div class="grid">${products.map((product,index)=>productCard(product,index+1)).join("")}</div></section></main>`, schema, "", "", selectedMarket.code, alternateCodes));
+  res.send(shell(`Best ${categoryTitle} Deals in ${selectedMarket.name} | OneDailyDrop`, description, canonical, `<main><section class="deals-section"><nav class="breadcrumb"><a href="${marketPath(selectedMarket.code)}">Home</a><span>›</span><span>${esc(categoryTitle)} Deals</span></nav><div class="section-heading"><div><p class="eyebrow">${esc(selectedMarket.name.toUpperCase())} CATEGORY</p><h1>Best ${esc(categoryTitle)} Deals</h1><p>${esc(description)}</p></div><p class="result-count">${count}</p></div>${categorySummary}<div class="grid">${products.map((product,index)=>productCard(product,index+1)).join("")}</div></section></main>`, schema, "", "", selectedMarket.code, alternateCodes, req));
 });
 
 app.get("/search", (req, res) => {
@@ -529,11 +556,12 @@ app.get("/search", (req, res) => {
   const empty = query ? `No deals matched “${esc(query)}”. Try a product type, brand, or category.` : "Enter a product, brand, or category above.";
   const body = `<main><section class="deals-section"><div class="section-heading"><div><p class="eyebrow">${esc(selectedMarket.name.toUpperCase())} SEARCH</p><h1>${query ? `Results for “${esc(query)}”` : "Search deals"}</h1></div><p class="result-count">${count}</p></div>${products.length ? `<div class="grid">${products.map((product,index)=>productCard(product,index+1)).join("")}</div>` : `<div class="empty-state">${empty}<div class="empty-actions"><a class="primary-cta" href="${marketPath(selectedMarket.code)}">Back to today’s drop</a></div></div>`}</section></main>`;
   const canonicalPath = marketPath(selectedMarket.code, "/search");
-  res.send(shell(`${query ? `${query} Deals in ${selectedMarket.name}` : `Search ${selectedMarket.name} Deals`} | OneDailyDrop`, `Search OneDailyDrop deals in ${selectedMarket.name}${query ? ` for ${query}` : ""}.`, `${SITE}${canonicalPath}${query ? `?q=${encodeURIComponent(query)}` : ""}`, body, null, "", "noindex,follow", selectedMarket.code));
+  res.send(shell(`${query ? `${query} Deals in ${selectedMarket.name}` : `Search ${selectedMarket.name} Deals`} | OneDailyDrop`, `Search OneDailyDrop deals in ${selectedMarket.name}${query ? ` for ${query}` : ""}.`, `${SITE}${canonicalPath}${query ? `?q=${encodeURIComponent(query)}` : ""}`, body, null, "", "noindex,follow", selectedMarket.code, marketCodes, req));
 });
 
 app.get("/archive", (req, res) => {
   const selectedMarket = requestMarket(req);
+  const pageLocale = languageTag(selectedMarket.code, req.language);
   const today = localDate(selectedMarket.timezone);
   const products = db.prepare(`
     SELECT p.*,d.drop_date,d.rank,d.score AS drop_score,d.current_price AS drop_price,
@@ -559,11 +587,11 @@ app.get("/archive", (req, res) => {
     groups.get(product.drop_date).push(product);
   }
   const dates = [...groups.entries()].map(([dateValue, dailyProducts]) => {
-    const label = new Date(`${dateValue}T12:00:00Z`).toLocaleDateString("en-US", {month:"long", day:"numeric", year:"numeric", timeZone:"UTC"});
+    const label = new Date(`${dateValue}T12:00:00Z`).toLocaleDateString(pageLocale, {month:"long", day:"numeric", year:"numeric", timeZone:"UTC"});
     return `<article class="archive-row"><time datetime="${dateValue}">${label}</time><div class="archive-day-grid">${dailyProducts.map(archiveCard).join("")}</div></article>`;
   }).join("");
   const body = `<main><section class="deals-section"><div class="section-heading"><div><p class="eyebrow">${esc(selectedMarket.name.toUpperCase())} ARCHIVE</p><h1>Past Drops</h1><p class="description">Every previous daily selection stays available with its original date, Score and current deal status.</p></div></div><div class="archive-list">${dates || '<div class="empty-state">The archive is being prepared.</div>'}</div></section></main>`;
-  res.send(shell(`Past Drops in ${selectedMarket.name} | OneDailyDrop`, `Browse previous OneDailyDrop selections for ${selectedMarket.name}, including original Scores and current availability.`, `${SITE}${marketPath(selectedMarket.code, "/archive")}`, body, null, "", products.length ? "" : "noindex,follow", selectedMarket.code));
+  res.send(shell(`Past Drops in ${selectedMarket.name} | OneDailyDrop`, `Browse previous OneDailyDrop selections for ${selectedMarket.name}, including original Scores and current availability.`, `${SITE}${marketPath(selectedMarket.code, "/archive")}`, body, null, "", products.length ? "" : "noindex,follow", selectedMarket.code, marketCodes, req));
 });
 
 app.get("/brand/:slug", (req, res) => {
@@ -574,7 +602,7 @@ app.get("/brand/:slug", (req, res) => {
   const description = `Browse ${products.length} ${brand} deals, price drops and top-rated products selected by OneDailyDrop.`;
   const schema = {"@context":"https://schema.org","@graph":[{"@type":"Brand",name:brand,url:canonical},{"@type":"ItemList",name:`Best ${brand} Deals`,numberOfItems:products.length,itemListElement:products.map((product,index)=>({"@type":"ListItem",position:index+1,url:SITE+dealPath(product),name:shortTitle(product.title)}))},{"@type":"BreadcrumbList",itemListElement:[{"@type":"ListItem",position:1,name:"Home",item:SITE+marketPath(selectedMarket.code)},{"@type":"ListItem",position:2,name:"Brands",item:SITE+marketPath(selectedMarket.code,"/brands")},{"@type":"ListItem",position:3,name:brand,item:canonical}]}]};
   const stats = `<div class="detail-grid"><section><h3>Products</h3><p>${products.length}</p></section><section><h3>Average price</h3><p>${money(avgPrice,products[0].currency)}</p></section><section><h3>Average rating</h3><p>${avgRating.toFixed(1)} / 5</p></section><section><h3>Average discount</h3><p>${Math.round(avgDiscount)}%</p></section></div>`;
-  res.send(shell(`${brand} Deals in ${selectedMarket.name} | OneDailyDrop`, description, canonical, `<main><section class="deals-section"><nav class="breadcrumb"><a href="${marketPath(selectedMarket.code)}">Home</a><span>›</span><a href="${marketPath(selectedMarket.code, "/brands")}">Brands</a><span>›</span><span>${esc(brand)}</span></nav><div class="section-heading"><div><p class="eyebrow">${esc(selectedMarket.name.toUpperCase())} BRAND</p><h1>${esc(brand)} Deals</h1><p>${esc(description)}</p></div></div>${stats}<div class="grid">${products.map((product,index)=>productCard(product,index+1)).join("")}</div></section></main>`, schema, "", "", selectedMarket.code));
+  res.send(shell(`${brand} Deals in ${selectedMarket.name} | OneDailyDrop`, description, canonical, `<main><section class="deals-section"><nav class="breadcrumb"><a href="${marketPath(selectedMarket.code)}">Home</a><span>›</span><a href="${marketPath(selectedMarket.code, "/brands")}">Brands</a><span>›</span><span>${esc(brand)}</span></nav><div class="section-heading"><div><p class="eyebrow">${esc(selectedMarket.name.toUpperCase())} BRAND</p><h1>${esc(brand)} Deals</h1><p>${esc(description)}</p></div></div>${stats}<div class="grid">${products.map((product,index)=>productCard(product,index+1)).join("")}</div></section></main>`, schema, "", "", selectedMarket.code, marketCodes, req));
 });
 
 app.get("/brands", (req, res) => {
@@ -583,7 +611,7 @@ app.get("/brands", (req, res) => {
   const canonical = SITE + marketPath(selectedMarket.code, "/brands"), description = `Explore popular brands and their best current deals in ${selectedMarket.name} on OneDailyDrop.`;
   const schema = {"@context":"https://schema.org","@type":"ItemList",name:"Popular Brands",numberOfItems:brands.length,itemListElement:brands.map((brand,index)=>({"@type":"ListItem",position:index+1,url:SITE+brandPath(brand.brand,selectedMarket.code),name:brand.brand}))};
   const cards = brands.map(brand => `<article class="card"><div class="card-content"><p class="eyebrow">${brand.product_count} DEALS</p><h2><a href="${brandPath(brand.brand, selectedMarket.code)}">${esc(brand.brand)}</a></h2><p>Average price ${money(brand.avg_price, selectedMarket.currency)} · Rating ${Number(brand.avg_rating||0).toFixed(1)}</p></div></article>`).join("");
-  res.send(shell(`Popular Brands in ${selectedMarket.name} | OneDailyDrop`, description, canonical, `<main><section class="deals-section"><div class="section-heading"><div><p class="eyebrow">${esc(selectedMarket.name.toUpperCase())}</p><h1>Popular Brands</h1></div><p class="result-count">${brands.length} brands</p></div><div class="grid">${cards}</div></section></main>`, schema, "", brands.length ? "" : "noindex,follow", selectedMarket.code));
+  res.send(shell(`Popular Brands in ${selectedMarket.name} | OneDailyDrop`, description, canonical, `<main><section class="deals-section"><div class="section-heading"><div><p class="eyebrow">${esc(selectedMarket.name.toUpperCase())}</p><h1>Popular Brands</h1></div><p class="result-count">${brands.length} brands</p></div><div class="grid">${cards}</div></section></main>`, schema, "", brands.length ? "" : "noindex,follow", selectedMarket.code, marketCodes, req));
 });
 
 app.get("/robots.txt", (req, res) => res
@@ -713,7 +741,7 @@ app.post("/api/subscribe", async (req,res) => {
   }
   res.status(201).json({
     ok:true,
-    message:emailSent ? "You're subscribed. Check your inbox for confirmation." : "You're subscribed to the Daily Drop.",
+    message:emailSent ? t(req.language, "form.subscribedEmail") : t(req.language, "form.subscribed"),
     categories,
     market:selectedMarket.code,
     emailSent

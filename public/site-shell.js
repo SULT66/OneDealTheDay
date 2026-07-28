@@ -1,4 +1,6 @@
 (() => {
+  const localizedText = window.__ODD_TEXT__ || {};
+  const tr = (key, fallback) => localizedText[key] || fallback;
   const categoryMenu = document.querySelector(".category-menu");
   const menuButton = categoryMenu?.querySelector(":scope > button");
   const menu = categoryMenu?.querySelector(".mega-menu");
@@ -42,7 +44,7 @@
   };
   const closeMobileMenu = (restoreFocus = false) => {
     toggle.setAttribute("aria-expanded", "false");
-    toggle.setAttribute("aria-label", "Open menu");
+    toggle.setAttribute("aria-label", tr("menu.open", "Open menu"));
     navigation.classList.remove("is-open");
     closeCategoryMenu();
     if (restoreFocus) toggle.focus();
@@ -51,7 +53,7 @@
   toggle.addEventListener("click", () => {
     const willOpen = toggle.getAttribute("aria-expanded") !== "true";
     toggle.setAttribute("aria-expanded", String(willOpen));
-    toggle.setAttribute("aria-label", willOpen ? "Close menu" : "Open menu");
+    toggle.setAttribute("aria-label", willOpen ? tr("menu.close", "Close menu") : tr("menu.open", "Open menu"));
     navigation.classList.toggle("is-open", willOpen);
   });
   navigation.addEventListener("click", event => {

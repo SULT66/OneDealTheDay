@@ -1,0 +1,6 @@
+.language-switcher{margin:0}
+.language-switcher label{display:block}
+.language-switcher select{min-height:42px;padding:0 32px 0 11px;border:1px solid var(--line,rgba(255,255,255,.38));border-radius:12px;background:var(--surface,#fff);color:var(--text,#111827);font-size:12px;font-weight:850;cursor:pointer}
+.language-switcher select:focus{outline:3px solid rgba(255,107,0,.28);outline-offset:2px}
+.sr-only{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
+@media(max-width:680px){.language-switcher select{max-width:96px;min-height:40px;padding-left:8px;padding-right:24px}}

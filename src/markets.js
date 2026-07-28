@@ -41,8 +41,8 @@ const definitions = {
     name: "France",
     countryCodes: ["FR"],
     currency: "EUR",
-    locale: "en-FR",
-    hreflang: "en-FR",
+    locale: "fr-FR",
+    hreflang: "fr-FR",
     timezone: "Europe/Paris",
     amazonDomain: "amazon.fr",
     supportsWalmart: false
@@ -52,8 +52,8 @@ const definitions = {
     name: "Germany",
     countryCodes: ["DE"],
     currency: "EUR",
-    locale: "en-DE",
-    hreflang: "en-DE",
+    locale: "de-DE",
+    hreflang: "de-DE",
     timezone: "Europe/Berlin",
     amazonDomain: "amazon.de",
     supportsWalmart: false

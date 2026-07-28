@@ -1,5 +1,14 @@
 const renderHomepage = require("./homepage");
 const { marketFromRequest, marketPath, alternateLinks } = require("./markets");
+const {
+  resolveLanguage,
+  languageTag,
+  marketName,
+  t,
+  clientCopy,
+  localizeHtml,
+  languageSwitcher
+} = require("./i18n");
 
 const SITE = "https://www.onedailydrop.com";
 const anchorOffsetStyle = `<style id="homepage-anchor-offset">
@@ -11,13 +20,16 @@ module.exports = function homepageSeo(req, res) {
   const originalSend = res.send.bind(res);
   const selectedMarket = marketFromRequest(req);
   req.market = selectedMarket.code;
+  const language = resolveLanguage(req, res, selectedMarket.code);
+  const locale = languageTag(selectedMarket.code, language);
+  const localizedMarketName = marketName(selectedMarket.code, language);
 
   res.send = body => {
     if (typeof body !== "string" || !body.includes("application/ld+json")) return originalSend(body);
 
     const homePath = marketPath(selectedMarket.code);
     const canonical = SITE + homePath;
-    const appScript = `<script>window.__ODD_MARKET__=${JSON.stringify(selectedMarket.code)};window.__ODD_MARKET_TIMEZONE__=${JSON.stringify(selectedMarket.timezone)};</script><script>(function(){const q=new URLSearchParams(location.search).get("q");if(!q)return;const input=document.getElementById("searchInput");if(input)input.value=q;})();</script><script src="/app.js?v=20260727-mobile-menu"></script>`;
+    const appScript = `<script>window.__ODD_MARKET__=${JSON.stringify(selectedMarket.code)};window.__ODD_MARKET_TIMEZONE__=${JSON.stringify(selectedMarket.timezone)};window.__ODD_LANGUAGE__=${JSON.stringify(language)};window.__ODD_LOCALE__=${JSON.stringify(locale)};window.__ODD_TEXT__=${JSON.stringify(clientCopy(language)).replace(/</g, "\\u003c")};</script><script>(function(){const q=new URLSearchParams(location.search).get("q");if(!q)return;const input=document.getElementById("searchInput");if(input)input.value=q;})();</script><script src="/app.js?v=20260728-i18n"></script>`;
     let enhanced = body
       .replace(
         '<link rel="canonical" href="https://www.onedailydrop.com/">',
@@ -28,20 +40,20 @@ module.exports = function homepageSeo(req, res) {
       .replace('action="/search"', `action="${marketPath(selectedMarket.code, "/search")}"`)
       .replace(
         '</button></div><nav class="main-nav" aria-label="Primary navigation">',
-        '</button><button class="mobile-menu-toggle" type="button" aria-expanded="false" aria-controls="mainNavigation" aria-label="Open menu"><span></span><span></span><span></span></button></div><nav id="mainNavigation" class="main-nav" aria-label="Primary navigation">'
+        `</button>${languageSwitcher(req, selectedMarket.code, language)}<button class="mobile-menu-toggle" type="button" aria-expanded="false" aria-controls="mainNavigation" aria-label="${t(language, "menu.open")}"><span></span><span></span><span></span></button></div><nav id="mainNavigation" class="main-nav" aria-label="${t(language, "nav.primary")}">`
       )
-      .replace(/\/styles\.css\?v=[^"]+/, "/styles.css?v=20260727-mobile-menu")
+      .replace(/\/styles\.css\?v=[^"]+/, "/styles.css?v=20260728-i18n")
       .replace(/href="\/us\/category\//g, `href="/${selectedMarket.code}/category/`)
       .replace('<a href="#archive">Past Drops</a>', `<a href="${marketPath(selectedMarket.code, "/archive")}">Past Drops</a>`)
       .replace(
         '<p class="eyebrow">ONE GENUINELY GOOD DEAL, CHECKED DAILY</p>',
-        `<p class="eyebrow">ONE GENUINELY GOOD DEAL IN ${selectedMarket.name.toUpperCase()}, CHECKED DAILY</p>`
+        `<p class="eyebrow">${t(language, "home.eyebrowMarket", { country: localizedMarketName.toUpperCase() })}</p>`
       )
       .replace(
         '<p class="hero-intro">We compare the price, product quality and seller signals - so your first stop before buying is a smarter one.</p>',
-        `<p class="hero-intro">We compare local ${selectedMarket.name} prices, product quality and seller signals, so your first stop before buying is a smarter one.</p><p class="market-note">Deals, currency and retailers are selected automatically from your IP location: ${selectedMarket.name}.</p>`
+        `<p class="hero-intro">${t(language, "home.introMarket", { country: localizedMarketName })}</p><p class="market-note">${t(language, "home.marketNote", { country: localizedMarketName })}</p>`
       )
-      .replace('<div class="trust-inline">', '<p class="shopping-model-note">OneDailyDrop does not sell products. When you choose a deal, we send you to the local retailer.</p><div class="trust-inline">')
+      .replace('<div class="trust-inline">', `<p class="shopping-model-note">${t(language, "home.modelNote")}</p><div class="trust-inline">`)
       .replace(/<section class="confidence-section">[\s\S]*?<\/section>/, "")
       .replace(/<div id="resultCount" class="result-count">[^<]*<\/div>/, '<div id="resultCount" class="result-count"></div>')
       .replace('<span style="--weight:25%"><b>25%</b> Product quality</span>', '<span style="--weight:20%"><b>20%</b> Product quality</span>')
@@ -49,7 +61,11 @@ module.exports = function homepageSeo(req, res) {
       .replace('<span style="--weight:10%"><b>10%</b> Shipping & returns</span><span style="--weight:5%"><b>5%</b> Freshness</span>', '<span style="--weight:10%"><b>10%</b> Demand & usefulness</span><span style="--weight:10%"><b>10%</b> Shipping & returns</span>')
       .replace(/<script src="\/app\.js\?v=[^"]+"><\/script>/, appScript);
 
-    enhanced = enhanced.replace("</head>", `${anchorOffsetStyle}</head>`);
+    enhanced = localizeHtml(enhanced, language)
+      .replace(/<html lang="[^"]+">/, `<html lang="${locale}">`)
+      .replace(/<meta property="og:locale" content="[^"]+">/, `<meta property="og:locale" content="${locale.replace("-", "_")}">`)
+      .replace(/"inLanguage":"[^"]+"/g, `"inLanguage":"${locale}"`)
+      .replace("</head>", `${anchorOffsetStyle}</head>`);
     return originalSend(enhanced);
   };
 

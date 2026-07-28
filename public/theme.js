@@ -1,4 +1,6 @@
 (() => {
+  const localizedText = window.__ODD_TEXT__ || {};
+  const tr = (key, fallback) => localizedText[key] || fallback;
   const scrollStyle = document.createElement("style");
   scrollStyle.textContent = `
     .scroll-top-button{--scroll-progress:0deg;position:fixed!important;left:auto!important;right:24px!important;bottom:24px;z-index:80;width:56px;height:56px;padding:3px;border:0;border-radius:18px;background:conic-gradient(var(--accent,#ff6b00) var(--scroll-progress),rgba(148,153,162,.35) 0);color:var(--text,#15171a);box-shadow:0 14px 36px rgba(13,22,40,.22);cursor:pointer;opacity:0;visibility:hidden;transform:translateY(18px) scale(.92);transition:opacity .2s ease,visibility .2s ease,transform .25s ease,filter .2s ease}
@@ -24,9 +26,9 @@
     const label = button.querySelector(".theme-button-label");
     if (icon) icon.textContent = dark ? "☀" : "☾";
     else button.textContent = dark ? "☀" : "☾";
-    if (label) label.textContent = dark ? "Light" : "Dark";
-    button.setAttribute("aria-label", dark ? "Switch to light mode" : "Switch to dark mode");
-    button.title = dark ? "Light mode" : "Dark mode";
+    if (label) label.textContent = dark ? tr("theme.light", "Light") : tr("theme.dark", "Dark");
+    button.setAttribute("aria-label", dark ? tr("theme.toLight", "Switch to light mode") : tr("theme.toDark", "Switch to dark mode"));
+    button.title = dark ? tr("theme.light", "Light") : tr("theme.dark", "Dark");
   };
 
   button.addEventListener("click", () => {
@@ -40,8 +42,8 @@
   const scrollButton = document.createElement("button");
   scrollButton.type = "button";
   scrollButton.className = "scroll-top-button";
-  scrollButton.setAttribute("aria-label", "Back to top");
-  scrollButton.title = "Back to top";
+  scrollButton.setAttribute("aria-label", tr("back.top", "Back to top"));
+  scrollButton.title = tr("back.top", "Back to top");
   scrollButton.innerHTML = '<span aria-hidden="true">↑</span>';
   document.body.appendChild(scrollButton);
 
