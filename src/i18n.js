@@ -787,7 +787,7 @@ function languageSwitcher(req, marketCode, language) {
     .flatMap(([key, value]) => (Array.isArray(value) ? value : [value])
       .map(item => `<input type="hidden" name="${escapeHtml(key)}" value="${escapeHtml(item)}">`))
     .join("");
-  return `<link rel="stylesheet" href="/i18n.css?v=20260728"><form class="language-switcher" method="get" action="${escapeHtml(originalPath)}"><label><span class="sr-only">${escapeHtml(t(language, "language.label"))}</span><select name="lang" aria-label="${escapeHtml(t(language, "language.label"))}" onchange="this.form.submit()">${allowed.map(code => `<option value="${code}"${code === language ? " selected" : ""}>${escapeHtml(languageDefinitions[code].label)}</option>`).join("")}</select></label>${hidden}<noscript><button type="submit">OK</button></noscript></form>`;
+  return `<link rel="stylesheet" href="/i18n.css?v=20260728-2"><form class="language-switcher" method="get" action="${escapeHtml(originalPath)}"><label><span class="sr-only">${escapeHtml(t(language, "language.label"))}</span><select name="lang" aria-label="${escapeHtml(t(language, "language.label"))}" onchange="this.form.submit()">${allowed.map(code => `<option value="${code}"${code === language ? " selected" : ""}>${escapeHtml(languageDefinitions[code].label)}</option>`).join("")}</select></label>${hidden}<noscript><button type="submit">OK</button></noscript></form>`;
 }
 
 module.exports = {
