@@ -3,6 +3,8 @@ const os = require("os");
 const path = require("path");
 const Module = require("module");
 const { DatabaseSync } = require("node:sqlite");
+const { localizeProduct } = require("../src/demoTranslations");
+const { categoryLabel } = require("../src/i18n");
 
 class TestDatabase {
   constructor(filename) {
@@ -71,6 +73,12 @@ async function waitForServer() {
 }
 
 async function run() {
+  const demoFixture = { source: "demo", external_id: "D003", title: "English title", description: "English description" };
+  assert(localizeProduct(demoFixture, "fr").title.includes("prises connectées"), "French demo translation is incomplete");
+  assert(localizeProduct(demoFixture, "de").title.includes("WLAN-Steckdosen"), "German demo translation is incomplete");
+  assert(categoryLabel("Smart Home", "fr") === "Maison connectée", "French Smart Home category translation is incorrect");
+  assert(categoryLabel("Office", "de") === "Büro", "German Office category translation is incorrect");
+
   require("../app");
   await waitForServer();
 
@@ -88,18 +96,27 @@ async function run() {
   assert(homepage.includes('"@type":"WebPage"'), "Homepage WebPage schema is missing");
   assert(homepage.includes('property="og:site_name" content="OneDailyDrop"'), "Homepage Open Graph metadata is missing");
   assert(homepage.includes('<option value="es">Español</option>'), "US Spanish language switch is missing");
+  const usLanguageSwitcher = homepage.match(/<form class="language-switcher"[\s\S]*?<\/form>/)?.[0] || "";
+  assert(usLanguageSwitcher.includes('<option value="en" selected>English</option>'), "US English language option is missing");
+  assert(!usLanguageSwitcher.includes("Deutsch") && !usLanguageSwitcher.includes("Français"), "US must only offer English and Spanish");
   assert(homepage.includes('class="country-switcher"'), "Country switcher is missing");
-  assert(homepage.includes('<option value="/fr">France</option>'), "France is missing from the country switcher");
+  assert(homepage.includes('<option value="/fr">🇫🇷 France</option>'), "France is missing from the country switcher");
 
   const spanishResponse = await get("/us?lang=es");
   const spanishHomepage = await spanishResponse.text();
   assert(spanishHomepage.includes('<html lang="es-US">'), "US Spanish locale is incorrect");
   assert(spanishHomepage.includes("Míralo aquí"), "US Spanish homepage copy is missing");
   assert(String(spanishResponse.headers.get("set-cookie") || "").includes("odd_lang_us=es"), "US language preference cookie is missing");
+  assert(spanishHomepage.includes('<option value="/de">🇩🇪 Germany</option>'), "Country names must stay recognizable when Spanish is selected");
+  assert(!spanishHomepage.includes(">Alemania<"), "Country switcher must not look like an extra language list");
 
   const frenchHomepage = await (await get("/fr")).text();
   assert(frenchHomepage.includes('<html lang="fr-FR">'), "France must default to French");
   assert(frenchHomepage.includes("Vérifiez ici"), "French homepage copy is missing");
+  const frenchLanguageSwitcher = frenchHomepage.match(/<form class="language-switcher"[\s\S]*?<\/form>/)?.[0] || "";
+  assert(frenchLanguageSwitcher.includes('<option value="fr" selected>Français</option>'), "France French language option is missing");
+  assert(frenchLanguageSwitcher.includes('<option value="en">English</option>'), "France English language option is missing");
+  assert(!frenchLanguageSwitcher.includes("Deutsch") && !frenchLanguageSwitcher.includes("Español"), "France must only offer French and English");
   assert(frenchHomepage.includes('<option value="en">English</option>'), "France English switch is missing");
   assert(require("../src/i18n").categoryLabel("Smart Home", "fr") === "Maison connectée", "French Smart Home category translation is incorrect");
 
@@ -110,6 +127,10 @@ async function run() {
   const germanHomepage = await (await get("/de")).text();
   assert(germanHomepage.includes('<html lang="de-DE">'), "Germany must default to German");
   assert(germanHomepage.includes("Hier prüfen"), "German homepage copy is missing");
+  const germanLanguageSwitcher = germanHomepage.match(/<form class="language-switcher"[\s\S]*?<\/form>/)?.[0] || "";
+  assert(germanLanguageSwitcher.includes('<option value="de" selected>Deutsch</option>'), "Germany German language option is missing");
+  assert(germanLanguageSwitcher.includes('<option value="en">English</option>'), "Germany English language option is missing");
+  assert(!germanLanguageSwitcher.includes("Español") && !germanLanguageSwitcher.includes("Français"), "Germany must only offer German and English");
 
   const canadaHomepage = await (await get("/ca")).text();
   assert(canadaHomepage.includes('<html lang="en-CA">'), "Canada must default to English");
@@ -132,6 +153,27 @@ async function run() {
 
   const products = await (await get("/api/products?market=us")).json();
   assert(products.length > 0, "SEO route test has no products");
+  const smartPlug = products.find(product => String(product.provider_external_id || product.external_id || "").endsWith("D003"));
+  assert(smartPlug, "Localized demo product fixture is missing");
+
+  const spanishProducts = await (await get("/api/products?market=us&lang=es")).json();
+  const spanishSmartPlug = spanishProducts.find(product => String(product.provider_external_id || product.external_id || "").endsWith("D003"));
+  assert(spanishSmartPlug?.title.includes("enchufes inteligentes"), "Spanish product title is not localized");
+  assert(spanishSmartPlug?.description.includes("controlar lámparas"), "Spanish product description is not localized");
+  assert(spanishSmartPlug?.deal_url === smartPlug.deal_url, "Localized product title changed the canonical deal URL");
+
+  const spanishProductPage = await (await get(`${smartPlug.deal_url}?lang=es`)).text();
+  assert(spanishProductPage.includes("enchufes inteligentes"), "Spanish product page title is not localized");
+  assert(spanishProductPage.includes("Hogar inteligente"), "Spanish product category is not localized");
+  assert(spanishProductPage.includes("reseñas"), "Spanish review label is not localized");
+  for (const englishFragment of [">Why we picked it<", ">Current price<", ">Customer rating<", ">Price history<", ">Home<", ">View details<"]) {
+    assert(!spanishProductPage.includes(englishFragment), `Spanish product page still contains ${englishFragment}`);
+  }
+
+  const spanishCategoryPage = await (await get(`${smartPlug.category_url}?lang=es`)).text();
+  assert(spanishCategoryPage.includes("Mejores ofertas de Hogar inteligente"), "Spanish category heading is not localized");
+  assert(spanishCategoryPage.includes("Cómo seleccionamos ofertas de hogar inteligente"), "Spanish category method is not localized");
+
   const productUrl = products[0].deal_url;
   const productPage = await (await get(productUrl)).text();
   assert(productPage.includes('property="og:type" content="product"'), "Product Open Graph type is missing");
@@ -144,6 +186,23 @@ async function run() {
   assert(categoryPage.includes("How we select"), "Category SEO content is missing");
   assert(categoryPage.includes("Current price range"), "Category price summary is missing");
   assert(!categoryPage.includes('hreflang="fr-FR"'), "Category hreflang points to a market without this page");
+
+  const legacyCategory = await get(categoryUrl.replace(/^\/us/, ""));
+  assert(legacyCategory.status === 301, "Legacy category URL must return 301");
+  assert(legacyCategory.headers.get("location") === categoryUrl, "Legacy category redirect target is incorrect");
+
+  const legacyProduct = await get(productUrl.replace(/^\/us/, ""));
+  assert(legacyProduct.status === 301, "Legacy product URL must return 301");
+  assert(legacyProduct.headers.get("location") === productUrl, "Legacy product redirect target is incorrect");
+
+  const legacyBrands = await get("/brands");
+  assert(legacyBrands.status === 301, "Legacy Brands URL must return 301");
+  assert(legacyBrands.headers.get("location") === "/us/brands", "Legacy Brands redirect target is incorrect");
+  const hiddenBrands = await get("/us/brands");
+  const hiddenBrandsPage = await hiddenBrands.text();
+  assert(hiddenBrands.status === 404, "Empty Brands page must be hidden");
+  assert(hiddenBrandsPage.includes('<meta name="robots" content="noindex,nofollow">'), "Hidden Brands page must be noindex");
+  assert(!sitemap.includes("<loc>https://www.onedailydrop.com/us/brands</loc>"), "Empty Brands page must not appear in sitemap");
 
   const searchPage = await (await get("/us/search?q=plug")).text();
   assert(searchPage.includes('<meta name="robots" content="noindex,follow">'), "Search result pages must be noindex");

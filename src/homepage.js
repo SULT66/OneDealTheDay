@@ -2,6 +2,7 @@ const db = require("./db");
 const config = require("./config");
 const { slugifyBrand } = require("./brandDetector");
 const { reasonFor } = require("./demoEditorial");
+const { localizeProduct } = require("./demoTranslations");
 const { marketFromRequest, marketPath, alternateLinks, market } = require("./markets");
 const { localDate } = require("./refresh");
 const { t, marketName, languageTag } = require("./i18n");
@@ -9,7 +10,7 @@ const { t, marketName, languageTag } = require("./i18n");
 const SITE = "https://www.onedailydrop.com";
 const esc = value => String(value ?? "").replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 const slug = value => String(value || "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/&/g, " and ").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 90) || "deal";
-const dealPath = product => marketPath(product.market || "us", `/deal/${slug(product.title)}-${product.id}`);
+const dealPath = product => marketPath(product.market || "us", `/deal/${slug(product.canonical_title || product.title)}-${product.id}`);
 const categoryPath = (value, code = "us") => marketPath(code, `/category/${slug(value)}`);
 const brandPath = (value, code = "us") => marketPath(code, `/brand/${slugifyBrand(value)}`);
 const clean = value => String(value || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
@@ -43,7 +44,7 @@ const badge = product => {
   return "POPULAR PICK";
 };
 const whyPicked = product => {
-  if (isDemo(product)) return reasonFor(product);
+  if (isDemo(product)) return clean(product.description) || reasonFor(product);
   if (clean(product.selection_reason)) return clean(product.selection_reason);
   const reasons = [];
   if (Number(product.rating) >= 4.5) reasons.push(`${Number(product.rating).toFixed(1)}-star rating`);
@@ -112,7 +113,9 @@ module.exports = function homepage(req, res) {
   const locale = languageTag(selectedMarket.code, language);
   const localizedMarketName = marketName(selectedMarket.code, language);
   const sourceFilter = config.demoMode ? " AND LOWER(COALESCE(source,''))='demo'" : "";
-  const products = db.prepare(`SELECT * FROM products WHERE market=? AND status='published'${sourceFilter} ORDER BY score DESC, updated_at DESC`).all(selectedMarket.code);
+  const products = db.prepare(`SELECT * FROM products WHERE market=? AND status='published'${sourceFilter} ORDER BY score DESC, updated_at DESC`)
+    .all(selectedMarket.code)
+    .map(product => localizeProduct(product, language));
   const today = localDate(selectedMarket.timezone);
   let dailyProducts = db.prepare(`
     SELECT p.*,d.rank,d.selection_reason AS daily_selection_reason,d.drop_date
@@ -122,10 +125,10 @@ module.exports = function homepage(req, res) {
       SELECT MAX(drop_date) FROM daily_drops WHERE market=? AND drop_date<=?
     )
     ORDER BY d.rank
-  `).all(selectedMarket.code, selectedMarket.code, today).map(product => ({
+  `).all(selectedMarket.code, selectedMarket.code, today).map(product => localizeProduct({
     ...product,
     selection_reason: product.daily_selection_reason || product.selection_reason
-  }));
+  }, language));
   if (dailyProducts.length < 10) dailyProducts = products.slice(0, 10);
   const featured = dailyProducts[0] || null;
   const moreWorthSeeing = dailyProducts.slice(1, 10);
@@ -147,10 +150,10 @@ module.exports = function homepage(req, res) {
     WHERE d.market=? AND d.rank=1 AND d.drop_date<?
     ORDER BY d.drop_date DESC
     LIMIT 4
-  `).all(selectedMarket.code, today).map(product => ({
+  `).all(selectedMarket.code, today).map(product => localizeProduct({
     ...product,
     selection_reason: product.daily_selection_reason || product.selection_reason
-  }));
+  }, language));
   const title = t(language, "seo.homeTitle", { country: localizedMarketName });
   const description = t(language, "seo.homeDescription", { country: localizedMarketName });
   const canonicalPath = marketPath(selectedMarket.code);
