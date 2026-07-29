@@ -28,6 +28,14 @@ const marketNames = {
   de: { us: "Vereinigte Staaten", ca: "Kanada", uk: "Vereinigtes Königreich", fr: "Frankreich", de: "Deutschland" }
 };
 
+const marketSelectorNames = {
+  us: "🇺🇸 USA",
+  ca: "🇨🇦 Canada",
+  uk: "🇬🇧 United Kingdom",
+  fr: "🇫🇷 France",
+  de: "🇩🇪 Germany"
+};
+
 const copy = {
   en: {
     "brand.tagline": "Check here before you buy.",
@@ -815,9 +823,9 @@ function countrySwitcher(req, marketCode, language) {
   const queryString = query.toString();
   const options = Object.keys(defaultLanguages).map(code => {
     const destination = `/${code}${suffix}${queryString ? `?${queryString}` : ""}`;
-    return `<option value="${escapeHtml(destination)}"${code === marketCode ? " selected" : ""}>${escapeHtml(marketName(code, language))}</option>`;
+    return `<option value="${escapeHtml(destination)}"${code === marketCode ? " selected" : ""}>${escapeHtml(marketSelectorNames[code])}</option>`;
   }).join("");
-  return `<link rel="stylesheet" href="/i18n.css?v=20260728-country"><form class="country-switcher" onsubmit="return false"><label><span class="sr-only">${escapeHtml(t(language, "country.label"))}</span><select aria-label="${escapeHtml(t(language, "country.label"))}" onchange="window.location.assign(this.value)">${options}</select></label></form>`;
+  return `<link rel="stylesheet" href="/i18n.css?v=20260728-country2"><form class="country-switcher" onsubmit="return false"><label><span class="switcher-title">${escapeHtml(t(language, "country.label"))}</span><select aria-label="${escapeHtml(t(language, "country.label"))}" onchange="window.location.assign(this.value)">${options}</select></label></form>`;
 }
 
 module.exports = {
