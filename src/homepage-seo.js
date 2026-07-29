@@ -43,7 +43,7 @@ module.exports = function homepageSeo(req, res) {
         '</button></div><nav class="main-nav" aria-label="Primary navigation">',
         `</button>${countrySwitcher(req, selectedMarket.code, language)}${languageSwitcher(req, selectedMarket.code, language)}<button class="mobile-menu-toggle" type="button" aria-expanded="false" aria-controls="mainNavigation" aria-label="${t(language, "menu.open")}"><span></span><span></span><span></span></button></div><nav id="mainNavigation" class="main-nav" aria-label="${t(language, "nav.primary")}">`
       )
-      .replace(/\/styles\.css\?v=[^"]+/, "/styles.css?v=20260728-anchor-search")
+      .replace(/\/styles\.css\?v=[^"]+/, "/styles.css?v=20260728-opaque-search")
       .replace(/href="\/us\/category\//g, `href="/${selectedMarket.code}/category/`)
       .replace('<a href="#archive">Past Drops</a>', `<a href="${marketPath(selectedMarket.code, "/archive")}">Past Drops</a>`)
       .replace(
