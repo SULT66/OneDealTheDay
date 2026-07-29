@@ -7,7 +7,8 @@ const {
   t,
   clientCopy,
   localizeHtml,
-  languageSwitcher
+  languageSwitcher,
+  countrySwitcher
 } = require("./i18n");
 
 const SITE = "https://www.onedailydrop.com";
@@ -40,7 +41,7 @@ module.exports = function homepageSeo(req, res) {
       .replace('action="/search"', `action="${marketPath(selectedMarket.code, "/search")}"`)
       .replace(
         '</button></div><nav class="main-nav" aria-label="Primary navigation">',
-        `</button>${languageSwitcher(req, selectedMarket.code, language)}<button class="mobile-menu-toggle" type="button" aria-expanded="false" aria-controls="mainNavigation" aria-label="${t(language, "menu.open")}"><span></span><span></span><span></span></button></div><nav id="mainNavigation" class="main-nav" aria-label="${t(language, "nav.primary")}">`
+        `</button>${countrySwitcher(req, selectedMarket.code, language)}${languageSwitcher(req, selectedMarket.code, language)}<button class="mobile-menu-toggle" type="button" aria-expanded="false" aria-controls="mainNavigation" aria-label="${t(language, "menu.open")}"><span></span><span></span><span></span></button></div><nav id="mainNavigation" class="main-nav" aria-label="${t(language, "nav.primary")}">`
       )
       .replace(/\/styles\.css\?v=[^"]+/, "/styles.css?v=20260728-i18n")
       .replace(/href="\/us\/category\//g, `href="/${selectedMarket.code}/category/`)

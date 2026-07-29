@@ -19,6 +19,9 @@ const {
   clientCopy,
   localizeHtml,
   languageSwitcher,
+  countrySwitcher,
+  categoryLabel,
+  marketName,
   t
 } = require("./i18n");
 
@@ -85,6 +88,14 @@ app.use((req, res, next) => {
   const marketCode = req.market || marketFromIp(req).code;
   resolveLanguage(req, res, marketCode);
   next();
+});
+app.use((req, res, next) => {
+  if (req.method !== "GET" || req.market) return next();
+  const regionalPages = /^\/(?:about|contact|privacy|terms|affiliate-disclosure|editorial-policy|how-we-select-deals|price-disclaimer|archive|brands|search|deal\/[^/]+|category\/[^/]+|brand\/[^/]+)\/?$/;
+  if (!regionalPages.test(req.path)) return next();
+  const destination = marketPath(marketFromIp(req).code, req.path);
+  const queryIndex = String(req.originalUrl || "").indexOf("?");
+  return res.redirect(301, `${destination}${queryIndex >= 0 ? req.originalUrl.slice(queryIndex) : ""}`);
 });
 app.use((req, res, next) => {
   const legacyPages = {
@@ -418,7 +429,7 @@ const requestMarket = req => req.market ? market(req.market) : marketFromIp(req)
 const navCategories = code => db.prepare("SELECT DISTINCT category FROM products WHERE market=? AND status='published' AND category<>'' ORDER BY category").all(code).map(row => row.category);
 const sharedHeader = (code, language = "en", req = null) => {
   const home = marketPath(code);
-  return `<header class="site-header"><div class="header-top"><a class="brand" href="${home}"><span class="brand-mark">D</span><span class="brand-copy"><strong>OneDailyDrop</strong><small>The Best Deals. Every Day.</small></span></a><form class="header-search" action="${marketPath(code, "/search")}"><span aria-hidden="true">⌕</span><input name="q" type="search" placeholder="Search deals" aria-label="Search deals"></form><a class="header-subscribe" href="${home}#subscribe">Get Daily Drops</a><button id="themeToggle" class="theme-button" type="button" aria-label="Switch to dark mode" title="Dark mode"><span class="theme-button-icon" aria-hidden="true">☾</span><span class="theme-button-label">Dark</span></button>${req ? languageSwitcher(req, code, language) : ""}<button class="mobile-menu-toggle" type="button" aria-expanded="false" aria-controls="mainNavigation" aria-label="Open menu"><span></span><span></span><span></span></button></div><nav id="mainNavigation" class="main-nav" aria-label="Primary navigation"><a href="${home}">Today</a><div class="category-menu"><button type="button" aria-expanded="false">Categories <span>⌄</span></button><div class="mega-menu" hidden>${navCategories(code).map(category => `<a href="${catPath(category, code)}">${esc(category)}</a>`).join("")}</div></div><a href="${home}#trending">Trending</a><a href="${marketPath(code, "/archive")}">Past Drops</a><a href="${marketPath(code, "/about")}">About</a></nav></header>`;
+  return `<header class="site-header"><div class="header-top"><a class="brand" href="${home}"><span class="brand-mark">D</span><span class="brand-copy"><strong>OneDailyDrop</strong><small>The Best Deals. Every Day.</small></span></a><form class="header-search" action="${marketPath(code, "/search")}"><span aria-hidden="true">⌕</span><input name="q" type="search" placeholder="Search deals" aria-label="Search deals"></form><a class="header-subscribe" href="${home}#subscribe">Get Daily Drops</a><button id="themeToggle" class="theme-button" type="button" aria-label="Switch to dark mode" title="Dark mode"><span class="theme-button-icon" aria-hidden="true">☾</span><span class="theme-button-label">Dark</span></button>${req ? `${countrySwitcher(req, code, language)}${languageSwitcher(req, code, language)}` : ""}<button class="mobile-menu-toggle" type="button" aria-expanded="false" aria-controls="mainNavigation" aria-label="Open menu"><span></span><span></span><span></span></button></div><nav id="mainNavigation" class="main-nav" aria-label="Primary navigation"><a href="${home}">Today</a><div class="category-menu"><button type="button" aria-expanded="false">Categories <span>⌄</span></button><div class="mega-menu" hidden>${navCategories(code).map(category => `<a href="${catPath(category, code)}">${esc(category)}</a>`).join("")}</div></div><a href="${home}#trending">Trending</a><a href="${marketPath(code, "/archive")}">Past Drops</a><a href="${marketPath(code, "/about")}">About</a></nav></header>`;
 };
 const sharedFooter = code => `<footer><div class="footer-brand"><b>OneDailyDrop</b><p>The Best Deals. Every Day.</p><div class="footer-links"><a href="${marketPath(code, "/about")}">About</a><a href="${marketPath(code, "/contact")}">Contact</a><a href="${marketPath(code, "/privacy")}">Privacy</a><a href="${marketPath(code, "/terms")}">Terms</a><a href="${marketPath(code, "/affiliate-disclosure")}">Affiliate Disclosure</a><a href="${marketPath(code, "/editorial-policy")}">Editorial Policy</a></div></div><p class="disclosure">Preview products and prices are sample data while OneDailyDrop is being built.</p></footer>`;
 const shell = (title, description, canonical, body, schema = null, image = "", robots = "", code = "us", alternateCodes = marketCodes, req = null) => {
@@ -533,9 +544,10 @@ app.get("/category/:slug", (req, res) => {
   const all = db.prepare("SELECT * FROM products WHERE market=? AND status='published' ORDER BY score DESC,updated_at DESC").all(selectedMarket.code);
   const category = [...new Set(all.map(product => product.category).filter(Boolean))].find(value => slug(value) === req.params.slug);
   if (!category) return sendNotFound(req, res);
-  const products = all.filter(product => product.category === category), canonical = SITE + catPath(category, selectedMarket.code), description = `Browse the best ${category} deals available in ${selectedMarket.name}, selected by OneDailyDrop.`;
+  const localizedCategory = categoryLabel(category, req.language);
+  const products = all.filter(product => product.category === category), canonical = SITE + catPath(category, selectedMarket.code), description = t(req.language, "page.categoryDescription", { category: localizedCategory, country: marketName(selectedMarket.code, req.language) });
   const schema = {"@context":"https://schema.org","@graph":[{"@type":"ItemList",name:`Best ${category} Deals`,numberOfItems:products.length,itemListElement:products.map((product,index)=>({"@type":"ListItem",position:index+1,url:SITE+dealPath(product),name:shortTitle(product.title)}))},{"@type":"BreadcrumbList",itemListElement:[{"@type":"ListItem",position:1,name:"Home",item:SITE+marketPath(selectedMarket.code)},{"@type":"ListItem",position:2,name:category,item:canonical}]}]};
-  const categoryTitle = category.toLowerCase() === "pets" ? "Pet" : category;
+  const categoryTitle = category.toLowerCase() === "pets" && req.language === "en" ? "Pet" : localizedCategory;
   const count = `${products.length} ${products.length === 1 ? "product" : "products"}`;
   const prices = products.map(product => Number(product.current_price)).filter(value => Number.isFinite(value) && value > 0);
   const ratings = products.map(product => Number(product.rating)).filter(value => Number.isFinite(value) && value > 0);
@@ -543,7 +555,8 @@ app.get("/category/:slug", (req, res) => {
   const averageRating = ratings.length ? `${(ratings.reduce((sum, value) => sum + value, 0) / ratings.length).toFixed(1)} / 5` : "Not yet available";
   const categorySummary = `<div class="detail-grid"><section><h2>Products checked</h2><p>${products.length}</p></section><section><h2>Current price range</h2><p>${esc(priceRange)}</p></section><section><h2>Average rating</h2><p>${esc(averageRating)}</p></section></div><section class="editorial-box"><h2>How we select ${esc(categoryTitle.toLowerCase())} deals</h2><p>OneDailyDrop compares current price signals, product quality, customer feedback and seller reliability. Rankings update when stronger verified offers become available in ${esc(selectedMarket.name)}.</p></section>`;
   const alternateCodes = marketCodes.filter(code => db.prepare("SELECT 1 FROM products WHERE market=? AND status='published' AND category=? LIMIT 1").get(code, category));
-  res.send(shell(`Best ${categoryTitle} Deals in ${selectedMarket.name} | OneDailyDrop`, description, canonical, `<main><section class="deals-section"><nav class="breadcrumb"><a href="${marketPath(selectedMarket.code)}">Home</a><span>›</span><span>${esc(categoryTitle)} Deals</span></nav><div class="section-heading"><div><p class="eyebrow">${esc(selectedMarket.name.toUpperCase())} CATEGORY</p><h1>Best ${esc(categoryTitle)} Deals</h1><p>${esc(description)}</p></div><p class="result-count">${count}</p></div>${categorySummary}<div class="grid">${products.map((product,index)=>productCard(product,index+1)).join("")}</div></section></main>`, schema, "", "", selectedMarket.code, alternateCodes, req));
+  const localizedHeading = t(req.language, "page.bestCategoryDeals", { category: categoryTitle });
+  res.send(shell(`${localizedHeading} | OneDailyDrop`, description, canonical, `<main><section class="deals-section"><nav class="breadcrumb"><a href="${marketPath(selectedMarket.code)}">Home</a><span>›</span><span>${esc(localizedHeading)}</span></nav><div class="section-heading"><div><p class="eyebrow">${esc(marketName(selectedMarket.code, req.language).toUpperCase())} CATEGORY</p><h1>${esc(localizedHeading)}</h1><p>${esc(description)}</p></div><p class="result-count">${count}</p></div>${categorySummary}<div class="grid">${products.map((product,index)=>productCard(product,index+1)).join("")}</div></section></main>`, schema, "", "", selectedMarket.code, alternateCodes, req));
 });
 
 app.get("/search", (req, res) => {
@@ -665,7 +678,9 @@ app.get("/sitemap.xml", (req, res) => {
       imageTitle: shortTitle(product.title)
     }));
   }
-  Object.keys(trustPages).forEach(pathname => urls.push({ loc: SITE + pathname }));
+  for (const code of marketCodes) {
+    Object.keys(trustPages).forEach(pathname => urls.push({ loc: SITE + marketPath(code, pathname) }));
+  }
   res.set("Cache-Control", "public, max-age=1800").type("application/xml").send(
     `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">${urls.map(item => `<url><loc>${esc(item.loc)}</loc>${item.alternates || ""}${item.lastmod ? `<lastmod>${item.lastmod}</lastmod>` : ""}${item.image ? `<image:image><image:loc>${esc(item.image)}</image:loc><image:title>${esc(item.imageTitle)}</image:title></image:image>` : ""}</url>`).join("")}</urlset>`
   );

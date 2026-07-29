@@ -33,6 +33,7 @@ const copy = {
     "brand.tagline": "Check here before you buy.",
     "brand.seoTagline": "The Best Deals. Every Day.",
     "language.label": "Language",
+    "country.label": "Country",
     "search.placeholder": "What are you thinking of buying?",
     "search.short": "Search deals",
     "search.clear": "Clear search",
@@ -183,12 +184,15 @@ const copy = {
     "page.finalPrice": "Final price is confirmed on the retailer website.",
     "page.productsChecked": "Products checked",
     "page.currentRange": "Current price range",
-    "page.archivePreparing": "The archive is being prepared."
+    "page.archivePreparing": "The archive is being prepared.",
+    "page.bestCategoryDeals": "Best {category} Deals",
+    "page.categoryDescription": "Browse the best {category} deals available in {country}, selected by OneDailyDrop."
   },
   es: {
     "brand.tagline": "Míralo aquí antes de comprar.",
     "brand.seoTagline": "Las mejores ofertas. Todos los días.",
     "language.label": "Idioma",
+    "country.label": "País",
     "search.placeholder": "¿Qué estás pensando comprar?",
     "search.short": "Buscar ofertas",
     "search.clear": "Borrar búsqueda",
@@ -334,12 +338,15 @@ const copy = {
     "page.finalPrice": "El precio final se confirma en el sitio web de la tienda.",
     "page.productsChecked": "Productos revisados",
     "page.currentRange": "Rango de precios actual",
-    "page.archivePreparing": "Estamos preparando el archivo."
+    "page.archivePreparing": "Estamos preparando el archivo.",
+    "page.bestCategoryDeals": "Mejores ofertas de {category}",
+    "page.categoryDescription": "Explora las mejores ofertas de {category} disponibles en {country}, seleccionadas por OneDailyDrop."
   },
   fr: {
     "brand.tagline": "Vérifiez ici avant d’acheter.",
     "brand.seoTagline": "Les meilleures offres. Chaque jour.",
     "language.label": "Langue",
+    "country.label": "Pays",
     "search.placeholder": "Qu’envisagez-vous d’acheter ?",
     "search.short": "Rechercher des offres",
     "search.clear": "Effacer la recherche",
@@ -485,12 +492,15 @@ const copy = {
     "page.finalPrice": "Le prix final est confirmé sur le site de l’enseigne.",
     "page.productsChecked": "Produits vérifiés",
     "page.currentRange": "Fourchette de prix actuelle",
-    "page.archivePreparing": "L’historique est en préparation."
+    "page.archivePreparing": "L’historique est en préparation.",
+    "page.bestCategoryDeals": "Meilleures offres {category}",
+    "page.categoryDescription": "Découvrez les meilleures offres {category} disponibles en {country}, sélectionnées par OneDailyDrop."
   },
   de: {
     "brand.tagline": "Hier prüfen, bevor Sie kaufen.",
     "brand.seoTagline": "Die besten Angebote. Jeden Tag.",
     "language.label": "Sprache",
+    "country.label": "Land",
     "search.placeholder": "Was möchten Sie kaufen?",
     "search.short": "Angebote suchen",
     "search.clear": "Suche löschen",
@@ -636,7 +646,9 @@ const copy = {
     "page.finalPrice": "Der endgültige Preis wird auf der Händlerwebsite bestätigt.",
     "page.productsChecked": "Geprüfte Produkte",
     "page.currentRange": "Aktuelle Preisspanne",
-    "page.archivePreparing": "Das Archiv wird vorbereitet."
+    "page.archivePreparing": "Das Archiv wird vorbereitet.",
+    "page.bestCategoryDeals": "Beste Angebote für {category}",
+    "page.categoryDescription": "Entdecken Sie die besten Angebote für {category} in {country}, ausgewählt von OneDailyDrop."
   }
 };
 
@@ -645,17 +657,20 @@ const categoryNames = {
   es: {
     "Beauty": "Belleza", "Electronics": "Electrónica", "Fashion": "Moda", "Home": "Hogar",
     "Kitchen": "Cocina", "Pets": "Mascotas", "Sports & Outdoors": "Deportes y aire libre",
-    "Automotive": "Automóvil", "Toys": "Juguetes", "Deals": "Ofertas"
+    "Automotive": "Automóvil", "Toys": "Juguetes", "Deals": "Ofertas", "Office": "Oficina",
+    "Smart Home": "Hogar inteligente", "Tools": "Herramientas", "Travel": "Viajes", "Wellness": "Bienestar"
   },
   fr: {
     "Beauty": "Beauté", "Electronics": "Électronique", "Fashion": "Mode", "Home": "Maison",
     "Kitchen": "Cuisine", "Pets": "Animaux", "Sports & Outdoors": "Sports et plein air",
-    "Automotive": "Auto", "Toys": "Jouets", "Deals": "Offres"
+    "Automotive": "Auto", "Toys": "Jouets", "Deals": "Offres", "Office": "Bureau",
+    "Smart Home": "Maison connectée", "Tools": "Outils", "Travel": "Voyage", "Wellness": "Bien-être"
   },
   de: {
     "Beauty": "Beauty", "Electronics": "Elektronik", "Fashion": "Mode", "Home": "Wohnen",
     "Kitchen": "Küche", "Pets": "Haustiere", "Sports & Outdoors": "Sport und Outdoor",
-    "Automotive": "Auto", "Toys": "Spielzeug", "Deals": "Angebote"
+    "Automotive": "Auto", "Toys": "Spielzeug", "Deals": "Angebote", "Office": "Büro",
+    "Smart Home": "Smart Home", "Tools": "Werkzeuge", "Travel": "Reisen", "Wellness": "Wellness"
   }
 };
 
@@ -790,6 +805,21 @@ function languageSwitcher(req, marketCode, language) {
   return `<link rel="stylesheet" href="/i18n.css?v=20260728-2"><form class="language-switcher" method="get" action="${escapeHtml(originalPath)}"><label><span class="sr-only">${escapeHtml(t(language, "language.label"))}</span><select name="lang" aria-label="${escapeHtml(t(language, "language.label"))}" onchange="this.form.submit()">${allowed.map(code => `<option value="${code}"${code === language ? " selected" : ""}>${escapeHtml(languageDefinitions[code].label)}</option>`).join("")}</select></label>${hidden}<noscript><button type="submit">OK</button></noscript></form>`;
 }
 
+function countrySwitcher(req, marketCode, language) {
+  const originalPath = String(req.originalUrl || `/${marketCode}`).split("?")[0] || `/${marketCode}`;
+  const regionalPrefix = new RegExp(`^/(${Object.keys(defaultLanguages).join("|")})(?=/|$)`);
+  const rawSuffix = originalPath.replace(regionalPrefix, "") || "";
+  const suffix = /^\/(?:deal|brand)\//.test(rawSuffix) ? "" : rawSuffix;
+  const query = new URLSearchParams(req.query || {});
+  query.delete("lang");
+  const queryString = query.toString();
+  const options = Object.keys(defaultLanguages).map(code => {
+    const destination = `/${code}${suffix}${queryString ? `?${queryString}` : ""}`;
+    return `<option value="${escapeHtml(destination)}"${code === marketCode ? " selected" : ""}>${escapeHtml(marketName(code, language))}</option>`;
+  }).join("");
+  return `<link rel="stylesheet" href="/i18n.css?v=20260728-country"><form class="country-switcher" onsubmit="return false"><label><span class="sr-only">${escapeHtml(t(language, "country.label"))}</span><select aria-label="${escapeHtml(t(language, "country.label"))}" onchange="window.location.assign(this.value)">${options}</select></label></form>`;
+}
+
 module.exports = {
   copy,
   languageDefinitions,
@@ -804,5 +834,6 @@ module.exports = {
   categoryLabel,
   clientCopy,
   localizeHtml,
-  languageSwitcher
+  languageSwitcher,
+  countrySwitcher
 };

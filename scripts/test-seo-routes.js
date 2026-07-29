@@ -88,6 +88,8 @@ async function run() {
   assert(homepage.includes('"@type":"WebPage"'), "Homepage WebPage schema is missing");
   assert(homepage.includes('property="og:site_name" content="OneDailyDrop"'), "Homepage Open Graph metadata is missing");
   assert(homepage.includes('<option value="es">Español</option>'), "US Spanish language switch is missing");
+  assert(homepage.includes('class="country-switcher"'), "Country switcher is missing");
+  assert(homepage.includes('<option value="/fr">France</option>'), "France is missing from the country switcher");
 
   const spanishResponse = await get("/us?lang=es");
   const spanishHomepage = await spanishResponse.text();
@@ -99,6 +101,7 @@ async function run() {
   assert(frenchHomepage.includes('<html lang="fr-FR">'), "France must default to French");
   assert(frenchHomepage.includes("Vérifiez ici"), "French homepage copy is missing");
   assert(frenchHomepage.includes('<option value="en">English</option>'), "France English switch is missing");
+  assert(require("../src/i18n").categoryLabel("Smart Home", "fr") === "Maison connectée", "French Smart Home category translation is incorrect");
 
   const franceEnglish = await (await get("/fr?lang=en")).text();
   assert(franceEnglish.includes('<html lang="en-FR">'), "France English locale is incorrect");
@@ -114,6 +117,10 @@ async function run() {
 
   const ukHomepage = await (await get("/uk")).text();
   assert(!ukHomepage.includes('class="language-switcher"'), "UK should not show a one-option language switch");
+
+  const legacyAbout = await get("/about");
+  assert(legacyAbout.status === 301, "Legacy unprefixed pages must redirect permanently");
+  assert(legacyAbout.headers.get("location") === "/us/about", "Legacy page redirect target is incorrect");
 
   const robots = await (await get("/robots.txt")).text();
   assert(robots.includes("Disallow: /go/"), "Affiliate redirect paths are not blocked in robots.txt");
@@ -146,7 +153,7 @@ async function run() {
   assert(missingResponse.status === 404, "Missing product must return HTTP 404");
   assert(missingPage.includes('<meta name="robots" content="noindex,nofollow">'), "404 page must be noindex");
 
-  const trustPage = await (await get("/about")).text();
+  const trustPage = await (await get("/us/about")).text();
   assert(trustPage.includes('property="og:title" content="About | OneDailyDrop"'), "Trust page Open Graph metadata is missing");
   assert(trustPage.includes('"@type":"WebPage"'), "Trust page schema is missing");
 
