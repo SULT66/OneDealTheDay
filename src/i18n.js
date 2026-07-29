@@ -21,6 +21,14 @@ const defaultLanguages = {
   de: "de"
 };
 
+const countryOptions = {
+  us: "🇺🇸 United States",
+  ca: "🇨🇦 Canada",
+  uk: "🇬🇧 United Kingdom",
+  fr: "🇫🇷 France",
+  de: "🇩🇪 Germany"
+};
+
 const marketNames = {
   en: { us: "United States", ca: "Canada", uk: "United Kingdom", fr: "France", de: "Germany" },
   es: { us: "Estados Unidos", ca: "Canadá", uk: "Reino Unido", fr: "Francia", de: "Alemania" },
@@ -109,6 +117,9 @@ const copy = {
     "home.transparentText": "Affiliate commissions never change your price or decide our selection.",
     "seo.homeTitle": "Best Daily Deals in {country} | OneDailyDrop",
     "seo.homeDescription": "OneDailyDrop checks local prices, product quality and seller signals to find one strong daily deal in {country}, plus nine more products worth seeing.",
+    "seo.categoryTitle": "Best {category} Deals in {country} | OneDailyDrop",
+    "seo.categoryHeading": "Best {category} Deals",
+    "seo.categoryDescription": "Browse the best {category} deals available in {country}, selected by OneDailyDrop.",
     "product.retailer": "Retailer",
     "product.deals": "Deals",
     "product.verified": "VERIFIED DEAL",
@@ -141,6 +152,8 @@ const copy = {
     "product.reviewsReason": "{count} reviews",
     "product.scoreReason": "{score}/100 OneDailyDrop score",
     "product.discountReason": "{percent}% verified discount",
+    "product.reasonSentence": "We selected this product for {reasons}.",
+    "product.ratingSummary": "{rating} / 5 from {count} reviews",
     "search.results": "Search results",
     "search.found": "Found {count} products",
     "search.products": "{count} products",
@@ -160,6 +173,7 @@ const copy = {
     "footer.selection": "How We Select Deals",
     "footer.price": "Price Disclaimer",
     "footer.disclosure": "We independently select featured products. OneDailyDrop may earn a commission when you purchase through our links, at no extra cost to you. Prices and availability may change.",
+    "footer.preview": "Preview products and prices are sample data while OneDailyDrop is being built.",
     "page.home": "Home",
     "page.brands": "Brands",
     "page.products": "Products",
@@ -184,6 +198,12 @@ const copy = {
     "page.finalPrice": "Final price is confirmed on the retailer website.",
     "page.productsChecked": "Products checked",
     "page.currentRange": "Current price range",
+    "page.howSelectCategory": "How we select {category} deals",
+    "page.categoryMethod": "OneDailyDrop compares current price signals, product quality, customer feedback and seller reliability. Rankings update when stronger verified offers become available in {country}.",
+    "page.notEnoughHistory": "Not enough price history yet",
+    "page.historySummary": "{observations} tracked price observations across {days} days.",
+    "page.trackingStarted": "Price tracking has started. A chart will appear after another price change is recorded.",
+    "page.priceChart": "Price history chart",
     "page.archivePreparing": "The archive is being prepared.",
     "page.bestCategoryDeals": "Best {category} Deals",
     "page.categoryDescription": "Browse the best {category} deals available in {country}, selected by OneDailyDrop."
@@ -267,6 +287,9 @@ const copy = {
     "home.transparentText": "Las comisiones de afiliación nunca cambian tu precio ni deciden nuestra selección.",
     "seo.homeTitle": "Mejores ofertas diarias en {country} | OneDailyDrop",
     "seo.homeDescription": "OneDailyDrop comprueba precios locales, calidad y vendedores para encontrar una gran oferta diaria en {country}, además de nueve productos más.",
+    "seo.categoryTitle": "Mejores ofertas de {category} en {country} | OneDailyDrop",
+    "seo.categoryHeading": "Mejores ofertas de {category}",
+    "seo.categoryDescription": "Descubre las mejores ofertas de {category} disponibles en {country}, seleccionadas por OneDailyDrop.",
     "product.retailer": "Tienda",
     "product.deals": "Ofertas",
     "product.verified": "OFERTA VERIFICADA",
@@ -295,6 +318,12 @@ const copy = {
     "product.retailerPolicy": "Ver política de la tienda",
     "product.selectedFallback": "Elegido por su precio, las opiniones de compradores y su valor general.",
     "product.demoFallback": "Elegido por su utilidad diaria y sus funciones claras.",
+    "product.ratingReason": "valoración de {rating} estrellas",
+    "product.reviewsReason": "{count} reseñas",
+    "product.scoreReason": "puntuación OneDailyDrop de {score}/100",
+    "product.discountReason": "{percent}% de descuento verificado",
+    "product.reasonSentence": "Seleccionamos este producto por {reasons}.",
+    "product.ratingSummary": "{rating} / 5 según {count} reseñas",
     "search.results": "Resultados de búsqueda",
     "search.found": "{count} productos encontrados",
     "search.products": "{count} productos",
@@ -314,6 +343,7 @@ const copy = {
     "footer.selection": "Cómo seleccionamos ofertas",
     "footer.price": "Aviso sobre precios",
     "footer.disclosure": "Seleccionamos los productos de forma independiente. OneDailyDrop puede recibir una comisión por tus compras, sin coste adicional para ti. Los precios y la disponibilidad pueden cambiar.",
+    "footer.preview": "Los productos y precios de vista previa son datos de muestra mientras se prepara OneDailyDrop.",
     "page.home": "Inicio",
     "page.brands": "Marcas",
     "page.products": "Productos",
@@ -338,6 +368,12 @@ const copy = {
     "page.finalPrice": "El precio final se confirma en el sitio web de la tienda.",
     "page.productsChecked": "Productos revisados",
     "page.currentRange": "Rango de precios actual",
+    "page.howSelectCategory": "Cómo seleccionamos ofertas de {category}",
+    "page.categoryMethod": "OneDailyDrop compara las señales de precio actuales, la calidad del producto, las opiniones de clientes y la fiabilidad del vendedor. La clasificación se actualiza cuando aparecen ofertas verificadas mejores en {country}.",
+    "page.notEnoughHistory": "Todavía no hay suficiente historial de precios",
+    "page.historySummary": "{observations} observaciones de precio registradas durante {days} días.",
+    "page.trackingStarted": "El seguimiento del precio ha comenzado. El gráfico aparecerá cuando se registre otro cambio.",
+    "page.priceChart": "Gráfico del historial de precios",
     "page.archivePreparing": "Estamos preparando el archivo.",
     "page.bestCategoryDeals": "Mejores ofertas de {category}",
     "page.categoryDescription": "Explora las mejores ofertas de {category} disponibles en {country}, seleccionadas por OneDailyDrop."
@@ -421,6 +457,9 @@ const copy = {
     "home.transparentText": "Les commissions d’affiliation ne modifient jamais votre prix et ne déterminent pas nos choix.",
     "seo.homeTitle": "Meilleures offres du jour en {country} | OneDailyDrop",
     "seo.homeDescription": "OneDailyDrop vérifie les prix locaux, la qualité et les vendeurs pour trouver une excellente offre quotidienne en {country}, plus neuf autres produits.",
+    "seo.categoryTitle": "Meilleures offres {category} en {country} | OneDailyDrop",
+    "seo.categoryHeading": "Meilleures offres {category}",
+    "seo.categoryDescription": "Découvrez les meilleures offres {category} disponibles en {country}, sélectionnées par OneDailyDrop.",
     "product.retailer": "Enseigne",
     "product.deals": "Offres",
     "product.verified": "OFFRE VÉRIFIÉE",
@@ -449,6 +488,12 @@ const copy = {
     "product.retailerPolicy": "Voir la politique de l’enseigne",
     "product.selectedFallback": "Choisi pour son prix, les avis clients et son rapport qualité-prix.",
     "product.demoFallback": "Choisi pour son utilité quotidienne et ses fonctions claires.",
+    "product.ratingReason": "note de {rating} étoiles",
+    "product.reviewsReason": "{count} avis",
+    "product.scoreReason": "score OneDailyDrop de {score}/100",
+    "product.discountReason": "remise vérifiée de {percent} %",
+    "product.reasonSentence": "Nous avons sélectionné ce produit pour {reasons}.",
+    "product.ratingSummary": "{rating} / 5 d’après {count} avis",
     "search.results": "Résultats de recherche",
     "search.found": "{count} produits trouvés",
     "search.products": "{count} produits",
@@ -468,6 +513,7 @@ const copy = {
     "footer.selection": "Comment nous sélectionnons les offres",
     "footer.price": "Avertissement sur les prix",
     "footer.disclosure": "Nous sélectionnons les produits en toute indépendance. OneDailyDrop peut recevoir une commission sur vos achats, sans frais supplémentaires. Les prix et la disponibilité peuvent changer.",
+    "footer.preview": "Les produits et prix affichés en aperçu sont des exemples pendant la préparation de OneDailyDrop.",
     "page.home": "Accueil",
     "page.brands": "Marques",
     "page.products": "Produits",
@@ -492,6 +538,12 @@ const copy = {
     "page.finalPrice": "Le prix final est confirmé sur le site de l’enseigne.",
     "page.productsChecked": "Produits vérifiés",
     "page.currentRange": "Fourchette de prix actuelle",
+    "page.howSelectCategory": "Comment nous sélectionnons les offres {category}",
+    "page.categoryMethod": "OneDailyDrop compare les prix actuels, la qualité du produit, les avis clients et la fiabilité du vendeur. Le classement évolue lorsque de meilleures offres vérifiées apparaissent en {country}.",
+    "page.notEnoughHistory": "Pas encore assez d’historique de prix",
+    "page.historySummary": "{observations} relevés de prix suivis sur {days} jours.",
+    "page.trackingStarted": "Le suivi du prix a commencé. Un graphique apparaîtra après l’enregistrement d’un nouveau changement.",
+    "page.priceChart": "Graphique de l’historique des prix",
     "page.archivePreparing": "L’historique est en préparation.",
     "page.bestCategoryDeals": "Meilleures offres {category}",
     "page.categoryDescription": "Découvrez les meilleures offres {category} disponibles en {country}, sélectionnées par OneDailyDrop."
@@ -575,6 +627,9 @@ const copy = {
     "home.transparentText": "Affiliate-Provisionen ändern niemals Ihren Preis und bestimmen nicht unsere Auswahl.",
     "seo.homeTitle": "Beste tägliche Angebote in {country} | OneDailyDrop",
     "seo.homeDescription": "OneDailyDrop prüft lokale Preise, Qualität und Verkäufer, um ein starkes Tagesangebot in {country} und neun weitere Produkte zu finden.",
+    "seo.categoryTitle": "Beste {category}-Angebote in {country} | OneDailyDrop",
+    "seo.categoryHeading": "Beste {category}-Angebote",
+    "seo.categoryDescription": "Entdecken Sie die besten verfügbaren {category}-Angebote in {country}, ausgewählt von OneDailyDrop.",
     "product.retailer": "Händler",
     "product.deals": "Angebote",
     "product.verified": "GEPRÜFTES ANGEBOT",
@@ -603,6 +658,12 @@ const copy = {
     "product.retailerPolicy": "Händlerbedingungen ansehen",
     "product.selectedFallback": "Ausgewählt wegen Preis, Kundenfeedback und Gesamtwert.",
     "product.demoFallback": "Ausgewählt wegen klarer Alltagstauglichkeit und einfacher Funktionen.",
+    "product.ratingReason": "{rating}-Sterne-Bewertung",
+    "product.reviewsReason": "{count} Bewertungen",
+    "product.scoreReason": "OneDailyDrop-Score von {score}/100",
+    "product.discountReason": "{percent}% geprüfter Rabatt",
+    "product.reasonSentence": "Wir haben dieses Produkt ausgewählt wegen {reasons}.",
+    "product.ratingSummary": "{rating} / 5 aus {count} Bewertungen",
     "search.results": "Suchergebnisse",
     "search.found": "{count} Produkte gefunden",
     "search.products": "{count} Produkte",
@@ -622,6 +683,7 @@ const copy = {
     "footer.selection": "So wählen wir Angebote aus",
     "footer.price": "Preishinweis",
     "footer.disclosure": "Wir wählen Produkte unabhängig aus. OneDailyDrop kann bei einem Kauf eine Provision erhalten, ohne Mehrkosten für Sie. Preise und Verfügbarkeit können sich ändern.",
+    "footer.preview": "Vorschauprodukte und -preise sind Beispieldaten, solange OneDailyDrop vorbereitet wird.",
     "page.home": "Startseite",
     "page.brands": "Marken",
     "page.products": "Produkte",
@@ -646,6 +708,12 @@ const copy = {
     "page.finalPrice": "Der endgültige Preis wird auf der Händlerwebsite bestätigt.",
     "page.productsChecked": "Geprüfte Produkte",
     "page.currentRange": "Aktuelle Preisspanne",
+    "page.howSelectCategory": "So wählen wir {category}-Angebote aus",
+    "page.categoryMethod": "OneDailyDrop vergleicht aktuelle Preissignale, Produktqualität, Kundenfeedback und Verkäuferzuverlässigkeit. Die Rangfolge wird aktualisiert, sobald in {country} bessere geprüfte Angebote verfügbar sind.",
+    "page.notEnoughHistory": "Noch nicht genügend Preisverlauf vorhanden",
+    "page.historySummary": "{observations} erfasste Preisbeobachtungen über {days} Tage.",
+    "page.trackingStarted": "Die Preisverfolgung hat begonnen. Nach einer weiteren Preisänderung erscheint ein Diagramm.",
+    "page.priceChart": "Preisverlaufsdiagramm",
     "page.archivePreparing": "Das Archiv wird vorbereitet.",
     "page.bestCategoryDeals": "Beste Angebote für {category}",
     "page.categoryDescription": "Entdecken Sie die besten Angebote für {category} in {country}, ausgewählt von OneDailyDrop."
@@ -657,20 +725,23 @@ const categoryNames = {
   es: {
     "Beauty": "Belleza", "Electronics": "Electrónica", "Fashion": "Moda", "Home": "Hogar",
     "Kitchen": "Cocina", "Pets": "Mascotas", "Sports & Outdoors": "Deportes y aire libre",
-    "Automotive": "Automóvil", "Toys": "Juguetes", "Deals": "Ofertas", "Office": "Oficina",
-    "Smart Home": "Hogar inteligente", "Tools": "Herramientas", "Travel": "Viajes", "Wellness": "Bienestar"
+    "Automotive": "Automóvil", "Toys": "Juguetes", "Deals": "Ofertas",
+    "Smart Home": "Hogar inteligente", "Tools": "Herramientas", "Travel": "Viajes",
+    "Office": "Oficina", "Fitness": "Fitness", "Wellness": "Bienestar"
   },
   fr: {
     "Beauty": "Beauté", "Electronics": "Électronique", "Fashion": "Mode", "Home": "Maison",
     "Kitchen": "Cuisine", "Pets": "Animaux", "Sports & Outdoors": "Sports et plein air",
-    "Automotive": "Auto", "Toys": "Jouets", "Deals": "Offres", "Office": "Bureau",
-    "Smart Home": "Maison connectée", "Tools": "Outils", "Travel": "Voyage", "Wellness": "Bien-être"
+    "Automotive": "Auto", "Toys": "Jouets", "Deals": "Offres",
+    "Smart Home": "Maison connectée", "Tools": "Outils", "Travel": "Voyage",
+    "Office": "Bureau", "Fitness": "Fitness", "Wellness": "Bien-être"
   },
   de: {
     "Beauty": "Beauty", "Electronics": "Elektronik", "Fashion": "Mode", "Home": "Wohnen",
     "Kitchen": "Küche", "Pets": "Haustiere", "Sports & Outdoors": "Sport und Outdoor",
-    "Automotive": "Auto", "Toys": "Spielzeug", "Deals": "Angebote", "Office": "Büro",
-    "Smart Home": "Smart Home", "Tools": "Werkzeuge", "Travel": "Reisen", "Wellness": "Wellness"
+    "Automotive": "Auto", "Toys": "Spielzeug", "Deals": "Angebote",
+    "Smart Home": "Smart Home", "Tools": "Werkzeuge", "Travel": "Reisen",
+    "Office": "Büro", "Fitness": "Fitness", "Wellness": "Wohlbefinden"
   }
 };
 
@@ -815,7 +886,7 @@ function countrySwitcher(req, marketCode, language) {
   const queryString = query.toString();
   const options = Object.keys(defaultLanguages).map(code => {
     const destination = `/${code}${suffix}${queryString ? `?${queryString}` : ""}`;
-    return `<option value="${escapeHtml(destination)}"${code === marketCode ? " selected" : ""}>${escapeHtml(marketName(code, language))}</option>`;
+    return `<option value="${escapeHtml(destination)}"${code === marketCode ? " selected" : ""}>${escapeHtml(countryOptions[code])}</option>`;
   }).join("");
   return `<link rel="stylesheet" href="/i18n.css?v=20260728-country"><form class="country-switcher" onsubmit="return false"><label><span class="sr-only">${escapeHtml(t(language, "country.label"))}</span><select aria-label="${escapeHtml(t(language, "country.label"))}" onchange="window.location.assign(this.value)">${options}</select></label></form>`;
 }
@@ -825,6 +896,7 @@ module.exports = {
   languageDefinitions,
   marketLanguages,
   defaultLanguages,
+  countryOptions,
   normalizeLanguage,
   languagesForMarket,
   resolveLanguage,
