@@ -117,9 +117,60 @@
   };
   const searchTerms = value => String(value || "").toLowerCase().trim().split(/\s+/).filter(Boolean)
     .map(term => searchAliases[term] || [term, term.endsWith("s") ? term.slice(0, -1) : `${term}s`]);
+  const normalizeSearchText = value => String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
   const matchesSearch = (product, query) => {
-    const haystack = `${product.title || ""} ${cleanText(product.description)} ${product.category || ""} ${product.brand || ""}`.toLowerCase();
-    return searchTerms(query).every(alternatives => alternatives.some(term => haystack.includes(term)));
+    const haystack = normalizeSearchText([
+      product.title,
+      cleanText(product.description),
+      product.category,
+      categoryLabel(product.category || ""),
+      product.brand,
+      storeName(product)
+    ].filter(Boolean).join(" "));
+    return searchTerms(normalizeSearchText(query))
+      .every(alternatives => alternatives.some(term => haystack.includes(normalizeSearchText(term))));
+  };
+
+  const searchSuggestions = document.createElement("div");
+  searchSuggestions.id = "searchSuggestions";
+  searchSuggestions.className = "search-suggestions";
+  searchSuggestions.setAttribute("role", "region");
+  searchSuggestions.setAttribute("aria-label", tr("search.results", "Search results"));
+  searchSuggestions.hidden = true;
+  els.searchForm?.appendChild(searchSuggestions);
+  els.searchInput?.setAttribute("aria-controls", searchSuggestions.id);
+  els.searchInput?.setAttribute("aria-expanded", "false");
+
+  const closeSearchSuggestions = () => {
+    searchSuggestions.hidden = true;
+    els.searchInput?.setAttribute("aria-expanded", "false");
+  };
+
+  const renderSearchSuggestions = () => {
+    const query = els.searchInput?.value.trim() || "";
+    els.searchClear.hidden = !query;
+    if (!query) {
+      closeSearchSuggestions();
+      return;
+    }
+
+    const matches = products.filter(product => matchesSearch(product, query));
+    const resultLabel = tr("search.found", "Found {count} products", { count: matches.length });
+    const searchUrl = `${marketPath("/search")}?q=${encodeURIComponent(query)}`;
+    searchSuggestions.innerHTML = matches.length
+      ? `<div class="search-suggestion-heading">${esc(resultLabel)}</div>
+        <div class="search-suggestion-list">${matches.slice(0, 6).map(product => `
+          <a class="search-suggestion" href="${esc(dealUrl(product))}">
+            <img src="${esc(product.image_url)}" alt="" loading="lazy">
+            <span><strong>${esc(fullTitle(product.title))}</strong><small>${esc(categoryLabel(product.category || "Deals"))} · ${esc(money(product.current_price, product.currency))}</small></span>
+          </a>`).join("")}</div>
+        <a class="search-view-all" href="${esc(searchUrl)}">${esc(resultLabel)} →</a>`
+      : `<div class="search-no-results">${esc(tr("home.noMatch", "No products match that search."))}</div>`;
+    searchSuggestions.hidden = false;
+    els.searchInput.setAttribute("aria-expanded", "true");
   };
 
   const renderFeatured = () => {
@@ -190,14 +241,11 @@
   };
 
   const renderMain = () => {
-    const query = els.searchInput.value.trim().toLowerCase();
-    const visible = visibleProducts(query);
-    els.dealsTitle.textContent = query ? tr("search.results", "Search results") : activeCategory === "More Worth Seeing" ? tr("nav.more", "9 More Worth Seeing") : activeCategory;
-    els.resultCount.textContent = query
-      ? tr("search.found", "Found {count} products", { count: visible.length })
-      : activeCategory === "More Worth Seeing"
-        ? ""
-        : tr("search.products", "{count} products", { count: visible.length });
+    const visible = visibleProducts("");
+    els.dealsTitle.textContent = activeCategory === "More Worth Seeing" ? tr("nav.more", "9 More Worth Seeing") : activeCategory;
+    els.resultCount.textContent = activeCategory === "More Worth Seeing"
+      ? ""
+      : tr("search.products", "{count} products", { count: visible.length });
     els.emptyState.hidden = visible.length !== 0;
     els.products.innerHTML = visible.map((product, index) => mainCard(product, index + 1)).join("");
   };
@@ -288,24 +336,80 @@
       els.categoryMenuButton.setAttribute("aria-expanded", "false");
       if (categoryWasOpen) els.categoryMenuButton.focus();
       if (els.mobileMenuToggle?.getAttribute("aria-expanded") === "true") closeMobileMenu(true);
+      closeSearchSuggestions();
     }
   });
+
+  const header = document.querySelector(".site-header");
+  const updateAnchorOffset = () => {
+    if (!header) return;
+    const headerBottom = Math.max(0, header.getBoundingClientRect().bottom);
+    document.documentElement.style.setProperty("--odd-header-offset", `${Math.ceil(headerBottom + 18)}px`);
+  };
+  const scrollToAnchor = (hash, updateHistory = true) => {
+    if (!hash || hash === "#") return false;
+    const target = document.getElementById(decodeURIComponent(hash.slice(1)));
+    if (!target) return false;
+    updateAnchorOffset();
+    const headerBottom = header ? Math.max(0, header.getBoundingClientRect().bottom) : 0;
+    const targetTop = target.id === "today"
+      ? 0
+      : Math.max(0, window.scrollY + target.getBoundingClientRect().top - headerBottom - 18);
+    window.scrollTo({ top: targetTop, behavior: "smooth" });
+    if (updateHistory && window.location.hash !== hash) {
+      history.pushState(null, "", `${window.location.pathname}${window.location.search}${hash}`);
+    }
+    return true;
+  };
+
+  updateAnchorOffset();
+  if (header && "ResizeObserver" in window) new ResizeObserver(updateAnchorOffset).observe(header);
+  window.addEventListener("resize", updateAnchorOffset, { passive: true });
+  window.addEventListener("load", () => {
+    updateAnchorOffset();
+    if (window.location.hash) requestAnimationFrame(() => scrollToAnchor(window.location.hash, false));
+  });
+  window.addEventListener("popstate", () => {
+    if (window.location.hash) scrollToAnchor(window.location.hash, false);
+  });
+  document.addEventListener("click", event => {
+    const link = event.target.closest('a[href^="#"]');
+    if (!link) return;
+    const hash = link.getAttribute("href");
+    if (!hash || hash === "#") return;
+    const menuWasOpen = mobileMenuQuery.matches && els.mobileMenuToggle?.getAttribute("aria-expanded") === "true";
+    event.preventDefault();
+    closeSearchSuggestions();
+    if (menuWasOpen) closeMobileMenu();
+    window.setTimeout(() => scrollToAnchor(hash), menuWasOpen ? 360 : 0);
+  });
+
   els.searchInput.addEventListener("input", () => {
     activeCategory = "More Worth Seeing";
-    els.searchClear.hidden = !els.searchInput.value;
-    renderMain();
+    renderSearchSuggestions();
   });
+  els.searchInput.addEventListener("focus", renderSearchSuggestions);
   els.searchClear.addEventListener("click", () => {
     els.searchInput.value = "";
     els.searchClear.hidden = true;
-    renderMain();
+    closeSearchSuggestions();
     els.searchInput.focus();
   });
   if (els.searchForm) {
     els.searchForm.addEventListener("submit", event => {
-      if (!els.searchInput.value.trim()) event.preventDefault();
+      event.preventDefault();
+      const query = els.searchInput.value.trim();
+      if (!query) {
+        closeSearchSuggestions();
+        els.searchInput.focus();
+        return;
+      }
+      window.location.assign(`${marketPath("/search")}?q=${encodeURIComponent(query)}`);
     });
   }
+  document.addEventListener("click", event => {
+    if (!event.target.closest(".header-search")) closeSearchSuggestions();
+  });
   const subscribeForm = $("subscribeForm");
   if (subscribeForm) {
     subscribeForm.addEventListener("submit", async event => {
@@ -397,6 +501,7 @@
       renderCategoryMenu();
       renderMain();
       renderCollections();
+      if (els.searchInput.value.trim()) renderSearchSuggestions();
     })
     .catch(error => {
       console.error("OneDailyDrop load error:", error);
