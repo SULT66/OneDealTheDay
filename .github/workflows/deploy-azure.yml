@@ -6,6 +6,7 @@ on:
       - main
   workflow_dispatch:
 
+# Deployment trigger: regional navigation release 2026-07-28
 concurrency:
   group: onedealtheday-production
   cancel-in-progress: true
