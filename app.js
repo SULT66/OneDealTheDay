@@ -6,8 +6,10 @@ const db = require("./src/db");
 const config = require("./src/config");
 const { refreshProducts } = require("./src/refresh");
 const { reasonFor } = require("./src/demoEditorial");
+const { localizeProduct } = require("./src/demoTranslations");
 const renderHomepage = require("./src/homepage-seo");
 const { codes: marketCodes, normalizeMarket, marketFromIp, marketFromRequest, marketPath } = require("./src/markets");
+const { resolveLanguage } = require("./src/i18n");
 const createExpressApp = express;
 
 if (!config.liveRefreshEnabled) {
@@ -91,6 +93,7 @@ function expressWithHomepage(...args) {
   app.get("/api/products", (req, res, next) => {
     if (!config.isProduction) return next();
     const selectedMarket = normalizeMarket(req.query.market) || marketFromIp(req).code;
+    const language = resolveLanguage(req, res, selectedMarket);
     const sourceCondition = config.demoMode
       ? "LOWER(COALESCE(source,''))='demo'"
       : "LOWER(COALESCE(source,''))<>'demo'";
@@ -112,9 +115,13 @@ function expressWithHomepage(...args) {
       selection_reason: product.daily_selection_reason || product.selection_reason
     })), ...catalog];
     if (config.demoMode) {
-      return res.json(products.map(product => ({ ...product, description: reasonFor(product), badge: "" })));
+      return res.json(products.map(product => localizeProduct({
+        ...product,
+        description: reasonFor(product),
+        badge: ""
+      }, language)));
     }
-    return res.json(products);
+    return res.json(products.map(product => localizeProduct(product, language)));
   });
 
   app.get("/go/:id", (req, res, next) => {
