@@ -9,6 +9,18 @@ const { t, marketName, languageTag } = require("./i18n");
 const { sourceSql } = require("./publicCatalog");
 
 const SITE = "https://www.onedailydrop.com";
+const DEFAULT_INTEREST_CATEGORIES = [
+  "Electronics",
+  "Home",
+  "Kitchen",
+  "Beauty",
+  "Fashion",
+  "Pets",
+  "Sports & Outdoors",
+  "Automotive",
+  "Toys",
+  "Smart Home"
+];
 const esc = value => String(value ?? "").replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 const slug = value => String(value || "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/&/g, " and ").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 90) || "deal";
 const dealPath = product => marketPath(product.market || "us", `/deal/${slug(product.canonical_title || product.title)}-${product.id}`);
@@ -143,7 +155,7 @@ module.exports = function homepage(req, res) {
   const priceDrops = take(products.filter(product => discount(product) > 0).sort((a, b) => discount(b) - discount(a)));
   const newest = take([...products].sort((a, b) => Number(b.id) - Number(a.id)));
   const categories = [...new Set(products.map(product => product.category).filter(Boolean))];
-  const categoryChoices = categories.slice(0, 10);
+  const categoryChoices = (categories.length ? categories : DEFAULT_INTEREST_CATEGORIES).slice(0, 10);
   const archive = db.prepare(`
     SELECT p.*,d.drop_date,d.selection_reason AS daily_selection_reason
     FROM daily_drops d
@@ -189,7 +201,7 @@ module.exports = function homepage(req, res) {
     about: { "@id": `${SITE}/#organization` }
   };
   const schemaGraph = [organizationNode, websiteNode, webpageNode];
-  if (!demoMode) {
+  if (!demoMode && dailyProducts.length) {
     schemaGraph.push({
       "@type": "ItemList",
       "@id": `${canonical}#daily-deals`,
@@ -220,9 +232,21 @@ module.exports = function homepage(req, res) {
       <p class="verification">${esc(statusText(featured))}</p>
       ${offerFacts(featured)}
       <div class="card-actions">${action(featured, "featured-button")}${priceHistoryAction(featured)}</div>
-    </div>` : `<div class="featured-body"><h2>No featured drop is available yet.</h2></div>`;
+    </div>` : `<div class="featured-body catalog-empty-featured">
+      <p class="eyebrow">${esc(t(language, "home.catalogEyebrow"))}</p>
+      <h2>${esc(t(language, "home.catalogTitle"))}</h2>
+      <p class="description">${esc(t(language, "home.catalogText"))}</p>
+      <div class="catalog-empty-checks" aria-label="${esc(t(language, "home.catalogStandards"))}">
+        <span>✓ ${esc(t(language, "home.realProductsOnly"))}</span>
+        <span>✓ ${esc(t(language, "home.verifiedRetailerLinks"))}</span>
+        <span>✓ ${esc(t(language, "home.noInventedData"))}</span>
+      </div>
+      <a class="featured-button" href="#subscribe">${esc(t(language, "home.catalogNotify"))}</a>
+    </div>`;
 
-  const collection = items => items.map(miniCard).join("");
+  const collection = (items, emptyMessage) => items.length
+    ? items.map(miniCard).join("")
+    : `<div class="empty-state catalog-section-empty">${esc(emptyMessage)}</div>`;
   const robots = '<meta name="robots" content="index,follow,max-image-preview:large">';
   const demoBanner = "";
 

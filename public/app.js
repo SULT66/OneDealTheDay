@@ -24,6 +24,7 @@
     resultCount: $("resultCount"),
     products: $("products"),
     emptyState: $("emptyState"),
+    archiveProducts: document.querySelector("#archive .mini-grid"),
     trendingProducts: $("trendingProducts"),
     priceDropProducts: $("priceDropProducts"),
     newProducts: $("newProducts")
@@ -176,7 +177,17 @@
   const renderFeatured = () => {
     const product = products[0];
     if (!product) {
-      els.featuredDeal.innerHTML = `<div class="featured-body"><h2>${esc(tr("home.unavailable", "No featured drop is available yet."))}</h2></div>`;
+      els.featuredDeal.innerHTML = `<div class="featured-body catalog-empty-featured">
+        <p class="eyebrow">${esc(tr("home.catalogEyebrow", "REAL PRODUCTS, NO PLACEHOLDERS"))}</p>
+        <h2>${esc(tr("home.catalogTitle", "The first verified Daily Drop is coming."))}</h2>
+        <p class="description">${esc(tr("home.catalogText", "We removed every sample listing. A product will appear here only after its retailer link, source and product details have been checked."))}</p>
+        <div class="catalog-empty-checks" aria-label="${esc(tr("home.catalogStandards", "Publication standards"))}">
+          <span>✓ ${esc(tr("home.realProductsOnly", "Real products only"))}</span>
+          <span>✓ ${esc(tr("home.verifiedRetailerLinks", "Working retailer links"))}</span>
+          <span>✓ ${esc(tr("home.noInventedData", "No invented prices or ratings"))}</span>
+        </div>
+        <a class="featured-button" href="#subscribe">${esc(tr("home.catalogNotify", "Notify me when the first drop is live"))}</a>
+      </div>`;
       return;
     }
     const save = discount(product);
@@ -247,6 +258,9 @@
       ? ""
       : tr("search.products", "{count} products", { count: visible.length });
     els.emptyState.hidden = visible.length !== 0;
+    els.emptyState.textContent = products.length
+      ? tr("home.noMatch", "No products match that search.")
+      : tr("home.catalogSectionEmpty", "Verified selections will appear here as they are published.");
     els.products.innerHTML = visible.map((product, index) => mainCard(product, index + 1)).join("");
   };
 
@@ -262,13 +276,23 @@
   };
 
   const renderCollections = () => {
+    const emptyCollection = message => `<div class="empty-state catalog-section-empty">${esc(message)}</div>`;
     const used = new Set(products.slice(0, 10).map(product => product.id));
     const trending = takeUnique([...products].sort((a, b) => Number(b.review_count || 0) - Number(a.review_count || 0)), 4, used);
     const priceDrops = takeUnique([...products].filter(product => discount(product) > 0).sort((a, b) => discount(b) - discount(a)), 4, used);
     const newest = takeUnique([...products].sort((a, b) => Number(b.id) - Number(a.id)), 4, used);
-    els.trendingProducts.innerHTML = trending.map(miniCard).join("");
-    els.priceDropProducts.innerHTML = priceDrops.map(miniCard).join("");
-    els.newProducts.innerHTML = newest.map(miniCard).join("");
+    if (els.archiveProducts && !els.archiveProducts.children.length) {
+      els.archiveProducts.innerHTML = emptyCollection(tr("home.catalogArchiveEmpty", "The archive will begin with the first real Daily Drop."));
+    }
+    els.trendingProducts.innerHTML = trending.length
+      ? trending.map(miniCard).join("")
+      : emptyCollection(tr("home.catalogSectionEmpty", "Verified selections will appear here as they are published."));
+    els.priceDropProducts.innerHTML = priceDrops.length
+      ? priceDrops.map(miniCard).join("")
+      : emptyCollection(tr("home.catalogSectionEmpty", "Verified selections will appear here as they are published."));
+    els.newProducts.innerHTML = newest.length
+      ? newest.map(miniCard).join("")
+      : emptyCollection(tr("home.catalogSectionEmpty", "Verified selections will appear here as they are published."));
   };
 
   const renderCategoryMenu = () => {

@@ -93,7 +93,11 @@ async function run() {
   assert(homepage.includes('<html lang="en-US">'), "US homepage language is incorrect");
   assert(homepage.includes('<link rel="canonical" href="https://www.onedailydrop.com/us">'), "US homepage canonical is missing");
   assert(homepage.includes('property="og:site_name" content="OneDailyDrop"'), "Homepage Open Graph metadata is missing");
-  assert(homepage.includes("Real product selections are being prepared."), "Verified catalog update message is missing");
+  assert(homepage.includes('class="site-header"'), "Full site header is missing from the empty-catalog homepage");
+  assert(homepage.includes('id="today" class="hero"'), "Full homepage hero is missing");
+  assert(homepage.includes('id="subscribeForm"'), "Subscription form is missing");
+  assert(homepage.includes("The first verified Daily Drop is coming."), "Verified catalog message is missing");
+  assert(!homepage.includes("EDITORIAL CATALOG UPDATE"), "Standalone catalog placeholder is still replacing the homepage");
   for (const forbidden of ["Development preview", "Sample price", "Retailer availability coming soon", "Rainforest"]) {
     assert(!homepage.includes(forbidden), `US homepage still exposes ${forbidden}`);
   }
@@ -101,20 +105,20 @@ async function run() {
   const spanishResponse = await get("/us?lang=es");
   const spanishHomepage = await spanishResponse.text();
   assert(spanishHomepage.includes('<html lang="es-US">'), "US Spanish locale is incorrect");
-  assert(spanishHomepage.includes("Estamos preparando selecciones de productos reales."), "US Spanish catalog message is missing");
+  assert(spanishHomepage.includes("La primera oferta diaria verificada está en camino."), "US Spanish catalog message is missing");
   assert(String(spanishResponse.headers.get("set-cookie") || "").includes("odd_lang_us=es"), "US language preference cookie is missing");
 
   const frenchHomepage = await (await get("/fr")).text();
   assert(frenchHomepage.includes('<html lang="fr-FR">'), "France must default to French");
-  assert(frenchHomepage.includes("Nous préparons des sélections de produits réels."), "French catalog message is missing");
+  assert(frenchHomepage.includes("La première sélection quotidienne vérifiée arrive."), "French catalog message is missing");
 
   const franceEnglish = await (await get("/fr?lang=en")).text();
   assert(franceEnglish.includes('<html lang="en-FR">'), "France English locale is incorrect");
-  assert(franceEnglish.includes("Real product selections are being prepared."), "France English fallback copy is missing");
+  assert(franceEnglish.includes("The first verified Daily Drop is coming."), "France English fallback copy is missing");
 
   const germanHomepage = await (await get("/de")).text();
   assert(germanHomepage.includes('<html lang="de-DE">'), "Germany must default to German");
-  assert(germanHomepage.includes("Wir bereiten echte Produktempfehlungen vor."), "German catalog message is missing");
+  assert(germanHomepage.includes("Der erste geprüfte Daily Drop kommt bald."), "German catalog message is missing");
 
   const canadaHomepage = await (await get("/ca")).text();
   assert(canadaHomepage.includes('<html lang="en-CA">'), "Canada must default to English");
