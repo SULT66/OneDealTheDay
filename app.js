@@ -104,7 +104,10 @@ function expressWithHomepage(...args) {
     const id = String(req.params.slug).match(/-(\d+)$/)?.[1];
     if (!id) return next();
     const product = db.prepare("SELECT source FROM products WHERE id=? AND status='published'").get(id);
-    if (!isPublicSource(product?.source)) return res.sendStatus(404);
+    if (!isPublicSource(product?.source)) {
+      res.set("X-Robots-Tag", "noindex, nofollow");
+      return res.sendStatus(410);
+    }
     return next();
   });
 

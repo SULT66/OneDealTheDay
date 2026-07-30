@@ -1,8 +1,7 @@
 const PUBLIC_PRODUCT_SOURCES = Object.freeze([
-  "amazon-manual",
-  "amazon-creators-api",
-  "amazon-pa-api",
-  "bestbuy-products-api"
+  // Affiliate-approval launch mode: expose only the ten manually checked US
+  // products. API sources can be enabled here after each retailer approves us.
+  "amazon-manual"
 ]);
 
 const quotedSources = PUBLIC_PRODUCT_SOURCES
