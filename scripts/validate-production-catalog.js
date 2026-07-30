@@ -139,8 +139,8 @@ for (const required of [".mobile-menu-toggle", ".main-nav.is-open", "overflow-x:
 const database = fs.readFileSync(path.join(root, "src/db.js"), "utf8");
 if (!database.includes("CREATE TABLE IF NOT EXISTS subscribers")) throw new Error("Subscriber storage is missing");
 if (!database.includes("CREATE TABLE IF NOT EXISTS daily_drops")) throw new Error("Permanent daily-drop archive storage is missing");
-if (!database.includes("2026-07-30-remove-legacy-catalog") || !database.includes('db.prepare("DELETE FROM products").run()')) {
-  throw new Error("The one-time legacy catalog cleanup is missing");
+if (!database.includes("DELETE FROM products WHERE LOWER(COALESCE(source,''))='demo'")) {
+  throw new Error("Old demo products are not purged safely at startup");
 }
 for (const field of ["market", "score_breakdown", "selection_reason", "provider_external_id"]) {
   if (!database.includes(field)) throw new Error(`Market-aware product selection field is missing from the database: ${field}`);
