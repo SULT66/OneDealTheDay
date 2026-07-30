@@ -141,6 +141,8 @@ async function run() {
   const status = await (await get("/api/status?market=us")).json();
   assert(status.products === 0, "Catalog status still counts removed products");
   assert(status.provider === "unconfigured", "An unapproved automated provider is enabled");
+  assert(status.requestedProvider === "unconfigured", "A legacy provider request is still exposed");
+  assert(status.lastRun === null, "Legacy demo refresh history is still exposed");
 
   const legacyBrands = await get("/brands");
   assert(legacyBrands.status === 301, "Legacy Brands URL must return 301");
