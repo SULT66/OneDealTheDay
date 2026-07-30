@@ -163,8 +163,8 @@ async function run() {
 
   const missingResponse = await get("/us/deal/not-a-real-product-999999");
   const missingPage = await missingResponse.text();
-  assert(missingResponse.status === 404, "Missing product must return HTTP 404");
-  assert(missingPage.includes('<meta name="robots" content="noindex,nofollow">'), "404 page must be noindex");
+  assert(missingResponse.status === 410, "Removed product must return HTTP 410");
+  assert(missingPage.includes('<meta name="robots" content="noindex,nofollow">'), "410 page must be noindex");
 
   const trustPage = await (await get("/us/about")).text();
   assert(trustPage.includes('property="og:title" content="About | OneDailyDrop"'), "Trust page Open Graph metadata is missing");
