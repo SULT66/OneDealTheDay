@@ -99,16 +99,14 @@ async function run() {
   const usLanguageSwitcher = homepage.match(/<form class="language-switcher"[\s\S]*?<\/form>/)?.[0] || "";
   assert(usLanguageSwitcher.includes('<option value="en" selected>English</option>'), "US English language option is missing");
   assert(!usLanguageSwitcher.includes("Deutsch") && !usLanguageSwitcher.includes("Français"), "US must only offer English and Spanish");
-  assert(homepage.includes('class="country-switcher"'), "Country switcher is missing");
-  assert(homepage.includes('<option value="/fr">🇫🇷 France</option>'), "France is missing from the country switcher");
+  assert(!homepage.includes('class="country-switcher"'), "Country switcher must not be shown");
 
   const spanishResponse = await get("/us?lang=es");
   const spanishHomepage = await spanishResponse.text();
   assert(spanishHomepage.includes('<html lang="es-US">'), "US Spanish locale is incorrect");
   assert(spanishHomepage.includes("Míralo aquí"), "US Spanish homepage copy is missing");
   assert(String(spanishResponse.headers.get("set-cookie") || "").includes("odd_lang_us=es"), "US language preference cookie is missing");
-  assert(spanishHomepage.includes('<option value="/de">🇩🇪 Germany</option>'), "Country names must stay recognizable when Spanish is selected");
-  assert(!spanishHomepage.includes(">Alemania<"), "Country switcher must not look like an extra language list");
+  assert(!spanishHomepage.includes('class="country-switcher"'), "Country switcher must stay hidden in Spanish");
 
   const frenchHomepage = await (await get("/fr")).text();
   assert(frenchHomepage.includes('<html lang="fr-FR">'), "France must default to French");

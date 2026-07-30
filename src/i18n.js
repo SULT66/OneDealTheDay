@@ -21,14 +21,6 @@ const defaultLanguages = {
   de: "de"
 };
 
-const countryOptions = {
-  us: "🇺🇸 United States",
-  ca: "🇨🇦 Canada",
-  uk: "🇬🇧 United Kingdom",
-  fr: "🇫🇷 France",
-  de: "🇩🇪 Germany"
-};
-
 const marketNames = {
   en: { us: "United States", ca: "Canada", uk: "United Kingdom", fr: "France", de: "Germany" },
   es: { us: "Estados Unidos", ca: "Canadá", uk: "Reino Unido", fr: "Francia", de: "Alemania" },
@@ -876,27 +868,11 @@ function languageSwitcher(req, marketCode, language) {
   return `<link rel="stylesheet" href="/i18n.css?v=20260728-2"><form class="language-switcher" method="get" action="${escapeHtml(originalPath)}"><label><span class="sr-only">${escapeHtml(t(language, "language.label"))}</span><select name="lang" aria-label="${escapeHtml(t(language, "language.label"))}" onchange="this.form.submit()">${allowed.map(code => `<option value="${code}"${code === language ? " selected" : ""}>${escapeHtml(languageDefinitions[code].label)}</option>`).join("")}</select></label>${hidden}<noscript><button type="submit">OK</button></noscript></form>`;
 }
 
-function countrySwitcher(req, marketCode, language) {
-  const originalPath = String(req.originalUrl || `/${marketCode}`).split("?")[0] || `/${marketCode}`;
-  const regionalPrefix = new RegExp(`^/(${Object.keys(defaultLanguages).join("|")})(?=/|$)`);
-  const rawSuffix = originalPath.replace(regionalPrefix, "") || "";
-  const suffix = /^\/(?:deal|brand)\//.test(rawSuffix) ? "" : rawSuffix;
-  const query = new URLSearchParams(req.query || {});
-  query.delete("lang");
-  const queryString = query.toString();
-  const options = Object.keys(defaultLanguages).map(code => {
-    const destination = `/${code}${suffix}${queryString ? `?${queryString}` : ""}`;
-    return `<option value="${escapeHtml(destination)}"${code === marketCode ? " selected" : ""}>${escapeHtml(countryOptions[code])}</option>`;
-  }).join("");
-  return `<link rel="stylesheet" href="/i18n.css?v=20260728-country2"><form class="country-switcher" onsubmit="return false"><label><span class="switcher-title">${escapeHtml(t(language, "country.label"))}</span><select aria-label="${escapeHtml(t(language, "country.label"))}" onchange="window.location.assign(this.value)">${options}</select></label></form>`;
-}
-
 module.exports = {
   copy,
   languageDefinitions,
   marketLanguages,
   defaultLanguages,
-  countryOptions,
   normalizeLanguage,
   languagesForMarket,
   resolveLanguage,
@@ -906,6 +882,5 @@ module.exports = {
   categoryLabel,
   clientCopy,
   localizeHtml,
-  languageSwitcher,
-  countrySwitcher
+  languageSwitcher
 };
