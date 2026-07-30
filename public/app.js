@@ -483,7 +483,7 @@
         if (!subscribeForm.querySelector('input[name="categories"]:checked')) return;
         $("interestFieldset").classList.remove("has-error");
         $("categoryError").hidden = true;
-        $("subscribeStatus").textContent = tr("home.noSpam", "No spam. Unsubscribe anytime.");
+        $("subscribeStatus").textContent = tr("home.noSpam", "Email alerts are being prepared.");
       });
     });
   }

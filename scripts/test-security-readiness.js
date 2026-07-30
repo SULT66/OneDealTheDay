@@ -1,0 +1,40 @@
+const fs = require("fs");
+const path = require("path");
+
+const root = path.join(__dirname, "..");
+const read = file => fs.readFileSync(path.join(root, file), "utf8");
+const assert = (condition, message) => {
+  if (!condition) throw new Error(message);
+};
+
+const config = read("src/config.js");
+const envExample = read(".env.example");
+const server = read("src/server.js");
+const homepageSeo = read("src/homepage-seo.js");
+const staticHomepage = read("public/index.html");
+const browserApp = read("public/app.js");
+const i18n = read("src/i18n.js");
+const cookieScript = read("public/cookie-consent.js");
+const ignore = read(".gitignore");
+
+assert(!config.includes("change-this-private-key"), "Fallback admin password is still present in config");
+assert(!envExample.includes("change-this-private-key"), "Fallback admin password is still present in .env.example");
+assert(config.includes('String(process.env.ADMIN_KEY || "").trim()'), "ADMIN_KEY is not read safely");
+assert(server.includes("crypto.timingSafeEqual"), "Admin key comparison is not timing-safe");
+assert(!server.includes("req.query.key"), "Admin secret can still be supplied in a URL");
+assert(server.includes("Admin access is not configured."), "Missing ADMIN_KEY does not disable admin access");
+assert(ignore.split(/\r?\n/).includes("data/"), "Runtime database directory is not ignored");
+assert(!staticHomepage.includes("googletagmanager.com/gtag/js"), "Static homepage still loads analytics before consent");
+assert(homepageSeo.includes(".replace(legacyAnalytics, \"\")"), "Server homepage does not remove the old analytics tag");
+assert(homepageSeo.includes("cookie-consent.js"), "Server homepage does not load the consent controller");
+assert(server.includes('cookie-consent.css?v=20260730'), "Legal pages do not load consent styles");
+assert(server.includes('cookie-consent.js?v=20260730'), "Legal pages do not load the consent controller");
+assert(cookieScript.includes('new Set(["fr", "de"])'), "European consent markets are not configured");
+assert(cookieScript.includes('saved === "accepted"'), "Analytics is not gated behind affirmative consent");
+assert(cookieScript.includes('saved !== "declined"'), "Declined consent is not respected");
+assert(cookieScript.includes("data-cookie-settings"), "Visitors cannot reopen cookie settings");
+assert(!i18n.includes("Unsubscribe anytime"), "The site still promises unsubscribe before email delivery exists");
+assert(!browserApp.includes("Unsubscribe anytime"), "Browser fallback still promises unsubscribe before email delivery exists");
+assert(homepageSeo.includes('t(language, "home.noSpam")'), "Server homepage does not show the temporary email status honestly");
+
+console.log("Security readiness validation passed.");

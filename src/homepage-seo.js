@@ -15,6 +15,9 @@ const anchorOffsetStyle = `<style id="homepage-anchor-offset">
 html{scroll-padding-top:var(--odd-header-offset,132px)}
 #today,#featuredDeal,#subscribe,#top,#score,#archive,#trending,#price-drops,#new-drops,#about{scroll-margin-top:var(--odd-header-offset,132px)}
 </style>`;
+const legacyAnalytics = /<script async src="https:\/\/www\.googletagmanager\.com\/gtag\/js\?id=[^"]+"><\/script><script>[\s\S]*?gtag\('config','[^']+'\);<\/script>/;
+const consentStyles = '<link rel="stylesheet" href="/cookie-consent.css?v=20260730">';
+const consentScript = '<script src="/cookie-consent.js?v=20260730"></script>';
 
 module.exports = function homepageSeo(req, res) {
   const originalSend = res.send.bind(res);
@@ -31,6 +34,7 @@ module.exports = function homepageSeo(req, res) {
     const canonical = SITE + homePath;
     const appScript = `<script>window.__ODD_MARKET__=${JSON.stringify(selectedMarket.code)};window.__ODD_MARKET_TIMEZONE__=${JSON.stringify(selectedMarket.timezone)};window.__ODD_LANGUAGE__=${JSON.stringify(language)};window.__ODD_LOCALE__=${JSON.stringify(locale)};window.__ODD_TEXT__=${JSON.stringify(clientCopy(language)).replace(/</g, "\\u003c")};</script><script>(function(){const q=new URLSearchParams(location.search).get("q");if(!q)return;const input=document.getElementById("searchInput");if(input)input.value=q;})();</script><script src="/app.js?v=20260730-empty-catalog"></script>`;
     let enhanced = body
+      .replace(legacyAnalytics, "")
       .replace(
         '<link rel="canonical" href="https://www.onedailydrop.com/">',
         `<link rel="canonical" href="${canonical}"><link rel="icon" href="/favicon.svg" type="image/svg+xml"><meta property="og:site_name" content="OneDailyDrop">${alternateLinks("/")}`
@@ -65,7 +69,9 @@ module.exports = function homepageSeo(req, res) {
       .replace(/<html lang="[^"]+">/, `<html lang="${locale}">`)
       .replace(/<meta property="og:locale" content="[^"]+">/, `<meta property="og:locale" content="${locale.replace("-", "_")}">`)
       .replace(/"inLanguage":"[^"]+"/g, `"inLanguage":"${locale}"`)
-      .replace("</head>", `${anchorOffsetStyle}</head>`);
+      .replace(/(<p id="subscribeStatus" class="form-status" aria-live="polite">)[\s\S]*?(<\/p>)/, `$1${t(language, "home.noSpam")}$2`)
+      .replace("</head>", `${anchorOffsetStyle}${consentStyles}</head>`)
+      .replace("</body>", `${consentScript}</body>`);
     return originalSend(enhanced);
   };
 

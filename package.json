@@ -9,7 +9,8 @@
     "test": "node scripts/validate-production-catalog.js",
     "test:seo": "node scripts/test-seo-routes.js",
     "test:intelligence": "node scripts/test-price-intelligence.js",
-    "build": "node scripts/validate-production-catalog.js"
+    "build": "node scripts/validate-production-catalog.js && node scripts/test-security-readiness.js",
+    "test:security": "node scripts/test-security-readiness.js"
   },
   "dependencies": {
     "better-sqlite3": "^11.8.1",
