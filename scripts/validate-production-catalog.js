@@ -33,8 +33,11 @@ if (!app.includes("sourceSql()") || !app.includes("isPublicSource")) throw new E
 if (app.includes("preview catalog seeded") || app.includes('provider: "demo"')) {
   throw new Error("Demo catalog seeding is still enabled");
 }
-if (!app.includes("We do not publish sample products, estimated prices or made-up ratings")) {
-  throw new Error("The empty catalog page does not clearly explain the verified-only launch");
+if (app.includes("function unavailablePage") || app.includes("status.liveProducts === 0")) {
+  throw new Error("The empty catalog still replaces the full homepage with a standalone placeholder");
+}
+if (!app.includes("return renderHomepage(req, res);")) {
+  throw new Error("Country routes do not render the full homepage");
 }
 if (!app.includes('forwardedHost !== "onedailydrop.com"') || !app.includes("res.redirect(301, `https://www.onedailydrop.com")) {
   throw new Error("The apex domain is not permanently redirected to the canonical www host");
@@ -59,6 +62,9 @@ if (!hasLiquidGlass(homepage)) {
 }
 if (!homepage.includes("const featured = dailyProducts[0] || null;")) {
   throw new Error("Homepage is missing its single Today's Drop selection");
+}
+for (const required of ["catalog-empty-featured", "home.catalogTitle", "DEFAULT_INTEREST_CATEGORIES"]) {
+  if (!homepage.includes(required)) throw new Error(`Homepage empty-catalog design is missing: ${required}`);
 }
 if (!homepage.includes("const moreWorthSeeing = dailyProducts.slice(1, 10);")) {
   throw new Error("Homepage does not exclude Today's Drop from the nine additional products");
@@ -99,6 +105,9 @@ if (!browserApp.includes("VIEW DEAL AT") || !browserApp.includes("offer-facts") 
 }
 if (!browserApp.includes('classList.toggle("is-open", willOpen)') || !browserApp.includes('willOpen ? tr("menu.close"')) {
   throw new Error("Homepage hamburger behavior is missing");
+}
+for (const required of ["catalog-empty-featured", "home.catalogSectionEmpty", "home.catalogArchiveEmpty"]) {
+  if (!browserApp.includes(required)) throw new Error(`Client empty-catalog rendering is missing: ${required}`);
 }
 
 const staticHomepage = fs.readFileSync(path.join(root, "public/index.html"), "utf8");
