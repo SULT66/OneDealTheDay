@@ -6,7 +6,7 @@ const rainforestApiKey = String(process.env.RAINFOREST_API_KEY || "").trim();
 const bluecartApiKey = String(process.env.BLUECART_API_KEY || "").trim();
 const requestedProvider = String(process.env.PRODUCT_PROVIDER || "").trim().toLowerCase();
 const demoMode = false;
-const liveRefreshEnabled = String(process.env.LIVE_REFRESH_ENABLED || "false").trim().toLowerCase() === "true";
+const liveRefreshEnabled = false;
 
 const defaultKeywords = [
   "home gadgets",
@@ -22,8 +22,6 @@ const defaultKeywords = [
 ];
 
 function resolveLiveProvider() {
-  if (requestedProvider === "rainforest" && rainforestApiKey) return "rainforest";
-  if (rainforestApiKey) return "rainforest";
   return "unconfigured";
 }
 
