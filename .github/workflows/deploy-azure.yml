@@ -35,8 +35,10 @@ jobs:
       - name: Validate production build
         run: npm test
 
+      # v3/OneDeploy can report success while leaving the previous Linux App
+      # Service package active. v2 uses the stable zip-deploy path here.
       - name: Deploy to Azure App Service
-        uses: azure/webapps-deploy@v3
+        uses: azure/webapps-deploy@v2
         with:
           app-name: onedealtheday
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
