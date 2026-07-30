@@ -63,7 +63,7 @@ module.exports = {
   affiliateTag: String(process.env.AFFILIATE_TAG || "").trim(),
   affiliateTagConfigured: Boolean(String(process.env.AFFILIATE_TAG || "").trim()),
   provider: resolveLiveProvider(),
-  requestedProvider: requestedProvider || "auto",
+  requestedProvider: "unconfigured",
   siteMode: "live",
   demoMode,
   liveRefreshEnabled,
