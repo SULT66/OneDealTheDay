@@ -6,6 +6,7 @@ const { localizeProduct } = require("./demoTranslations");
 const { marketFromRequest, marketPath, alternateLinks, market } = require("./markets");
 const { localDate } = require("./refresh");
 const { t, marketName, languageTag } = require("./i18n");
+const { sourceSql } = require("./publicCatalog");
 
 const SITE = "https://www.onedailydrop.com";
 const esc = value => String(value ?? "").replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
@@ -112,7 +113,7 @@ module.exports = function homepage(req, res) {
   const language = req.language || "en";
   const locale = languageTag(selectedMarket.code, language);
   const localizedMarketName = marketName(selectedMarket.code, language);
-  const sourceFilter = config.demoMode ? " AND LOWER(COALESCE(source,''))='demo'" : "";
+  const sourceFilter = ` AND ${sourceSql()}`;
   const products = db.prepare(`SELECT * FROM products WHERE market=? AND status='published'${sourceFilter} ORDER BY score DESC, updated_at DESC`)
     .all(selectedMarket.code)
     .map(product => localizeProduct(product, language));
@@ -121,7 +122,7 @@ module.exports = function homepage(req, res) {
     SELECT p.*,d.rank,d.selection_reason AS daily_selection_reason,d.drop_date
     FROM daily_drops d
     JOIN products p ON p.id=d.product_id
-    WHERE d.market=? AND d.drop_date=(
+    WHERE d.market=? AND ${sourceSql("p")} AND d.drop_date=(
       SELECT MAX(drop_date) FROM daily_drops WHERE market=? AND drop_date<=?
     )
     ORDER BY d.rank
@@ -147,7 +148,7 @@ module.exports = function homepage(req, res) {
     SELECT p.*,d.drop_date,d.selection_reason AS daily_selection_reason
     FROM daily_drops d
     JOIN products p ON p.id=d.product_id
-    WHERE d.market=? AND d.rank=1 AND d.drop_date<?
+    WHERE d.market=? AND ${sourceSql("p")} AND d.rank=1 AND d.drop_date<?
     ORDER BY d.drop_date DESC
     LIMIT 4
   `).all(selectedMarket.code, today).map(product => localizeProduct({

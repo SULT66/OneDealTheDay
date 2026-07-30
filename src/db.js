@@ -229,6 +229,16 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_daily_drops_product ON daily_drops(product_id, drop_date DESC);
 `);
 
+// Remove preview records and their dependent snapshots so stale demo cards
+// cannot return after a deployment restart. Verified retailer data is kept.
+db.transaction(() => {
+  const demoIds = "SELECT id FROM products WHERE LOWER(COALESCE(source,''))='demo'";
+  db.prepare(`DELETE FROM daily_drops WHERE product_id IN (${demoIds})`).run();
+  db.prepare(`DELETE FROM price_history WHERE product_id IN (${demoIds})`).run();
+  db.prepare(`DELETE FROM clicks WHERE product_id IN (${demoIds})`).run();
+  db.prepare("DELETE FROM products WHERE LOWER(COALESCE(source,''))='demo'").run();
+})();
+
 // Seed one observation for existing products so price intelligence works
 // immediately after deployment without discarding any catalog data.
 db.exec(`
