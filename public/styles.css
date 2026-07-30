@@ -109,6 +109,15 @@ body.dark .archive-card-media{background:#23272e}
 .language-switcher select:hover,.language-switcher select:focus{border-color:var(--accent);outline:0;box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 18%,transparent)}
 .language-switcher noscript button{min-height:40px;margin-left:5px}
 .sr-only{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
+.catalog-empty-featured{justify-content:center;min-height:420px}
+.catalog-empty-featured .eyebrow{margin:0 0 8px}
+.catalog-empty-featured .description{max-width:590px;margin:0 0 22px;font-size:15px;line-height:1.7}
+.catalog-empty-featured .featured-button{width:auto;align-self:flex-start;margin-top:24px;padding-inline:22px}
+.catalog-empty-checks{display:grid;gap:10px}
+.catalog-empty-checks span{display:flex;align-items:center;gap:9px;color:var(--muted);font-size:13px;font-weight:800}
+.catalog-empty-checks span::first-letter{color:var(--accent)}
+.catalog-section-empty{grid-column:1/-1;width:100%}
+body.dark .catalog-empty-checks span{color:#c7cdd6}
 @media(max-width:1080px){
   .header-top{grid-template-columns:auto minmax(220px,1fr) auto minmax(96px,116px)}
 }
@@ -118,4 +127,6 @@ body.dark .archive-card-media{background:#23272e}
   .site-header .mobile-menu-toggle{grid-column:3;grid-row:1}
   .site-header .language-switcher{grid-column:1/-1;grid-row:3}
   .site-header .language-switcher select{width:100%;max-width:none;min-height:40px;padding-left:9px;padding-right:25px}
+  .catalog-empty-featured{min-height:360px}
+  .catalog-empty-featured .featured-button{width:100%}
 }
