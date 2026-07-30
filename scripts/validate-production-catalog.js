@@ -8,6 +8,7 @@ const hasLiquidGlass = source => /\/liquid-glass\.css\?v=[^"'`\s>]+/.test(source
 const files = [
   "app.js",
   "src/config.js",
+  "src/publicCatalog.js",
   "src/markets.js",
   "src/ranker.js",
   "src/refresh.js",
@@ -28,12 +29,12 @@ const app = fs.readFileSync(path.join(root, "app.js"), "utf8");
 if (!app.includes("config.demoMode")) throw new Error("Demo-mode routing guard is missing");
 if (!app.includes("config.liveRefreshEnabled")) throw new Error("Live refresh guard is missing");
 if (!app.includes("cron.schedule = ()")) throw new Error("Scheduled refreshes are not disabled in demo mode");
-if (!app.includes("LOWER(COALESCE(source,''))='rainforest'")) throw new Error("Amazon-only API filter is missing");
+if (!app.includes("sourceSql()") || !app.includes("isPublicSource")) throw new Error("Approved-source catalog filters are missing");
 if (app.includes("preview catalog seeded") || app.includes('provider: "demo"')) {
   throw new Error("Demo catalog seeding is still enabled");
 }
-if (!app.includes("Only real Amazon products with current retailer data")) {
-  throw new Error("The empty catalog page does not clearly explain the Amazon-only launch");
+if (!app.includes("We do not publish sample products, estimated prices or made-up ratings")) {
+  throw new Error("The empty catalog page does not clearly explain the verified-only launch");
 }
 if (!app.includes('forwardedHost !== "onedailydrop.com"') || !app.includes("res.redirect(301, `https://www.onedailydrop.com")) {
   throw new Error("The apex domain is not permanently redirected to the canonical www host");
@@ -138,8 +139,8 @@ for (const required of [".mobile-menu-toggle", ".main-nav.is-open", "overflow-x:
 const database = fs.readFileSync(path.join(root, "src/db.js"), "utf8");
 if (!database.includes("CREATE TABLE IF NOT EXISTS subscribers")) throw new Error("Subscriber storage is missing");
 if (!database.includes("CREATE TABLE IF NOT EXISTS daily_drops")) throw new Error("Permanent daily-drop archive storage is missing");
-if (!database.includes("DELETE FROM products WHERE LOWER(COALESCE(source,'')) = 'demo'")) {
-  throw new Error("Old demo products are not purged at startup");
+if (!database.includes("2026-07-30-remove-legacy-catalog") || !database.includes('db.prepare("DELETE FROM products").run()')) {
+  throw new Error("The one-time legacy catalog cleanup is missing");
 }
 for (const field of ["market", "score_breakdown", "selection_reason", "provider_external_id"]) {
   if (!database.includes(field)) throw new Error(`Market-aware product selection field is missing from the database: ${field}`);
@@ -336,8 +337,8 @@ const legacyDemoEnv = {
 const legacyDemoResult = spawnSync(process.execPath, ["-e", configProbe], { cwd: root, env: legacyDemoEnv, encoding: "utf8" });
 if (legacyDemoResult.status !== 0) throw new Error(legacyDemoResult.stderr || "Legacy demo config probe failed");
 const legacyDemo = JSON.parse(legacyDemoResult.stdout);
-if (legacyDemo.provider !== "rainforest" || legacyDemo.demoMode || !legacyDemo.liveRefreshEnabled) {
-  throw new Error(`Legacy demo settings can still reactivate preview products: ${legacyDemoResult.stdout}`);
+if (legacyDemo.provider !== "unconfigured" || legacyDemo.demoMode || legacyDemo.liveRefreshEnabled) {
+  throw new Error(`Legacy settings can still reactivate an unapproved provider: ${legacyDemoResult.stdout}`);
 }
 if (legacyDemo.keywords < 5) throw new Error("Default Amazon search categories are missing");
 
@@ -353,8 +354,8 @@ const liveEnv = {
 const liveResult = spawnSync(process.execPath, ["-e", configProbe], { cwd: root, env: liveEnv, encoding: "utf8" });
 if (liveResult.status !== 0) throw new Error(liveResult.stderr || "Live config probe failed");
 const live = JSON.parse(liveResult.stdout);
-if (live.provider !== "rainforest" || live.demoMode || !live.liveRefreshEnabled) {
-  throw new Error(`Live mode activation is invalid: ${liveResult.stdout}`);
+if (live.provider !== "unconfigured" || live.demoMode || live.liveRefreshEnabled) {
+  throw new Error(`Unapproved provider activation is still possible: ${liveResult.stdout}`);
 }
 
-console.log("Amazon-only catalog, empty-state homepage and trust-page validation passed.");
+console.log("Verified-source catalog, empty-state homepage and trust-page validation passed.");
