@@ -514,7 +514,13 @@ const sendNotFound = (req, res) => {
 
 app.get("/deal/:slug", (req, res) => {
   const p = findProduct(req.params.slug);
-  if (!p) return sendNotFound(req, res);
+  if (!p) {
+    const selectedMarket = requestMarket(req);
+    const body = `<main class="not-found"><p class="eyebrow">410 GONE</p><h1>${esc(t(req.language, "page.notFoundTitle"))}</h1><p>${esc(t(req.language, "page.notFoundText"))}</p><div class="hero-actions"><a class="primary-cta" href="${marketPath(selectedMarket.code)}">${esc(t(req.language, "page.backToday"))}</a></div></main>`;
+    const requestedPath = String(req.originalUrl || "/").split("?")[0];
+    res.set("X-Robots-Tag", "noindex, nofollow");
+    return res.status(410).send(shell("Removed Drop | OneDailyDrop", "This product page has been permanently removed.", `${SITE}${requestedPath}`, body, null, "", "noindex,nofollow", selectedMarket.code, marketCodes, req));
+  }
   const expectedPath = dealPath(p);
   if (String(req.originalUrl || "").split("?")[0] !== expectedPath) return res.redirect(301, expectedPath);
   const display = localizeProduct(p, req.language);
