@@ -93,32 +93,30 @@ async function run() {
   assert(homepage.includes('<html lang="en-US">'), "US homepage language is incorrect");
   assert(homepage.includes('<link rel="canonical" href="https://www.onedailydrop.com/us">'), "US homepage canonical is missing");
   assert(homepage.includes('property="og:site_name" content="OneDailyDrop"'), "Homepage Open Graph metadata is missing");
-  assert(homepage.includes('class="site-header"'), "Full site header is missing from the empty-catalog homepage");
-  assert(homepage.includes('id="today" class="hero"'), "Full homepage hero is missing");
-  assert(homepage.includes('id="subscribeForm"'), "Subscription form is missing");
-  assert(homepage.includes("The first verified Daily Drop is coming."), "Verified catalog message is missing");
-  assert(!homepage.includes("EDITORIAL CATALOG UPDATE"), "Standalone catalog placeholder is still replacing the homepage");
-  for (const forbidden of ["Development preview", "Sample price", "Retailer availability coming soon", "Rainforest"]) {
+  assert(homepage.includes("Fullstar Vegetable Chopper"), "The manual Amazon catalog is missing from the US homepage");
+  assert(homepage.includes("Check current price on Amazon"), "The US homepage must defer unverified prices to Amazon");
+  assert(!homepage.includes("0 reviews") && !homepage.includes("0/100"), "The US homepage exposes invented product metrics");
+  for (const forbidden of ["Development preview", "Sample price", "Rainforest"]) {
     assert(!homepage.includes(forbidden), `US homepage still exposes ${forbidden}`);
   }
 
   const spanishResponse = await get("/us?lang=es");
   const spanishHomepage = await spanishResponse.text();
   assert(spanishHomepage.includes('<html lang="es-US">'), "US Spanish locale is incorrect");
-  assert(spanishHomepage.includes("La primera oferta diaria verificada está en camino."), "US Spanish catalog message is missing");
+  assert(spanishHomepage.includes("Fullstar Vegetable Chopper"), "US Spanish catalog is missing the manual products");
   assert(String(spanishResponse.headers.get("set-cookie") || "").includes("odd_lang_us=es"), "US language preference cookie is missing");
 
   const frenchHomepage = await (await get("/fr")).text();
   assert(frenchHomepage.includes('<html lang="fr-FR">'), "France must default to French");
-  assert(frenchHomepage.includes("La première sélection quotidienne vérifiée arrive."), "French catalog message is missing");
+  assert(!frenchHomepage.includes("Fullstar Vegetable Chopper"), "US-only products leaked into the France catalog");
 
   const franceEnglish = await (await get("/fr?lang=en")).text();
   assert(franceEnglish.includes('<html lang="en-FR">'), "France English locale is incorrect");
-  assert(franceEnglish.includes("The first verified Daily Drop is coming."), "France English fallback copy is missing");
+  assert(!franceEnglish.includes("Fullstar Vegetable Chopper"), "US-only products leaked into the France English catalog");
 
   const germanHomepage = await (await get("/de")).text();
   assert(germanHomepage.includes('<html lang="de-DE">'), "Germany must default to German");
-  assert(germanHomepage.includes("Der erste geprüfte Daily Drop kommt bald."), "German catalog message is missing");
+  assert(!germanHomepage.includes("Fullstar Vegetable Chopper"), "US-only products leaked into the Germany catalog");
 
   const canadaHomepage = await (await get("/ca")).text();
   assert(canadaHomepage.includes('<html lang="en-CA">'), "Canada must default to English");
@@ -136,14 +134,17 @@ async function run() {
 
   const sitemap = await (await get("/sitemap.xml")).text();
   assert(sitemap.includes('xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"'), "Image sitemap namespace is missing");
-  assert(!sitemap.includes("<image:image>"), "Removed product images are still present in sitemap");
-  assert(!sitemap.includes("/deal/") && !sitemap.includes("/category/") && !sitemap.includes("/brands"), "Removed catalog pages remain in sitemap");
+  assert(sitemap.includes("<image:image>"), "Manual product images are missing from the sitemap");
+  assert(sitemap.includes("/deal/") && sitemap.includes("/category/") && sitemap.includes("/brands"), "Manual catalog pages are missing from the sitemap");
 
   const products = await (await get("/api/products?market=us")).json();
-  assert(products.length === 0, "Legacy catalog products are still public");
+  assert(products.length === 10, "The public US catalog must contain exactly ten manual products");
+  assert(products.every(product => product.source === "amazon-manual"), "An unapproved product source is public");
+  assert(products.every(product => product.affiliate_url.endsWith("?tag=onedailydrop-20")), "An Amazon affiliate link is missing the OneDailyDrop tracking ID");
+  assert(products.every(product => product.current_price === null && product.rating === null), "Unverified prices or ratings are public");
 
   const status = await (await get("/api/status?market=us")).json();
-  assert(status.products === 0, "Catalog status still counts removed products");
+  assert(status.products === 10, "Catalog status does not count the ten manual products");
   assert(status.provider === "unconfigured", "An unapproved automated provider is enabled");
   assert(status.requestedProvider === "unconfigured", "A legacy provider request is still exposed");
   assert(status.lastRun === null, "Legacy demo refresh history is still exposed");
@@ -151,14 +152,14 @@ async function run() {
   const legacyBrands = await get("/brands");
   assert(legacyBrands.status === 301, "Legacy Brands URL must return 301");
   assert(legacyBrands.headers.get("location") === "/us/brands", "Legacy Brands redirect target is incorrect");
-  const hiddenBrands = await get("/us/brands");
-  const hiddenBrandsPage = await hiddenBrands.text();
-  assert(hiddenBrands.status === 404, "Empty Brands page must be hidden");
-  assert(hiddenBrandsPage.includes('<meta name="robots" content="noindex,nofollow">'), "Hidden Brands page must be noindex");
-  assert(!sitemap.includes("<loc>https://www.onedailydrop.com/us/brands</loc>"), "Empty Brands page must not appear in sitemap");
+  const brandsPageResponse = await get("/us/brands");
+  const brandsPage = await brandsPageResponse.text();
+  assert(brandsPageResponse.status === 200, "Brands page must be available for the manual catalog");
+  assert(brandsPage.includes("Fullstar") && brandsPage.includes("BISSELL"), "Manual catalog brands are missing");
+  assert(sitemap.includes("<loc>https://www.onedailydrop.com/us/brands</loc>"), "Brands page is missing from the sitemap");
 
   const searchPage = await (await get("/us/search?q=plug")).text();
-  assert(searchPage.includes("No deals matched"), "Empty search page is not honest");
+  assert(searchPage.includes("Kasa Smart Plug Mini"), "Search does not find a manual catalog product");
 
   const missingResponse = await get("/us/deal/not-a-real-product-999999");
   const missingPage = await missingResponse.text();
@@ -169,7 +170,7 @@ async function run() {
   assert(trustPage.includes('property="og:title" content="About | OneDailyDrop"'), "Trust page Open Graph metadata is missing");
   assert(trustPage.includes('"@type":"WebPage"'), "Trust page schema is missing");
 
-  console.log("Empty-catalog SEO route validation passed");
+  console.log("Manual-catalog SEO route validation passed");
   process.exit(0);
 }
 

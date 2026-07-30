@@ -9,6 +9,7 @@ const files = [
   "app.js",
   "src/config.js",
   "src/publicCatalog.js",
+  "src/manualCatalog.js",
   "src/markets.js",
   "src/ranker.js",
   "src/refresh.js",
@@ -150,6 +151,14 @@ if (!database.includes("CREATE TABLE IF NOT EXISTS subscribers")) throw new Erro
 if (!database.includes("CREATE TABLE IF NOT EXISTS daily_drops")) throw new Error("Permanent daily-drop archive storage is missing");
 if (!database.includes("DELETE FROM products WHERE LOWER(COALESCE(source,''))='demo'")) {
   throw new Error("Old demo products are not purged safely at startup");
+}
+if (!database.includes("installManualCatalog(db)")) {
+  throw new Error("The manually selected Amazon catalog is not installed at startup");
+}
+const manualCatalog = require(path.join(root, "src", "manualCatalog"));
+if (manualCatalog.products.length !== 10) throw new Error("The manual Amazon catalog must contain exactly ten products");
+for (const product of manualCatalog.products) {
+  if (!/^[A-Z0-9]{10}$/.test(product.asin)) throw new Error(`Invalid manual Amazon ASIN: ${product.asin}`);
 }
 for (const field of ["market", "score_breakdown", "selection_reason", "provider_external_id"]) {
   if (!database.includes(field)) throw new Error(`Market-aware product selection field is missing from the database: ${field}`);
