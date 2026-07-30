@@ -28,7 +28,13 @@ const app = fs.readFileSync(path.join(root, "app.js"), "utf8");
 if (!app.includes("config.demoMode")) throw new Error("Demo-mode routing guard is missing");
 if (!app.includes("config.liveRefreshEnabled")) throw new Error("Live refresh guard is missing");
 if (!app.includes("cron.schedule = ()")) throw new Error("Scheduled refreshes are not disabled in demo mode");
-if (!app.includes("LOWER(COALESCE(source,''))='demo'")) throw new Error("Demo-only API filter is missing");
+if (!app.includes("LOWER(COALESCE(source,''))='rainforest'")) throw new Error("Amazon-only API filter is missing");
+if (app.includes("preview catalog seeded") || app.includes('provider: "demo"')) {
+  throw new Error("Demo catalog seeding is still enabled");
+}
+if (!app.includes("Only real Amazon products with current retailer data")) {
+  throw new Error("The empty catalog page does not clearly explain the Amazon-only launch");
+}
 if (!app.includes('forwardedHost !== "onedailydrop.com"') || !app.includes("res.redirect(301, `https://www.onedailydrop.com")) {
   throw new Error("The apex domain is not permanently redirected to the canonical www host");
 }
@@ -132,6 +138,9 @@ for (const required of [".mobile-menu-toggle", ".main-nav.is-open", "overflow-x:
 const database = fs.readFileSync(path.join(root, "src/db.js"), "utf8");
 if (!database.includes("CREATE TABLE IF NOT EXISTS subscribers")) throw new Error("Subscriber storage is missing");
 if (!database.includes("CREATE TABLE IF NOT EXISTS daily_drops")) throw new Error("Permanent daily-drop archive storage is missing");
+if (!database.includes("DELETE FROM products WHERE LOWER(COALESCE(source,'')) <> 'rainforest'")) {
+  throw new Error("Old demo and non-Amazon products are not purged at startup");
+}
 for (const field of ["market", "score_breakdown", "selection_reason", "provider_external_id"]) {
   if (!database.includes(field)) throw new Error(`Market-aware product selection field is missing from the database: ${field}`);
 }
@@ -314,7 +323,7 @@ const configProbe = `
   }));
 `;
 
-const demoEnv = {
+const legacyDemoEnv = {
   ...process.env,
   WEBSITE_SITE_NAME: "production-test",
   SITE_MODE: "demo",
@@ -324,13 +333,13 @@ const demoEnv = {
   BLUECART_API_KEY: "walmart-key",
   SEARCH_KEYWORDS: ""
 };
-const demoResult = spawnSync(process.execPath, ["-e", configProbe], { cwd: root, env: demoEnv, encoding: "utf8" });
-if (demoResult.status !== 0) throw new Error(demoResult.stderr || "Demo config probe failed");
-const demo = JSON.parse(demoResult.stdout);
-if (demo.provider !== "demo" || !demo.demoMode || demo.liveRefreshEnabled) {
-  throw new Error(`Demo mode could spend retailer credits: ${demoResult.stdout}`);
+const legacyDemoResult = spawnSync(process.execPath, ["-e", configProbe], { cwd: root, env: legacyDemoEnv, encoding: "utf8" });
+if (legacyDemoResult.status !== 0) throw new Error(legacyDemoResult.stderr || "Legacy demo config probe failed");
+const legacyDemo = JSON.parse(legacyDemoResult.stdout);
+if (legacyDemo.provider !== "rainforest" || legacyDemo.demoMode || !legacyDemo.liveRefreshEnabled) {
+  throw new Error(`Legacy demo settings can still reactivate preview products: ${legacyDemoResult.stdout}`);
 }
-if (demo.keywords < 5) throw new Error("Default demo categories are missing");
+if (legacyDemo.keywords < 5) throw new Error("Default Amazon search categories are missing");
 
 const liveEnv = {
   ...process.env,
@@ -344,8 +353,8 @@ const liveEnv = {
 const liveResult = spawnSync(process.execPath, ["-e", configProbe], { cwd: root, env: liveEnv, encoding: "utf8" });
 if (liveResult.status !== 0) throw new Error(liveResult.stderr || "Live config probe failed");
 const live = JSON.parse(liveResult.stdout);
-if (live.provider !== "multi" || live.demoMode || !live.liveRefreshEnabled) {
+if (live.provider !== "rainforest" || live.demoMode || !live.liveRefreshEnabled) {
   throw new Error(`Live mode activation is invalid: ${liveResult.stdout}`);
 }
 
-console.log("Catalog, homepage demo and trust-page footer validation passed.");
+console.log("Amazon-only catalog, empty-state homepage and trust-page validation passed.");
