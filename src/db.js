@@ -1,6 +1,7 @@
 const Database = require("better-sqlite3");
 const path = require("path");
 const fs = require("fs");
+const { installManualCatalog } = require("./manualCatalog");
 
 const isAzure = Boolean(process.env.WEBSITE_SITE_NAME || process.env.WEBSITE_INSTANCE_ID);
 const dir = process.env.DATA_DIR || (isAzure ? "/home/data/onedealtheday" : path.join(__dirname, "..", "data"));
@@ -238,6 +239,11 @@ db.transaction(() => {
   db.prepare(`DELETE FROM clicks WHERE product_id IN (${demoIds})`).run();
   db.prepare("DELETE FROM products WHERE LOWER(COALESCE(source,''))='demo'").run();
 })();
+
+// Until an approved product-data feed is connected, publish the ten manually
+// selected US products with affiliate links but without copied prices,
+// ratings, reviews or retailer images.
+installManualCatalog(db);
 
 // Seed one observation for existing products so price intelligence works
 // immediately after deployment without discarding any catalog data.

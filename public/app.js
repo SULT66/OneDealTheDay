@@ -38,6 +38,7 @@
   };
   const fullTitle = value => cleanText(value);
   const isDemo = product => String(product?.source || "").toLowerCase() === "demo";
+  const isManual = product => String(product?.source || "").toLowerCase() === "amazon-manual";
   const money = (value, currency = "USD") => {
     if (value == null || value === "") return tr("product.checkPrice", "Check price");
     const amount = Number(value);
@@ -61,6 +62,7 @@
   };
   const badgeFor = product => {
     if (isDemo(product)) return "";
+    if (isManual(product)) return tr("product.editorPick", "EDITOR'S PICK");
     if (discount(product) >= 25) return tr("product.verified", "VERIFIED DEAL");
     if (Number(product.score) >= 90) return tr("product.editorPick", "EDITOR'S PICK");
     if (Number(product.review_count) >= 5000) return tr("product.trending", "TRENDING");
@@ -68,11 +70,15 @@
   };
   const statusText = product => isDemo(product)
     ? tr("product.availabilitySoon", "Retailer availability coming soon")
+    : isManual(product)
+      ? "Price and availability confirmed on Amazon"
     : product.checked_at || product.updated_at
       ? tr("product.priceChecked", "Price checked {date}", { date: new Date(product.checked_at || product.updated_at).toLocaleString(locale) })
       : tr("product.priceVerified", "Price recently verified");
   const priceLabel = product => isDemo(product)
     ? tr("product.retailerPrice", "Retailer price")
+    : isManual(product)
+      ? "Amazon price"
     : tr("product.currentPrice", "Current price");
   const whyPicked = product => {
     if (isDemo(product)) return cleanText(product.description) || tr("product.demoFallback", "Chosen for clear everyday usefulness and straightforward features.");
@@ -90,7 +96,7 @@
   const actionButton = (product, className) => isDemo(product)
     ? `<a class="${className}" href="${esc(dealUrl(product))}">${esc(tr("product.viewDetails", "VIEW DETAILS"))}</a>`
     : `<a class="${className}" href="${marketPath(`/go/${encodeURIComponent(product.id)}`)}" rel="nofollow sponsored">${esc(tr("product.viewDealAt", "VIEW DEAL AT {store}", { store: storeName(product) }))}</a>`;
-  const priceHistoryAction = product => isDemo(product)
+  const priceHistoryAction = product => isDemo(product) || isManual(product)
     ? ""
     : `<a class="price-history-link" href="${esc(dealUrl(product))}#price-history">${esc(tr("product.priceHistory", "PRICE HISTORY"))}</a>`;
   const offerFacts = product => {
@@ -200,8 +206,8 @@
         <p class="cat">${esc(categoryLabel(product.category || "Deals"))} · ${esc(storeName(product))}</p>
         <h2><a href="${esc(dealUrl(product))}">${esc(fullTitle(product.title))}</a></h2>
         <p class="description">${esc(whyPicked(product))}</p>
-        <p class="stats">★ ${esc(product.rating || " - ")} · ${Number(product.review_count || 0).toLocaleString(locale)} ${esc(tr("product.reviews", "reviews"))}</p>
-        <div class="score-strip"><strong>${Math.round(Number(product.score) || 0)}/100</strong><span>OneDailyDrop ${esc(tr("product.score", "Score"))}</span></div>
+        ${isManual(product) ? "" : `<p class="stats">★ ${esc(product.rating || " - ")} · ${Number(product.review_count || 0).toLocaleString(locale)} ${esc(tr("product.reviews", "reviews"))}</p>
+        <div class="score-strip"><strong>${Math.round(Number(product.score) || 0)}/100</strong><span>OneDailyDrop ${esc(tr("product.score", "Score"))}</span></div>`}
         <div class="featured-price-row"><span class="price-label">${priceLabel(product)}</span><span class="featured-price">${money(product.current_price, product.currency)}</span>${product.original_price ? `<span class="old">${money(product.original_price, product.currency)}</span>` : ""}${save ? `<span class="save-pill">${esc(tr("product.save", "SAVE {percent}%", { percent: save }))}</span>` : ""}</div>
         <p class="verification">${esc(statusText(product))}</p>
         ${offerFacts(product)}
@@ -219,7 +225,7 @@
           <p class="cat">${esc(categoryLabel(product.category || "Deals"))} · ${esc(storeName(product))}</p>
           <h3><a href="${esc(dealUrl(product))}">${esc(fullTitle(product.title))}</a></h3>
           <p class="description"><strong>${esc(tr("product.why", "Why we picked it:"))}</strong> ${esc(whyPicked(product))}</p>
-          <p class="stats">★ ${esc(product.rating || " - ")} · ${Number(product.review_count || 0).toLocaleString(locale)} ${esc(tr("product.reviews", "reviews"))} · ${esc(tr("product.score", "Score"))} ${Math.round(Number(product.score) || 0)}/100</p>
+          ${isManual(product) ? "" : `<p class="stats">★ ${esc(product.rating || " - ")} · ${Number(product.review_count || 0).toLocaleString(locale)} ${esc(tr("product.reviews", "reviews"))} · ${esc(tr("product.score", "Score"))} ${Math.round(Number(product.score) || 0)}/100</p>`}
           <div class="price-row"><span class="price-label">${priceLabel(product)}</span><span class="price">${money(product.current_price, product.currency)}</span>${product.original_price ? `<span class="old">${money(product.original_price, product.currency)}</span>` : ""}${save ? `<span class="save-pill">${esc(tr("product.save", "SAVE {percent}%", { percent: save }))}</span>` : ""}</div>
           <p class="verification">${esc(statusText(product))}</p>
           ${offerFacts(product)}
@@ -236,7 +242,7 @@
         <div class="mini-card-body">
           <p class="cat">${esc(categoryLabel(product.category || "Deals"))} · ${esc(storeName(product))}</p>
           <h3><a href="${esc(dealUrl(product))}">${esc(fullTitle(product.title))}</a></h3>
-          <p class="mini-meta">★ ${esc(product.rating || " - ")} · ${esc(tr("product.score", "Score"))} ${Math.round(Number(product.score) || 0)}/100${save ? ` · ${esc(tr("product.off", "{percent}% off", { percent: save }))}` : ""}</p>
+          ${isManual(product) ? "" : `<p class="mini-meta">★ ${esc(product.rating || " - ")} · ${esc(tr("product.score", "Score"))} ${Math.round(Number(product.score) || 0)}/100${save ? ` · ${esc(tr("product.off", "{percent}% off", { percent: save }))}` : ""}</p>`}
           <div class="mini-price-row"><span class="mini-price-label">${priceLabel(product)}</span><span class="mini-price">${money(product.current_price, product.currency)}</span>${product.original_price ? `<span class="old">${money(product.original_price, product.currency)}</span>` : ""}</div>
           <a class="mini-action" href="${esc(dealUrl(product))}">${esc(tr("product.viewDetails", "VIEW DETAILS"))}</a>
         </div>
