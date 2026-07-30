@@ -138,8 +138,8 @@ for (const required of [".mobile-menu-toggle", ".main-nav.is-open", "overflow-x:
 const database = fs.readFileSync(path.join(root, "src/db.js"), "utf8");
 if (!database.includes("CREATE TABLE IF NOT EXISTS subscribers")) throw new Error("Subscriber storage is missing");
 if (!database.includes("CREATE TABLE IF NOT EXISTS daily_drops")) throw new Error("Permanent daily-drop archive storage is missing");
-if (!database.includes("DELETE FROM products WHERE LOWER(COALESCE(source,'')) <> 'rainforest'")) {
-  throw new Error("Old demo and non-Amazon products are not purged at startup");
+if (!database.includes("DELETE FROM products WHERE LOWER(COALESCE(source,'')) = 'demo'")) {
+  throw new Error("Old demo products are not purged at startup");
 }
 for (const field of ["market", "score_breakdown", "selection_reason", "provider_external_id"]) {
   if (!database.includes(field)) throw new Error(`Market-aware product selection field is missing from the database: ${field}`);
