@@ -5,6 +5,7 @@ const isAzure = Boolean(process.env.WEBSITE_SITE_NAME || process.env.WEBSITE_INS
 const rainforestApiKey = String(process.env.RAINFOREST_API_KEY || "").trim();
 const bluecartApiKey = String(process.env.BLUECART_API_KEY || "").trim();
 const requestedProvider = String(process.env.PRODUCT_PROVIDER || "").trim().toLowerCase();
+const adminKey = String(process.env.ADMIN_KEY || "").trim();
 const demoMode = false;
 const liveRefreshEnabled = false;
 
@@ -59,7 +60,7 @@ const marketConfig = code => {
 
 module.exports = {
   port: Number(process.env.PORT || 8088),
-  adminKey: process.env.ADMIN_KEY || "change-this-private-key",
+  adminKey,
   affiliateTag: String(process.env.AFFILIATE_TAG || "").trim(),
   affiliateTagConfigured: Boolean(String(process.env.AFFILIATE_TAG || "").trim()),
   provider: resolveLiveProvider(),
