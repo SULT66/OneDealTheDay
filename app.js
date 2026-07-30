@@ -31,6 +31,7 @@ function countProducts(where = "1=1", params = []) {
 function catalogStatus(marketCode = "") {
   const marketWhere = marketCode ? "market=? AND " : "";
   const params = marketCode ? [marketCode] : [];
+  const latestRun = db.prepare("SELECT provider,started_at,finished_at,found_count,published_count,status,message FROM refresh_runs ORDER BY id DESC LIMIT 1").get() || null;
   return {
     siteMode: config.siteMode,
     provider: config.provider,
@@ -43,7 +44,7 @@ function catalogStatus(marketCode = "") {
     automatedCatalogConfigured: config.provider !== "unconfigured",
     affiliateTagConfigured: marketCode ? Boolean(config.affiliateTagForMarket(marketCode)) : Boolean(config.affiliateTagConfigured),
     searchKeywordCount: config.searchKeywords.length,
-    lastRun: db.prepare("SELECT provider,started_at,finished_at,found_count,published_count,status,message FROM refresh_runs ORDER BY id DESC LIMIT 1").get() || null
+    lastRun: isPublicSource(latestRun?.provider) ? latestRun : null
   };
 }
 
