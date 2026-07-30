@@ -241,7 +241,9 @@ Object.entries(trustPages).forEach(([route, file]) => app.get(route, (req, res) 
     .replace(
       '<button id="themeToggle"',
       `${languageSwitcher(req, selectedMarket.code, language)}<button id="themeToggle"`
-    );
+    )
+    .replace("</head>", '<link rel="stylesheet" href="/cookie-consent.css?v=20260730"></head>')
+    .replace("</body>", '<script src="/cookie-consent.js?v=20260730"></script></body>');
   res.type("html").send(html);
 }));
 app.get("/club", (req, res) => res.sendFile(path.join(publicDir, "club.html")));
@@ -700,7 +702,17 @@ app.get("/sitemap.xml", (req, res) => {
   );
 });
 
-const admin = (req,res,next) => (req.headers["x-admin-key"] || req.query.key) === c.adminKey ? next() : res.status(401).json({error:"Unauthorized"});
+const secretMatches = (provided, expected) => {
+  const left = Buffer.from(String(provided || ""), "utf8");
+  const right = Buffer.from(String(expected || ""), "utf8");
+  return left.length === right.length && left.length > 0 && crypto.timingSafeEqual(left, right);
+};
+const admin = (req,res,next) => {
+  if (!c.adminKey) return res.status(503).json({error:"Admin access is not configured."});
+  return secretMatches(req.headers["x-admin-key"], c.adminKey)
+    ? next()
+    : res.status(401).json({error:"Unauthorized"});
+};
 app.get("/api/products", (req, res) => {
   const selectedMarket = normalizeMarket(req.query.market) || requestMarket(req).code;
   const params = [selectedMarket];
