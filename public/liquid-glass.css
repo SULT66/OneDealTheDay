@@ -1185,3 +1185,14 @@ footer a:hover,
     border-radius: 19px !important;
   }
 }
+
+
+/* Exact OneDailyDrop header brand treatment. */
+.brand-copy .brand-drop,
+.brand .brand-drop {
+  background: linear-gradient(110deg, #337ee8 0%, #5d58d9 48%, #9c3bcc 100%) !important;
+  background-clip: text !important;
+  -webkit-background-clip: text !important;
+  color: transparent !important;
+  -webkit-text-fill-color: transparent !important;
+}
