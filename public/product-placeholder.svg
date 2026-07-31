@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 700" role="img" aria-labelledby="title desc">
-  <title id="title">Product image coming soon</title>
+  <title id="title">OneDailyDrop editorial product pick</title>
   <desc id="desc">OneDailyDrop product placeholder</desc>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
@@ -16,6 +16,6 @@
   <circle cx="770" cy="600" r="190" fill="#51a7ff" opacity=".08"/>
   <path d="M330 270h240l35 250H295l35-250Z" fill="none" stroke="url(#bag)" stroke-width="20" stroke-linejoin="round"/>
   <path d="M380 285c0-80 140-80 140 0" fill="none" stroke="url(#bag)" stroke-width="20" stroke-linecap="round"/>
-  <text x="450" y="595" fill="#fff" font-family="Arial,sans-serif" font-size="34" font-weight="700" text-anchor="middle">PRODUCT IMAGE COMING SOON</text>
-  <text x="450" y="640" fill="#b9c8e8" font-family="Arial,sans-serif" font-size="24" text-anchor="middle">View the exact item on Amazon</text>
+  <text x="450" y="595" fill="#fff" font-family="Arial,sans-serif" font-size="34" font-weight="700" text-anchor="middle">EDITORIAL PRODUCT PICK</text>
+  <text x="450" y="640" fill="#b9c8e8" font-family="Arial,sans-serif" font-size="24" text-anchor="middle">View the exact item at the retailer</text>
 </svg>
