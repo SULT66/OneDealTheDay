@@ -217,7 +217,7 @@ if (server.includes('data-account-nav href="/account"')) {
 if (!server.includes('aria-controls="mainNavigation"') || !server.includes('id="mainNavigation"')) {
   throw new Error("Shared pages are missing the accessible mobile menu controls");
 }
-for (const required of ['id="price-history"', "retailer-detail-grid", "View Deal at"]) {
+for (const required of ['id="price-history"', "retailer-detail-grid", '"product.viewDealAt"']) {
   if (!server.includes(required)) throw new Error(`Product deal page is missing: ${required}`);
 }
 const homepageSeo = fs.readFileSync(path.join(root, "src/homepage-seo.js"), "utf8");
