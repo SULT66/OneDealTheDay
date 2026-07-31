@@ -1196,3 +1196,44 @@ footer a:hover,
   color: transparent !important;
   -webkit-text-fill-color: transparent !important;
 }
+
+
+/* Live-server fallback for the pre-restart header markup. */
+.brand .brand-mark:not(:has(img)) {
+  font-size: 0 !important;
+  color: transparent !important;
+  background: transparent url("/header-bag.svg?v=20260731-exact-bag") center / contain no-repeat !important;
+}
+
+.brand-copy strong:not(:has(.brand-drop)) {
+  font-size: 0 !important;
+}
+
+.brand-copy strong:not(:has(.brand-drop))::before,
+.brand-copy strong:not(:has(.brand-drop))::after {
+  font-size: 20px;
+  line-height: 1.05;
+  letter-spacing: -.03em;
+}
+
+.brand-copy strong:not(:has(.brand-drop))::before {
+  content: "OneDaily";
+  color: var(--text) !important;
+  -webkit-text-fill-color: var(--text) !important;
+}
+
+.brand-copy strong:not(:has(.brand-drop))::after {
+  content: "Drop";
+  background: linear-gradient(110deg, #337ee8 0%, #5d58d9 48%, #9c3bcc 100%) !important;
+  background-clip: text !important;
+  -webkit-background-clip: text !important;
+  color: transparent !important;
+  -webkit-text-fill-color: transparent !important;
+}
+
+@media (max-width: 420px) {
+  .brand-copy strong:not(:has(.brand-drop))::before,
+  .brand-copy strong:not(:has(.brand-drop))::after {
+    font-size: 18px;
+  }
+}
