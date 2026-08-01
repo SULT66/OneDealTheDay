@@ -6,6 +6,7 @@ const rainforestApiKey = String(process.env.RAINFOREST_API_KEY || "").trim();
 const bluecartApiKey = String(process.env.BLUECART_API_KEY || "").trim();
 const requestedProvider = String(process.env.PRODUCT_PROVIDER || "").trim().toLowerCase();
 const adminKey = String(process.env.ADMIN_KEY || "").trim();
+const ebayVerificationToken = String(process.env.EBAY_VERIFICATION_TOKEN || "").trim();
 const demoMode = false;
 const liveRefreshEnabled = false;
 
@@ -61,6 +62,13 @@ const marketConfig = code => {
 module.exports = {
   port: Number(process.env.PORT || 8088),
   adminKey,
+  ebayVerificationToken,
+  ebayAccountDeletionEndpoint: String(
+    process.env.EBAY_ACCOUNT_DELETION_ENDPOINT || "https://www.onedailydrop.com/api/ebay/account-deletion"
+  ).trim(),
+  ebayClientId: String(process.env.EBAY_CLIENT_ID || "").trim(),
+  ebayClientSecret: String(process.env.EBAY_CLIENT_SECRET || "").trim(),
+  ebayEnvironment: String(process.env.EBAY_ENVIRONMENT || "production").trim().toLowerCase(),
   affiliateTag: String(process.env.AFFILIATE_TAG || "").trim(),
   affiliateTagConfigured: Boolean(String(process.env.AFFILIATE_TAG || "").trim()),
   provider: resolveLiveProvider(),
