@@ -142,6 +142,13 @@ db.exec(`
     UNIQUE(market, drop_date, product_id),
     FOREIGN KEY(product_id) REFERENCES products(id)
   );
+  CREATE TABLE IF NOT EXISTS ebay_account_deletion_receipts(
+    notification_id TEXT PRIMARY KEY,
+    event_date TEXT,
+    received_at TEXT NOT NULL,
+    processed_at TEXT NOT NULL,
+    status TEXT NOT NULL
+  );
 `);
 
 const userColumns = new Set(db.prepare("PRAGMA table_info(users)").all().map(column => column.name));

@@ -14,6 +14,12 @@ const { localizeProduct } = require("./demoTranslations");
 const { priceIntelligence } = require("./priceIntelligence");
 const { sourceSql, isPublicSource } = require("./publicCatalog");
 const { passwordResetEmail, subscriptionEmail, clubWaitlistEmail } = require("./mailer");
+const {
+  challengeResponse: ebayChallengeResponse,
+  createEbayPublicKeyClient,
+  tokenIsValid: ebayTokenIsValid,
+  verifySignature: verifyEbaySignature
+} = require("./ebayAccountDeletion");
 const { codes: marketCodes, normalizeMarket, market, marketFromIp, marketPath, alternateLinks } = require("./markets");
 const {
   resolveLanguage,
@@ -36,6 +42,11 @@ const stripeWebhookSecret = String(process.env.STRIPE_WEBHOOK_SECRET || "").trim
 const stripePriceId = String(process.env.STRIPE_CLUB_PRICE_ID || "").trim();
 const stripe = stripeSecretKey ? new Stripe(stripeSecretKey) : null;
 const clubEnrollmentOpen = String(process.env.CLUB_ENROLLMENT_OPEN || "false").trim().toLowerCase() === "true";
+const getEbayPublicKey = createEbayPublicKeyClient({
+  clientId:c.ebayClientId,
+  clientSecret:c.ebayClientSecret,
+  environment:c.ebayEnvironment
+});
 
 app.use(helmet({ contentSecurityPolicy: false }));
 app.post("/api/stripe/webhook", express.raw({type:"application/json"}), (req, res) => {
@@ -72,6 +83,67 @@ app.post("/api/stripe/webhook", express.raw({type:"application/json"}), (req, re
     }
   }
   res.json({received:true});
+});
+app.get("/api/ebay/account-deletion", (req, res) => {
+  res.set("X-Robots-Tag", "noindex, nofollow").set("Cache-Control", "no-store");
+  const challengeCode = typeof req.query.challenge_code === "string" ? req.query.challenge_code : "";
+  if (!challengeCode || challengeCode.length > 512) return res.status(400).json({error:"Missing or invalid challenge_code."});
+  if (!ebayTokenIsValid(c.ebayVerificationToken)) {
+    return res.status(503).json({error:"eBay account-deletion endpoint is not configured."});
+  }
+  try {
+    return res.status(200).json({
+      challengeResponse:ebayChallengeResponse({
+        challengeCode,
+        verificationToken:c.ebayVerificationToken,
+        endpoint:c.ebayAccountDeletionEndpoint
+      })
+    });
+  } catch (error) {
+    console.error("eBay endpoint validation failed:", error.message);
+    return res.sendStatus(500);
+  }
+});
+app.post("/api/ebay/account-deletion", express.raw({type:"application/json", limit:"64kb"}), async (req, res) => {
+  res.set("X-Robots-Tag", "noindex, nofollow").set("Cache-Control", "no-store");
+  if (!Buffer.isBuffer(req.body) || !req.body.length) return res.status(400).json({error:"Invalid notification payload."});
+  let verified;
+  try {
+    verified = await verifyEbaySignature({
+      rawBody:req.body,
+      signatureHeader:req.get("X-EBAY-SIGNATURE"),
+      getPublicKey:getEbayPublicKey
+    });
+  } catch (error) {
+    console.error("eBay notification validation failed:", error.message);
+    const configurationError = error.message.includes("credentials are not configured") || error.message.includes("request failed");
+    return res.sendStatus(configurationError ? 503 : 412);
+  }
+  if (!verified) return res.sendStatus(412);
+
+  let message;
+  try {
+    message = JSON.parse(req.body.toString("utf8"));
+  } catch {
+    return res.status(400).json({error:"Invalid notification JSON."});
+  }
+  const topic = String(message?.metadata?.topic || "");
+  const notificationId = String(message?.notification?.notificationId || "").trim();
+  const eventDate = String(message?.notification?.eventDate || "").trim().slice(0, 64);
+  if (topic !== "MARKETPLACE_ACCOUNT_DELETION" || !notificationId || notificationId.length > 200) {
+    return res.status(400).json({error:"Unsupported eBay notification."});
+  }
+
+  // OneDailyDrop does not persist eBay member accounts or user-level eBay data.
+  // Store only a receipt ID for idempotency; never store the deletion payload,
+  // eBay username, or eBay user ID.
+  const now = new Date().toISOString();
+  db.prepare(`
+    INSERT OR IGNORE INTO ebay_account_deletion_receipts
+      (notification_id,event_date,received_at,processed_at,status)
+    VALUES(?,?,?,?,?)
+  `).run(notificationId, eventDate || null, now, now, "acknowledged_no_user_data_stored");
+  return res.sendStatus(204);
 });
 app.use(express.json());
 app.use("/api", (req, res, next) => {
