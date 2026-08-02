@@ -256,7 +256,9 @@ async function searchProducts({
     }
     result.value.forEach((item, itemIndex) => {
       if (!candidateIsUsable(item)) return;
-      const sourceRank = keywordIndex * 20 + itemIndex + 1;
+      // Search categories are peers. Penalizing every later category made a
+      // strong item rank lower solely because its category ran later.
+      const sourceRank = itemIndex + 1;
       const candidate = {
         item,
         keyword:searchTerms[keywordIndex],

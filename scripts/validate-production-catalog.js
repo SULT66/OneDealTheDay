@@ -169,7 +169,7 @@ const refresh = fs.readFileSync(path.join(root, "src/refresh.js"), "utf8");
 for (const field of ["@retailer_name", "@seller_name", "@shipping_summary", "@return_summary", "@availability", "@checked_at"]) {
   if (!refresh.includes(field)) throw new Error(`Live offer field is not persisted during refresh: ${field}`);
 }
-for (const required of ["selectDailyProducts", "INSERT INTO daily_drops", "config.provider === \"ebay\" ? 28 : 60", "preserveDailySelection", "existingSnapshots"]) {
+for (const required of ["selectDailyProducts", "INSERT INTO daily_drops", "config.provider === \"ebay\" ? 20 : 60", "preserveDailySelection", "existingSnapshots"]) {
   if (!refresh.includes(required)) throw new Error(`Daily country selection workflow is missing: ${required}`);
 }
 const ranker = fs.readFileSync(path.join(root, "src/ranker.js"), "utf8");
