@@ -1,7 +1,6 @@
 const Database = require("better-sqlite3");
 const path = require("path");
 const fs = require("fs");
-const { installManualCatalog } = require("./manualCatalog");
 
 const isAzure = Boolean(process.env.WEBSITE_SITE_NAME || process.env.WEBSITE_INSTANCE_ID);
 const dir = process.env.DATA_DIR || (isAzure ? "/home/data/onedealtheday" : path.join(__dirname, "..", "data"));
@@ -237,20 +236,16 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_daily_drops_product ON daily_drops(product_id, drop_date DESC);
 `);
 
-// Remove preview records and their dependent snapshots so stale demo cards
-// cannot return after a deployment restart. Verified retailer data is kept.
+// Remove retired preview and hand-entered records with their dependent
+// snapshots. Live retailer data is kept so a failed refresh can continue to
+// serve the last successfully verified catalog.
 db.transaction(() => {
-  const demoIds = "SELECT id FROM products WHERE LOWER(COALESCE(source,''))='demo'";
-  db.prepare(`DELETE FROM daily_drops WHERE product_id IN (${demoIds})`).run();
-  db.prepare(`DELETE FROM price_history WHERE product_id IN (${demoIds})`).run();
-  db.prepare(`DELETE FROM clicks WHERE product_id IN (${demoIds})`).run();
-  db.prepare("DELETE FROM products WHERE LOWER(COALESCE(source,''))='demo'").run();
+  const retiredIds = "SELECT id FROM products WHERE LOWER(COALESCE(source,'')) IN ('demo','amazon-manual')";
+  db.prepare(`DELETE FROM daily_drops WHERE product_id IN (${retiredIds})`).run();
+  db.prepare(`DELETE FROM price_history WHERE product_id IN (${retiredIds})`).run();
+  db.prepare(`DELETE FROM clicks WHERE product_id IN (${retiredIds})`).run();
+  db.prepare("DELETE FROM products WHERE LOWER(COALESCE(source,'')) IN ('demo','amazon-manual')").run();
 })();
-
-// Until an approved product-data feed is connected, publish the ten manually
-// selected US products with affiliate links but without copied prices,
-// ratings, reviews or retailer images.
-installManualCatalog(db);
 
 // Seed one observation for existing products so price intelligence works
 // immediately after deployment without discarding any catalog data.

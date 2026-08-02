@@ -115,9 +115,10 @@ function demandScore(product) {
 function fulfillmentScore(product) {
   const shipping = String(product.shipping_summary || "").trim();
   const returns = String(product.return_summary || "").trim();
+  const positiveReturns = returns && !/\b(not accepted|no returns|final sale)\b/i.test(returns);
   const fastOrFree = /\b(prime|free|same.day|next.day|fast)\b/i.test(shipping);
   return (shipping ? 4 : 0) +
-    (returns ? 3 : 0) +
+    (positiveReturns ? 3 : 0) +
     (isAvailable(product) ? 2 : 0) +
     (fastOrFree ? 1 : 0);
 }

@@ -9,6 +9,7 @@ const definitions = {
     locale: "en-US",
     hreflang: "en-US",
     timezone: "America/New_York",
+    ebayMarketplaceId: "EBAY_US",
     amazonDomain: "amazon.com",
     walmartDomain: "walmart.com",
     supportsWalmart: true
@@ -21,6 +22,7 @@ const definitions = {
     locale: "en-CA",
     hreflang: "en-CA",
     timezone: "America/Toronto",
+    ebayMarketplaceId: "EBAY_CA",
     amazonDomain: "amazon.ca",
     walmartDomain: "walmart.ca",
     supportsWalmart: false
@@ -33,6 +35,7 @@ const definitions = {
     locale: "en-GB",
     hreflang: "en-GB",
     timezone: "Europe/London",
+    ebayMarketplaceId: "EBAY_GB",
     amazonDomain: "amazon.co.uk",
     supportsWalmart: false
   },
@@ -44,6 +47,7 @@ const definitions = {
     locale: "fr-FR",
     hreflang: "fr-FR",
     timezone: "Europe/Paris",
+    ebayMarketplaceId: "EBAY_FR",
     amazonDomain: "amazon.fr",
     supportsWalmart: false
   },
@@ -55,6 +59,7 @@ const definitions = {
     locale: "de-DE",
     hreflang: "de-DE",
     timezone: "Europe/Berlin",
+    ebayMarketplaceId: "EBAY_DE",
     amazonDomain: "amazon.de",
     supportsWalmart: false
   }

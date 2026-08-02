@@ -9,12 +9,12 @@ const files = [
   "app.js",
   "src/config.js",
   "src/publicCatalog.js",
-  "src/manualCatalog.js",
   "src/markets.js",
   "src/ranker.js",
   "src/refresh.js",
   "src/catalogRecovery.js",
   "src/providers/demo.js",
+  "src/providers/ebay.js",
   "src/homepage.js",
   "src/homepage-seo.js",
   "src/mailer.js",
@@ -149,16 +149,15 @@ for (const required of [".mobile-menu-toggle", ".main-nav.is-open", "overflow-x:
 const database = fs.readFileSync(path.join(root, "src/db.js"), "utf8");
 if (!database.includes("CREATE TABLE IF NOT EXISTS subscribers")) throw new Error("Subscriber storage is missing");
 if (!database.includes("CREATE TABLE IF NOT EXISTS daily_drops")) throw new Error("Permanent daily-drop archive storage is missing");
-if (!database.includes("DELETE FROM products WHERE LOWER(COALESCE(source,''))='demo'")) {
-  throw new Error("Old demo products are not purged safely at startup");
+if (!database.includes("IN ('demo','amazon-manual')")) {
+  throw new Error("Retired demo and manual Amazon products are not purged safely at startup");
 }
-if (!database.includes("installManualCatalog(db)")) {
-  throw new Error("The manually selected Amazon catalog is not installed at startup");
+if (database.includes("installManualCatalog") || fs.existsSync(path.join(root, "src", "manualCatalog.js"))) {
+  throw new Error("The retired manual Amazon catalog can still be installed");
 }
-const manualCatalog = require(path.join(root, "src", "manualCatalog"));
-if (manualCatalog.products.length !== 10) throw new Error("The manual Amazon catalog must contain exactly ten products");
-for (const product of manualCatalog.products) {
-  if (!/^[A-Z0-9]{10}$/.test(product.asin)) throw new Error(`Invalid manual Amazon ASIN: ${product.asin}`);
+const publicCatalog = fs.readFileSync(path.join(root, "src/publicCatalog.js"), "utf8");
+if (publicCatalog.includes('"amazon-manual"')) {
+  throw new Error("Manual Amazon products remain eligible for public pages");
 }
 for (const field of ["market", "score_breakdown", "selection_reason", "provider_external_id"]) {
   if (!database.includes(field)) throw new Error(`Market-aware product selection field is missing from the database: ${field}`);
@@ -170,7 +169,7 @@ const refresh = fs.readFileSync(path.join(root, "src/refresh.js"), "utf8");
 for (const field of ["@retailer_name", "@seller_name", "@shipping_summary", "@return_summary", "@availability", "@checked_at"]) {
   if (!refresh.includes(field)) throw new Error(`Live offer field is not persisted during refresh: ${field}`);
 }
-for (const required of ["selectDailyProducts", "INSERT INTO daily_drops", "minimumScore: config.provider === \"demo\" ? 0 : 60", "preserveDailySelection", "existingSnapshots"]) {
+for (const required of ["selectDailyProducts", "INSERT INTO daily_drops", "config.provider === \"ebay\" ? 50 : 60", "preserveDailySelection", "existingSnapshots"]) {
   if (!refresh.includes(required)) throw new Error(`Daily country selection workflow is missing: ${required}`);
 }
 const ranker = fs.readFileSync(path.join(root, "src/ranker.js"), "utf8");
@@ -374,6 +373,20 @@ if (liveResult.status !== 0) throw new Error(liveResult.stderr || "Live config p
 const live = JSON.parse(liveResult.stdout);
 if (live.provider !== "unconfigured" || live.demoMode || live.liveRefreshEnabled) {
   throw new Error(`Unapproved provider activation is still possible: ${liveResult.stdout}`);
+}
+
+const ebayEnv = {
+  ...process.env,
+  WEBSITE_SITE_NAME: "production-test",
+  EBAY_CLIENT_ID: "production-client-id",
+  EBAY_CLIENT_SECRET: "production-client-secret",
+  EBAY_CAMPAIGN_ID: "5339179772"
+};
+const ebayResult = spawnSync(process.execPath, ["-e", configProbe], { cwd: root, env: ebayEnv, encoding: "utf8" });
+if (ebayResult.status !== 0) throw new Error(ebayResult.stderr || "eBay config probe failed");
+const ebay = JSON.parse(ebayResult.stdout);
+if (ebay.provider !== "ebay" || ebay.demoMode || !ebay.liveRefreshEnabled) {
+  throw new Error(`Approved eBay provider did not activate safely: ${ebayResult.stdout}`);
 }
 
 console.log("Verified-source catalog, empty-state homepage and trust-page validation passed.");
