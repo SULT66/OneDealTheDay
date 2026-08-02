@@ -1,5 +1,5 @@
 const assert = require("assert");
-const { candidateIsUsable, normalizeItem, searchProducts } = require("../src/providers/ebay");
+const { candidateIsUsable, hasTrustEvidence, normalizeItem, searchProducts } = require("../src/providers/ebay");
 
 const market = {
   code:"us",
@@ -105,6 +105,14 @@ const fetchImpl = async (url, options = {}) => {
     returnTerms:{returnsAccepted:false}
   }, "home gadgets", 1, market);
   assert.strictEqual(noReturns.return_summary, "Returns not accepted");
+
+  const sellerBacked = normalizeItem({
+    ...summary,
+    primaryProductReviewRating:undefined
+  }, "home gadgets", 2, market);
+  assert.strictEqual(sellerBacked.rating, 0, "A seller score was incorrectly exposed as a product rating");
+  assert(hasTrustEvidence(sellerBacked), "An established seller was not accepted as fallback evidence");
+  assert(!hasTrustEvidence({...sellerBacked, seller_rating:4.7}), "Weak seller evidence was accepted");
 
   console.log("eBay Browse API validation passed.");
 })().catch(error => {

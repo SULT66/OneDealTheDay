@@ -57,5 +57,7 @@ When the production Client ID, Client Secret and Campaign ID are configured,
 eBay becomes an approved live catalog source automatically. OneDailyDrop searches
 the US, Canada, Great Britain, France and Germany marketplaces, follows the best
 candidates with item-detail requests, and publishes only new fixed-price listings
-with EPN commission links, real customer-review evidence and current offer data.
+with EPN commission links and current offer data. Product-review evidence is used
+when eBay provides it; otherwise the item must come from an established seller
+with strong feedback, and the site does not invent or relabel a product rating.
 The daily selection refreshes nightly and checks offers every six hours.

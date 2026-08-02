@@ -211,6 +211,7 @@ function normalizeItem(item, keyword, sourceRank, market) {
     retailer_name:"eBay",
     seller_name:text(item?.seller?.username),
     seller_rating:sellerFeedback > 0 ? sellerFeedback / 20 : 0,
+    seller_feedback_count:Math.round(number(item?.seller?.feedbackScore, 0)),
     shipping_summary:shippingSummary(item),
     return_summary:returnSummary(item),
     availability:listingAvailable(item) ? "In stock" : "Out of stock",
@@ -219,6 +220,12 @@ function normalizeItem(item, keyword, sourceRank, market) {
     source:"ebay",
     source_rank:sourceRank
   };
+}
+
+function hasTrustEvidence(product) {
+  const reviewedProduct = product.rating >= 4 && product.review_count >= 25;
+  const establishedSeller = product.seller_rating >= 4.8 && product.seller_feedback_count >= 100;
+  return reviewedProduct || establishedSeller;
 }
 
 async function searchProducts({
@@ -273,21 +280,26 @@ async function searchProducts({
     details.forEach((result, index) => {
       if (result.status !== "fulfilled") return;
       const candidate = batch[index];
-      const merged = {...candidate.item, ...result.value};
+      const merged = {
+        ...candidate.item,
+        ...result.value,
+        seller:{...candidate.item?.seller, ...result.value?.seller}
+      };
       const product = normalizeItem(merged, candidate.keyword, candidate.sourceRank, market);
-      if (product.rating >= 4 && product.review_count >= 25 && product.current_price > 0 && product.affiliate_url && product.image_url && listingAvailable(merged)) {
+      if (hasTrustEvidence(product) && product.current_price > 0 && product.affiliate_url && product.image_url && listingAvailable(merged)) {
         products.push(product);
       }
     });
   }
 
-  if (!products.length) throw new Error("eBay returned no products with verified customer ratings and commissionable links");
+  if (!products.length) throw new Error("eBay returned no products with sufficient product-review or established-seller evidence");
   return products;
 }
 
 module.exports = {
   candidateIsUsable,
   createEbayClient,
+  hasTrustEvidence,
   normalizeItem,
   searchProducts
 };
