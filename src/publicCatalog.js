@@ -1,26 +1,32 @@
 const supportedSources = new Set([
-  "amazon-manual",
   "rainforest",
   "amazon",
+  "ebay",
   "walmart",
   "bluecart"
 ]);
 
-// Keep the launch catalog safe by default. Once a retailer approves the site,
-// its provider can be enabled through configuration without a code release:
-// PUBLIC_PRODUCT_SOURCES=amazon-manual,rainforest,walmart
-const configuredSources = String(process.env.PUBLIC_PRODUCT_SOURCES || "amazon-manual")
+// Only approved automated feeds can become public. No hand-entered or demo
+// catalog is used as a fallback.
+const configuredSources = String(process.env.PUBLIC_PRODUCT_SOURCES || "")
   .split(",")
   .map(source => source.trim().toLowerCase())
   .filter(source => supportedSources.has(source));
 
+const ebayConfigured = Boolean(
+  String(process.env.EBAY_CLIENT_ID || "").trim() &&
+  String(process.env.EBAY_CLIENT_SECRET || "").trim() &&
+  /^\d{10}$/.test(String(process.env.EBAY_CAMPAIGN_ID || "").trim())
+);
+if (ebayConfigured && !configuredSources.includes("ebay")) configuredSources.push("ebay");
+
 const PUBLIC_PRODUCT_SOURCES = Object.freeze(
-  [...new Set(configuredSources.length ? configuredSources : ["amazon-manual"])]
+  [...new Set(configuredSources)]
 );
 
-const quotedSources = PUBLIC_PRODUCT_SOURCES
-  .map(source => `'${source.replace(/'/g, "''")}'`)
-  .join(",");
+const quotedSources = PUBLIC_PRODUCT_SOURCES.length
+  ? PUBLIC_PRODUCT_SOURCES.map(source => `'${source.replace(/'/g, "''")}'`).join(",")
+  : "'__no_public_source__'";
 
 const sourceSql = (alias = "") => {
   const prefix = alias ? `${alias}.` : "";

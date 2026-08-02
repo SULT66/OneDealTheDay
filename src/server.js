@@ -477,7 +477,7 @@ const slug = value => String(value || "").normalize("NFKD").replace(/[\u0300-\u0
 const dealPath = product => marketPath(product.market || "us", `/deal/${slug(product.canonical_title || product.title)}-${product.id}`);
 const catPath = (value, code = "us") => marketPath(code, `/category/${slug(value)}`);
 const brandPath = (value, code = "us") => marketPath(code, `/brand/${slugifyBrand(value)}`);
-const money = (value, currency = "USD", locale = "en-US") => { if (value == null || value === "") return "Check current price on Amazon"; const n = Number(value); if (!Number.isFinite(n)) return "Check current price on Amazon"; try { return new Intl.NumberFormat(locale, { style: "currency", currency: String(currency || "USD").toUpperCase() }).format(n); } catch { return `$${n.toFixed(2)}`; } };
+const money = (value, currency = "USD", locale = "en-US") => { if (value == null || value === "") return "Check current price"; const n = Number(value); if (!Number.isFinite(n)) return "Check current price"; try { return new Intl.NumberFormat(locale, { style: "currency", currency: String(currency || "USD").toUpperCase() }).format(n); } catch { return `$${n.toFixed(2)}`; } };
 const clean = value => String(value || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
 const shortTitle = value => { const text = clean(value); return text.length <= 78 ? text : `${text.slice(0, 75).trim()}…`; };
 const storeName = product => { const source = String(product.source || "").toLowerCase(); if (clean(product.retailer_name)) return clean(product.retailer_name); if (source.includes("amazon") || source.includes("rainforest")) return "Amazon"; if (source.includes("walmart") || source.includes("bluecart")) return "Walmart"; return product.source || "Retailer"; };
@@ -935,9 +935,18 @@ for (const marketCode of c.markets) {
 }
 (async () => {
   backfillBrands();
-  for (const marketCode of c.markets) {
-    const count = db.prepare("SELECT COUNT(*) n FROM products WHERE market=? AND status='published'").get(marketCode).n;
-    if (!count && c.provider !== "unconfigured") await refreshProducts(c, {market:marketCode}).catch(console.error);
-  }
-  app.listen(c.port, () => console.log(`http://localhost:${c.port}`));
+  app.listen(c.port, () => {
+    console.log(`http://localhost:${c.port}`);
+    // Azure production recovery is owned by app.js so only one initial API
+    // pass can run. Keep this convenience bootstrap for local development.
+    if (c.isProduction || c.provider === "unconfigured") return;
+    setImmediate(async () => {
+      for (const marketCode of c.markets) {
+        const sourceCount = db.prepare(
+          "SELECT COUNT(*) n FROM products WHERE market=? AND status='published' AND LOWER(COALESCE(source,''))=?"
+        ).get(marketCode, c.provider).n;
+        if (!sourceCount) await refreshProducts(c, {market:marketCode}).catch(console.error);
+      }
+    });
+  });
 })();

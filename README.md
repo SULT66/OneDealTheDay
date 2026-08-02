@@ -20,11 +20,11 @@ The site does not load demo products. Until verified products are added, visitor
 ## Product sources
 Public products must use an explicitly approved source:
 
-- `amazon-manual` for original editorial pages with SiteStripe links;
+- `ebay` for Browse API product data and EPN-tracked links;
 - `amazon-creators-api` or `amazon-pa-api` after official Amazon API access;
 - `bestbuy-products-api` after official Best Buy API access.
 
-Legacy scraping providers and demo catalogs are not enabled.
+Legacy scraping providers, demo catalogs and hand-entered Amazon products are not enabled.
 
 The ranking uses search position, rating, review volume, discount and popularity badges. Previous products are archived and the best ten are published.
 
@@ -41,6 +41,7 @@ Configure these values only in the hosting provider's encrypted app settings:
 - `EBAY_VERIFICATION_TOKEN`: 32–80 characters using letters, numbers, `_` or `-`;
 - `EBAY_CLIENT_ID`: production App ID/Client ID;
 - `EBAY_CLIENT_SECRET`: production Cert ID/Client Secret;
+- `EBAY_CAMPAIGN_ID`: the 10-digit eBay Partner Network campaign ID;
 - `EBAY_ACCOUNT_DELETION_ENDPOINT`: the exact production URL above;
 - `EBAY_ENVIRONMENT`: `production`.
 
@@ -49,3 +50,12 @@ The GET route answers eBay's endpoint challenge. The POST route validates
 notification. OneDailyDrop does not store eBay member accounts; it records only
 the notification ID and processing timestamps for idempotency, never the eBay
 username, eBay user ID or full notification payload.
+
+## eBay Browse API catalog
+
+When the production Client ID, Client Secret and Campaign ID are configured,
+eBay becomes an approved live catalog source automatically. OneDailyDrop searches
+the US, Canada, Great Britain, France and Germany marketplaces, follows the best
+candidates with item-detail requests, and publishes only new fixed-price listings
+with EPN commission links, real customer-review evidence and current offer data.
+The daily selection refreshes nightly and checks offers every six hours.

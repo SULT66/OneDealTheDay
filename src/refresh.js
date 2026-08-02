@@ -51,6 +51,24 @@ async function loadProducts(config, selectedMarket) {
   const jobs = [];
   const amazonEnabled = ["rainforest", "multi"].includes(config.provider);
   const walmartEnabled = ["walmart", "multi"].includes(config.provider) && selectedMarket.supportsWalmart;
+  const ebayEnabled = ["ebay", "multi"].includes(config.provider);
+
+  if (ebayEnabled) {
+    if (!config.ebayClientId || !config.ebayClientSecret) throw new Error("eBay Production credentials are missing; existing products were kept");
+    if (!/^\d{10}$/.test(config.ebayCampaignId)) throw new Error("EBAY_CAMPAIGN_ID is invalid; existing products were kept");
+    const ebay = require("./providers/ebay");
+    jobs.push({
+      name: `eBay ${selectedMarket.name}`,
+      promise: ebay.searchProducts({
+        clientId: config.ebayClientId,
+        clientSecret: config.ebayClientSecret,
+        campaignId: config.ebayCampaignId,
+        environment: config.ebayEnvironment,
+        keywords: selectedMarket.searchKeywords,
+        market: selectedMarket
+      })
+    });
+  }
 
   if (amazonEnabled) {
     if (!config.rainforestApiKey) throw new Error("RAINFOREST_API_KEY is missing; existing products were kept");
@@ -163,9 +181,9 @@ async function refreshMarket(config, marketCode, options = {}) {
     const found = addPriceIntelligence(await loadProducts(config, selectedMarket), selectedMarket.code);
     const ranked = rankProducts(found, 60, {
       currency: selectedMarket.currency,
-      minimumRating: 3.8,
+      minimumRating: config.provider === "ebay" ? 4 : 3.8,
       minimumReviews: 25,
-      minimumScore: config.provider === "demo" ? 0 : 60
+      minimumScore: config.provider === "demo" ? 0 : config.provider === "ebay" ? 50 : 60
     });
     if (!Array.isArray(found) || found.length < 10 || ranked.length < 10) {
       throw new Error(`${selectedMarket.name} refresh returned insufficient eligible products (${ranked.length}/10)`);

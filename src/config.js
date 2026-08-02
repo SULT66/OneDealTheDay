@@ -4,11 +4,12 @@ const { codes: supportedMarketCodes, market } = require("./markets");
 const isAzure = Boolean(process.env.WEBSITE_SITE_NAME || process.env.WEBSITE_INSTANCE_ID);
 const rainforestApiKey = String(process.env.RAINFOREST_API_KEY || "").trim();
 const bluecartApiKey = String(process.env.BLUECART_API_KEY || "").trim();
-const requestedProvider = String(process.env.PRODUCT_PROVIDER || "").trim().toLowerCase();
 const adminKey = String(process.env.ADMIN_KEY || "").trim();
 const ebayVerificationToken = String(process.env.EBAY_VERIFICATION_TOKEN || "").trim();
+const ebayClientId = String(process.env.EBAY_CLIENT_ID || "").trim();
+const ebayClientSecret = String(process.env.EBAY_CLIENT_SECRET || "").trim();
+const ebayCampaignId = String(process.env.EBAY_CAMPAIGN_ID || "").trim();
 const demoMode = false;
-const liveRefreshEnabled = false;
 
 const defaultKeywords = [
   "home gadgets",
@@ -24,8 +25,12 @@ const defaultKeywords = [
 ];
 
 function resolveLiveProvider() {
+  if (ebayClientId && ebayClientSecret && /^\d{10}$/.test(ebayCampaignId)) return "ebay";
   return "unconfigured";
 }
+
+const provider = resolveLiveProvider();
+const liveRefreshEnabled = provider === "ebay";
 
 const configuredKeywords = String(process.env.SEARCH_KEYWORDS || "")
   .split(",")
@@ -66,22 +71,23 @@ module.exports = {
   ebayAccountDeletionEndpoint: String(
     process.env.EBAY_ACCOUNT_DELETION_ENDPOINT || "https://www.onedailydrop.com/api/ebay/account-deletion"
   ).trim(),
-  ebayClientId: String(process.env.EBAY_CLIENT_ID || "").trim(),
-  ebayClientSecret: String(process.env.EBAY_CLIENT_SECRET || "").trim(),
+  ebayClientId,
+  ebayClientSecret,
+  ebayCampaignId,
   ebayEnvironment: String(process.env.EBAY_ENVIRONMENT || "production").trim().toLowerCase(),
   affiliateTag: String(process.env.AFFILIATE_TAG || "").trim(),
   affiliateTagConfigured: Boolean(String(process.env.AFFILIATE_TAG || "").trim()),
-  provider: resolveLiveProvider(),
-  requestedProvider: "unconfigured",
+  provider,
+  requestedProvider: provider === "ebay" ? "ebay" : "unconfigured",
   siteMode: "live",
   demoMode,
   liveRefreshEnabled,
-  offerCheckEnabled: liveRefreshEnabled && String(process.env.OFFER_CHECK_ENABLED || "false").trim().toLowerCase() === "true",
+  offerCheckEnabled: liveRefreshEnabled && String(process.env.OFFER_CHECK_ENABLED || "true").trim().toLowerCase() !== "false",
   rainforestApiKey,
   bluecartApiKey,
   isProduction: isAzure,
   refreshCron: process.env.REFRESH_CRON || "15 0 * * *",
-  offerCheckCron: process.env.OFFER_CHECK_CRON || "15 * * * *",
+  offerCheckCron: process.env.OFFER_CHECK_CRON || "15 */6 * * *",
   timezone: process.env.TIMEZONE || "America/New_York",
   searchKeywords: configuredKeywords.length ? configuredKeywords : defaultKeywords,
   markets,

@@ -1,8 +1,12 @@
 const db = require("./db");
 const { refreshProducts } = require("./refresh");
 
-function countLiveProducts() {
-  return Number(db.prepare("SELECT COUNT(*) n FROM products WHERE status='published' AND LOWER(COALESCE(source,''))<>'demo'").get().n || 0);
+function countLiveProducts(marketCode = "") {
+  const marketFilter = marketCode ? " AND market=?" : "";
+  const params = marketCode ? [marketCode] : [];
+  return Number(db.prepare(
+    `SELECT COUNT(*) n FROM products WHERE status='published' AND LOWER(COALESCE(source,'')) NOT IN ('demo','amazon-manual')${marketFilter}`
+  ).get(...params).n || 0);
 }
 
 function countDemoProducts() {
@@ -31,20 +35,23 @@ function recordConfigurationFailure(config, message) {
 
 module.exports = async function recoverProductionCatalog(config) {
   const demoCount = countDemoProducts();
-  let liveCount = countLiveProducts();
-  let refreshError = "";
+  const refreshErrors = [];
+  const marketCodes = Array.isArray(config.markets) && config.markets.length ? config.markets : ["us"];
 
-  if (!liveCount && config.provider !== "unconfigured") {
-    console.log(`Refreshing live production catalog with provider ${config.provider}.`);
-    try {
-      await refreshProducts(config);
-    } catch (error) {
-      refreshError = error.message;
-      console.error(`Live catalog recovery failed: ${refreshError}`);
+  if (config.provider !== "unconfigured") {
+    for (const marketCode of marketCodes) {
+      if (countLiveProducts(marketCode)) continue;
+      console.log(`Refreshing ${marketCode.toUpperCase()} production catalog with provider ${config.provider}.`);
+      try {
+        await refreshProducts(config, { market: marketCode });
+      } catch (error) {
+        refreshErrors.push(`${marketCode}: ${error.message}`);
+        console.error(`${marketCode.toUpperCase()} catalog recovery failed: ${error.message}`);
+      }
     }
-    liveCount = countLiveProducts();
-  } else if (!liveCount && config.provider === "unconfigured") {
-    refreshError = "No live retailer API keys are configured in Azure App Settings";
+  } else if (!countLiveProducts()) {
+    const refreshError = "No live retailer API keys are configured in Azure App Settings";
+    refreshErrors.push(refreshError);
     recordConfigurationFailure(config, refreshError);
     console.error(refreshError);
   }
@@ -54,7 +61,8 @@ module.exports = async function recoverProductionCatalog(config) {
   const removed = removeDemoProducts();
   if (removed) console.log(`Removed ${removed} demo products from the production database.`);
 
-  liveCount = countLiveProducts();
+  const liveCount = countLiveProducts();
+  const refreshError = refreshErrors.join(" | ");
   if (!liveCount) {
     console.error(`Production catalog is empty. ${refreshError || "No live retailer products were returned."}`);
   }

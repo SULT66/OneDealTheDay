@@ -35,9 +35,9 @@ const hasCurrentOffer = product => Number(product?.current_price) > 0 &&
 const hasReviewData = product => Number(product?.rating) > 0 && Number(product?.review_count) > 0;
 const hasScoreData = product => hasCurrentOffer(product) && Number(product?.score) > 0;
 const money = (value, currency = "USD") => {
-  if (value == null || value === "") return "Check current price on Amazon";
+  if (value == null || value === "") return "Check current price";
   const amount = Number(value);
-  if (!Number.isFinite(amount)) return "Check current price on Amazon";
+  if (!Number.isFinite(amount)) return "Check current price";
   try {
     return new Intl.NumberFormat("en-US", { style: "currency", currency: String(currency || "USD").toUpperCase() }).format(amount);
   } catch {
@@ -78,7 +78,7 @@ const whyPicked = product => {
 const statusText = product => isDemo(product)
   ? "Retailer availability coming soon"
   : !hasCurrentOffer(product)
-    ? "Price and availability confirmed on Amazon"
+    ? "Confirm price and availability at the retailer"
   : product.checked_at || product.updated_at
     ? `Price checked ${new Date(product.checked_at || product.updated_at).toLocaleString("en-US")}`
     : "Price recently verified";
