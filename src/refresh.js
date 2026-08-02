@@ -183,7 +183,7 @@ async function refreshMarket(config, marketCode, options = {}) {
       currency: selectedMarket.currency,
       minimumRating: config.provider === "ebay" ? 0 : 3.8,
       minimumReviews: config.provider === "ebay" ? 0 : 25,
-      minimumScore: config.provider === "demo" ? 0 : config.provider === "ebay" ? 28 : 60
+      minimumScore: config.provider === "demo" ? 0 : config.provider === "ebay" ? 20 : 60
     });
     if (!Array.isArray(found) || found.length < 10 || ranked.length < 10) {
       throw new Error(`${selectedMarket.name} refresh returned insufficient eligible products (${found.length} found, ${ranked.length}/10 eligible)`);

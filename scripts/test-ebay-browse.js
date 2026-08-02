@@ -89,6 +89,7 @@ const fetchImpl = async (url, options = {}) => {
   });
   assert.strictEqual(products.length, 1);
   assert.strictEqual(products[0].source, "ebay");
+  assert.strictEqual(products[0].source_rank, 1);
   assert.strictEqual(products[0].rating, 4.7);
   assert.strictEqual(products[0].review_count, 321);
   assert.strictEqual(products[0].affiliate_url, summary.itemAffiliateWebUrl);
