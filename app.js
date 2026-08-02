@@ -31,7 +31,9 @@ function countProducts(where = "1=1", params = []) {
 function catalogStatus(marketCode = "") {
   const marketWhere = marketCode ? "market=? AND " : "";
   const params = marketCode ? [marketCode] : [];
-  const latestRun = db.prepare("SELECT provider,started_at,finished_at,found_count,published_count,status,message FROM refresh_runs ORDER BY id DESC LIMIT 1").get() || null;
+  const latestRun = marketCode
+    ? db.prepare("SELECT provider,market,started_at,finished_at,found_count,published_count,status,message FROM refresh_runs WHERE market=? ORDER BY id DESC LIMIT 1").get(marketCode) || null
+    : db.prepare("SELECT provider,market,started_at,finished_at,found_count,published_count,status,message FROM refresh_runs ORDER BY id DESC LIMIT 1").get() || null;
   return {
     siteMode: config.siteMode,
     provider: config.provider,

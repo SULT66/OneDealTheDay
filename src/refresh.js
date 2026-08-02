@@ -181,12 +181,12 @@ async function refreshMarket(config, marketCode, options = {}) {
     const found = addPriceIntelligence(await loadProducts(config, selectedMarket), selectedMarket.code);
     const ranked = rankProducts(found, 60, {
       currency: selectedMarket.currency,
-      minimumRating: config.provider === "ebay" ? 4 : 3.8,
-      minimumReviews: 25,
-      minimumScore: config.provider === "demo" ? 0 : config.provider === "ebay" ? 50 : 60
+      minimumRating: config.provider === "ebay" ? 0 : 3.8,
+      minimumReviews: config.provider === "ebay" ? 0 : 25,
+      minimumScore: config.provider === "demo" ? 0 : config.provider === "ebay" ? 28 : 60
     });
     if (!Array.isArray(found) || found.length < 10 || ranked.length < 10) {
-      throw new Error(`${selectedMarket.name} refresh returned insufficient eligible products (${ranked.length}/10)`);
+      throw new Error(`${selectedMarket.name} refresh returned insufficient eligible products (${found.length} found, ${ranked.length}/10 eligible)`);
     }
     const selected = selectDailyProducts(ranked, selectedMarket.code, selectedMarket.timezone, Boolean(options.preserveDailySelection));
     const updatedAt = new Date().toISOString();

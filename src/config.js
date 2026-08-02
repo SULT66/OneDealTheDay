@@ -23,6 +23,30 @@ const defaultKeywords = [
   "fitness accessories",
   "gifts under 25"
 ];
+const localizedDefaultKeywords = {
+  fr: [
+    "gadgets maison",
+    "accessoires cuisine",
+    "maison connectée",
+    "accessoires voiture",
+    "animaux de compagnie",
+    "outils bricolage",
+    "accessoires voyage",
+    "accessoires fitness",
+    "idées cadeaux"
+  ],
+  de: [
+    "haushaltsgadgets",
+    "küchengadgets",
+    "smart home",
+    "autozubehör",
+    "tierbedarf",
+    "werkzeug",
+    "reisezubehör",
+    "fitness zubehör",
+    "geschenkideen"
+  ]
+};
 
 function resolveLiveProvider() {
   if (ebayClientId && ebayClientSecret && /^\d{10}$/.test(ebayCampaignId)) return "ebay";
@@ -53,7 +77,11 @@ const keywordsForMarket = code => {
     .split(",")
     .map(value => value.trim())
     .filter(Boolean);
-  return configured.length ? configured : configuredKeywords.length ? configuredKeywords : defaultKeywords;
+  return configured.length
+    ? configured
+    : configuredKeywords.length
+      ? configuredKeywords
+      : localizedDefaultKeywords[code] || defaultKeywords;
 };
 const marketConfig = code => {
   const selected = market(code);
