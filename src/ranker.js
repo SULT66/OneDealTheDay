@@ -157,12 +157,14 @@ function selectionReason(product, result) {
   }
   if (number(product.rating) > 0) points.push(`${number(product.rating).toFixed(1)}-star rating`);
   if (number(product.review_count) >= 25) points.push(`${Math.round(number(product.review_count)).toLocaleString("en-US")} reviews`);
-  if (String(product.seller_name || "").trim()) points.push(`seller identified as ${String(product.seller_name).trim()}`);
-  if (String(product.shipping_summary || "").trim()) points.push("clear delivery information");
+  if (number(result.breakdown?.seller_reliability) >= 12) points.push("established seller evidence");
+  else if (String(product.seller_name || "").trim()) points.push("an identified seller");
+  if (String(product.shipping_summary || "").trim()) points.push("delivery terms");
+  if (String(product.return_summary || "").trim()) points.push("return terms");
   const evidence = points.slice(0, 4);
   return evidence.length
-    ? `Selected with a ${Math.round(result.total)}/100 OneDailyDrop Score for ${evidence.join(", ")}.`
-    : `Selected with a ${Math.round(result.total)}/100 OneDailyDrop Score after comparing price, quality, seller and fulfillment signals.`;
+    ? `Ranked using ${evidence.join(", ")}; missing evidence received no points.`
+    : "Ranked from the available price, product, seller and fulfillment evidence; missing evidence received no points.";
 }
 
 function betterOffer(left, right) {

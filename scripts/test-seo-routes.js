@@ -68,39 +68,48 @@ const insertProduct = db.prepare(`
     currency,score,selection_reason,source,status,updated_at,first_seen_at,last_seen_at
   ) VALUES(${Array(29).fill("?").join(",")})
 `);
-for (let index = 1; index <= 10; index += 1) {
-  const brand = index <= 5 ? "Acme" : "Northstar";
-  insertProduct.run(
-    `us:ebay-test-${index}`,
-    `ebay-test-${index}`,
-    "us",
-    `ebay-test-${index}`,
-    brand,
-    brand.toLowerCase(),
-    `eBay Test Product ${index}`,
-    index % 2 ? "Home" : "Electronics",
-    `Verified eBay fixture ${index}`,
-    `https://i.ebayimg.com/images/g/test-${index}/s-l1600.jpg`,
-    `https://www.ebay.com/itm/${1000 + index}?campid=5339179772`,
-    "eBay",
-    `Test Seller ${index}`,
-    "Free delivery",
-    "30-day returns",
-    "Available",
-    now,
-    4.8,
-    500 + index,
-    18.99 + index,
-    28.99 + index,
-    "USD",
-    90 - index / 10,
-    "Strong customer feedback, delivery and return terms.",
-    "ebay",
-    "published",
-    now,
-    now,
-    now
-  );
+const fixtureMarkets = [
+  { code:"us", currency:"USD", category:"office gadgets", rating:4.8, reviews:500 },
+  { code:"ca", currency:"CAD", category:"car accessories", rating:4.7, reviews:220 },
+  { code:"uk", currency:"GBP", category:"travel accessories", rating:4.6, reviews:80 },
+  { code:"fr", currency:"EUR", category:"pet supplies", rating:0, reviews:0 },
+  { code:"de", currency:"EUR", category:"kitchen gadgets", rating:0, reviews:0 }
+];
+for (const fixtureMarket of fixtureMarkets) {
+  for (let index = 1; index <= 10; index += 1) {
+    const brand = index <= 5 ? "Acme" : "Northstar";
+    insertProduct.run(
+      `${fixtureMarket.code}:ebay-test-${index}`,
+      `${fixtureMarket.code}-ebay-test-${index}`,
+      fixtureMarket.code,
+      `${fixtureMarket.code}-ebay-test-${index}`,
+      brand,
+      brand.toLowerCase(),
+      `eBay Test Product ${index}`,
+      fixtureMarket.category,
+      `Verified eBay fixture ${index}`,
+      `https://i.ebayimg.com/images/g/${fixtureMarket.code}-test-${index}/s-l1600.jpg`,
+      `https://www.ebay.com/itm/${fixtureMarket.code}${1000 + index}?campid=5339179772`,
+      "eBay",
+      `Test Seller ${index}`,
+      "Free shipping via Standard Shipping",
+      "30 calendar days, seller-paid return shipping",
+      "In stock",
+      now,
+      fixtureMarket.rating,
+      fixtureMarket.reviews + index,
+      18.99 + index,
+      28.99 + index,
+      fixtureMarket.currency,
+      45 - index / 10,
+      "Selected with a technical internal score.",
+      "ebay",
+      "published",
+      now,
+      now,
+      now
+    );
+  }
 }
 
 const base = `http://127.0.0.1:${port}`;
@@ -152,22 +161,38 @@ async function run() {
   const spanishHomepage = await spanishResponse.text();
   assert(spanishHomepage.includes('<html lang="es-US">'), "US Spanish locale is incorrect");
   assert(spanishHomepage.includes("eBay Test Product 1"), "US Spanish catalog is missing the verified products");
+  assert(spanishHomepage.includes("Accesorios de oficina"), "US Spanish live category is not localized");
+  assert(spanishHomepage.includes("Entrega gratuita mediante Standard Shipping"), "US Spanish delivery terms are not localized");
+  assert(!spanishHomepage.includes("Selected with a technical internal score"), "US Spanish exposes the stored technical selection reason");
   assert(String(spanishResponse.headers.get("set-cookie") || "").includes("odd_lang_us=es"), "US language preference cookie is missing");
 
   const frenchHomepage = await (await get("/fr")).text();
   assert(frenchHomepage.includes('<html lang="fr-FR">'), "France must default to French");
-  assert(!frenchHomepage.includes("eBay Test Product 1"), "US-only products leaked into the France catalog");
+  assert(frenchHomepage.includes("eBay Test Product 1"), "France live catalog is missing");
+  assert(frenchHomepage.includes("Produits pour animaux"), "France live category is not localized");
+  assert(frenchHomepage.includes("Livraison gratuite via Standard Shipping"), "France delivery terms are not localized");
+  assert(frenchHomepage.includes("Retours acceptés sous 30 jours"), "France return terms are not localized");
+  assert(frenchHomepage.includes("eBay n’a fourni aucune note produit"), "France missing-rating disclosure is absent");
+  for (const forbidden of ["Selected with", "Free shipping via", "30 calendar days", "POPULAR PICK", "CHOIX POPULAIRE"]) {
+    assert(!frenchHomepage.includes(forbidden), `France homepage still exposes misleading or untranslated text: ${forbidden}`);
+  }
 
   const franceEnglish = await (await get("/fr?lang=en")).text();
   assert(franceEnglish.includes('<html lang="en-FR">'), "France English locale is incorrect");
-  assert(!franceEnglish.includes("eBay Test Product 1"), "US-only products leaked into the France English catalog");
+  assert(franceEnglish.includes("eBay Test Product 1"), "France English catalog is missing");
 
   const germanHomepage = await (await get("/de")).text();
   assert(germanHomepage.includes('<html lang="de-DE">'), "Germany must default to German");
-  assert(!germanHomepage.includes("eBay Test Product 1"), "US-only products leaked into the Germany catalog");
+  assert(germanHomepage.includes("Küchenhelfer"), "Germany live category is not localized");
+  assert(germanHomepage.includes("Kostenlose Lieferung über Standard Shipping"), "Germany delivery terms are not localized");
+  assert(germanHomepage.includes("Rückgabe innerhalb von 30 Tagen"), "Germany return terms are not localized");
+  assert(!germanHomepage.includes("Selected with"), "Germany exposes the stored technical selection reason");
 
   const canadaHomepage = await (await get("/ca")).text();
   assert(canadaHomepage.includes('<html lang="en-CA">'), "Canada must default to English");
+  const canadaFrench = await (await get("/ca?lang=fr")).text();
+  assert(canadaFrench.includes("Accessoires auto"), "Canada French live category is not localized");
+  assert(canadaFrench.includes("Livraison gratuite via Standard Shipping"), "Canada French delivery terms are not localized");
 
   const ukHomepage = await (await get("/uk")).text();
   assert(ukHomepage.includes('<html lang="en-GB">'), "UK homepage language is incorrect");
@@ -217,6 +242,17 @@ async function run() {
   const trustPage = await (await get("/us/about")).text();
   assert(trustPage.includes('property="og:title" content="About | OneDailyDrop"'), "Trust page Open Graph metadata is missing");
   assert(trustPage.includes('"@type":"WebPage"'), "Trust page schema is missing");
+
+  const frenchMethod = await (await get("/fr/how-we-select-deals")).text();
+  assert(frenchMethod.includes("Comment nous classons les offres du jour"), "French methodology title is not localized");
+  assert(frenchMethod.includes("Qualité du prix · jusqu’à 30 points"), "French methodology weights are missing");
+  assert(frenchMethod.includes("La note du vendeur n’est jamais affichée ni comptée comme une note produit"), "French seller/product rating distinction is missing");
+  assert(!frenchMethod.includes("Data-backed scoring"), "French methodology still contains English content");
+
+  const germanMethod = await (await get("/de/how-we-select-deals")).text();
+  assert(germanMethod.includes("So ordnen wir die heutigen Angebote ein"), "German methodology title is not localized");
+  assert(germanMethod.includes("Preisqualität · bis zu 30 Punkte"), "German methodology weights are missing");
+  assert(germanMethod.includes("Eine Verkäuferbewertung wird niemals als Produktbewertung"), "German seller/product rating distinction is missing");
 
   console.log("eBay-catalog SEO route validation passed");
   process.exit(0);
