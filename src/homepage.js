@@ -6,6 +6,7 @@ const { localizeProduct } = require("./demoTranslations");
 const { marketFromRequest, marketPath, alternateLinks, market } = require("./markets");
 const { localDate } = require("./refresh");
 const { t, marketName, languageTag } = require("./i18n");
+const { presentProduct } = require("./productPresentation");
 const { sourceSql } = require("./publicCatalog");
 
 const SITE = "https://www.onedailydrop.com";
@@ -33,7 +34,6 @@ const hasCurrentOffer = product => Number(product?.current_price) > 0 &&
   /^[A-Z]{3}$/.test(String(product?.currency || "").toUpperCase()) &&
   Boolean(clean(product?.checked_at));
 const hasReviewData = product => Number(product?.rating) > 0 && Number(product?.review_count) > 0;
-const hasScoreData = product => hasCurrentOffer(product) && Number(product?.score) > 0;
 const money = (value, currency = "USD") => {
   if (value == null || value === "") return "Check current price";
   const amount = Number(value);
@@ -57,43 +57,29 @@ const discount = product => Number(product.original_price) > Number(product.curr
   : 0;
 const badge = product => {
   if (isDemo(product)) return "";
-  if (!hasCurrentOffer(product)) return "EDITORIAL PICK";
-  if (discount(product) >= 25) return "VERIFIED DEAL";
-  if (Number(product.score) >= 90) return "EDITOR'S PICK";
-  if (Number(product.review_count) >= 5000) return "TRENDING";
-  return "POPULAR PICK";
+  return clean(product.display_badge) || "CHECKED OFFER";
 };
 const whyPicked = product => {
   if (isDemo(product)) return clean(product.description) || reasonFor(product);
-  if (clean(product.selection_reason)) return clean(product.selection_reason);
-  const reasons = [];
-  if (Number(product.rating) >= 4.5) reasons.push(`${Number(product.rating).toFixed(1)}-star rating`);
-  if (Number(product.review_count) >= 1000) reasons.push(`${Number(product.review_count).toLocaleString("en-US")} reviews`);
-  if (Number(product.score) >= 80) reasons.push(`${Math.round(Number(product.score))}/100 OneDailyDrop score`);
-  if (discount(product)) reasons.push(`${discount(product)}% verified savings`);
-  return reasons.length
-    ? `Picked for its ${reasons.join(", ")}.`
-    : "Picked for its price, shopper feedback and overall value.";
+  return clean(product.display_selection_reason) || "Offer details checked with the retailer.";
 };
 const statusText = product => isDemo(product)
   ? "Retailer availability coming soon"
   : !hasCurrentOffer(product)
     ? "Confirm price and availability at the retailer"
-  : product.checked_at || product.updated_at
-    ? `Price checked ${new Date(product.checked_at || product.updated_at).toLocaleString("en-US")}`
-    : "Price recently verified";
-const priceLabel = product => isDemo(product) ? "Retailer price" : !hasCurrentOffer(product) ? "Retailer price" : "Current price";
+  : clean(product.display_status) || "Price recently verified";
+const priceLabel = product => isDemo(product) ? "Retailer price" : !hasCurrentOffer(product) ? "Retailer price" : clean(product.display_price_label) || "Current price";
 const action = (product, className) => isDemo(product)
   ? `<a class="${className}" href="${dealPath(product)}">VIEW DETAILS</a>`
-  : `<a class="${className}" href="${marketPath(product.market || "us", `/go/${product.id}`)}" rel="nofollow sponsored">VIEW DEAL AT ${esc(storeName(product))}</a>`;
+  : `<a class="${className}" href="${marketPath(product.market || "us", `/go/${product.id}`)}" rel="nofollow sponsored">${esc(product.display_action_label || `VIEW DEAL AT ${storeName(product)}`)}</a>`;
 const priceHistoryAction = product => isDemo(product) || !hasCurrentOffer(product)
   ? ""
-  : `<a class="price-history-link" href="${dealPath(product)}#price-history">PRICE HISTORY</a>`;
+  : `<a class="price-history-link" href="${dealPath(product)}#price-history">${esc(product.display_price_history_label || "PRICE HISTORY")}</a>`;
 const offerFacts = product => {
   if (isDemo(product)) return "";
   const seller = clean(product.seller_name) || storeName(product);
-  const shipping = clean(product.shipping_summary) || "Confirm at retailer";
-  const returns = clean(product.return_summary) || "See retailer policy";
+  const shipping = clean(product.display_shipping_summary) || "Confirm at retailer";
+  const returns = clean(product.display_return_summary) || "See retailer policy";
   return `<dl class="offer-facts" aria-label="Offer details">
     <div><dt>Sold by</dt><dd>${esc(seller)}</dd></div>
     <div><dt>Delivery</dt><dd>${esc(shipping)}</dd></div>
@@ -106,11 +92,11 @@ const mainCard = (product, index) => `
     <a class="image-wrap" href="${dealPath(product)}"><img src="${esc(product.image_url)}" alt="${esc(fullTitle(product.title))}" loading="lazy"></a>
     <div class="card-content">
       <div class="card-top"><span class="rank">#${index}</span>${badge(product) ? `<span class="badge">${esc(badge(product))}</span>` : ""}</div>
-      <p class="cat"><a href="${categoryPath(product.category || "Deals", product.market)}">${esc(product.category || "Deals")}</a> · ${esc(storeName(product))}</p>
+      <p class="cat"><a href="${categoryPath(product.category || "Deals", product.market)}">${esc(product.display_category || product.category || "Deals")}</a> · ${esc(storeName(product))}</p>
       <h3><a href="${dealPath(product)}">${esc(fullTitle(product.title))}</a></h3>
       <p class="description"><strong>Why we picked it:</strong> ${esc(whyPicked(product))}</p>
-      ${hasReviewData(product) ? `<p class="stats">★ ${esc(product.rating)} · ${Number(product.review_count).toLocaleString("en-US")} reviews${hasScoreData(product) ? ` · Score ${Math.round(Number(product.score))}/100` : ""}</p>` : ""}
-      <div class="price-row"><span class="price-label">${priceLabel(product)}</span><span class="price">${money(product.current_price, product.currency)}</span>${product.original_price ? `<span class="old">${money(product.original_price, product.currency)}</span>` : ""}${discount(product) ? `<span class="save-pill">SAVE ${discount(product)}%</span>` : ""}</div>
+      ${hasReviewData(product) ? `<p class="stats">★ ${esc(product.rating)} · ${esc(product.display_review_count || product.review_count)} ${esc(product.display_reviews_label || "reviews")}</p>` : ""}
+      <div class="price-row"><span class="price-label">${priceLabel(product)}</span><span class="price">${esc(product.display_current_price || money(product.current_price, product.currency))}</span>${product.original_price ? `<span class="old">${esc(product.display_original_price || money(product.original_price, product.currency))}</span>` : ""}${discount(product) ? `<span class="save-pill">${esc(product.display_save_label || `SAVE ${discount(product)}%`)}</span>` : ""}</div>
       <p class="verification">${esc(statusText(product))}</p>
       ${offerFacts(product)}
       <div class="card-actions">${action(product, "button")}${priceHistoryAction(product)}</div>
@@ -121,10 +107,10 @@ const miniCard = product => `
   <article class="mini-card">
     <a href="${dealPath(product)}"><img src="${esc(product.image_url)}" alt="${esc(fullTitle(product.title))}" loading="lazy"></a>
     <div class="mini-card-body">
-      <p class="cat"><a href="${categoryPath(product.category || "Deals", product.market)}">${esc(product.category || "Deals")}</a> · ${esc(storeName(product))}</p>
+      <p class="cat"><a href="${categoryPath(product.category || "Deals", product.market)}">${esc(product.display_category || product.category || "Deals")}</a> · ${esc(storeName(product))}</p>
       <h3><a href="${dealPath(product)}">${esc(fullTitle(product.title))}</a></h3>
-      ${hasReviewData(product) ? `<p class="mini-meta">★ ${esc(product.rating)}${hasScoreData(product) ? ` · Score ${Math.round(Number(product.score))}/100` : ""}${discount(product) ? ` · ${discount(product)}% off` : ""}</p>` : ""}
-      <div class="mini-price-row"><span class="mini-price-label">${priceLabel(product)}</span><span class="mini-price">${money(product.current_price, product.currency)}</span>${product.original_price ? `<span class="old">${money(product.original_price, product.currency)}</span>` : ""}</div>
+      ${hasReviewData(product) ? `<p class="mini-meta">★ ${esc(product.rating)}${discount(product) ? ` · ${esc(product.display_off_label || `${discount(product)}% off`)}` : ""}</p>` : ""}
+      <div class="mini-price-row"><span class="mini-price-label">${priceLabel(product)}</span><span class="mini-price">${esc(product.display_current_price || money(product.current_price, product.currency))}</span>${product.original_price ? `<span class="old">${esc(product.display_original_price || money(product.original_price, product.currency))}</span>` : ""}</div>
       <a class="mini-action" href="${dealPath(product)}">VIEW DETAILS</a>
     </div>
   </article>`;
@@ -137,7 +123,7 @@ module.exports = function homepage(req, res) {
   const sourceFilter = ` AND ${sourceSql()}`;
   const products = db.prepare(`SELECT * FROM products WHERE market=? AND status='published'${sourceFilter} ORDER BY score DESC, updated_at DESC`)
     .all(selectedMarket.code)
-    .map(product => localizeProduct(product, language));
+    .map(product => presentProduct(localizeProduct(product, language), language));
   const today = localDate(selectedMarket.timezone);
   let dailyProducts = db.prepare(`
     SELECT p.*,d.rank,d.selection_reason AS daily_selection_reason,d.drop_date
@@ -147,10 +133,10 @@ module.exports = function homepage(req, res) {
       SELECT MAX(drop_date) FROM daily_drops WHERE market=? AND drop_date<=?
     )
     ORDER BY d.rank
-  `).all(selectedMarket.code, selectedMarket.code, today).map(product => localizeProduct({
+  `).all(selectedMarket.code, selectedMarket.code, today).map(product => presentProduct(localizeProduct({
     ...product,
     selection_reason: product.daily_selection_reason || product.selection_reason
-  }, language));
+  }, language), language));
   if (dailyProducts.length < 10) dailyProducts = products.slice(0, 10);
   const featured = dailyProducts[0] || null;
   const moreWorthSeeing = dailyProducts.slice(1, 10);
@@ -164,7 +150,7 @@ module.exports = function homepage(req, res) {
   const priceDrops = take(products.filter(product => discount(product) > 0).sort((a, b) => discount(b) - discount(a)));
   const newest = take([...products].sort((a, b) => Number(b.id) - Number(a.id)));
   const categories = [...new Set(products.map(product => product.category).filter(Boolean))];
-  const categoryChoices = (categories.length ? categories : DEFAULT_INTEREST_CATEGORIES).slice(0, 10);
+  const categoryChoices = (categories.length ? products.filter((product, index, rows) => rows.findIndex(row => row.category === product.category) === index).map(product => ({ value: product.category, label: product.display_category })) : DEFAULT_INTEREST_CATEGORIES.map(value => ({ value, label: value }))).slice(0, 10);
   const archive = db.prepare(`
     SELECT p.*,d.drop_date,d.selection_reason AS daily_selection_reason
     FROM daily_drops d
@@ -172,10 +158,10 @@ module.exports = function homepage(req, res) {
     WHERE d.market=? AND ${sourceSql("p")} AND d.rank=1 AND d.drop_date<?
     ORDER BY d.drop_date DESC
     LIMIT 4
-  `).all(selectedMarket.code, today).map(product => localizeProduct({
+  `).all(selectedMarket.code, today).map(product => presentProduct(localizeProduct({
     ...product,
     selection_reason: product.daily_selection_reason || product.selection_reason
-  }, language));
+  }, language), language));
   const title = t(language, "seo.homeTitle", { country: localizedMarketName });
   const description = t(language, "seo.homeDescription", { country: localizedMarketName });
   const canonicalPath = marketPath(selectedMarket.code);
@@ -232,12 +218,12 @@ module.exports = function homepage(req, res) {
       <span class="featured-ribbon">TODAY'S #1 PICK</span>${badge(featured) ? `<span class="featured-badge">${esc(badge(featured))}</span>` : ""}
     </div>
     <div class="featured-body">
-      <p class="cat"><a href="${categoryPath(featured.category || "Deals", selectedMarket.code)}">${esc(featured.category || "Deals")}</a> · ${esc(storeName(featured))}</p>
+      <p class="cat"><a href="${categoryPath(featured.category || "Deals", selectedMarket.code)}">${esc(featured.display_category || featured.category || "Deals")}</a> · ${esc(storeName(featured))}</p>
       <h2><a href="${dealPath(featured)}">${esc(fullTitle(featured.title))}</a></h2>
       <p class="description">${esc(whyPicked(featured))}</p>
-      ${hasReviewData(featured) ? `<p class="stats">★ ${esc(featured.rating)} · ${Number(featured.review_count).toLocaleString("en-US")} reviews</p>` : ""}
-      ${hasScoreData(featured) ? `<div class="score-strip"><strong>${Math.round(Number(featured.score))}/100</strong><span>OneDailyDrop Score</span></div>` : ""}
-      <div class="featured-price-row"><span class="price-label">${priceLabel(featured)}</span><span class="featured-price">${money(featured.current_price, featured.currency)}</span>${featured.original_price ? `<span class="old">${money(featured.original_price, featured.currency)}</span>` : ""}${discount(featured) ? `<span class="save-pill">SAVE ${discount(featured)}%</span>` : ""}</div>
+      ${hasReviewData(featured) ? `<p class="stats">★ ${esc(featured.rating)} · ${Number(featured.review_count).toLocaleString(locale)} ${esc(featured.display_reviews_label || "reviews")}</p>` : ""}
+      <div class="score-strip"><strong>${Number(featured.evidence_count) || 0}/6</strong><span>${esc(featured.evidence_label || t(language, "product.verifiedSignals", { count: Number(featured.evidence_count) || 0 }))}</span></div>
+      <div class="featured-price-row"><span class="price-label">${priceLabel(featured)}</span><span class="featured-price">${esc(featured.display_current_price || money(featured.current_price, featured.currency))}</span>${featured.original_price ? `<span class="old">${esc(featured.display_original_price || money(featured.original_price, featured.currency))}</span>` : ""}${discount(featured) ? `<span class="save-pill">${esc(featured.display_save_label || `SAVE ${discount(featured)}%`)}</span>` : ""}</div>
       <p class="verification">${esc(statusText(featured))}</p>
       ${offerFacts(featured)}
       <div class="card-actions">${action(featured, "featured-button")}${priceHistoryAction(featured)}</div>

@@ -1,6 +1,6 @@
 const assert = require("assert");
 const { priceIntelligence, shouldRecordObservation } = require("../src/priceIntelligence");
-const { scoreProduct } = require("../src/ranker");
+const { rankProducts, scoreProduct } = require("../src/ranker");
 
 const now = new Date("2026-07-27T12:00:00Z");
 const one = priceIntelligence([
@@ -47,5 +47,30 @@ const score = scoreProduct({
 });
 assert(score.total >= 70 && score.total <= 100, `strong real offer should score credibly, received ${score.total}`);
 assert.equal(Object.keys(score.breakdown).length, 6);
+
+const [ranked] = rankProducts([{
+  external_id: "trust-reason-test",
+  title: "Verified test product",
+  image_url: "https://i.ebayimg.com/test.jpg",
+  affiliate_url: "https://www.ebay.com/itm/1?campid=5339179772",
+  ...{
+    source: "ebay",
+    currency: "USD",
+    current_price: 24.99,
+    original_price: 39.99,
+    rating: 4.7,
+    review_count: 2500,
+    retailer_name: "eBay",
+    seller_name: "internal-seller-id",
+    seller_rating: 4.95,
+    availability: "In stock",
+    shipping_summary: "Free delivery",
+    return_summary: "30-day returns",
+    source_rank: 1
+  }
+}], 1, { minimumScore: 0, minimumRating: 0, minimumReviews: 0, currency: "USD" });
+assert(ranked.selection_reason.includes("missing evidence received no points"));
+assert(!ranked.selection_reason.includes("/100"));
+assert(!ranked.selection_reason.includes("internal-seller-id"));
 
 console.log("Price intelligence and live-product scoring tests passed.");

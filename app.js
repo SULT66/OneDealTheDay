@@ -6,6 +6,7 @@ const cron = require("node-cron");
 const db = require("./src/db");
 const config = require("./src/config");
 const { localizeProduct } = require("./src/demoTranslations");
+const { presentProduct } = require("./src/productPresentation");
 const renderHomepage = require("./src/homepage-seo");
 const { codes: marketCodes, normalizeMarket, marketFromIp, marketFromRequest, marketPath } = require("./src/markets");
 const { resolveLanguage } = require("./src/i18n");
@@ -91,7 +92,7 @@ function expressWithHomepage(...args) {
       ...product,
       selection_reason: product.daily_selection_reason || product.selection_reason
     })), ...catalog];
-    return res.json(products.map(product => localizeProduct(product, language)));
+    return res.json(products.map(product => presentProduct(localizeProduct(product, language), language)));
   });
 
   app.get("/go/:id", (req, res, next) => {

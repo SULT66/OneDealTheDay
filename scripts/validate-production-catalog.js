@@ -198,10 +198,10 @@ if (!server.includes("if (!clubEnrollmentOpen)")) {
 if (!hasLiquidGlass(server)) {
   throw new Error("Dynamic product, category and brand pages are missing Liquid Glass");
 }
-for (const required of ["daily_drops", "Past Drops in ${selectedMarket.name} | OneDailyDrop", "xhtml:link", "timezone:selectedMarket.timezone", "market:selectedMarket.code"]) {
+for (const required of ["daily_drops", '"page.archiveDescription"', "xhtml:link", "timezone:selectedMarket.timezone", "market:selectedMarket.code"]) {
   if (!server.includes(required)) throw new Error(`Country archive or local SEO behavior is missing: ${required}`);
 }
-for (const required of ['xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"', "<image:image>", "Disallow: /go/", 'html lang="${esc(locale)}"', "Customer rating", '"@id":`${canonical}#product`', "sendNotFound"]) {
+for (const required of ['xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"', "<image:image>", "Disallow: /go/", 'html lang="${esc(locale)}"', '"page.customerRating"', '"@id":`${canonical}#product`', "sendNotFound"]) {
   if (!server.includes(required)) throw new Error(`Technical SEO behavior is missing: ${required}`);
 }
 if (server.includes('res.status(404).send("Product not found")') || server.includes('res.status(404).send("Category not found")')) {

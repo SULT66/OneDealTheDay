@@ -42,7 +42,7 @@
     /^[A-Z]{3}$/.test(String(product?.currency || "").toUpperCase()) &&
     Boolean(cleanText(product?.checked_at));
   const hasReviewData = product => Number(product?.rating) > 0 && Number(product?.review_count) > 0;
-  const hasScoreData = product => hasCurrentOffer(product) && Number(product?.score) > 0;
+  const displayCategory = product => cleanText(product?.display_category) || categoryLabel(product?.category || "Deals");
   const money = (value, currency = "USD") => {
     if (value == null || value === "") return tr("product.checkPrice", "Check price");
     const amount = Number(value);
@@ -66,11 +66,7 @@
   };
   const badgeFor = product => {
     if (isDemo(product)) return "";
-    if (!hasCurrentOffer(product)) return tr("product.editorPick", "EDITOR'S PICK");
-    if (discount(product) >= 25) return tr("product.verified", "VERIFIED DEAL");
-    if (Number(product.score) >= 90) return tr("product.editorPick", "EDITOR'S PICK");
-    if (Number(product.review_count) >= 5000) return tr("product.trending", "TRENDING");
-    return tr("product.popular", "POPULAR PICK");
+    return cleanText(product.display_badge) || tr("product.checkedOffer", "CHECKED OFFER");
   };
   const statusText = product => isDemo(product)
     ? tr("product.availabilitySoon", "Retailer availability coming soon")
@@ -86,15 +82,7 @@
     : tr("product.currentPrice", "Current price");
   const whyPicked = product => {
     if (isDemo(product)) return cleanText(product.description) || tr("product.demoFallback", "Chosen for clear everyday usefulness and straightforward features.");
-    if (cleanText(product.selection_reason)) return cleanText(product.selection_reason);
-    const reasons = [];
-    if (Number(product.rating) >= 4.5) reasons.push(tr("product.ratingReason", "{rating}-star rating", { rating: Number(product.rating).toFixed(1) }));
-    if (Number(product.review_count) >= 1000) reasons.push(tr("product.reviewsReason", "{count} reviews", { count: Number(product.review_count).toLocaleString(locale) }));
-    if (Number(product.score) >= 80) reasons.push(tr("product.scoreReason", "{score}/100 OneDailyDrop score", { score: Math.round(Number(product.score)) }));
-    if (discount(product)) reasons.push(tr("product.discountReason", "{percent}% verified discount", { percent: discount(product) }));
-    return reasons.length
-      ? `${tr("product.why", "Why we picked it:").replace(/:$/, "")} ${reasons.join(", ")}.`
-      : tr("product.selectedFallback", "Picked for its price, shopper feedback and overall value.");
+    return cleanText(product.display_selection_reason) || tr("product.reasonCheckedOffer", "a current price and offer details checked with the retailer");
   };
   const dealUrl = product => product.deal_url || marketPath(`/deal/${encodeURIComponent(product.id)}`);
   const actionButton = (product, className) => isDemo(product)
@@ -106,8 +94,8 @@
   const offerFacts = product => {
     if (isDemo(product)) return "";
     const seller = cleanText(product.seller_name) || storeName(product);
-    const shipping = cleanText(product.shipping_summary) || tr("product.confirmRetailer", "Confirm at retailer");
-    const returns = cleanText(product.return_summary) || tr("product.retailerPolicy", "See retailer policy");
+    const shipping = cleanText(product.display_shipping_summary) || tr("product.confirmRetailer", "Confirm at retailer");
+    const returns = cleanText(product.display_return_summary) || tr("product.retailerPolicy", "See retailer policy");
     return `<dl class="offer-facts" aria-label="${esc(tr("product.offerDetails", "Offer details"))}">
       <div><dt>${esc(tr("product.soldBy", "Sold by"))}</dt><dd>${esc(seller)}</dd></div>
       <div><dt>${esc(tr("product.delivery", "Delivery"))}</dt><dd>${esc(shipping)}</dd></div>
@@ -137,7 +125,7 @@
       product.title,
       cleanText(product.description),
       product.category,
-      categoryLabel(product.category || ""),
+      displayCategory(product),
       product.brand,
       storeName(product)
     ].filter(Boolean).join(" "));
@@ -176,7 +164,7 @@
         <div class="search-suggestion-list">${matches.slice(0, 6).map(product => `
           <a class="search-suggestion" href="${esc(dealUrl(product))}">
             <img src="${esc(product.image_url)}" alt="" loading="lazy">
-            <span><strong>${esc(fullTitle(product.title))}</strong><small>${esc(categoryLabel(product.category || "Deals"))} · ${esc(money(product.current_price, product.currency))}</small></span>
+            <span><strong>${esc(fullTitle(product.title))}</strong><small>${esc(displayCategory(product))} · ${esc(money(product.current_price, product.currency))}</small></span>
           </a>`).join("")}</div>
         <a class="search-view-all" href="${esc(searchUrl)}">${esc(resultLabel)} →</a>`
       : `<div class="search-no-results">${esc(tr("home.noMatch", "No products match that search."))}</div>`;
@@ -207,11 +195,11 @@
         <span class="featured-ribbon">${esc(tr("home.featured", "TODAY'S #1 PICK"))}</span>${badgeFor(product) ? `<span class="featured-badge">${esc(badgeFor(product))}</span>` : ""}
       </div>
       <div class="featured-body">
-        <p class="cat">${esc(categoryLabel(product.category || "Deals"))} · ${esc(storeName(product))}</p>
+        <p class="cat">${esc(displayCategory(product))} · ${esc(storeName(product))}</p>
         <h2><a href="${esc(dealUrl(product))}">${esc(fullTitle(product.title))}</a></h2>
         <p class="description">${esc(whyPicked(product))}</p>
         ${hasReviewData(product) ? `<p class="stats">★ ${esc(product.rating)} · ${Number(product.review_count).toLocaleString(locale)} ${esc(tr("product.reviews", "reviews"))}</p>` : ""}
-        ${hasScoreData(product) ? `<div class="score-strip"><strong>${Math.round(Number(product.score))}/100</strong><span>OneDailyDrop ${esc(tr("product.score", "Score"))}</span></div>` : ""}
+        <div class="score-strip"><strong>${Number(product.evidence_count) || 0}/6</strong><span>${esc(product.evidence_label || tr("product.verifiedSignals", "{count} of 6 offer signals verified", { count: Number(product.evidence_count) || 0 }))}</span></div>
         <div class="featured-price-row"><span class="price-label">${priceLabel(product)}</span><span class="featured-price">${money(product.current_price, product.currency)}</span>${product.original_price ? `<span class="old">${money(product.original_price, product.currency)}</span>` : ""}${save ? `<span class="save-pill">${esc(tr("product.save", "SAVE {percent}%", { percent: save }))}</span>` : ""}</div>
         <p class="verification">${esc(statusText(product))}</p>
         ${offerFacts(product)}
@@ -226,10 +214,10 @@
         <a class="image-wrap" href="${esc(dealUrl(product))}"><img src="${esc(product.image_url)}" alt="${esc(fullTitle(product.title))}" loading="lazy"></a>
         <div class="card-content">
           <div class="card-top"><span class="rank">#${rank}</span>${badgeFor(product) ? `<span class="badge">${esc(badgeFor(product))}</span>` : ""}</div>
-          <p class="cat">${esc(categoryLabel(product.category || "Deals"))} · ${esc(storeName(product))}</p>
+          <p class="cat">${esc(displayCategory(product))} · ${esc(storeName(product))}</p>
           <h3><a href="${esc(dealUrl(product))}">${esc(fullTitle(product.title))}</a></h3>
           <p class="description"><strong>${esc(tr("product.why", "Why we picked it:"))}</strong> ${esc(whyPicked(product))}</p>
-          ${hasReviewData(product) ? `<p class="stats">★ ${esc(product.rating)} · ${Number(product.review_count).toLocaleString(locale)} ${esc(tr("product.reviews", "reviews"))}${hasScoreData(product) ? ` · ${esc(tr("product.score", "Score"))} ${Math.round(Number(product.score))}/100` : ""}</p>` : ""}
+          ${hasReviewData(product) ? `<p class="stats">★ ${esc(product.rating)} · ${Number(product.review_count).toLocaleString(locale)} ${esc(tr("product.reviews", "reviews"))}</p>` : ""}
           <div class="price-row"><span class="price-label">${priceLabel(product)}</span><span class="price">${money(product.current_price, product.currency)}</span>${product.original_price ? `<span class="old">${money(product.original_price, product.currency)}</span>` : ""}${save ? `<span class="save-pill">${esc(tr("product.save", "SAVE {percent}%", { percent: save }))}</span>` : ""}</div>
           <p class="verification">${esc(statusText(product))}</p>
           ${offerFacts(product)}
@@ -244,9 +232,9 @@
       <article class="mini-card">
         <a href="${esc(dealUrl(product))}"><img src="${esc(product.image_url)}" alt="${esc(fullTitle(product.title))}" loading="lazy"></a>
         <div class="mini-card-body">
-          <p class="cat">${esc(categoryLabel(product.category || "Deals"))} · ${esc(storeName(product))}</p>
+          <p class="cat">${esc(displayCategory(product))} · ${esc(storeName(product))}</p>
           <h3><a href="${esc(dealUrl(product))}">${esc(fullTitle(product.title))}</a></h3>
-          ${hasReviewData(product) ? `<p class="mini-meta">★ ${esc(product.rating)}${hasScoreData(product) ? ` · ${esc(tr("product.score", "Score"))} ${Math.round(Number(product.score))}/100` : ""}${save ? ` · ${esc(tr("product.off", "{percent}% off", { percent: save }))}` : ""}</p>` : ""}
+          ${hasReviewData(product) ? `<p class="mini-meta">★ ${esc(product.rating)}${save ? ` · ${esc(tr("product.off", "{percent}% off", { percent: save }))}` : ""}</p>` : ""}
           <div class="mini-price-row"><span class="mini-price-label">${priceLabel(product)}</span><span class="mini-price">${money(product.current_price, product.currency)}</span>${product.original_price ? `<span class="old">${money(product.original_price, product.currency)}</span>` : ""}</div>
           <a class="mini-action" href="${esc(dealUrl(product))}">${esc(tr("product.viewDetails", "VIEW DETAILS"))}</a>
         </div>
@@ -263,7 +251,7 @@
 
   const renderMain = () => {
     const visible = visibleProducts("");
-    els.dealsTitle.textContent = activeCategory === "More Worth Seeing" ? tr("nav.more", "9 More Worth Seeing") : activeCategory;
+    els.dealsTitle.textContent = activeCategory === "More Worth Seeing" ? tr("nav.more", "9 More Worth Seeing") : displayCategory({ category: activeCategory });
     els.resultCount.textContent = activeCategory === "More Worth Seeing"
       ? ""
       : tr("search.products", "{count} products", { count: visible.length });
@@ -308,7 +296,7 @@
   const renderCategoryMenu = () => {
     const categories = [...new Set(products.map(product => product.category).filter(Boolean))];
     const categoryUrl = category => marketPath(`/category/${category.toLowerCase().replace(/&/g, " and ").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`);
-    els.categoryMenu.innerHTML = [`<a href="#top">${esc(tr("nav.more", "9 More Worth Seeing"))}</a>`, ...categories.map(category => `<a href="${esc(categoryUrl(category))}">${esc(categoryLabel(category))}</a>`)].join("");
+    els.categoryMenu.innerHTML = [`<a href="#top">${esc(tr("nav.more", "9 More Worth Seeing"))}</a>`, ...categories.map(category => `<a href="${esc(categoryUrl(category))}">${esc(displayCategory(products.find(product => product.category === category) || { category }))}</a>`)].join("");
   };
 
   const currentUrl = new URL(window.location.href);
