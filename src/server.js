@@ -690,7 +690,8 @@ app.get("/archive", (req, res) => {
   const pageLocale = languageTag(selectedMarket.code, req.language);
   const today = localDate(selectedMarket.timezone);
   const products = db.prepare(`
-    SELECT p.*,d.drop_date,d.rank,d.score AS drop_score,d.current_price AS drop_price,
+    SELECT p.*,d.drop_date,d.rank,d.score AS drop_score,d.score_model AS drop_score_model,d.current_price AS drop_price,
+      d.original_price AS drop_original_price,
       d.currency AS drop_currency,d.selection_reason AS daily_selection_reason,
       CASE
         WHEN LOWER(COALESCE(p.availability,'')) LIKE '%out of stock%' THEN 'Out of Stock'
@@ -828,7 +829,8 @@ app.get("/api/products", (req, res) => {
   }
   const catalog = db.prepare(`SELECT * FROM products WHERE ${conditions.join(" AND ")} ORDER BY score DESC,updated_at DESC`).all(...params);
   const daily = db.prepare(`
-    SELECT product_id,rank,score AS drop_score,current_price AS drop_price,drop_date,selection_reason
+    SELECT product_id,rank,score AS drop_score,score_model AS drop_score_model,current_price AS drop_price,
+      original_price AS drop_original_price,drop_date,selection_reason
     FROM daily_drops
     WHERE market=? AND drop_date=(SELECT MAX(drop_date) FROM daily_drops WHERE market=?)
   `).all(selectedMarket, selectedMarket);
@@ -844,7 +846,9 @@ app.get("/api/products", (req, res) => {
       ...product,
       daily_rank: snapshot?.rank || null,
       drop_score: snapshot?.drop_score ?? null,
+      drop_score_model: snapshot?.drop_score_model || null,
       drop_price: snapshot?.drop_price ?? null,
+      drop_original_price: snapshot?.drop_original_price ?? null,
       drop_date: snapshot?.drop_date || null,
       selection_reason: snapshot?.selection_reason || product.selection_reason,
       slug: slug(product.title),

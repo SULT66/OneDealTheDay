@@ -1,5 +1,5 @@
 const db = require("./db");
-const { rankProducts } = require("./ranker");
+const { SCORE_MODEL, rankProducts } = require("./ranker");
 const { detectBrand, normalizeBrand, slugifyBrand } = require("./brandDetector");
 const { priceIntelligence, shouldRecordObservation } = require("./priceIntelligence");
 
@@ -183,7 +183,7 @@ async function refreshMarket(config, marketCode, options = {}) {
       currency: selectedMarket.currency,
       minimumRating: config.provider === "ebay" ? 0 : 3.8,
       minimumReviews: config.provider === "ebay" ? 0 : 25,
-      minimumScore: config.provider === "demo" ? 0 : config.provider === "ebay" ? 20 : 60
+      minimumScore: config.provider === "demo" ? 0 : 60
     });
     if (!Array.isArray(found) || found.length < 10 || ranked.length < 10) {
       throw new Error(`${selectedMarket.name} refresh returned insufficient eligible products (${found.length} found, ${ranked.length}/10 eligible)`);
@@ -288,12 +288,12 @@ async function refreshMarket(config, marketCode, options = {}) {
 
       const upsertDrop = db.prepare(`
         INSERT INTO daily_drops(
-          market,drop_date,product_id,rank,score,current_price,original_price,currency,
+          market,drop_date,product_id,rank,score,score_model,current_price,original_price,currency,
           selection_reason,availability_status,selected_at
         )
-        VALUES(?,?,?,?,?,?,?,?,?,?,?)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
         ON CONFLICT(market,drop_date,rank) DO UPDATE SET
-          product_id=excluded.product_id,score=excluded.score,current_price=excluded.current_price,
+          product_id=excluded.product_id,score=excluded.score,score_model=excluded.score_model,current_price=excluded.current_price,
           original_price=excluded.original_price,currency=excluded.currency,
           selection_reason=excluded.selection_reason,availability_status=excluded.availability_status,
           selected_at=excluded.selected_at
@@ -307,7 +307,8 @@ async function refreshMarket(config, marketCode, options = {}) {
           dropDate,
           productId,
           index + 1,
-          snapshot ? snapshot.score : numberValue(product.score, 0),
+          numberValue(product.score, 0),
+          SCORE_MODEL,
           snapshot ? snapshot.current_price : product.current_price == null ? null : numberValue(product.current_price, null),
           snapshot ? snapshot.original_price : product.original_price == null ? null : numberValue(product.original_price, null),
           snapshot ? snapshot.currency : textValue(product.currency || selectedMarket.currency).toUpperCase(),

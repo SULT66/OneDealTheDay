@@ -141,7 +141,8 @@ module.exports = function homepage(req, res) {
     .map(product => presentProduct(localizeProduct(product, language), language));
   const today = localDate(selectedMarket.timezone);
   let dailyProducts = db.prepare(`
-    SELECT p.*,d.rank,d.score AS drop_score,d.current_price AS drop_price,
+    SELECT p.*,d.rank,d.score AS drop_score,d.score_model AS drop_score_model,d.current_price AS drop_price,
+      d.original_price AS drop_original_price,
       d.selection_reason AS daily_selection_reason,d.drop_date
     FROM daily_drops d
     JOIN products p ON p.id=d.product_id
@@ -168,7 +169,8 @@ module.exports = function homepage(req, res) {
   const categories = [...new Set(products.map(product => product.category).filter(Boolean))];
   const categoryChoices = (categories.length ? products.filter((product, index, rows) => rows.findIndex(row => row.category === product.category) === index).map(product => ({ value: product.category, label: product.display_category })) : DEFAULT_INTEREST_CATEGORIES.map(value => ({ value, label: value }))).slice(0, 10);
   const archive = db.prepare(`
-    SELECT p.*,d.drop_date,d.score AS drop_score,d.current_price AS drop_price,
+    SELECT p.*,d.drop_date,d.score AS drop_score,d.score_model AS drop_score_model,d.current_price AS drop_price,
+      d.original_price AS drop_original_price,
       d.selection_reason AS daily_selection_reason
     FROM daily_drops d
     JOIN products p ON p.id=d.product_id

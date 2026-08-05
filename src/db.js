@@ -133,6 +133,7 @@ db.exec(`
     product_id INTEGER NOT NULL,
     rank INTEGER NOT NULL,
     score REAL NOT NULL,
+    score_model TEXT,
     current_price REAL,
     original_price REAL,
     currency TEXT,
@@ -165,6 +166,9 @@ if (!refreshRunColumns.has("market")) db.exec("ALTER TABLE refresh_runs ADD COLU
 
 const clickColumns = new Set(db.prepare("PRAGMA table_info(clicks)").all().map(column => column.name));
 if (!clickColumns.has("market")) db.exec("ALTER TABLE clicks ADD COLUMN market TEXT NOT NULL DEFAULT 'us'");
+
+const dailyDropColumns = new Set(db.prepare("PRAGMA table_info(daily_drops)").all().map(column => column.name));
+if (!dailyDropColumns.has("score_model")) db.exec("ALTER TABLE daily_drops ADD COLUMN score_model TEXT");
 
 const productColumns = new Set(db.prepare("PRAGMA table_info(products)").all().map(column => column.name));
 for (const [column, type] of [

@@ -38,11 +38,22 @@ assert(!french.display_selection_reason.includes("31/100"));
 assert(!french.display_selection_reason.includes("Selected with"));
 assert(!french.display_selection_reason.includes("sit3203"));
 assert(french.evidence_count >= 4);
-assert.strictEqual(french.display_score, 31);
+assert.strictEqual(french.display_score, 61, "a stored score from the old model must be recalibrated immediately");
 assert.strictEqual(french.display_score_label, "Score OneDailyDrop");
 assert.strictEqual(french.display_product_rating, "");
 assert.strictEqual(french.display_seller_rating, "99,8 % d’avis positifs");
 assert(french.display_seller_feedback.includes("12 000") || french.display_seller_feedback.includes("12 000"));
+
+const correctedSnapshot = presentProduct({
+  ...fixture,
+  drop_score: 77,
+  drop_score_model: "current-offer-v2",
+  drop_price: 44.62
+}, "fr");
+assert.strictEqual(correctedSnapshot.display_score, 77, "a snapshot saved by the current model must keep its selection score");
+
+const legacySnapshot = presentProduct({...fixture, drop_score:31, drop_price:44.62}, "fr");
+assert.notStrictEqual(legacySnapshot.display_score, 31, "a legacy archive snapshot must not expose the obsolete low score");
 
 const german = presentProduct({...fixture, market:"de", category:"car accessories"}, "de");
 assert.strictEqual(german.display_category, "Autozubehör");
