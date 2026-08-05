@@ -15,6 +15,19 @@ function scoreBreakdown(product) {
   }
 }
 
+function oneDailyDropScore(product) {
+  const raw = product?.drop_score ?? product?.score;
+  const value = number(raw, NaN);
+  return Number.isFinite(value) ? Math.round(Math.max(0, Math.min(100, value))) : null;
+}
+
+function sellerRatingPercent(product) {
+  const rating = number(product?.seller_rating, NaN);
+  if (!Number.isFinite(rating) || rating <= 0) return null;
+  const percent = rating <= 5 ? rating * 20 : rating;
+  return Math.max(0, Math.min(100, percent));
+}
+
 function discountPercent(product) {
   const current = number(product?.current_price);
   const reference = number(product?.original_price);
@@ -151,6 +164,13 @@ function presentProduct(product, language = "en") {
   const displayReturns = localizeReturns(product.return_summary, language);
   const displayAvailability = localizeAvailability(product.availability, language);
   const displayReason = presentationReason(product, language);
+  const dealScore = oneDailyDropScore(product);
+  const productRating = number(product.rating, NaN);
+  const sellerPercent = sellerRatingPercent(product);
+  const sellerFeedbackCount = Math.max(0, Math.round(number(product.seller_feedback_count)));
+  const localizedSellerPercent = sellerPercent == null
+    ? ""
+    : new Intl.NumberFormat(languageTag(product.market, language), { maximumFractionDigits: 1 }).format(sellerPercent);
   return {
     ...product,
     shipping_summary: displayShipping,
@@ -177,6 +197,23 @@ function presentProduct(product, language = "en") {
     display_off_label: discount > 0 ? t(language, "product.off", { percent: discount }) : "",
     display_reviews_label: t(language, "product.reviews"),
     display_review_count: Math.round(number(product.review_count)).toLocaleString(languageTag(product.market, language)),
+    display_score: dealScore,
+    display_score_label: t(language, "product.oneDailyDropScore"),
+    display_score_context: t(language, "product.overallDealScore"),
+    display_score_at_selection_label: t(language, "product.scoreAtSelection"),
+    display_product_rating: Number.isFinite(productRating) && productRating > 0
+      ? `${productRating.toFixed(1)}/5`
+      : "",
+    display_product_rating_label: t(language, "product.productRating"),
+    display_seller_rating: sellerPercent == null
+      ? ""
+      : t(language, "product.sellerRatingSummary", { percent: localizedSellerPercent }),
+    display_seller_rating_label: t(language, "product.sellerRating"),
+    display_seller_feedback: sellerFeedbackCount > 0
+      ? t(language, "product.sellerFeedbackCount", {
+        count: sellerFeedbackCount.toLocaleString(languageTag(product.market, language))
+      })
+      : "",
     evidence_count: count,
     evidence_label: t(language, "product.verifiedSignals", { count })
   };
@@ -189,7 +226,9 @@ module.exports = {
   localizeAvailability,
   localizeReturns,
   localizeShipping,
+  oneDailyDropScore,
   presentProduct,
   presentationReason,
+  sellerRatingPercent,
   scoreBreakdown
 };

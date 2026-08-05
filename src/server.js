@@ -557,16 +557,34 @@ const shell = (title, description, canonical, body, schema = null, image = "", r
   };
   const ogType = suppliedNodes.some(node => node?.["@type"] === "Product") ? "product" : "website";
   const html = `<!doctype html><html lang="${esc(locale)}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0a1020"><title>${esc(title)}</title><meta name="description" content="${esc(description.slice(0,160))}"><meta name="robots" content="${esc(robotsContent)}"><link rel="canonical" href="${esc(canonical)}"><link rel="icon" href="/favicon.svg" type="image/svg+xml">${alternates}<meta property="og:type" content="${ogType}"><meta property="og:site_name" content="OneDailyDrop"><meta property="og:locale" content="${esc(ogLocale)}"><meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(description.slice(0,180))}"><meta property="og:url" content="${esc(canonical)}">${image ? `<meta property="og:image" content="${esc(image)}"><meta property="og:image:alt" content="${esc(title)}">` : ""}<meta name="twitter:card" content="${image ? "summary_large_image" : "summary"}"><meta name="twitter:title" content="${esc(title)}"><meta name="twitter:description" content="${esc(description.slice(0,180))}">${image ? `<meta name="twitter:image" content="${esc(image)}">` : ""}<link rel="stylesheet" href="/styles.css?v=20260731-brand-lockup"><link rel="stylesheet" href="/brand-theme.css?v=20260731-brand-lockup"><link rel="stylesheet" href="/liquid-glass.css?v=20260731-brand-lockup"><script type="application/ld+json">${JSON.stringify(pageSchema).replace(/</g,"\\u003c")}</script><script>window.__ODD_LANGUAGE__=${JSON.stringify(language)};window.__ODD_LOCALE__=${JSON.stringify(locale)};window.__ODD_TEXT__=${JSON.stringify(clientCopy(language)).replace(/</g, "\\u003c")};</script></head><body>${sharedHeader(code, language, req)}${body}${sharedFooter(code, language)}<script src="/theme.js?v=20260728-i18n2"></script><script src="/site-shell.js?v=20260728-i18n2"></script></body></html>`;
-  return localizeHtml(html, language);
+  const versionedHtml = html.replace("/styles.css?v=20260731-brand-lockup", "/styles.css?v=20260805-stage1");
+  return localizeHtml(versionedHtml, language);
+};
+
+const scoreMetrics = (display, language = "en", { atSelection = false } = {}) => {
+  const score = Number(display?.display_score);
+  const hasScore = Number.isFinite(score) && score >= 0;
+  const productRating = clean(display?.display_product_rating);
+  const sellerRating = clean(display?.display_seller_rating);
+  if (!hasScore && !productRating && !sellerRating) return "";
+  const ratings = [
+    productRating ? `<span class="deal-rating"><strong>★ ${esc(productRating)}</strong><small>${esc(display.display_product_rating_label || t(language,"product.productRating"))}</small></span>` : "",
+    sellerRating ? `<span class="deal-rating"><strong>${esc(sellerRating)}</strong><small>${esc(display.display_seller_rating_label || t(language,"product.sellerRating"))}${display.display_seller_feedback ? ` · ${esc(display.display_seller_feedback)}` : ""}</small></span>` : ""
+  ].filter(Boolean).join("");
+  return `<div class="deal-metrics${atSelection ? " is-selection" : ""}">
+    ${hasScore ? `<div class="deal-score"><strong>${score}/100</strong><span>${esc(atSelection ? display.display_score_at_selection_label : display.display_score_label)}<small>${esc(display.display_score_context)}</small></span></div>` : ""}
+    ${ratings ? `<div class="deal-ratings">${ratings}</div>` : ""}
+  </div>`;
 };
 
 const productCard = (product, index = 0, language = "en") => {
   const display = presentProduct(localizeProduct(product, language), language);
-  return `<article class="card"><a class="image-wrap" href="${dealPath(product)}"><img src="${esc(product.image_url)}" alt="${esc(shortTitle(display.title))}"></a><div class="card-content">${index ? `<span class="rank">#${index}</span>` : ""}${product.brand ? `<a class="eyebrow" href="${brandPath(product.brand, product.market)}">${esc(product.brand)}</a>` : ""}<h2 class="card-title"><a href="${dealPath(product)}">${esc(shortTitle(display.title))}</a></h2><p class="description">${esc(whyPicked(display, language))}</p><span class="price card-price">${money(product.current_price, product.currency, languageTag(product.market, language))}</span><a class="button" href="${dealPath(product)}">${esc(t(language,"page.viewDetails"))}</a></div></article>`;
+  return `<article class="card catalog-card"><a class="image-wrap" href="${dealPath(product)}"><img src="${esc(product.image_url)}" alt="${esc(shortTitle(display.title))}"></a><div class="card-content">${index ? `<span class="rank">#${index}</span>` : ""}${product.brand ? `<a class="eyebrow" href="${brandPath(product.brand, product.market)}">${esc(product.brand)}</a>` : ""}<h2 class="card-title"><a href="${dealPath(product)}">${esc(shortTitle(display.title))}</a></h2><p class="description">${esc(whyPicked(display, language))}</p>${scoreMetrics(display, language)}<span class="price card-price">${money(product.current_price, product.currency, languageTag(product.market, language))}</span><a class="button" href="${dealPath(product)}">${esc(t(language,"page.viewDetails"))}</a></div></article>`;
 };
 const archiveCard = (product, language = "en") => {
   const display = presentProduct(localizeProduct(product, language), language);
-  return `<article class="archive-card"><a class="archive-card-media" href="${dealPath(product)}"><img src="${esc(product.image_url)}" alt="${esc(shortTitle(display.title))}"></a><div class="archive-card-content">${product.category ? `<a class="eyebrow" href="${catPath(product.category, product.market)}">${esc(display.display_category)}</a>` : ""}<h2><a href="${dealPath(product)}">${esc(shortTitle(display.title))}</a></h2><p class="description">${esc(whyPicked(display, language))}</p><p class="archive-meta">${esc(t(language,"product.currentPrice"))}: ${money(product.drop_price ?? product.current_price, product.drop_currency || product.currency, languageTag(product.market, language))}</p><span class="archive-status">${esc(display.display_availability)}</span><a class="button" href="${dealPath(product)}">${esc(t(language,"page.viewDetails"))}</a></div></article>`;
+  const locale = languageTag(product.market, language);
+  return `<article class="archive-card"><a class="archive-card-media" href="${dealPath(product)}"><img src="${esc(product.image_url)}" alt="${esc(shortTitle(display.title))}"></a><div class="archive-card-content">${product.category ? `<a class="eyebrow" href="${catPath(product.category, product.market)}">${esc(display.display_category)}</a>` : ""}<h2><a href="${dealPath(product)}">${esc(shortTitle(display.title))}</a></h2><p class="description">${esc(whyPicked(display, language))}</p>${scoreMetrics(display, language, { atSelection:true })}<div class="archive-prices"><p><span>${esc(t(language,"product.selectionPrice"))}</span><strong>${money(product.drop_price ?? product.current_price, product.drop_currency || product.currency, locale)}</strong></p><p><span>${esc(t(language,"product.currentPrice"))}</span><strong>${money(product.current_price, product.currency, locale)}</strong></p></div><span class="archive-status">${esc(display.display_availability)}</span><a class="button" href="${dealPath(product)}">${esc(t(language,"page.viewDetails"))}</a></div></article>`;
 };
 const findProduct = param => { const id = String(param).match(/-(\d+)$/)?.[1] || (/^\d+$/.test(param) ? param : null); return id ? db.prepare(`SELECT * FROM products WHERE id=? AND status='published' AND ${sourceSql()}`).get(id) : null; };
 const historyFor = id => db.prepare("SELECT price,original_price,currency,source,observed_at FROM price_history WHERE product_id=? ORDER BY observed_at ASC").all(id);
@@ -624,7 +642,7 @@ app.get("/deal/:slug", (req, res) => {
   const ratingSummary = Number(p.rating)>0&&Number(p.review_count)>0
     ? `<section><h3>${esc(t(req.language,"page.customerRating"))}</h3><p>${esc(t(req.language,"product.ratingSummary",{rating:Number(p.rating).toFixed(1),count:Number(p.review_count).toLocaleString(pageLocale)}))}</p></section>`
     : "";
-  const scoreBlock = currentOffer ? `<div class="product-score"><strong>${Number(display.evidence_count) || 0}/6</strong><span>${esc(display.evidence_label)}</span></div>` : "";
+  const scoreBlock = scoreMetrics(display, req.language);
   const priceDetails = !currentOffer
     ? `<div class="detail-grid"><section><h3>${esc(t(req.language,"product.currentPrice"))}</h3><p>${esc(t(req.language,"product.checkPrice"))} ${esc(store)}</p></section></div>`
     : `<div class="detail-grid"><section><h3>${esc(t(req.language,"product.currentPrice"))}</h3><p>${money(p.current_price,p.currency,pageLocale)}</p></section>${ratingSummary}<section><h3>${esc(t(req.language,"page.low30"))}</h3><p>${historyLabel(intelligence.day30)}</p></section><section><h3>${esc(t(req.language,"page.low90"))}</h3><p>${historyLabel(intelligence.day90)}</p></section><section><h3>${esc(t(req.language,"page.lowAll"))}</h3><p>${historyLabel(intelligence.allTime)}</p></section></div><section id="price-history" class="editorial-box">${retailerDetails}<h2>${esc(t(req.language,"page.priceHistory"))}</h2>${chartSvg(history,req.language,p.market)}<p>${esc(t(req.language,"page.historySummary",{observations:history.length,days:intelligence.allTime.distinctDays}))}</p></section>`;
@@ -810,7 +828,7 @@ app.get("/api/products", (req, res) => {
   }
   const catalog = db.prepare(`SELECT * FROM products WHERE ${conditions.join(" AND ")} ORDER BY score DESC,updated_at DESC`).all(...params);
   const daily = db.prepare(`
-    SELECT product_id,rank,selection_reason
+    SELECT product_id,rank,score AS drop_score,current_price AS drop_price,drop_date,selection_reason
     FROM daily_drops
     WHERE market=? AND drop_date=(SELECT MAX(drop_date) FROM daily_drops WHERE market=?)
   `).all(selectedMarket, selectedMarket);
@@ -822,15 +840,18 @@ app.get("/api/products", (req, res) => {
   });
   res.json(products.map(product => {
     const snapshot = dailyById.get(product.id);
-    return localizeProduct({
+    return presentProduct(localizeProduct({
       ...product,
       daily_rank: snapshot?.rank || null,
+      drop_score: snapshot?.drop_score ?? null,
+      drop_price: snapshot?.drop_price ?? null,
+      drop_date: snapshot?.drop_date || null,
       selection_reason: snapshot?.selection_reason || product.selection_reason,
       slug: slug(product.title),
       deal_url: dealPath(product),
       category_url: catPath(product.category || "deals", selectedMarket),
       brand_url: product.brand ? brandPath(product.brand, selectedMarket) : null
-    }, req.language);
+    }, req.language), req.language);
   }));
 });
 app.get("/api/brands", (req,res) => {

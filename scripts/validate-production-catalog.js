@@ -162,11 +162,11 @@ if (publicCatalog.includes('"amazon-manual"')) {
 for (const field of ["market", "score_breakdown", "selection_reason", "provider_external_id"]) {
   if (!database.includes(field)) throw new Error(`Market-aware product selection field is missing from the database: ${field}`);
 }
-for (const field of ["retailer_name", "seller_name", "shipping_summary", "return_summary", "availability", "checked_at"]) {
+for (const field of ["retailer_name", "seller_name", "seller_rating", "seller_feedback_count", "shipping_summary", "return_summary", "availability", "checked_at"]) {
   if (!database.includes(field)) throw new Error(`Live offer field is missing from the database: ${field}`);
 }
 const refresh = fs.readFileSync(path.join(root, "src/refresh.js"), "utf8");
-for (const field of ["@retailer_name", "@seller_name", "@shipping_summary", "@return_summary", "@availability", "@checked_at"]) {
+for (const field of ["@retailer_name", "@seller_name", "@seller_rating", "@seller_feedback_count", "@shipping_summary", "@return_summary", "@availability", "@checked_at"]) {
   if (!refresh.includes(field)) throw new Error(`Live offer field is not persisted during refresh: ${field}`);
 }
 for (const required of ["selectDailyProducts", "INSERT INTO daily_drops", "config.provider === \"ebay\" ? 20 : 60", "preserveDailySelection", "existingSnapshots"]) {

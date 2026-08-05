@@ -11,6 +11,8 @@ const fixture = {
   rating: 0,
   review_count: 0,
   seller_name: "sit3203",
+  seller_rating: 4.99,
+  seller_feedback_count: 12000,
   shipping_summary: "Free shipping via Autre mode d'envoi",
   return_summary: "30 calendar days, seller-paid return shipping",
   availability: "In stock",
@@ -36,11 +38,17 @@ assert(!french.display_selection_reason.includes("31/100"));
 assert(!french.display_selection_reason.includes("Selected with"));
 assert(!french.display_selection_reason.includes("sit3203"));
 assert(french.evidence_count >= 4);
+assert.strictEqual(french.display_score, 31);
+assert.strictEqual(french.display_score_label, "Score OneDailyDrop");
+assert.strictEqual(french.display_product_rating, "");
+assert.strictEqual(french.display_seller_rating, "99,8 % d’avis positifs");
+assert(french.display_seller_feedback.includes("12 000") || french.display_seller_feedback.includes("12 000"));
 
 const german = presentProduct({...fixture, market:"de", category:"car accessories"}, "de");
 assert.strictEqual(german.display_category, "Autozubehör");
 assert(german.display_shipping_summary.startsWith("Kostenlose Lieferung"));
 assert(german.display_return_summary.startsWith("Rückgabe innerhalb von 30 Tagen"));
+assert.strictEqual(german.display_score_at_selection_label, "OneDailyDrop-Score bei Auswahl");
 
 const spanish = presentProduct({...fixture, market:"us", category:"office gadgets"}, "es");
 assert.strictEqual(spanish.display_category, "Accesorios de oficina");

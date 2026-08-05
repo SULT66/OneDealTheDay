@@ -42,6 +42,16 @@
     /^[A-Z]{3}$/.test(String(product?.currency || "").toUpperCase()) &&
     Boolean(cleanText(product?.checked_at));
   const hasReviewData = product => Number(product?.rating) > 0 && Number(product?.review_count) > 0;
+  const scoreValue = product => {
+    const raw = product?.drop_score ?? product?.score;
+    const value = Number(raw);
+    return Number.isFinite(value) ? Math.round(Math.max(0, Math.min(100, value))) : null;
+  };
+  const sellerRatingPercent = product => {
+    const rating = Number(product?.seller_rating);
+    if (!Number.isFinite(rating) || rating <= 0) return null;
+    return Math.max(0, Math.min(100, rating <= 5 ? rating * 20 : rating));
+  };
   const displayCategory = product => cleanText(product?.display_category) || categoryLabel(product?.category || "Deals");
   const money = (value, currency = "USD") => {
     if (value == null || value === "") return tr("product.checkPrice", "Check price");
@@ -101,6 +111,32 @@
       <div><dt>${esc(tr("product.delivery", "Delivery"))}</dt><dd>${esc(shipping)}</dd></div>
       <div><dt>${esc(tr("product.returns", "Returns"))}</dt><dd>${esc(returns)}</dd></div>
     </dl>`;
+  };
+  const scoreMetrics = (product, atSelection = false) => {
+    const score = scoreValue(product);
+    const productRating = hasReviewData(product)
+      ? (cleanText(product.display_product_rating) || `${Number(product.rating).toFixed(1)}/5`)
+      : "";
+    const sellerPercent = sellerRatingPercent(product);
+    const sellerRating = cleanText(product.display_seller_rating) || (sellerPercent == null
+      ? ""
+      : tr("product.sellerRatingSummary", "{percent}% positive", {
+        percent: new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(sellerPercent)
+      }));
+    const sellerFeedback = cleanText(product.display_seller_feedback) || (Number(product.seller_feedback_count) > 0
+      ? tr("product.sellerFeedbackCount", "{count} seller ratings", {
+        count: Number(product.seller_feedback_count).toLocaleString(locale)
+      })
+      : "");
+    if (score == null && !productRating && !sellerRating) return "";
+    const ratings = [
+      productRating ? `<span class="deal-rating"><strong>★ ${esc(productRating)}</strong><small>${esc(cleanText(product.display_product_rating_label) || tr("product.productRating", "Product rating"))}</small></span>` : "",
+      sellerRating ? `<span class="deal-rating"><strong>${esc(sellerRating)}</strong><small>${esc(cleanText(product.display_seller_rating_label) || tr("product.sellerRating", "Seller rating"))}${sellerFeedback ? ` · ${esc(sellerFeedback)}` : ""}</small></span>` : ""
+    ].filter(Boolean).join("");
+    return `<div class="deal-metrics${atSelection ? " is-selection" : ""}">
+      ${score == null ? "" : `<div class="deal-score"><strong>${score}/100</strong><span>${esc(atSelection ? tr("product.scoreAtSelection", "OneDailyDrop Score at selection") : tr("product.oneDailyDropScore", "OneDailyDrop Score"))}<small>${esc(tr("product.overallDealScore", "Overall deal score"))}</small></span></div>`}
+      ${ratings ? `<div class="deal-ratings">${ratings}</div>` : ""}
+    </div>`;
   };
 
   let products = [];
@@ -198,8 +234,7 @@
         <p class="cat">${esc(displayCategory(product))} · ${esc(storeName(product))}</p>
         <h2><a href="${esc(dealUrl(product))}">${esc(fullTitle(product.title))}</a></h2>
         <p class="description">${esc(whyPicked(product))}</p>
-        ${hasReviewData(product) ? `<p class="stats">★ ${esc(product.rating)} · ${Number(product.review_count).toLocaleString(locale)} ${esc(tr("product.reviews", "reviews"))}</p>` : ""}
-        <div class="score-strip"><strong>${Number(product.evidence_count) || 0}/6</strong><span>${esc(product.evidence_label || tr("product.verifiedSignals", "{count} of 6 offer signals verified", { count: Number(product.evidence_count) || 0 }))}</span></div>
+        ${scoreMetrics(product)}
         <div class="featured-price-row"><span class="price-label">${priceLabel(product)}</span><span class="featured-price">${money(product.current_price, product.currency)}</span>${product.original_price ? `<span class="old">${money(product.original_price, product.currency)}</span>` : ""}${save ? `<span class="save-pill">${esc(tr("product.save", "SAVE {percent}%", { percent: save }))}</span>` : ""}</div>
         <p class="verification">${esc(statusText(product))}</p>
         ${offerFacts(product)}
@@ -217,7 +252,7 @@
           <p class="cat">${esc(displayCategory(product))} · ${esc(storeName(product))}</p>
           <h3><a href="${esc(dealUrl(product))}">${esc(fullTitle(product.title))}</a></h3>
           <p class="description"><strong>${esc(tr("product.why", "Why we picked it:"))}</strong> ${esc(whyPicked(product))}</p>
-          ${hasReviewData(product) ? `<p class="stats">★ ${esc(product.rating)} · ${Number(product.review_count).toLocaleString(locale)} ${esc(tr("product.reviews", "reviews"))}</p>` : ""}
+          ${scoreMetrics(product)}
           <div class="price-row"><span class="price-label">${priceLabel(product)}</span><span class="price">${money(product.current_price, product.currency)}</span>${product.original_price ? `<span class="old">${money(product.original_price, product.currency)}</span>` : ""}${save ? `<span class="save-pill">${esc(tr("product.save", "SAVE {percent}%", { percent: save }))}</span>` : ""}</div>
           <p class="verification">${esc(statusText(product))}</p>
           ${offerFacts(product)}
@@ -227,14 +262,13 @@
   };
 
   const miniCard = product => {
-    const save = discount(product);
     return `
       <article class="mini-card">
         <a href="${esc(dealUrl(product))}"><img src="${esc(product.image_url)}" alt="${esc(fullTitle(product.title))}" loading="lazy"></a>
         <div class="mini-card-body">
           <p class="cat">${esc(displayCategory(product))} · ${esc(storeName(product))}</p>
           <h3><a href="${esc(dealUrl(product))}">${esc(fullTitle(product.title))}</a></h3>
-          ${hasReviewData(product) ? `<p class="mini-meta">★ ${esc(product.rating)}${save ? ` · ${esc(tr("product.off", "{percent}% off", { percent: save }))}` : ""}</p>` : ""}
+          ${scoreMetrics(product, product.drop_score != null && Boolean(product.drop_date))}
           <div class="mini-price-row"><span class="mini-price-label">${priceLabel(product)}</span><span class="mini-price">${money(product.current_price, product.currency)}</span>${product.original_price ? `<span class="old">${money(product.original_price, product.currency)}</span>` : ""}</div>
           <a class="mini-action" href="${esc(dealUrl(product))}">${esc(tr("product.viewDetails", "VIEW DETAILS"))}</a>
         </div>

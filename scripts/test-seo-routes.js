@@ -64,9 +64,9 @@ const insertProduct = db.prepare(`
   INSERT INTO products(
     external_id,provider_external_id,market,product_key,brand,brand_slug,title,category,
     description,image_url,affiliate_url,retailer_name,seller_name,shipping_summary,
-    return_summary,availability,checked_at,rating,review_count,current_price,original_price,
+    seller_rating,seller_feedback_count,return_summary,availability,checked_at,rating,review_count,current_price,original_price,
     currency,score,selection_reason,source,status,updated_at,first_seen_at,last_seen_at
-  ) VALUES(${Array(29).fill("?").join(",")})
+  ) VALUES(${Array(31).fill("?").join(",")})
 `);
 const fixtureMarkets = [
   { code:"us", currency:"USD", category:"office gadgets", rating:4.8, reviews:500 },
@@ -93,6 +93,8 @@ for (const fixtureMarket of fixtureMarkets) {
       "eBay",
       `Test Seller ${index}`,
       "Free shipping via Standard Shipping",
+      4.99,
+      12000 + index,
       "30 calendar days, seller-paid return shipping",
       "In stock",
       now,
@@ -111,6 +113,28 @@ for (const fixtureMarket of fixtureMarkets) {
     );
   }
 }
+
+const archiveDate = "2000-01-01";
+const dropProducts = db.prepare("SELECT id,current_price,original_price,currency,score FROM products WHERE market='us' ORDER BY id LIMIT 10").all();
+const insertDrop = db.prepare(`
+  INSERT INTO daily_drops(
+    market,drop_date,product_id,rank,score,current_price,original_price,currency,
+    selection_reason,availability_status,selected_at
+  ) VALUES(?,?,?,?,?,?,?,?,?,?,?)
+`);
+dropProducts.forEach((product, index) => insertDrop.run(
+  "us",
+  archiveDate,
+  product.id,
+  index + 1,
+  product.score,
+  product.current_price + 5,
+  product.original_price,
+  product.currency,
+  "Archived selection snapshot.",
+  "Available",
+  now
+));
 
 const base = `http://127.0.0.1:${port}`;
 const assert = (condition, message) => {
@@ -152,6 +176,8 @@ async function run() {
   assert(homepage.includes('property="og:site_name" content="OneDailyDrop"'), "Homepage Open Graph metadata is missing");
   assert(homepage.includes("eBay Test Product 1"), "The verified eBay catalog is missing from the US homepage");
   assert(homepage.includes("VIEW DEAL AT eBay"), "The eBay affiliate action is missing from the US homepage");
+  assert(homepage.includes("OneDailyDrop Score") && homepage.includes("Overall deal score"), "The public OneDailyDrop Score is missing from the homepage");
+  assert(homepage.includes("Product rating") && homepage.includes("Seller rating"), "Product and seller ratings are not separated on the homepage");
   assert(!homepage.includes("Check current price on Amazon"), "A retired Amazon fallback remains on the homepage");
   for (const forbidden of ["Development preview", "Sample price", "Rainforest"]) {
     assert(!homepage.includes(forbidden), `US homepage still exposes ${forbidden}`);
@@ -172,6 +198,7 @@ async function run() {
   assert(frenchHomepage.includes("Produits pour animaux"), "France live category is not localized");
   assert(frenchHomepage.includes("Livraison gratuite via Standard Shipping"), "France delivery terms are not localized");
   assert(frenchHomepage.includes("Retours acceptés sous 30 jours"), "France return terms are not localized");
+  assert(frenchHomepage.includes("Score OneDailyDrop") && frenchHomepage.includes("Note du vendeur"), "France score or seller rating labels are missing");
   assert(frenchHomepage.includes("eBay n’a fourni aucune note produit"), "France missing-rating disclosure is absent");
   for (const forbidden of ["Selected with", "Free shipping via", "30 calendar days", "POPULAR PICK", "CHOIX POPULAIRE"]) {
     assert(!frenchHomepage.includes(forbidden), `France homepage still exposes misleading or untranslated text: ${forbidden}`);
@@ -186,6 +213,7 @@ async function run() {
   assert(germanHomepage.includes("Küchenhelfer"), "Germany live category is not localized");
   assert(germanHomepage.includes("Kostenlose Lieferung über Standard Shipping"), "Germany delivery terms are not localized");
   assert(germanHomepage.includes("Rückgabe innerhalb von 30 Tagen"), "Germany return terms are not localized");
+  assert(germanHomepage.includes("OneDailyDrop-Score") && germanHomepage.includes("Verkäuferbewertung"), "Germany score or seller rating labels are missing");
   assert(!germanHomepage.includes("Selected with"), "Germany exposes the stored technical selection reason");
 
   const canadaHomepage = await (await get("/ca")).text();
@@ -233,6 +261,15 @@ async function run() {
 
   const searchPage = await (await get("/us/search?q=product%202")).text();
   assert(searchPage.includes("eBay Test Product 2"), "Search does not find a verified eBay product");
+  assert(searchPage.includes("deal-metrics") && searchPage.includes("OneDailyDrop Score"), "Search results are missing the OneDailyDrop Score");
+
+  const archivePage = await (await get("/us/archive")).text();
+  assert(archivePage.includes("OneDailyDrop Score at selection"), "Past Drops does not preserve the score at selection");
+  assert(archivePage.includes("Price when selected") && archivePage.includes("Current price"), "Past Drops does not separate selected and current prices");
+  assert(archivePage.includes("archive-prices") && archivePage.includes("VIEW DETAILS"), "Past Drops card content or action is missing");
+
+  const productPage = await (await fetch(`${base}/us/deal/${products[0].id}`)).text();
+  assert(productPage.includes("OneDailyDrop Score") && productPage.includes("Product rating") && productPage.includes("Seller rating"), "Product page does not separate the three ratings");
 
   const missingResponse = await get("/us/deal/not-a-real-product-999999");
   const missingPage = await missingResponse.text();

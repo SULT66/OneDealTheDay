@@ -33,7 +33,6 @@ const isDemo = product => String(product?.source || "").toLowerCase() === "demo"
 const hasCurrentOffer = product => Number(product?.current_price) > 0 &&
   /^[A-Z]{3}$/.test(String(product?.currency || "").toUpperCase()) &&
   Boolean(clean(product?.checked_at));
-const hasReviewData = product => Number(product?.rating) > 0 && Number(product?.review_count) > 0;
 const money = (value, currency = "USD") => {
   if (value == null || value === "") return "Check current price";
   const amount = Number(value);
@@ -87,7 +86,23 @@ const offerFacts = product => {
   </dl>`;
 };
 
-const mainCard = (product, index) => `
+const scoreMetrics = (product, language = "en", atSelection = false) => {
+  const score = Number(product.display_score);
+  const hasScore = Number.isFinite(score) && score >= 0;
+  const productRating = clean(product.display_product_rating);
+  const sellerRating = clean(product.display_seller_rating);
+  if (!hasScore && !productRating && !sellerRating) return "";
+  const ratings = [
+    productRating ? `<span class="deal-rating"><strong>★ ${esc(productRating)}</strong><small>${esc(product.display_product_rating_label || t(language, "product.productRating"))}</small></span>` : "",
+    sellerRating ? `<span class="deal-rating"><strong>${esc(sellerRating)}</strong><small>${esc(product.display_seller_rating_label || t(language, "product.sellerRating"))}${product.display_seller_feedback ? ` · ${esc(product.display_seller_feedback)}` : ""}</small></span>` : ""
+  ].filter(Boolean).join("");
+  return `<div class="deal-metrics${atSelection ? " is-selection" : ""}">
+    ${hasScore ? `<div class="deal-score"><strong>${score}/100</strong><span>${esc(atSelection ? product.display_score_at_selection_label : product.display_score_label)}<small>${esc(product.display_score_context)}</small></span></div>` : ""}
+    ${ratings ? `<div class="deal-ratings">${ratings}</div>` : ""}
+  </div>`;
+};
+
+const mainCard = (product, index, language = "en") => `
   <article class="card">
     <a class="image-wrap" href="${dealPath(product)}"><img src="${esc(product.image_url)}" alt="${esc(fullTitle(product.title))}" loading="lazy"></a>
     <div class="card-content">
@@ -95,7 +110,7 @@ const mainCard = (product, index) => `
       <p class="cat"><a href="${categoryPath(product.category || "Deals", product.market)}">${esc(product.display_category || product.category || "Deals")}</a> · ${esc(storeName(product))}</p>
       <h3><a href="${dealPath(product)}">${esc(fullTitle(product.title))}</a></h3>
       <p class="description"><strong>Why we picked it:</strong> ${esc(whyPicked(product))}</p>
-      ${hasReviewData(product) ? `<p class="stats">★ ${esc(product.rating)} · ${esc(product.display_review_count || product.review_count)} ${esc(product.display_reviews_label || "reviews")}</p>` : ""}
+      ${scoreMetrics(product, language)}
       <div class="price-row"><span class="price-label">${priceLabel(product)}</span><span class="price">${esc(product.display_current_price || money(product.current_price, product.currency))}</span>${product.original_price ? `<span class="old">${esc(product.display_original_price || money(product.original_price, product.currency))}</span>` : ""}${discount(product) ? `<span class="save-pill">${esc(product.display_save_label || `SAVE ${discount(product)}%`)}</span>` : ""}</div>
       <p class="verification">${esc(statusText(product))}</p>
       ${offerFacts(product)}
@@ -103,13 +118,13 @@ const mainCard = (product, index) => `
     </div>
   </article>`;
 
-const miniCard = product => `
+const miniCard = (product, language = "en", atSelection = false) => `
   <article class="mini-card">
     <a href="${dealPath(product)}"><img src="${esc(product.image_url)}" alt="${esc(fullTitle(product.title))}" loading="lazy"></a>
     <div class="mini-card-body">
       <p class="cat"><a href="${categoryPath(product.category || "Deals", product.market)}">${esc(product.display_category || product.category || "Deals")}</a> · ${esc(storeName(product))}</p>
       <h3><a href="${dealPath(product)}">${esc(fullTitle(product.title))}</a></h3>
-      ${hasReviewData(product) ? `<p class="mini-meta">★ ${esc(product.rating)}${discount(product) ? ` · ${esc(product.display_off_label || `${discount(product)}% off`)}` : ""}</p>` : ""}
+      ${scoreMetrics(product, language, atSelection || (product.drop_score != null && Boolean(product.drop_date)))}
       <div class="mini-price-row"><span class="mini-price-label">${priceLabel(product)}</span><span class="mini-price">${esc(product.display_current_price || money(product.current_price, product.currency))}</span>${product.original_price ? `<span class="old">${esc(product.display_original_price || money(product.original_price, product.currency))}</span>` : ""}</div>
       <a class="mini-action" href="${dealPath(product)}">VIEW DETAILS</a>
     </div>
@@ -126,7 +141,8 @@ module.exports = function homepage(req, res) {
     .map(product => presentProduct(localizeProduct(product, language), language));
   const today = localDate(selectedMarket.timezone);
   let dailyProducts = db.prepare(`
-    SELECT p.*,d.rank,d.selection_reason AS daily_selection_reason,d.drop_date
+    SELECT p.*,d.rank,d.score AS drop_score,d.current_price AS drop_price,
+      d.selection_reason AS daily_selection_reason,d.drop_date
     FROM daily_drops d
     JOIN products p ON p.id=d.product_id
     WHERE d.market=? AND ${sourceSql("p")} AND d.drop_date=(
@@ -152,7 +168,8 @@ module.exports = function homepage(req, res) {
   const categories = [...new Set(products.map(product => product.category).filter(Boolean))];
   const categoryChoices = (categories.length ? products.filter((product, index, rows) => rows.findIndex(row => row.category === product.category) === index).map(product => ({ value: product.category, label: product.display_category })) : DEFAULT_INTEREST_CATEGORIES.map(value => ({ value, label: value }))).slice(0, 10);
   const archive = db.prepare(`
-    SELECT p.*,d.drop_date,d.selection_reason AS daily_selection_reason
+    SELECT p.*,d.drop_date,d.score AS drop_score,d.current_price AS drop_price,
+      d.selection_reason AS daily_selection_reason
     FROM daily_drops d
     JOIN products p ON p.id=d.product_id
     WHERE d.market=? AND ${sourceSql("p")} AND d.rank=1 AND d.drop_date<?
@@ -221,8 +238,7 @@ module.exports = function homepage(req, res) {
       <p class="cat"><a href="${categoryPath(featured.category || "Deals", selectedMarket.code)}">${esc(featured.display_category || featured.category || "Deals")}</a> · ${esc(storeName(featured))}</p>
       <h2><a href="${dealPath(featured)}">${esc(fullTitle(featured.title))}</a></h2>
       <p class="description">${esc(whyPicked(featured))}</p>
-      ${hasReviewData(featured) ? `<p class="stats">★ ${esc(featured.rating)} · ${Number(featured.review_count).toLocaleString(locale)} ${esc(featured.display_reviews_label || "reviews")}</p>` : ""}
-      <div class="score-strip"><strong>${Number(featured.evidence_count) || 0}/6</strong><span>${esc(featured.evidence_label || t(language, "product.verifiedSignals", { count: Number(featured.evidence_count) || 0 }))}</span></div>
+      ${scoreMetrics(featured, language)}
       <div class="featured-price-row"><span class="price-label">${priceLabel(featured)}</span><span class="featured-price">${esc(featured.display_current_price || money(featured.current_price, featured.currency))}</span>${featured.original_price ? `<span class="old">${esc(featured.display_original_price || money(featured.original_price, featured.currency))}</span>` : ""}${discount(featured) ? `<span class="save-pill">${esc(featured.display_save_label || `SAVE ${discount(featured)}%`)}</span>` : ""}</div>
       <p class="verification">${esc(statusText(featured))}</p>
       ${offerFacts(featured)}
@@ -239,8 +255,8 @@ module.exports = function homepage(req, res) {
       <a class="featured-button" href="#subscribe">${esc(t(language, "home.catalogNotify"))}</a>
     </div>`;
 
-  const collection = (items, emptyMessage) => items.length
-    ? items.map(miniCard).join("")
+  const collection = (items, emptyMessage = t(language, "home.catalogSectionEmpty"), atSelection = false) => items.length
+    ? items.map(product => miniCard(product, language, atSelection)).join("")
     : `<div class="empty-state catalog-section-empty">${esc(emptyMessage)}</div>`;
   const robots = '<meta name="robots" content="index,follow,max-image-preview:large">';
   const demoBanner = "";
