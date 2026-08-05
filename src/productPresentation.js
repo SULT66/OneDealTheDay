@@ -1,4 +1,5 @@
 const { categoryLabel, languageTag, t } = require("./i18n");
+const { SCORE_MODEL, scoreProduct } = require("./ranker");
 
 const clean = value => String(value || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
 const number = (value, fallback = 0) => {
@@ -16,9 +17,25 @@ function scoreBreakdown(product) {
 }
 
 function oneDailyDropScore(product) {
+  const breakdown = scoreBreakdown(product);
   const raw = product?.drop_score ?? product?.score;
   const value = number(raw, NaN);
-  return Number.isFinite(value) ? Math.round(Math.max(0, Math.min(100, value))) : null;
+  const isSelectionSnapshot = product?.drop_score != null;
+  const scoreModel = isSelectionSnapshot ? product?.drop_score_model : breakdown.model;
+  if (scoreModel === SCORE_MODEL && Number.isFinite(value)) {
+    return Math.round(Math.max(0, Math.min(100, value)));
+  }
+
+  // Scores saved by the previous model treated unavailable retailer fields
+  // and a short local price history as negative evidence. Recalculate those
+  // records at presentation time so every existing card is corrected as soon
+  // as the new release starts, including archived selections.
+  const recalculated = scoreProduct({
+    ...product,
+    current_price: product?.drop_price ?? product?.current_price,
+    original_price: product?.drop_original_price ?? product?.original_price
+  }).total;
+  return Number.isFinite(recalculated) ? Math.round(recalculated) : null;
 }
 
 function sellerRatingPercent(product) {
