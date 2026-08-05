@@ -8,6 +8,7 @@ const { localDate } = require("./refresh");
 const { t, marketName, languageTag } = require("./i18n");
 const { presentProduct } = require("./productPresentation");
 const { sourceSql } = require("./publicCatalog");
+const { outboundPath } = require("./retailerLinks");
 
 const SITE = "https://www.onedailydrop.com";
 const DEFAULT_INTEREST_CATEGORIES = [
@@ -68,9 +69,10 @@ const statusText = product => isDemo(product)
     ? "Confirm price and availability at the retailer"
   : clean(product.display_status) || "Price recently verified";
 const priceLabel = product => isDemo(product) ? "Retailer price" : !hasCurrentOffer(product) ? "Retailer price" : clean(product.display_price_label) || "Current price";
-const action = (product, className) => isDemo(product)
+const trackingAttributes = (product, placement) => `data-track-product="${Number(product.id)}" data-track-source="home" data-track-placement="${placement}" data-track-action="view_details"`;
+const action = (product, className, placement) => isDemo(product)
   ? `<a class="${className}" href="${dealPath(product)}">VIEW DETAILS</a>`
-  : `<a class="${className}" href="${marketPath(product.market || "us", `/go/${product.id}`)}" rel="nofollow sponsored">${esc(product.display_action_label || `VIEW DEAL AT ${storeName(product)}`)}</a>`;
+  : `<a class="${className}" href="${esc(outboundPath(product, { sourcePage:"home", placement }))}" target="_blank" rel="sponsored noopener noreferrer">${esc(product.display_action_label || `VIEW DEAL AT ${storeName(product)}`)}</a>`;
 const priceHistoryAction = product => isDemo(product) || !hasCurrentOffer(product)
   ? ""
   : `<a class="price-history-link" href="${dealPath(product)}#price-history">${esc(product.display_price_history_label || "PRICE HISTORY")}</a>`;
@@ -104,29 +106,29 @@ const scoreMetrics = (product, language = "en", atSelection = false) => {
 
 const mainCard = (product, index, language = "en") => `
   <article class="card">
-    <a class="image-wrap" href="${dealPath(product)}"><img src="${esc(product.image_url)}" alt="${esc(fullTitle(product.title))}" loading="lazy"></a>
+    <a class="image-wrap" href="${dealPath(product)}" ${trackingAttributes(product, "daily_card_media")}><img src="${esc(product.image_url)}" alt="${esc(fullTitle(product.title))}" loading="lazy"></a>
     <div class="card-content">
       <div class="card-top"><span class="rank">#${index}</span>${badge(product) ? `<span class="badge">${esc(badge(product))}</span>` : ""}</div>
       <p class="cat"><a href="${categoryPath(product.category || "Deals", product.market)}">${esc(product.display_category || product.category || "Deals")}</a> · ${esc(storeName(product))}</p>
-      <h3><a href="${dealPath(product)}">${esc(fullTitle(product.title))}</a></h3>
+      <h3><a href="${dealPath(product)}" ${trackingAttributes(product, "daily_card_title")}>${esc(fullTitle(product.title))}</a></h3>
       <p class="description"><strong>Why we picked it:</strong> ${esc(whyPicked(product))}</p>
       ${scoreMetrics(product, language)}
       <div class="price-row"><span class="price-label">${priceLabel(product)}</span><span class="price">${esc(product.display_current_price || money(product.current_price, product.currency))}</span>${product.original_price ? `<span class="old">${esc(product.display_original_price || money(product.original_price, product.currency))}</span>` : ""}${discount(product) ? `<span class="save-pill">${esc(product.display_save_label || `SAVE ${discount(product)}%`)}</span>` : ""}</div>
       <p class="verification">${esc(statusText(product))}</p>
       ${offerFacts(product)}
-      <div class="card-actions">${action(product, "button")}${priceHistoryAction(product)}</div>
+      <div class="card-actions">${action(product, "button", "daily_card_cta")}${priceHistoryAction(product)}</div>
     </div>
   </article>`;
 
 const miniCard = (product, language = "en", atSelection = false) => `
   <article class="mini-card">
-    <a href="${dealPath(product)}"><img src="${esc(product.image_url)}" alt="${esc(fullTitle(product.title))}" loading="lazy"></a>
+    <a href="${dealPath(product)}" ${trackingAttributes(product, "collection_media")}><img src="${esc(product.image_url)}" alt="${esc(fullTitle(product.title))}" loading="lazy"></a>
     <div class="mini-card-body">
       <p class="cat"><a href="${categoryPath(product.category || "Deals", product.market)}">${esc(product.display_category || product.category || "Deals")}</a> · ${esc(storeName(product))}</p>
-      <h3><a href="${dealPath(product)}">${esc(fullTitle(product.title))}</a></h3>
+      <h3><a href="${dealPath(product)}" ${trackingAttributes(product, "collection_title")}>${esc(fullTitle(product.title))}</a></h3>
       ${scoreMetrics(product, language, atSelection || (product.drop_score != null && Boolean(product.drop_date)))}
       <div class="mini-price-row"><span class="mini-price-label">${priceLabel(product)}</span><span class="mini-price">${esc(product.display_current_price || money(product.current_price, product.currency))}</span>${product.original_price ? `<span class="old">${esc(product.display_original_price || money(product.original_price, product.currency))}</span>` : ""}</div>
-      <a class="mini-action" href="${dealPath(product)}">VIEW DETAILS</a>
+      <a class="mini-action" href="${dealPath(product)}" ${trackingAttributes(product, "collection_details")}>VIEW DETAILS</a>
     </div>
   </article>`;
 
@@ -233,18 +235,18 @@ module.exports = function homepage(req, res) {
 
   const featuredHtml = featured ? `
     <div class="featured-media">
-      <a href="${dealPath(featured)}"><img src="${esc(featured.image_url)}" alt="${esc(fullTitle(featured.title))}"></a>
+      <a href="${dealPath(featured)}" ${trackingAttributes(featured, "featured_media")}><img src="${esc(featured.image_url)}" alt="${esc(fullTitle(featured.title))}"></a>
       <span class="featured-ribbon">TODAY'S #1 PICK</span>${badge(featured) ? `<span class="featured-badge">${esc(badge(featured))}</span>` : ""}
     </div>
     <div class="featured-body">
       <p class="cat"><a href="${categoryPath(featured.category || "Deals", selectedMarket.code)}">${esc(featured.display_category || featured.category || "Deals")}</a> · ${esc(storeName(featured))}</p>
-      <h2><a href="${dealPath(featured)}">${esc(fullTitle(featured.title))}</a></h2>
+      <h2><a href="${dealPath(featured)}" ${trackingAttributes(featured, "featured_title")}>${esc(fullTitle(featured.title))}</a></h2>
       <p class="description">${esc(whyPicked(featured))}</p>
       ${scoreMetrics(featured, language)}
       <div class="featured-price-row"><span class="price-label">${priceLabel(featured)}</span><span class="featured-price">${esc(featured.display_current_price || money(featured.current_price, featured.currency))}</span>${featured.original_price ? `<span class="old">${esc(featured.display_original_price || money(featured.original_price, featured.currency))}</span>` : ""}${discount(featured) ? `<span class="save-pill">${esc(featured.display_save_label || `SAVE ${discount(featured)}%`)}</span>` : ""}</div>
       <p class="verification">${esc(statusText(featured))}</p>
       ${offerFacts(featured)}
-      <div class="card-actions">${action(featured, "featured-button")}${priceHistoryAction(featured)}</div>
+      <div class="card-actions">${action(featured, "featured-button", "featured_cta")}${priceHistoryAction(featured)}</div>
     </div>` : `<div class="featured-body catalog-empty-featured">
       <p class="eyebrow">${esc(t(language, "home.catalogEyebrow"))}</p>
       <h2>${esc(t(language, "home.catalogTitle"))}</h2>

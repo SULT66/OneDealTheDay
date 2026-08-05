@@ -31,6 +31,7 @@ db.exec(`
     description TEXT,
     image_url TEXT,
     affiliate_url TEXT,
+    retailer_shop_url TEXT,
     retailer_name TEXT,
     seller_name TEXT,
     seller_rating REAL,
@@ -69,6 +70,11 @@ db.exec(`
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     product_id INTEGER,
     market TEXT NOT NULL DEFAULT 'us',
+    retailer_name TEXT NOT NULL DEFAULT '',
+    source_page TEXT NOT NULL DEFAULT 'unknown',
+    placement TEXT NOT NULL DEFAULT 'unknown',
+    action_type TEXT NOT NULL DEFAULT 'view_deal',
+    destination_type TEXT NOT NULL DEFAULT 'retailer',
     clicked_at TEXT,
     referrer TEXT,
     user_agent TEXT
@@ -166,6 +172,15 @@ if (!refreshRunColumns.has("market")) db.exec("ALTER TABLE refresh_runs ADD COLU
 
 const clickColumns = new Set(db.prepare("PRAGMA table_info(clicks)").all().map(column => column.name));
 if (!clickColumns.has("market")) db.exec("ALTER TABLE clicks ADD COLUMN market TEXT NOT NULL DEFAULT 'us'");
+for (const [column, definition] of [
+  ["retailer_name", "TEXT NOT NULL DEFAULT ''"],
+  ["source_page", "TEXT NOT NULL DEFAULT 'unknown'"],
+  ["placement", "TEXT NOT NULL DEFAULT 'unknown'"],
+  ["action_type", "TEXT NOT NULL DEFAULT 'view_deal'"],
+  ["destination_type", "TEXT NOT NULL DEFAULT 'retailer'"]
+]) {
+  if (!clickColumns.has(column)) db.exec(`ALTER TABLE clicks ADD COLUMN ${column} ${definition}`);
+}
 
 const dailyDropColumns = new Set(db.prepare("PRAGMA table_info(daily_drops)").all().map(column => column.name));
 if (!dailyDropColumns.has("score_model")) db.exec("ALTER TABLE daily_drops ADD COLUMN score_model TEXT");
@@ -188,6 +203,7 @@ for (const column of [
   "mpn",
   "ean",
   "retailer_name",
+  "retailer_shop_url",
   "seller_name",
   "shipping_summary",
   "return_summary",

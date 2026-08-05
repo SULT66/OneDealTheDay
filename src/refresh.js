@@ -205,13 +205,13 @@ async function refreshMarket(config, marketCode, options = {}) {
       const upsertProduct = db.prepare(`
         INSERT INTO products(
           external_id,provider_external_id,market,product_key,upc,gtin,model_number,brand,brand_slug,manufacturer,mpn,ean,
-          title,category,description,image_url,affiliate_url,retailer_name,seller_name,seller_rating,seller_feedback_count,shipping_summary,return_summary,
+          title,category,description,image_url,affiliate_url,retailer_shop_url,retailer_name,seller_name,seller_rating,seller_feedback_count,shipping_summary,return_summary,
           availability,checked_at,rating,review_count,current_price,original_price,currency,badge,score,score_breakdown,
           selection_reason,source,status,updated_at,first_seen_at,last_seen_at
         )
         VALUES(
           @external_id,@provider_external_id,@market,@product_key,@upc,@gtin,@model_number,@brand,@brand_slug,@manufacturer,@mpn,@ean,
-          @title,@category,@description,@image_url,@affiliate_url,@retailer_name,@seller_name,@seller_rating,@seller_feedback_count,@shipping_summary,@return_summary,
+          @title,@category,@description,@image_url,@affiliate_url,@retailer_shop_url,@retailer_name,@seller_name,@seller_rating,@seller_feedback_count,@shipping_summary,@return_summary,
           @availability,@checked_at,@rating,@review_count,@current_price,@original_price,@currency,@badge,@score,@score_breakdown,
           @selection_reason,@source,'published',@updated_at,@first_seen_at,@last_seen_at
         )
@@ -220,7 +220,7 @@ async function refreshMarket(config, marketCode, options = {}) {
           upc=excluded.upc,gtin=excluded.gtin,model_number=excluded.model_number,brand=excluded.brand,
           brand_slug=excluded.brand_slug,manufacturer=excluded.manufacturer,mpn=excluded.mpn,ean=excluded.ean,
           title=excluded.title,category=excluded.category,description=excluded.description,image_url=excluded.image_url,
-          affiliate_url=excluded.affiliate_url,retailer_name=excluded.retailer_name,seller_name=excluded.seller_name,
+          affiliate_url=excluded.affiliate_url,retailer_shop_url=excluded.retailer_shop_url,retailer_name=excluded.retailer_name,seller_name=excluded.seller_name,
           seller_rating=excluded.seller_rating,seller_feedback_count=excluded.seller_feedback_count,
           shipping_summary=excluded.shipping_summary,return_summary=excluded.return_summary,
           availability=excluded.availability,checked_at=excluded.checked_at,rating=excluded.rating,
@@ -253,6 +253,7 @@ async function refreshMarket(config, marketCode, options = {}) {
           description: textValue(product.description),
           image_url: textValue(product.image_url),
           affiliate_url: textValue(product.affiliate_url),
+          retailer_shop_url: textValue(product.retailer_shop_url),
           retailer_name: textValue(product.retailer_name),
           seller_name: textValue(product.seller_name),
           seller_rating: numberValue(product.seller_rating, 0),

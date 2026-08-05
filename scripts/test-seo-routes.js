@@ -57,16 +57,17 @@ process.env.WEBSITE_SITE_NAME = "onedailydrop-test";
 process.env.EBAY_CLIENT_ID = "test-client-id";
 process.env.EBAY_CLIENT_SECRET = "test-client-secret";
 process.env.EBAY_CAMPAIGN_ID = "5339179772";
+process.env.ADMIN_KEY = "test-admin-key";
 
 const db = require("../src/db");
 const now = new Date().toISOString();
 const insertProduct = db.prepare(`
   INSERT INTO products(
     external_id,provider_external_id,market,product_key,brand,brand_slug,title,category,
-    description,image_url,affiliate_url,retailer_name,seller_name,shipping_summary,
+    description,image_url,affiliate_url,retailer_shop_url,retailer_name,seller_name,shipping_summary,
     seller_rating,seller_feedback_count,return_summary,availability,checked_at,rating,review_count,current_price,original_price,
     currency,score,selection_reason,source,status,updated_at,first_seen_at,last_seen_at
-  ) VALUES(${Array(31).fill("?").join(",")})
+  ) VALUES(${Array(32).fill("?").join(",")})
 `);
 const fixtureMarkets = [
   { code:"us", currency:"USD", category:"office gadgets", rating:4.8, reviews:500 },
@@ -90,6 +91,7 @@ for (const fixtureMarket of fixtureMarkets) {
       `Verified eBay fixture ${index}`,
       `https://i.ebayimg.com/images/g/${fixtureMarket.code}-test-${index}/s-l1600.jpg`,
       `https://www.ebay.com/itm/${fixtureMarket.code}${1000 + index}?campid=5339179772`,
+      `https://www.ebay.com/sch/i.html?_nkw=smart+home&campid=5339179772`,
       "eBay",
       `Test Seller ${index}`,
       "Free shipping via Standard Shipping",
@@ -176,6 +178,9 @@ async function run() {
   assert(homepage.includes('property="og:site_name" content="OneDailyDrop"'), "Homepage Open Graph metadata is missing");
   assert(homepage.includes("eBay Test Product 1"), "The verified eBay catalog is missing from the US homepage");
   assert(homepage.includes("VIEW DEAL AT eBay"), "The eBay affiliate action is missing from the US homepage");
+  assert(homepage.includes('target="_blank" rel="sponsored noopener noreferrer"'), "Retailer actions do not open safely in a new tab");
+  assert(homepage.includes("source=home&amp;placement=featured_cta&amp;action=view_deal"), "Homepage outbound attribution is missing");
+  assert(homepage.includes('data-track-source="home"') && homepage.includes('data-track-action="view_details"'), "Homepage internal product tracking is missing");
   assert(homepage.includes("OneDailyDrop Score") && homepage.includes("Overall deal score"), "The public OneDailyDrop Score is missing from the homepage");
   assert(homepage.includes("Product rating") && homepage.includes("Seller rating"), "Product and seller ratings are not separated on the homepage");
   assert(!homepage.includes("Check current price on Amazon"), "A retired Amazon fallback remains on the homepage");
@@ -270,6 +275,46 @@ async function run() {
 
   const productPage = await (await fetch(`${base}/us/deal/${products[0].id}`)).text();
   assert(productPage.includes("OneDailyDrop Score") && productPage.includes("Product rating") && productPage.includes("Seller rating"), "Product page does not separate the three ratings");
+  assert(productPage.includes("SHOP ALL ON eBay"), "The attributed retailer shop-all action is missing");
+  assert(productPage.includes("action=shop_all"), "The shop-all action is not identified for analytics");
+  assert(productPage.includes('target="_blank" rel="sponsored noopener noreferrer"'), "Product retailer actions do not preserve OneDailyDrop in the original tab");
+
+  const internalClick = await fetch(`${base}/api/click-events`, {
+    method:"POST",
+    headers:{"content-type":"application/json"},
+    body:JSON.stringify({
+      productId:products[0].id,
+      sourcePage:"search",
+      placement:"catalog_title",
+      action:"view_details"
+    })
+  });
+  assert(internalClick.status === 204, "An internal product click was not accepted");
+
+  const retailerClick = await get(`/us/go/${products[0].id}?source=product&placement=product_cta&action=view_deal`);
+  assert(retailerClick.status === 302, "The retailer action did not redirect");
+  assert(retailerClick.headers.get("location").includes("campid=5339179772"), "The original affiliate destination was not preserved");
+
+  const shopAllClick = await get(`/us/go/${products[0].id}?source=product&placement=shop_all&action=shop_all`);
+  assert(shopAllClick.status === 302, "The retailer shop-all action did not redirect");
+  const shopAllLocation = shopAllClick.headers.get("location") || "";
+  assert(shopAllLocation.includes("/sch/i.html") && shopAllLocation.includes("campid=5339179772"), "The shop-all link lost retailer attribution");
+
+  const recordedClicks = db.prepare(`
+    SELECT source_page,placement,action_type,destination_type,retailer_name
+    FROM clicks WHERE product_id=? ORDER BY id
+  `).all(products[0].id);
+  assert(recordedClicks.some(click => click.source_page === "search" && click.action_type === "view_details" && click.destination_type === "internal"), "Internal click dimensions were not stored");
+  assert(recordedClicks.some(click => click.source_page === "product" && click.action_type === "view_deal" && click.destination_type === "retailer"), "Retailer click dimensions were not stored");
+  assert(recordedClicks.some(click => click.placement === "shop_all" && click.action_type === "shop_all" && click.retailer_name === "eBay"), "Shop-all click dimensions were not stored");
+
+  const analyticsResponse = await fetch(`${base}/api/admin/click-analytics?days=7`, {
+    headers:{"x-admin-key":"test-admin-key"}
+  });
+  const analytics = await analyticsResponse.json();
+  assert(analyticsResponse.status === 200, "Admin click analytics is unavailable");
+  assert(Number(analytics.totals.internal_product_clicks) === 1, "Internal click analytics total is incorrect");
+  assert(Number(analytics.totals.retailer_clicks) === 2, "Retailer click analytics total is incorrect");
 
   const missingResponse = await get("/us/deal/not-a-real-product-999999");
   const missingPage = await missingResponse.text();
