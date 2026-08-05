@@ -33,6 +33,8 @@ db.exec(`
     affiliate_url TEXT,
     retailer_name TEXT,
     seller_name TEXT,
+    seller_rating REAL,
+    seller_feedback_count INTEGER,
     shipping_summary TEXT,
     return_summary TEXT,
     availability TEXT,
@@ -165,6 +167,12 @@ const clickColumns = new Set(db.prepare("PRAGMA table_info(clicks)").all().map(c
 if (!clickColumns.has("market")) db.exec("ALTER TABLE clicks ADD COLUMN market TEXT NOT NULL DEFAULT 'us'");
 
 const productColumns = new Set(db.prepare("PRAGMA table_info(products)").all().map(column => column.name));
+for (const [column, type] of [
+  ["seller_rating", "REAL"],
+  ["seller_feedback_count", "INTEGER"]
+]) {
+  if (!productColumns.has(column)) db.exec(`ALTER TABLE products ADD COLUMN ${column} ${type}`);
+}
 for (const column of [
   "product_key",
   "upc",
