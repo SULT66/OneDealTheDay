@@ -106,7 +106,7 @@ const scoreMetrics = (product, language = "en", atSelection = false) => {
 
 const mainCard = (product, index, language = "en") => `
   <article class="card">
-    <a class="image-wrap" href="${dealPath(product)}" ${trackingAttributes(product, "daily_card_media")}><img src="${esc(product.image_url)}" alt="${esc(fullTitle(product.title))}" loading="lazy"></a>
+    <a class="image-wrap" href="${dealPath(product)}" ${trackingAttributes(product, "daily_card_media")}><img src="${esc(product.image_url)}" alt="${esc(fullTitle(product.title))}" loading="lazy" decoding="async"></a>
     <div class="card-content">
       <div class="card-top"><span class="rank">#${index}</span>${badge(product) ? `<span class="badge">${esc(badge(product))}</span>` : ""}</div>
       <p class="cat"><a href="${categoryPath(product.category || "Deals", product.market)}">${esc(product.display_category || product.category || "Deals")}</a> · ${esc(storeName(product))}</p>
@@ -122,7 +122,7 @@ const mainCard = (product, index, language = "en") => `
 
 const miniCard = (product, language = "en", atSelection = false) => `
   <article class="mini-card">
-    <a href="${dealPath(product)}" ${trackingAttributes(product, "collection_media")}><img src="${esc(product.image_url)}" alt="${esc(fullTitle(product.title))}" loading="lazy"></a>
+    <a href="${dealPath(product)}" ${trackingAttributes(product, "collection_media")}><img src="${esc(product.image_url)}" alt="${esc(fullTitle(product.title))}" loading="lazy" decoding="async"></a>
     <div class="mini-card-body">
       <p class="cat"><a href="${categoryPath(product.category || "Deals", product.market)}">${esc(product.display_category || product.category || "Deals")}</a> · ${esc(storeName(product))}</p>
       <h3><a href="${dealPath(product)}" ${trackingAttributes(product, "collection_title")}>${esc(fullTitle(product.title))}</a></h3>
@@ -235,7 +235,7 @@ module.exports = function homepage(req, res) {
 
   const featuredHtml = featured ? `
     <div class="featured-media">
-      <a href="${dealPath(featured)}" ${trackingAttributes(featured, "featured_media")}><img src="${esc(featured.image_url)}" alt="${esc(fullTitle(featured.title))}"></a>
+      <a href="${dealPath(featured)}" ${trackingAttributes(featured, "featured_media")}><img src="${esc(featured.image_url)}" alt="${esc(fullTitle(featured.title))}" decoding="async" fetchpriority="high"></a>
       <span class="featured-ribbon">TODAY'S #1 PICK</span>${badge(featured) ? `<span class="featured-badge">${esc(badge(featured))}</span>` : ""}
     </div>
     <div class="featured-body">

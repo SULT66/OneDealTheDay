@@ -3,6 +3,7 @@ const { marketFromRequest, marketPath, alternateLinks } = require("./markets");
 const {
   resolveLanguage,
   languageTag,
+  defaultLanguages,
   marketName,
   t,
   clientCopy,
@@ -18,6 +19,16 @@ html{scroll-padding-top:var(--odd-header-offset,132px)}
 const legacyAnalytics = /<script async src="https:\/\/www\.googletagmanager\.com\/gtag\/js\?id=[^"]+"><\/script><script>[\s\S]*?gtag\('config','[^']+'\);<\/script>/;
 const consentStyles = '<link rel="stylesheet" href="/cookie-consent.css?v=20260730">';
 const consentScript = '<script src="/cookie-consent.js?v=20260730"></script>';
+const imageConnectionHints = image => {
+  try {
+    const origin = new URL(String(image || "")).origin;
+    return origin.startsWith("https://")
+      ? `<link rel="preconnect" href="${origin}"><link rel="dns-prefetch" href="${origin}">`
+      : "";
+  } catch {
+    return "";
+  }
+};
 
 module.exports = function homepageSeo(req, res) {
   const originalSend = res.send.bind(res);
@@ -32,6 +43,7 @@ module.exports = function homepageSeo(req, res) {
 
     const homePath = marketPath(selectedMarket.code);
     const canonical = SITE + homePath;
+    const defaultLanguage = defaultLanguages[selectedMarket.code];
     const appScript = `<script>window.__ODD_MARKET__=${JSON.stringify(selectedMarket.code)};window.__ODD_MARKET_TIMEZONE__=${JSON.stringify(selectedMarket.timezone)};window.__ODD_LANGUAGE__=${JSON.stringify(language)};window.__ODD_LOCALE__=${JSON.stringify(locale)};window.__ODD_TEXT__=${JSON.stringify(clientCopy(language)).replace(/</g, "\\u003c")};</script><script>(function(){const q=new URLSearchParams(location.search).get("q");if(!q)return;const input=document.getElementById("searchInput");if(input)input.value=q;})();</script><script src="/click-tracking.js?v=20260805-stage2"></script><script src="/app.js?v=20260805-stage2"></script>`;
     const stage4AppScript = appScript.replace("/app.js?v=20260805-stage2", "/app.js?v=20260805-stage4");
     let enhanced = body
@@ -75,8 +87,19 @@ module.exports = function homepageSeo(req, res) {
       .replace(/<meta property="og:locale" content="[^"]+">/, `<meta property="og:locale" content="${locale.replace("-", "_")}">`)
       .replace(/"inLanguage":"[^"]+"/g, `"inLanguage":"${locale}"`)
       .replace(/(<p id="subscribeStatus" class="form-status" aria-live="polite">)[\s\S]*?(<\/p>)/, `$1${t(language, "home.noSpam")}$2`)
-      .replace("</head>", `${anchorOffsetStyle}${consentStyles}</head>`)
       .replace("</body>", `${consentScript}</body>`);
+    if (language !== defaultLanguage) {
+      enhanced = enhanced.replace(
+        /<meta name="robots" content="[^"]+">/,
+        '<meta name="robots" content="noindex,follow">'
+      );
+      res.set("X-Robots-Tag", "noindex, follow");
+      res.set("Cache-Control", "private, no-cache");
+    } else {
+      res.set("Cache-Control", "public, max-age=0, s-maxage=300, stale-while-revalidate=3600");
+    }
+    const socialImage = enhanced.match(/<meta property="og:image" content="([^"]+)">/)?.[1] || "";
+    enhanced = enhanced.replace("</head>", `${imageConnectionHints(socialImage)}${anchorOffsetStyle}${consentStyles}</head>`);
     return originalSend(enhanced);
   };
 

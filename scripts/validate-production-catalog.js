@@ -40,8 +40,11 @@ if (app.includes("function unavailablePage") || app.includes("status.liveProduct
 if (!app.includes("return renderHomepage(req, res);")) {
   throw new Error("Country routes do not render the full homepage");
 }
-if (!app.includes('forwardedHost !== "onedailydrop.com"') || !app.includes("res.redirect(301, `https://www.onedailydrop.com")) {
+if (!app.includes('forwardedHost === "onedailydrop.com"') || !app.includes("CANONICAL_HOST") || !app.includes("res.redirect(301")) {
   throw new Error("The apex domain is not permanently redirected to the canonical www host");
+}
+for (const required of ["AZURE_PRODUCTION_HOST", "normalizedMarketPath", "normalizedPath", "insecureCanonicalRequest"]) {
+  if (!app.includes(required)) throw new Error(`Canonical URL normalization is missing: ${required}`);
 }
 
 const homepage = fs.readFileSync(path.join(root, "src/homepage.js"), "utf8");
@@ -208,6 +211,17 @@ for (const required of ["daily_drops", '"page.archiveDescription"', "xhtml:link"
 for (const required of ['xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"', "<image:image>", "Disallow: /go/", 'html lang="${esc(locale)}"', '"page.customerRating"', '"@id":`${canonical}#product`', "sendNotFound"]) {
   if (!server.includes(required)) throw new Error(`Technical SEO behavior is missing: ${required}`);
 }
+for (const required of [
+  'const canonical = `${SITE}${marketPath(selectedMarket.code, route)}`',
+  'language === defaultLanguages[selectedMarket.code]',
+  'url:canonical,priceCurrency',
+  "brandMarkets",
+  "brandsMarkets",
+  'fetchpriority="high"',
+  'loading="lazy" decoding="async"'
+]) {
+  if (!server.includes(required)) throw new Error(`Stage 5 technical SEO safeguard is missing: ${required}`);
+}
 if (server.includes('res.status(404).send("Product not found")') || server.includes('res.status(404).send("Category not found")')) {
   throw new Error("A crawlable plain-text 404 response remains in a public SEO route");
 }
@@ -234,7 +248,7 @@ if (!i18n.includes("OneDailyDrop does not sell products.")) {
 if (!homepageSeo.includes('/<section class="confidence-section">[\\s\\S]*?<\\/section>/')) {
   throw new Error("The repeated trust/score explanation is not removed");
 }
-for (const required of ["marketFromRequest", "alternateLinks", "window.__ODD_MARKET__"]) {
+for (const required of ["marketFromRequest", "alternateLinks", "window.__ODD_MARKET__", "noindex,follow", "imageConnectionHints"]) {
   if (!homepageSeo.includes(required)) throw new Error(`Country homepage SEO behavior is missing: ${required}`);
 }
 if (!i18n.includes("selected automatically from your IP location")) {

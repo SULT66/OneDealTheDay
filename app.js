@@ -12,6 +12,8 @@ const { codes: marketCodes, normalizeMarket, marketFromIp, marketFromRequest, ma
 const { resolveLanguage } = require("./src/i18n");
 const { sourceSql, isPublicSource } = require("./src/publicCatalog");
 const createExpressApp = express;
+const CANONICAL_HOST = "www.onedailydrop.com";
+const AZURE_PRODUCTION_HOST = "onedealtheday-g3dme0aghzerc3a2.centralus-01.azurewebsites.net";
 
 if (!config.liveRefreshEnabled) {
   cron.schedule = () => ({ start() {}, stop() {}, destroy() {} });
@@ -60,8 +62,28 @@ function expressWithHomepage(...args) {
       .trim()
       .toLowerCase()
       .replace(/:\d+$/, "");
-    if (forwardedHost !== "onedailydrop.com") return next();
-    return res.redirect(301, `https://www.onedailydrop.com${req.originalUrl || "/"}`);
+    const originalUrl = req.originalUrl || "/";
+    const isRead = req.method === "GET" || req.method === "HEAD";
+    const queryIndex = originalUrl.indexOf("?");
+    const pathname = queryIndex >= 0 ? originalUrl.slice(0, queryIndex) : originalUrl;
+    const query = queryIndex >= 0 ? originalUrl.slice(queryIndex) : "";
+    const marketMatch = pathname.match(new RegExp(`^/(${marketCodes.join("|")})(?=/|$)`, "i"));
+    const normalizedMarketPath = marketMatch && marketMatch[1] !== marketMatch[1].toLowerCase()
+      ? `/${marketMatch[1].toLowerCase()}${pathname.slice(marketMatch[0].length)}`
+      : pathname;
+    const normalizedPath = normalizedMarketPath.length > 1
+      ? normalizedMarketPath.replace(/\/+$/, "")
+      : normalizedMarketPath;
+    const normalizedOriginalUrl = `${normalizedPath}${query}`;
+    const isPublicAzurePage = forwardedHost === AZURE_PRODUCTION_HOST && !req.path.startsWith("/api/");
+    const insecureCanonicalRequest = forwardedHost === CANONICAL_HOST && String(req.headers["x-forwarded-proto"] || "").split(",")[0].trim() === "http";
+    if (forwardedHost === "onedailydrop.com" || (isRead && isPublicAzurePage) || (isRead && insecureCanonicalRequest)) {
+      return res.redirect(301, `https://${CANONICAL_HOST}${normalizedOriginalUrl}`);
+    }
+
+    if (!isRead) return next();
+    if (normalizedPath !== pathname) return res.redirect(301, `${normalizedPath}${query}`);
+    return next();
   });
 
   app.get("/api/status", (req, res) => {
