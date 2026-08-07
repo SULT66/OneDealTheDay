@@ -13,6 +13,8 @@ const { reasonFor } = require("./demoEditorial");
 const { localizeProduct } = require("./demoTranslations");
 const { priceIntelligence } = require("./priceIntelligence");
 const { sourceSql, isPublicSource } = require("./publicCatalog");
+const { enabledProviders } = require("./providers/registry");
+const { coverage: retailerCoverage } = require("./retailerCatalog");
 const { presentProduct } = require("./productPresentation");
 const { methodology, methodologyMain } = require("./methodology");
 const { createEditorialBrief } = require("./editorialBrief");
@@ -1036,13 +1038,16 @@ app.get("/api/brands/:slug", (req,res) => { const products = db.prepare(`SELECT 
 app.get("/api/products/:id/price-history", (req,res) => { const product = db.prepare(`SELECT id,title,current_price,currency FROM products WHERE id=? AND status='published' AND ${sourceSql()}`).get(req.params.id); if (!product) return res.status(404).json({error:"Product not found"}); const history = historyFor(product.id); res.json({product,summary:{observations:history.length,lowest_30_days:minSince(history,30),lowest_90_days:minSince(history,90),lowest_ever:history.length?Math.min(...history.map(row=>Number(row.price)).filter(Number.isFinite)):null},history}); });
 app.get("/api/status", (req,res) => {
   const latestRun = db.prepare("SELECT * FROM refresh_runs ORDER BY id DESC LIMIT 1").get() || null;
+  const providers = enabledProviders(c);
   res.json({
     provider:c.provider,
+    sources:providers.map(provider => ({id:provider.id, source:provider.source, name:provider.name, markets:provider.markets})),
+    retailerCoverage:retailerCoverage(providers),
     products:db.prepare(`SELECT COUNT(*) n FROM products WHERE status='published' AND ${sourceSql()}`).get().n,
     brands:db.prepare(`SELECT COUNT(DISTINCT brand_slug) n FROM products WHERE status='published' AND ${sourceSql()} AND brand_slug<>''`).get().n,
     clicks:db.prepare(`SELECT COUNT(*) n FROM clicks c JOIN products p ON p.id=c.product_id WHERE c.destination_type='retailer' AND ${sourceSql("p")}`).get().n,
     priceObservations:db.prepare(`SELECT COUNT(*) n FROM price_history h JOIN products p ON p.id=h.product_id WHERE ${sourceSql("p")}`).get().n,
-    lastRun:isPublicSource(latestRun?.provider) ? latestRun : null
+    lastRun:c.liveRefreshEnabled ? latestRun : null
   });
 });
 app.post("/api/subscribe", async (req,res) => {
@@ -1082,6 +1087,19 @@ app.post("/api/admin/refresh", admin, async (req,res) => {
   } catch (error) {
     res.status(500).json({error:error.message});
   }
+});
+app.get("/api/admin/automation-status", admin, (req,res) => {
+  const sourceRuns = db.prepare("SELECT * FROM source_refresh_runs ORDER BY id DESC LIMIT 100").all();
+  const alerts = db.prepare("SELECT * FROM automation_alerts WHERE resolved_at IS NULL ORDER BY created_at DESC LIMIT 100").all();
+  const distribution = db.prepare("SELECT market,drop_date,channel,status,updated_at,delivered_at FROM distribution_queue ORDER BY drop_date DESC,id DESC LIMIT 100").all();
+  res.json({
+    enabledSources:enabledProviders(c).map(provider => ({id:provider.id, source:provider.source, name:provider.name, markets:provider.markets})),
+    retailerCoverage:retailerCoverage(enabledProviders(c)),
+    schedules:{daily:c.refreshCron,offerCheck:c.offerCheckCron},
+    sourceRuns,
+    alerts,
+    distribution
+  });
 });
 app.get("/go/:id", (req,res) => {
   res.set("X-Robots-Tag", "noindex, nofollow").set("Cache-Control", "private, no-store");
@@ -1148,8 +1166,8 @@ for (const marketCode of c.markets) {
     setImmediate(async () => {
       for (const marketCode of c.markets) {
         const sourceCount = db.prepare(
-          "SELECT COUNT(*) n FROM products WHERE market=? AND status='published' AND LOWER(COALESCE(source,''))=?"
-        ).get(marketCode, c.provider).n;
+          `SELECT COUNT(*) n FROM products WHERE market=? AND status='published' AND ${sourceSql()}`
+        ).get(marketCode).n;
         if (!sourceCount) await refreshProducts(c, {market:marketCode}).catch(console.error);
       }
     });

@@ -26,6 +26,32 @@ Public products must use an explicitly approved source:
 
 Legacy scraping providers, demo catalogs and hand-entered Amazon products are not enabled.
 
+### Full multi-retailer automation
+
+OneDailyDrop runs every configured source at the same time. A failed store is
+isolated, so successful stores still refresh. All valid offers are retained for
+cross-store comparisons, while the daily Top 10 contains unique products.
+
+Native adapters cover eBay, Amazon and Walmart. Approved affiliate feeds cover
+Walmart, Target, Best Buy, Home Depot, Lowe's, Wayfair, AliExpress, Currys,
+AO.com, Fnac, Cdiscount, Darty, MediaMarkt, Saturn, OTTO, ALTERNATE and Samsung
+across the US, Canada, UK, France and Germany. Feeds may be JSON, CSV, TSV, XML
+or gzip-compressed and are enabled only by their encrypted `AFFILIATE_FEED_*_URL`
+setting. No retailer is scraped.
+
+Stores outside the built-in catalog can be connected without a code change via
+`AFFILIATE_FEEDS_JSON`, using the same normalized schema and safety checks.
+
+Each market publishes a new Top 10 nightly and checks offers every six hours.
+Source-level outcomes, stale offers and failures are recorded. Email and social
+content packets are prepared in `distribution_queue`; external delivery remains
+disabled until the relevant channel credentials are configured.
+
+The optional `*_FIELD_MAP_JSON` setting maps unusual feed columns to the common
+schema. Example: `{"title":"merchant_product_name","affiliate_url":"aw_deep_link"}`.
+The optional `*_HEADERS_JSON` setting supplies feed authorization headers and
+must be stored only in the hosting provider's encrypted app settings.
+
 The ranking uses search position, rating, review volume, discount and popularity badges. Previous products are archived and the best ten are published.
 
 Before public launch, use HTTPS, protect `.env`, add Privacy/Terms/Contact pages, and comply with Amazon Associates and product-data provider rules. Do not scrape Amazon directly.

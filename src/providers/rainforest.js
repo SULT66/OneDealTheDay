@@ -79,7 +79,7 @@ async function searchOne(keyword, apiKey, affiliateTag, market) {
       availability,
       checked_at: new Date().toISOString(),
       market: market?.code || "us",
-      source: "rainforest",
+      source: "amazon",
       source_rank: index + 1
     };
   });

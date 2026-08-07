@@ -1,7 +1,9 @@
 const db = require("./db");
-const { SCORE_MODEL, rankProducts } = require("./ranker");
+const { SCORE_MODEL, scoreOffers, selectUniqueProducts } = require("./ranker");
 const { detectBrand, normalizeBrand, slugifyBrand } = require("./brandDetector");
 const { priceIntelligence, shouldRecordObservation } = require("./priceIntelligence");
+const { searchAll } = require("./providers/registry");
+const activeMarketRefreshes = new Map();
 
 function textValue(value) {
   if (value == null) return "";
@@ -45,74 +47,20 @@ function availabilityStatus(product) {
 async function loadProducts(config, selectedMarket) {
   if (config.provider === "demo") {
     const provider = require("./providers/demo");
-    return provider.searchProducts({ market: selectedMarket });
+    const products = await provider.searchProducts({ market: selectedMarket });
+    return {products, reports:[{id:"demo", source:"demo", name:"Demo", status:"success", found:products.length, error:""}]};
   }
+  return searchAll(config, selectedMarket);
+}
 
-  const jobs = [];
-  const amazonEnabled = ["rainforest", "multi"].includes(config.provider);
-  const walmartEnabled = ["walmart", "multi"].includes(config.provider) && selectedMarket.supportsWalmart;
-  const ebayEnabled = ["ebay", "multi"].includes(config.provider);
-
-  if (ebayEnabled) {
-    if (!config.ebayClientId || !config.ebayClientSecret) throw new Error("eBay Production credentials are missing; existing products were kept");
-    if (!/^\d{10}$/.test(config.ebayCampaignId)) throw new Error("EBAY_CAMPAIGN_ID is invalid; existing products were kept");
-    const ebay = require("./providers/ebay");
-    jobs.push({
-      name: `eBay ${selectedMarket.name}`,
-      promise: ebay.searchProducts({
-        clientId: config.ebayClientId,
-        clientSecret: config.ebayClientSecret,
-        campaignId: config.ebayCampaignId,
-        environment: config.ebayEnvironment,
-        keywords: selectedMarket.searchKeywords,
-        market: selectedMarket
-      })
-    });
-  }
-
-  if (amazonEnabled) {
-    if (!config.rainforestApiKey) throw new Error("RAINFOREST_API_KEY is missing; existing products were kept");
-    if (!selectedMarket.affiliateTag) throw new Error(`AFFILIATE_TAG_${selectedMarket.code.toUpperCase()} is missing; ${selectedMarket.name} products were kept`);
-    const amazon = require("./providers/rainforest");
-    jobs.push({
-      name: `Amazon ${selectedMarket.name}`,
-      promise: amazon.searchProducts({
-        apiKey: config.rainforestApiKey,
-        affiliateTag: selectedMarket.affiliateTag,
-        keywords: selectedMarket.searchKeywords,
-        market: selectedMarket
-      })
-    });
-  }
-
-  if (walmartEnabled) {
-    if (!config.bluecartApiKey) throw new Error("BLUECART_API_KEY is missing; existing products were kept");
-    const walmart = require("./providers/walmart");
-    jobs.push({
-      name: `Walmart ${selectedMarket.name}`,
-      promise: walmart.searchProducts({
-        apiKey: config.bluecartApiKey,
-        keywords: selectedMarket.searchKeywords,
-        market: selectedMarket
-      })
-    });
-  }
-
-  if (!jobs.length) throw new Error(`No live retailer feed is configured for ${selectedMarket.name}`);
-  const results = await Promise.allSettled(jobs.map(job => job.promise));
-  const products = [];
-  const failures = [];
-  results.forEach((result, index) => {
-    if (result.status === "fulfilled") products.push(...result.value);
-    else failures.push(`${jobs[index].name}: ${result.reason?.message || "refresh failed"}`);
-  });
-  if (!products.length) throw new Error(`All ${selectedMarket.name} retailer feeds failed. ${failures.join(" | ")}`);
-  if (failures.length) console.error(`Partial ${selectedMarket.name} refresh: ${failures.join(" | ")}`);
-  return products;
+function qualifiedProviderId(product) {
+  const source = textValue(product.source).trim().toLowerCase() || "unknown";
+  const raw = textValue(product.external_id).trim();
+  return raw.startsWith(`${source}:`) ? raw : `${source}:${raw}`;
 }
 
 function addPriceIntelligence(products, marketCode) {
-  const existingProduct = db.prepare("SELECT id FROM products WHERE market=? AND provider_external_id=?");
+  const existingProduct = db.prepare("SELECT id FROM products WHERE external_id=?");
   const history = db.prepare(`
     SELECT price, observed_at
     FROM price_history
@@ -121,7 +69,7 @@ function addPriceIntelligence(products, marketCode) {
   `);
   const cutoff = new Date(Date.now() - 90 * 86400000).toISOString();
   return products.map(product => {
-    const existing = existingProduct.get(marketCode, textValue(product.external_id));
+    const existing = existingProduct.get(`${marketCode}:${qualifiedProviderId(product)}`);
     if (!existing) return product;
     const intelligence = priceIntelligence(history.all(existing.id, cutoff));
     const observations = intelligence.observations;
@@ -141,7 +89,7 @@ function addPriceIntelligence(products, marketCode) {
 
 function selectDailyProducts(ranked, marketCode, timezone, preserveDailySelection) {
   const today = localDate(timezone);
-  const productKey = product => textValue(product.external_id);
+  const productKey = product => qualifiedProviderId(product);
   if (preserveDailySelection) {
     const current = db.prepare(`
       SELECT p.provider_external_id
@@ -167,6 +115,49 @@ function selectDailyProducts(ranked, marketCode, timezone, preserveDailySelectio
   return [...fresh, ...fallback].slice(0, 10);
 }
 
+function recordSourceReports(runId, marketCode, startedAt, reports = []) {
+  const finishedAt = new Date().toISOString();
+  const insert = db.prepare(`
+    INSERT INTO source_refresh_runs(refresh_run_id,provider_id,source,market,started_at,finished_at,found_count,status,message)
+    VALUES(?,?,?,?,?,?,?,?,?)
+  `);
+  const alert = db.prepare(`
+    INSERT INTO automation_alerts(kind,provider_id,market,severity,message,created_at,resolved_at)
+    VALUES('source_refresh',?,?,?,?,?,NULL)
+  `);
+  db.transaction(() => {
+    for (const report of reports) {
+      insert.run(runId, report.id, report.source, marketCode, startedAt, finishedAt, report.found || 0, report.status, report.error || "");
+      if (report.status === "failed") alert.run(report.id, marketCode, "warning", report.error || `${report.name} refresh failed`, finishedAt);
+      else db.prepare("UPDATE automation_alerts SET resolved_at=? WHERE kind='source_refresh' AND provider_id=? AND market=? AND resolved_at IS NULL")
+        .run(finishedAt, report.id, marketCode);
+    }
+  })();
+}
+
+function queueDistributionPackets(marketCode, dropDate, selected, updatedAt) {
+  const payload = JSON.stringify({
+    market:marketCode,
+    dropDate,
+    products:selected.map((product, index) => ({
+      rank:index + 1,
+      providerExternalId:qualifiedProviderId(product),
+      title:textValue(product.title),
+      retailer:textValue(product.retailer_name),
+      price:numberValue(product.current_price, null),
+      currency:textValue(product.currency),
+      score:numberValue(product.score, 0),
+      reason:textValue(product.selection_reason)
+    }))
+  });
+  const upsert = db.prepare(`
+    INSERT INTO distribution_queue(market,drop_date,channel,status,payload,created_at,updated_at)
+    VALUES(?,?,?,'ready',?,?,?)
+    ON CONFLICT(market,drop_date,channel) DO UPDATE SET payload=excluded.payload,updated_at=excluded.updated_at
+  `);
+  for (const channel of ["email", "social"]) upsert.run(marketCode, dropDate, channel, payload, updatedAt, updatedAt);
+}
+
 async function refreshMarket(config, marketCode, options = {}) {
   const selectedMarket = {
     ...config.marketConfig(marketCode),
@@ -178,13 +169,19 @@ async function refreshMarket(config, marketCode, options = {}) {
   ).run(config.provider, selectedMarket.code, started).lastInsertRowid);
 
   try {
-    const found = addPriceIntelligence(await loadProducts(config, selectedMarket), selectedMarket.code);
-    const ranked = rankProducts(found, 60, {
+    const loaded = await loadProducts(config, selectedMarket);
+    recordSourceReports(runId, selectedMarket.code, started, loaded.reports);
+    const failedReports = loaded.reports.filter(report => report.status === "failed");
+    if (failedReports.length) console.error(`Partial ${selectedMarket.name} refresh: ${failedReports.map(report => `${report.name}: ${report.error}`).join(" | ")}`);
+    const found = addPriceIntelligence(loaded.products, selectedMarket.code);
+    const eligibility = {
       currency: selectedMarket.currency,
-      minimumRating: config.provider === "ebay" ? 0 : 3.8,
-      minimumReviews: config.provider === "ebay" ? 0 : 25,
+      minimumRating: 0,
+      minimumReviews: 0,
       minimumScore: config.provider === "demo" ? 0 : 60
-    });
+    };
+    const scoredOffers = scoreOffers(found, eligibility);
+    const ranked = selectUniqueProducts(scoredOffers).slice(0, 60);
     if (!Array.isArray(found) || found.length < 10 || ranked.length < 10) {
       throw new Error(`${selectedMarket.name} refresh returned insufficient eligible products (${found.length} found, ${ranked.length}/10 eligible)`);
     }
@@ -231,8 +228,8 @@ async function refreshMarket(config, marketCode, options = {}) {
       `);
 
       const idsByProviderExternalId = new Map();
-      for (const product of ranked) {
-        const providerExternalId = textValue(product.external_id);
+      for (const product of scoredOffers) {
+        const providerExternalId = qualifiedProviderId(product);
         const externalId = `${selectedMarket.code}:${providerExternalId}`;
         const brand = normalizeBrand(detectBrand(product));
         const safe = {
@@ -301,7 +298,7 @@ async function refreshMarket(config, marketCode, options = {}) {
       `);
       db.prepare("DELETE FROM daily_drops WHERE market=? AND drop_date=?").run(selectedMarket.code, dropDate);
       selected.forEach((product, index) => {
-        const productId = idsByProviderExternalId.get(textValue(product.external_id));
+        const productId = idsByProviderExternalId.get(qualifiedProviderId(product));
         const snapshot = existingSnapshots.get(productId);
         upsertDrop.run(
           selectedMarket.code,
@@ -318,6 +315,15 @@ async function refreshMarket(config, marketCode, options = {}) {
           snapshot ? snapshot.selected_at : updatedAt
         );
       });
+      const staleCutoff = new Date(Date.now() - Number(config.staleOfferHours || 48) * 3600000).toISOString();
+      for (const report of loaded.reports.filter(item => item.status === "success")) {
+        db.prepare(`
+          UPDATE products
+          SET availability='Unavailable',checked_at=?,updated_at=?
+          WHERE market=? AND source=? AND status='published' AND COALESCE(last_seen_at,'')<?
+        `).run(updatedAt, updatedAt, selectedMarket.code, report.source, staleCutoff);
+      }
+      queueDistributionPackets(selectedMarket.code, dropDate, selected, updatedAt);
     })();
 
     db.prepare(`
@@ -327,26 +333,44 @@ async function refreshMarket(config, marketCode, options = {}) {
     `).run(
       new Date().toISOString(),
       found.length,
-      ranked.length,
-      `${selectedMarket.name}: products scored and daily selection saved`,
+      scoredOffers.length,
+      `${selectedMarket.name}: ${loaded.reports.filter(report => report.status === "success").length}/${loaded.reports.length} sources refreshed; offers scored and daily selection saved`,
       runId
     );
+    db.prepare("UPDATE automation_alerts SET resolved_at=? WHERE kind='catalog_refresh' AND market=? AND resolved_at IS NULL")
+      .run(new Date().toISOString(), selectedMarket.code);
     return {
       market: selectedMarket.code,
       provider: config.provider,
       found: found.length,
-      eligible: ranked.length,
+      eligible: scoredOffers.length,
+      uniqueProducts: ranked.length,
       selected: selected.length,
-      dropDate
+      dropDate,
+      sources:loaded.reports
     };
   } catch (error) {
+    if (Array.isArray(error.sourceReports)) recordSourceReports(runId, selectedMarket.code, started, error.sourceReports);
+    const failedAt = new Date().toISOString();
     db.prepare("UPDATE refresh_runs SET finished_at=?,status='failed',message=? WHERE id=?")
-      .run(new Date().toISOString(), error.message, runId);
+      .run(failedAt, error.message, runId);
+    db.prepare(`
+      INSERT INTO automation_alerts(kind,provider_id,market,severity,message,created_at,resolved_at)
+      VALUES('catalog_refresh',?,?, 'critical',?,?,NULL)
+    `).run(config.provider, selectedMarket.code, error.message, failedAt);
     throw error;
   }
 }
 
 exports.refreshMarket = refreshMarket;
+function refreshMarketOnce(config, marketCode, options) {
+  if (activeMarketRefreshes.has(marketCode)) return activeMarketRefreshes.get(marketCode);
+  const pending = refreshMarket(config, marketCode, options)
+    .finally(() => activeMarketRefreshes.delete(marketCode));
+  activeMarketRefreshes.set(marketCode, pending);
+  return pending;
+}
+
 exports.refreshProducts = async (config, options = {}) => {
   if (typeof options === "string") options = { market: options };
   const markets = options.market ? [options.market] : config.markets;
@@ -354,7 +378,7 @@ exports.refreshProducts = async (config, options = {}) => {
   const failures = [];
   for (const marketCode of markets) {
     try {
-      results.push(await refreshMarket(config, marketCode, options));
+      results.push(await refreshMarketOnce(config, marketCode, options));
     } catch (error) {
       failures.push({ market: marketCode, error: error.message });
       console.error(`${marketCode.toUpperCase()} catalog refresh failed: ${error.message}`);
@@ -365,3 +389,4 @@ exports.refreshProducts = async (config, options = {}) => {
 };
 
 exports.localDate = localDate;
+exports.refreshMarketOnce = refreshMarketOnce;

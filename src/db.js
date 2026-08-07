@@ -66,6 +66,41 @@ db.exec(`
     status TEXT,
     message TEXT
   );
+  CREATE TABLE IF NOT EXISTS source_refresh_runs(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    refresh_run_id INTEGER NOT NULL,
+    provider_id TEXT NOT NULL,
+    source TEXT NOT NULL,
+    market TEXT NOT NULL,
+    started_at TEXT NOT NULL,
+    finished_at TEXT NOT NULL,
+    found_count INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL,
+    message TEXT NOT NULL DEFAULT '',
+    FOREIGN KEY(refresh_run_id) REFERENCES refresh_runs(id)
+  );
+  CREATE TABLE IF NOT EXISTS automation_alerts(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    kind TEXT NOT NULL,
+    provider_id TEXT NOT NULL DEFAULT '',
+    market TEXT NOT NULL DEFAULT '',
+    severity TEXT NOT NULL DEFAULT 'warning',
+    message TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    resolved_at TEXT
+  );
+  CREATE TABLE IF NOT EXISTS distribution_queue(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    market TEXT NOT NULL,
+    drop_date TEXT NOT NULL,
+    channel TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'ready',
+    payload TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    delivered_at TEXT,
+    UNIQUE(market,drop_date,channel)
+  );
   CREATE TABLE IF NOT EXISTS clicks(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     product_id INTEGER,
@@ -231,6 +266,17 @@ db.exec(`
   UPDATE products
   SET external_id=market || ':' || provider_external_id
   WHERE external_id NOT LIKE market || ':%';
+  UPDATE products SET source='amazon' WHERE LOWER(COALESCE(source,''))='rainforest';
+  UPDATE products
+  SET provider_external_id=LOWER(source) || ':' || provider_external_id,
+      external_id=market || ':' || LOWER(source) || ':' || provider_external_id
+  WHERE LOWER(COALESCE(source,'')) IN ('amazon','ebay','walmart','bluecart')
+    AND provider_external_id NOT LIKE LOWER(source) || ':%'
+    AND NOT EXISTS (
+      SELECT 1 FROM products other
+      WHERE other.id<>products.id
+        AND other.external_id=products.market || ':' || LOWER(products.source) || ':' || products.provider_external_id
+    );
   UPDATE products
   SET first_seen_at=COALESCE(NULLIF(first_seen_at,''), NULLIF(updated_at,''), datetime('now')),
       last_seen_at=COALESCE(NULLIF(last_seen_at,''), NULLIF(updated_at,''), datetime('now'));
@@ -262,6 +308,9 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_price_alerts_user ON price_alerts(user_id, created_at DESC);
   CREATE INDEX IF NOT EXISTS idx_daily_drops_market_date_rank ON daily_drops(market, drop_date DESC, rank);
   CREATE INDEX IF NOT EXISTS idx_daily_drops_product ON daily_drops(product_id, drop_date DESC);
+  CREATE INDEX IF NOT EXISTS idx_source_refresh_provider_market ON source_refresh_runs(provider_id, market, id DESC);
+  CREATE INDEX IF NOT EXISTS idx_automation_alerts_open ON automation_alerts(resolved_at, severity, created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_distribution_queue_status ON distribution_queue(status, drop_date, market);
 `);
 
 // Remove retired preview and hand-entered records with their dependent

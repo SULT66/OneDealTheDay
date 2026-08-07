@@ -1,0 +1,298 @@
+const crypto = require("crypto");
+const zlib = require("zlib");
+
+const MAX_FEED_BYTES = 30 * 1024 * 1024;
+const MAX_REDIRECTS = 3;
+
+const FIELD_ALIASES = Object.freeze({
+  id:["id", "sku", "product_id", "productid", "merchant_product_id", "aw_product_id", "item_id", "asin"],
+  title:["title", "name", "product_name", "product_title"],
+  description:["description", "product_description", "short_description", "merchant_product_description"],
+  category:["category", "category_name", "merchant_category", "product_type"],
+  brand:["brand", "brand_name", "manufacturer"],
+  manufacturer:["manufacturer", "manufacturer_name"],
+  gtin:["gtin", "gtin13", "gtin14"],
+  upc:["upc", "upc_code"],
+  ean:["ean", "ean13"],
+  mpn:["mpn", "manufacturer_part_number", "part_number"],
+  model:["model", "model_number"],
+  price:["price", "current_price", "sale_price", "search_price", "offer_price"],
+  original_price:["original_price", "old_price", "regular_price", "list_price", "rrp", "msrp"],
+  currency:["currency", "currency_code", "price_currency"],
+  image_url:["image_url", "image", "merchant_image_url", "large_image", "large_image_url", "product_image"],
+  affiliate_url:["affiliate_url", "aw_deep_link", "deeplink", "deep_link", "tracking_url", "click_url", "product_url", "url"],
+  retailer_shop_url:["retailer_shop_url", "merchant_url", "store_url", "shop_url"],
+  seller_name:["seller_name", "seller", "merchant_name", "advertiser_name"],
+  shipping:["shipping_summary", "shipping", "delivery", "delivery_message"],
+  returns:["return_summary", "returns", "return_policy"],
+  availability:["availability", "stock_status", "in_stock", "stock"],
+  rating:["rating", "average_rating", "customer_rating"],
+  review_count:["review_count", "reviews", "rating_count", "ratings_total"],
+  badge:["badge", "promotion", "product_badge", "coupon"]
+});
+
+function compactText(value) {
+  return String(value == null ? "" : value)
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function parseJson(value, label) {
+  if (!value) return {};
+  try {
+    const result = JSON.parse(value);
+    if (!result || Array.isArray(result) || typeof result !== "object") throw new Error("must be an object");
+    return result;
+  } catch (error) {
+    throw new Error(`${label} is invalid JSON: ${error.message}`);
+  }
+}
+
+function safeFeedUrl(value) {
+  let url;
+  try {
+    url = new URL(String(value || ""));
+  } catch {
+    throw new Error("Affiliate feed URL is invalid");
+  }
+  const hostname = url.hostname.toLowerCase();
+  const privateHost = hostname === "localhost" || hostname === "0.0.0.0" || hostname === "::1" ||
+    /^127\./.test(hostname) || /^10\./.test(hostname) || /^192\.168\./.test(hostname) ||
+    /^169\.254\./.test(hostname) || /^172\.(1[6-9]|2\d|3[01])\./.test(hostname);
+  if (url.protocol !== "https:" || privateHost || url.username || url.password) {
+    throw new Error("Affiliate feed URL must be a public HTTPS URL without embedded credentials");
+  }
+  return url;
+}
+
+function safeHeaders(headersJson) {
+  const parsed = parseJson(headersJson, "Affiliate feed headers");
+  const blocked = new Set(["host", "content-length", "connection", "transfer-encoding"]);
+  return Object.fromEntries(Object.entries(parsed)
+    .filter(([key, value]) => !blocked.has(key.toLowerCase()) && ["string", "number", "boolean"].includes(typeof value))
+    .map(([key, value]) => [key, String(value)]));
+}
+
+async function download(definition, fetchImpl = global.fetch, redirectCount = 0) {
+  const url = safeFeedUrl(definition.url);
+  const response = await fetchImpl(url, {
+    headers:{Accept:"application/json,text/csv,text/tab-separated-values,application/xml,text/xml;q=0.9,*/*;q=0.5", ...safeHeaders(definition.headersJson)},
+    redirect:"manual",
+    signal:AbortSignal.timeout(30000)
+  });
+  if (response.status >= 300 && response.status < 400) {
+    if (redirectCount >= MAX_REDIRECTS) throw new Error("Affiliate feed redirected too many times");
+    const location = response.headers.get("location");
+    if (!location) throw new Error(`Affiliate feed redirect ${response.status} has no location`);
+    const redirectedUrl = new URL(location, url);
+    return download({
+      ...definition,
+      url:redirectedUrl.toString(),
+      headersJson:redirectedUrl.origin === url.origin ? definition.headersJson : ""
+    }, fetchImpl, redirectCount + 1);
+  }
+  if (!response.ok) throw new Error(`Affiliate feed request failed with HTTP ${response.status}`);
+  const declaredLength = Number(response.headers.get("content-length") || 0);
+  if (declaredLength > MAX_FEED_BYTES) throw new Error("Affiliate feed exceeds the 30 MB limit");
+  let buffer = Buffer.from(await response.arrayBuffer());
+  if (buffer.length > MAX_FEED_BYTES) throw new Error("Affiliate feed exceeds the 30 MB limit");
+  const encoding = String(response.headers.get("content-encoding") || "").toLowerCase();
+  const hasGzipHeader = buffer.length >= 2 && buffer[0] === 0x1f && buffer[1] === 0x8b;
+  if ((encoding.includes("gzip") || url.pathname.toLowerCase().endsWith(".gz")) && hasGzipHeader) buffer = zlib.gunzipSync(buffer);
+  if (buffer.length > MAX_FEED_BYTES) throw new Error("Decompressed affiliate feed exceeds the 30 MB limit");
+  return {
+    body:buffer.toString("utf8").replace(/^\uFEFF/, ""),
+    contentType:String(response.headers.get("content-type") || "").toLowerCase(),
+    pathname:url.pathname.toLowerCase()
+  };
+}
+
+function parseDelimited(text, delimiter = ",") {
+  const rows = [];
+  let row = [];
+  let field = "";
+  let quoted = false;
+  for (let index = 0; index < text.length; index += 1) {
+    const character = text[index];
+    if (quoted) {
+      if (character === '"' && text[index + 1] === '"') {
+        field += '"';
+        index += 1;
+      } else if (character === '"') quoted = false;
+      else field += character;
+    } else if (character === '"') quoted = true;
+    else if (character === delimiter) {
+      row.push(field);
+      field = "";
+    } else if (character === "\n") {
+      row.push(field.replace(/\r$/, ""));
+      if (row.some(value => value.trim())) rows.push(row);
+      row = [];
+      field = "";
+    } else field += character;
+  }
+  row.push(field.replace(/\r$/, ""));
+  if (row.some(value => value.trim())) rows.push(row);
+  if (rows.length < 2) return [];
+  const headers = rows.shift().map(header => compactText(header).toLowerCase());
+  return rows.map(values => Object.fromEntries(headers.map((header, index) => [header, values[index] ?? ""])));
+}
+
+function decodeXml(value) {
+  return String(value || "")
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
+    .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'").replace(/&amp;/g, "&");
+}
+
+function parseXml(text) {
+  const records = [];
+  const nodes = text.match(/<(?:product|item|entry)\b[^>]*>[\s\S]*?<\/(?:product|item|entry)>/gi) || [];
+  for (const node of nodes) {
+    const record = {};
+    const childPattern = /<([a-zA-Z_][\w:.-]*)\b[^>]*>([\s\S]*?)<\/\1>/g;
+    let match;
+    while ((match = childPattern.exec(node))) {
+      const key = match[1].split(":").pop().toLowerCase();
+      record[key] = compactText(decodeXml(match[2]));
+    }
+    if (Object.keys(record).length) records.push(record);
+  }
+  return records;
+}
+
+function jsonRecords(value) {
+  if (Array.isArray(value)) return value;
+  for (const key of ["products", "items", "data", "results", "offers"]) {
+    if (Array.isArray(value?.[key])) return value[key];
+  }
+  return [];
+}
+
+function parseRecords(downloaded, requestedFormat = "auto") {
+  const format = requestedFormat === "auto"
+    ? downloaded.contentType.includes("json") || downloaded.pathname.endsWith(".json") ? "json"
+      : downloaded.contentType.includes("xml") || downloaded.pathname.endsWith(".xml") ? "xml"
+        : downloaded.contentType.includes("tab-separated") || downloaded.pathname.endsWith(".tsv") ? "tsv"
+          : "csv"
+    : requestedFormat;
+  if (format === "json") return jsonRecords(JSON.parse(downloaded.body));
+  if (format === "xml") return parseXml(downloaded.body);
+  if (format === "tsv") return parseDelimited(downloaded.body, "\t");
+  if (format === "csv") return parseDelimited(downloaded.body, ",");
+  throw new Error(`Unsupported affiliate feed format: ${format}`);
+}
+
+function normalizedRecord(record) {
+  return Object.fromEntries(Object.entries(record || {}).map(([key, value]) => [String(key).trim().toLowerCase(), value]));
+}
+
+function field(record, map, logical) {
+  const configured = map[logical];
+  const keys = configured ? [configured] : FIELD_ALIASES[logical] || [];
+  for (const key of keys) {
+    const value = record[String(key).trim().toLowerCase()];
+    if (value != null && String(value).trim() !== "") return value;
+  }
+  return "";
+}
+
+function numberValue(value) {
+  let text = String(value == null ? "" : value).trim().replace(/[^0-9,.-]/g, "");
+  if (!text) return null;
+  const comma = text.lastIndexOf(",");
+  const dot = text.lastIndexOf(".");
+  if (comma > dot) text = text.replace(/\./g, "").replace(",", ".");
+  else text = text.replace(/,/g, "");
+  const parsed = Number(text);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function httpUrl(value) {
+  try {
+    const url = new URL(String(value || "").trim());
+    return /^https?:$/.test(url.protocol) ? url.toString() : "";
+  } catch {
+    return "";
+  }
+}
+
+function productKey({gtin, upc, ean, mpn, model}) {
+  const numeric = compactText(gtin || upc || ean).replace(/\D/g, "");
+  if (numeric.length >= 8) return `gtin:${numeric}`;
+  const part = compactText(mpn || model).toLowerCase().replace(/[^a-z0-9]/g, "");
+  return part ? `model:${part}` : "";
+}
+
+function normalize(record, definition, market, index, map) {
+  const source = `feed-${definition.retailerId}`;
+  const title = compactText(field(record, map, "title"));
+  const affiliateUrl = httpUrl(field(record, map, "affiliate_url"));
+  const imageUrl = httpUrl(field(record, map, "image_url"));
+  const currentPrice = numberValue(field(record, map, "price"));
+  const originalPrice = numberValue(field(record, map, "original_price"));
+  const gtin = compactText(field(record, map, "gtin"));
+  const upc = compactText(field(record, map, "upc"));
+  const ean = compactText(field(record, map, "ean"));
+  const mpn = compactText(field(record, map, "mpn"));
+  const model = compactText(field(record, map, "model"));
+  const rawId = compactText(field(record, map, "id")) || crypto.createHash("sha256").update(`${affiliateUrl}|${title}`).digest("hex").slice(0, 24);
+  const availabilityValue = compactText(field(record, map, "availability"));
+  const availability = /^(?:0|false|no)$/i.test(availabilityValue) ? "Out of stock" : availabilityValue || "Available";
+  return {
+    external_id:rawId,
+    product_key:productKey({gtin, upc, ean, mpn, model}),
+    gtin,
+    upc,
+    ean,
+    mpn,
+    model_number:model || mpn,
+    brand:compactText(field(record, map, "brand")),
+    manufacturer:compactText(field(record, map, "manufacturer")),
+    title,
+    category:compactText(field(record, map, "category")) || "Featured products",
+    description:compactText(field(record, map, "description")),
+    rating:numberValue(field(record, map, "rating")) || 0,
+    review_count:Math.max(0, Math.round(numberValue(field(record, map, "review_count")) || 0)),
+    current_price:currentPrice,
+    original_price:originalPrice > currentPrice ? originalPrice : null,
+    currency:compactText(field(record, map, "currency") || market.currency).toUpperCase(),
+    badge:compactText(field(record, map, "badge")),
+    image_url:imageUrl,
+    affiliate_url:affiliateUrl,
+    retailer_shop_url:httpUrl(field(record, map, "retailer_shop_url")),
+    retailer_name:definition.retailerName,
+    seller_name:compactText(field(record, map, "seller_name")) || definition.retailerName,
+    shipping_summary:compactText(field(record, map, "shipping")),
+    return_summary:compactText(field(record, map, "returns")),
+    availability,
+    checked_at:new Date().toISOString(),
+    market:market.code,
+    source,
+    source_rank:index + 1
+  };
+}
+
+async function searchProducts({definition, market, fetchImpl = global.fetch}) {
+  if (!definition?.markets?.includes(market?.code)) return [];
+  const map = Object.fromEntries(Object.entries(parseJson(definition.fieldMapJson, "Affiliate feed field map"))
+    .map(([key, value]) => [String(key).trim().toLowerCase(), String(value).trim().toLowerCase()]));
+  const downloaded = await download(definition, fetchImpl);
+  const records = parseRecords(downloaded, definition.format).map(normalizedRecord);
+  const products = records
+    .map((record, index) => normalize(record, definition, market, index, map))
+    .filter(product => product.title && product.image_url && product.affiliate_url && product.current_price > 0)
+    .slice(0, 2000);
+  if (!products.length) throw new Error(`${definition.retailerName} feed returned no usable commissionable products`);
+  return products;
+}
+
+module.exports = {
+  download,
+  normalize,
+  parseDelimited,
+  parseRecords,
+  safeFeedUrl,
+  searchProducts
+};

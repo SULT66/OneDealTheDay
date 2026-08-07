@@ -186,8 +186,14 @@ for (const required of ["current-offer-v2", "comparable_median_price", "return r
 for (const forbidden of ["average_30_day_price", "average_90_day_price", "price_history_observation_count", "evidencePenalty"]) {
   if (ranker.includes(forbidden)) throw new Error(`Public OneDailyDrop Score still depends on unavailable evidence: ${forbidden}`);
 }
-if (!ranker.includes("result.total < number(options.minimumScore, 60)")) {
+if (!ranker.includes("item.score >= number(options.minimumScore, 60)")) {
   throw new Error("Live products below the minimum OneDailyDrop Score are not excluded");
+}
+for (const required of ["scoreOffers", "selectUniqueProducts"]) {
+  if (!ranker.includes(required)) throw new Error(`Multi-store offer scoring is missing: ${required}`);
+}
+for (const required of ["searchAll", "source_refresh_runs", "distribution_queue", "automation_alerts", "qualifiedProviderId"]) {
+  if (!refresh.includes(required) && !database.includes(required)) throw new Error(`Full automation component is missing: ${required}`);
 }
 const server = fs.readFileSync(path.join(root, "src/server.js"), "utf8");
 if (!server.includes('app.post("/api/subscribe"')) throw new Error("Subscriber API is missing");
