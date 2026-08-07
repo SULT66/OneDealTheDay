@@ -83,7 +83,7 @@ for (const fixtureMarket of fixtureMarkets) {
       `${fixtureMarket.code}:ebay-test-${index}`,
       `${fixtureMarket.code}-ebay-test-${index}`,
       fixtureMarket.code,
-      `${fixtureMarket.code}-ebay-test-${index}`,
+      index <= 2 ? `${fixtureMarket.code}-shared-product` : `${fixtureMarket.code}-ebay-test-${index}`,
       brand,
       brand.toLowerCase(),
       `eBay Test Product ${index}`,
@@ -181,6 +181,8 @@ async function run() {
   assert(homepage.includes('target="_blank" rel="sponsored noopener noreferrer"'), "Retailer actions do not open safely in a new tab");
   assert(homepage.includes("source=home&amp;placement=featured_cta&amp;action=view_deal"), "Homepage outbound attribution is missing");
   assert(homepage.includes('data-track-source="home"') && homepage.includes('data-track-action="view_details"'), "Homepage internal product tracking is missing");
+  assert(homepage.includes('class="description editorial-teaser"'), "Homepage cards do not use the compact Stage 4 editorial teaser");
+  assert(homepage.includes('/styles.css?v=20260805-stage4') && homepage.includes('/app.js?v=20260805-stage4'), "Stage 4 assets are not cache-busted on the homepage");
   assert(homepage.includes("OneDailyDrop Score") && homepage.includes("Overall deal score"), "The public OneDailyDrop Score is missing from the homepage");
   assert(homepage.includes("Product rating") && homepage.includes("Seller rating"), "Product and seller ratings are not separated on the homepage");
   assert(!homepage.includes("Check current price on Amazon"), "A retired Amazon fallback remains on the homepage");
@@ -275,9 +277,24 @@ async function run() {
 
   const productPage = await (await fetch(`${base}/us/deal/${products[0].id}`)).text();
   assert(productPage.includes("OneDailyDrop Score") && productPage.includes("Product rating") && productPage.includes("Seller rating"), "Product page does not separate the three ratings");
+  assert(productPage.includes('id="buying-brief"') && productPage.includes("ONEDAILYDROP BUYING BRIEF"), "The Stage 4 buying brief is missing");
+  assert(productPage.includes("The useful details, without the sales-page noise"), "The compact editorial structure is missing");
+  assert(productPage.includes("Verified strengths") && productPage.includes("Watch-outs"), "The product page does not separate strengths and limitations");
+  assert(productPage.includes("What this listing is") && productPage.includes("Who it may suit") && productPage.includes("What to check before buying"), "The buying brief omits required editorial sections");
+  assert(productPage.includes("Alternatives worth comparing") && productPage.includes("alternative-grid"), "Relevant alternatives are missing from the product page");
+  assert(productPage.includes("Compare current offers") && productPage.includes("placement=offer_comparison"), "Matching multi-store offers are not rendered with analytics");
+  assert(productPage.includes('"@type":"Offer"'), "Product structured data is missing real Offer nodes");
+  assert(!productPage.includes("waterproof") && !productPage.includes("lifetime warranty"), "The editorial page invented product specifications");
   assert(productPage.includes("SHOP ALL ON eBay"), "The attributed retailer shop-all action is missing");
   assert(productPage.includes("action=shop_all"), "The shop-all action is not identified for analytics");
   assert(productPage.includes('target="_blank" rel="sponsored noopener noreferrer"'), "Product retailer actions do not preserve OneDailyDrop in the original tab");
+
+  const franceProducts = await (await get("/api/products?market=fr")).json();
+  const frenchProductPage = await (await fetch(`${base}/fr/deal/${franceProducts[0].id}`)).text();
+  assert(frenchProductPage.includes("GUIDE D’ACHAT ONEDAILYDROP") && frenchProductPage.includes("À vérifier avant l’achat"), "The French buying brief is not localized");
+  const germanyProducts = await (await get("/api/products?market=de")).json();
+  const germanProductPage = await (await fetch(`${base}/de/deal/${germanyProducts[0].id}`)).text();
+  assert(germanProductPage.includes("ONEDAILYDROP KAUFÜBERSICHT") && germanProductPage.includes("Vor dem Kauf prüfen"), "The German buying brief is not localized");
 
   const internalClick = await fetch(`${base}/api/click-events`, {
     method:"POST",
