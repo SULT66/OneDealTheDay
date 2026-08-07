@@ -238,7 +238,7 @@
       <div class="featured-body">
         <p class="cat">${esc(displayCategory(product))} · ${esc(storeName(product))}</p>
         <h2><a href="${esc(dealUrl(product))}" ${trackingAttributes(product, "featured_title")}>${esc(fullTitle(product.title))}</a></h2>
-        <p class="description">${esc(whyPicked(product))}</p>
+        <p class="description editorial-teaser">${esc(whyPicked(product))}</p>
         ${scoreMetrics(product)}
         <div class="featured-price-row"><span class="price-label">${priceLabel(product)}</span><span class="featured-price">${money(product.current_price, product.currency)}</span>${product.original_price ? `<span class="old">${money(product.original_price, product.currency)}</span>` : ""}${save ? `<span class="save-pill">${esc(tr("product.save", "SAVE {percent}%", { percent: save }))}</span>` : ""}</div>
         <p class="verification">${esc(statusText(product))}</p>
@@ -256,7 +256,7 @@
           <div class="card-top"><span class="rank">#${rank}</span>${badgeFor(product) ? `<span class="badge">${esc(badgeFor(product))}</span>` : ""}</div>
           <p class="cat">${esc(displayCategory(product))} · ${esc(storeName(product))}</p>
           <h3><a href="${esc(dealUrl(product))}" ${trackingAttributes(product, "daily_card_title")}>${esc(fullTitle(product.title))}</a></h3>
-          <p class="description"><strong>${esc(tr("product.why", "Why we picked it:"))}</strong> ${esc(whyPicked(product))}</p>
+          <p class="description editorial-teaser"><strong>${esc(tr("product.why", "Why we picked it:"))}</strong> ${esc(whyPicked(product))}</p>
           ${scoreMetrics(product)}
           <div class="price-row"><span class="price-label">${priceLabel(product)}</span><span class="price">${money(product.current_price, product.currency)}</span>${product.original_price ? `<span class="old">${money(product.original_price, product.currency)}</span>` : ""}${save ? `<span class="save-pill">${esc(tr("product.save", "SAVE {percent}%", { percent: save }))}</span>` : ""}</div>
           <p class="verification">${esc(statusText(product))}</p>

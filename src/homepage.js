@@ -111,7 +111,7 @@ const mainCard = (product, index, language = "en") => `
       <div class="card-top"><span class="rank">#${index}</span>${badge(product) ? `<span class="badge">${esc(badge(product))}</span>` : ""}</div>
       <p class="cat"><a href="${categoryPath(product.category || "Deals", product.market)}">${esc(product.display_category || product.category || "Deals")}</a> · ${esc(storeName(product))}</p>
       <h3><a href="${dealPath(product)}" ${trackingAttributes(product, "daily_card_title")}>${esc(fullTitle(product.title))}</a></h3>
-      <p class="description"><strong>Why we picked it:</strong> ${esc(whyPicked(product))}</p>
+      <p class="description editorial-teaser"><strong>${esc(t(language, "product.why"))}</strong> ${esc(whyPicked(product))}</p>
       ${scoreMetrics(product, language)}
       <div class="price-row"><span class="price-label">${priceLabel(product)}</span><span class="price">${esc(product.display_current_price || money(product.current_price, product.currency))}</span>${product.original_price ? `<span class="old">${esc(product.display_original_price || money(product.original_price, product.currency))}</span>` : ""}${discount(product) ? `<span class="save-pill">${esc(product.display_save_label || `SAVE ${discount(product)}%`)}</span>` : ""}</div>
       <p class="verification">${esc(statusText(product))}</p>
@@ -241,7 +241,7 @@ module.exports = function homepage(req, res) {
     <div class="featured-body">
       <p class="cat"><a href="${categoryPath(featured.category || "Deals", selectedMarket.code)}">${esc(featured.display_category || featured.category || "Deals")}</a> · ${esc(storeName(featured))}</p>
       <h2><a href="${dealPath(featured)}" ${trackingAttributes(featured, "featured_title")}>${esc(fullTitle(featured.title))}</a></h2>
-      <p class="description">${esc(whyPicked(featured))}</p>
+      <p class="description editorial-teaser">${esc(whyPicked(featured))}</p>
       ${scoreMetrics(featured, language)}
       <div class="featured-price-row"><span class="price-label">${priceLabel(featured)}</span><span class="featured-price">${esc(featured.display_current_price || money(featured.current_price, featured.currency))}</span>${featured.original_price ? `<span class="old">${esc(featured.display_original_price || money(featured.original_price, featured.currency))}</span>` : ""}${discount(featured) ? `<span class="save-pill">${esc(featured.display_save_label || `SAVE ${discount(featured)}%`)}</span>` : ""}</div>
       <p class="verification">${esc(statusText(featured))}</p>
