@@ -11,6 +11,8 @@ const renderHomepage = require("./src/homepage-seo");
 const { codes: marketCodes, normalizeMarket, marketFromIp, marketFromRequest, marketPath } = require("./src/markets");
 const { resolveLanguage } = require("./src/i18n");
 const { sourceSql, isPublicSource } = require("./src/publicCatalog");
+const { enabledProviders } = require("./src/providers/registry");
+const { coverage: retailerCoverage } = require("./src/retailerCatalog");
 const createExpressApp = express;
 const CANONICAL_HOST = "www.onedailydrop.com";
 const AZURE_PRODUCTION_HOST = "onedealtheday-g3dme0aghzerc3a2.centralus-01.azurewebsites.net";
@@ -41,6 +43,8 @@ function catalogStatus(marketCode = "") {
     siteMode: config.siteMode,
     provider: config.provider,
     requestedProvider: config.requestedProvider,
+    sources: enabledProviders(config).map(provider => ({id:provider.id, source:provider.source, name:provider.name, markets:provider.markets})),
+    retailerCoverage: retailerCoverage(enabledProviders(config)),
     liveRefreshEnabled: Boolean(config.liveRefreshEnabled),
     market: marketCode || "all",
     products: countProducts(`${marketWhere}1=1`, params),
@@ -49,7 +53,7 @@ function catalogStatus(marketCode = "") {
     automatedCatalogConfigured: config.provider !== "unconfigured",
     affiliateTagConfigured: marketCode ? Boolean(config.affiliateTagForMarket(marketCode)) : Boolean(config.affiliateTagConfigured),
     searchKeywordCount: config.searchKeywords.length,
-    lastRun: isPublicSource(latestRun?.provider) ? latestRun : null
+    lastRun: config.liveRefreshEnabled ? latestRun : null
   };
 }
 

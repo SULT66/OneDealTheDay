@@ -1,27 +1,20 @@
-const supportedSources = new Set([
-  "rainforest",
-  "amazon",
-  "ebay",
-  "walmart",
-  "bluecart"
-]);
+const config = require("./config");
 
-// Only approved automated feeds can become public. No hand-entered or demo
-// catalog is used as a fallback.
-const configuredSources = String(process.env.PUBLIC_PRODUCT_SOURCES || "")
+const enabledSources = new Set((config.enabledSourceIds || [])
+  .map(source => String(source || "").trim().toLowerCase())
+  .filter(Boolean));
+
+// A source is public only when its credentials or approved affiliate feed are
+// actually configured. PUBLIC_PRODUCT_SOURCES may narrow that set, but can
+// never activate an unconfigured source.
+const requestedSources = String(process.env.PUBLIC_PRODUCT_SOURCES || "")
   .split(",")
   .map(source => source.trim().toLowerCase())
-  .filter(source => supportedSources.has(source));
-
-const ebayConfigured = Boolean(
-  String(process.env.EBAY_CLIENT_ID || "").trim() &&
-  String(process.env.EBAY_CLIENT_SECRET || "").trim() &&
-  /^\d{10}$/.test(String(process.env.EBAY_CAMPAIGN_ID || "").trim())
-);
-if (ebayConfigured && !configuredSources.includes("ebay")) configuredSources.push("ebay");
+  .filter(Boolean);
 
 const PUBLIC_PRODUCT_SOURCES = Object.freeze(
-  [...new Set(configuredSources)]
+  [...new Set((requestedSources.length ? requestedSources : [...enabledSources])
+    .filter(source => enabledSources.has(source)))]
 );
 
 const quotedSources = PUBLIC_PRODUCT_SOURCES.length
@@ -37,8 +30,4 @@ const isPublicSource = source => PUBLIC_PRODUCT_SOURCES.includes(
   String(source || "").trim().toLowerCase()
 );
 
-module.exports = {
-  PUBLIC_PRODUCT_SOURCES,
-  sourceSql,
-  isPublicSource
-};
+module.exports = { PUBLIC_PRODUCT_SOURCES, sourceSql, isPublicSource };

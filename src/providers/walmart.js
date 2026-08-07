@@ -153,7 +153,16 @@ function walmartImageUrl(item, raw) {
   return "";
 }
 
-function normalize(raw, keyword, index, market) {
+function trackedAffiliateUrl(template, productUrl, itemId) {
+  if (!template || !productUrl) return "";
+  const value = String(template)
+    .replaceAll("{url}", encodeURIComponent(productUrl))
+    .replaceAll("{rawUrl}", productUrl)
+    .replaceAll("{id}", encodeURIComponent(String(itemId || "")));
+  return validHttpUrl(value);
+}
+
+function normalize(raw, keyword, index, market, affiliateTemplate = "") {
   const item = raw.product || raw;
 
   const itemId =
@@ -201,6 +210,15 @@ function normalize(raw, keyword, index, market) {
     item.availability ||
     primaryOffer.availability
   ) || (item.out_of_stock === false || primaryOffer.out_of_stock === false ? "In stock" : "");
+
+  const productUrl =
+    extractUrl(item.link) ||
+    extractUrl(item.url) ||
+    extractUrl(item.product_url) ||
+    extractUrl(raw.link) ||
+    extractUrl(raw.url) ||
+    extractUrl(raw.product_url) ||
+    (itemId ? `https://www.${market?.walmartDomain || "walmart.com"}/ip/${itemId}` : "");
 
   return {
     external_id: `walmart-${itemId || `${keyword}-${index}`}`,
@@ -271,16 +289,7 @@ function normalize(raw, keyword, index, market) {
 
     image_url: walmartImageUrl(item, raw),
 
-    affiliate_url:
-      extractUrl(item.link) ||
-      extractUrl(item.url) ||
-      extractUrl(item.product_url) ||
-      extractUrl(raw.link) ||
-      extractUrl(raw.url) ||
-      extractUrl(raw.product_url) ||
-      (itemId
-        ? `https://www.${market?.walmartDomain || "walmart.com"}/ip/${itemId}`
-        : ""),
+    affiliate_url:trackedAffiliateUrl(affiliateTemplate, productUrl, itemId),
 
     retailer_name: "Walmart",
     seller_name: sellerName,
@@ -294,7 +303,7 @@ function normalize(raw, keyword, index, market) {
   };
 }
 
-async function searchOne(keyword, apiKey, market) {
+async function searchOne(keyword, apiKey, market, affiliateTemplate) {
   const query = new URLSearchParams({
     api_key: apiKey,
     type: "search",
@@ -315,7 +324,7 @@ async function searchOne(keyword, apiKey, market) {
       return (json.search_results || [])
         .slice(0, 20)
         .map((item, index) =>
-          normalize(item, keyword, index, market)
+          normalize(item, keyword, index, market, affiliateTemplate)
         )
         .filter(
           item =>
@@ -347,12 +356,14 @@ async function searchOne(keyword, apiKey, market) {
 
 exports.searchProducts = async ({
   apiKey,
+  affiliateTemplate,
   keywords,
   market
 }) => {
   if (!apiKey) {
     throw new Error("BLUECART_API_KEY is missing");
   }
+  if (!affiliateTemplate) throw new Error(`Walmart affiliate URL template is missing for ${market?.code || "us"}`);
 
   const all = [];
   const failures = [];
@@ -362,7 +373,8 @@ exports.searchProducts = async ({
       const products = await searchOne(
         keyword,
         apiKey,
-        market
+        market,
+        affiliateTemplate
       );
 
       all.push(...products);
@@ -385,3 +397,5 @@ exports.searchProducts = async ({
 
   return all;
 };
+
+exports.trackedAffiliateUrl = trackedAffiliateUrl;

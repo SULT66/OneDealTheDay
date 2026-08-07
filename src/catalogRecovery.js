@@ -1,11 +1,12 @@
 const db = require("./db");
 const { refreshProducts } = require("./refresh");
+const { sourceSql } = require("./publicCatalog");
 
 function countLiveProducts(marketCode = "") {
   const marketFilter = marketCode ? " AND market=?" : "";
   const params = marketCode ? [marketCode] : [];
   return Number(db.prepare(
-    `SELECT COUNT(*) n FROM products WHERE status='published' AND LOWER(COALESCE(source,'')) NOT IN ('demo','amazon-manual')${marketFilter}`
+    `SELECT COUNT(*) n FROM products WHERE status='published' AND ${sourceSql()}${marketFilter}`
   ).get(...params).n || 0);
 }
 

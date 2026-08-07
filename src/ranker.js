@@ -199,18 +199,26 @@ function betterOffer(left, right) {
   return rightPrice < leftPrice ? right : left;
 }
 
-function prepare(items, options) {
-  const uniqueOffers = new Map();
+function scoreOffers(items, options = {}) {
   const eligible = addCurrentOfferComparisons((items || []).filter(item => isEligible(item, options)));
-  for (const item of eligible) {
+  return eligible.map(item => {
     const result = scoreProduct(item);
-    if (!isDemo(item) && result.total < number(options.minimumScore, 60)) continue;
-    const enriched = {
+    return {
       ...item,
       score: result.total,
       score_breakdown: result.breakdown,
       selection_reason: selectionReason(item, result)
     };
+  }).filter(item => isDemo(item) || item.score >= number(options.minimumScore, 60))
+    .sort((left, right) => {
+      if (number(right.score) !== number(left.score)) return number(right.score) - number(left.score);
+      return number(left.current_price, Number.MAX_SAFE_INTEGER) - number(right.current_price, Number.MAX_SAFE_INTEGER);
+    });
+}
+
+function selectUniqueProducts(scoredOffers) {
+  const uniqueOffers = new Map();
+  for (const enriched of scoredOffers || []) {
     const exact = exactMatchKey(enriched);
     const key = exact ? `product:${exact}` : `title:${normalizedTitle(enriched.title)}`;
     uniqueOffers.set(key, betterOffer(uniqueOffers.get(key), enriched));
@@ -224,4 +232,6 @@ function prepare(items, options) {
 exports.scoreProduct = scoreProduct;
 exports.isEligible = isEligible;
 exports.SCORE_MODEL = SCORE_MODEL;
-exports.rankProducts = (items, limit = 10, options = {}) => prepare(items, options).slice(0, limit);
+exports.scoreOffers = scoreOffers;
+exports.selectUniqueProducts = selectUniqueProducts;
+exports.rankProducts = (items, limit = 10, options = {}) => selectUniqueProducts(scoreOffers(items, options)).slice(0, limit);

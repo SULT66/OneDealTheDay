@@ -8,6 +8,9 @@
 - SEO slugs, category pages, canonical metadata, Open Graph, Twitter cards
 - Product, Offer, Breadcrumb and ItemList structured data
 - Dynamic robots.txt and sitemap.xml
+- Multi-retailer automation for all target stores and five markets
+- Independent API/feed health monitoring and stale-offer handling
+- Nightly unique Top 10, six-hour offer checks and distribution content queue
 
 ## Current sprint: Price Intelligence v1
 - Persist price observations without deleting historical records

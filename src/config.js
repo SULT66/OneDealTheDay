@@ -1,5 +1,6 @@
 require("dotenv").config();
 const { codes: supportedMarketCodes, market } = require("./markets");
+const { feedDefinitions } = require("./retailerCatalog");
 
 const isAzure = Boolean(process.env.WEBSITE_SITE_NAME || process.env.WEBSITE_INSTANCE_ID);
 const rainforestApiKey = String(process.env.RAINFOREST_API_KEY || "").trim();
@@ -10,6 +11,11 @@ const ebayClientId = String(process.env.EBAY_CLIENT_ID || "").trim();
 const ebayClientSecret = String(process.env.EBAY_CLIENT_SECRET || "").trim();
 const ebayCampaignId = String(process.env.EBAY_CAMPAIGN_ID || "").trim();
 const demoMode = false;
+
+function boundedNumber(value, fallback, minimum, maximum = Number.MAX_SAFE_INTEGER) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.max(minimum, Math.min(maximum, parsed)) : fallback;
+}
 
 const defaultKeywords = [
   "home gadgets",
@@ -48,14 +54,6 @@ const localizedDefaultKeywords = {
   ]
 };
 
-function resolveLiveProvider() {
-  if (ebayClientId && ebayClientSecret && /^\d{10}$/.test(ebayCampaignId)) return "ebay";
-  return "unconfigured";
-}
-
-const provider = resolveLiveProvider();
-const liveRefreshEnabled = provider === "ebay";
-
 const configuredKeywords = String(process.env.SEARCH_KEYWORDS || "")
   .split(",")
   .map(value => value.trim())
@@ -67,9 +65,15 @@ const configuredMarkets = String(process.env.SUPPORTED_MARKETS || supportedMarke
   .filter(value => supportedMarketCodes.includes(value));
 
 const markets = [...new Set(configuredMarkets.length ? configuredMarkets : ["us"])];
+const affiliateFeeds = feedDefinitions(process.env).filter(feed => feed.markets.some(code => markets.includes(code)));
 const affiliateTagForMarket = code => String(
   process.env[`AFFILIATE_TAG_${String(code).toUpperCase()}`] ||
   (code === "us" ? process.env.AFFILIATE_TAG : "") ||
+  ""
+).trim();
+const walmartAffiliateTemplateForMarket = code => String(
+  process.env[`WALMART_AFFILIATE_URL_TEMPLATE_${String(code).toUpperCase()}`] ||
+  (code === "us" ? process.env.WALMART_AFFILIATE_URL_TEMPLATE : "") ||
   ""
 ).trim();
 const keywordsForMarket = code => {
@@ -92,6 +96,15 @@ const marketConfig = code => {
   };
 };
 
+const enabledSourceIds = [];
+if (ebayClientId && ebayClientSecret && /^\d{10}$/.test(ebayCampaignId)) enabledSourceIds.push("ebay");
+if (rainforestApiKey && markets.some(code => affiliateTagForMarket(code))) enabledSourceIds.push("amazon");
+if (bluecartApiKey && markets.some(code => walmartAffiliateTemplateForMarket(code))) enabledSourceIds.push("walmart");
+for (const feed of affiliateFeeds) enabledSourceIds.push(feed.source);
+const uniqueSourceIds = [...new Set(enabledSourceIds)];
+const provider = uniqueSourceIds.length > 1 ? "multi" : uniqueSourceIds[0] || "unconfigured";
+const liveRefreshEnabled = uniqueSourceIds.length > 0;
+
 module.exports = {
   port: Number(process.env.PORT || 8088),
   adminKey,
@@ -104,9 +117,11 @@ module.exports = {
   ebayCampaignId,
   ebayEnvironment: String(process.env.EBAY_ENVIRONMENT || "production").trim().toLowerCase(),
   affiliateTag: String(process.env.AFFILIATE_TAG || "").trim(),
-  affiliateTagConfigured: Boolean(String(process.env.AFFILIATE_TAG || "").trim()),
+  affiliateTagConfigured: markets.some(code => Boolean(affiliateTagForMarket(code))),
   provider,
-  requestedProvider: provider === "ebay" ? "ebay" : "unconfigured",
+  requestedProvider: provider,
+  enabledSourceIds: uniqueSourceIds,
+  affiliateFeeds,
   siteMode: "live",
   demoMode,
   liveRefreshEnabled,
@@ -115,11 +130,14 @@ module.exports = {
   bluecartApiKey,
   isProduction: isAzure,
   refreshCron: process.env.REFRESH_CRON || "15 0 * * *",
-  offerCheckCron: process.env.OFFER_CHECK_CRON || "15 */6 * * *",
+  offerCheckCron: process.env.OFFER_CHECK_CRON || "45 3,9,15,21 * * *",
   timezone: process.env.TIMEZONE || "America/New_York",
   searchKeywords: configuredKeywords.length ? configuredKeywords : defaultKeywords,
   markets,
   defaultMarket: "us",
   marketConfig,
-  affiliateTagForMarket
+  affiliateTagForMarket,
+  walmartAffiliateTemplateForMarket,
+  staleOfferHours: boundedNumber(process.env.STALE_OFFER_HOURS, 48, 12),
+  maxProductsPerSource: boundedNumber(process.env.MAX_PRODUCTS_PER_SOURCE, 500, 50, 2000)
 };
