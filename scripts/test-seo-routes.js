@@ -171,6 +171,30 @@ async function run() {
   });
   assert(apex.status === 301, "Apex host must return 301");
   assert(apex.headers.get("location") === "https://www.onedailydrop.com/us", "Apex redirect target is incorrect");
+  const apexDuplicate = await fetch(`${base}/US/?ref=test`, {
+    redirect: "manual",
+    headers: { "x-forwarded-host": "onedailydrop.com" }
+  });
+  assert(apexDuplicate.headers.get("location") === "https://www.onedailydrop.com/us?ref=test", "Host and path duplicates must normalize in one redirect");
+
+  const azureHtml = await fetch(`${base}/us`, {
+    redirect: "manual",
+    headers: { "x-forwarded-host": "onedealtheday-g3dme0aghzerc3a2.centralus-01.azurewebsites.net" }
+  });
+  assert(azureHtml.status === 301, "The Azure production hostname must not serve duplicate public HTML");
+  assert(azureHtml.headers.get("location") === "https://www.onedailydrop.com/us", "Azure HTML redirect target is incorrect");
+  const azureApi = await fetch(`${base}/api/status?market=us`, {
+    redirect: "manual",
+    headers: { "x-forwarded-host": "onedealtheday-g3dme0aghzerc3a2.centralus-01.azurewebsites.net" }
+  });
+  assert(azureApi.status === 200, "Azure API health endpoints must remain available to workflows");
+
+  const trailingSlash = await get("/us/?ref=test");
+  assert(trailingSlash.status === 301, "Trailing-slash duplicate must redirect permanently");
+  assert(trailingSlash.headers.get("location") === "/us?ref=test", "Trailing-slash redirect must preserve the query string");
+  const uppercaseMarket = await get("/US?ref=test");
+  assert(uppercaseMarket.status === 301, "Uppercase market duplicate must redirect permanently");
+  assert(uppercaseMarket.headers.get("location") === "/us?ref=test", "Market normalization redirect is incorrect");
 
   const homepage = await (await get("/us")).text();
   assert(homepage.includes('<html lang="en-US">'), "US homepage language is incorrect");
@@ -181,6 +205,9 @@ async function run() {
   assert(homepage.includes('target="_blank" rel="sponsored noopener noreferrer"'), "Retailer actions do not open safely in a new tab");
   assert(homepage.includes("source=home&amp;placement=featured_cta&amp;action=view_deal"), "Homepage outbound attribution is missing");
   assert(homepage.includes('data-track-source="home"') && homepage.includes('data-track-action="view_details"'), "Homepage internal product tracking is missing");
+  assert(homepage.includes('<link rel="preconnect" href="https://i.ebayimg.com">'), "Homepage image origin preconnect is missing");
+  assert(homepage.includes('decoding="async" fetchpriority="high"'), "Homepage LCP image priority is missing");
+  assert(homepage.includes('loading="lazy" decoding="async"'), "Below-the-fold homepage images are not deferred");
   assert(homepage.includes('class="description editorial-teaser"'), "Homepage cards do not use the compact Stage 4 editorial teaser");
   assert(homepage.includes('/styles.css?v=20260805-stage4') && homepage.includes('/app.js?v=20260805-stage4'), "Stage 4 assets are not cache-busted on the homepage");
   assert(homepage.includes("OneDailyDrop Score") && homepage.includes("Overall deal score"), "The public OneDailyDrop Score is missing from the homepage");
@@ -198,6 +225,8 @@ async function run() {
   assert(spanishHomepage.includes("Entrega gratuita mediante Standard Shipping"), "US Spanish delivery terms are not localized");
   assert(!spanishHomepage.includes("Selected with a technical internal score"), "US Spanish exposes the stored technical selection reason");
   assert(String(spanishResponse.headers.get("set-cookie") || "").includes("odd_lang_us=es"), "US language preference cookie is missing");
+  assert(spanishHomepage.includes('<meta name="robots" content="noindex,follow">'), "Non-default language query must not compete with the canonical market page");
+  assert(String(spanishResponse.headers.get("x-robots-tag") || "").includes("noindex"), "Non-default language query is missing an X-Robots-Tag safeguard");
 
   const frenchHomepage = await (await get("/fr")).text();
   assert(frenchHomepage.includes('<html lang="fr-FR">'), "France must default to French");
@@ -235,6 +264,20 @@ async function run() {
   const legacyAbout = await get("/about");
   assert(legacyAbout.status === 301, "Legacy unprefixed pages must redirect permanently");
   assert(legacyAbout.headers.get("location") === "/us/about", "Legacy page redirect target is incorrect");
+  const legacyHtmlAbout = await get("/fr/about.html?ref=legacy");
+  assert(legacyHtmlAbout.status === 301, "Legacy .html page must redirect permanently");
+  assert(legacyHtmlAbout.headers.get("location") === "/fr/about?ref=legacy", "Legacy .html page creates a redirect chain or loses its market");
+
+  const frenchAboutResponse = await get("/fr/about");
+  const frenchAbout = await frenchAboutResponse.text();
+  assert(frenchAbout.includes('<link rel="canonical" href="https://www.onedailydrop.com/fr/about">'), "Regional trust-page canonical is incorrect");
+  assert(!frenchAbout.includes('<link rel="canonical" href="https://www.onedailydrop.com/about">'), "Legacy unprefixed trust-page canonical remains");
+  assert(frenchAbout.includes('hreflang="en-US" href="https://www.onedailydrop.com/us/about"'), "Trust-page hreflang cluster is incomplete");
+  assert(frenchAbout.includes('hreflang="fr-FR" href="https://www.onedailydrop.com/fr/about"'), "Trust-page self-referencing hreflang is missing");
+  const frenchAboutEnglish = await get("/fr/about?lang=en");
+  const frenchAboutEnglishHtml = await frenchAboutEnglish.text();
+  assert(frenchAboutEnglishHtml.includes('<meta name="robots" content="noindex,follow">'), "Optional trust-page language must be noindex");
+  assert(String(frenchAboutEnglish.headers.get("x-robots-tag") || "").includes("noindex"), "Optional trust-page language is missing the response-level noindex directive");
 
   const robots = await (await get("/robots.txt")).text();
   assert(robots.includes("Disallow: /go/"), "Affiliate redirect paths are not blocked in robots.txt");
@@ -244,6 +287,27 @@ async function run() {
   assert(sitemap.includes('xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"'), "Image sitemap namespace is missing");
   assert(sitemap.includes("<image:image>"), "Verified product images are missing from the sitemap");
   assert(sitemap.includes("/deal/") && sitemap.includes("/category/") && sitemap.includes("/brands"), "Verified catalog pages are missing from the sitemap");
+  assert(sitemap.includes('<loc>https://www.onedailydrop.com/fr/about</loc>') && sitemap.includes('hreflang="fr-FR" href="https://www.onedailydrop.com/fr/about"'), "Regional trust pages or their sitemap alternates are missing");
+  for (const forbidden of ["/search", "/go/", "?lang="]) {
+    assert(!sitemap.includes(forbidden), `Sitemap contains a non-canonical URL: ${forbidden}`);
+  }
+  const sitemapLocations = [...sitemap.matchAll(/<loc>(https:\/\/www\.onedailydrop\.com[^<]+)<\/loc>/g)].map(match => match[1]);
+  assert(sitemapLocations.length === new Set(sitemapLocations).size, "Sitemap contains duplicate canonical URLs");
+  for (const location of sitemapLocations) {
+    const sitemapUrl = new URL(location);
+    const response = await get(`${sitemapUrl.pathname}${sitemapUrl.search}`);
+    const html = await response.text();
+    assert(response.status === 200, `Sitemap URL does not return 200: ${location}`);
+    const canonicals = [...html.matchAll(/<link rel="canonical" href="([^"]+)">/g)].map(match => match[1]);
+    assert(canonicals.length === 1 && canonicals[0] === location, `Sitemap URL has a missing, duplicate or conflicting canonical: ${location}`);
+    assert(!html.includes('<meta name="robots" content="noindex'), `Sitemap contains a noindex page: ${location}`);
+    const structuredData = [...html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].map(match => match[1]);
+    assert(structuredData.length > 0, `Sitemap URL is missing structured data: ${location}`);
+    structuredData.forEach(value => JSON.parse(value));
+  }
+  const sitemapSet = new Set(sitemapLocations);
+  const sitemapAlternates = [...sitemap.matchAll(/<xhtml:link rel="alternate" hreflang="[^"]+" href="([^"]+)"\/>/g)].map(match => match[1]);
+  sitemapAlternates.forEach(location => assert(sitemapSet.has(location), `Hreflang target is not a canonical sitemap URL: ${location}`));
 
   const products = await (await get("/api/products?market=us")).json();
   assert(products.length === 10, "The public US catalog must contain exactly ten verified products");
@@ -284,6 +348,11 @@ async function run() {
   assert(productPage.includes("Alternatives worth comparing") && productPage.includes("alternative-grid"), "Relevant alternatives are missing from the product page");
   assert(productPage.includes("Compare current offers") && productPage.includes("placement=offer_comparison"), "Matching multi-store offers are not rendered with analytics");
   assert(productPage.includes('"@type":"Offer"'), "Product structured data is missing real Offer nodes");
+  const productCanonical = productPage.match(/<link rel="canonical" href="([^"]+)">/)?.[1];
+  assert(productCanonical && productPage.includes(`"@type":"Offer","url":"${productCanonical}"`), "Offer structured data does not use the crawlable product canonical");
+  assert(!productPage.includes('"@type":"Offer","url":"https://www.onedailydrop.com/us/go/'), "Offer structured data points at a blocked tracking redirect");
+  assert(productPage.includes('<link rel="preconnect" href="https://i.ebayimg.com">'), "Product image origin preconnect is missing");
+  assert(productPage.includes('decoding="async" fetchpriority="high"'), "Product hero image priority is missing");
   assert(!productPage.includes("waterproof") && !productPage.includes("lifetime warranty"), "The editorial page invented product specifications");
   assert(productPage.includes("SHOP ALL ON eBay"), "The attributed retailer shop-all action is missing");
   assert(productPage.includes("action=shop_all"), "The shop-all action is not identified for analytics");

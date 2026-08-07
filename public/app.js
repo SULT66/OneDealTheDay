@@ -204,7 +204,7 @@
       ? `<div class="search-suggestion-heading">${esc(resultLabel)}</div>
         <div class="search-suggestion-list">${matches.slice(0, 6).map(product => `
           <a class="search-suggestion" href="${esc(dealUrl(product))}" ${trackingAttributes(product, "search_suggestion")}>
-            <img src="${esc(product.image_url)}" alt="" loading="lazy">
+            <img src="${esc(product.image_url)}" alt="" loading="lazy" decoding="async">
             <span><strong>${esc(fullTitle(product.title))}</strong><small>${esc(displayCategory(product))} · ${esc(money(product.current_price, product.currency))}</small></span>
           </a>`).join("")}</div>
         <a class="search-view-all" href="${esc(searchUrl)}">${esc(resultLabel)} →</a>`
@@ -232,7 +232,7 @@
     const save = discount(product);
     els.featuredDeal.innerHTML = `
       <div class="featured-media">
-        <a href="${esc(dealUrl(product))}" ${trackingAttributes(product, "featured_media")}><img src="${esc(product.image_url)}" alt="${esc(fullTitle(product.title))}"></a>
+        <a href="${esc(dealUrl(product))}" ${trackingAttributes(product, "featured_media")}><img src="${esc(product.image_url)}" alt="${esc(fullTitle(product.title))}" decoding="async" fetchpriority="high"></a>
         <span class="featured-ribbon">${esc(tr("home.featured", "TODAY'S #1 PICK"))}</span>${badgeFor(product) ? `<span class="featured-badge">${esc(badgeFor(product))}</span>` : ""}
       </div>
       <div class="featured-body">
@@ -251,7 +251,7 @@
     const save = discount(product);
     return `
       <article class="card">
-        <a class="image-wrap" href="${esc(dealUrl(product))}" ${trackingAttributes(product, "daily_card_media")}><img src="${esc(product.image_url)}" alt="${esc(fullTitle(product.title))}" loading="lazy"></a>
+        <a class="image-wrap" href="${esc(dealUrl(product))}" ${trackingAttributes(product, "daily_card_media")}><img src="${esc(product.image_url)}" alt="${esc(fullTitle(product.title))}" loading="lazy" decoding="async"></a>
         <div class="card-content">
           <div class="card-top"><span class="rank">#${rank}</span>${badgeFor(product) ? `<span class="badge">${esc(badgeFor(product))}</span>` : ""}</div>
           <p class="cat">${esc(displayCategory(product))} · ${esc(storeName(product))}</p>
@@ -269,7 +269,7 @@
   const miniCard = product => {
     return `
       <article class="mini-card">
-        <a href="${esc(dealUrl(product))}" ${trackingAttributes(product, "collection_media")}><img src="${esc(product.image_url)}" alt="${esc(fullTitle(product.title))}" loading="lazy"></a>
+        <a href="${esc(dealUrl(product))}" ${trackingAttributes(product, "collection_media")}><img src="${esc(product.image_url)}" alt="${esc(fullTitle(product.title))}" loading="lazy" decoding="async"></a>
         <div class="mini-card-body">
           <p class="cat">${esc(displayCategory(product))} · ${esc(storeName(product))}</p>
           <h3><a href="${esc(dealUrl(product))}" ${trackingAttributes(product, "collection_title")}>${esc(fullTitle(product.title))}</a></h3>

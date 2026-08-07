@@ -34,6 +34,7 @@ const { codes: marketCodes, normalizeMarket, market, marketFromIp, marketPath, a
 const {
   resolveLanguage,
   languageTag,
+  defaultLanguages,
   clientCopy,
   localizeHtml,
   languageSwitcher,
@@ -170,6 +171,9 @@ app.use((req, res, next) => {
 app.use((req, res, next) => {
   const marketCode = req.market || marketFromIp(req).code;
   resolveLanguage(req, res, marketCode);
+  if ((req.method === "GET" || req.method === "HEAD") && req.language !== defaultLanguages[marketCode]) {
+    res.set("X-Robots-Tag", "noindex, follow");
+  }
   next();
 });
 app.use((req, res, next) => {
@@ -196,7 +200,14 @@ app.use((req, res, next) => {
     "/admin.html": "/admin"
   };
   const legacyPath = req.path.replace(/^\/pages\//, "/");
-  return legacyPages[legacyPath] ? res.redirect(301, legacyPages[legacyPath]) : next();
+  const legacyTarget = legacyPages[legacyPath];
+  if (!legacyTarget) return next();
+  const regionalLegacyTargets = new Set(["/", "/about", "/contact", "/privacy", "/terms", "/affiliate-disclosure", "/editorial-policy", "/how-we-select-deals", "/price-disclaimer"]);
+  const destination = regionalLegacyTargets.has(legacyTarget)
+    ? marketPath(req.market || marketFromIp(req).code, legacyTarget)
+    : legacyTarget;
+  const queryIndex = String(req.originalUrl || "").indexOf("?");
+  return res.redirect(301, `${destination}${queryIndex >= 0 ? req.originalUrl.slice(queryIndex) : ""}`);
 });
 app.use(express.static(publicDir));
 
@@ -287,7 +298,14 @@ Object.entries(trustPages).forEach(([route, file]) => app.get(route, (req, res) 
       .replace(/<meta name="description" content="[^"]*">/, `<meta name="description" content="${method.description}">`)
       .replace(/<main class="page-main">[\s\S]*?<\/main>/, methodologyMain(language));
   }
-  const canonical = `${SITE}${route}`;
+  const canonical = `${SITE}${marketPath(selectedMarket.code, route)}`;
+  const robotsContent = language === defaultLanguages[selectedMarket.code]
+    ? "index,follow,max-image-preview:large"
+    : "noindex,follow";
+  html = html.replace(
+    /<link rel="canonical" href="[^"]+">/,
+    `<link rel="canonical" href="${canonical}">${alternateLinks(route)}`
+  );
   const pageSchema = {
     "@context": "https://schema.org",
     "@graph": [
@@ -318,7 +336,7 @@ Object.entries(trustPages).forEach(([route, file]) => app.get(route, (req, res) 
   };
   html = html.replace(
     "</head>",
-    `<link rel="icon" href="/favicon.svg" type="image/svg+xml"><meta name="robots" content="index,follow,max-image-preview:large"><meta property="og:type" content="website"><meta property="og:site_name" content="OneDailyDrop"><meta property="og:title" content="${pageTitle}"><meta property="og:description" content="${pageDescription}"><meta property="og:url" content="${canonical}"><meta name="twitter:card" content="summary"><meta name="twitter:title" content="${pageTitle}"><meta name="twitter:description" content="${pageDescription}"><script type="application/ld+json">${JSON.stringify(pageSchema).replace(/</g, "\\u003c")}</script><script>window.__ODD_LANGUAGE__=${JSON.stringify(language)};window.__ODD_LOCALE__=${JSON.stringify(locale)};window.__ODD_TEXT__=${JSON.stringify(clientCopy(language)).replace(/</g, "\\u003c")};</script></head>`
+    `<link rel="icon" href="/favicon.svg" type="image/svg+xml"><meta name="robots" content="${robotsContent}"><meta property="og:type" content="website"><meta property="og:site_name" content="OneDailyDrop"><meta property="og:locale" content="${locale.replace("-", "_")}"><meta property="og:title" content="${esc(pageTitle)}"><meta property="og:description" content="${esc(pageDescription)}"><meta property="og:url" content="${canonical}"><meta name="twitter:card" content="summary"><meta name="twitter:title" content="${esc(pageTitle)}"><meta name="twitter:description" content="${esc(pageDescription)}"><script type="application/ld+json">${JSON.stringify(pageSchema).replace(/</g, "\\u003c")}</script><script>window.__ODD_LANGUAGE__=${JSON.stringify(language)};window.__ODD_LOCALE__=${JSON.stringify(locale)};window.__ODD_TEXT__=${JSON.stringify(clientCopy(language)).replace(/</g, "\\u003c")};</script></head>`
   );
   html = localizeHtml(html, language)
     .replace(/<html lang="[^"]+">/, `<html lang="${locale}">`)
@@ -329,7 +347,12 @@ Object.entries(trustPages).forEach(([route, file]) => app.get(route, (req, res) 
     )
     .replace("</head>", '<link rel="stylesheet" href="/cookie-consent.css?v=20260730"></head>')
     .replace("</body>", '<script src="/cookie-consent.js?v=20260730"></script></body>');
-  res.type("html").send(html);
+  res.set(
+    "Cache-Control",
+    language === defaultLanguages[selectedMarket.code]
+      ? "public, max-age=0, s-maxage=300, stale-while-revalidate=3600"
+      : "private, no-cache"
+  ).type("html").send(html);
 }));
 app.get("/club", (req, res) => res.sendFile(path.join(publicDir, "club.html")));
 app.get("/account", (req, res) => res.set("X-Robots-Tag", "noindex, nofollow").sendFile(path.join(publicDir, "account.html")));
@@ -499,6 +522,16 @@ const hasCurrentOffer = product => Number(product?.current_price) > 0 &&
   Boolean(clean(product?.checked_at));
 const hasRetailerImage = product => Boolean(clean(product?.image_url)) &&
   !/product-placeholder\.svg(?:$|\?)/i.test(String(product.image_url));
+const imageConnectionHints = image => {
+  try {
+    const origin = new URL(String(image || "")).origin;
+    return origin.startsWith("https://")
+      ? `<link rel="preconnect" href="${esc(origin)}"><link rel="dns-prefetch" href="${esc(origin)}">`
+      : "";
+  } catch {
+    return "";
+  }
+};
 const discountPercent = product => Number(product.original_price) > Number(product.current_price) ? Math.round((1 - Number(product.current_price) / Number(product.original_price)) * 100) : 0;
 const whyPicked = (product, language = "en") => {
   if (String(product?.source || "").toLowerCase() === "demo") return clean(product.description) || reasonFor(product);
@@ -551,9 +584,11 @@ const shell = (title, description, canonical, body, schema = null, image = "", r
     try { return new URL(canonical).pathname.replace(new RegExp(`^/(${marketCodes.join("|")})`), "") || "/"; }
     catch { return ""; }
   })();
-  const hasCountryAlternates = /^\/(?:archive|brands|category\/[^/]+)$/.test(pathname);
+  const hasCountryAlternates = /^\/(?:about|contact|privacy|terms|affiliate-disclosure|editorial-policy|how-we-select-deals|price-disclaimer|archive|brands|category\/[^/]+|brand\/[^/]+)$/.test(pathname);
   const alternates = hasCountryAlternates ? alternateLinks(pathname, alternateCodes) : "";
-  const robotsContent = robots || "index,follow,max-image-preview:large";
+  const robotsContent = robots || (language === defaultLanguages[selectedMarket.code]
+    ? "index,follow,max-image-preview:large"
+    : "noindex,follow");
   const ogLocale = locale.replace("-", "_");
   const suppliedNodes = schema
     ? (Array.isArray(schema["@graph"])
@@ -590,7 +625,7 @@ const shell = (title, description, canonical, body, schema = null, image = "", r
     ]
   };
   const ogType = suppliedNodes.some(node => node?.["@type"] === "Product") ? "product" : "website";
-  const html = `<!doctype html><html lang="${esc(locale)}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0a1020"><title>${esc(title)}</title><meta name="description" content="${esc(description.slice(0,160))}"><meta name="robots" content="${esc(robotsContent)}"><link rel="canonical" href="${esc(canonical)}"><link rel="icon" href="/favicon.svg" type="image/svg+xml">${alternates}<meta property="og:type" content="${ogType}"><meta property="og:site_name" content="OneDailyDrop"><meta property="og:locale" content="${esc(ogLocale)}"><meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(description.slice(0,180))}"><meta property="og:url" content="${esc(canonical)}">${image ? `<meta property="og:image" content="${esc(image)}"><meta property="og:image:alt" content="${esc(title)}">` : ""}<meta name="twitter:card" content="${image ? "summary_large_image" : "summary"}"><meta name="twitter:title" content="${esc(title)}"><meta name="twitter:description" content="${esc(description.slice(0,180))}">${image ? `<meta name="twitter:image" content="${esc(image)}">` : ""}<link rel="stylesheet" href="/styles.css?v=20260731-brand-lockup"><link rel="stylesheet" href="/brand-theme.css?v=20260731-brand-lockup"><link rel="stylesheet" href="/liquid-glass.css?v=20260731-brand-lockup"><script type="application/ld+json">${JSON.stringify(pageSchema).replace(/</g,"\\u003c")}</script><script>window.__ODD_LANGUAGE__=${JSON.stringify(language)};window.__ODD_LOCALE__=${JSON.stringify(locale)};window.__ODD_TEXT__=${JSON.stringify(clientCopy(language)).replace(/</g, "\\u003c")};</script></head><body>${sharedHeader(code, language, req)}${body}${sharedFooter(code, language)}<script src="/theme.js?v=20260728-i18n2"></script><script src="/site-shell.js?v=20260728-i18n2"></script><script src="/click-tracking.js?v=20260805-stage2"></script></body></html>`;
+  const html = `<!doctype html><html lang="${esc(locale)}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0a1020"><title>${esc(title)}</title><meta name="description" content="${esc(description.slice(0,160))}"><meta name="robots" content="${esc(robotsContent)}"><link rel="canonical" href="${esc(canonical)}"><link rel="icon" href="/favicon.svg" type="image/svg+xml">${alternates}${imageConnectionHints(image)}<meta property="og:type" content="${ogType}"><meta property="og:site_name" content="OneDailyDrop"><meta property="og:locale" content="${esc(ogLocale)}"><meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(description.slice(0,180))}"><meta property="og:url" content="${esc(canonical)}">${image ? `<meta property="og:image" content="${esc(image)}"><meta property="og:image:alt" content="${esc(title)}">` : ""}<meta name="twitter:card" content="${image ? "summary_large_image" : "summary"}"><meta name="twitter:title" content="${esc(title)}"><meta name="twitter:description" content="${esc(description.slice(0,180))}">${image ? `<meta name="twitter:image" content="${esc(image)}">` : ""}<link rel="stylesheet" href="/styles.css?v=20260731-brand-lockup"><link rel="stylesheet" href="/brand-theme.css?v=20260731-brand-lockup"><link rel="stylesheet" href="/liquid-glass.css?v=20260731-brand-lockup"><script type="application/ld+json">${JSON.stringify(pageSchema).replace(/</g,"\\u003c")}</script><script>window.__ODD_LANGUAGE__=${JSON.stringify(language)};window.__ODD_LOCALE__=${JSON.stringify(locale)};window.__ODD_TEXT__=${JSON.stringify(clientCopy(language)).replace(/</g, "\\u003c")};</script></head><body>${sharedHeader(code, language, req)}${body}${sharedFooter(code, language)}<script src="/theme.js?v=20260728-i18n2"></script><script src="/site-shell.js?v=20260728-i18n2"></script><script src="/click-tracking.js?v=20260805-stage2"></script></body></html>`;
   const versionedHtml = html.replace("/styles.css?v=20260731-brand-lockup", "/styles.css?v=20260805-stage4");
   return localizeHtml(versionedHtml, language);
 };
@@ -613,16 +648,16 @@ const scoreMetrics = (display, language = "en", { atSelection = false } = {}) =>
 
 const productCard = (product, index = 0, language = "en", sourcePage = "unknown") => {
   const display = presentProduct(localizeProduct(product, language), language);
-  return `<article class="card catalog-card"><a class="image-wrap" href="${dealPath(product)}" ${trackingAttributes(product, sourcePage, "catalog_media")}><img src="${esc(product.image_url)}" alt="${esc(shortTitle(display.title))}"></a><div class="card-content">${index ? `<span class="rank">#${index}</span>` : ""}${product.brand ? `<a class="eyebrow" href="${brandPath(product.brand, product.market)}">${esc(product.brand)}</a>` : ""}<h2 class="card-title"><a href="${dealPath(product)}" ${trackingAttributes(product, sourcePage, "catalog_title")}>${esc(shortTitle(display.title))}</a></h2><p class="description editorial-teaser"><strong>${esc(t(language,"product.why"))}</strong> ${esc(whyPicked(display, language))}</p>${scoreMetrics(display, language)}<span class="price card-price">${money(product.current_price, product.currency, languageTag(product.market, language))}</span><a class="button" href="${dealPath(product)}" ${trackingAttributes(product, sourcePage, "catalog_details")}>${esc(t(language,"page.viewDetails"))}</a></div></article>`;
+  return `<article class="card catalog-card"><a class="image-wrap" href="${dealPath(product)}" ${trackingAttributes(product, sourcePage, "catalog_media")}><img src="${esc(product.image_url)}" alt="${esc(shortTitle(display.title))}" loading="lazy" decoding="async"></a><div class="card-content">${index ? `<span class="rank">#${index}</span>` : ""}${product.brand ? `<a class="eyebrow" href="${brandPath(product.brand, product.market)}">${esc(product.brand)}</a>` : ""}<h2 class="card-title"><a href="${dealPath(product)}" ${trackingAttributes(product, sourcePage, "catalog_title")}>${esc(shortTitle(display.title))}</a></h2><p class="description editorial-teaser"><strong>${esc(t(language,"product.why"))}</strong> ${esc(whyPicked(display, language))}</p>${scoreMetrics(display, language)}<span class="price card-price">${money(product.current_price, product.currency, languageTag(product.market, language))}</span><a class="button" href="${dealPath(product)}" ${trackingAttributes(product, sourcePage, "catalog_details")}>${esc(t(language,"page.viewDetails"))}</a></div></article>`;
 };
 const alternativeCard = (product, language = "en") => {
   const display = presentProduct(localizeProduct(product, language), language);
-  return `<article class="alternative-card"><a class="alternative-card-media" href="${dealPath(product)}" ${trackingAttributes(product,"related","catalog_media")}><img src="${esc(product.image_url)}" alt="${esc(shortTitle(display.title))}" loading="lazy"></a><div class="alternative-card-body"><p class="cat">${esc(display.display_category)} · ${esc(storeName(product))}</p><h3><a href="${dealPath(product)}" ${trackingAttributes(product,"related","catalog_title")}>${esc(shortTitle(display.title))}</a></h3><div class="alternative-meta">${display.display_score != null ? `<span>${esc(display.display_score_label)} <strong>${Number(display.display_score)}/100</strong></span>` : ""}<span class="price">${money(product.current_price,product.currency,languageTag(product.market,language))}</span></div><a class="alternative-link" href="${dealPath(product)}" ${trackingAttributes(product,"related","catalog_details")}>${esc(t(language,"page.viewDetails"))} →</a></div></article>`;
+  return `<article class="alternative-card"><a class="alternative-card-media" href="${dealPath(product)}" ${trackingAttributes(product,"related","catalog_media")}><img src="${esc(product.image_url)}" alt="${esc(shortTitle(display.title))}" loading="lazy" decoding="async"></a><div class="alternative-card-body"><p class="cat">${esc(display.display_category)} · ${esc(storeName(product))}</p><h3><a href="${dealPath(product)}" ${trackingAttributes(product,"related","catalog_title")}>${esc(shortTitle(display.title))}</a></h3><div class="alternative-meta">${display.display_score != null ? `<span>${esc(display.display_score_label)} <strong>${Number(display.display_score)}/100</strong></span>` : ""}<span class="price">${money(product.current_price,product.currency,languageTag(product.market,language))}</span></div><a class="alternative-link" href="${dealPath(product)}" ${trackingAttributes(product,"related","catalog_details")}>${esc(t(language,"page.viewDetails"))} →</a></div></article>`;
 };
 const archiveCard = (product, language = "en") => {
   const display = presentProduct(localizeProduct(product, language), language);
   const locale = languageTag(product.market, language);
-  return `<article class="archive-card"><a class="archive-card-media" href="${dealPath(product)}" ${trackingAttributes(product, "archive", "archive_media")}><img src="${esc(product.image_url)}" alt="${esc(shortTitle(display.title))}"></a><div class="archive-card-content">${product.category ? `<a class="eyebrow" href="${catPath(product.category, product.market)}">${esc(display.display_category)}</a>` : ""}<h2><a href="${dealPath(product)}" ${trackingAttributes(product, "archive", "archive_title")}>${esc(shortTitle(display.title))}</a></h2><p class="description editorial-teaser">${esc(whyPicked(display, language))}</p>${scoreMetrics(display, language, { atSelection:true })}<div class="archive-prices"><p><span>${esc(t(language,"product.selectionPrice"))}</span><strong>${money(product.drop_price ?? product.current_price, product.drop_currency || product.currency, locale)}</strong></p><p><span>${esc(t(language,"product.currentPrice"))}</span><strong>${money(product.current_price, product.currency, locale)}</strong></p></div><span class="archive-status">${esc(display.display_availability)}</span><a class="button" href="${dealPath(product)}" ${trackingAttributes(product, "archive", "archive_details")}>${esc(t(language,"page.viewDetails"))}</a></div></article>`;
+  return `<article class="archive-card"><a class="archive-card-media" href="${dealPath(product)}" ${trackingAttributes(product, "archive", "archive_media")}><img src="${esc(product.image_url)}" alt="${esc(shortTitle(display.title))}" loading="lazy" decoding="async"></a><div class="archive-card-content">${product.category ? `<a class="eyebrow" href="${catPath(product.category, product.market)}">${esc(display.display_category)}</a>` : ""}<h2><a href="${dealPath(product)}" ${trackingAttributes(product, "archive", "archive_title")}>${esc(shortTitle(display.title))}</a></h2><p class="description editorial-teaser">${esc(whyPicked(display, language))}</p>${scoreMetrics(display, language, { atSelection:true })}<div class="archive-prices"><p><span>${esc(t(language,"product.selectionPrice"))}</span><strong>${money(product.drop_price ?? product.current_price, product.drop_currency || product.currency, locale)}</strong></p><p><span>${esc(t(language,"product.currentPrice"))}</span><strong>${money(product.current_price, product.currency, locale)}</strong></p></div><span class="archive-status">${esc(display.display_availability)}</span><a class="button" href="${dealPath(product)}" ${trackingAttributes(product, "archive", "archive_details")}>${esc(t(language,"page.viewDetails"))}</a></div></article>`;
 };
 const findProduct = param => { const id = String(param).match(/-(\d+)$/)?.[1] || (/^\d+$/.test(param) ? param : null); return id ? db.prepare(`SELECT * FROM products WHERE id=? AND status='published' AND ${sourceSql()}`).get(id) : null; };
 const sameProductOffers = product => {
@@ -705,7 +740,7 @@ app.get("/deal/:slug", (req, res) => {
   const schemaOffers = offerRows.map(offer => {
     const offerState = offerAvailability(offer.availability);
     const eligible = String(offer.source || "").toLowerCase() !== "demo" && /^https?:\/\//i.test(String(offer.affiliate_url || "")) && Number(offer.current_price) > 0 && /^[A-Z]{3}$/.test(String(offer.currency || "").toUpperCase()) && offerState;
-    return eligible ? {"@type":"Offer",url:SITE+outboundPath(offer,{sourcePage:"product",placement:"offer_comparison",action:"view_deal"}),priceCurrency:String(offer.currency).toUpperCase(),price:Number(offer.current_price),availability:offerState,itemCondition:"https://schema.org/NewCondition",seller:{"@type":"Organization",name:storeName(offer)}} : null;
+    return eligible ? {"@type":"Offer",url:canonical,priceCurrency:String(offer.currency).toUpperCase(),price:Number(offer.current_price),availability:offerState,itemCondition:"https://schema.org/NewCondition",seller:{"@type":"Organization",name:storeName(offer)}} : null;
   }).filter(Boolean);
   if (schemaOffers.length) productNode.offers = schemaOffers.length === 1 ? schemaOffers[0] : schemaOffers;
   const productSchema = {"@context":"https://schema.org","@graph":[productNode,{"@type":"BreadcrumbList",itemListElement:[{"@type":"ListItem",position:1,name:t(req.language,"page.home"),item:SITE+marketPath(p.market)},{"@type":"ListItem",position:2,name:displayCategory,item:SITE+catPath(category,p.market)},...(p.brand?[{"@type":"ListItem",position:3,name:p.brand,item:SITE+brandPath(p.brand,p.market)}]:[]),{"@type":"ListItem",position:p.brand?4:3,name:title,item:canonical}]}]};
@@ -731,7 +766,7 @@ app.get("/deal/:slug", (req, res) => {
   const priceDetails = !currentOffer
     ? `<div class="detail-grid"><section><h3>${esc(t(req.language,"product.currentPrice"))}</h3><p>${esc(t(req.language,"product.checkPrice"))} ${esc(store)}</p></section></div>`
     : `<div class="detail-grid"><section><h3>${esc(t(req.language,"product.currentPrice"))}</h3><p>${money(p.current_price,p.currency,pageLocale)}</p></section>${ratingSummary}<section><h3>${esc(t(req.language,"page.low30"))}</h3><p>${historyLabel(intelligence.day30)}</p></section><section><h3>${esc(t(req.language,"page.low90"))}</h3><p>${historyLabel(intelligence.day90)}</p></section><section><h3>${esc(t(req.language,"page.lowAll"))}</h3><p>${historyLabel(intelligence.allTime)}</p></section></div><section id="price-history" class="editorial-box">${retailerDetails}<h2>${esc(t(req.language,"page.priceHistory"))}</h2>${chartSvg(history,req.language,p.market)}<p>${esc(t(req.language,"page.historySummary",{observations:history.length,days:intelligence.allTime.distinctDays}))}</p></section>`;
-  const body = `<main class="product-page"><nav class="breadcrumb"><a href="${marketPath(p.market)}">${esc(t(req.language,"page.home"))}</a><span>›</span><a href="${catPath(category,p.market)}">${esc(displayCategory)}</a>${p.brand?`<span>›</span><a href="${brandPath(p.brand,p.market)}">${esc(p.brand)}</a>`:""}<span>›</span><span>${esc(title)}</span></nav><article class="product-detail"><div class="product-detail-media"><img src="${esc(p.image_url)}" alt="${esc(hasRetailerImage(p) ? title : `${store} ${t(req.language,"product.editorPick")}`)}" decoding="async"></div><div class="product-detail-content">${brandBlock}<h1>${esc(title)}</h1>${scoreBlock}<p class="product-lead">${esc(brief.verdict)}</p><a class="brief-jump-link" href="#buying-brief">${esc(brief.eyebrow)} ↓</a>${priceDetails}<div class="product-price-box"><span class="product-price">${currentOffer ? money(p.current_price,p.currency,pageLocale) : `${esc(t(req.language,"product.checkPrice"))} ${esc(store)}`}</span>${currentOffer && p.original_price?`<span class="old">${money(p.original_price,p.currency,pageLocale)}</span>`:""}<small>${esc(t(req.language,"page.finalPrice"))}</small></div>${retailerActions}</div></article>${briefBlock}${offerComparisonBlock}${alternativesBlock}${relatedBlock}</main>`;
+  const body = `<main class="product-page"><nav class="breadcrumb"><a href="${marketPath(p.market)}">${esc(t(req.language,"page.home"))}</a><span>›</span><a href="${catPath(category,p.market)}">${esc(displayCategory)}</a>${p.brand?`<span>›</span><a href="${brandPath(p.brand,p.market)}">${esc(p.brand)}</a>`:""}<span>›</span><span>${esc(title)}</span></nav><article class="product-detail"><div class="product-detail-media"><img src="${esc(p.image_url)}" alt="${esc(hasRetailerImage(p) ? title : `${store} ${t(req.language,"product.editorPick")}`)}" decoding="async" fetchpriority="high"></div><div class="product-detail-content">${brandBlock}<h1>${esc(title)}</h1>${scoreBlock}<p class="product-lead">${esc(brief.verdict)}</p><a class="brief-jump-link" href="#buying-brief">${esc(brief.eyebrow)} ↓</a>${priceDetails}<div class="product-price-box"><span class="product-price">${currentOffer ? money(p.current_price,p.currency,pageLocale) : `${esc(t(req.language,"product.checkPrice"))} ${esc(store)}`}</span>${currentOffer && p.original_price?`<span class="old">${money(p.original_price,p.currency,pageLocale)}</span>`:""}<small>${esc(t(req.language,"page.finalPrice"))}</small></div>${retailerActions}</div></article>${briefBlock}${offerComparisonBlock}${alternativesBlock}${relatedBlock}</main>`;
   const enrichedBody = currentOffer ? body : body.replace('<div class="product-price-box">', `${retailerDetails}<div class="product-price-box">`);
   res.send(shell(brief.seoTitle, description, canonical, enrichedBody, productSchema, p.image_url, "", p.market, marketCodes, req));
 });
@@ -811,10 +846,11 @@ app.get("/brand/:slug", (req, res) => {
   const products = db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()} AND brand_slug=? ORDER BY score DESC,updated_at DESC`).all(selectedMarket.code, req.params.slug);
   if (!products.length) return sendNotFound(req, res);
   const brand = products[0].brand, canonical = SITE + brandPath(brand, selectedMarket.code), avgPrice = products.reduce((sum,p)=>sum+Number(p.current_price||0),0)/products.length, avgRating = products.reduce((sum,p)=>sum+Number(p.rating||0),0)/products.length, avgDiscount = products.reduce((sum,p)=>sum+discountPercent(p),0)/products.length;
+  const alternateCodes = marketCodes.filter(code => db.prepare(`SELECT 1 FROM products WHERE market=? AND status='published' AND ${sourceSql()} AND brand_slug=? LIMIT 1`).get(code, req.params.slug));
   const description = t(req.language,"page.brandDescription",{count:products.length,brand});
   const schema = {"@context":"https://schema.org","@graph":[{"@type":"Brand",name:brand,url:canonical},{"@type":"ItemList",name:`Best ${brand} Deals`,numberOfItems:products.length,itemListElement:products.map((product,index)=>({"@type":"ListItem",position:index+1,url:SITE+dealPath(product),name:shortTitle(product.title)}))},{"@type":"BreadcrumbList",itemListElement:[{"@type":"ListItem",position:1,name:"Home",item:SITE+marketPath(selectedMarket.code)},{"@type":"ListItem",position:2,name:"Brands",item:SITE+marketPath(selectedMarket.code,"/brands")},{"@type":"ListItem",position:3,name:brand,item:canonical}]}]};
   const stats = `<div class="detail-grid"><section><h3>${esc(t(req.language,"page.products"))}</h3><p>${products.length}</p></section><section><h3>${esc(t(req.language,"page.averagePrice"))}</h3><p>${money(avgPrice,products[0].currency,languageTag(selectedMarket.code,req.language))}</p></section><section><h3>${esc(t(req.language,"page.averageRating"))}</h3><p>${avgRating.toFixed(1)} / 5</p></section><section><h3>${esc(t(req.language,"page.averageDiscount"))}</h3><p>${Math.round(avgDiscount)}%</p></section></div>`;
-  res.send(shell(`${brand} | OneDailyDrop`, description, canonical, `<main><section class="deals-section"><nav class="breadcrumb"><a href="${marketPath(selectedMarket.code)}">${esc(t(req.language,"page.home"))}</a><span>›</span><a href="${marketPath(selectedMarket.code, "/brands")}">${esc(t(req.language,"page.brands"))}</a><span>›</span><span>${esc(brand)}</span></nav><div class="section-heading"><div><p class="eyebrow">${esc(marketName(selectedMarket.code,req.language).toUpperCase())} · ${esc(t(req.language,"page.brands").toUpperCase())}</p><h1>${esc(t(req.language,"page.moreBrandDeals",{brand}))}</h1><p>${esc(description)}</p></div></div>${stats}<div class="grid">${products.map((product,index)=>productCard(product,index+1,req.language,"brand")).join("")}</div></section></main>`, schema, "", "", selectedMarket.code, marketCodes, req));
+  res.send(shell(`${brand} | OneDailyDrop`, description, canonical, `<main><section class="deals-section"><nav class="breadcrumb"><a href="${marketPath(selectedMarket.code)}">${esc(t(req.language,"page.home"))}</a><span>›</span><a href="${marketPath(selectedMarket.code, "/brands")}">${esc(t(req.language,"page.brands"))}</a><span>›</span><span>${esc(brand)}</span></nav><div class="section-heading"><div><p class="eyebrow">${esc(marketName(selectedMarket.code,req.language).toUpperCase())} · ${esc(t(req.language,"page.brands").toUpperCase())}</p><h1>${esc(t(req.language,"page.moreBrandDeals",{brand}))}</h1><p>${esc(description)}</p></div></div>${stats}<div class="grid">${products.map((product,index)=>productCard(product,index+1,req.language,"brand")).join("")}</div></section></main>`, schema, "", "", selectedMarket.code, alternateCodes, req));
 });
 
 app.get("/brands", (req, res) => {
@@ -825,9 +861,10 @@ app.get("/brands", (req, res) => {
     return sendNotFound(req, res);
   }
   const canonical = SITE + marketPath(selectedMarket.code, "/brands"), description = t(req.language,"page.brandDescription",{count:brands.length,brand:marketName(selectedMarket.code,req.language)});
+  const alternateCodes = marketCodes.filter(code => db.prepare(`SELECT 1 FROM products WHERE market=? AND status='published' AND ${sourceSql()} AND brand_slug<>'' LIMIT 1`).get(code));
   const schema = {"@context":"https://schema.org","@type":"ItemList",name:"Popular Brands",numberOfItems:brands.length,itemListElement:brands.map((brand,index)=>({"@type":"ListItem",position:index+1,url:SITE+brandPath(brand.brand,selectedMarket.code),name:brand.brand}))};
   const cards = brands.map(brand => `<article class="card"><div class="card-content"><p class="eyebrow">${esc(t(req.language,"search.products",{count:brand.product_count}).toUpperCase())}</p><h2><a href="${brandPath(brand.brand, selectedMarket.code)}">${esc(brand.brand)}</a></h2><p>${esc(t(req.language,"page.averagePrice"))}: ${money(brand.avg_price, selectedMarket.currency,languageTag(selectedMarket.code,req.language))} · ${esc(t(req.language,"page.averageRating"))}: ${Number(brand.avg_rating||0).toFixed(1)}</p></div></article>`).join("");
-  res.send(shell(`${t(req.language,"page.popularBrands")} | OneDailyDrop`, description, canonical, `<main><section class="deals-section"><div class="section-heading"><div><p class="eyebrow">${esc(marketName(selectedMarket.code,req.language).toUpperCase())}</p><h1>${esc(t(req.language,"page.popularBrands"))}</h1></div><p class="result-count">${esc(t(req.language,"search.products",{count:brands.length}))}</p></div><div class="grid">${cards}</div></section></main>`, schema, "", brands.length ? "" : "noindex,follow", selectedMarket.code, marketCodes, req));
+  res.send(shell(`${t(req.language,"page.popularBrands")} | OneDailyDrop`, description, canonical, `<main><section class="deals-section"><div class="section-heading"><div><p class="eyebrow">${esc(marketName(selectedMarket.code,req.language).toUpperCase())}</p><h1>${esc(t(req.language,"page.popularBrands"))}</h1></div><p class="result-count">${esc(t(req.language,"search.products",{count:brands.length}))}</p></div><div class="grid">${cards}</div></section></main>`, schema, "", brands.length ? "" : "noindex,follow", selectedMarket.code, alternateCodes, req));
 });
 
 app.get("/robots.txt", (req, res) => res
@@ -851,12 +888,18 @@ app.get("/sitemap.xml", (req, res) => {
     return Number.isNaN(date.getTime()) ? "" : date.toISOString();
   };
   const categoryMarkets = new Map();
+  const brandMarkets = new Map();
   for (const product of products) {
     const key = slug(product.category);
     if (!categoryMarkets.has(key)) categoryMarkets.set(key, new Set());
     categoryMarkets.get(key).add(product.market);
+    if (product.brand_slug) {
+      if (!brandMarkets.has(product.brand_slug)) brandMarkets.set(product.brand_slug, new Set());
+      brandMarkets.get(product.brand_slug).add(product.market);
+    }
   }
   const archiveMarkets = new Set(db.prepare(`SELECT DISTINCT d.market FROM daily_drops d JOIN products p ON p.id=d.product_id WHERE ${sourceSql("p")}`).all().map(row => row.market));
+  const brandsMarkets = new Set(products.filter(product => product.brand_slug).map(product => product.market));
   for (const code of marketCodes) {
     const marketProducts = products.filter(product => product.market === code);
     const categories = [...new Set(marketProducts.map(product => product.category).filter(Boolean))];
@@ -864,7 +907,7 @@ app.get("/sitemap.xml", (req, res) => {
     const latestUpdate = marketProducts.map(product => validLastmod(product.updated_at)).filter(Boolean).sort().at(-1);
     urls.push({ loc: SITE + marketPath(code), alternates: localizedAlternates("/"), lastmod: latestUpdate });
     if (archiveMarkets.has(code)) urls.push({ loc: SITE + marketPath(code, "/archive"), alternates: localizedAlternates("/archive", [...archiveMarkets]), lastmod: latestUpdate });
-    if (brands.length) urls.push({ loc: SITE + marketPath(code, "/brands"), alternates: localizedAlternates("/brands"), lastmod: latestUpdate });
+    if (brands.length) urls.push({ loc: SITE + marketPath(code, "/brands"), alternates: localizedAlternates("/brands", [...brandsMarkets]), lastmod: latestUpdate });
     categories.forEach(value => urls.push({
       loc: SITE + catPath(value, code),
       alternates: localizedAlternates(`/category/${slug(value)}`, [...(categoryMarkets.get(slug(value)) || [])]),
@@ -872,6 +915,7 @@ app.get("/sitemap.xml", (req, res) => {
     }));
     brands.forEach(value => urls.push({
       loc: SITE + brandPath(value, code),
+      alternates: localizedAlternates(`/brand/${slugifyBrand(value)}`, [...(brandMarkets.get(slugifyBrand(value)) || [])]),
       lastmod: marketProducts.filter(product => product.brand_slug === slugifyBrand(value)).map(product => validLastmod(product.updated_at)).filter(Boolean).sort().at(-1)
     }));
     marketProducts.forEach(product => urls.push({
@@ -882,7 +926,10 @@ app.get("/sitemap.xml", (req, res) => {
     }));
   }
   for (const code of marketCodes) {
-    Object.keys(trustPages).forEach(pathname => urls.push({ loc: SITE + marketPath(code, pathname) }));
+    Object.keys(trustPages).forEach(pathname => urls.push({
+      loc: SITE + marketPath(code, pathname),
+      alternates: localizedAlternates(pathname)
+    }));
   }
   res.set("Cache-Control", "public, max-age=1800").type("application/xml").send(
     `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">${urls.map(item => `<url><loc>${esc(item.loc)}</loc>${item.alternates || ""}${item.lastmod ? `<lastmod>${item.lastmod}</lastmod>` : ""}${item.image ? `<image:image><image:loc>${esc(item.image)}</image:loc><image:title>${esc(item.imageTitle)}</image:title></image:image>` : ""}</url>`).join("")}</urlset>`
