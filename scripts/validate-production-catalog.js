@@ -179,14 +179,15 @@ const refresh = fs.readFileSync(path.join(root, "src/refresh.js"), "utf8");
 for (const field of ["@retailer_name", "@seller_name", "@seller_rating", "@seller_feedback_count", "@shipping_summary", "@shipping_cost", "@landed_cost", "@return_summary", "@availability", "@checked_at", "@evidence_confidence"]) {
   if (!refresh.includes(field)) throw new Error(`Live offer field is not persisted during refresh: ${field}`);
 }
-for (const required of ["selectDailyProducts", "INSERT INTO daily_drops", "minimumScore: config.provider === \"demo\" ? 0 : 60", "preserveDailySelection", "existingSnapshots"]) {
+for (const required of ["selectDailyProducts", "INSERT INTO daily_drops", "minimumScore: 0", "Number(product.score) >= 60", "Number(product.evidence_confidence) >= 45", "preserveDailySelection", "existingSnapshots"]) {
   if (!refresh.includes(required)) throw new Error(`Daily country selection workflow is missing: ${required}`);
 }
 const ranker = fs.readFileSync(path.join(root, "src/ranker.js"), "utf8");
+const methodology = fs.readFileSync(path.join(root, "src/methodology.js"), "utf8");
 for (const required of ["price_quality", "product_quality", "review_confidence", "seller_reliability", "demand_usefulness", "shipping_returns"]) {
   if (!ranker.includes(required)) throw new Error(`OneDailyDrop Score component is missing: ${required}`);
 }
-for (const required of ["current-offer-v4", "comparable_median_landed_cost", "return referenceScore", "evidenceConfidence", "return rankPoints + reviewDemand + badge", "maximumShippingRatio"]) {
+for (const required of ["current-offer-v5", "comparable_median_landed_cost", "return referenceScore", "evidenceConfidence", "return rankPoints + reviewDemand + badge", "maximumShippingRatio"]) {
   if (!ranker.includes(required)) throw new Error(`OneDailyDrop Score weighting is incomplete: ${required}`);
 }
 for (const forbidden of ["average_30_day_price", "average_90_day_price", "price_history_observation_count", "evidencePenalty"]) {
@@ -194,6 +195,11 @@ for (const forbidden of ["average_30_day_price", "average_90_day_price", "price_
 }
 if (!ranker.includes("item.score >= number(options.minimumScore, 60)")) {
   throw new Error("Live products below the minimum OneDailyDrop Score are not excluded");
+}
+for (const required of ["82 to 95", "quality * 0.75", "evidenceQuality * 0.25"]) {
+  if (!methodology.includes(required) && !fs.readFileSync(path.join(root, "src/productPresentation.js"), "utf8").includes(required)) {
+    throw new Error(`Public score calibration is incomplete: ${required}`);
+  }
 }
 for (const required of ["scoreOffers", "selectUniqueProducts"]) {
   if (!ranker.includes(required)) throw new Error(`Multi-store offer scoring is missing: ${required}`);

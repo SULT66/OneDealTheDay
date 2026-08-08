@@ -191,14 +191,17 @@ async function refreshMarket(config, marketCode, options = {}) {
       currency: selectedMarket.currency,
       minimumRating: 0,
       minimumReviews: 0,
-      minimumScore: config.provider === "demo" ? 0 : 60,
-      minimumEvidenceConfidence: config.provider === "demo" ? 0 : 45,
+      minimumScore: 0,
+      minimumEvidenceConfidence: 0,
       maximumShippingRatio: 0.5
     };
     const scoredOffers = scoreOffers(found, eligibility);
-    const ranked = selectUniqueProducts(scoredOffers).slice(0, 60);
-    if (!Array.isArray(found) || found.length < 1 || ranked.length < 1) {
-      throw new Error(`${selectedMarket.name} refresh returned no eligible products (${found.length} found, ${ranked.length} eligible)`);
+    const catalogProducts = selectUniqueProducts(scoredOffers).slice(0, 60);
+    const ranked = catalogProducts.filter(product =>
+      config.provider === "demo" || (Number(product.score) >= 60 && Number(product.evidence_confidence) >= 45)
+    );
+    if (!Array.isArray(found) || found.length < 1 || catalogProducts.length < 1) {
+      throw new Error(`${selectedMarket.name} refresh returned no valid catalog products (${found.length} found, ${catalogProducts.length} valid)`);
     }
     const selected = selectDailyProducts(ranked, selectedMarket.code, selectedMarket.timezone, Boolean(options.preserveDailySelection));
     const updatedAt = new Date().toISOString();
@@ -363,7 +366,8 @@ async function refreshMarket(config, marketCode, options = {}) {
       provider: config.provider,
       found: found.length,
       eligible: scoredOffers.length,
-      uniqueProducts: ranked.length,
+      uniqueProducts: catalogProducts.length,
+      qualifiedProducts: ranked.length,
       selected: selected.length,
       dropDate,
       sources:loaded.reports

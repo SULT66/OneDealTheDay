@@ -14,7 +14,7 @@ const {
   normalizeTradeItemId
 } = require("../src/productIdentity");
 
-assert.strictEqual(SCORE_MODEL, "current-offer-v4");
+assert.strictEqual(SCORE_MODEL, "current-offer-v5");
 for (const placeholder of ["Does not apply", "Does Not Apply", "Non applicable", "Nicht zutreffend", "Ne s'applique pas", "不适用", "N/A"]) {
   assert.strictEqual(normalizeTradeItemId(placeholder), "", `Placeholder GTIN was accepted: ${placeholder}`);
 }

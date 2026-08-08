@@ -55,7 +55,7 @@ function deduplicationKeys(product) {
   return [...new Set(keys)];
 }
 
-const SCORE_MODEL = "current-offer-v4";
+const SCORE_MODEL = "current-offer-v5";
 
 function localizedAmount(value) {
   let candidate = String(value || "").replace(/\s/g, "");

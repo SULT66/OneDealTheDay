@@ -319,7 +319,7 @@ async function run() {
 
   const products = await (await get("/api/products?market=us")).json();
   assert(products.length === 9, "The public US catalog must deduplicate equivalent verified listings");
-  assert(products.every(product => product.display_score >= 60), "The production API exposed a Deal Score below the editorial floor");
+  assert(products.every(product => product.display_score >= 82 && product.display_score <= 95), "A qualified public Deal Score escaped the calibrated 82-95 range");
   const publicProductKeys = products.map(product => product.product_key).filter(Boolean);
   assert(new Set(publicProductKeys).size === publicProductKeys.length, "The production API exposed a duplicate product identity");
   assert(products.every(product => product.source === "ebay"), "A non-eBay product source is public");

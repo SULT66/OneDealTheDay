@@ -102,6 +102,9 @@ function records(retailer, prefix, duplicateFirst = false) {
 const targetRecords = records("Target", "t", true);
 const bestBuyRecords = records("Best Buy", "b", true);
 bestBuyRecords[0].gtin = targetRecords[0].gtin;
+targetRecords[5].rating = "0";
+targetRecords[5].review_count = "0";
+targetRecords[5].original_price = targetRecords[5].price;
 
 const originalFetch = global.fetch;
 global.fetch = async url => {
@@ -180,9 +183,10 @@ const config = {
       review_count:Number(item.review_count),
       source:index < 6 ? "feed-target" : "feed-best-buy",
       source_rank:(index % 6) + 1
-    })), {currency:"USD", minimumRating:0, minimumReviews:0, minimumScore:60});
+    })), {currency:"USD", minimumRating:0, minimumReviews:0, minimumScore:0});
     assert.strictEqual(scored.length, 12, "Multi-store scoring discarded an alternative offer");
     assert.strictEqual(selectUniqueProducts(scored).length, 11, "Daily selection did not deduplicate the matching product");
+    assert(scored.some(product => product.score < 60), "The catalog fixture is missing its below-selection offer");
 
     const result = await refreshMarket(config, "us");
     assert.strictEqual(result.selected, 10);
@@ -190,6 +194,7 @@ const config = {
     assert.strictEqual(result.sources.filter(source => source.status === "success").length, 2);
     assert.strictEqual(result.sources.filter(source => source.status === "failed").length, 1);
     assert.strictEqual(db.prepare("SELECT COUNT(*) n FROM products").get().n, 12, "All valid store offers were not persisted");
+    assert.strictEqual(db.prepare("SELECT COUNT(*) n FROM products WHERE status='published' AND score<60").get().n, 1, "A valid catalog offer disappeared only because it missed the Daily Drop threshold");
     assert.strictEqual(db.prepare("SELECT COUNT(*) n FROM products WHERE product_key=?").get(`gtin:${targetRecords[0].gtin}`).n, 2, "Matching cross-store offers were not retained");
     assert.strictEqual(db.prepare("SELECT COUNT(*) n FROM daily_drops").get().n, 10);
     assert.strictEqual(db.prepare("SELECT COUNT(*) n FROM source_refresh_runs").get().n, 3);

@@ -143,8 +143,7 @@ function expressWithHomepage(...args) {
       selection_reason: product.daily_selection_reason || product.selection_reason
     })), ...catalog]);
     const presented = products
-      .map(product => presentProduct(localizeProduct(product, language), language))
-      .filter(product => product.display_score != null);
+      .map(product => presentProduct(localizeProduct(product, language), language));
     return res.json(presented);
   });
 

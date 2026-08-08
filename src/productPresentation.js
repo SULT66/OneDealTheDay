@@ -1,6 +1,11 @@
 const { categoryLabel, languageTag, t } = require("./i18n");
 const { SCORE_MODEL, scoreProduct } = require("./ranker");
 
+const EDITORIAL_SCORE_FLOOR = 60;
+const EDITORIAL_CONFIDENCE_FLOOR = 45;
+const PUBLIC_SCORE_FLOOR = 82;
+const PUBLIC_SCORE_CEILING = 95;
+
 const clean = value => String(value || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
 const number = (value, fallback = 0) => {
   const parsed = Number(value);
@@ -49,6 +54,24 @@ function oneDailyDropEvidenceConfidence(product) {
     current_price: product?.drop_price ?? product?.current_price,
     original_price: product?.drop_original_price ?? product?.original_price
   }).evidenceConfidence;
+}
+
+function publicOneDailyDropScore(rawScore, confidence) {
+  const raw = number(rawScore, NaN);
+  const evidence = number(confidence, NaN);
+  if (!Number.isFinite(raw) || !Number.isFinite(evidence)) return null;
+  if (raw < EDITORIAL_SCORE_FLOOR || evidence < EDITORIAL_CONFIDENCE_FLOOR) return null;
+
+  // The internal model scores every candidate from 0-100. The public score is
+  // a calibrated score for offers that already passed the editorial floor:
+  // 82 means qualified, 90+ means strong, and 95 is intentionally exceptional.
+  // Offer quality carries most of the result while evidence coverage prevents
+  // a sparse listing from receiving the same public score as a well-supported one.
+  const quality = Math.max(0, Math.min(1, (raw - EDITORIAL_SCORE_FLOOR) / 30));
+  const evidenceQuality = Math.max(0, Math.min(1, (evidence - EDITORIAL_CONFIDENCE_FLOOR) / 45));
+  const calibrated = PUBLIC_SCORE_FLOOR +
+    (PUBLIC_SCORE_CEILING - PUBLIC_SCORE_FLOOR) * (quality * 0.75 + evidenceQuality * 0.25);
+  return Math.round(Math.max(PUBLIC_SCORE_FLOOR, Math.min(PUBLIC_SCORE_CEILING, calibrated)));
 }
 
 function sellerRatingPercent(product) {
@@ -196,13 +219,9 @@ function presentProduct(product, language = "en") {
   const displayReason = presentationReason(product, language);
   const rawDealScore = oneDailyDropScore(product);
   const confidence = oneDailyDropEvidenceConfidence(product);
-  // Scores below the editorial eligibility floor remain useful internally for
-  // ordering candidates, but presenting a weak number as a consumer verdict
-  // misrepresents what the score means. Only qualified picks receive a public
-  // numeric score; sparse offers keep their factual rating/seller evidence.
-  const dealScore = Number.isFinite(rawDealScore) && rawDealScore >= 60 && confidence >= 45
-    ? rawDealScore
-    : null;
+  // Candidate ranking and consumer presentation are deliberately separate.
+  // Only offers that pass the editorial floor receive a calibrated public score.
+  const dealScore = publicOneDailyDropScore(rawDealScore, confidence);
   const productRating = number(product.rating, NaN);
   const sellerPercent = sellerRatingPercent(product);
   const sellerFeedbackCount = Math.max(0, Math.round(number(product.seller_feedback_count)));
@@ -268,6 +287,7 @@ module.exports = {
   localizeShipping,
   oneDailyDropScore,
   oneDailyDropEvidenceConfidence,
+  publicOneDailyDropScore,
   presentProduct,
   presentationReason,
   sellerRatingPercent,
