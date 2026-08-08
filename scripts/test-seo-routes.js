@@ -318,7 +318,10 @@ async function run() {
   sitemapAlternates.forEach(location => assert(sitemapSet.has(location), `Hreflang target is not a canonical sitemap URL: ${location}`));
 
   const products = await (await get("/api/products?market=us")).json();
-  assert(products.length === 10, "The public US catalog must contain exactly ten verified products");
+  assert(products.length === 9, "The public US catalog must deduplicate equivalent verified listings");
+  assert(products.every(product => product.display_score >= 60), "The production API exposed a Deal Score below the editorial floor");
+  const publicProductKeys = products.map(product => product.product_key).filter(Boolean);
+  assert(new Set(publicProductKeys).size === publicProductKeys.length, "The production API exposed a duplicate product identity");
   assert(products.every(product => product.source === "ebay"), "A non-eBay product source is public");
   assert(products.every(product => product.affiliate_url.includes("campid=5339179772")), "An eBay affiliate link is missing the EPN campaign ID");
   assert(products.every(product => product.current_price > 0 && product.rating > 0), "Verified prices or ratings are missing");
