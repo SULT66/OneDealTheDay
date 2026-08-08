@@ -38,6 +38,8 @@ db.exec(`
     seller_feedback_count INTEGER,
     shipping_summary TEXT,
     return_summary TEXT,
+    shipping_cost REAL,
+    landed_cost REAL,
     availability TEXT,
     checked_at TEXT,
     rating REAL,
@@ -47,6 +49,7 @@ db.exec(`
     currency TEXT,
     badge TEXT,
     score REAL,
+    evidence_confidence REAL,
     score_breakdown TEXT,
     selection_reason TEXT,
     source TEXT,
@@ -223,7 +226,10 @@ if (!dailyDropColumns.has("score_model")) db.exec("ALTER TABLE daily_drops ADD C
 const productColumns = new Set(db.prepare("PRAGMA table_info(products)").all().map(column => column.name));
 for (const [column, type] of [
   ["seller_rating", "REAL"],
-  ["seller_feedback_count", "INTEGER"]
+  ["seller_feedback_count", "INTEGER"],
+  ["shipping_cost", "REAL"],
+  ["landed_cost", "REAL"],
+  ["evidence_confidence", "REAL"]
 ]) {
   if (!productColumns.has(column)) db.exec(`ALTER TABLE products ADD COLUMN ${column} ${type}`);
 }
@@ -284,17 +290,17 @@ db.exec(`
   UPDATE users SET market='us' WHERE COALESCE(market,'')='';
 `);
 
-// Products are a permanent catalog. A refresh may update or add products,
-// but it must never remove older products from their categories.
+// Expired offers remain recoverable for history, but are not public catalog
+// entries. A later verified refresh can publish the same external ID again.
 db.exec(`
-  UPDATE products SET status='published' WHERE status='archived';
   DROP TRIGGER IF EXISTS prevent_product_archiving;
-  CREATE TRIGGER prevent_product_archiving
-  BEFORE UPDATE OF status ON products
-  WHEN NEW.status='archived'
-  BEGIN
-    SELECT RAISE(IGNORE);
-  END;
+  UPDATE products
+  SET status='archived'
+  WHERE LOWER(COALESCE(availability,'')) LIKE '%unavailable%'
+     OR LOWER(COALESCE(availability,'')) LIKE '%out of stock%'
+     OR LOWER(COALESCE(availability,'')) LIKE '%sold out%'
+     OR LOWER(COALESCE(availability,'')) LIKE '%expired%'
+     OR LOWER(COALESCE(availability,'')) LIKE '%discontinued%';
   CREATE INDEX IF NOT EXISTS idx_products_status_score ON products(status, score DESC);
   CREATE INDEX IF NOT EXISTS idx_products_market_status_score ON products(market, status, score DESC);
   CREATE INDEX IF NOT EXISTS idx_products_market_provider_id ON products(market, provider_external_id);

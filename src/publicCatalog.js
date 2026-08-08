@@ -23,11 +23,24 @@ const quotedSources = PUBLIC_PRODUCT_SOURCES.length
 
 const sourceSql = (alias = "") => {
   const prefix = alias ? `${alias}.` : "";
-  return `LOWER(COALESCE(${prefix}source,'')) IN (${quotedSources})`;
+  return `(LOWER(COALESCE(${prefix}source,'')) IN (${quotedSources})
+    AND LOWER(COALESCE(${prefix}availability,'')) NOT LIKE '%unavailable%'
+    AND LOWER(COALESCE(${prefix}availability,'')) NOT LIKE '%out of stock%'
+    AND LOWER(COALESCE(${prefix}availability,'')) NOT LIKE '%sold out%'
+    AND LOWER(COALESCE(${prefix}availability,'')) NOT LIKE '%expired%'
+    AND LOWER(COALESCE(${prefix}availability,'')) NOT LIKE '%discontinued%')`;
 };
 
 const isPublicSource = source => PUBLIC_PRODUCT_SOURCES.includes(
   String(source || "").trim().toLowerCase()
 );
 
-module.exports = { PUBLIC_PRODUCT_SOURCES, sourceSql, isPublicSource };
+const isAvailable = availability => !/\b(?:out of stock|unavailable|sold out|expired|discontinued)\b/i.test(
+  String(availability || "")
+);
+const isPublicProduct = product => Boolean(product) &&
+  isPublicSource(product.source) &&
+  isAvailable(product.availability) &&
+  product.status === "published";
+
+module.exports = { PUBLIC_PRODUCT_SOURCES, sourceSql, isAvailable, isPublicProduct, isPublicSource };

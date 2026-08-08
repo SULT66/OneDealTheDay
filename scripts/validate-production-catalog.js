@@ -30,7 +30,7 @@ const app = fs.readFileSync(path.join(root, "app.js"), "utf8");
 if (!app.includes("config.demoMode")) throw new Error("Demo-mode routing guard is missing");
 if (!app.includes("config.liveRefreshEnabled")) throw new Error("Live refresh guard is missing");
 if (!app.includes("cron.schedule = ()")) throw new Error("Scheduled refreshes are not disabled in demo mode");
-if (!app.includes("sourceSql()") || !app.includes("isPublicSource")) throw new Error("Approved-source catalog filters are missing");
+if (!app.includes("sourceSql()") || !app.includes("isPublicProduct")) throw new Error("Approved-source and availability catalog filters are missing");
 if (app.includes("preview catalog seeded") || app.includes('provider: "demo"')) {
   throw new Error("Demo catalog seeding is still enabled");
 }
@@ -168,7 +168,7 @@ const publicCatalog = fs.readFileSync(path.join(root, "src/publicCatalog.js"), "
 if (publicCatalog.includes('"amazon-manual"')) {
   throw new Error("Manual Amazon products remain eligible for public pages");
 }
-for (const field of ["market", "score_breakdown", "selection_reason", "provider_external_id"]) {
+for (const field of ["market", "score_breakdown", "selection_reason", "provider_external_id", "shipping_cost", "landed_cost", "evidence_confidence"]) {
   if (!database.includes(field)) throw new Error(`Market-aware product selection field is missing from the database: ${field}`);
 }
 if (!database.includes("score_model")) throw new Error("Daily-drop snapshots do not preserve the scoring model version");
@@ -176,7 +176,7 @@ for (const field of ["retailer_name", "seller_name", "seller_rating", "seller_fe
   if (!database.includes(field)) throw new Error(`Live offer field is missing from the database: ${field}`);
 }
 const refresh = fs.readFileSync(path.join(root, "src/refresh.js"), "utf8");
-for (const field of ["@retailer_name", "@seller_name", "@seller_rating", "@seller_feedback_count", "@shipping_summary", "@return_summary", "@availability", "@checked_at"]) {
+for (const field of ["@retailer_name", "@seller_name", "@seller_rating", "@seller_feedback_count", "@shipping_summary", "@shipping_cost", "@landed_cost", "@return_summary", "@availability", "@checked_at", "@evidence_confidence"]) {
   if (!refresh.includes(field)) throw new Error(`Live offer field is not persisted during refresh: ${field}`);
 }
 for (const required of ["selectDailyProducts", "INSERT INTO daily_drops", "minimumScore: config.provider === \"demo\" ? 0 : 60", "preserveDailySelection", "existingSnapshots"]) {
@@ -186,7 +186,7 @@ const ranker = fs.readFileSync(path.join(root, "src/ranker.js"), "utf8");
 for (const required of ["price_quality", "product_quality", "review_confidence", "seller_reliability", "demand_usefulness", "shipping_returns"]) {
   if (!ranker.includes(required)) throw new Error(`OneDailyDrop Score component is missing: ${required}`);
 }
-for (const required of ["current-offer-v3", "comparable_median_price", "return referenceScore", "return (knownRetailer ? 6 : 0)", "return rankPoints + reviewDemand + badge", "deliveryBurden >= 0.5"]) {
+for (const required of ["current-offer-v4", "comparable_median_landed_cost", "return referenceScore", "evidenceConfidence", "return rankPoints + reviewDemand + badge", "maximumShippingRatio"]) {
   if (!ranker.includes(required)) throw new Error(`OneDailyDrop Score weighting is incomplete: ${required}`);
 }
 for (const forbidden of ["average_30_day_price", "average_90_day_price", "price_history_observation_count", "evidencePenalty"]) {

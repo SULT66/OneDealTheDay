@@ -6,15 +6,15 @@ const content = {
     lede: "The ranking compares offers; it is not a product rating. Every candidate passes the same eligibility checks and 100-point framework.",
     sections: [
       ["1. Eligibility comes first", "A listing must be a real new product for the visitor’s market, have a working commissionable retailer link, a current price, an image, an identified seller and available inventory. Product-review data may be absent only when the seller has a strong, verifiable feedback history."],
-      ["2. Price quality · up to 30 points", "We compare current offers for the same product when reliable identifiers and matching listings are available. A price below the median of those live offers earns more points. A verified retailer reference discount can also help; when neither signal is available, the price receives a neutral baseline instead of zero."],
+      ["2. Price quality · up to 30 points", "We compare the full landed cost — item price plus delivery — for the same product when reliable identifiers and matching listings are available. A verified retailer reference discount can also help. When neither signal is available, price quality receives zero points."],
       ["3. Product quality and review confidence · up to 35 points", "The product’s own rating can earn up to 20 points and the number of product reviews up to 15. A seller rating is never shown or counted as a product rating."],
       ["4. Seller reliability · up to 15 points", "We check whether the retailer and seller are identified, whether the listing is available, and whether eBay reports strong seller feedback. Seller evidence supports the offer but does not prove product quality."],
       ["5. Demand and usefulness · up to 10 points", "Search relevance, source position, genuine product-review demand and supported marketplace badges help compare otherwise similar offers. A badge alone cannot make a weak listing the daily winner."],
-      ["6. Delivery and returns · up to 10 points", "Clear delivery information, free or fast shipping, accepted returns and current availability improve an offer. Unknown terms use a neutral baseline; confirmed buyer-friendly or restrictive terms move the result up or down."],
-      ["7. Missing retailer data", "An unavailable retailer field is not treated as proof that a product or offer is bad. The score uses a neutral baseline for an unknown signal and changes only when verified evidence supports a stronger or weaker result. We do not show a separate data-confidence label beside the public score."],
+      ["6. Delivery and returns · up to 10 points", "Clear delivery information, free or fast shipping, accepted returns and current availability improve an offer. Shipping above 50% of the item price, or shipping that costs more than the item, cannot enter the Daily Drop."],
+      ["7. Missing retailer data", "Missing product ratings, reviews, price proof, delivery terms or return terms receive zero points for that signal. Evidence Confidence is shown separately from the Deal Score so shoppers can distinguish offer quality from data coverage."],
       ["8. Price history, independence and refreshes", "Price history is a separate feature for charts and future buy-now-or-wait guidance; it is not an input to the public OneDailyDrop Score. Affiliate commission adds no points. The retailer checkout page always controls the final price and terms."]
     ],
-    updated: "Last updated: August 5, 2026"
+    updated: "Last updated: August 8, 2026"
   },
   es: {
     title: "Cómo clasificamos las ofertas de hoy",
@@ -23,15 +23,15 @@ const content = {
     lede: "La clasificación compara ofertas; no es una nota del producto. Cada candidato pasa los mismos controles y el mismo modelo de 100 puntos.",
     sections: [
       ["1. Primero, los requisitos", "El anuncio debe ser un producto nuevo y real para el mercado del visitante, con enlace activo de la tienda, precio actual, imagen, vendedor identificado y existencias. Solo puede faltar la valoración del producto cuando el vendedor tiene un historial de opiniones sólido y verificable."],
-      ["2. Calidad del precio · hasta 30 puntos", "Comparamos las ofertas actuales del mismo producto cuando existen identificadores fiables y anuncios equivalentes. Un precio inferior a la mediana de esas ofertas obtiene más puntos. Un descuento de referencia verificado también puede ayudar; si no existe ninguna de esas señales, el precio recibe una base neutral en lugar de cero."],
+      ["2. Calidad del precio · hasta 30 puntos", "Comparamos el coste total — precio más entrega — del mismo producto cuando existen identificadores fiables. Un descuento de referencia verificado también puede ayudar. Si no existe ninguna señal, la calidad del precio recibe cero puntos."],
       ["3. Calidad del producto y confianza en las opiniones · hasta 35 puntos", "La valoración del propio producto puede aportar hasta 20 puntos y el número de opiniones hasta 15. Nunca mostramos ni contamos la valoración del vendedor como si fuera la del producto."],
       ["4. Fiabilidad del vendedor · hasta 15 puntos", "Comprobamos la identidad de la tienda y del vendedor, la disponibilidad del anuncio y las opiniones del vendedor comunicadas por eBay. Esta evidencia respalda la oferta, pero no demuestra la calidad del producto."],
       ["5. Demanda y utilidad · hasta 10 puntos", "La relevancia de búsqueda, la posición en la fuente, la demanda basada en opiniones reales y las insignias verificables ayudan a comparar ofertas similares. Una insignia por sí sola no convierte una oferta débil en la ganadora."],
-      ["6. Entrega y devoluciones · hasta 10 puntos", "La información clara de entrega, el envío gratuito o rápido, las devoluciones aceptadas y la disponibilidad actual mejoran una oferta. Los términos desconocidos usan una base neutral; las condiciones confirmadas favorables o restrictivas suben o bajan el resultado."],
-      ["7. Datos ausentes de la tienda", "La ausencia de un dato de la tienda no se considera una prueba de que el producto o la oferta sean malos. La puntuación usa una base neutral para una señal desconocida y solo cambia cuando hay datos verificados. No mostramos una etiqueta separada de confianza de datos junto a la puntuación pública."],
+      ["6. Entrega y devoluciones · hasta 10 puntos", "La información clara de entrega, el envío gratuito o rápido, las devoluciones aceptadas y la disponibilidad actual mejoran una oferta. Un envío superior al 50 % del precio del artículo no puede entrar en la selección diaria."],
+      ["7. Datos ausentes de la tienda", "Las valoraciones, opiniones, pruebas de precio o condiciones ausentes reciben cero puntos en esa señal. La Confianza de la evidencia se muestra por separado de la puntuación de la oferta."],
       ["8. Historial de precios, independencia y actualizaciones", "El historial de precios es una función separada para gráficos y una futura orientación sobre comprar ahora o esperar; no forma parte de la puntuación pública OneDailyDrop. La comisión de afiliación no añade puntos. La página de pago de la tienda determina siempre el precio y las condiciones finales."]
     ],
-    updated: "Última actualización: 5 de agosto de 2026"
+    updated: "Última actualización: 8 de agosto de 2026"
   },
   fr: {
     title: "Comment nous classons les offres du jour",
@@ -40,15 +40,15 @@ const content = {
     lede: "Le classement compare des offres ; ce n’est pas une note attribuée au produit. Chaque candidat passe les mêmes contrôles et le même modèle sur 100 points.",
     sections: [
       ["1. L’admissibilité avant tout", "L’annonce doit concerner un produit neuf et réel pour le marché du visiteur, avec un lien marchand actif et commissionnable, un prix actuel, une image, un vendeur identifié et du stock. L’absence d’avis produit n’est admise que si le vendeur possède un historique d’évaluations solide et vérifiable."],
-      ["2. Qualité du prix · jusqu’à 30 points", "Nous comparons les offres actuelles du même produit lorsque des identifiants fiables et des annonces correspondantes sont disponibles. Un prix inférieur à la médiane de ces offres obtient davantage de points. Une remise de référence vérifiée peut aussi compter ; sans ces signaux, le prix reçoit une base neutre plutôt que zéro."],
+      ["2. Qualité du prix · jusqu’à 30 points", "Nous comparons le coût total — prix et livraison — du même produit lorsque des identifiants fiables sont disponibles. Une remise de référence vérifiée peut aussi compter. Sans ces signaux, la qualité du prix reçoit zéro point."],
       ["3. Qualité du produit et confiance dans les avis · jusqu’à 35 points", "La note propre au produit peut rapporter jusqu’à 20 points et le nombre d’avis produit jusqu’à 15. La note du vendeur n’est jamais affichée ni comptée comme une note produit."],
       ["4. Fiabilité du vendeur · jusqu’à 15 points", "Nous vérifions l’identité du marchand et du vendeur, la disponibilité de l’annonce et la qualité des évaluations vendeur communiquées par eBay. Ces éléments renforcent l’offre, mais ne prouvent pas la qualité du produit."],
       ["5. Demande et utilité · jusqu’à 10 points", "La pertinence de la recherche, la position dans la source, la demande fondée sur de vrais avis produit et les badges pris en charge aident à départager des offres proches. Un badge seul ne peut pas faire gagner une annonce faible."],
-      ["6. Livraison et retours · jusqu’à 10 points", "Des informations claires, une livraison gratuite ou rapide, des retours acceptés et une disponibilité actuelle améliorent l’offre. Les conditions inconnues utilisent une base neutre ; des modalités favorables ou restrictives confirmées font monter ou baisser le résultat."],
-      ["7. Données marchandes manquantes", "L’absence d’un champ marchand ne prouve pas que le produit ou l’offre est mauvais. Le score utilise une base neutre pour un signal inconnu et ne change que lorsque des éléments vérifiés justifient un résultat meilleur ou moins bon. Aucun indicateur distinct de confiance des données n’est affiché près du score public."],
+      ["6. Livraison et retours · jusqu’à 10 points", "Des informations claires, une livraison gratuite ou rapide, des retours acceptés et une disponibilité actuelle améliorent l’offre. Une livraison supérieure à 50 % du prix de l’article ne peut pas entrer dans la sélection quotidienne."],
+      ["7. Données marchandes manquantes", "Les notes, avis, preuves de prix ou conditions absents reçoivent zéro point pour ce signal. La Fiabilité des preuves est affichée séparément du score de l’offre."],
       ["8. Historique des prix, indépendance et actualisation", "L’historique des prix est une fonction distincte pour les graphiques et une future aide acheter maintenant ou attendre ; il n’entre pas dans le score public OneDailyDrop. La commission d’affiliation n’ajoute aucun point. La page de paiement du marchand détermine toujours le prix et les conditions finales."]
     ],
-    updated: "Dernière mise à jour : 5 août 2026"
+    updated: "Dernière mise à jour : 8 août 2026"
   },
   de: {
     title: "So ordnen wir die heutigen Angebote ein",
@@ -57,15 +57,15 @@ const content = {
     lede: "Die Rangliste vergleicht Angebote; sie ist keine Produktnote. Jeder Kandidat durchläuft dieselben Prüfungen und dasselbe 100-Punkte-Modell.",
     sections: [
       ["1. Zuerst die Zulässigkeit", "Das Angebot muss ein echtes neues Produkt für den Markt des Besuchers sein und einen funktionierenden provisionsfähigen Händlerlink, einen aktuellen Preis, ein Bild, einen identifizierten Verkäufer sowie verfügbare Ware besitzen. Produktbewertungen dürfen nur fehlen, wenn der Verkäufer eine starke und überprüfbare Bewertungshistorie hat."],
-      ["2. Preisqualität · bis zu 30 Punkte", "Wir vergleichen aktuelle Angebote desselben Produkts, wenn verlässliche Kennungen und passende Listings verfügbar sind. Ein Preis unter dem Median dieser Live-Angebote erhält mehr Punkte. Ein bestätigter Referenzrabatt kann ebenfalls helfen; fehlen beide Signale, erhält der Preis eine neutrale Basis statt null Punkten."],
+      ["2. Preisqualität · bis zu 30 Punkte", "Wir vergleichen die Gesamtkosten aus Artikelpreis und Lieferung für dasselbe Produkt, wenn verlässliche Kennungen verfügbar sind. Ein bestätigter Referenzrabatt kann ebenfalls helfen. Fehlen beide Signale, erhält die Preisqualität null Punkte."],
       ["3. Produktqualität und Bewertungssicherheit · bis zu 35 Punkte", "Die Bewertung des Produkts selbst kann bis zu 20 Punkte und die Zahl der Produktbewertungen bis zu 15 Punkte beitragen. Eine Verkäuferbewertung wird niemals als Produktbewertung angezeigt oder gezählt."],
       ["4. Verkäuferzuverlässigkeit · bis zu 15 Punkte", "Wir prüfen, ob Händler und Verkäufer identifiziert sind, ob das Angebot verfügbar ist und ob eBay starke Verkäuferbewertungen meldet. Diese Evidenz stützt das Angebot, beweist aber nicht die Produktqualität."],
       ["5. Nachfrage und Nutzen · bis zu 10 Punkte", "Suchrelevanz, Quellenposition, echte Nachfrage aus Produktbewertungen und unterstützte Marktplatz-Badges helfen beim Vergleich ähnlicher Angebote. Ein Badge allein macht ein schwaches Angebot nicht zum Tagessieger."],
-      ["6. Lieferung und Rückgabe · bis zu 10 Punkte", "Klare Lieferangaben, kostenlose oder schnelle Lieferung, akzeptierte Rückgaben und aktuelle Verfügbarkeit verbessern ein Angebot. Unbekannte Bedingungen erhalten eine neutrale Basis; bestätigte kundenfreundliche oder einschränkende Bedingungen verändern das Ergebnis nach oben oder unten."],
-      ["7. Fehlende Händlerdaten", "Ein nicht verfügbarer Händlerwert gilt nicht als Beweis für ein schlechtes Produkt oder Angebot. Der Score verwendet für ein unbekanntes Signal eine neutrale Basis und ändert sich nur durch bestätigte positive oder negative Angaben. Neben dem öffentlichen Score zeigen wir keine separate Datenvertrauensanzeige."],
+      ["6. Lieferung und Rückgabe · bis zu 10 Punkte", "Klare Lieferangaben, kostenlose oder schnelle Lieferung, akzeptierte Rückgaben und aktuelle Verfügbarkeit verbessern ein Angebot. Lieferkosten über 50 % des Artikelpreises können nicht in die tägliche Auswahl gelangen."],
+      ["7. Fehlende Händlerdaten", "Fehlende Produktbewertungen, Rezensionen, Preisnachweise oder Bedingungen erhalten für das jeweilige Signal null Punkte. Das Evidenzvertrauen wird getrennt vom Angebotsscore angezeigt."],
       ["8. Preisverlauf, Unabhängigkeit und Aktualisierung", "Der Preisverlauf ist eine getrennte Funktion für Diagramme und eine künftige Kaufen-oder-warten-Hilfe; er fließt nicht in den öffentlichen OneDailyDrop-Score ein. Affiliate-Provisionen bringen keine Punkte. Für Preis und Bedingungen bleibt die Checkout-Seite des Händlers maßgeblich."]
     ],
-    updated: "Zuletzt aktualisiert: 5. August 2026"
+    updated: "Zuletzt aktualisiert: 8. August 2026"
   }
 };
 

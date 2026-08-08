@@ -11,12 +11,18 @@ const { presentProduct } = require("./src/productPresentation");
 const renderHomepage = require("./src/homepage-seo");
 const { codes: marketCodes, normalizeMarket, marketFromIp, marketFromRequest, marketPath } = require("./src/markets");
 const { resolveLanguage } = require("./src/i18n");
-const { sourceSql, isPublicSource } = require("./src/publicCatalog");
+const { sourceSql, isPublicProduct } = require("./src/publicCatalog");
 const { enabledProviders } = require("./src/providers/registry");
 const { coverage: retailerCoverage } = require("./src/retailerCatalog");
+const { recalculateCatalog } = require("./src/catalogRecalculation");
 const createExpressApp = express;
 const CANONICAL_HOST = "www.onedailydrop.com";
 const AZURE_PRODUCTION_HOST = "onedealtheday-g3dme0aghzerc3a2.centralus-01.azurewebsites.net";
+
+if (config.isProduction) {
+  const recalculated = recalculateCatalog(db, marketCodes, {selectionMarkets:config.markets});
+  if (recalculated.changed) console.log(`Recalculated ${recalculated.products} catalog products and ${recalculated.selections} daily selections with ${require("./src/ranker").SCORE_MODEL}.`);
+}
 
 if (!config.liveRefreshEnabled) {
   cron.schedule = () => ({ start() {}, stop() {}, destroy() {} });
@@ -127,8 +133,8 @@ function expressWithHomepage(...args) {
 
   app.get("/go/:id", (req, res, next) => {
     if (!config.isProduction) return next();
-    const product = db.prepare("SELECT source FROM products WHERE id=? AND status='published'").get(req.params.id);
-    if (!isPublicSource(product?.source)) return res.sendStatus(404);
+    const product = db.prepare("SELECT source,availability,status FROM products WHERE id=?").get(req.params.id);
+    if (!isPublicProduct(product)) return res.sendStatus(404);
     return next();
   });
 
@@ -136,8 +142,8 @@ function expressWithHomepage(...args) {
     if (!config.isProduction) return next();
     const id = String(req.params.slug).match(/-(\d+)$/)?.[1];
     if (!id) return next();
-    const product = db.prepare("SELECT source FROM products WHERE id=? AND status='published'").get(id);
-    if (!isPublicSource(product?.source)) {
+    const product = db.prepare("SELECT source,availability,status FROM products WHERE id=?").get(id);
+    if (!isPublicProduct(product)) {
       res.set("X-Robots-Tag", "noindex, nofollow");
       return res.sendStatus(410);
     }

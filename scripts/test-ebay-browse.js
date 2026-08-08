@@ -95,7 +95,7 @@ const fetchImpl = async (url, options = {}) => {
   assert.strictEqual(products[0].affiliate_url, summary.itemAffiliateWebUrl);
   assert.strictEqual(products[0].shipping_summary, "Free shipping via USPS");
   assert.strictEqual(products[0].return_summary, "30 calendar days, seller-paid return shipping");
-  assert.strictEqual(products[0].product_key, "gtin:012345678905");
+  assert.strictEqual(products[0].product_key, "gtin:00012345678905");
   assert.strictEqual(oauthCalls, 1, "The OAuth application token was not reused");
   assert.strictEqual(searchCalls, 1);
   assert.strictEqual(detailCalls, 1);

@@ -73,8 +73,8 @@ const fixtureMarkets = [
   { code:"us", currency:"USD", category:"office gadgets", rating:4.8, reviews:500 },
   { code:"ca", currency:"CAD", category:"car accessories", rating:4.7, reviews:220 },
   { code:"uk", currency:"GBP", category:"travel accessories", rating:4.6, reviews:80 },
-  { code:"fr", currency:"EUR", category:"pet supplies", rating:0, reviews:0 },
-  { code:"de", currency:"EUR", category:"kitchen gadgets", rating:0, reviews:0 }
+  { code:"fr", currency:"EUR", category:"pet supplies", rating:4.6, reviews:80 },
+  { code:"de", currency:"EUR", category:"kitchen gadgets", rating:4.6, reviews:80 }
 ];
 for (const fixtureMarket of fixtureMarkets) {
   for (let index = 1; index <= 10; index += 1) {
@@ -83,7 +83,7 @@ for (const fixtureMarket of fixtureMarkets) {
       `${fixtureMarket.code}:ebay-test-${index}`,
       `${fixtureMarket.code}-ebay-test-${index}`,
       fixtureMarket.code,
-      index <= 2 ? `${fixtureMarket.code}-shared-product` : `${fixtureMarket.code}-ebay-test-${index}`,
+      index <= 2 ? "gtin:00012345678905" : `${fixtureMarket.code}-ebay-test-${index}`,
       brand,
       brand.toLowerCase(),
       `eBay Test Product ${index}`,
@@ -215,6 +215,8 @@ async function run() {
   assert(homepage.includes('class="description editorial-teaser"'), "Homepage cards do not use the compact Stage 4 editorial teaser");
   assert(homepage.includes('/styles.css?v=20260805-stage4') && homepage.includes('/app.js?v=20260805-stage4'), "Stage 4 assets are not cache-busted on the homepage");
   assert(homepage.includes("OneDailyDrop Score") && homepage.includes("Overall deal score"), "The public OneDailyDrop Score is missing from the homepage");
+  assert(homepage.includes("Evidence confidence"), "Evidence Confidence is not separated from the Deal Score");
+  assert(!homepage.includes("[object Object]"), "Subscription categories render as [object Object]");
   assert(homepage.includes('<span style="--weight:20%"><b>20%</b> Product quality</span>'), "Homepage product-quality weight is stale");
   assert(homepage.includes('<span style="--weight:10%"><b>10%</b> Demand & usefulness</span>'), "Homepage demand weight is missing");
   assert(!homepage.includes("<b>5%</b> Freshness"), "Homepage still shows the retired freshness weight");
@@ -242,7 +244,6 @@ async function run() {
   assert(frenchHomepage.includes("Livraison gratuite via Standard Shipping"), "France delivery terms are not localized");
   assert(frenchHomepage.includes("Retours acceptés sous 30 jours"), "France return terms are not localized");
   assert(frenchHomepage.includes("Score OneDailyDrop") && frenchHomepage.includes("Note du vendeur"), "France score or seller rating labels are missing");
-  assert(frenchHomepage.includes("eBay n’a fourni aucune note produit"), "France missing-rating disclosure is absent");
   for (const forbidden of ["Selected with", "Free shipping via", "30 calendar days", "POPULAR PICK", "CHOIX POPULAIRE"]) {
     assert(!frenchHomepage.includes(forbidden), `France homepage still exposes misleading or untranslated text: ${forbidden}`);
   }

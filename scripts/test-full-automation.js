@@ -3,6 +3,41 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const zlib = require("zlib");
+const Module = require("module");
+const { DatabaseSync } = require("node:sqlite");
+
+class TestDatabase {
+  constructor(filename) { this.database = new DatabaseSync(filename); }
+  pragma(value) { this.database.exec(`PRAGMA ${value}`); }
+  exec(sql) { return this.database.exec(sql); }
+  prepare(sql) {
+    const statement = this.database.prepare(sql);
+    return {
+      all:(...params) => statement.all(...params),
+      get:(...params) => statement.get(...params),
+      run:(...params) => statement.run(...params)
+    };
+  }
+  transaction(callback) {
+    return (...args) => {
+      this.database.exec("BEGIN");
+      try {
+        const result = callback(...args);
+        this.database.exec("COMMIT");
+        return result;
+      } catch (error) {
+        this.database.exec("ROLLBACK");
+        throw error;
+      }
+    };
+  }
+}
+
+const originalLoad = Module._load;
+Module._load = function load(request, parent, isMain) {
+  if (request === "better-sqlite3") return TestDatabase;
+  return originalLoad.call(this, request, parent, isMain);
+};
 
 process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "onedailydrop-automation-"));
 
@@ -10,6 +45,7 @@ const { RETAILERS, feedDefinitions } = require("../src/retailerCatalog");
 const { download, parseDelimited, parseRecords, safeFeedUrl } = require("../src/providers/affiliateFeed");
 const { scoreOffers, selectUniqueProducts } = require("../src/ranker");
 const { refreshMarket, sortByCurrentScore } = require("../src/refresh");
+const { recalculateCatalog } = require("../src/catalogRecalculation");
 const db = require("../src/db");
 
 assert(RETAILERS.length >= 20, "The complete target retailer catalog is missing");
@@ -160,6 +196,14 @@ const config = {
     assert.strictEqual(db.prepare("SELECT COUNT(*) n FROM automation_alerts WHERE resolved_at IS NULL").get().n, 1);
     assert.strictEqual(db.prepare("SELECT COUNT(*) n FROM distribution_queue WHERE status='ready'").get().n, 2);
     assert(db.prepare("SELECT COUNT(*) n FROM products WHERE provider_external_id LIKE 'feed-%:%'").get().n === 12, "Provider IDs are not source-qualified");
+    const [placeholderProduct, unavailableProduct] = db.prepare("SELECT id FROM products ORDER BY id LIMIT 2").all();
+    db.prepare("UPDATE products SET product_key='gtin:Does not apply',gtin='Does not apply',upc='',ean='',brand='',model_number='',mpn='' WHERE id=?").run(placeholderProduct.id);
+    db.prepare("UPDATE products SET availability='Unavailable',status='published' WHERE id=?").run(unavailableProduct.id);
+    const recalculated = recalculateCatalog(db, ["us"], {force:true, selectionMarkets:["us"]});
+    assert.strictEqual(recalculated.changed, true);
+    assert(!/does.*apply/i.test(db.prepare("SELECT product_key FROM products WHERE id=?").get(placeholderProduct.id).product_key), "Placeholder ID survived catalog recalculation");
+    assert.strictEqual(db.prepare("SELECT status FROM products WHERE id=?").get(unavailableProduct.id).status, "archived", "Unavailable product remained public");
+    assert(db.prepare("SELECT COUNT(*) n FROM daily_drops WHERE market='us'").get().n <= 10, "Daily selection was not rebuilt");
     console.log("Full multi-retailer automation validation passed.");
   } finally {
     global.fetch = originalFetch;

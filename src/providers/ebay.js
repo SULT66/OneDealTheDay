@@ -2,6 +2,7 @@ const DEFAULT_DETAIL_LIMIT = 80;
 const DEFAULT_TARGET_ELIGIBLE = 40;
 const SEARCH_CONCURRENCY = 3;
 const DETAIL_CONCURRENCY = 6;
+const { normalizeTradeItemId } = require("../productIdentity");
 
 function text(value) {
   return String(value == null ? "" : value)
@@ -159,6 +160,12 @@ function shippingSummary(item) {
   return service ? `${price} via ${service}` : price;
 }
 
+function shippingCost(item) {
+  const options = Array.isArray(item?.shippingOptions) ? item.shippingOptions : [];
+  const costs = options.map(option => number(option?.shippingCost)).filter(value => value != null && value >= 0);
+  return costs.length ? Math.min(...costs) : null;
+}
+
 function returnSummary(item) {
   const terms = item?.returnTerms;
   if (!terms) return item?.topRatedBuyingExperience ? "Minimum 30-day money-back returns" : "";
@@ -184,16 +191,16 @@ function normalizeItem(item, keyword, sourceRank, market) {
   const originalPrice = number(item?.marketingPrice?.originalPrice);
   const currentPrice = number(item?.price);
   const sellerFeedback = number(item?.seller?.feedbackPercentage, 0);
-  const gtin = text(item?.gtin);
+  const gtin = normalizeTradeItemId(item?.gtin);
   const epid = text(item?.epid);
   const mpn = text(item?.mpn);
-  const productKey = gtin ? `gtin:${gtin}` : epid ? `epid:${epid}` : mpn ? `mpn:${mpn.toLowerCase()}` : "";
+  const productKey = gtin ? `gtin:${gtin}` : epid ? `epid:${epid}` : "";
   return {
     external_id:text(item?.itemId),
     product_key:productKey,
     gtin,
-    upc:/^\d{12}$/.test(gtin) ? gtin : "",
-    ean:/^\d{13}$/.test(gtin) ? gtin : "",
+    upc:gtin,
+    ean:gtin,
     model_number:mpn,
     mpn,
     brand:text(item?.brand),
@@ -213,6 +220,7 @@ function normalizeItem(item, keyword, sourceRank, market) {
     seller_rating:sellerFeedback > 0 ? sellerFeedback / 20 : 0,
     seller_feedback_count:Math.round(number(item?.seller?.feedbackScore, 0)),
     shipping_summary:shippingSummary(item),
+    shipping_cost:shippingCost(item),
     return_summary:returnSummary(item),
     availability:listingAvailable(item) ? "In stock" : "Out of stock",
     checked_at:new Date().toISOString(),

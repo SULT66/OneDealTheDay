@@ -638,8 +638,10 @@ const scoreMetrics = (display, language = "en", { atSelection = false } = {}) =>
   const hasScore = Number.isFinite(score) && score >= 0;
   const productRating = clean(display?.display_product_rating);
   const sellerRating = clean(display?.display_seller_rating);
+  const confidence = Number(display?.display_evidence_confidence);
   if (!hasScore && !productRating && !sellerRating) return "";
   const ratings = [
+    Number.isFinite(confidence) ? `<span class="deal-rating"><strong>${confidence}/100</strong><small>${esc(display.display_evidence_confidence_label || t(language,"product.evidenceConfidence"))}</small></span>` : "",
     productRating ? `<span class="deal-rating"><strong>★ ${esc(productRating)}</strong><small>${esc(display.display_product_rating_label || t(language,"product.productRating"))}</small></span>` : "",
     sellerRating ? `<span class="deal-rating"><strong>${esc(sellerRating)}</strong><small>${esc(display.display_seller_rating_label || t(language,"product.sellerRating"))}${display.display_seller_feedback ? ` · ${esc(display.display_seller_feedback)}` : ""}</small></span>` : ""
   ].filter(Boolean).join("");
