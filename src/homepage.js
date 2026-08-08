@@ -191,7 +191,6 @@ module.exports = function homepage(req, res) {
     markUsed(product);
     if (archive.length === 4) break;
   }
-  const qualifiedProducts = products.filter(product => product.display_score != null);
   const takeUnique = rows => {
     const selected = [];
     for (const product of rows) {
@@ -202,9 +201,9 @@ module.exports = function homepage(req, res) {
     }
     return selected;
   };
-  const trending = takeUnique([...qualifiedProducts].sort((a, b) => Number(b.review_count || 0) - Number(a.review_count || 0)));
-  const priceDrops = takeUnique(qualifiedProducts.filter(product => discount(product) > 0).sort((a, b) => discount(b) - discount(a)));
-  const newest = takeUnique([...qualifiedProducts].sort((a, b) => Number(b.id) - Number(a.id)));
+  const trending = takeUnique([...products].sort((a, b) => Number(b.review_count || 0) - Number(a.review_count || 0)));
+  const priceDrops = takeUnique(products.filter(product => discount(product) > 0).sort((a, b) => discount(b) - discount(a)));
+  const newest = takeUnique([...products].sort((a, b) => Number(b.id) - Number(a.id)));
   const title = t(language, "seo.homeTitle", { country: localizedMarketName });
   const description = t(language, "seo.homeDescription", { country: localizedMarketName });
   const canonicalPath = marketPath(selectedMarket.code);
