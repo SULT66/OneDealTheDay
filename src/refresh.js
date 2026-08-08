@@ -1,5 +1,5 @@
 const db = require("./db");
-const { SCORE_MODEL, scoreOffers, selectUniqueProducts } = require("./ranker");
+const { SCORE_MODEL, deduplicationKeys, scoreOffers, selectUniqueProducts } = require("./ranker");
 const { detectBrand, normalizeBrand, slugifyBrand } = require("./brandDetector");
 const { priceIntelligence, shouldRecordObservation } = require("./priceIntelligence");
 const { searchAll } = require("./providers/registry");
@@ -90,6 +90,10 @@ function addPriceIntelligence(products, marketCode) {
 function selectDailyProducts(ranked, marketCode, timezone, preserveDailySelection) {
   const today = localDate(timezone);
   const productKey = product => qualifiedProviderId(product);
+  const selectionKeys = product => [
+    `offer:${productKey(product)}`,
+    ...deduplicationKeys(product)
+  ];
   if (preserveDailySelection) {
     const current = db.prepare(`
       SELECT p.provider_external_id
@@ -105,13 +109,14 @@ function selectDailyProducts(ranked, marketCode, timezone, preserveDailySelectio
   }
 
   const recent = new Set(db.prepare(`
-    SELECT p.provider_external_id
+    SELECT p.*
     FROM daily_drops d
     JOIN products p ON p.id=d.product_id
     WHERE d.market=? AND d.drop_date>=? AND d.drop_date<?
-  `).all(marketCode, daysAgoDate(timezone, 7), today).map(row => row.provider_external_id));
-  const fresh = ranked.filter(product => !recent.has(productKey(product)));
-  const fallback = ranked.filter(product => recent.has(productKey(product)));
+  `).all(marketCode, daysAgoDate(timezone, 7), today).flatMap(selectionKeys));
+  const wasRecentlySelected = product => selectionKeys(product).some(key => recent.has(key));
+  const fresh = ranked.filter(product => !wasRecentlySelected(product));
+  const fallback = ranked.filter(wasRecentlySelected);
   return [...fresh, ...fallback].slice(0, 10);
 }
 

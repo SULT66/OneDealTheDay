@@ -1,4 +1,4 @@
-const PLACEHOLDER_PATTERN = /^(?:n\/?a|na|none|null|unknown|not\s+applicable|does\s+not\s+apply|non\s+applicable|nicht\s+zutreffend|sans\s+objet|no\s+aplica|不适用)$/i;
+const PLACEHOLDER_PATTERN = /^(?:n\s*a|na|none|null|unknown|not\s+(?:applicable|specified)|does\s+not\s+apply|non\s+applicable|nicht\s+(?:zutreffend|anwendbar)|keine\s+angabe|sans\s+objet|ne\s+s\s+applique\s+pas|no\s+aplica|不适用)$/i;
 const TRADE_ITEM_LENGTHS = new Set([8, 12, 13, 14]);
 
 function text(value) {
@@ -15,7 +15,7 @@ function normalizedPart(value) {
 }
 
 function isPlaceholder(value) {
-  const candidate = text(value).replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
+  const candidate = text(value).replace(/[^\p{L}\p{N}]+/gu, " ").replace(/\s+/g, " ").trim();
   return !candidate || PLACEHOLDER_PATTERN.test(candidate);
 }
 
@@ -44,7 +44,7 @@ function modelPart(product) {
 
 function brandPart(product) {
   const raw = product?.brand || product?.manufacturer;
-  if (isPlaceholder(raw) || /^(?:unbranded|generic)$/i.test(text(raw))) return "";
+  if (isPlaceholder(raw) || /^(?:unbranded|generic|no\s+brand|sans\s+marque(?:\s*\/\s*g[ée]n[ée]rique)?|g[ée]n[ée]rique|markenlos|keine\s+marke)$/i.test(text(raw))) return "";
   const normalized = normalizedPart(raw);
   return normalized.length >= 2 ? normalized : "";
 }

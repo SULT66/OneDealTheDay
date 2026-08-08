@@ -26,8 +26,33 @@ function normalizedTitle(title) {
     .trim();
 }
 
+const TITLE_NOISE = new Set([
+  "authentic", "brand", "fast", "free", "genuine", "instock", "new", "newest",
+  "nib", "official", "original", "renewed", "refurbished", "sealed", "seller",
+  "shipping", "unused"
+]);
+
+function titleFingerprint(title) {
+  const tokens = normalizedTitle(title)
+    .split(" ")
+    .filter(token => token.length > 1 && !TITLE_NOISE.has(token));
+  if (tokens.length < 4) return "";
+  return [...new Set(tokens)].sort().join("-");
+}
+
 function exactMatchKey(product) {
   return normalizeProductIdentity(product).product_key || "";
+}
+
+function deduplicationKeys(product) {
+  const keys = [];
+  const exact = exactMatchKey(product);
+  const title = normalizedTitle(product?.canonical_title || product?.title);
+  const fingerprint = titleFingerprint(product?.canonical_title || product?.title);
+  if (exact) keys.push(`product:${exact}`);
+  if (title.length >= 16) keys.push(`title:${title}`);
+  if (fingerprint.length >= 16) keys.push(`family:${fingerprint}`);
+  return [...new Set(keys)];
 }
 
 const SCORE_MODEL = "current-offer-v4";
@@ -310,13 +335,28 @@ function scoreOffers(items, options = {}) {
 }
 
 function selectUniqueProducts(scoredOffers) {
-  const uniqueOffers = new Map();
+  const groups = [];
   for (const enriched of scoredOffers || []) {
-    const exact = exactMatchKey(enriched);
-    const key = exact ? `product:${exact}` : `title:${normalizedTitle(enriched.title)}`;
-    uniqueOffers.set(key, betterOffer(uniqueOffers.get(key), enriched));
+    const keys = new Set(deduplicationKeys(enriched));
+    const matching = [];
+    groups.forEach((group, index) => {
+      if ([...keys].some(key => group.keys.has(key))) matching.push(index);
+    });
+    if (!matching.length) {
+      groups.push({ keys, offer: enriched });
+      continue;
+    }
+    const target = groups[matching[0]];
+    target.offer = betterOffer(target.offer, enriched);
+    keys.forEach(key => target.keys.add(key));
+    for (let offset = matching.length - 1; offset >= 1; offset -= 1) {
+      const duplicate = groups[matching[offset]];
+      target.offer = betterOffer(target.offer, duplicate.offer);
+      duplicate.keys.forEach(key => target.keys.add(key));
+      groups.splice(matching[offset], 1);
+    }
   }
-  return [...uniqueOffers.values()].sort((left, right) => {
+  return groups.map(group => group.offer).sort((left, right) => {
     if (number(right.score) !== number(left.score)) return number(right.score) - number(left.score);
     if (number(right.evidence_confidence) !== number(left.evidence_confidence)) return number(right.evidence_confidence) - number(left.evidence_confidence);
     return number(left.landed_cost, Number.MAX_SAFE_INTEGER) - number(right.landed_cost, Number.MAX_SAFE_INTEGER);
@@ -326,6 +366,7 @@ function selectUniqueProducts(scoredOffers) {
 exports.scoreProduct = scoreProduct;
 exports.isEligible = isEligible;
 exports.evidenceConfidence = evidenceConfidence;
+exports.deduplicationKeys = deduplicationKeys;
 exports.exactMatchKey = exactMatchKey;
 exports.landedCost = landedCost;
 exports.paidShippingCost = paidShippingCost;

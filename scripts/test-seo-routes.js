@@ -338,8 +338,9 @@ async function run() {
   assert(brandsPage.includes("Acme") && brandsPage.includes("Northstar"), "eBay catalog brands are missing");
   assert(sitemap.includes("<loc>https://www.onedailydrop.com/us/brands</loc>"), "Brands page is missing from the sitemap");
 
-  const searchPage = await (await get("/us/search?q=product%202")).text();
-  assert(searchPage.includes("eBay Test Product 2"), "Search does not find a verified eBay product");
+  const searchPage = await (await get("/us/search?q=product%203")).text();
+  assert(searchPage.includes("eBay Test Product 3"), "Search does not find a verified eBay product");
+  assert(!searchPage.includes("eBay Test Product 2"), "Search reintroduced a duplicate GTIN listing");
   assert(searchPage.includes("deal-metrics") && searchPage.includes("OneDailyDrop Score"), "Search results are missing the OneDailyDrop Score");
 
   const archivePage = await (await get("/us/archive")).text();
