@@ -46,7 +46,7 @@ const score = scoreProduct({
   source_rank: 1
 });
 assert(score.total >= 70 && score.total <= 100, `strong real offer should score credibly, received ${score.total}`);
-assert.equal(score.breakdown.model, "current-offer-v3");
+assert.equal(score.breakdown.model, "current-offer-v4");
 
 const newListing = {
   source: "ebay",
@@ -62,10 +62,10 @@ const newListing = {
   source_rank: 5
 };
 const newListingScore = scoreProduct(newListing);
-assert(newListingScore.total >= 68 && newListingScore.total <= 82,
+assert(newListingScore.total >= 35 && newListingScore.total <= 55,
   `a strong new listing without price history should have a credible score, received ${newListingScore.total}`);
-assert.equal(newListingScore.breakdown.price_quality, 20,
-  "missing price history must use a neutral current-price score instead of zero");
+assert.equal(newListingScore.breakdown.price_quality, 0,
+  "missing price evidence must receive zero price-quality points");
 
 const historyChanged = scoreProduct({
   ...newListing,
@@ -91,8 +91,8 @@ const comparableOffers = rankProducts([29.99, 24.99, 34.99].map((price, index) =
 })), 3, { minimumScore: 0, minimumRating: 0, minimumReviews: 0, currency: "USD" });
 assert.equal(comparableOffers[0].current_price, 24.99,
   "the best-priced matching current offer should rank first");
-assert(comparableOffers[0].score_breakdown.price_quality > 20,
-  "a below-median matching current offer must earn more than the neutral price score");
+assert(comparableOffers[0].score_breakdown.price_quality > 15,
+  "a below-median matching current offer must earn more than the median price score");
 assert(scoreProduct({...newListing, comparable_offer_count:3, comparable_median_price:29.99}).breakdown.price_quality >
   scoreProduct({...newListing, current_price:34.99, comparable_offer_count:3, comparable_median_price:29.99}).breakdown.price_quality,
 "matching current offers must affect price quality without using price history");

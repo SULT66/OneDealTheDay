@@ -2,6 +2,8 @@ function clamp(value, min = 0, max = 1) {
   return Math.max(min, Math.min(max, value));
 }
 
+const { normalizeProductIdentity } = require("./productIdentity");
+
 function number(value, fallback = 0) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
@@ -25,26 +27,61 @@ function normalizedTitle(title) {
 }
 
 function exactMatchKey(product) {
-  const value =
-    product.product_key ||
-    product.gtin ||
-    product.upc ||
-    product.ean ||
-    product.model_number ||
-    product.model;
-  return value ? String(value).toLowerCase().replace(/[^a-z0-9]/g, "") : "";
+  return normalizeProductIdentity(product).product_key || "";
 }
 
-const SCORE_MODEL = "current-offer-v3";
+const SCORE_MODEL = "current-offer-v4";
+
+function localizedAmount(value) {
+  let candidate = String(value || "").replace(/\s/g, "");
+  if (!candidate) return null;
+  const lastComma = candidate.lastIndexOf(",");
+  const lastDot = candidate.lastIndexOf(".");
+  if (lastComma >= 0 && lastDot >= 0) {
+    const decimal = lastComma > lastDot ? "," : ".";
+    candidate = candidate.replace(decimal === "," ? /\./g : /,/g, "").replace(decimal, ".");
+  } else if (lastComma >= 0) {
+    candidate = /,\d{1,2}$/.test(candidate) ? candidate.replace(",", ".") : candidate.replace(/,/g, "");
+  } else if ((candidate.match(/\./g) || []).length > 1) {
+    candidate = candidate.replace(/\./g, "");
+  }
+  const parsed = Number(candidate);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+}
 
 function paidShippingCost(product) {
-  const match = String(product?.shipping_summary || "").match(/\b(?:USD|CAD|GBP|EUR)\s+([0-9]+(?:\.[0-9]+)?)\s+shipping\b/i);
-  return match ? number(match[1], 0) : 0;
+  if (product?.shipping_cost != null && product.shipping_cost !== "") {
+    const explicit = number(product.shipping_cost, NaN);
+    if (Number.isFinite(explicit) && explicit >= 0) return explicit;
+  }
+  const summary = String(product?.shipping_summary || "").trim();
+  if (!summary) return null;
+  if (/\bfree\s+(?:shipping|delivery)\b|\blivraison gratuite\b|\bkostenlose lieferung\b/i.test(summary)) return 0;
+  const amountPattern = "([0-9][0-9\\s.,]*)";
+  const patterns = [
+    new RegExp(`\\b(?:USD|CAD|GBP|EUR)\\s*${amountPattern}`, "i"),
+    new RegExp(`(?:US|CA|C)?\\s*[$£€]\\s*${amountPattern}`, "i"),
+    new RegExp(`\\b(?:shipping|delivery|livraison|lieferung)\\s*:?\\s*${amountPattern}`, "i")
+  ];
+  for (const pattern of patterns) {
+    const match = summary.match(pattern);
+    const parsed = match ? localizedAmount(match[1]) : null;
+    if (parsed != null) return parsed;
+  }
+  return null;
+}
+
+function landedCost(product) {
+  const price = number(product?.current_price);
+  if (price <= 0) return 0;
+  const shipping = paidShippingCost(product);
+  return price + (shipping == null ? 0 : shipping);
 }
 
 function shippingRatio(product) {
   const price = number(product?.current_price);
-  return price > 0 ? paidShippingCost(product) / price : 0;
+  const shipping = paidShippingCost(product);
+  return price > 0 && shipping != null ? shipping / price : null;
 }
 
 function hasUnsafeTitle(product) {
@@ -64,7 +101,7 @@ function addCurrentOfferComparisons(items) {
   for (const product of items) {
     const key = exactMatchKey(product);
     const currency = String(product.currency || "").toUpperCase();
-    const price = number(product.current_price);
+    const price = landedCost(product);
     if (!key || !currency || price <= 0) continue;
     const groupKey = `${currency}:${key}`;
     if (!groups.has(groupKey)) groups.set(groupKey, []);
@@ -75,9 +112,11 @@ function addCurrentOfferComparisons(items) {
     const key = exactMatchKey(product);
     const currency = String(product.currency || "").toUpperCase();
     const prices = groups.get(`${currency}:${key}`) || [];
+    const shippingCost = paidShippingCost(product);
+    const totalCost = landedCost(product);
     return prices.length >= 2
-      ? {...product, comparable_offer_count:prices.length, comparable_median_price:median(prices)}
-      : product;
+      ? {...product, shipping_cost:shippingCost, landed_cost:totalCost, comparable_offer_count:prices.length, comparable_median_price:median(prices), comparable_median_landed_cost:median(prices)}
+      : {...product, shipping_cost:shippingCost, landed_cost:totalCost};
   });
 }
 
@@ -98,61 +137,65 @@ function isEligible(product, options = {}) {
   if (number(product.current_price) <= 0) return false;
   const noReturns = /\b(?:returns? not accepted|no returns?|final sale)\b/i.test(String(product.return_summary || ""));
   const deliveryBurden = shippingRatio(product);
-  if (deliveryBurden >= 1 || (noReturns && deliveryBurden >= 0.5)) return false;
-  if (number(product.rating) < number(options.minimumRating, 3.8)) return false;
-  if (number(product.review_count) < number(options.minimumReviews, 25)) return false;
+  const shipping = paidShippingCost(product);
+  const price = number(product.current_price);
+  const maximumShippingRatio = number(options.maximumShippingRatio, 0.5);
+  if (shipping != null && (shipping > price || deliveryBurden > maximumShippingRatio || (noReturns && deliveryBurden >= 0.35))) return false;
+  if (number(options.minimumRating, 0) > 0 && number(product.rating) < number(options.minimumRating)) return false;
+  if (number(options.minimumReviews, 0) > 0 && number(product.review_count) < number(options.minimumReviews)) return false;
   if (options.currency && String(product.currency || "").toUpperCase() !== String(options.currency).toUpperCase()) return false;
   return true;
 }
 
 function priceScore(product) {
-  const current = number(product.current_price);
+  const current = landedCost(product);
   if (current <= 0) return 0;
   const comparableCount = number(product.comparable_offer_count);
   const comparableMedian = number(product.comparable_median_price);
   const listReference = number(product.original_price);
-  const verifiedDiscount = listReference > current ? (listReference - current) / listReference : 0;
-  const referenceScore = verifiedDiscount > 0 ? 20 + clamp(verifiedDiscount / 0.4) * 6 : 20;
+  const itemPrice = number(product.current_price);
+  const verifiedDiscount = listReference > itemPrice ? (listReference - itemPrice) / listReference : 0;
+  const referenceScore = verifiedDiscount > 0 ? clamp(8 + verifiedDiscount * 55, 8, 30) : 0;
   if (comparableCount < 2 || comparableMedian <= 0) return referenceScore;
 
-  // A median of current matching offers is the primary price signal. At the
-  // market median an offer is neutral (20/30); a lower live price earns more.
+  // A median of matching landed costs is the primary price signal. At the
+  // market median an offer earns 15/30; a lower all-in cost earns more.
   const marketAdvantage = (comparableMedian - current) / comparableMedian;
-  const marketScore = clamp(20 + marketAdvantage * 40, 5, 30);
+  const marketScore = clamp(15 + marketAdvantage * 50, 0, 30);
   return Math.max(referenceScore, marketScore);
 }
 
 function productQualityScore(product) {
   const rating = number(product.rating);
   const brand = String(product.brand || "").trim();
-  const brandEvidence = brand && !/^(?:unbranded|generic|unknown)$/i.test(brand) ? 0 : -2;
-  if (rating <= 0) return Math.max(0, 13 + brandEvidence);
-  const ratingPoints = 10 + clamp((rating - 3.8) / 1.2) * 10;
-  return Math.max(0, Math.min(20, ratingPoints + brandEvidence));
+  const brandMultiplier = brand && !/^(?:unbranded|generic|unknown)$/i.test(brand) ? 1 : 0.9;
+  if (rating <= 0) return 0;
+  return clamp((rating - 3.8) / 1.2) * 20 * brandMultiplier;
 }
 
 function reviewConfidenceScore(product) {
   const reviews = number(product.review_count);
-  if (reviews <= 0) return 9;
-  const volume = clamp(Math.log10(reviews + 1) / 4) * 6;
-  const ratingSupport = number(product.rating) >= 4.2 ? 3 : 0;
-  return Math.min(15, 6 + volume + ratingSupport);
+  if (reviews <= 0) return 0;
+  return clamp(Math.log10(reviews + 1) / 4) * 15;
 }
 
 function sellerScore(product) {
-  const knownRetailer = ["amazon", "walmart"].includes(retailer(product)) || Boolean(String(product.retailer_name || "").trim());
+  const knownRetailer = ["amazon", "walmart", "ebay", "target", "best buy", "bestbuy"].includes(retailer(product)) ||
+    /^(?:amazon|walmart|ebay|target|best\s*buy)$/i.test(String(product.retailer_name || "").trim());
   const seller = String(product.seller_name || "").trim();
   const sellerRating = number(product.seller_rating);
-  return (knownRetailer ? 6 : 0) +
-    (seller ? 4 : 0) +
-    (isAvailable(product) ? 3 : 0) +
-    (sellerRating >= 4 ? 2 : sellerRating > 0 ? 1 : 0);
+  const feedback = number(product.seller_feedback_count);
+  return Math.min(15, (knownRetailer ? 5 : 0) +
+    (seller ? 3 : 0) +
+    (isAvailable(product) ? 2 : 0) +
+    (sellerRating >= 4.8 ? 3 : sellerRating >= 4 ? 2 : sellerRating > 0 ? 1 : 0) +
+    (feedback >= 100 ? 2 : feedback > 0 ? 1 : 0));
 }
 
 function demandScore(product) {
   const position = number(product.source_rank, 100);
-  const rankPoints = clamp(1 - (position - 1) / 50) * 5;
-  const reviewDemand = clamp(Math.log10(number(product.review_count) + 1) / 5) * 3;
+  const rankPoints = clamp(1 - (position - 1) / 50) * 4;
+  const reviewDemand = clamp(Math.log10(number(product.review_count) + 1) / 5) * 4;
   const badge = /best|choice|popular|deal|trending/i.test(String(product.badge || "")) ? 2 : 0;
   return rankPoints + reviewDemand + badge;
 }
@@ -163,16 +206,35 @@ function fulfillmentScore(product) {
   const positiveReturns = returns && !/\b(not accepted|no returns|final sale)\b/i.test(returns);
   const fastOrFree = /\b(prime|free|same.day|next.day|fast)\b/i.test(shipping);
   const deliveryBurden = shippingRatio(product);
-  const shippingPoints = !shipping ? 2
+  const shippingPoints = !shipping ? 0
     : fastOrFree ? 4
-      : deliveryBurden >= 0.5 ? 0
+      : deliveryBurden == null ? 1
+        : deliveryBurden >= 0.5 ? 0
         : deliveryBurden >= 0.25 ? 1
           : 3;
-  const returnPoints = positiveReturns ? 3 : returns ? 0 : 1.5;
+  const returnPoints = positiveReturns ? 3 : 0;
   return Math.min(10, shippingPoints +
     returnPoints +
     (isAvailable(product) ? 2 : 0) +
     (fastOrFree ? 1 : 0));
+}
+
+function evidenceConfidence(product) {
+  const priceEvidence = number(product.comparable_offer_count) >= 2 || number(product.original_price) > number(product.current_price);
+  const identity = exactMatchKey(product);
+  const sellerEvidence = number(product.seller_rating) > 0 || number(product.seller_feedback_count) > 0 || ["amazon", "walmart"].includes(retailer(product));
+  const shippingKnown = paidShippingCost(product) != null || /\b(?:ships|shipping|delivery|livraison|lieferung)\b/i.test(String(product.shipping_summary || ""));
+  const returnsKnown = Boolean(String(product.return_summary || "").trim());
+  return Math.round((
+    (priceEvidence ? 25 : 0) +
+    (identity ? 10 : 0) +
+    (number(product.rating) > 0 ? 15 : 0) +
+    (number(product.review_count) > 0 ? 10 : 0) +
+    (sellerEvidence ? 15 : 0) +
+    (shippingKnown ? 10 : 0) +
+    (returnsKnown ? 10 : 0) +
+    (isAvailable(product) ? 5 : 0)
+  ));
 }
 
 function scoreProduct(product) {
@@ -193,15 +255,16 @@ function scoreProduct(product) {
     breakdown.demand_usefulness +
     breakdown.shipping_returns
   ) * 10) / 10;
-  return { total: clamp(total, 0, 100), breakdown };
+  return { total: clamp(total, 0, 100), evidenceConfidence:evidenceConfidence(product), breakdown };
 }
 
 function selectionReason(product, result) {
   const points = [];
   const current = number(product.current_price);
+  const totalCost = landedCost(product);
   const comparableMedian = number(product.comparable_median_price);
-  if (number(product.comparable_offer_count) >= 2 && comparableMedian > current && current > 0) {
-    points.push(`${Math.round((1 - current / comparableMedian) * 100)}% below the median of matching current offers`);
+  if (number(product.comparable_offer_count) >= 2 && comparableMedian > totalCost && totalCost > 0) {
+    points.push(`${Math.round((1 - totalCost / comparableMedian) * 100)}% below the median landed cost of matching current offers`);
   } else if (number(product.original_price) > current && current > 0) {
     points.push(`${Math.round((1 - current / number(product.original_price)) * 100)}% below its retailer reference price`);
   }
@@ -220,25 +283,29 @@ function selectionReason(product, result) {
 function betterOffer(left, right) {
   if (!left) return right;
   if (number(right.score) !== number(left.score)) return number(right.score) > number(left.score) ? right : left;
-  const leftPrice = number(left.current_price, Number.MAX_SAFE_INTEGER);
-  const rightPrice = number(right.current_price, Number.MAX_SAFE_INTEGER);
+  if (number(right.evidence_confidence) !== number(left.evidence_confidence)) return number(right.evidence_confidence) > number(left.evidence_confidence) ? right : left;
+  const leftPrice = number(left.landed_cost, Number.MAX_SAFE_INTEGER);
+  const rightPrice = number(right.landed_cost, Number.MAX_SAFE_INTEGER);
   return rightPrice < leftPrice ? right : left;
 }
 
 function scoreOffers(items, options = {}) {
-  const eligible = addCurrentOfferComparisons((items || []).filter(item => isEligible(item, options)));
+  const normalized = (items || []).map(normalizeProductIdentity);
+  const eligible = addCurrentOfferComparisons(normalized.filter(item => isEligible(item, options)));
   return eligible.map(item => {
     const result = scoreProduct(item);
     return {
       ...item,
       score: result.total,
+      evidence_confidence: result.evidenceConfidence,
       score_breakdown: result.breakdown,
       selection_reason: selectionReason(item, result)
     };
-  }).filter(item => isDemo(item) || item.score >= number(options.minimumScore, 60))
+  }).filter(item => isDemo(item) || (item.score >= number(options.minimumScore, 60) && item.evidence_confidence >= number(options.minimumEvidenceConfidence, 0)))
     .sort((left, right) => {
       if (number(right.score) !== number(left.score)) return number(right.score) - number(left.score);
-      return number(left.current_price, Number.MAX_SAFE_INTEGER) - number(right.current_price, Number.MAX_SAFE_INTEGER);
+      if (number(right.evidence_confidence) !== number(left.evidence_confidence)) return number(right.evidence_confidence) - number(left.evidence_confidence);
+      return number(left.landed_cost, Number.MAX_SAFE_INTEGER) - number(right.landed_cost, Number.MAX_SAFE_INTEGER);
     });
 }
 
@@ -251,12 +318,17 @@ function selectUniqueProducts(scoredOffers) {
   }
   return [...uniqueOffers.values()].sort((left, right) => {
     if (number(right.score) !== number(left.score)) return number(right.score) - number(left.score);
-    return number(left.current_price, Number.MAX_SAFE_INTEGER) - number(right.current_price, Number.MAX_SAFE_INTEGER);
+    if (number(right.evidence_confidence) !== number(left.evidence_confidence)) return number(right.evidence_confidence) - number(left.evidence_confidence);
+    return number(left.landed_cost, Number.MAX_SAFE_INTEGER) - number(right.landed_cost, Number.MAX_SAFE_INTEGER);
   });
 }
 
 exports.scoreProduct = scoreProduct;
 exports.isEligible = isEligible;
+exports.evidenceConfidence = evidenceConfidence;
+exports.exactMatchKey = exactMatchKey;
+exports.landedCost = landedCost;
+exports.paidShippingCost = paidShippingCost;
 exports.SCORE_MODEL = SCORE_MODEL;
 exports.scoreOffers = scoreOffers;
 exports.selectUniqueProducts = selectUniqueProducts;

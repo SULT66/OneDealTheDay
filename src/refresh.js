@@ -186,12 +186,14 @@ async function refreshMarket(config, marketCode, options = {}) {
       currency: selectedMarket.currency,
       minimumRating: 0,
       minimumReviews: 0,
-      minimumScore: config.provider === "demo" ? 0 : 60
+      minimumScore: config.provider === "demo" ? 0 : 60,
+      minimumEvidenceConfidence: config.provider === "demo" ? 0 : 45,
+      maximumShippingRatio: 0.5
     };
     const scoredOffers = scoreOffers(found, eligibility);
     const ranked = selectUniqueProducts(scoredOffers).slice(0, 60);
-    if (!Array.isArray(found) || found.length < 10 || ranked.length < 10) {
-      throw new Error(`${selectedMarket.name} refresh returned insufficient eligible products (${found.length} found, ${ranked.length}/10 eligible)`);
+    if (!Array.isArray(found) || found.length < 1 || ranked.length < 1) {
+      throw new Error(`${selectedMarket.name} refresh returned no eligible products (${found.length} found, ${ranked.length} eligible)`);
     }
     const selected = selectDailyProducts(ranked, selectedMarket.code, selectedMarket.timezone, Boolean(options.preserveDailySelection));
     const updatedAt = new Date().toISOString();
@@ -211,13 +213,13 @@ async function refreshMarket(config, marketCode, options = {}) {
         INSERT INTO products(
           external_id,provider_external_id,market,product_key,upc,gtin,model_number,brand,brand_slug,manufacturer,mpn,ean,
           title,category,description,image_url,affiliate_url,retailer_shop_url,retailer_name,seller_name,seller_rating,seller_feedback_count,shipping_summary,return_summary,
-          availability,checked_at,rating,review_count,current_price,original_price,currency,badge,score,score_breakdown,
+          shipping_cost,landed_cost,availability,checked_at,rating,review_count,current_price,original_price,currency,badge,score,evidence_confidence,score_breakdown,
           selection_reason,source,status,updated_at,first_seen_at,last_seen_at
         )
         VALUES(
           @external_id,@provider_external_id,@market,@product_key,@upc,@gtin,@model_number,@brand,@brand_slug,@manufacturer,@mpn,@ean,
           @title,@category,@description,@image_url,@affiliate_url,@retailer_shop_url,@retailer_name,@seller_name,@seller_rating,@seller_feedback_count,@shipping_summary,@return_summary,
-          @availability,@checked_at,@rating,@review_count,@current_price,@original_price,@currency,@badge,@score,@score_breakdown,
+          @shipping_cost,@landed_cost,@availability,@checked_at,@rating,@review_count,@current_price,@original_price,@currency,@badge,@score,@evidence_confidence,@score_breakdown,
           @selection_reason,@source,'published',@updated_at,@first_seen_at,@last_seen_at
         )
         ON CONFLICT(external_id) DO UPDATE SET
@@ -228,9 +230,10 @@ async function refreshMarket(config, marketCode, options = {}) {
           affiliate_url=excluded.affiliate_url,retailer_shop_url=excluded.retailer_shop_url,retailer_name=excluded.retailer_name,seller_name=excluded.seller_name,
           seller_rating=excluded.seller_rating,seller_feedback_count=excluded.seller_feedback_count,
           shipping_summary=excluded.shipping_summary,return_summary=excluded.return_summary,
+          shipping_cost=excluded.shipping_cost,landed_cost=excluded.landed_cost,
           availability=excluded.availability,checked_at=excluded.checked_at,rating=excluded.rating,
           review_count=excluded.review_count,current_price=excluded.current_price,original_price=excluded.original_price,
-          currency=excluded.currency,badge=excluded.badge,score=excluded.score,score_breakdown=excluded.score_breakdown,
+          currency=excluded.currency,badge=excluded.badge,score=excluded.score,evidence_confidence=excluded.evidence_confidence,score_breakdown=excluded.score_breakdown,
           selection_reason=excluded.selection_reason,source=excluded.source,status='published',
           updated_at=excluded.updated_at,last_seen_at=excluded.last_seen_at
       `);
@@ -265,6 +268,8 @@ async function refreshMarket(config, marketCode, options = {}) {
           seller_feedback_count: Math.round(numberValue(product.seller_feedback_count, 0)),
           shipping_summary: textValue(product.shipping_summary),
           return_summary: textValue(product.return_summary),
+          shipping_cost: product.shipping_cost == null ? null : numberValue(product.shipping_cost, null),
+          landed_cost: product.landed_cost == null ? numberValue(product.current_price, null) : numberValue(product.landed_cost, null),
           availability: textValue(product.availability || "Available"),
           checked_at: textValue(product.checked_at || updatedAt),
           rating: numberValue(product.rating, 0),
@@ -274,6 +279,7 @@ async function refreshMarket(config, marketCode, options = {}) {
           currency: textValue(product.currency || selectedMarket.currency).toUpperCase(),
           badge: textValue(product.badge),
           score: numberValue(product.score, 0),
+          evidence_confidence: numberValue(product.evidence_confidence, 0),
           score_breakdown: JSON.stringify(product.score_breakdown || {}),
           selection_reason: textValue(product.selection_reason),
           source: textValue(product.source),
@@ -327,7 +333,7 @@ async function refreshMarket(config, marketCode, options = {}) {
       for (const report of loaded.reports.filter(item => item.status === "success")) {
         db.prepare(`
           UPDATE products
-          SET availability='Unavailable',checked_at=?,updated_at=?
+          SET availability='Unavailable',status='archived',checked_at=?,updated_at=?
           WHERE market=? AND source=? AND status='published' AND COALESCE(last_seen_at,'')<?
         `).run(updatedAt, updatedAt, selectedMarket.code, report.source, staleCutoff);
       }

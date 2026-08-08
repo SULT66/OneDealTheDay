@@ -93,8 +93,10 @@ const scoreMetrics = (product, language = "en", atSelection = false) => {
   const hasScore = Number.isFinite(score) && score >= 0;
   const productRating = clean(product.display_product_rating);
   const sellerRating = clean(product.display_seller_rating);
+  const confidence = Number(product.display_evidence_confidence);
   if (!hasScore && !productRating && !sellerRating) return "";
   const ratings = [
+    Number.isFinite(confidence) ? `<span class="deal-rating"><strong>${confidence}/100</strong><small>${esc(product.display_evidence_confidence_label || t(language, "product.evidenceConfidence"))}</small></span>` : "",
     productRating ? `<span class="deal-rating"><strong>★ ${esc(productRating)}</strong><small>${esc(product.display_product_rating_label || t(language, "product.productRating"))}</small></span>` : "",
     sellerRating ? `<span class="deal-rating"><strong>${esc(sellerRating)}</strong><small>${esc(product.display_seller_rating_label || t(language, "product.sellerRating"))}${product.display_seller_feedback ? ` · ${esc(product.display_seller_feedback)}` : ""}</small></span>` : ""
   ].filter(Boolean).join("");
@@ -156,7 +158,7 @@ module.exports = function homepage(req, res) {
     ...product,
     selection_reason: product.daily_selection_reason || product.selection_reason
   }, language), language)).sort((left, right) => Number(right.display_score || 0) - Number(left.display_score || 0));
-  if (dailyProducts.length < 10) dailyProducts = products.slice(0, 10);
+  if (!dailyProducts.length) dailyProducts = products.filter(product => Number(product.score) >= 60 && Number(product.evidence_confidence) >= 45).slice(0, 10);
   const featured = dailyProducts[0] || null;
   const moreWorthSeeing = dailyProducts.slice(1, 10);
   const demoMode = Boolean(featured && isDemo(featured));
@@ -169,7 +171,7 @@ module.exports = function homepage(req, res) {
   const priceDrops = take(products.filter(product => discount(product) > 0).sort((a, b) => discount(b) - discount(a)));
   const newest = take([...products].sort((a, b) => Number(b.id) - Number(a.id)));
   const categories = [...new Set(products.map(product => product.category).filter(Boolean))];
-  const categoryChoices = (categories.length ? products.filter((product, index, rows) => rows.findIndex(row => row.category === product.category) === index).map(product => ({ value: product.category, label: product.display_category })) : DEFAULT_INTEREST_CATEGORIES.map(value => ({ value, label: value }))).slice(0, 10);
+  const categoryChoices = (categories.length ? categories : DEFAULT_INTEREST_CATEGORIES).slice(0, 10);
   const archive = db.prepare(`
     SELECT p.*,d.drop_date,d.score AS drop_score,d.score_model AS drop_score_model,d.current_price AS drop_price,
       d.original_price AS drop_original_price,

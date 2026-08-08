@@ -38,6 +38,19 @@ function oneDailyDropScore(product) {
   return Number.isFinite(recalculated) ? Math.round(recalculated) : null;
 }
 
+function oneDailyDropEvidenceConfidence(product) {
+  const breakdown = scoreBreakdown(product);
+  const stored = number(product?.evidence_confidence, NaN);
+  if (breakdown.model === SCORE_MODEL && Number.isFinite(stored)) {
+    return Math.round(Math.max(0, Math.min(100, stored)));
+  }
+  return scoreProduct({
+    ...product,
+    current_price: product?.drop_price ?? product?.current_price,
+    original_price: product?.drop_original_price ?? product?.original_price
+  }).evidenceConfidence;
+}
+
 function sellerRatingPercent(product) {
   const rating = number(product?.seller_rating, NaN);
   if (!Number.isFinite(rating) || rating <= 0) return null;
@@ -182,6 +195,7 @@ function presentProduct(product, language = "en") {
   const displayAvailability = localizeAvailability(product.availability, language);
   const displayReason = presentationReason(product, language);
   const dealScore = oneDailyDropScore(product);
+  const confidence = oneDailyDropEvidenceConfidence(product);
   const productRating = number(product.rating, NaN);
   const sellerPercent = sellerRatingPercent(product);
   const sellerFeedbackCount = Math.max(0, Math.round(number(product.seller_feedback_count)));
@@ -217,6 +231,8 @@ function presentProduct(product, language = "en") {
     display_score: dealScore,
     display_score_label: t(language, "product.oneDailyDropScore"),
     display_score_context: t(language, "product.overallDealScore"),
+    display_evidence_confidence: confidence,
+    display_evidence_confidence_label: t(language, "product.evidenceConfidence"),
     display_score_at_selection_label: t(language, "product.scoreAtSelection"),
     display_product_rating: Number.isFinite(productRating) && productRating > 0
       ? `${productRating.toFixed(1)}/5`
@@ -244,6 +260,7 @@ module.exports = {
   localizeReturns,
   localizeShipping,
   oneDailyDropScore,
+  oneDailyDropEvidenceConfidence,
   presentProduct,
   presentationReason,
   sellerRatingPercent,
