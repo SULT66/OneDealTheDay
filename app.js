@@ -15,6 +15,7 @@ const { sourceSql, isPublicProduct } = require("./src/publicCatalog");
 const { enabledProviders } = require("./src/providers/registry");
 const { coverage: retailerCoverage } = require("./src/retailerCatalog");
 const { recalculateCatalog } = require("./src/catalogRecalculation");
+const { deduplicationKeys } = require("./src/ranker");
 const createExpressApp = express;
 const CANONICAL_HOST = "www.onedailydrop.com";
 const AZURE_PRODUCTION_HOST = "onedealtheday-g3dme0aghzerc3a2.centralus-01.azurewebsites.net";
@@ -38,6 +39,19 @@ if (config.isProduction && !config.demoMode && config.liveRefreshEnabled) {
 
 function countProducts(where = "1=1", params = []) {
   return Number(db.prepare(`SELECT COUNT(*) n FROM products WHERE status='published' AND ${where}`).get(...params).n || 0);
+}
+
+function uniqueProductsInOrder(products) {
+  const used = new Set();
+  const unique = [];
+  for (const product of products || []) {
+    const marketPrefix = String(product.market || "").toLowerCase();
+    const keys = deduplicationKeys(product).map(key => `${marketPrefix}:${key}`);
+    if (keys.some(key => used.has(key))) continue;
+    unique.push(product);
+    keys.forEach(key => used.add(key));
+  }
+  return unique;
 }
 
 function catalogStatus(marketCode = "") {
@@ -124,11 +138,14 @@ function expressWithHomepage(...args) {
       WHERE market=? AND status='published' AND ${sourceCondition}
       ORDER BY score DESC,updated_at DESC
     `).all(selectedMarket).filter(product => !dailyIds.has(product.id));
-    const products = [...daily.map(product => ({
+    const products = uniqueProductsInOrder([...daily.map(product => ({
       ...product,
       selection_reason: product.daily_selection_reason || product.selection_reason
-    })), ...catalog];
-    return res.json(products.map(product => presentProduct(localizeProduct(product, language), language)));
+    })), ...catalog]);
+    const presented = products
+      .map(product => presentProduct(localizeProduct(product, language), language))
+      .filter(product => product.display_score != null);
+    return res.json(presented);
   });
 
   app.get("/go/:id", (req, res, next) => {
