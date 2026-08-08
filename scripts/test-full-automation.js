@@ -2,32 +2,44 @@ const assert = require("assert");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
+const zlib = require("zlib");
 
 process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "onedailydrop-automation-"));
 
 const { RETAILERS, feedDefinitions } = require("../src/retailerCatalog");
-const { parseDelimited, parseRecords, safeFeedUrl } = require("../src/providers/affiliateFeed");
+const { download, parseDelimited, parseRecords, safeFeedUrl } = require("../src/providers/affiliateFeed");
 const { scoreOffers, selectUniqueProducts } = require("../src/ranker");
-const { refreshMarket } = require("../src/refresh");
+const { refreshMarket, sortByCurrentScore } = require("../src/refresh");
 const db = require("../src/db");
 
-assert(RETAILERS.length >= 19, "The complete target retailer catalog is missing");
-for (const retailer of ["Amazon", "eBay", "Walmart", "Target", "Best Buy", "Currys", "Fnac", "Darty", "MediaMarkt", "Saturn", "OTTO", "Samsung"]) {
+assert(RETAILERS.length >= 20, "The complete target retailer catalog is missing");
+for (const retailer of ["Amazon", "eBay", "Walmart", "Target", "Best Buy", "Mooncool", "Currys", "Fnac", "Darty", "MediaMarkt", "Saturn", "OTTO", "Samsung"]) {
   assert(RETAILERS.some(item => item.name === retailer), `${retailer} is missing from retailer coverage`);
 }
 assert.throws(() => safeFeedUrl("http://localhost/feed.csv"), /public HTTPS/);
 assert.strictEqual(parseDelimited('id,title\n1,"A, B"\n')[0].title, "A, B");
+assert.strictEqual(parseRecords({body:"id|product_name\n1|Mooncool TK1\n", contentType:"text/csv", pathname:"/feed"}, "csv")[0].product_name, "Mooncool TK1");
 assert.strictEqual(parseRecords({body:'{"products":[{"id":"1"}]}', contentType:"application/json", pathname:"/feed"}).length, 1);
 assert.strictEqual(parseRecords({body:"<products><product><id>1</id><title>Test</title></product></products>", contentType:"application/xml", pathname:"/feed"}).length, 1);
 
-const feedEnv = {AFFILIATE_FEED_TARGET_US_URL:"https://feed.test/target.csv"};
+const feedEnv = {
+  AFFILIATE_FEED_TARGET_US_URL:"https://feed.test/target.csv",
+  AFFILIATE_FEED_MOONCOOL_US_URL:"https://productdata.awin.com/mooncool-us.csv.gz",
+  AFFILIATE_FEED_MOONCOOL_CA_URL:"https://productdata.awin.com/mooncool-ca.csv.gz"
+};
 const definitions = feedDefinitions(feedEnv);
-assert.strictEqual(definitions.length, 1);
-assert.strictEqual(definitions[0].retailerName, "Target");
+assert.strictEqual(definitions.length, 3);
+assert.strictEqual(definitions.find(item => item.id === "target-us").retailerName, "Target");
+assert.deepStrictEqual(definitions.filter(item => item.retailerId === "mooncool").map(item => item.markets[0]), ["us", "ca"]);
 const customDefinitions = feedDefinitions({AFFILIATE_FEEDS_JSON:JSON.stringify([{
   id:"future-store", retailerName:"Future Store", market:"ca", url:"https://feed.test/future.json", format:"json"
 }])});
 assert.strictEqual(customDefinitions[0].source, "feed-future-store", "A future retailer cannot be added without code changes");
+assert.deepStrictEqual(
+  sortByCurrentScore([{id:1, score:61, current_price:10}, {id:2, score:78, current_price:40}]).map(item => item.id),
+  [2, 1],
+  "A preserved daily selection must still put the highest current score first"
+);
 
 function records(retailer, prefix, duplicateFirst = false) {
   return Array.from({length:6}, (_, index) => ({
@@ -92,6 +104,29 @@ const config = {
 
 (async () => {
   try {
+    const awinCsv = "aw_product_id|product_name|search_price|currency|merchant_image_url|aw_deep_link\n1|Mooncool TK1|1299|USD|https://images.test/tk1.jpg|https://www.awin1.com/cread.php?id=1\n";
+    const compressed = zlib.gzipSync(Buffer.from(awinCsv));
+    const downloaded = await download({url:"https://productdata.awin.com/mooncool", headersJson:""}, async () =>
+      new Response(compressed, {status:200, headers:{"content-type":"application/octet-stream"}}));
+    assert.strictEqual(parseRecords(downloaded, "csv")[0].product_name, "Mooncool TK1", "Headerless Awin gzip response was not decoded");
+
+    const googleFeed = [
+      "id,title,description,google_product_category,brand,price,sale_price,image_link,link,availability",
+      "tk2,Mooncool TK2,Electric trike,Sporting Goods > Outdoor Recreation > Cycling > Tricycles,mooncool,1699 USD,1399 USD,https://images.test/tk2.jpg,https://www.awin1.com/cread.php?id=2,out_of_stock",
+      "helmet,Mooncool Helmet,Helmet,Sporting Goods > Outdoor Recreation > Cycling > Bicycle Accessories,Mooncool,59 USD,,https://images.test/helmet.jpg,https://www.awin1.com/cread.php?id=3,in_stock"
+    ].join("\n");
+    const mooncoolDefinition = feedDefinitions({AFFILIATE_FEED_MOONCOOL_US_URL:"https://productdata.awin.com/mooncool-google.csv"})[0];
+    const googleProducts = await require("../src/providers/affiliateFeed").searchProducts({
+      definition:{...mooncoolDefinition, format:"csv"},
+      market:{code:"us", currency:"USD"},
+      fetchImpl:async () => new Response(googleFeed, {status:200, headers:{"content-type":"text/csv"}})
+    });
+    assert.strictEqual(googleProducts.length, 1, "Mooncool accessories were not excluded from the main-product feed");
+    assert.strictEqual(googleProducts[0].brand, "Mooncool", "Mooncool brand casing was not normalized");
+    assert.strictEqual(googleProducts[0].current_price, 1399, "Google sale_price was not preferred");
+    assert.strictEqual(googleProducts[0].original_price, 1699, "Google regular price was not retained");
+    assert.strictEqual(googleProducts[0].availability, "Out of stock", "Google availability was not normalized");
+
     const scored = scoreOffers([...targetRecords, ...bestBuyRecords].map((item, index) => ({
       ...item,
       external_id:item.id,

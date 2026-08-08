@@ -188,6 +188,7 @@ async function run() {
     headers: { "x-forwarded-host": "onedealtheday-g3dme0aghzerc3a2.centralus-01.azurewebsites.net" }
   });
   assert(azureApi.status === 200, "Azure API health endpoints must remain available to workflows");
+  assert(azureApi.headers.get("x-robots-tag") === "noindex, nofollow", "Catalog status endpoint must not be indexed");
 
   const trailingSlash = await get("/us/?ref=test");
   assert(trailingSlash.status === 301, "Trailing-slash duplicate must redirect permanently");
@@ -196,7 +197,10 @@ async function run() {
   assert(uppercaseMarket.status === 301, "Uppercase market duplicate must redirect permanently");
   assert(uppercaseMarket.headers.get("location") === "/us?ref=test", "Market normalization redirect is incorrect");
 
-  const homepage = await (await get("/us")).text();
+  const homepageResponse = await get("/us");
+  const homepage = await homepageResponse.text();
+  assert(!homepageResponse.headers.has("x-powered-by"), "Homepage still exposes the Express implementation");
+  assert(homepageResponse.headers.has("x-content-type-options"), "Homepage is missing Helmet security headers");
   assert(homepage.includes('<html lang="en-US">'), "US homepage language is incorrect");
   assert(homepage.includes('<link rel="canonical" href="https://www.onedailydrop.com/us">'), "US homepage canonical is missing");
   assert(homepage.includes('property="og:site_name" content="OneDailyDrop"'), "Homepage Open Graph metadata is missing");
@@ -211,6 +215,9 @@ async function run() {
   assert(homepage.includes('class="description editorial-teaser"'), "Homepage cards do not use the compact Stage 4 editorial teaser");
   assert(homepage.includes('/styles.css?v=20260805-stage4') && homepage.includes('/app.js?v=20260805-stage4'), "Stage 4 assets are not cache-busted on the homepage");
   assert(homepage.includes("OneDailyDrop Score") && homepage.includes("Overall deal score"), "The public OneDailyDrop Score is missing from the homepage");
+  assert(homepage.includes('<span style="--weight:20%"><b>20%</b> Product quality</span>'), "Homepage product-quality weight is stale");
+  assert(homepage.includes('<span style="--weight:10%"><b>10%</b> Demand & usefulness</span>'), "Homepage demand weight is missing");
+  assert(!homepage.includes("<b>5%</b> Freshness"), "Homepage still shows the retired freshness weight");
   assert(homepage.includes("Product rating") && homepage.includes("Seller rating"), "Product and seller ratings are not separated on the homepage");
   assert(!homepage.includes("Check current price on Amazon"), "A retired Amazon fallback remains on the homepage");
   for (const forbidden of ["Development preview", "Sample price", "Rainforest"]) {

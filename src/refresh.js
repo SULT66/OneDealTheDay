@@ -101,7 +101,7 @@ function selectDailyProducts(ranked, marketCode, timezone, preserveDailySelectio
     const byProviderId = new Map(ranked.map(product => [productKey(product), product]));
     const kept = current.map(id => byProviderId.get(id)).filter(Boolean);
     const used = new Set(kept.map(productKey));
-    return [...kept, ...ranked.filter(product => !used.has(productKey(product)))].slice(0, 10);
+    return sortByCurrentScore([...kept, ...ranked.filter(product => !used.has(productKey(product)))].slice(0, 10));
   }
 
   const recent = new Set(db.prepare(`
@@ -113,6 +113,14 @@ function selectDailyProducts(ranked, marketCode, timezone, preserveDailySelectio
   const fresh = ranked.filter(product => !recent.has(productKey(product)));
   const fallback = ranked.filter(product => recent.has(productKey(product)));
   return [...fresh, ...fallback].slice(0, 10);
+}
+
+function sortByCurrentScore(products) {
+  return [...(products || [])].sort((left, right) => {
+    const scoreDifference = numberValue(right.score, 0) - numberValue(left.score, 0);
+    if (scoreDifference) return scoreDifference;
+    return numberValue(left.current_price, Number.MAX_SAFE_INTEGER) - numberValue(right.current_price, Number.MAX_SAFE_INTEGER);
+  });
 }
 
 function recordSourceReports(runId, marketCode, startedAt, reports = []) {
@@ -390,3 +398,4 @@ exports.refreshProducts = async (config, options = {}) => {
 
 exports.localDate = localDate;
 exports.refreshMarketOnce = refreshMarketOnce;
+exports.sortByCurrentScore = sortByCurrentScore;

@@ -47,6 +47,7 @@ const {
 
 const app = express();
 app.set("trust proxy", 1);
+app.disable("x-powered-by");
 const publicDir = path.join(__dirname, "..", "public");
 const pagesDir = path.join(publicDir, "pages");
 const SITE = "https://www.onedailydrop.com";

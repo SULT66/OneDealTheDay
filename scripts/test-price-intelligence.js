@@ -46,7 +46,7 @@ const score = scoreProduct({
   source_rank: 1
 });
 assert(score.total >= 70 && score.total <= 100, `strong real offer should score credibly, received ${score.total}`);
-assert.equal(score.breakdown.model, "current-offer-v2");
+assert.equal(score.breakdown.model, "current-offer-v3");
 
 const newListing = {
   source: "ebay",
@@ -121,5 +121,22 @@ const [ranked] = rankProducts([{
 assert(!ranked.selection_reason.includes("missing evidence"));
 assert(!ranked.selection_reason.includes("/100"));
 assert(!ranked.selection_reason.includes("internal-seller-id"));
+
+const riskyShipping = rankProducts([{
+  ...newListing,
+  external_id:"risky-shipping",
+  title:"Unbranded passport wallet",
+  image_url:"https://i.ebayimg.com/risky.jpg",
+  affiliate_url:"https://www.ebay.com/itm/risky?campid=5339179772",
+  current_price:18.92,
+  shipping_summary:"USD 20.00 shipping",
+  return_summary:"Returns not accepted",
+  currency:"USD"
+}], 1, {minimumScore:0, minimumRating:0, minimumReviews:0, currency:"USD"});
+assert.strictEqual(riskyShipping.length, 0, "shipping above the product price with no returns must not enter the Daily Drop");
+
+const brandedScore = scoreProduct({...newListing, brand:"Known Brand"}).total;
+const unbrandedScore = scoreProduct({...newListing, brand:"Unbranded"}).total;
+assert(brandedScore > unbrandedScore, "missing brand evidence must not rank equally with a known brand");
 
 console.log("Price intelligence and live-product scoring tests passed.");

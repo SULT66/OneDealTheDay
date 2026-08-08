@@ -8,6 +8,16 @@ const RETAILERS = Object.freeze([
   {id:"lowes", name:"Lowe's", network:"Impact", markets:["us", "ca"]},
   {id:"wayfair", name:"Wayfair", network:"CJ Affiliate", markets:["us", "ca", "uk", "de"]},
   {id:"aliexpress", name:"AliExpress", network:"AliExpress Portals", markets:["us", "ca", "uk", "fr", "de"]},
+  {
+    id:"mooncool",
+    name:"Mooncool",
+    network:"Awin",
+    markets:["us", "ca"],
+    feedPolicy:{
+      categoryLeaves:["Bicycles", "Tricycles"],
+      excludeTitleTerms:["not sold separately", "not for sale", "non-delivery"]
+    }
+  },
   {id:"currys", name:"Currys", network:"Awin", markets:["uk"]},
   {id:"ao", name:"AO.com", network:"Awin", markets:["uk"]},
   {id:"fnac", name:"Fnac", network:"Awin", markets:["fr"]},
@@ -41,7 +51,8 @@ function feedDefinitions(env = process.env) {
         url,
         format:String(env[`${prefix}_FORMAT`] || "auto").trim().toLowerCase(),
         headersJson:String(env[`${prefix}_HEADERS_JSON`] || "").trim(),
-        fieldMapJson:String(env[`${prefix}_FIELD_MAP_JSON`] || "").trim()
+        fieldMapJson:String(env[`${prefix}_FIELD_MAP_JSON`] || "").trim(),
+        feedPolicy:retailer.feedPolicy || null
       });
     }
   }

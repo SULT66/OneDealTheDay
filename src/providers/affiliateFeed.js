@@ -7,8 +7,8 @@ const MAX_REDIRECTS = 3;
 const FIELD_ALIASES = Object.freeze({
   id:["id", "sku", "product_id", "productid", "merchant_product_id", "aw_product_id", "item_id", "asin"],
   title:["title", "name", "product_name", "product_title"],
-  description:["description", "product_description", "short_description", "merchant_product_description"],
-  category:["category", "category_name", "merchant_category", "product_type"],
+  description:["description", "product_description", "short_description", "product_short_description", "merchant_product_description"],
+  category:["category", "category_name", "merchant_category", "merchant_product_category_path", "google_product_category", "product_type"],
   brand:["brand", "brand_name", "manufacturer"],
   manufacturer:["manufacturer", "manufacturer_name"],
   gtin:["gtin", "gtin13", "gtin14"],
@@ -16,19 +16,19 @@ const FIELD_ALIASES = Object.freeze({
   ean:["ean", "ean13"],
   mpn:["mpn", "manufacturer_part_number", "part_number"],
   model:["model", "model_number"],
-  price:["price", "current_price", "sale_price", "search_price", "offer_price"],
-  original_price:["original_price", "old_price", "regular_price", "list_price", "rrp", "msrp"],
+  price:["sale_price", "current_price", "search_price", "offer_price", "price"],
+  original_price:["original_price", "old_price", "regular_price", "list_price", "rrp", "rrp_price", "msrp", "price"],
   currency:["currency", "currency_code", "price_currency"],
-  image_url:["image_url", "image", "merchant_image_url", "large_image", "large_image_url", "product_image"],
-  affiliate_url:["affiliate_url", "aw_deep_link", "deeplink", "deep_link", "tracking_url", "click_url", "product_url", "url"],
+  image_url:["image_url", "image", "image_link", "merchant_image_url", "merchant_thumb_url", "aw_thumb_url", "large_image", "large_image_url", "alternate_image", "additional_image_link", "product_image"],
+  affiliate_url:["affiliate_url", "aw_deep_link", "deeplink", "deep_link", "tracking_url", "click_url", "link", "product_url", "url"],
   retailer_shop_url:["retailer_shop_url", "merchant_url", "store_url", "shop_url"],
   seller_name:["seller_name", "seller", "merchant_name", "advertiser_name"],
-  shipping:["shipping_summary", "shipping", "delivery", "delivery_message"],
+  shipping:["shipping_summary", "shipping", "delivery", "delivery_message", "delivery_cost"],
   returns:["return_summary", "returns", "return_policy"],
   availability:["availability", "stock_status", "in_stock", "stock"],
   rating:["rating", "average_rating", "customer_rating"],
   review_count:["review_count", "reviews", "rating_count", "ratings_total"],
-  badge:["badge", "promotion", "product_badge", "coupon"]
+  badge:["badge", "promotion", "promotional_text", "product_badge", "coupon"]
 });
 
 function compactText(value) {
@@ -97,9 +97,10 @@ async function download(definition, fetchImpl = global.fetch, redirectCount = 0)
   if (declaredLength > MAX_FEED_BYTES) throw new Error("Affiliate feed exceeds the 30 MB limit");
   let buffer = Buffer.from(await response.arrayBuffer());
   if (buffer.length > MAX_FEED_BYTES) throw new Error("Affiliate feed exceeds the 30 MB limit");
-  const encoding = String(response.headers.get("content-encoding") || "").toLowerCase();
   const hasGzipHeader = buffer.length >= 2 && buffer[0] === 0x1f && buffer[1] === 0x8b;
-  if ((encoding.includes("gzip") || url.pathname.toLowerCase().endsWith(".gz")) && hasGzipHeader) buffer = zlib.gunzipSync(buffer);
+  // Awin Create-a-Feed URLs can return a gzip body without a .gz pathname or
+  // a reliable Content-Encoding header, so the file signature is authoritative.
+  if (hasGzipHeader) buffer = zlib.gunzipSync(buffer);
   if (buffer.length > MAX_FEED_BYTES) throw new Error("Decompressed affiliate feed exceeds the 30 MB limit");
   return {
     body:buffer.toString("utf8").replace(/^\uFEFF/, ""),
@@ -180,7 +181,14 @@ function parseRecords(downloaded, requestedFormat = "auto") {
   if (format === "json") return jsonRecords(JSON.parse(downloaded.body));
   if (format === "xml") return parseXml(downloaded.body);
   if (format === "tsv") return parseDelimited(downloaded.body, "\t");
-  if (format === "csv") return parseDelimited(downloaded.body, ",");
+  if (format === "csv") {
+    const firstLine = String(downloaded.body || "").split(/\r?\n/, 1)[0] || "";
+    const candidates = [",", "\t", "|"];
+    const delimiter = candidates
+      .map(value => ({value, count:firstLine.split(value).length - 1}))
+      .sort((left, right) => right.count - left.count)[0];
+    return parseDelimited(downloaded.body, delimiter?.count ? delimiter.value : ",");
+  }
   throw new Error(`Unsupported affiliate feed format: ${format}`);
 }
 
@@ -225,6 +233,22 @@ function productKey({gtin, upc, ean, mpn, model}) {
   return part ? `model:${part}` : "";
 }
 
+function allowedByFeedPolicy(product, definition) {
+  const policy = definition?.feedPolicy;
+  if (!policy) return true;
+  const category = compactText(product.category);
+  const leaf = category.split(" > ").pop()?.trim().toLowerCase() || "";
+  const categoryLeaves = Array.isArray(policy.categoryLeaves)
+    ? policy.categoryLeaves.map(value => compactText(value).toLowerCase()).filter(Boolean)
+    : [];
+  if (categoryLeaves.length && !categoryLeaves.includes(leaf)) return false;
+  const title = compactText(product.title).toLowerCase();
+  const excludedTerms = Array.isArray(policy.excludeTitleTerms)
+    ? policy.excludeTitleTerms.map(value => compactText(value).toLowerCase()).filter(Boolean)
+    : [];
+  return !excludedTerms.some(term => title.includes(term));
+}
+
 function normalize(record, definition, market, index, map) {
   const source = `feed-${definition.retailerId}`;
   const title = compactText(field(record, map, "title"));
@@ -239,7 +263,7 @@ function normalize(record, definition, market, index, map) {
   const model = compactText(field(record, map, "model"));
   const rawId = compactText(field(record, map, "id")) || crypto.createHash("sha256").update(`${affiliateUrl}|${title}`).digest("hex").slice(0, 24);
   const availabilityValue = compactText(field(record, map, "availability"));
-  const availability = /^(?:0|false|no)$/i.test(availabilityValue) ? "Out of stock" : availabilityValue || "Available";
+  const availability = /^(?:0|false|no|out[ _-]?of[ _-]?stock|unavailable)$/i.test(availabilityValue) ? "Out of stock" : availabilityValue || "Available";
   return {
     external_id:rawId,
     product_key:productKey({gtin, upc, ean, mpn, model}),
@@ -248,7 +272,12 @@ function normalize(record, definition, market, index, map) {
     ean,
     mpn,
     model_number:model || mpn,
-    brand:compactText(field(record, map, "brand")),
+    brand:(() => {
+      const brand = compactText(field(record, map, "brand"));
+      return brand && brand.toLowerCase() === String(definition.retailerName || "").toLowerCase()
+        ? definition.retailerName
+        : brand;
+    })(),
     manufacturer:compactText(field(record, map, "manufacturer")),
     title,
     category:compactText(field(record, map, "category")) || "Featured products",
@@ -283,6 +312,7 @@ async function searchProducts({definition, market, fetchImpl = global.fetch}) {
   const products = records
     .map((record, index) => normalize(record, definition, market, index, map))
     .filter(product => product.title && product.image_url && product.affiliate_url && product.current_price > 0)
+    .filter(product => allowedByFeedPolicy(product, definition))
     .slice(0, 2000);
   if (!products.length) throw new Error(`${definition.retailerName} feed returned no usable commissionable products`);
   return products;
@@ -290,6 +320,7 @@ async function searchProducts({definition, market, fetchImpl = global.fetch}) {
 
 module.exports = {
   download,
+  allowedByFeedPolicy,
   normalize,
   parseDelimited,
   parseRecords,

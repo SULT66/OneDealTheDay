@@ -35,7 +35,22 @@ function exactMatchKey(product) {
   return value ? String(value).toLowerCase().replace(/[^a-z0-9]/g, "") : "";
 }
 
-const SCORE_MODEL = "current-offer-v2";
+const SCORE_MODEL = "current-offer-v3";
+
+function paidShippingCost(product) {
+  const match = String(product?.shipping_summary || "").match(/\b(?:USD|CAD|GBP|EUR)\s+([0-9]+(?:\.[0-9]+)?)\s+shipping\b/i);
+  return match ? number(match[1], 0) : 0;
+}
+
+function shippingRatio(product) {
+  const price = number(product?.current_price);
+  return price > 0 ? paidShippingCost(product) / price : 0;
+}
+
+function hasUnsafeTitle(product) {
+  const title = String(product?.title || "").trim();
+  return title.length < 8 || /^(?:test|n\/?a)$/i.test(title) || /\b(?:not for sale|not sold separately|non[ -]?delivery)\b/i.test(title);
+}
 
 function median(values) {
   const sorted = values.map(value => number(value, NaN)).filter(Number.isFinite).sort((left, right) => left - right);
@@ -77,9 +92,13 @@ function isAvailable(product) {
 function isEligible(product, options = {}) {
   if (!product?.title || !product?.image_url) return false;
   if (isDemo(product)) return true;
+  if (hasUnsafeTitle(product)) return false;
   if (!/^https?:\/\//i.test(String(product.affiliate_url || ""))) return false;
   if (!isAvailable(product)) return false;
   if (number(product.current_price) <= 0) return false;
+  const noReturns = /\b(?:returns? not accepted|no returns?|final sale)\b/i.test(String(product.return_summary || ""));
+  const deliveryBurden = shippingRatio(product);
+  if (deliveryBurden >= 1 || (noReturns && deliveryBurden >= 0.5)) return false;
   if (number(product.rating) < number(options.minimumRating, 3.8)) return false;
   if (number(product.review_count) < number(options.minimumReviews, 25)) return false;
   if (options.currency && String(product.currency || "").toUpperCase() !== String(options.currency).toUpperCase()) return false;
@@ -105,9 +124,11 @@ function priceScore(product) {
 
 function productQualityScore(product) {
   const rating = number(product.rating);
-  if (rating <= 0) return 13;
+  const brand = String(product.brand || "").trim();
+  const brandEvidence = brand && !/^(?:unbranded|generic|unknown)$/i.test(brand) ? 0 : -2;
+  if (rating <= 0) return Math.max(0, 13 + brandEvidence);
   const ratingPoints = 10 + clamp((rating - 3.8) / 1.2) * 10;
-  return Math.min(20, ratingPoints);
+  return Math.max(0, Math.min(20, ratingPoints + brandEvidence));
 }
 
 function reviewConfidenceScore(product) {
@@ -141,12 +162,17 @@ function fulfillmentScore(product) {
   const returns = String(product.return_summary || "").trim();
   const positiveReturns = returns && !/\b(not accepted|no returns|final sale)\b/i.test(returns);
   const fastOrFree = /\b(prime|free|same.day|next.day|fast)\b/i.test(shipping);
-  const shippingPoints = shipping ? 4 : 2;
+  const deliveryBurden = shippingRatio(product);
+  const shippingPoints = !shipping ? 2
+    : fastOrFree ? 4
+      : deliveryBurden >= 0.5 ? 0
+        : deliveryBurden >= 0.25 ? 1
+          : 3;
   const returnPoints = positiveReturns ? 3 : returns ? 0 : 1.5;
-  return shippingPoints +
+  return Math.min(10, shippingPoints +
     returnPoints +
     (isAvailable(product) ? 2 : 0) +
-    (fastOrFree ? 1 : 0);
+    (fastOrFree ? 1 : 0));
 }
 
 function scoreProduct(product) {
