@@ -15,7 +15,7 @@ const {
 } = require("../src/productIdentity");
 
 assert.strictEqual(SCORE_MODEL, "current-offer-v4");
-for (const placeholder of ["Does not apply", "Does Not Apply", "Non applicable", "Nicht zutreffend", "不适用", "N/A"]) {
+for (const placeholder of ["Does not apply", "Does Not Apply", "Non applicable", "Nicht zutreffend", "Ne s'applique pas", "不适用", "N/A"]) {
   assert.strictEqual(normalizeTradeItemId(placeholder), "", `Placeholder GTIN was accepted: ${placeholder}`);
 }
 assert.strictEqual(normalizeTradeItemId("012345678905"), "00012345678905");
@@ -65,11 +65,30 @@ assert(missing.evidenceConfidence < 50, "Sparse evidence received high confidenc
 
 const normalizedPlaceholder = normalizeProductIdentity({...base, product_key:"gtin:Does not apply", gtin:"Does not apply", title:"First unrelated item"});
 assert.strictEqual(normalizedPlaceholder.product_key, "", "Placeholder product key survived normalization");
+assert.strictEqual(
+  identityForProduct({brand:"Sans marque/Générique", model_number:"Ne s'applique pas", title:"Produit sans identifiant"}).productKey,
+  "",
+  "Localized generic brand/model placeholders created a false identity"
+);
 const placeholderOffers = scoreOffers([
   {...base, external_id:"one", product_key:"gtin:Does not apply", gtin:"Does not apply", title:"First unrelated item", original_price:50, shipping_summary:"Free shipping"},
   {...base, external_id:"two", product_key:"gtin:Does not apply", gtin:"Does not apply", title:"Second unrelated item", original_price:50, shipping_summary:"Free shipping"}
 ], {minimumScore:0, minimumEvidenceConfidence:0, maximumShippingRatio:0.5});
 assert.strictEqual(selectUniqueProducts(placeholderOffers).length, 2, "Unrelated placeholder-GTIN products were merged");
+
+const duplicateListings = [
+  {...base, external_id:"listing-a", product_key:"gtin:012345678905", title:"Office Easy Button Red Silver Desk Gadget Motivation Stress Relief Toy New", score:78, evidence_confidence:90, landed_cost:19},
+  {...base, external_id:"listing-b", product_key:"gtin:999999999999", title:"Office Easy Button Red Silver Desk Gadget Motivation Stress Relief Toy Sealed", score:72, evidence_confidence:90, landed_cost:18}
+];
+assert.strictEqual(selectUniqueProducts(duplicateListings).length, 1, "Equivalent listings with different marketplace IDs were not deduplicated");
+assert.strictEqual(selectUniqueProducts([
+  {...duplicateListings[0], external_id:"ordered-a", product_key:"gtin:111111111111", title:"Universal Car Center Console Armrest Cushion Cover Protector Accessories"},
+  {...duplicateListings[1], external_id:"ordered-b", product_key:"gtin:222222222222", title:"Car Armrest Cushion Cover Center Console Protector Accessories Universal"}
+]).length, 1, "Reordered marketplace titles were not recognized as the same product family");
+assert.strictEqual(selectUniqueProducts([
+  {...duplicateListings[0], external_id:"pack-10", product_key:"gtin:333333333333", title:"Packing Cubes Travel Organizer Set 10 Pack"},
+  {...duplicateListings[1], external_id:"pack-12", product_key:"gtin:444444444444", title:"Packing Cubes Travel Organizer Set 12 Pack"}
+]).length, 2, "Different quantity variants were incorrectly merged");
 
 const comparable = scoreOffers([
   {...base, external_id:"cheap-item", current_price:100, shipping_summary:"CAD 40.00 shipping", original_price:null},
