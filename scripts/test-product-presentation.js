@@ -38,7 +38,7 @@ assert(!french.display_selection_reason.includes("31/100"));
 assert(!french.display_selection_reason.includes("Selected with"));
 assert(!french.display_selection_reason.includes("sit3203"));
 assert(french.evidence_count >= 4);
-assert.strictEqual(french.display_score, 20, "missing product and price evidence must receive zero points after recalibration");
+assert.strictEqual(french.display_score, null, "an offer below the editorial floor must not expose a weak consumer-facing score");
 assert.strictEqual(french.display_evidence_confidence, 40, "evidence coverage must be reported separately from the Deal Score");
 assert.strictEqual(french.display_score_label, "Score OneDailyDrop");
 assert.strictEqual(french.display_product_rating, "");
@@ -49,7 +49,17 @@ const correctedSnapshot = presentProduct({
   ...fixture,
   drop_score: 77,
   drop_score_model: "current-offer-v4",
-  drop_price: 44.62
+  drop_price: 44.62,
+  evidence_confidence: 50,
+  score_breakdown: JSON.stringify({
+    model:"current-offer-v4",
+    price_quality:20,
+    product_quality:0,
+    review_confidence:0,
+    seller_reliability:15,
+    demand_usefulness:5,
+    shipping_returns:10
+  })
 }, "fr");
 assert.strictEqual(correctedSnapshot.display_score, 77, "a snapshot saved by the current model must keep its selection score");
 
