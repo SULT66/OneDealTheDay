@@ -108,7 +108,7 @@ const mainCard = (product, index, language = "en") => `
   <article class="card">
     <a class="image-wrap" href="${dealPath(product)}" ${trackingAttributes(product, "daily_card_media")}><img src="${esc(product.image_url)}" alt="${esc(fullTitle(product.title))}" loading="lazy" decoding="async"></a>
     <div class="card-content">
-      <div class="card-top"><span class="rank">#${index}</span>${badge(product) ? `<span class="badge">${esc(badge(product))}</span>` : ""}</div>
+      <div class="card-top"><span class="rank">#${index + 1}</span>${badge(product) ? `<span class="badge">${esc(badge(product))}</span>` : ""}</div>
       <p class="cat"><a href="${categoryPath(product.category || "Deals", product.market)}">${esc(product.display_category || product.category || "Deals")}</a> · ${esc(storeName(product))}</p>
       <h3><a href="${dealPath(product)}" ${trackingAttributes(product, "daily_card_title")}>${esc(fullTitle(product.title))}</a></h3>
       <p class="description editorial-teaser"><strong>${esc(t(language, "product.why"))}</strong> ${esc(whyPicked(product))}</p>
@@ -155,7 +155,7 @@ module.exports = function homepage(req, res) {
   `).all(selectedMarket.code, selectedMarket.code, today).map(product => presentProduct(localizeProduct({
     ...product,
     selection_reason: product.daily_selection_reason || product.selection_reason
-  }, language), language));
+  }, language), language)).sort((left, right) => Number(right.display_score || 0) - Number(left.display_score || 0));
   if (dailyProducts.length < 10) dailyProducts = products.slice(0, 10);
   const featured = dailyProducts[0] || null;
   const moreWorthSeeing = dailyProducts.slice(1, 10);

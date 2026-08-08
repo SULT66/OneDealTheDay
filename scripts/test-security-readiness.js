@@ -8,6 +8,7 @@ const assert = (condition, message) => {
 };
 
 const config = read("src/config.js");
+const appEntry = read("app.js");
 const envExample = read(".env.example");
 const server = read("src/server.js");
 const homepageSeo = read("src/homepage-seo.js");
@@ -23,6 +24,9 @@ assert(config.includes('String(process.env.ADMIN_KEY || "").trim()'), "ADMIN_KEY
 assert(server.includes("crypto.timingSafeEqual"), "Admin key comparison is not timing-safe");
 assert(!server.includes("req.query.key"), "Admin secret can still be supplied in a URL");
 assert(server.includes("Admin access is not configured."), "Missing ADMIN_KEY does not disable admin access");
+assert(appEntry.includes('app.disable("x-powered-by")'), "Early homepage/status routes still expose Express");
+assert(appEntry.includes("app.use(helmet({ contentSecurityPolicy:false }))"), "Early homepage/status routes bypass security headers");
+assert(appEntry.includes('res.set("X-Robots-Tag", "noindex, nofollow")'), "Early status route is crawlable");
 assert(ignore.split(/\r?\n/).includes("data/"), "Runtime database directory is not ignored");
 assert(!staticHomepage.includes("googletagmanager.com/gtag/js"), "Static homepage still loads analytics before consent");
 assert(homepageSeo.includes(".replace(legacyAnalytics, \"\")"), "Server homepage does not remove the old analytics tag");

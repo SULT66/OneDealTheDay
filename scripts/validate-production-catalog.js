@@ -76,6 +76,9 @@ if (!homepage.includes("const moreWorthSeeing = dailyProducts.slice(1, 10);")) {
 if (!homepage.includes("9 More Worth Seeing")) {
   throw new Error("Homepage is missing the 9 More Worth Seeing section");
 }
+if (!homepage.includes('class="rank">#${index + 1}')) {
+  throw new Error("Server-rendered additional picks do not continue with ranks #2-#10");
+}
 if ((homepage.match(/id="subscribeForm"/g) || []).length !== 1) {
   throw new Error("Homepage must contain exactly one Daily Drop subscription form");
 }
@@ -91,6 +94,9 @@ if (browserApp.includes("shortTitle")) throw new Error("Client-side titles are s
 if (!browserApp.includes('searchParams.delete("country")')) throw new Error("Stale country parameter cleanup is missing");
 if (!browserApp.includes("return products.slice(1, 10);")) {
   throw new Error("Client-side rendering still repeats Today's Drop in the additional list");
+}
+if (!browserApp.includes('activeCategory === "More Worth Seeing" ? 2 : 1')) {
+  throw new Error("Client-side additional picks do not continue with ranks #2-#10");
 }
 if (browserApp.includes("Top 10 Drops Today")) {
   throw new Error("Client-side rendering still labels the additional products as Top 10");
@@ -180,7 +186,7 @@ const ranker = fs.readFileSync(path.join(root, "src/ranker.js"), "utf8");
 for (const required of ["price_quality", "product_quality", "review_confidence", "seller_reliability", "demand_usefulness", "shipping_returns"]) {
   if (!ranker.includes(required)) throw new Error(`OneDailyDrop Score component is missing: ${required}`);
 }
-for (const required of ["current-offer-v2", "comparable_median_price", "return referenceScore", "return (knownRetailer ? 6 : 0)", "return rankPoints + reviewDemand + badge", "const shippingPoints = shipping ? 4 : 2"]) {
+for (const required of ["current-offer-v3", "comparable_median_price", "return referenceScore", "return (knownRetailer ? 6 : 0)", "return rankPoints + reviewDemand + badge", "deliveryBurden >= 0.5"]) {
   if (!ranker.includes(required)) throw new Error(`OneDailyDrop Score weighting is incomplete: ${required}`);
 }
 for (const forbidden of ["average_30_day_price", "average_90_day_price", "price_history_observation_count", "evidencePenalty"]) {

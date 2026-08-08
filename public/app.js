@@ -43,7 +43,7 @@
     Boolean(cleanText(product?.checked_at));
   const hasReviewData = product => Number(product?.rating) > 0 && Number(product?.review_count) > 0;
   const scoreValue = product => {
-    const raw = product?.drop_score ?? product?.score;
+    const raw = product?.display_score ?? product?.score ?? product?.drop_score;
     const value = Number(raw);
     return Number.isFinite(value) ? Math.round(Math.max(0, Math.min(100, value))) : null;
   };
@@ -298,7 +298,8 @@
     els.emptyState.textContent = products.length
       ? tr("home.noMatch", "No products match that search.")
       : tr("home.catalogSectionEmpty", "Verified selections will appear here as they are published.");
-    els.products.innerHTML = visible.map((product, index) => mainCard(product, index + 1)).join("");
+    const rankOffset = activeCategory === "More Worth Seeing" ? 2 : 1;
+    els.products.innerHTML = visible.map((product, index) => mainCard(product, index + rankOffset)).join("");
   };
 
   const takeUnique = (source, count, used) => {
@@ -551,12 +552,12 @@
       return response.json();
     })
     .then(data => {
-      products = (Array.isArray(data) ? data : []).filter(product => product && product.title).sort((a, b) => {
-        const leftRank = Number(a.daily_rank || Number.MAX_SAFE_INTEGER);
-        const rightRank = Number(b.daily_rank || Number.MAX_SAFE_INTEGER);
-        if (leftRank !== rightRank) return leftRank - rightRank;
-        return Number(b.score || 0) - Number(a.score || 0);
-      });
+      const received = (Array.isArray(data) ? data : []).filter(product => product && product.title);
+      const daily = received.filter(product => Number.isFinite(Number(product.daily_rank)))
+        .sort((a, b) => (scoreValue(b) || 0) - (scoreValue(a) || 0));
+      const catalog = received.filter(product => !Number.isFinite(Number(product.daily_rank)))
+        .sort((a, b) => (scoreValue(b) || 0) - (scoreValue(a) || 0));
+      products = [...daily, ...catalog];
       els.updated.textContent = products[0] ? statusText(products[0]) : tr("home.preparing", "Today's selection is being prepared");
       renderFeatured();
       renderCategoryMenu();

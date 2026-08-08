@@ -2,6 +2,7 @@
 // Deployment refresh: homepage anchors and search, July 28, 2026.
 // Register catalog mode safeguards and the SEO homepage before src/server adds express.static().
 const express = require("express");
+const helmet = require("helmet");
 const cron = require("node-cron");
 const db = require("./src/db");
 const config = require("./src/config");
@@ -60,6 +61,8 @@ function catalogStatus(marketCode = "") {
 function expressWithHomepage(...args) {
   const app = createExpressApp(...args);
   app.set("trust proxy", 1);
+  app.disable("x-powered-by");
+  app.use(helmet({ contentSecurityPolicy:false }));
   app.use((req, res, next) => {
     const forwardedHost = String(req.headers["x-forwarded-host"] || req.headers.host || "")
       .split(",")[0]
@@ -92,6 +95,7 @@ function expressWithHomepage(...args) {
 
   app.get("/api/status", (req, res) => {
     const marketCode = normalizeMarket(req.query.market) || marketFromIp(req).code;
+    res.set("X-Robots-Tag", "noindex, nofollow");
     res.json(catalogStatus(marketCode));
   });
 
