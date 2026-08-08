@@ -194,8 +194,15 @@ function presentProduct(product, language = "en") {
   const displayReturns = localizeReturns(product.return_summary, language);
   const displayAvailability = localizeAvailability(product.availability, language);
   const displayReason = presentationReason(product, language);
-  const dealScore = oneDailyDropScore(product);
+  const rawDealScore = oneDailyDropScore(product);
   const confidence = oneDailyDropEvidenceConfidence(product);
+  // Scores below the editorial eligibility floor remain useful internally for
+  // ordering candidates, but presenting a weak number as a consumer verdict
+  // misrepresents what the score means. Only qualified picks receive a public
+  // numeric score; sparse offers keep their factual rating/seller evidence.
+  const dealScore = Number.isFinite(rawDealScore) && rawDealScore >= 60 && confidence >= 45
+    ? rawDealScore
+    : null;
   const productRating = number(product.rating, NaN);
   const sellerPercent = sellerRatingPercent(product);
   const sellerFeedbackCount = Math.max(0, Math.round(number(product.seller_feedback_count)));
