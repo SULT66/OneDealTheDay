@@ -9,6 +9,7 @@ const { t, marketName, languageTag } = require("./i18n");
 const { presentProduct } = require("./productPresentation");
 const { sourceSql } = require("./publicCatalog");
 const { outboundPath } = require("./retailerLinks");
+const { deduplicationKeys, selectUniqueProducts } = require("./ranker");
 
 const SITE = "https://www.onedailydrop.com";
 const DEFAULT_INTEREST_CATEGORIES = [
@@ -89,8 +90,8 @@ const offerFacts = product => {
 };
 
 const scoreMetrics = (product, language = "en", atSelection = false) => {
-  const score = Number(product.display_score);
-  const hasScore = Number.isFinite(score) && score >= 0;
+  const score = product.display_score == null ? NaN : Number(product.display_score);
+  const hasScore = Number.isFinite(score) && score >= 60;
   const productRating = clean(product.display_product_rating);
   const sellerRating = clean(product.display_seller_rating);
   const confidence = Number(product.display_evidence_confidence);
@@ -140,8 +141,8 @@ module.exports = function homepage(req, res) {
   const locale = languageTag(selectedMarket.code, language);
   const localizedMarketName = marketName(selectedMarket.code, language);
   const sourceFilter = ` AND ${sourceSql()}`;
-  const products = db.prepare(`SELECT * FROM products WHERE market=? AND status='published'${sourceFilter} ORDER BY score DESC, updated_at DESC`)
-    .all(selectedMarket.code)
+  const products = selectUniqueProducts(db.prepare(`SELECT * FROM products WHERE market=? AND status='published'${sourceFilter} ORDER BY score DESC, updated_at DESC`)
+    .all(selectedMarket.code))
     .map(product => presentProduct(localizeProduct(product, language), language));
   const today = localDate(selectedMarket.timezone);
   let dailyProducts = db.prepare(`
@@ -157,22 +158,20 @@ module.exports = function homepage(req, res) {
   `).all(selectedMarket.code, selectedMarket.code, today).map(product => presentProduct(localizeProduct({
     ...product,
     selection_reason: product.daily_selection_reason || product.selection_reason
-  }, language), language)).sort((left, right) => Number(right.display_score || 0) - Number(left.display_score || 0));
+  }, language), language)).filter(product => product.display_score != null);
+  dailyProducts = selectUniqueProducts(dailyProducts)
+    .sort((left, right) => Number(right.display_score || 0) - Number(left.display_score || 0));
   if (!dailyProducts.length) dailyProducts = products.filter(product => Number(product.score) >= 60 && Number(product.evidence_confidence) >= 45).slice(0, 10);
   const featured = dailyProducts[0] || null;
   const moreWorthSeeing = dailyProducts.slice(1, 10);
   const demoMode = Boolean(featured && isDemo(featured));
-  const used = new Set([featured, ...moreWorthSeeing].filter(Boolean).map(product => product.id));
-  const take = rows => rows.filter(product => !used.has(product.id)).slice(0, 4).map(product => {
-    used.add(product.id);
-    return product;
-  });
-  const trending = take([...products].sort((a, b) => Number(b.review_count || 0) - Number(a.review_count || 0)));
-  const priceDrops = take(products.filter(product => discount(product) > 0).sort((a, b) => discount(b) - discount(a)));
-  const newest = take([...products].sort((a, b) => Number(b.id) - Number(a.id)));
+  const used = new Set();
+  const markUsed = product => deduplicationKeys(product).forEach(key => used.add(key));
+  [featured, ...moreWorthSeeing].filter(Boolean).forEach(markUsed);
+  const isUnused = product => !deduplicationKeys(product).some(key => used.has(key));
   const categories = [...new Set(products.map(product => product.category).filter(Boolean))];
   const categoryChoices = (categories.length ? categories : DEFAULT_INTEREST_CATEGORIES).slice(0, 10);
-  const archive = db.prepare(`
+  const archiveCandidates = db.prepare(`
     SELECT p.*,d.drop_date,d.score AS drop_score,d.score_model AS drop_score_model,d.current_price AS drop_price,
       d.original_price AS drop_original_price,
       d.selection_reason AS daily_selection_reason
@@ -180,11 +179,32 @@ module.exports = function homepage(req, res) {
     JOIN products p ON p.id=d.product_id
     WHERE d.market=? AND ${sourceSql("p")} AND d.rank=1 AND d.drop_date<?
     ORDER BY d.drop_date DESC
-    LIMIT 4
+    LIMIT 40
   `).all(selectedMarket.code, today).map(product => presentProduct(localizeProduct({
     ...product,
     selection_reason: product.daily_selection_reason || product.selection_reason
   }, language), language));
+  const archive = [];
+  for (const product of archiveCandidates) {
+    if (product.display_score == null || !isUnused(product)) continue;
+    archive.push(product);
+    markUsed(product);
+    if (archive.length === 4) break;
+  }
+  const qualifiedProducts = products.filter(product => product.display_score != null);
+  const takeUnique = rows => {
+    const selected = [];
+    for (const product of rows) {
+      if (!isUnused(product)) continue;
+      selected.push(product);
+      markUsed(product);
+      if (selected.length === 4) break;
+    }
+    return selected;
+  };
+  const trending = takeUnique([...qualifiedProducts].sort((a, b) => Number(b.review_count || 0) - Number(a.review_count || 0)));
+  const priceDrops = takeUnique(qualifiedProducts.filter(product => discount(product) > 0).sort((a, b) => discount(b) - discount(a)));
+  const newest = takeUnique([...qualifiedProducts].sort((a, b) => Number(b.id) - Number(a.id)));
   const title = t(language, "seo.homeTitle", { country: localizedMarketName });
   const description = t(language, "seo.homeDescription", { country: localizedMarketName });
   const canonicalPath = marketPath(selectedMarket.code);
