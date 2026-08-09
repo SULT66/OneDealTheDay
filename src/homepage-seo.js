@@ -14,7 +14,7 @@ const {
 const SITE = "https://www.onedailydrop.com";
 const anchorOffsetStyle = `<style id="homepage-anchor-offset">
 html{scroll-padding-top:var(--odd-header-offset,132px)}
-#today,#featuredDeal,#subscribe,#top,#score,#archive,#trending,#price-drops,#new-drops,#about{scroll-margin-top:var(--odd-header-offset,132px)}
+#today,#featuredDeal,#subscribe,#top,#score,#archive,#price-drops,#about{scroll-margin-top:var(--odd-header-offset,132px)}
 </style>`;
 const legacyAnalytics = /<script async src="https:\/\/www\.googletagmanager\.com\/gtag\/js\?id=[^"]+"><\/script><script>[\s\S]*?gtag\('config','[^']+'\);<\/script>/;
 const consentStyles = '<link rel="stylesheet" href="/cookie-consent.css?v=20260730">';
@@ -45,7 +45,7 @@ module.exports = function homepageSeo(req, res) {
     const canonical = SITE + homePath;
     const defaultLanguage = defaultLanguages[selectedMarket.code];
     const appScript = `<script>window.__ODD_MARKET__=${JSON.stringify(selectedMarket.code)};window.__ODD_MARKET_TIMEZONE__=${JSON.stringify(selectedMarket.timezone)};window.__ODD_LANGUAGE__=${JSON.stringify(language)};window.__ODD_LOCALE__=${JSON.stringify(locale)};window.__ODD_TEXT__=${JSON.stringify(clientCopy(language)).replace(/</g, "\\u003c")};</script><script>(function(){const q=new URLSearchParams(location.search).get("q");if(!q)return;const input=document.getElementById("searchInput");if(input)input.value=q;})();</script><script src="/click-tracking.js?v=20260805-stage2"></script><script src="/app.js?v=20260805-stage2"></script>`;
-    const stage4AppScript = appScript.replace("/app.js?v=20260805-stage2", "/app.js?v=20260805-stage4");
+    const stage4AppScript = appScript.replace("/app.js?v=20260805-stage2", "/app.js?v=20260808-assistant");
     let enhanced = body
       .replace(legacyAnalytics, "")
       .replace(
@@ -56,10 +56,10 @@ module.exports = function homepageSeo(req, res) {
       .replace('href="/" aria-label="OneDailyDrop home"', `href="${homePath}" aria-label="OneDailyDrop home"`)
       .replace('action="/search"', `action="${marketPath(selectedMarket.code, "/search")}"`)
       .replace(
-        '</button></div><nav class="main-nav" aria-label="Primary navigation">',
+        /<\/button>\s*<\/div>\s*<nav class="main-nav" aria-label="[^"]+">/,
         `</button>${languageSwitcher(req, selectedMarket.code, language)}<button class="mobile-menu-toggle" type="button" aria-expanded="false" aria-controls="mainNavigation" aria-label="${t(language, "menu.open")}"><span></span><span></span><span></span></button></div><nav id="mainNavigation" class="main-nav" aria-label="${t(language, "nav.primary")}">`
       )
-      .replace(/\/styles\.css\?v=[^"]+/, "/styles.css?v=20260805-stage4")
+      .replace(/\/styles\.css\?v=[^"]+/, "/styles.css?v=20260808-assistant")
       .replace(/href="\/us\/category\//g, `href="/${selectedMarket.code}/category/`)
       .replace('<a href="#archive">Past Drops</a>', `<a href="${marketPath(selectedMarket.code, "/archive")}">Past Drops</a>`)
       .replace(

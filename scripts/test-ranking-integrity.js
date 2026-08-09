@@ -1,6 +1,7 @@
 const assert = require("assert");
 const {
   SCORE_MODEL,
+  isDailyPickEligible,
   isEligible,
   landedCost,
   paidShippingCost,
@@ -14,7 +15,7 @@ const {
   normalizeTradeItemId
 } = require("../src/productIdentity");
 
-assert.strictEqual(SCORE_MODEL, "current-offer-v5");
+assert.strictEqual(SCORE_MODEL, "current-offer-v6");
 for (const placeholder of ["Does not apply", "Does Not Apply", "Non applicable", "Nicht zutreffend", "Ne s'applique pas", "不适用", "N/A"]) {
   assert.strictEqual(normalizeTradeItemId(placeholder), "", `Placeholder GTIN was accepted: ${placeholder}`);
 }
@@ -56,12 +57,18 @@ const base = {
 assert.strictEqual(isEligible({...base, shipping_summary:"Delivery: $105.31"}), false, "Shipping above the item price entered ranking");
 assert.strictEqual(isEligible({...base, shipping_summary:"CAD 13.00 shipping"}), false, "Shipping above 50% entered ranking");
 assert.strictEqual(isEligible({...base, shipping_summary:"CAD 12.00 shipping"}), true);
+assert.strictEqual(isDailyPickEligible({...base, score:75, evidence_confidence:80, shipping_summary:"CAD 7.00 shipping"}), false, "Shipping above 25% entered the Daily Drop");
+assert.strictEqual(isDailyPickEligible({...base, score:75, evidence_confidence:80, shipping_summary:"Free shipping", return_summary:"Returns not accepted"}), false, "A no-return listing entered the Daily Drop");
+assert.strictEqual(isDailyPickEligible({...base, score:75, evidence_confidence:80, shipping_summary:"Free shipping", rating:2}), false, "A poorly rated product entered the Daily Drop");
+assert.strictEqual(isDailyPickEligible({...base, score:75, evidence_confidence:80, shipping_summary:"Free shipping"}), true, "A qualified offer was rejected from the Daily Drop");
 
 const missing = scoreProduct({...base, rating:0, review_count:0, original_price:null, shipping_summary:"", return_summary:"", seller_rating:0, seller_feedback_count:0});
 assert.strictEqual(missing.breakdown.price_quality, 0, "Missing price evidence received points");
 assert.strictEqual(missing.breakdown.product_quality, 0, "Missing rating received points");
 assert.strictEqual(missing.breakdown.review_confidence, 0, "Missing reviews received points");
 assert(missing.evidenceConfidence < 50, "Sparse evidence received high confidence");
+const referenceOnly = scoreProduct({...base, current_price:50, original_price:200, shipping_summary:"Free shipping"});
+assert(referenceOnly.breakdown.price_quality <= 15, "A retailer reference price earned a full verified price score");
 
 const normalizedPlaceholder = normalizeProductIdentity({...base, product_key:"gtin:Does not apply", gtin:"Does not apply", title:"First unrelated item"});
 assert.strictEqual(normalizedPlaceholder.product_key, "", "Placeholder product key survived normalization");

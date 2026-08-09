@@ -55,7 +55,7 @@ function deduplicationKeys(product) {
   return [...new Set(keys)];
 }
 
-const SCORE_MODEL = "current-offer-v5";
+const SCORE_MODEL = "current-offer-v6";
 
 function localizedAmount(value) {
   let candidate = String(value || "").replace(/\s/g, "");
@@ -153,6 +153,10 @@ function isAvailable(product) {
   return !/\b(out of stock|unavailable|sold out|expired|discontinued)\b/i.test(String(product.availability || ""));
 }
 
+function returnsNotAccepted(product) {
+  return /\b(?:returns? not accepted|no returns?|final sale|retours? non acceptés?|aucun retour|keine rückgabe|rückgabe ausgeschlossen)\b/i.test(String(product.return_summary || ""));
+}
+
 function isEligible(product, options = {}) {
   if (!product?.title || !product?.image_url) return false;
   if (isDemo(product)) return true;
@@ -160,7 +164,7 @@ function isEligible(product, options = {}) {
   if (!/^https?:\/\//i.test(String(product.affiliate_url || ""))) return false;
   if (!isAvailable(product)) return false;
   if (number(product.current_price) <= 0) return false;
-  const noReturns = /\b(?:returns? not accepted|no returns?|final sale)\b/i.test(String(product.return_summary || ""));
+  const noReturns = returnsNotAccepted(product);
   const deliveryBurden = shippingRatio(product);
   const shipping = paidShippingCost(product);
   const price = number(product.current_price);
@@ -172,6 +176,22 @@ function isEligible(product, options = {}) {
   return true;
 }
 
+function isDailyPickEligible(product, options = {}) {
+  if (!isEligible(product, {...options, maximumShippingRatio:number(options.maximumShippingRatio, 0.25)})) return false;
+  if (returnsNotAccepted(product)) return false;
+  const shipping = paidShippingCost(product);
+  if (shipping == null) return false;
+  const rating = number(product.rating);
+  if (rating > 0 && rating < number(options.minimumDailyRating, 4.3)) return false;
+  const source = retailer(product);
+  if (source === "ebay" && (number(product.seller_rating) < 4.8 || number(product.seller_feedback_count) < 100)) return false;
+  const scored = product.score != null && product.evidence_confidence != null
+    ? product
+    : {...product, ...scoreProduct(product)};
+  return number(scored.score ?? scored.total) >= number(options.minimumDailyScore, 60) &&
+    number(scored.evidence_confidence ?? scored.evidenceConfidence) >= number(options.minimumDailyEvidenceConfidence, 55);
+}
+
 function priceScore(product) {
   const current = landedCost(product);
   if (current <= 0) return 0;
@@ -179,8 +199,11 @@ function priceScore(product) {
   const comparableMedian = number(product.comparable_median_price);
   const listReference = number(product.original_price);
   const itemPrice = number(product.current_price);
-  const verifiedDiscount = listReference > itemPrice ? (listReference - itemPrice) / listReference : 0;
-  const referenceScore = verifiedDiscount > 0 ? clamp(8 + verifiedDiscount * 55, 8, 30) : 0;
+  const referenceGap = listReference > itemPrice ? (listReference - itemPrice) / listReference : 0;
+  // A seller's struck-through reference price is supporting evidence, not
+  // tracked price history. It can help, but never earn more than half of the
+  // price component by itself.
+  const referenceScore = referenceGap > 0 ? clamp(4 + referenceGap * 30, 4, 15) : 0;
   if (comparableCount < 2 || comparableMedian <= 0) return referenceScore;
 
   // A median of matching landed costs is the primary price signal. At the
@@ -365,6 +388,7 @@ function selectUniqueProducts(scoredOffers) {
 
 exports.scoreProduct = scoreProduct;
 exports.isEligible = isEligible;
+exports.isDailyPickEligible = isDailyPickEligible;
 exports.evidenceConfidence = evidenceConfidence;
 exports.deduplicationKeys = deduplicationKeys;
 exports.exactMatchKey = exactMatchKey;

@@ -16,9 +16,10 @@ const { sourceSql, isPublicSource } = require("./publicCatalog");
 const { enabledProviders } = require("./providers/registry");
 const { coverage: retailerCoverage } = require("./retailerCatalog");
 const { presentProduct } = require("./productPresentation");
-const { deduplicationKeys } = require("./ranker");
+const { deduplicationKeys, isDailyPickEligible } = require("./ranker");
 const { methodology, methodologyMain } = require("./methodology");
 const { createEditorialBrief } = require("./editorialBrief");
+const { createShoppingAssistant } = require("./shoppingAssistant");
 const { passwordResetEmail, subscriptionEmail, clubWaitlistEmail } = require("./mailer");
 const {
   normalizeAction,
@@ -47,6 +48,7 @@ const {
 } = require("./i18n");
 
 const app = express();
+const shoppingAssistant = createShoppingAssistant({ db, sourceSql, market });
 app.set("trust proxy", 1);
 app.disable("x-powered-by");
 const publicDir = path.join(__dirname, "..", "public");
@@ -164,6 +166,47 @@ app.use(express.json());
 app.use("/api", (req, res, next) => {
   res.set("X-Robots-Tag", "noindex, nofollow");
   next();
+});
+
+const shoppingAssistantAttempts = new Map();
+const shoppingAssistantRateLimit = (req, res, next) => {
+  const key = String(req.ip || req.socket?.remoteAddress || "unknown");
+  const now = Date.now();
+  const recent = (shoppingAssistantAttempts.get(key) || []).filter(time => now - time < 15 * 60 * 1000);
+  if (recent.length >= 20) return res.status(429).json({error:"Too many requests. Please wait a few minutes and try again."});
+  recent.push(now);
+  shoppingAssistantAttempts.set(key, recent);
+  next();
+};
+
+app.get("/api/shopping-assistant/status", (req, res) => {
+  res.set("Cache-Control", "no-store").json({available:shoppingAssistant.configured});
+});
+
+app.post("/api/shopping-assistant", shoppingAssistantRateLimit, async (req, res) => {
+  const requestedMarket = normalizeMarket(req.body?.market);
+  const selectedMarket = market(requestedMarket || req.market || marketFromIp(req).code);
+  const requestedLanguage = String(req.body?.language || req.language || "en").trim().toLowerCase().split("-")[0];
+  const language = ["en", "es", "fr", "de"].includes(requestedLanguage) ? requestedLanguage : "en";
+  try {
+    const result = await shoppingAssistant.respond({
+      message:req.body?.message,
+      messages:req.body?.messages,
+      marketCode:selectedMarket.code,
+      language
+    });
+    return res.set("Cache-Control", "no-store").json(result);
+  } catch (error) {
+    const status = Number(error.statusCode) || 502;
+    if (status >= 500) console.error("Shopping assistant request failed:", error.message);
+    return res.status(status).set("Cache-Control", "no-store").json({
+      error:status === 503
+        ? "The AI Shopping Assistant is being connected. Please try again shortly."
+        : status === 400
+          ? error.message
+          : "The AI Shopping Assistant could not complete that request. Please try again."
+    });
+  }
 });
 app.use((req, res, next) => {
   const match = req.url.match(new RegExp(`^/(${marketCodes.join("|")})(?=/|\\?|$)`));
@@ -349,7 +392,7 @@ Object.entries(trustPages).forEach(([route, file]) => app.get(route, (req, res) 
       '<button id="themeToggle"',
       `${languageSwitcher(req, selectedMarket.code, language)}<button id="themeToggle"`
     )
-    .replace("</head>", '<link rel="stylesheet" href="/cookie-consent.css?v=20260730"></head>')
+    .replace("</head>", '<link rel="stylesheet" href="/i18n.css?v=20260808-assistant"><link rel="stylesheet" href="/cookie-consent.css?v=20260730"></head>')
     .replace("</body>", '<script src="/cookie-consent.js?v=20260730"></script></body>');
   res.set(
     "Cache-Control",
@@ -574,12 +617,24 @@ const recordClick = (req, product, {
 };
 
 const requestMarket = req => req.market ? market(req.market) : marketFromIp(req);
-const navCategories = code => db.prepare(`SELECT DISTINCT category FROM products WHERE market=? AND status='published' AND ${sourceSql()} AND category<>'' ORDER BY category`).all(code).map(row => row.category);
+const isGenericBrand = value => /^(?:unbranded(?:-generic)?|generic|unknown|branded)$/i.test(clean(value));
+const isPubliclyIndexable = product => isDailyPickEligible(product);
+const navCategories = code => uniqueProductsInOrder(db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()} AND category<>'' ORDER BY score DESC,updated_at DESC`).all(code))
+  .filter(isPubliclyIndexable)
+  .map(product => product.category)
+  .filter((category, index, categories) => categories.indexOf(category) === index)
+  .sort();
 const sharedHeader = (code, language = "en", req = null) => {
   const home = marketPath(code);
-  return `<header class="site-header"><div class="header-top"><a class="brand" href="${home}"><span class="brand-mark" aria-hidden="true"><img src="/header-bag.svg?v=20260731-larger-bag" alt=""></span><span class="brand-copy"><strong><span>OneDaily</span><span class="brand-drop">Drop</span></strong><small>${esc(t(language,"brand.seoTagline"))}</small></span></a><form class="header-search" action="${marketPath(code, "/search")}"><span aria-hidden="true">⌕</span><input name="q" type="search" placeholder="${esc(t(language,"search.short"))}" aria-label="${esc(t(language,"search.short"))}"></form><a class="header-subscribe" href="${home}#subscribe">${esc(t(language,"nav.subscribe"))}</a><button id="themeToggle" class="theme-button" type="button" aria-label="${esc(t(language,"theme.toDark"))}" title="${esc(t(language,"theme.dark"))}"><span class="theme-button-icon" aria-hidden="true">☾</span><span class="theme-button-label">${esc(t(language,"theme.dark"))}</span></button>${req ? languageSwitcher(req, code, language) : ""}<button class="mobile-menu-toggle" type="button" aria-expanded="false" aria-controls="mainNavigation" aria-label="${esc(t(language,"menu.open"))}"><span></span><span></span><span></span></button></div><nav id="mainNavigation" class="main-nav" aria-label="${esc(t(language,"nav.primary"))}"><a href="${home}">${esc(t(language,"nav.todayShort"))}</a><div class="category-menu"><button type="button" aria-expanded="false">${esc(t(language,"nav.categories"))} <span>⌄</span></button><div class="mega-menu" hidden>${navCategories(code).map(category => `<a href="${catPath(category, code)}">${esc(categoryLabel(category, language))}</a>`).join("")}</div></div><a href="${home}#trending">${esc(t(language,"nav.trending"))}</a><a href="${marketPath(code, "/archive")}">${esc(t(language,"nav.archive"))}</a><a href="${marketPath(code, "/about")}">${esc(t(language,"nav.about"))}</a></nav></header>`;
+  return `<header class="site-header"><div class="header-top"><a class="brand" href="${home}"><span class="brand-mark" aria-hidden="true"><img src="/header-bag.svg?v=20260731-larger-bag" alt=""></span><span class="brand-copy"><strong><span>OneDaily</span><span class="brand-drop">Drop</span></strong><small>${esc(t(language,"brand.seoTagline"))}</small></span></a><form class="header-search" action="${marketPath(code, "/search")}"><span aria-hidden="true">⌕</span><input name="q" type="search" placeholder="${esc(t(language,"search.short"))}" aria-label="${esc(t(language,"search.short"))}"></form><button class="header-ai" type="button" data-shopping-assistant-open><span aria-hidden="true">✦</span><span>${esc(t(language,"assistant.short"))}</span></button><a class="header-subscribe" href="${home}#subscribe">${esc(t(language,"nav.subscribe"))}</a><button id="themeToggle" class="theme-button" type="button" aria-label="${esc(t(language,"theme.toDark"))}" title="${esc(t(language,"theme.dark"))}"><span class="theme-button-icon" aria-hidden="true">☾</span><span class="theme-button-label">${esc(t(language,"theme.dark"))}</span></button>${req ? languageSwitcher(req, code, language) : ""}<button class="mobile-menu-toggle" type="button" aria-expanded="false" aria-controls="mainNavigation" aria-label="${esc(t(language,"menu.open"))}"><span></span><span></span><span></span></button></div><nav id="mainNavigation" class="main-nav" aria-label="${esc(t(language,"nav.primary"))}"><a href="${home}">${esc(t(language,"nav.todayShort"))}</a><div class="category-menu"><button type="button" aria-expanded="false">${esc(t(language,"nav.categories"))} <span>⌄</span></button><div class="mega-menu" hidden>${navCategories(code).map(category => `<a href="${catPath(category, code)}">${esc(categoryLabel(category, language))}</a>`).join("")}</div></div><a href="${home}#top">${esc(t(language,"nav.more"))}</a><a href="${marketPath(code, "/archive")}">${esc(t(language,"nav.archive"))}</a><a href="${marketPath(code, "/about")}">${esc(t(language,"nav.about"))}</a></nav></header>`;
 };
 const sharedFooter = (code, language = "en") => `<footer><div class="footer-brand"><b>OneDailyDrop</b><p>${esc(t(language,"brand.seoTagline"))}</p><div class="footer-links"><a href="${marketPath(code, "/about")}">${esc(t(language,"footer.about"))}</a><a href="${marketPath(code, "/contact")}">${esc(t(language,"footer.contact"))}</a><a href="${marketPath(code, "/privacy")}">${esc(t(language,"footer.privacy"))}</a><a href="${marketPath(code, "/terms")}">${esc(t(language,"footer.terms"))}</a><a href="${marketPath(code, "/affiliate-disclosure")}">${esc(t(language,"footer.affiliate"))}</a><a href="${marketPath(code, "/editorial-policy")}">${esc(t(language,"footer.editorial"))}</a></div></div><p class="disclosure">${esc(t(language,"footer.preview"))}</p></footer>`;
+const shoppingAssistantPanel = (code, language) => {
+  const prompts = ["assistant.promptOne", "assistant.promptTwo", "assistant.promptThree"]
+    .map(key => `<button type="button" data-assistant-prompt="${esc(t(language,key))}">${esc(t(language,key))}</button>`)
+    .join("");
+  return `<div id="shoppingAssistantBackdrop" class="assistant-backdrop" hidden></div><aside id="shoppingAssistant" class="shopping-assistant" role="dialog" aria-modal="true" aria-labelledby="shoppingAssistantTitle" hidden data-market="${esc(code)}" data-language="${esc(language)}" data-you="${esc(t(language,"assistant.you"))}" data-thinking="${esc(t(language,"assistant.thinking"))}" data-failed="${esc(t(language,"assistant.failed"))}" data-sources="${esc(t(language,"assistant.sources"))}"><div class="assistant-header"><div class="assistant-title"><span class="assistant-spark" aria-hidden="true">✦</span><div><strong id="shoppingAssistantTitle">${esc(t(language,"assistant.title"))}</strong><small>${esc(t(language,"assistant.subtitle"))}</small></div></div><button class="assistant-close" type="button" data-shopping-assistant-close aria-label="${esc(t(language,"assistant.close"))}">×</button></div><div class="assistant-conversation"><div class="assistant-intro"><p>${esc(t(language,"assistant.intro"))}</p><div class="assistant-prompts">${prompts}</div></div><div class="assistant-messages" data-assistant-messages aria-live="polite"></div><div class="assistant-products" data-assistant-products hidden></div><div class="assistant-sources" data-assistant-sources hidden></div></div><form class="assistant-form"><div class="assistant-input-row"><textarea maxlength="1200" rows="1" required placeholder="${esc(t(language,"assistant.placeholder"))}" aria-label="${esc(t(language,"assistant.placeholder"))}"></textarea><button type="submit" aria-label="${esc(t(language,"assistant.send"))}">↑</button></div><p class="assistant-disclaimer">${esc(t(language,"assistant.disclaimer"))}</p></form></aside>`;
+};
 const shell = (title, description, canonical, body, schema = null, image = "", robots = "", code = "us", alternateCodes = marketCodes, req = null) => {
   const selectedMarket = market(code);
   const language = req?.language || "en";
@@ -630,7 +685,10 @@ const shell = (title, description, canonical, body, schema = null, image = "", r
   };
   const ogType = suppliedNodes.some(node => node?.["@type"] === "Product") ? "product" : "website";
   const html = `<!doctype html><html lang="${esc(locale)}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0a1020"><title>${esc(title)}</title><meta name="description" content="${esc(description.slice(0,160))}"><meta name="robots" content="${esc(robotsContent)}"><link rel="canonical" href="${esc(canonical)}"><link rel="icon" href="/favicon.svg" type="image/svg+xml">${alternates}${imageConnectionHints(image)}<meta property="og:type" content="${ogType}"><meta property="og:site_name" content="OneDailyDrop"><meta property="og:locale" content="${esc(ogLocale)}"><meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(description.slice(0,180))}"><meta property="og:url" content="${esc(canonical)}">${image ? `<meta property="og:image" content="${esc(image)}"><meta property="og:image:alt" content="${esc(title)}">` : ""}<meta name="twitter:card" content="${image ? "summary_large_image" : "summary"}"><meta name="twitter:title" content="${esc(title)}"><meta name="twitter:description" content="${esc(description.slice(0,180))}">${image ? `<meta name="twitter:image" content="${esc(image)}">` : ""}<link rel="stylesheet" href="/styles.css?v=20260731-brand-lockup"><link rel="stylesheet" href="/brand-theme.css?v=20260731-brand-lockup"><link rel="stylesheet" href="/liquid-glass.css?v=20260731-brand-lockup"><script type="application/ld+json">${JSON.stringify(pageSchema).replace(/</g,"\\u003c")}</script><script>window.__ODD_LANGUAGE__=${JSON.stringify(language)};window.__ODD_LOCALE__=${JSON.stringify(locale)};window.__ODD_TEXT__=${JSON.stringify(clientCopy(language)).replace(/</g, "\\u003c")};</script></head><body>${sharedHeader(code, language, req)}${body}${sharedFooter(code, language)}<script src="/theme.js?v=20260728-i18n2"></script><script src="/site-shell.js?v=20260728-i18n2"></script><script src="/click-tracking.js?v=20260805-stage2"></script></body></html>`;
-  const versionedHtml = html.replace("/styles.css?v=20260731-brand-lockup", "/styles.css?v=20260805-stage4");
+  const versionedHtml = html
+    .replace("/styles.css?v=20260731-brand-lockup", "/styles.css?v=20260808-assistant")
+    .replace("</head>", '<link rel="stylesheet" href="/i18n.css?v=20260808-assistant"><link rel="stylesheet" href="/shopping-assistant.css?v=20260808"></head>')
+    .replace("</body>", `${shoppingAssistantPanel(code, language)}<script src="/shopping-assistant.js?v=20260808"></script></body>`);
   return localizeHtml(versionedHtml, language);
 };
 
@@ -639,10 +697,8 @@ const scoreMetrics = (display, language = "en", { atSelection = false } = {}) =>
   const hasScore = Number.isFinite(score) && score >= 60;
   const productRating = clean(display?.display_product_rating);
   const sellerRating = clean(display?.display_seller_rating);
-  const confidence = Number(display?.display_evidence_confidence);
   if (!hasScore && !productRating && !sellerRating) return "";
   const ratings = [
-    Number.isFinite(confidence) ? `<span class="deal-rating"><strong>${confidence}/100</strong><small>${esc(display.display_evidence_confidence_label || t(language,"product.evidenceConfidence"))}</small></span>` : "",
     productRating ? `<span class="deal-rating"><strong>★ ${esc(productRating)}</strong><small>${esc(display.display_product_rating_label || t(language,"product.productRating"))}</small></span>` : "",
     sellerRating ? `<span class="deal-rating"><strong>${esc(sellerRating)}</strong><small>${esc(display.display_seller_rating_label || t(language,"product.sellerRating"))}${display.display_seller_feedback ? ` · ${esc(display.display_seller_feedback)}` : ""}</small></span>` : ""
   ].filter(Boolean).join("");
@@ -721,6 +777,7 @@ const alternativesFor = (product, limit = 3) => {
   const currentKeys = new Set(deduplicationKeys(product));
   const candidates = db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()} AND category=? AND id<>? ORDER BY score DESC,updated_at DESC LIMIT 40`)
     .all(product.market, product.category || "Deals", product.id)
+    .filter(isPubliclyIndexable)
     .filter(candidate => !deduplicationKeys(candidate).some(key => currentKeys.has(key)))
     .map(candidate => {
       const candidateWords = significantWords(candidate.canonical_title || candidate.title);
@@ -773,7 +830,7 @@ app.get("/deal/:slug", (req, res) => {
   const allLow = intelligence.allTime.sufficient ? intelligence.allTime.low : null;
   const alternatives = alternativesFor(p);
   const alternativeIds = new Set(alternatives.map(product => product.id));
-  const related = p.brand_slug ? uniqueProductsInOrder(db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()} AND brand_slug=? AND id<>? ORDER BY score DESC LIMIT 16`).all(p.market, p.brand_slug, p.id).filter(product => !alternativeIds.has(product.id))).slice(0, 4) : [];
+  const related = p.brand_slug ? uniqueProductsInOrder(db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()} AND brand_slug=? AND id<>? ORDER BY score DESC LIMIT 16`).all(p.market, p.brand_slug, p.id).filter(isPubliclyIndexable).filter(product => !alternativeIds.has(product.id))).slice(0, 4) : [];
   const offerRows = sameProductOffers(p);
   const brief = createEditorialBrief(p, display, {
     language: req.language,
@@ -815,13 +872,15 @@ app.get("/deal/:slug", (req, res) => {
     : `<div class="detail-grid"><section><h3>${esc(t(req.language,"product.currentPrice"))}</h3><p>${money(p.current_price,p.currency,pageLocale)}</p></section>${ratingSummary}<section><h3>${esc(t(req.language,"page.low30"))}</h3><p>${historyLabel(intelligence.day30)}</p></section><section><h3>${esc(t(req.language,"page.low90"))}</h3><p>${historyLabel(intelligence.day90)}</p></section><section><h3>${esc(t(req.language,"page.lowAll"))}</h3><p>${historyLabel(intelligence.allTime)}</p></section></div><section id="price-history" class="editorial-box">${retailerDetails}<h2>${esc(t(req.language,"page.priceHistory"))}</h2>${chartSvg(history,req.language,p.market)}<p>${esc(t(req.language,"page.historySummary",{observations:history.length,days:intelligence.allTime.distinctDays}))}</p></section>`;
   const body = `<main class="product-page"><nav class="breadcrumb"><a href="${marketPath(p.market)}">${esc(t(req.language,"page.home"))}</a><span>›</span><a href="${catPath(category,p.market)}">${esc(displayCategory)}</a>${p.brand?`<span>›</span><a href="${brandPath(p.brand,p.market)}">${esc(p.brand)}</a>`:""}<span>›</span><span>${esc(title)}</span></nav><article class="product-detail"><div class="product-detail-media"><img src="${esc(p.image_url)}" alt="${esc(hasRetailerImage(p) ? title : `${store} ${t(req.language,"product.editorPick")}`)}" decoding="async" fetchpriority="high"></div><div class="product-detail-content">${brandBlock}<h1>${esc(title)}</h1>${scoreBlock}<p class="product-lead">${esc(brief.verdict)}</p><a class="brief-jump-link" href="#buying-brief">${esc(brief.eyebrow)} ↓</a>${priceDetails}<div class="product-price-box"><span class="product-price">${currentOffer ? money(p.current_price,p.currency,pageLocale) : `${esc(t(req.language,"product.checkPrice"))} ${esc(store)}`}</span>${currentOffer && p.original_price?`<span class="old">${money(p.original_price,p.currency,pageLocale)}</span>`:""}<small>${esc(t(req.language,"page.finalPrice"))}</small></div>${retailerActions}</div></article>${briefBlock}${offerComparisonBlock}${alternativesBlock}${relatedBlock}</main>`;
   const enrichedBody = currentOffer ? body : body.replace('<div class="product-price-box">', `${retailerDetails}<div class="product-price-box">`);
-  res.send(shell(brief.seoTitle, description, canonical, enrichedBody, productSchema, p.image_url, "", p.market, marketCodes, req));
+  const robots = isPubliclyIndexable(p) ? "" : "noindex,follow";
+  if (robots) res.set("X-Robots-Tag", "noindex, follow");
+  res.send(shell(brief.seoTitle, description, canonical, enrichedBody, productSchema, p.image_url, robots, p.market, marketCodes, req));
 });
 
 app.get("/category/:slug", (req, res) => {
   const selectedMarket = requestMarket(req);
   const localizedMarketName = marketName(selectedMarket.code, req.language);
-  const all = uniqueProductsInOrder(db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()} ORDER BY score DESC,updated_at DESC`).all(selectedMarket.code));
+  const all = uniqueProductsInOrder(db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()} ORDER BY score DESC,updated_at DESC`).all(selectedMarket.code)).filter(isPubliclyIndexable);
   const category = [...new Set(all.map(product => product.category).filter(Boolean))].find(value => slug(value) === req.params.slug);
   if (!category) return sendNotFound(req, res);
   const products = all.filter(product => product.category === category), canonical = SITE + catPath(category, selectedMarket.code);
@@ -835,7 +894,7 @@ app.get("/category/:slug", (req, res) => {
   const priceRange = prices.length ? `${money(Math.min(...prices), selectedMarket.currency, pageLocale)} – ${money(Math.max(...prices), selectedMarket.currency, pageLocale)}` : t(req.language,"page.checkCurrentOffers");
   const averageRating = ratings.length ? `${(ratings.reduce((sum, value) => sum + value, 0) / ratings.length).toFixed(1)} / 5` : t(req.language,"page.notAvailable");
   const categorySummary = `<div class="detail-grid"><section><h2>Products checked</h2><p>${products.length}</p></section><section><h2>Current price range</h2><p>${esc(priceRange)}</p></section><section><h2>Average rating</h2><p>${esc(averageRating)}</p></section></div><section class="editorial-box"><h2>${esc(t(req.language,"page.howSelectCategory",{category:categoryTitle.toLowerCase()}))}</h2><p>${esc(t(req.language,"page.categoryMethod",{country:localizedMarketName}))}</p></section>`;
-  const alternateCodes = marketCodes.filter(code => db.prepare(`SELECT 1 FROM products WHERE market=? AND status='published' AND ${sourceSql()} AND category=? LIMIT 1`).get(code, category));
+  const alternateCodes = marketCodes.filter(code => db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()} AND category=?`).all(code, category).some(isPubliclyIndexable));
   res.send(shell(t(req.language,"seo.categoryTitle",{category:categoryTitle,country:localizedMarketName}), description, canonical, `<main><section class="deals-section"><nav class="breadcrumb"><a href="${marketPath(selectedMarket.code)}">${esc(t(req.language,"page.home"))}</a><span>›</span><span>${esc(t(req.language,"seo.categoryHeading",{category:categoryTitle}))}</span></nav><div class="section-heading"><div><p class="eyebrow">${esc(localizedMarketName.toUpperCase())} · ${esc(t(req.language,"nav.categories").toUpperCase())}</p><h1>${esc(t(req.language,"seo.categoryHeading",{category:categoryTitle}))}</h1><p>${esc(description)}</p></div><p class="result-count">${count}</p></div>${categorySummary}<div class="grid">${products.map((product,index)=>productCard(product,index+1,req.language,"category")).join("")}</div></section></main>`, schema, "", "", selectedMarket.code, alternateCodes, req));
 });
 
@@ -843,7 +902,7 @@ app.get("/search", (req, res) => {
   const selectedMarket = requestMarket(req);
   const query = clean(req.query.q).slice(0, 80);
   const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
-  const all = uniqueProductsInOrder(db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()} ORDER BY score DESC,updated_at DESC`).all(selectedMarket.code));
+  const all = uniqueProductsInOrder(db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()} ORDER BY score DESC,updated_at DESC`).all(selectedMarket.code)).filter(isPubliclyIndexable);
   const products = query ? all.filter(product => matchesSearch(product, terms)) : [];
   const count = t(req.language, "search.found", { count: products.length });
   const empty = query ? t(req.language,"page.searchNoMatch",{query}) : t(req.language,"page.searchPrompt");
@@ -890,10 +949,10 @@ app.get("/archive", (req, res) => {
 
 app.get("/brand/:slug", (req, res) => {
   const selectedMarket = requestMarket(req);
-  const products = uniqueProductsInOrder(db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()} AND brand_slug=? ORDER BY score DESC,updated_at DESC`).all(selectedMarket.code, req.params.slug));
+  const products = uniqueProductsInOrder(db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()} AND brand_slug=? ORDER BY score DESC,updated_at DESC`).all(selectedMarket.code, req.params.slug)).filter(isPubliclyIndexable);
   if (!products.length) return sendNotFound(req, res);
   const brand = products[0].brand, canonical = SITE + brandPath(brand, selectedMarket.code), avgPrice = products.reduce((sum,p)=>sum+Number(p.current_price||0),0)/products.length, avgRating = products.reduce((sum,p)=>sum+Number(p.rating||0),0)/products.length, avgDiscount = products.reduce((sum,p)=>sum+discountPercent(p),0)/products.length;
-  const alternateCodes = marketCodes.filter(code => db.prepare(`SELECT 1 FROM products WHERE market=? AND status='published' AND ${sourceSql()} AND brand_slug=? LIMIT 1`).get(code, req.params.slug));
+  const alternateCodes = marketCodes.filter(code => db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()} AND brand_slug=?`).all(code, req.params.slug).some(isPubliclyIndexable));
   const description = t(req.language,"page.brandDescription",{count:products.length,brand});
   const schema = {"@context":"https://schema.org","@graph":[{"@type":"Brand",name:brand,url:canonical},{"@type":"ItemList",name:`Best ${brand} Deals`,numberOfItems:products.length,itemListElement:products.map((product,index)=>({"@type":"ListItem",position:index+1,url:SITE+dealPath(product),name:shortTitle(product.title)}))},{"@type":"BreadcrumbList",itemListElement:[{"@type":"ListItem",position:1,name:"Home",item:SITE+marketPath(selectedMarket.code)},{"@type":"ListItem",position:2,name:"Brands",item:SITE+marketPath(selectedMarket.code,"/brands")},{"@type":"ListItem",position:3,name:brand,item:canonical}]}]};
   const stats = `<div class="detail-grid"><section><h3>${esc(t(req.language,"page.products"))}</h3><p>${products.length}</p></section><section><h3>${esc(t(req.language,"page.averagePrice"))}</h3><p>${money(avgPrice,products[0].currency,languageTag(selectedMarket.code,req.language))}</p></section><section><h3>${esc(t(req.language,"page.averageRating"))}</h3><p>${avgRating.toFixed(1)} / 5</p></section><section><h3>${esc(t(req.language,"page.averageDiscount"))}</h3><p>${Math.round(avgDiscount)}%</p></section></div>`;
@@ -902,13 +961,13 @@ app.get("/brand/:slug", (req, res) => {
 
 app.get("/brands", (req, res) => {
   const selectedMarket = requestMarket(req);
-  const brands = summarizeBrands(db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()} AND brand_slug<>'' ORDER BY score DESC,updated_at DESC`).all(selectedMarket.code));
+  const brands = summarizeBrands(db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()} AND brand_slug<>'' ORDER BY score DESC,updated_at DESC`).all(selectedMarket.code).filter(product => isPubliclyIndexable(product) && !isGenericBrand(product.brand_slug)));
   if (!brands.length) {
     res.set("X-Robots-Tag", "noindex, follow");
     return sendNotFound(req, res);
   }
   const canonical = SITE + marketPath(selectedMarket.code, "/brands"), description = t(req.language,"page.brandDescription",{count:brands.length,brand:marketName(selectedMarket.code,req.language)});
-  const alternateCodes = marketCodes.filter(code => db.prepare(`SELECT 1 FROM products WHERE market=? AND status='published' AND ${sourceSql()} AND brand_slug<>'' LIMIT 1`).get(code));
+  const alternateCodes = marketCodes.filter(code => db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()} AND brand_slug<>''`).all(code).some(product => isPubliclyIndexable(product) && !isGenericBrand(product.brand_slug)));
   const schema = {"@context":"https://schema.org","@type":"ItemList",name:"Popular Brands",numberOfItems:brands.length,itemListElement:brands.map((brand,index)=>({"@type":"ListItem",position:index+1,url:SITE+brandPath(brand.brand,selectedMarket.code),name:brand.brand}))};
   const cards = brands.map(brand => `<article class="card"><div class="card-content"><p class="eyebrow">${esc(t(req.language,"search.products",{count:brand.product_count}).toUpperCase())}</p><h2><a href="${brandPath(brand.brand, selectedMarket.code)}">${esc(brand.brand)}</a></h2><p>${esc(t(req.language,"page.averagePrice"))}: ${money(brand.avg_price, selectedMarket.currency,languageTag(selectedMarket.code,req.language))} · ${esc(t(req.language,"page.averageRating"))}: ${Number(brand.avg_rating||0).toFixed(1)}</p></div></article>`).join("");
   res.send(shell(`${t(req.language,"page.popularBrands")} | OneDailyDrop`, description, canonical, `<main><section class="deals-section"><div class="section-heading"><div><p class="eyebrow">${esc(marketName(selectedMarket.code,req.language).toUpperCase())}</p><h1>${esc(t(req.language,"page.popularBrands"))}</h1></div><p class="result-count">${esc(t(req.language,"search.products",{count:brands.length}))}</p></div><div class="grid">${cards}</div></section></main>`, schema, "", brands.length ? "" : "noindex,follow", selectedMarket.code, alternateCodes, req));
@@ -919,7 +978,8 @@ app.get("/robots.txt", (req, res) => res
   .type("text/plain")
   .send(`User-agent: *\nAllow: /\nDisallow: /admin\nDisallow: /api/\nDisallow: /go/\nDisallow: /us/go/\nDisallow: /ca/go/\nDisallow: /uk/go/\nDisallow: /fr/go/\nDisallow: /de/go/\n\nSitemap: ${SITE}/sitemap.xml\n`));
 app.get("/sitemap.xml", (req, res) => {
-  const products = uniqueProductsInOrder(db.prepare(`SELECT * FROM products WHERE status='published' AND ${sourceSql()} ORDER BY market,score DESC,updated_at DESC`).all());
+  const products = uniqueProductsInOrder(db.prepare(`SELECT * FROM products WHERE status='published' AND ${sourceSql()} ORDER BY market,score DESC,updated_at DESC`).all())
+    .filter(isPubliclyIndexable);
   const urls = [];
   const localizedAlternates = (pathname, codes = marketCodes) => {
     const supported = [...new Set(codes.map(normalizeMarket).filter(Boolean))];
@@ -940,7 +1000,7 @@ app.get("/sitemap.xml", (req, res) => {
     const key = slug(product.category);
     if (!categoryMarkets.has(key)) categoryMarkets.set(key, new Set());
     categoryMarkets.get(key).add(product.market);
-    if (product.brand_slug) {
+    if (product.brand_slug && !isGenericBrand(product.brand_slug)) {
       if (!brandMarkets.has(product.brand_slug)) brandMarkets.set(product.brand_slug, new Set());
       brandMarkets.get(product.brand_slug).add(product.market);
     }
@@ -950,7 +1010,7 @@ app.get("/sitemap.xml", (req, res) => {
   for (const code of marketCodes) {
     const marketProducts = products.filter(product => product.market === code);
     const categories = [...new Set(marketProducts.map(product => product.category).filter(Boolean))];
-    const brands = [...new Map(marketProducts.filter(product => product.brand_slug).map(product => [product.brand_slug, product.brand])).values()];
+    const brands = [...new Map(marketProducts.filter(product => product.brand_slug && !isGenericBrand(product.brand_slug)).map(product => [product.brand_slug, product.brand])).values()];
     const latestUpdate = marketProducts.map(product => validLastmod(product.updated_at)).filter(Boolean).sort().at(-1);
     urls.push({ loc: SITE + marketPath(code), alternates: localizedAlternates("/"), lastmod: latestUpdate });
     if (archiveMarkets.has(code)) urls.push({ loc: SITE + marketPath(code, "/archive"), alternates: localizedAlternates("/archive", [...archiveMarkets]), lastmod: latestUpdate });
@@ -1043,7 +1103,7 @@ app.get("/api/products", (req, res) => {
     conditions.push("category=?");
     params.push(String(req.query.category));
   }
-  const catalog = uniqueProductsInOrder(db.prepare(`SELECT * FROM products WHERE ${conditions.join(" AND ")} ORDER BY score DESC,updated_at DESC`).all(...params));
+  const catalog = uniqueProductsInOrder(db.prepare(`SELECT * FROM products WHERE ${conditions.join(" AND ")} ORDER BY score DESC,updated_at DESC`).all(...params)).filter(isPubliclyIndexable);
   const daily = db.prepare(`
     SELECT product_id,rank,score AS drop_score,score_model AS drop_score_model,current_price AS drop_price,
       original_price AS drop_original_price,drop_date,selection_reason
@@ -1076,10 +1136,10 @@ app.get("/api/products", (req, res) => {
 });
 app.get("/api/brands", (req,res) => {
   const selectedMarket = normalizeMarket(req.query.market) || requestMarket(req).code;
-  const brands = summarizeBrands(db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()} AND brand_slug<>'' ORDER BY score DESC,updated_at DESC`).all(selectedMarket));
+  const brands = summarizeBrands(db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()} AND brand_slug<>'' ORDER BY score DESC,updated_at DESC`).all(selectedMarket).filter(product => isPubliclyIndexable(product) && !isGenericBrand(product.brand_slug)));
   res.json(brands.map(brand => ({...brand,url:brandPath(brand.brand, selectedMarket)})));
 });
-app.get("/api/brands/:slug", (req,res) => { const products = uniqueProductsInOrder(db.prepare(`SELECT * FROM products WHERE status='published' AND ${sourceSql()} AND brand_slug=? ORDER BY score DESC`).all(req.params.slug)); if (!products.length) return res.status(404).json({error:"Brand not found"}); const brand = products[0].brand; res.json({brand,slug:req.params.slug,url:brandPath(brand),summary:{products:products.length,average_price:products.reduce((s,p)=>s+Number(p.current_price||0),0)/products.length,average_rating:products.reduce((s,p)=>s+Number(p.rating||0),0)/products.length,average_discount:products.reduce((s,p)=>s+discountPercent(p),0)/products.length,total_clicks:db.prepare(`SELECT COUNT(*) n FROM clicks c JOIN products p ON p.id=c.product_id WHERE c.destination_type='retailer' AND ${sourceSql("p")} AND p.brand_slug=?`).get(req.params.slug).n},products:products.map(p=>({...p,deal_url:dealPath(p)}))}); });
+app.get("/api/brands/:slug", (req,res) => { const products = uniqueProductsInOrder(db.prepare(`SELECT * FROM products WHERE status='published' AND ${sourceSql()} AND brand_slug=? ORDER BY score DESC`).all(req.params.slug)).filter(isPubliclyIndexable); if (!products.length) return res.status(404).json({error:"Brand not found"}); const brand = products[0].brand; res.json({brand,slug:req.params.slug,url:brandPath(brand),summary:{products:products.length,average_price:products.reduce((s,p)=>s+Number(p.current_price||0),0)/products.length,average_rating:products.reduce((s,p)=>s+Number(p.rating||0),0)/products.length,average_discount:products.reduce((s,p)=>s+discountPercent(p),0)/products.length,total_clicks:db.prepare(`SELECT COUNT(*) n FROM clicks c JOIN products p ON p.id=c.product_id WHERE c.destination_type='retailer' AND ${sourceSql("p")} AND p.brand_slug=?`).get(req.params.slug).n},products:products.map(p=>({...p,deal_url:dealPath(p)}))}); });
 app.get("/api/products/:id/price-history", (req,res) => { const product = db.prepare(`SELECT id,title,current_price,currency FROM products WHERE id=? AND status='published' AND ${sourceSql()}`).get(req.params.id); if (!product) return res.status(404).json({error:"Product not found"}); const history = historyFor(product.id); res.json({product,summary:{observations:history.length,lowest_30_days:minSince(history,30),lowest_90_days:minSince(history,90),lowest_ever:history.length?Math.min(...history.map(row=>Number(row.price)).filter(Number.isFinite)):null},history}); });
 app.get("/api/status", (req,res) => {
   const latestRun = db.prepare("SELECT * FROM refresh_runs ORDER BY id DESC LIMIT 1").get() || null;

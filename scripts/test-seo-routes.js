@@ -213,12 +213,17 @@ async function run() {
   assert(homepage.includes('decoding="async" fetchpriority="high"'), "Homepage LCP image priority is missing");
   assert(homepage.includes('loading="lazy" decoding="async"'), "Below-the-fold homepage images are not deferred");
   assert(homepage.includes('class="description editorial-teaser"'), "Homepage cards do not use the compact Stage 4 editorial teaser");
-  assert(homepage.includes('/styles.css?v=20260805-stage4') && homepage.includes('/app.js?v=20260805-stage4'), "Stage 4 assets are not cache-busted on the homepage");
+  assert(homepage.includes('/styles.css?v=20260808-assistant') && homepage.includes('/app.js?v=20260808-assistant'), "Assistant homepage assets are not cache-busted");
   assert(homepage.includes("OneDailyDrop Score") && homepage.includes("Overall deal score"), "The public OneDailyDrop Score is missing from the homepage");
-  assert(homepage.includes("Evidence confidence"), "Evidence Confidence is not separated from the Deal Score");
+  assert(!homepage.includes("<small>Evidence confidence</small>"), "Internal evidence confidence is still exposed as a public score");
+  assert(homepage.includes("AI Shopping Assistant") && homepage.includes("data-shopping-assistant-open"), "The AI Shopping Assistant entry point is missing");
+  assert(homepage.includes('/shopping-assistant.js?v=20260808'), "The AI Shopping Assistant client is missing");
+  for (const forbidden of ["Trending Drops", "New Drops", "Yesterday's Drops"]) {
+    assert(!homepage.includes(`<h2>${forbidden}</h2>`), `Homepage still exposes a misleading collection: ${forbidden}`);
+  }
   assert(!homepage.includes("[object Object]"), "Subscription categories render as [object Object]");
   assert(homepage.includes('<span style="--weight:20%"><b>20%</b> Product quality</span>'), "Homepage product-quality weight is stale");
-  assert(homepage.includes('<span style="--weight:10%"><b>10%</b> Demand & usefulness</span>'), "Homepage demand weight is missing");
+  assert(homepage.includes('<span style="--weight:10%"><b>10%</b> Demand &amp; usefulness</span>'), "Homepage demand weight is missing");
   assert(!homepage.includes("<b>5%</b> Freshness"), "Homepage still shows the retired freshness weight");
   assert(homepage.includes("Product rating") && homepage.includes("Seller rating"), "Product and seller ratings are not separated on the homepage");
   assert(!homepage.includes("Check current price on Amazon"), "A retired Amazon fallback remains on the homepage");
@@ -325,6 +330,8 @@ async function run() {
   assert(products.every(product => product.source === "ebay"), "A non-eBay product source is public");
   assert(products.every(product => product.affiliate_url.includes("campid=5339179772")), "An eBay affiliate link is missing the EPN campaign ID");
   assert(products.every(product => product.current_price > 0 && product.rating > 0), "Verified prices or ratings are missing");
+  const assistantStatus = await (await get("/api/shopping-assistant/status")).json();
+  assert(assistantStatus.available === false, "Assistant status must reflect a missing test API key");
 
   const status = await (await get("/api/status?market=us")).json();
   assert(status.products === 10, "Catalog status does not count the ten verified products");
@@ -369,6 +376,8 @@ async function run() {
   assert(productPage.includes("SHOP ALL ON eBay"), "The attributed retailer shop-all action is missing");
   assert(productPage.includes("action=shop_all"), "The shop-all action is not identified for analytics");
   assert(productPage.includes('target="_blank" rel="sponsored noopener noreferrer"'), "Product retailer actions do not preserve OneDailyDrop in the original tab");
+  assert(productPage.includes("data-shopping-assistant-open") && productPage.includes("shoppingAssistant"), "The assistant is not available on product pages");
+  assert(!productPage.includes("<small>Evidence confidence</small>"), "Product pages still expose internal evidence confidence");
 
   const franceProducts = await (await get("/api/products?market=fr")).json();
   const frenchProductPage = await (await fetch(`${base}/fr/deal/${franceProducts[0].id}`)).text();

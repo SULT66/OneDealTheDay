@@ -2,13 +2,17 @@ const assert = require("assert");
 const { categoryLabel } = require("../src/i18n");
 const { presentProduct, publicOneDailyDropScore } = require("../src/productPresentation");
 
-assert.strictEqual(publicOneDailyDropScore(60, 45), 82, "a just-qualified pick must start at 82");
+assert.strictEqual(publicOneDailyDropScore(60, 55), 82, "a just-qualified pick must start at 82");
 assert.strictEqual(publicOneDailyDropScore(75, 80), 89, "a strong pick must land near 90");
 assert.strictEqual(publicOneDailyDropScore(90, 90), 95, "an exceptional pick must cap at 95");
 assert.strictEqual(publicOneDailyDropScore(59.9, 100), null, "a weak candidate must not be cosmetically promoted");
-assert.strictEqual(publicOneDailyDropScore(100, 44.9), null, "sparse evidence must block a public score");
+assert.strictEqual(publicOneDailyDropScore(100, 54.9), null, "sparse evidence must block a public score");
 
 const fixture = {
+  title: "Useful pet grooming tool",
+  image_url: "https://example.com/pet-tool.jpg",
+  affiliate_url: "https://example.com/pet-tool",
+  source: "ebay",
   market: "fr",
   category: "pet supplies",
   current_price: 47.62,
@@ -54,11 +58,11 @@ assert(french.display_seller_feedback.includes("12 000") || french.display_sel
 const correctedSnapshot = presentProduct({
   ...fixture,
   drop_score: 77,
-  drop_score_model: "current-offer-v5",
+  drop_score_model: "current-offer-v6",
   drop_price: 44.62,
-  evidence_confidence: 50,
+  evidence_confidence: 70,
   score_breakdown: JSON.stringify({
-    model:"current-offer-v5",
+    model:"current-offer-v6",
     price_quality:20,
     product_quality:0,
     review_confidence:0,
@@ -67,7 +71,7 @@ const correctedSnapshot = presentProduct({
     shipping_returns:10
   })
 }, "fr");
-assert.strictEqual(correctedSnapshot.display_score, 88, "a qualified snapshot must use the calibrated public score");
+assert.strictEqual(correctedSnapshot.display_score, 89, "a qualified snapshot must use the calibrated public score");
 
 const legacySnapshot = presentProduct({...fixture, drop_score:31, drop_price:44.62}, "fr");
 assert.notStrictEqual(legacySnapshot.display_score, 31, "a legacy archive snapshot must not expose the obsolete low score");

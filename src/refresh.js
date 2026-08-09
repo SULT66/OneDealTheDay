@@ -1,5 +1,5 @@
 const db = require("./db");
-const { SCORE_MODEL, deduplicationKeys, scoreOffers, selectUniqueProducts } = require("./ranker");
+const { SCORE_MODEL, deduplicationKeys, isDailyPickEligible, scoreOffers, selectUniqueProducts } = require("./ranker");
 const { detectBrand, normalizeBrand, slugifyBrand } = require("./brandDetector");
 const { priceIntelligence, shouldRecordObservation } = require("./priceIntelligence");
 const { searchAll } = require("./providers/registry");
@@ -198,7 +198,7 @@ async function refreshMarket(config, marketCode, options = {}) {
     const scoredOffers = scoreOffers(found, eligibility);
     const catalogProducts = selectUniqueProducts(scoredOffers).slice(0, 60);
     const ranked = catalogProducts.filter(product =>
-      config.provider === "demo" || (Number(product.score) >= 60 && Number(product.evidence_confidence) >= 45)
+      config.provider === "demo" || isDailyPickEligible(product)
     );
     if (!Array.isArray(found) || found.length < 1 || catalogProducts.length < 1) {
       throw new Error(`${selectedMarket.name} refresh returned no valid catalog products (${found.length} found, ${catalogProducts.length} valid)`);

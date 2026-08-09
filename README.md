@@ -66,7 +66,18 @@ separate market/currency feed for each storefront and include at least
 The importer accepts Awin comma-, tab- or pipe-delimited CSV and gzip responses.
 It uses `aw_deep_link`, not the untracked merchant URL, for outbound clicks.
 
-The ranking uses search position, rating, review volume, discount and popularity badges. Previous products are archived and the best ten are published.
+The ranking compares landed price, product evidence, seller reliability, demand signals, delivery and returns. A public score appears only after an offer clears the editorial gate; no-return listings, unknown delivery costs and disproportionate shipping charges are excluded from the Daily Drop. Previous products are archived and the best qualified offers are published.
+
+## AI Shopping Assistant
+
+The assistant uses the OpenAI Responses API with web search plus two server-side catalog tools: qualified regional product search and tracked price history. It keeps the API key on the server, does not persist conversations through the API, and never exposes unqualified catalog scores.
+
+Set these values only in the hosting provider's encrypted app settings:
+
+- `OPENAI_API_KEY`: production OpenAI API key;
+- `OPENAI_SHOPPING_MODEL`: optional model override (defaults to `gpt-5.6-luna`).
+
+Without `OPENAI_API_KEY`, the site remains usable and the assistant endpoint reports that the connection is pending.
 
 Before public launch, use HTTPS, protect `.env`, add Privacy/Terms/Contact pages, and comply with Amazon Associates and product-data provider rules. Do not scrape Amazon directly.
 
