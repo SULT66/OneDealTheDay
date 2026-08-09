@@ -6,16 +6,15 @@
   const form = panel.querySelector("form");
   const input = panel.querySelector("textarea");
   const messagesElement = panel.querySelector("[data-assistant-messages]");
-  const productsElement = panel.querySelector("[data-assistant-products]");
-  const sourcesElement = panel.querySelector("[data-assistant-sources]");
+  const conversationElement = panel.querySelector(".assistant-conversation");
   const submitButton = form?.querySelector("button[type='submit']");
   const history = [];
   let previousFocus = null;
 
   const text = (key, fallback) => panel.dataset[key] || fallback;
   const scrollToLatest = () =>
-    messagesElement?.scrollTo({
-      top: messagesElement.scrollHeight,
+    conversationElement?.scrollTo({
+      top: conversationElement.scrollHeight,
       behavior: "smooth",
     });
 
@@ -26,7 +25,8 @@
     label.className = "assistant-message-label";
     label.textContent =
       role === "user" ? text("you", "You") : "OneDailyDrop AI";
-    const body = document.createElement("p");
+    const body = document.createElement("div");
+    body.className = "assistant-message-copy";
     body.textContent = content;
     message.append(label, body);
     messagesElement.append(message);
@@ -34,9 +34,76 @@
     return message;
   }
 
-  function renderProducts(products = []) {
-    productsElement.replaceChildren();
-    productsElement.hidden = !products.length;
+  function renderRecommendations(recommendations = [], host) {
+    if (!recommendations.length || !host) return;
+    const section = document.createElement("div");
+    section.className = "assistant-recommendations";
+    recommendations.forEach((recommendation, index) => {
+      const card = document.createElement("article");
+      card.className = "assistant-recommendation";
+      const top = document.createElement("div");
+      top.className = "assistant-recommendation-top";
+      const rank = document.createElement("span");
+      rank.className = "assistant-recommendation-rank";
+      rank.textContent = String(index + 1);
+      top.append(rank);
+      if (recommendation.badge) {
+        const badge = document.createElement("span");
+        badge.className = "assistant-recommendation-badge";
+        badge.textContent = recommendation.badge;
+        top.append(badge);
+      }
+      const title = document.createElement("h3");
+      title.textContent = recommendation.title;
+      const meta = document.createElement("div");
+      meta.className = "assistant-recommendation-meta";
+      if (recommendation.price) {
+        const price = document.createElement("strong");
+        price.textContent = recommendation.price;
+        meta.append(price);
+      }
+      if (recommendation.retailer) {
+        const retailer = document.createElement("span");
+        retailer.textContent = recommendation.retailer;
+        meta.append(retailer);
+      }
+      const reason = document.createElement("p");
+      reason.textContent = recommendation.reason;
+      card.append(top, title, meta, reason);
+      if (recommendation.url) {
+        const link = document.createElement("a");
+        link.className = "assistant-recommendation-link";
+        link.href = recommendation.url;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer nofollow";
+        link.textContent = recommendation.action_label || "View offer";
+        const arrow = document.createElement("span");
+        arrow.setAttribute("aria-hidden", "true");
+        arrow.textContent = "↗";
+        link.append(arrow);
+        card.append(link);
+      }
+      section.append(card);
+    });
+    host.append(section);
+  }
+
+  function renderComparison(notes = [], host) {
+    if (!notes.length || !host) return;
+    const list = document.createElement("ul");
+    list.className = "assistant-comparison-notes";
+    for (const note of notes) {
+      const item = document.createElement("li");
+      item.textContent = note;
+      list.append(item);
+    }
+    host.append(list);
+  }
+
+  function renderProducts(products = [], host) {
+    if (!products.length || !host) return;
+    const section = document.createElement("div");
+    section.className = "assistant-products";
     for (const product of products) {
       const card = document.createElement("a");
       card.className = "assistant-product";
@@ -65,25 +132,44 @@
         .join(" · ");
       copy.append(title, meta);
       card.append(image, copy);
-      productsElement.append(card);
+      section.append(card);
     }
+    host.append(section);
   }
 
-  function renderSources(sources = []) {
-    sourcesElement.replaceChildren();
-    sourcesElement.hidden = !sources.length;
-    if (!sources.length) return;
+  function renderSources(sources = [], host) {
+    if (!sources.length || !host) return;
+    const section = document.createElement("div");
+    section.className = "assistant-sources";
     const label = document.createElement("strong");
     label.textContent = text("sources", "Sources");
-    sourcesElement.append(label);
+    section.append(label);
     for (const source of sources) {
       const link = document.createElement("a");
       link.href = source.url;
       link.target = "_blank";
       link.rel = "noopener noreferrer nofollow";
       link.textContent = source.title;
-      sourcesElement.append(link);
+      section.append(link);
     }
+    host.append(section);
+  }
+
+  function renderResponse(message, body) {
+    const copy = message.querySelector(".assistant-message-copy");
+    copy.textContent = body.message || "";
+    renderRecommendations(body.recommendations, message);
+    renderComparison(body.comparison_notes, message);
+    if (!(body.recommendations || []).length) {
+      renderProducts(body.products, message);
+    }
+    if (body.follow_up) {
+      const followUp = document.createElement("p");
+      followUp.className = "assistant-follow-up";
+      followUp.textContent = body.follow_up;
+      message.append(followUp);
+    }
+    renderSources(body.sources, message);
   }
 
   function openPanel() {
@@ -145,13 +231,12 @@
     const question = input.value.trim();
     if (!question || submitButton.disabled) return;
     addMessage("user", question);
+    conversationElement?.classList.add("has-conversation");
     const priorHistory = history.slice(-8);
     history.push({ role: "user", content: question });
     input.value = "";
     submitButton.disabled = true;
     input.disabled = true;
-    renderProducts([]);
-    renderSources([]);
     const pending = addMessage(
       "assistant",
       text("thinking", "Comparing options…"),
@@ -174,13 +259,20 @@
           body.error ||
             text("failed", "The assistant is unavailable right now."),
         );
-      pending.querySelector("p").textContent = body.message;
+      renderResponse(pending, body);
       pending.classList.remove("is-pending");
-      history.push({ role: "assistant", content: body.message });
-      renderProducts(body.products);
-      renderSources(body.sources);
+      const recommendationHistory = (body.recommendations || [])
+        .map((item) => `${item.title} — ${item.price} ${item.retailer}`.trim())
+        .join("; ");
+      history.push({
+        role: "assistant",
+        content: [body.message, recommendationHistory]
+          .filter(Boolean)
+          .join(" ")
+          .slice(0, 1200),
+      });
     } catch (error) {
-      pending.querySelector("p").textContent =
+      pending.querySelector(".assistant-message-copy").textContent =
         error.message ||
         text("failed", "The assistant is unavailable right now.");
       pending.classList.remove("is-pending");

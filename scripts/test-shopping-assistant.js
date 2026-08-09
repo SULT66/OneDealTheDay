@@ -2,6 +2,7 @@ const assert = require("assert");
 const Database = require("better-sqlite3");
 const {
   createShoppingAssistant,
+  normalizeAssistantResponse,
   searchCatalog,
 } = require("../src/shoppingAssistant");
 
@@ -136,7 +137,22 @@ const client = {
             ],
           },
         ],
-        output_text: "This qualified blender fits the budget.",
+        output_text: JSON.stringify({
+          answer: "I found one qualified option within budget.",
+          follow_up: "Do you care more about noise or capacity?",
+          recommendations: [
+            {
+              title: "Acme quiet countertop blender",
+              retailer: "eBay",
+              price: "$79",
+              badge: "Best match",
+              reason: "It fits the budget and prioritizes quieter operation.",
+              url: "https://example.com/blender",
+              action_label: "View offer",
+            },
+          ],
+          comparison_notes: ["The tracked offer is below the $100 budget."],
+        }),
       };
     },
   },
@@ -169,6 +185,26 @@ const client = {
     calls[0].tools.some((tool) => tool.type === "web_search"),
     "Web search tool is missing",
   );
+  assert.strictEqual(
+    calls[1].text.format.type,
+    "json_schema",
+    "Assistant response is not constrained to the visual UI schema",
+  );
+  assert.strictEqual(
+    calls[1].text.format.strict,
+    true,
+    "Assistant response schema must be strict",
+  );
+  assert.strictEqual(
+    result.recommendations[0].title,
+    "Acme quiet countertop blender",
+    "Structured recommendation was not returned to the UI",
+  );
+  assert.strictEqual(
+    result.follow_up,
+    "Do you care more about noise or capacity?",
+    "Structured follow-up was not returned to the UI",
+  );
   assert(
     calls[0].tools.some(
       (tool) => tool.name === "search_catalog" && tool.strict,
@@ -180,6 +216,29 @@ const client = {
     1,
     "Catalog recommendation was not returned to the UI",
   );
+  const sanitized = normalizeAssistantResponse(
+    JSON.stringify({
+      answer: "A short answer",
+      follow_up: "",
+      recommendations: [
+        {
+          title: "Unsafe link test",
+          retailer: "Example",
+          price: "$1",
+          badge: "",
+          reason: "The card should render without an unsafe action.",
+          url: "javascript:alert(1)",
+          action_label: "Open",
+        },
+      ],
+      comparison_notes: [],
+    }),
+  );
+  assert.strictEqual(sanitized.recommendations[0].url, "");
+  const fallback = normalizeAssistantResponse(
+    "**Best value**: [Open offer](https://example.com/a-very-long-product-url)",
+  );
+  assert.strictEqual(fallback.answer, "Best value : Open offer");
   assert.strictEqual(
     result.sources[0].url,
     "https://example.com/review",
