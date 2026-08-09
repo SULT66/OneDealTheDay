@@ -133,6 +133,27 @@ body.dark .catalog-empty-checks span{color:#c7cdd6}
 
 @media(max-width:420px){.site-header .brand{gap:2px}.site-header .brand-mark{width:56px;height:56px;flex-basis:56px}.site-header .brand-copy strong{font-size:18px}}
 
+/* Homepage AI entry point: keep the expanded header balanced at every breakpoint. */
+.site-header .header-top{grid-template-columns:auto minmax(220px,1fr) auto auto auto minmax(96px,116px)}
+@media(max-width:1200px){
+  .site-header .header-subscribe{display:none}
+  .site-header .header-top{grid-template-columns:auto minmax(220px,1fr) auto auto minmax(96px,116px)}
+}
+@media(max-width:860px){
+  .site-header .header-ai span:last-child{display:none}
+  .site-header .header-ai{width:44px;padding:0}
+}
+@media(max-width:720px){
+  .site-header .header-top{grid-template-columns:minmax(0,1fr) 44px 44px!important}
+  .site-header .brand{grid-column:1;grid-row:1}
+  .site-header .theme-button{grid-column:2;grid-row:1}
+  .site-header .mobile-menu-toggle{grid-column:3;grid-row:1}
+  .site-header .header-search{grid-column:1/-1!important;grid-row:2!important}
+  .site-header .header-ai{grid-column:1/-1;grid-row:3;width:100%;padding:0 14px}
+  .site-header .header-ai span:last-child{display:inline}
+  .site-header .language-switcher{grid-column:1/-1;grid-row:4}
+}
+
 /* Stage 1: keep the editorial score distinct from retailer ratings. */
 .deal-metrics{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
 .deal-score,.deal-rating{min-width:0;border:1px solid var(--line);border-radius:12px;background:var(--surface)}

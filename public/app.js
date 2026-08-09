@@ -24,10 +24,7 @@
     resultCount: $("resultCount"),
     products: $("products"),
     emptyState: $("emptyState"),
-    archiveProducts: document.querySelector("#archive .mini-grid"),
-    trendingProducts: $("trendingProducts"),
-    priceDropProducts: $("priceDropProducts"),
-    newProducts: $("newProducts")
+    archiveProducts: document.querySelector("#archive .mini-grid")
   };
 
   const esc = value => String(value ?? "").replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
@@ -43,7 +40,10 @@
     Boolean(cleanText(product?.checked_at));
   const hasReviewData = product => Number(product?.rating) > 0 && Number(product?.review_count) > 0;
   const scoreValue = product => {
-    const raw = product?.display_score ?? product?.score ?? product?.drop_score;
+    const raw = Object.prototype.hasOwnProperty.call(product || {}, "display_score")
+      ? product.display_score
+      : product?.score ?? product?.drop_score;
+    if (raw == null || raw === "") return null;
     const value = Number(raw);
     return Number.isFinite(value) ? Math.round(Math.max(0, Math.min(100, value))) : null;
   };
@@ -240,7 +240,7 @@
         <h2><a href="${esc(dealUrl(product))}" ${trackingAttributes(product, "featured_title")}>${esc(fullTitle(product.title))}</a></h2>
         <p class="description editorial-teaser">${esc(whyPicked(product))}</p>
         ${scoreMetrics(product)}
-        <div class="featured-price-row"><span class="price-label">${priceLabel(product)}</span><span class="featured-price">${money(product.current_price, product.currency)}</span>${product.original_price ? `<span class="old">${money(product.original_price, product.currency)}</span>` : ""}${save ? `<span class="save-pill">${esc(tr("product.save", "SAVE {percent}%", { percent: save }))}</span>` : ""}</div>
+        <div class="featured-price-row"><span class="price-label">${priceLabel(product)}</span><span class="featured-price">${money(product.current_price, product.currency)}</span>${product.original_price ? `<span class="old">${money(product.original_price, product.currency)}</span>` : ""}${save ? `<span class="save-pill">${esc(tr("product.belowReferencePercent", "{percent}% BELOW REF.", { percent: save }))}</span>` : ""}</div>
         <p class="verification">${esc(statusText(product))}</p>
         ${offerFacts(product)}
         <div class="card-actions">${actionButton(product, "featured-button", "featured_cta")}${priceHistoryAction(product)}</div>
@@ -258,24 +258,10 @@
           <h3><a href="${esc(dealUrl(product))}" ${trackingAttributes(product, "daily_card_title")}>${esc(fullTitle(product.title))}</a></h3>
           <p class="description editorial-teaser"><strong>${esc(tr("product.why", "Why we picked it:"))}</strong> ${esc(whyPicked(product))}</p>
           ${scoreMetrics(product)}
-          <div class="price-row"><span class="price-label">${priceLabel(product)}</span><span class="price">${money(product.current_price, product.currency)}</span>${product.original_price ? `<span class="old">${money(product.original_price, product.currency)}</span>` : ""}${save ? `<span class="save-pill">${esc(tr("product.save", "SAVE {percent}%", { percent: save }))}</span>` : ""}</div>
+          <div class="price-row"><span class="price-label">${priceLabel(product)}</span><span class="price">${money(product.current_price, product.currency)}</span>${product.original_price ? `<span class="old">${money(product.original_price, product.currency)}</span>` : ""}${save ? `<span class="save-pill">${esc(tr("product.belowReferencePercent", "{percent}% BELOW REF.", { percent: save }))}</span>` : ""}</div>
           <p class="verification">${esc(statusText(product))}</p>
           ${offerFacts(product)}
           <div class="card-actions">${actionButton(product, "button", "daily_card_cta")}${priceHistoryAction(product)}</div>
-        </div>
-      </article>`;
-  };
-
-  const miniCard = product => {
-    return `
-      <article class="mini-card">
-        <a href="${esc(dealUrl(product))}" ${trackingAttributes(product, "collection_media")}><img src="${esc(product.image_url)}" alt="${esc(fullTitle(product.title))}" loading="lazy" decoding="async"></a>
-        <div class="mini-card-body">
-          <p class="cat">${esc(displayCategory(product))} · ${esc(storeName(product))}</p>
-          <h3><a href="${esc(dealUrl(product))}" ${trackingAttributes(product, "collection_title")}>${esc(fullTitle(product.title))}</a></h3>
-          ${scoreMetrics(product, product.drop_score != null && Boolean(product.drop_date))}
-          <div class="mini-price-row"><span class="mini-price-label">${priceLabel(product)}</span><span class="mini-price">${money(product.current_price, product.currency)}</span>${product.original_price ? `<span class="old">${money(product.original_price, product.currency)}</span>` : ""}</div>
-          <a class="mini-action" href="${esc(dealUrl(product))}" ${trackingAttributes(product, "collection_details")}>${esc(tr("product.viewDetails", "VIEW DETAILS"))}</a>
         </div>
       </article>`;
   };
@@ -302,35 +288,11 @@
     els.products.innerHTML = visible.map((product, index) => mainCard(product, index + rankOffset)).join("");
   };
 
-  const takeUnique = (source, count, used) => {
-    const chosen = [];
-    for (const product of source) {
-      if (chosen.length >= count) break;
-      if (used.has(product.id)) continue;
-      used.add(product.id);
-      chosen.push(product);
-    }
-    return chosen;
-  };
-
   const renderCollections = () => {
     const emptyCollection = message => `<div class="empty-state catalog-section-empty">${esc(message)}</div>`;
-    const used = new Set(products.slice(0, 10).map(product => product.id));
-    const trending = takeUnique([...products].sort((a, b) => Number(b.review_count || 0) - Number(a.review_count || 0)), 4, used);
-    const priceDrops = takeUnique([...products].filter(product => discount(product) > 0).sort((a, b) => discount(b) - discount(a)), 4, used);
-    const newest = takeUnique([...products].sort((a, b) => Number(b.id) - Number(a.id)), 4, used);
     if (els.archiveProducts && !els.archiveProducts.children.length) {
       els.archiveProducts.innerHTML = emptyCollection(tr("home.catalogArchiveEmpty", "The archive will begin with the first real Daily Drop."));
     }
-    els.trendingProducts.innerHTML = trending.length
-      ? trending.map(miniCard).join("")
-      : emptyCollection(tr("home.catalogSectionEmpty", "Verified selections will appear here as they are published."));
-    els.priceDropProducts.innerHTML = priceDrops.length
-      ? priceDrops.map(miniCard).join("")
-      : emptyCollection(tr("home.catalogSectionEmpty", "Verified selections will appear here as they are published."));
-    els.newProducts.innerHTML = newest.length
-      ? newest.map(miniCard).join("")
-      : emptyCollection(tr("home.catalogSectionEmpty", "Verified selections will appear here as they are published."));
   };
 
   const renderCategoryMenu = () => {

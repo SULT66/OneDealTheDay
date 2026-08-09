@@ -1,8 +1,8 @@
 const { categoryLabel, languageTag, t } = require("./i18n");
-const { SCORE_MODEL, scoreProduct } = require("./ranker");
+const { SCORE_MODEL, scoreProduct, isDailyPickEligible } = require("./ranker");
 
 const EDITORIAL_SCORE_FLOOR = 60;
-const EDITORIAL_CONFIDENCE_FLOOR = 45;
+const EDITORIAL_CONFIDENCE_FLOOR = 55;
 const PUBLIC_SCORE_FLOOR = 82;
 const PUBLIC_SCORE_CEILING = 95;
 
@@ -68,7 +68,7 @@ function publicOneDailyDropScore(rawScore, confidence) {
   // Offer quality carries most of the result while evidence coverage prevents
   // a sparse listing from receiving the same public score as a well-supported one.
   const quality = Math.max(0, Math.min(1, (raw - EDITORIAL_SCORE_FLOOR) / 30));
-  const evidenceQuality = Math.max(0, Math.min(1, (evidence - EDITORIAL_CONFIDENCE_FLOOR) / 45));
+  const evidenceQuality = Math.max(0, Math.min(1, (evidence - EDITORIAL_CONFIDENCE_FLOOR) / 35));
   const calibrated = PUBLIC_SCORE_FLOOR +
     (PUBLIC_SCORE_CEILING - PUBLIC_SCORE_FLOOR) * (quality * 0.75 + evidenceQuality * 0.25);
   return Math.round(Math.max(PUBLIC_SCORE_FLOOR, Math.min(PUBLIC_SCORE_CEILING, calibrated)));
@@ -184,7 +184,7 @@ function badge(product, language) {
   const reviews = number(product?.review_count);
   const buyerFriendly = /^Free shipping/i.test(clean(product?.shipping_summary)) &&
     clean(product?.return_summary) && !/^Returns not accepted$/i.test(clean(product?.return_summary));
-  if (discount >= 20) return t(language, "product.priceDrop");
+  if (discount >= 20) return t(language, "product.belowReference");
   if (rating >= 4.6 && reviews >= 50) return t(language, "product.strongReviews");
   if (number(breakdown.seller_reliability) >= 12) return t(language, "product.establishedSeller");
   if (buyerFriendly) return t(language, "product.buyerFriendly");
@@ -221,7 +221,13 @@ function presentProduct(product, language = "en") {
   const confidence = oneDailyDropEvidenceConfidence(product);
   // Candidate ranking and consumer presentation are deliberately separate.
   // Only offers that pass the editorial floor receive a calibrated public score.
-  const dealScore = publicOneDailyDropScore(rawDealScore, confidence);
+  const dealScore = isDailyPickEligible({
+    ...product,
+    score:rawDealScore,
+    evidence_confidence:confidence,
+    current_price:product?.drop_price ?? product?.current_price,
+    original_price:product?.drop_original_price ?? product?.original_price
+  }) ? publicOneDailyDropScore(rawDealScore, confidence) : null;
   const productRating = number(product.rating, NaN);
   const sellerPercent = sellerRatingPercent(product);
   const sellerFeedbackCount = Math.max(0, Math.round(number(product.seller_feedback_count)));
@@ -250,7 +256,7 @@ function presentProduct(product, language = "en") {
       : t(language, "product.priceVerified"),
     display_action_label: t(language, "product.viewDealAt", { store }),
     display_price_history_label: t(language, "product.priceHistory"),
-    display_save_label: discount > 0 ? t(language, "product.save", { percent: discount }) : "",
+    display_save_label: discount > 0 ? t(language, "product.belowReferencePercent", { percent: discount }) : "",
     display_off_label: discount > 0 ? t(language, "product.off", { percent: discount }) : "",
     display_reviews_label: t(language, "product.reviews"),
     display_review_count: Math.round(number(product.review_count)).toLocaleString(languageTag(product.market, language)),

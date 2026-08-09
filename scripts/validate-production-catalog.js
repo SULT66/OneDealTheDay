@@ -16,9 +16,12 @@ const files = [
   "src/providers/demo.js",
   "src/providers/ebay.js",
   "src/homepage.js",
+  "src/homepageTemplate.js",
   "src/homepage-seo.js",
+  "src/shoppingAssistant.js",
   "src/mailer.js",
-  "public/app.js"
+  "public/app.js",
+  "public/shopping-assistant.js"
 ];
 
 for (const relative of files) {
@@ -48,20 +51,21 @@ for (const required of ["AZURE_PRODUCTION_HOST", "normalizedMarketPath", "normal
 }
 
 const homepage = fs.readFileSync(path.join(root, "src/homepage.js"), "utf8");
+const homepageTemplate = fs.readFileSync(path.join(root, "src/homepageTemplate.js"), "utf8");
 for (const forbidden of ["DEMO PREVIEW", "Sample price", "VIEW PRODUCT PREVIEW", "Development preview", "no API credits are being used"]) {
   if (homepage.includes(forbidden)) throw new Error(`Public homepage still exposes internal catalog wording: ${forbidden}`);
 }
 if (homepage.includes('content="noindex')) {
   throw new Error("Country homepages must remain indexable in demo and live modes");
 }
-if (!homepage.includes('<meta name="robots" content="index,follow,max-image-preview:large">')) {
+if (!homepageTemplate.includes('<meta name="robots" content="index,follow,max-image-preview:large">')) {
   throw new Error("Country homepages are missing the required indexable robots directive");
 }
 for (const required of ['<link rel="canonical" href="${canonical}">', 'property="og:site_name"', 'name="twitter:title"', '"@type": "WebPage"', '"@type": "SearchAction"']) {
-  if (!homepage.includes(required)) throw new Error(`Homepage SEO metadata is missing: ${required}`);
+  if (!homepage.includes(required) && !homepageTemplate.includes(required)) throw new Error(`Homepage SEO metadata is missing: ${required}`);
 }
 if (homepage.includes("shortTitle")) throw new Error("Homepage titles are still truncated");
-if (!hasLiquidGlass(homepage)) {
+if (!hasLiquidGlass(homepageTemplate)) {
   throw new Error("Server-rendered homepage is missing the Liquid Glass design system");
 }
 if (!homepage.includes("const featured = dailyProducts[0] || null;")) {
@@ -73,13 +77,13 @@ for (const required of ["catalog-empty-featured", "home.catalogTitle", "DEFAULT_
 if (!homepage.includes("const moreWorthSeeing = dailyProducts.slice(1, 10);")) {
   throw new Error("Homepage does not exclude Today's Drop from the nine additional products");
 }
-if (!homepage.includes("9 More Worth Seeing")) {
-  throw new Error("Homepage is missing the 9 More Worth Seeing section");
+if (!homepageTemplate.includes('home.moreTitle')) {
+  throw new Error("Homepage is missing the localized checked-picks section");
 }
 if (!homepage.includes('class="rank">#${index + 1}')) {
   throw new Error("Server-rendered additional picks do not continue with ranks #2-#10");
 }
-if ((homepage.match(/id="subscribeForm"/g) || []).length !== 1) {
+if ((homepageTemplate.match(/id="subscribeForm"/g) || []).length !== 1) {
   throw new Error("Homepage must contain exactly one Daily Drop subscription form");
 }
 if (!homepage.includes("VIEW DEAL AT") || homepage.includes("SEE DEAL ON")) {
@@ -87,6 +91,12 @@ if (!homepage.includes("VIEW DEAL AT") || homepage.includes("SEE DEAL ON")) {
 }
 if (!homepage.includes("offer-facts") || !homepage.includes("price-history-link")) {
   throw new Error("Homepage live offer details or price-history links are missing");
+}
+for (const required of ["data-shopping-assistant-open", "shoppingAssistant", "assistant.promptOne", "home.realPriceDrops", "page.pastDrops"]) {
+  if (!homepageTemplate.includes(required)) throw new Error(`Homepage redesign is missing: ${required}`);
+}
+for (const forbidden of ["Trending Drops", "New Drops", "Yesterday's Drops", "Evidence confidence"]) {
+  if (homepageTemplate.includes(forbidden)) throw new Error(`Homepage still exposes misleading content: ${forbidden}`);
 }
 
 const browserApp = fs.readFileSync(path.join(root, "public/app.js"), "utf8");
@@ -112,6 +122,12 @@ if (!browserApp.includes('activeCategory === "More Worth Seeing"') || !browserAp
 }
 if (!browserApp.includes("VIEW DEAL AT") || !browserApp.includes("offer-facts") || !browserApp.includes("PRICE HISTORY")) {
   throw new Error("Client-side live offer details are incomplete");
+}
+if (browserApp.includes("els.trendingProducts.innerHTML") || browserApp.includes("els.newProducts.innerHTML") || browserApp.includes("els.priceDropProducts.innerHTML")) {
+  throw new Error("Client rendering can still recreate unverified Trending, New or Price Drop collections");
+}
+if (browserApp.includes('tr("product.save"')) {
+  throw new Error("Client cards still present retailer reference prices as verified savings");
 }
 if (!browserApp.includes('classList.toggle("is-open", willOpen)') || !browserApp.includes('willOpen ? tr("menu.close"')) {
   throw new Error("Homepage hamburger behavior is missing");
@@ -176,18 +192,22 @@ for (const field of ["retailer_name", "seller_name", "seller_rating", "seller_fe
   if (!database.includes(field)) throw new Error(`Live offer field is missing from the database: ${field}`);
 }
 const refresh = fs.readFileSync(path.join(root, "src/refresh.js"), "utf8");
+const recalculation = fs.readFileSync(path.join(root, "src/catalogRecalculation.js"), "utf8");
 for (const field of ["@retailer_name", "@seller_name", "@seller_rating", "@seller_feedback_count", "@shipping_summary", "@shipping_cost", "@landed_cost", "@return_summary", "@availability", "@checked_at", "@evidence_confidence"]) {
   if (!refresh.includes(field)) throw new Error(`Live offer field is not persisted during refresh: ${field}`);
 }
-for (const required of ["selectDailyProducts", "INSERT INTO daily_drops", "minimumScore: 0", "Number(product.score) >= 60", "Number(product.evidence_confidence) >= 45", "preserveDailySelection", "existingSnapshots"]) {
+for (const required of ["selectDailyProducts", "INSERT INTO daily_drops", "minimumScore: 0", "isDailyPickEligible", "preserveDailySelection", "existingSnapshots"]) {
   if (!refresh.includes(required)) throw new Error(`Daily country selection workflow is missing: ${required}`);
+}
+if (!recalculation.includes("filter(isDailyPickEligible)")) {
+  throw new Error("Startup catalog recalculation can still publish offers that fail the Daily Drop gate");
 }
 const ranker = fs.readFileSync(path.join(root, "src/ranker.js"), "utf8");
 const methodology = fs.readFileSync(path.join(root, "src/methodology.js"), "utf8");
 for (const required of ["price_quality", "product_quality", "review_confidence", "seller_reliability", "demand_usefulness", "shipping_returns"]) {
   if (!ranker.includes(required)) throw new Error(`OneDailyDrop Score component is missing: ${required}`);
 }
-for (const required of ["current-offer-v5", "comparable_median_landed_cost", "return referenceScore", "evidenceConfidence", "return rankPoints + reviewDemand + badge", "maximumShippingRatio"]) {
+for (const required of ["current-offer-v6", "comparable_median_landed_cost", "return referenceScore", "evidenceConfidence", "return rankPoints + reviewDemand + badge", "maximumShippingRatio", "isDailyPickEligible", "returnsNotAccepted", "referenceGap * 30"]) {
   if (!ranker.includes(required)) throw new Error(`OneDailyDrop Score weighting is incomplete: ${required}`);
 }
 for (const forbidden of ["average_30_day_price", "average_90_day_price", "price_history_observation_count", "evidencePenalty"]) {
@@ -228,6 +248,12 @@ for (const required of ["daily_drops", '"page.archiveDescription"', "xhtml:link"
 }
 for (const required of ['xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"', "<image:image>", "Disallow: /go/", 'html lang="${esc(locale)}"', '"page.customerRating"', '"@id":`${canonical}#product`', "sendNotFound"]) {
   if (!server.includes(required)) throw new Error(`Technical SEO behavior is missing: ${required}`);
+}
+for (const required of ['app.post("/api/shopping-assistant"', 'app.get("/api/shopping-assistant/status"', "shoppingAssistantRateLimit", ".filter(isPubliclyIndexable)", 'robots = isPubliclyIndexable(p)']) {
+  if (!server.includes(required)) throw new Error(`Shopping assistant or quality-indexing safeguard is missing: ${required}`);
+}
+if (server.includes("display_evidence_confidence_label ||")) {
+  throw new Error("Public catalog pages still expose evidence confidence as a second score");
 }
 for (const required of [
   'const canonical = `${SITE}${marketPath(selectedMarket.code, route)}`',

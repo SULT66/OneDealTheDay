@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node app.js",
     "refresh": "node src/refresh-cli.js",
-    "test": "node scripts/test-ranking-integrity.js && node scripts/validate-production-catalog.js && node scripts/test-product-presentation.js && node scripts/test-editorial-brief.js && node scripts/test-full-automation.js && node scripts/test-ebay-account-deletion.js && node scripts/test-ebay-browse.js",
+    "test": "node scripts/test-ranking-integrity.js && node scripts/validate-production-catalog.js && node scripts/test-product-presentation.js && node scripts/test-shopping-assistant.js && node scripts/test-editorial-brief.js && node scripts/test-full-automation.js && node scripts/test-ebay-account-deletion.js && node scripts/test-ebay-browse.js",
     "test:ranking": "node scripts/test-ranking-integrity.js",
     "test:automation": "node scripts/test-full-automation.js",
     "test:seo": "node scripts/test-seo-routes.js",
@@ -17,12 +17,13 @@
     "test:ebay:browse": "node scripts/test-ebay-browse.js"
   },
   "dependencies": {
-    "better-sqlite3": "^11.8.1",
+    "better-sqlite3": "^12.11.1",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "geoip-lite": "^2.0.3",
     "helmet": "^8.0.0",
     "node-cron": "^3.0.3",
+    "openai": "^7.4.0",
     "stripe": "^22.3.2"
   },
   "engines": {

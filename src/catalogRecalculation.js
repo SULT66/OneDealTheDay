@@ -1,6 +1,6 @@
 const { market } = require("./markets");
 const { normalizeProductIdentity } = require("./productIdentity");
-const { SCORE_MODEL, scoreOffers, selectUniqueProducts } = require("./ranker");
+const { SCORE_MODEL, isDailyPickEligible, scoreOffers, selectUniqueProducts } = require("./ranker");
 
 function localDate(timezone, value = new Date()) {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -50,9 +50,7 @@ function recalculateCatalog(db, marketCodes = ["us", "ca", "uk", "fr", "de"], op
       maximumShippingRatio:0.5
     });
     for (const product of scored) scoredById.set(product.id, product);
-    selectedByMarket.set(code, selectUniqueProducts(scored).filter(product =>
-      Number(product.score) >= 60 && Number(product.evidence_confidence) >= 45
-    ).slice(0, 10));
+    selectedByMarket.set(code, selectUniqueProducts(scored).filter(isDailyPickEligible).slice(0, 10));
   }
 
   let selectionCount = 0;
