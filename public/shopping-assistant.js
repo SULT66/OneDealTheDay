@@ -264,14 +264,24 @@
       const recommendationHistory = (body.recommendations || [])
         .map((item) => `${item.title} — ${item.price} ${item.retailer}`.trim())
         .join("; ");
-      history.push({
-        role: "assistant",
-        content: [body.message, recommendationHistory]
-          .filter(Boolean)
-          .join(" ")
-          .slice(0, 1200),
-      });
+      if (body.scope === "off_topic") {
+        history.pop();
+      } else {
+        history.push({
+          role: "assistant",
+          content: [body.message, recommendationHistory]
+            .filter(Boolean)
+            .join(" ")
+            .slice(0, 1200),
+        });
+      }
     } catch (error) {
+      if (
+        history.at(-1)?.role === "user" &&
+        history.at(-1)?.content === question
+      ) {
+        history.pop();
+      }
       pending.querySelector(".assistant-message-copy").textContent =
         error.message ||
         text("failed", "The assistant is unavailable right now.");

@@ -144,7 +144,7 @@ module.exports = function homepageTemplate({
   </aside>
   <script src="/theme.js?v=20260808-assistant"></script>
   <script src="/app.js?v=20260808-assistant"></script>
-  <script src="/shopping-assistant.js?v=20260809-rich-results"></script>
+  <script src="/shopping-assistant.js?v=20260809-shopping-scope"></script>
 </body>
 </html>`;
 };
