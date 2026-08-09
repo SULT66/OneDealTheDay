@@ -7,12 +7,105 @@ const DEFAULT_MODEL = "gpt-5.6-luna";
 const MAX_HISTORY_MESSAGES = 8;
 const MAX_MESSAGE_LENGTH = 1200;
 const MAX_TOOL_ROUNDS = 3;
+const MAX_RECOMMENDATIONS = 5;
+
+const ASSISTANT_RESPONSE_FORMAT = {
+  type: "json_schema",
+  name: "shopping_assistant_response",
+  strict: true,
+  schema: {
+    type: "object",
+    properties: {
+      answer: {
+        type: "string",
+        description:
+          "A concise answer in the shopper's language. No Markdown and no URLs.",
+      },
+      follow_up: {
+        type: "string",
+        description:
+          "One short useful follow-up question, or an empty string when none is needed.",
+      },
+      recommendations: {
+        type: "array",
+        maxItems: MAX_RECOMMENDATIONS,
+        description:
+          "Specific products or offers worth showing as visual recommendation cards.",
+        items: {
+          type: "object",
+          properties: {
+            title: { type: "string", description: "Product name." },
+            retailer: {
+              type: "string",
+              description: "Retailer or source name.",
+            },
+            price: {
+              type: "string",
+              description:
+                "Displayed price with currency when verified, otherwise an empty string.",
+            },
+            badge: {
+              type: "string",
+              description:
+                "A short localized label such as Best overall, Best value, or an empty string.",
+            },
+            reason: {
+              type: "string",
+              description: "One concise reason this option fits the request.",
+            },
+            url: {
+              type: "string",
+              description:
+                "A directly supported retailer, product, or cited source URL, otherwise an empty string.",
+            },
+            action_label: {
+              type: "string",
+              description:
+                "A short localized action label such as View offer or See details.",
+            },
+          },
+          required: [
+            "title",
+            "retailer",
+            "price",
+            "badge",
+            "reason",
+            "url",
+            "action_label",
+          ],
+          additionalProperties: false,
+        },
+      },
+      comparison_notes: {
+        type: "array",
+        maxItems: 4,
+        description:
+          "Short decision-relevant tradeoffs that are easier to scan as bullets.",
+        items: { type: "string" },
+      },
+    },
+    required: [
+      "answer",
+      "follow_up",
+      "recommendations",
+      "comparison_notes",
+    ],
+    additionalProperties: false,
+  },
+};
 
 const clean = (value) =>
   String(value || "")
     .replace(/<[^>]+>/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+const cleanDisplayText = (value) =>
+  clean(
+    String(value || "")
+      .replace(/\[([^\]]+)\]\(https?:\/\/[^\s)]+\)/gi, "$1")
+      .replace(/https?:\/\/\S+/gi, " ")
+      .replace(/[\*_`#]+/g, " "),
+  );
 const number = (value, fallback = 0) => {
   if (value == null || value === "") return fallback;
   const parsed = Number(value);
@@ -208,7 +301,66 @@ function instructions({ marketCode, currency, language }) {
   return `You are the OneDailyDrop AI Shopping Assistant for market ${marketCode.toUpperCase()} and currency ${currency}.
 Help shoppers narrow choices, compare tradeoffs, check current facts, and find relevant offers. Do not reduce the answer to a simplistic "buy" or "do not buy" verdict. Ask one concise follow-up question when budget or use case would materially change the result.
 
-Use search_catalog before recommending anything from OneDailyDrop. Translate the shopper's request into concise catalog search terms when the catalog language differs. Only describe a catalog score when the tool returns one. Never invent a price, discount, product rating, seller policy, availability, or price history. Use web search for current specifications, independent context, or products outside the catalog, and clearly separate web findings from OneDailyDrop catalog offers. Do not claim that a retailer reference price is a verified historical price. Keep answers concise, practical, and in language code ${language}.`;
+Use search_catalog before recommending anything from OneDailyDrop. Translate the shopper's request into concise catalog search terms when the catalog language differs. Only describe a catalog score when the tool returns one. Never invent a price, discount, product rating, seller policy, availability, or price history. Use web search for current specifications, independent context, or products outside the catalog, and clearly separate web findings from OneDailyDrop catalog offers. Do not claim that a retailer reference price is a verified historical price.
+
+The response is rendered as a visual shopping interface. Put the short conclusion in answer, concrete options in recommendations, and decision-relevant tradeoffs in comparison_notes. Never put Markdown, numbered product lists, or raw URLs in answer, follow_up, reason, or comparison_notes. Recommend no more than five options. Include a URL only when it comes directly from a tool result or a cited web-search result; otherwise use an empty string. Keep every field concise, practical, and in the shopper's language (language code ${language}).`;
+}
+
+function safeUrl(value) {
+  const raw = String(value || "").trim();
+  if (/^\/(?!\/)/.test(raw)) return raw;
+  try {
+    const url = new URL(raw);
+    return ["http:", "https:"].includes(url.protocol) ? url.href : "";
+  } catch {
+    return "";
+  }
+}
+
+function normalizeAssistantResponse(outputText) {
+  let parsed = null;
+  try {
+    parsed = JSON.parse(String(outputText || ""));
+  } catch {
+    parsed = null;
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return {
+      answer:
+        cleanDisplayText(outputText) ||
+        "I could not complete that comparison. Try a more specific product or budget.",
+      follow_up: "",
+      recommendations: [],
+      comparison_notes: [],
+    };
+  }
+  const recommendations = (
+    Array.isArray(parsed.recommendations) ? parsed.recommendations : []
+  )
+    .slice(0, MAX_RECOMMENDATIONS)
+    .map((item) => ({
+      title: cleanDisplayText(item?.title).slice(0, 140),
+      retailer: cleanDisplayText(item?.retailer).slice(0, 80),
+      price: cleanDisplayText(item?.price).slice(0, 40),
+      badge: cleanDisplayText(item?.badge).slice(0, 40),
+      reason: cleanDisplayText(item?.reason).slice(0, 240),
+      url: safeUrl(item?.url),
+      action_label: cleanDisplayText(item?.action_label).slice(0, 40),
+    }))
+    .filter((item) => item.title && item.reason);
+  return {
+    answer:
+      cleanDisplayText(parsed.answer).slice(0, 700) ||
+      "I found a few options worth comparing.",
+    follow_up: cleanDisplayText(parsed.follow_up).slice(0, 240),
+    recommendations,
+    comparison_notes: (
+      Array.isArray(parsed.comparison_notes) ? parsed.comparison_notes : []
+    )
+      .slice(0, 4)
+      .map((item) => cleanDisplayText(item).slice(0, 220))
+      .filter(Boolean),
+  };
 }
 
 function extractSources(response) {
@@ -287,6 +439,7 @@ function createShoppingAssistant({
             currency: selectedMarket.currency,
             language,
           }),
+          text: { format: ASSISTANT_RESPONSE_FORMAT },
           tools: toolDefinitions(),
           input,
         });
@@ -327,10 +480,12 @@ function createShoppingAssistant({
         input = [...input, ...(response.output || []), ...outputs];
       }
 
+      const structured = normalizeAssistantResponse(response?.output_text);
       return {
-        message:
-          clean(response?.output_text) ||
-          "I could not complete that comparison. Try a more specific product or budget.",
+        message: structured.answer,
+        follow_up: structured.follow_up,
+        recommendations: structured.recommendations,
+        comparison_notes: structured.comparison_notes,
         products: [...referencedProducts.values()].slice(0, 6),
         sources: extractSources(response || {}),
         model,
@@ -340,8 +495,10 @@ function createShoppingAssistant({
 }
 
 module.exports = {
+  ASSISTANT_RESPONSE_FORMAT,
   DEFAULT_MODEL,
   assistantProduct,
   createShoppingAssistant,
+  normalizeAssistantResponse,
   searchCatalog,
 };
