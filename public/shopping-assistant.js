@@ -1,30 +1,336 @@
 (() => {
   const panel = document.getElementById("shoppingAssistant");
   if (!panel) return;
+
+  const STORAGE_KEY = "odd_delia_chats_v1";
+  const ACTIVE_KEY = "odd_delia_active_chat_v1";
+  const SAVED_KEY = "odd_delia_saved_products_v1";
+  const MAX_CHATS = 20;
+  const MAX_MESSAGES_PER_CHAT = 80;
   const backdrop = document.getElementById("shoppingAssistantBackdrop");
   const closeButton = panel.querySelector("[data-shopping-assistant-close]");
   const form = panel.querySelector("form");
   const input = panel.querySelector("textarea");
   const messagesElement = panel.querySelector("[data-assistant-messages]");
   const conversationElement = panel.querySelector(".assistant-conversation");
-  const submitButton = form?.querySelector("button[type='submit']");
-  const history = [];
-  let previousFocus = null;
+  const submitButton = panel.querySelector(".assistant-send");
+  const stopButton = panel.querySelector("[data-assistant-stop]");
+  const historyElement = panel.querySelector("[data-assistant-history]");
+  const savedElement = panel.querySelector("[data-assistant-saved]");
+  const compareSavedButton = panel.querySelector(
+    "[data-assistant-compare-saved]",
+  );
+  const currentTitleElement = panel.querySelector(
+    "[data-assistant-current-title]",
+  );
+  const productContextElement = panel.querySelector(
+    "[data-assistant-product-context]",
+  );
+  const sidebar = panel.querySelector("[data-assistant-sidebar]");
+  const copy = (() => {
+    try {
+      return JSON.parse(
+        panel.querySelector("[data-assistant-copy]")?.textContent || "{}",
+      );
+    } catch {
+      return {};
+    }
+  })();
 
-  const text = (key, fallback) => panel.dataset[key] || fallback;
+  let previousFocus = null;
+  let activeChat = null;
+  let chats = readStorage(STORAGE_KEY, []);
+  let savedProducts = readStorage(SAVED_KEY, []);
+  let requestController = null;
+  let loadingTimer = null;
+
+  function readStorage(key, fallback) {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(key) || "null");
+      return Array.isArray(parsed) ? parsed : fallback;
+    } catch {
+      return fallback;
+    }
+  }
+
+  function writeStorage(key, value) {
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+    } catch {
+      // The chat still works when storage is unavailable or full.
+    }
+  }
+
+  const tr = (key, fallback) => copy[key] || fallback;
+  const makeId = () =>
+    window.crypto?.randomUUID?.() ||
+    `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+  const market = () => window.__ODD_MARKET__ || panel.dataset.market || "us";
+  const language = () =>
+    window.__ODD_LANGUAGE__ || panel.dataset.language || "en";
   const scrollToLatest = () =>
     conversationElement?.scrollTo({
       top: conversationElement.scrollHeight,
       behavior: "smooth",
     });
 
+  function createDraftChat() {
+    return {
+      id: makeId(),
+      title: tr("newChatTitle", "New shopping chat"),
+      messages: [],
+      market: market(),
+      language: language(),
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      draft: true,
+    };
+  }
+
+  function normalizedChats() {
+    return chats
+      .filter((chat) => chat && chat.id && Array.isArray(chat.messages))
+      .sort(
+        (left, right) =>
+          new Date(right.updated_at || 0) - new Date(left.updated_at || 0),
+      )
+      .slice(0, MAX_CHATS);
+  }
+
+  function persistChats() {
+    activeChat.updated_at = new Date().toISOString();
+    activeChat.messages = activeChat.messages.slice(-MAX_MESSAGES_PER_CHAT);
+    const index = chats.findIndex((chat) => chat.id === activeChat.id);
+    if (index >= 0) chats[index] = activeChat;
+    else if (!activeChat.draft || activeChat.messages.length) chats.unshift(activeChat);
+    chats = normalizedChats();
+    writeStorage(STORAGE_KEY, chats);
+    try {
+      localStorage.setItem(ACTIVE_KEY, activeChat.id);
+    } catch {}
+    renderHistory();
+  }
+
+  function titleFromQuestion(question) {
+    const words = String(question || "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .split(" ")
+      .slice(0, 8)
+      .join(" ");
+    return words.length > 48 ? `${words.slice(0, 45).trim()}…` : words;
+  }
+
+  function setActiveChat(chat) {
+    activeChat = chat || createDraftChat();
+    productContextElement.hidden = true;
+    productContextElement.replaceChildren();
+    messagesElement.replaceChildren();
+    for (const record of activeChat.messages) renderRecord(record);
+    conversationElement.classList.toggle(
+      "has-conversation",
+      activeChat.messages.length > 0,
+    );
+    currentTitleElement.textContent = activeChat.title;
+    try {
+      localStorage.setItem(ACTIVE_KEY, activeChat.id);
+    } catch {}
+    renderHistory();
+    closeSidebarOnMobile();
+    scrollToLatest();
+  }
+
+  function newChat() {
+    if (requestController) requestController.abort();
+    setActiveChat(createDraftChat());
+    input.value = "";
+    input.focus();
+  }
+
+  function renameChat(chat) {
+    const title = window.prompt(
+      tr("renamePrompt", "Rename this chat"),
+      chat.title,
+    );
+    if (!title?.trim()) return;
+    chat.title = title.trim().slice(0, 60);
+    if (chat.id === activeChat.id) currentTitleElement.textContent = chat.title;
+    persistChats();
+  }
+
+  function deleteChat(chat) {
+    if (!window.confirm(tr("deleteConfirm", "Delete this chat?"))) return;
+    chats = chats.filter((item) => item.id !== chat.id);
+    writeStorage(STORAGE_KEY, chats);
+    if (chat.id === activeChat.id) setActiveChat(chats[0] || createDraftChat());
+    else renderHistory();
+  }
+
+  function clearHistory() {
+    if (!window.confirm(tr("clearConfirm", "Delete all locally saved chats?")))
+      return;
+    chats = [];
+    writeStorage(STORAGE_KEY, chats);
+    setActiveChat(createDraftChat());
+  }
+
+  function renderHistory() {
+    historyElement.replaceChildren();
+    const visible = normalizedChats().filter((chat) => chat.messages.length);
+    if (!visible.length) {
+      const empty = document.createElement("p");
+      empty.className = "assistant-sidebar-empty";
+      empty.textContent = tr(
+        "noChats",
+        "Your recent shopping chats will appear here.",
+      );
+      historyElement.append(empty);
+      return;
+    }
+    for (const chat of visible) {
+      const row = document.createElement("div");
+      row.className = `assistant-history-item${chat.id === activeChat.id ? " is-active" : ""}`;
+      const open = document.createElement("button");
+      open.type = "button";
+      open.className = "assistant-history-open";
+      const title = document.createElement("strong");
+      title.textContent = chat.title;
+      const date = document.createElement("small");
+      date.textContent = new Date(chat.updated_at).toLocaleDateString();
+      open.append(title, date);
+      open.addEventListener("click", () => setActiveChat(chat));
+      const actions = document.createElement("span");
+      actions.className = "assistant-history-actions";
+      const rename = document.createElement("button");
+      rename.type = "button";
+      rename.textContent = "✎";
+      rename.title = tr("rename", "Rename");
+      rename.setAttribute("aria-label", tr("rename", "Rename"));
+      rename.addEventListener("click", () => renameChat(chat));
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.textContent = "×";
+      remove.title = tr("delete", "Delete");
+      remove.setAttribute("aria-label", tr("delete", "Delete"));
+      remove.addEventListener("click", () => deleteChat(chat));
+      actions.append(rename, remove);
+      row.append(open, actions);
+      historyElement.append(row);
+    }
+  }
+
+  function money(value, currency = "USD") {
+    if (value == null || value === "") return "";
+    try {
+      return new Intl.NumberFormat(window.__ODD_LOCALE__ || undefined, {
+        style: "currency",
+        currency: currency || "USD",
+      }).format(Number(value));
+    } catch {
+      return `${currency || ""} ${value}`.trim();
+    }
+  }
+
+  function productKey(product) {
+    return String(product.catalog_product_id || product.id || product.url || "");
+  }
+
+  function isSaved(product) {
+    const key = productKey(product);
+    return Boolean(key && savedProducts.some((item) => productKey(item) === key));
+  }
+
+  function toggleSaved(product) {
+    const key = productKey(product);
+    if (!key) return;
+    if (isSaved(product)) {
+      savedProducts = savedProducts.filter((item) => productKey(item) !== key);
+    } else {
+      savedProducts.unshift({
+        catalog_product_id: product.catalog_product_id || product.id || 0,
+        title: product.title,
+        retailer: product.retailer || "",
+        price_value: product.price_value ?? product.price ?? null,
+        currency: product.currency || "USD",
+        image_url: product.image_url || "",
+        url: product.url || "",
+        score: product.score ?? null,
+        saved_at: new Date().toISOString(),
+      });
+      savedProducts = savedProducts.slice(0, 50);
+    }
+    writeStorage(SAVED_KEY, savedProducts);
+    renderSavedProducts();
+    document.querySelectorAll("[data-save-product]").forEach((button) => {
+      if (button.dataset.saveProduct !== key) return;
+      const saved = isSaved(product);
+      button.classList.toggle("is-saved", saved);
+      button.textContent = saved
+        ? `♥ ${tr("savedLabel", "Saved")}`
+        : `♡ ${tr("save", "Save")}`;
+    });
+  }
+
+  function renderSavedProducts() {
+    savedElement.replaceChildren();
+    compareSavedButton.hidden = savedProducts.length < 2;
+    if (!savedProducts.length) {
+      const empty = document.createElement("p");
+      empty.className = "assistant-sidebar-empty";
+      empty.textContent = tr(
+        "noSaved",
+        "Save products from Delia's recommendations to compare later.",
+      );
+      savedElement.append(empty);
+      return;
+    }
+    for (const product of savedProducts) {
+      const row = document.createElement("article");
+      row.className = "assistant-saved-item";
+      const image = document.createElement("img");
+      image.src = product.image_url || "/product-placeholder.svg";
+      image.alt = "";
+      image.loading = "lazy";
+      image.addEventListener("error", () => {
+        image.src = "/product-placeholder.svg";
+      }, { once: true });
+      const copyElement = document.createElement("button");
+      copyElement.type = "button";
+      copyElement.className = "assistant-saved-open";
+      const title = document.createElement("strong");
+      title.textContent = product.title;
+      const meta = document.createElement("small");
+      meta.textContent = [
+        money(product.price_value, product.currency),
+        product.retailer,
+      ]
+        .filter(Boolean)
+        .join(" · ");
+      copyElement.append(title, meta);
+      copyElement.addEventListener("click", () => {
+        setProductContext(product);
+        closeSidebarOnMobile();
+      });
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "assistant-saved-remove";
+      remove.textContent = "×";
+      remove.setAttribute(
+        "aria-label",
+        tr("removeSaved", "Remove saved product"),
+      );
+      remove.addEventListener("click", () => toggleSaved(product));
+      row.append(image, copyElement, remove);
+      savedElement.append(row);
+    }
+  }
+
   function addMessage(role, content, pending = false) {
     const message = document.createElement("div");
     message.className = `assistant-message is-${role}${pending ? " is-pending" : ""}`;
     const label = document.createElement("span");
     label.className = "assistant-message-label";
-    label.textContent =
-      role === "user" ? text("you", "You") : "OneDailyDrop AI";
+    label.textContent = role === "user" ? tr("you", "You") : "Delia";
     const body = document.createElement("div");
     body.className = "assistant-message-copy";
     body.textContent = content;
@@ -34,6 +340,59 @@
     return message;
   }
 
+  function createButton(label, className, handler) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = className;
+    button.textContent = label;
+    button.addEventListener("click", handler);
+    return button;
+  }
+
+  function askProductPrompt(action, product) {
+    const title = product.title;
+    const id = product.catalog_product_id || product.id;
+    const reference = `${title}${id ? ` (OneDailyDrop product #${id})` : ""}`;
+    const prompts = {
+      fit: `${tr("productFit", "Is it right for me?")} ${reference}`,
+      compare: `${tr("productCompare", "Compare")} ${reference} with the best alternatives for the same use and budget.`,
+      alternative: `${tr("productAlternative", "Find an alternative")} to ${reference}.`,
+      score: `${tr("explainScore", "Explain the Score")} for ${reference}.`,
+    };
+    return prompts[action] || prompts.fit;
+  }
+
+  function setProductContext(product) {
+    productContextElement.replaceChildren();
+    const top = document.createElement("div");
+    const label = document.createElement("small");
+    label.textContent = tr("askProduct", "Ask Delia");
+    const title = document.createElement("strong");
+    title.textContent = product.title;
+    top.append(label, title);
+    const actions = document.createElement("div");
+    actions.className = "assistant-product-context-actions";
+    for (const [action, labelText] of [
+      ["fit", tr("productFit", "Is it right for me?")],
+      ["compare", tr("productCompare", "Compare")],
+      ["alternative", tr("productAlternative", "Find an alternative")],
+      ["score", tr("explainScore", "Explain the Score")],
+    ]) {
+      actions.append(
+        createButton(labelText, "assistant-context-action", () => {
+          sendQuestion(askProductPrompt(action, product));
+          productContextElement.hidden = true;
+        }),
+      );
+    }
+    const close = createButton("×", "assistant-context-close", () => {
+      productContextElement.hidden = true;
+    });
+    productContextElement.append(top, actions, close);
+    productContextElement.hidden = false;
+    openPanel();
+  }
+
   function renderRecommendations(recommendations = [], host) {
     if (!recommendations.length || !host) return;
     const section = document.createElement("div");
@@ -41,54 +400,174 @@
     recommendations.forEach((recommendation, index) => {
       const card = document.createElement("article");
       card.className = "assistant-recommendation";
-      const top = document.createElement("div");
-      top.className = "assistant-recommendation-top";
+      const media = document.createElement("div");
+      media.className = "assistant-recommendation-media";
+      const image = document.createElement("img");
+      image.src = recommendation.image_url || "/product-placeholder.svg";
+      image.alt = recommendation.title;
+      image.loading = "lazy";
+      image.addEventListener("error", () => {
+        image.src = "/product-placeholder.svg";
+      }, { once: true });
       const rank = document.createElement("span");
       rank.className = "assistant-recommendation-rank";
       rank.textContent = String(index + 1);
-      top.append(rank);
+      media.append(image, rank);
       if (recommendation.badge) {
         const badge = document.createElement("span");
         badge.className = "assistant-recommendation-badge";
         badge.textContent = recommendation.badge;
-        top.append(badge);
+        media.append(badge);
       }
+      const content = document.createElement("div");
+      content.className = "assistant-recommendation-content";
       const title = document.createElement("h3");
       title.textContent = recommendation.title;
       const meta = document.createElement("div");
       meta.className = "assistant-recommendation-meta";
-      if (recommendation.price) {
-        const price = document.createElement("strong");
-        price.textContent = recommendation.price;
-        meta.append(price);
+      const price = document.createElement("strong");
+      price.textContent =
+        money(recommendation.price_value, recommendation.currency) ||
+        recommendation.price ||
+        "";
+      const retailer = document.createElement("span");
+      retailer.textContent = recommendation.retailer || "";
+      meta.append(price, retailer);
+      const signals = document.createElement("div");
+      signals.className = "assistant-recommendation-signals";
+      if (recommendation.score != null) {
+        const score = document.createElement("span");
+        score.textContent = `${tr("score", "Score")} ${recommendation.score}/100`;
+        signals.append(score);
       }
-      if (recommendation.retailer) {
-        const retailer = document.createElement("span");
-        retailer.textContent = recommendation.retailer;
-        meta.append(retailer);
+      if (recommendation.rating) {
+        const rating = document.createElement("span");
+        rating.textContent = `★ ${Number(recommendation.rating).toFixed(1)}${recommendation.reviews ? ` (${Number(recommendation.reviews).toLocaleString()})` : ""}`;
+        signals.append(rating);
       }
       const reason = document.createElement("p");
       reason.textContent = recommendation.reason;
-      card.append(top, title, meta, reason);
+      const facts = document.createElement("dl");
+      facts.className = "assistant-recommendation-facts";
+      for (const [labelText, value] of [
+        [tr("delivery", "Delivery"), recommendation.delivery],
+        [tr("returns", "Returns"), recommendation.returns],
+      ]) {
+        if (!value) continue;
+        const wrapper = document.createElement("div");
+        const term = document.createElement("dt");
+        term.textContent = labelText;
+        const detail = document.createElement("dd");
+        detail.textContent = value;
+        wrapper.append(term, detail);
+        facts.append(wrapper);
+      }
+      const trust = document.createElement("small");
+      trust.className = "assistant-recommendation-trust";
+      const checked = recommendation.checked_at
+        ? new Date(recommendation.checked_at).toLocaleString()
+        : "";
+      trust.textContent = [
+        tr("inCatalog", "Verified OneDailyDrop catalog product"),
+        checked ? `${tr("checked", "Price checked")} ${checked}` : "",
+      ]
+        .filter(Boolean)
+        .join(" · ");
+      const controls = document.createElement("div");
+      controls.className = "assistant-recommendation-controls";
       if (recommendation.url) {
         const link = document.createElement("a");
         link.className = "assistant-recommendation-link";
         link.href = recommendation.url;
         link.target = "_blank";
         link.rel = "noopener noreferrer nofollow";
-        link.textContent = recommendation.action_label || "View offer";
-        const arrow = document.createElement("span");
-        arrow.setAttribute("aria-hidden", "true");
-        arrow.textContent = "↗";
-        link.append(arrow);
-        card.append(link);
+        link.textContent = recommendation.action_label || "View details";
+        controls.append(link);
       }
+      const saved = isSaved(recommendation);
+      const save = createButton(
+        saved
+          ? `♥ ${tr("savedLabel", "Saved")}`
+          : `♡ ${tr("save", "Save")}`,
+        `assistant-save-product${saved ? " is-saved" : ""}`,
+        () => toggleSaved(recommendation),
+      );
+      save.dataset.saveProduct = productKey(recommendation);
+      const ask = createButton(
+        `✦ ${tr("askProduct", "Ask Delia")}`,
+        "assistant-ask-product",
+        () => setProductContext(recommendation),
+      );
+      controls.append(save, ask);
+      content.append(title, meta, signals, reason, facts, trust, controls);
+      card.append(media, content);
       section.append(card);
     });
     host.append(section);
+    const note = document.createElement("p");
+    note.className = "assistant-final-price-note";
+    note.textContent = tr(
+      "finalPriceNote",
+      "Final price and availability must be confirmed with the retailer.",
+    );
+    host.append(note);
   }
 
-  function renderComparison(notes = [], host) {
+  function renderComparison(comparison = [], host) {
+    if (comparison.length < 2 || !host) return;
+    const section = document.createElement("section");
+    section.className = "assistant-comparison";
+    const heading = document.createElement("h3");
+    heading.textContent = tr("comparisonTitle", "Side-by-side comparison");
+    const scroll = document.createElement("div");
+    scroll.className = "assistant-comparison-scroll";
+    const table = document.createElement("table");
+    const head = document.createElement("thead");
+    const headerRow = document.createElement("tr");
+    for (const label of [
+      "Product",
+      "Price",
+      tr("bestFor", "Best for"),
+      tr("score", "Score"),
+      tr("delivery", "Delivery"),
+      tr("returns", "Returns"),
+      tr("strengths", "Strengths"),
+      tr("drawbacks", "Watch-outs"),
+    ]) {
+      const cell = document.createElement("th");
+      cell.scope = "col";
+      cell.textContent = label;
+      headerRow.append(cell);
+    }
+    head.append(headerRow);
+    const body = document.createElement("tbody");
+    for (const item of comparison) {
+      const row = document.createElement("tr");
+      const values = [
+        item.title,
+        money(item.price, item.currency),
+        item.best_for,
+        item.score == null ? "—" : `${item.score}/100`,
+        item.delivery || "—",
+        item.returns || "—",
+        item.strengths.join(" · "),
+        item.drawbacks.join(" · ") || "—",
+      ];
+      values.forEach((value, index) => {
+        const cell = document.createElement(index === 0 ? "th" : "td");
+        if (index === 0) cell.scope = "row";
+        cell.textContent = value;
+        row.append(cell);
+      });
+      body.append(row);
+    }
+    table.append(head, body);
+    scroll.append(table);
+    section.append(heading, scroll);
+    host.append(section);
+  }
+
+  function renderComparisonNotes(notes = [], host) {
     if (!notes.length || !host) return;
     const list = document.createElement("ul");
     list.className = "assistant-comparison-notes";
@@ -104,37 +583,45 @@
     if (!products.length || !host) return;
     const section = document.createElement("div");
     section.className = "assistant-products";
-    for (const product of products) {
-      const card = document.createElement("a");
+    for (const product of products.slice(0, 6)) {
+      const card = document.createElement("article");
       card.className = "assistant-product";
-      card.href = product.url;
       const image = document.createElement("img");
       image.src = product.image_url || "/product-placeholder.svg";
       image.alt = "";
       image.loading = "lazy";
-      const copy = document.createElement("span");
+      const copyElement = document.createElement("a");
+      copyElement.href = product.url;
       const title = document.createElement("strong");
       title.textContent = product.title;
       const meta = document.createElement("small");
-      const price =
-        product.price == null
-          ? ""
-          : new Intl.NumberFormat(window.__ODD_LOCALE__ || undefined, {
-              style: "currency",
-              currency: product.currency || "USD",
-            }).format(product.price);
       meta.textContent = [
-        price,
+        money(product.price, product.currency),
         product.score ? `${product.score}/100` : "",
         product.retailer,
       ]
         .filter(Boolean)
         .join(" · ");
-      copy.append(title, meta);
-      card.append(image, copy);
+      copyElement.append(title, meta);
+      const ask = createButton("✦", "assistant-product-ask", () =>
+        setProductContext(product),
+      );
+      card.append(image, copyElement, ask);
       section.append(card);
     }
     host.append(section);
+  }
+
+  function renderClarifyingQuestions(questions = [], host) {
+    if (!questions.length) return;
+    const list = document.createElement("ol");
+    list.className = "assistant-clarifying-questions";
+    for (const question of questions) {
+      const item = document.createElement("li");
+      item.textContent = question;
+      list.append(item);
+    }
+    host.append(list);
   }
 
   function renderSources(sources = [], host) {
@@ -142,7 +629,7 @@
     const section = document.createElement("div");
     section.className = "assistant-sources";
     const label = document.createElement("strong");
-    label.textContent = text("sources", "Sources");
+    label.textContent = tr("sources", "Sources");
     section.append(label);
     for (const source of sources) {
       const link = document.createElement("a");
@@ -155,12 +642,102 @@
     host.append(section);
   }
 
-  function renderResponse(message, body) {
-    const copy = message.querySelector(".assistant-message-copy");
-    copy.textContent = body.message || "";
+  function renderFollowUpActions(body, host) {
+    if (!(body.recommendations || []).length) return;
+    const products = body.recommendations.map((item) => item.title).join(", ");
+    const section = document.createElement("div");
+    section.className = "assistant-quick-actions";
+    for (const [key, fallback, suffix] of [
+      ["actionCompare", "Compare these products", `: ${products}`],
+      ["actionCheaper", "Find cheaper options", ""],
+      ["actionPremium", "Show premium options", ""],
+      ["actionNew", "Only new products", ""],
+      ["actionStores", "Check other stores", ""],
+    ]) {
+      const label = tr(key, fallback);
+      section.append(
+        createButton(label, "assistant-quick-action", () =>
+          sendQuestion(`${label}${suffix}`),
+        ),
+      );
+    }
+    host.append(section);
+  }
+
+  function renderFeedback(record, host) {
+    if (record.response?.scope !== "shopping" || record.response?.needs_clarification)
+      return;
+    const section = document.createElement("div");
+    section.className = "assistant-feedback";
+    const question = document.createElement("span");
+    question.textContent = tr(
+      "feedbackQuestion",
+      "Was this recommendation useful?",
+    );
+    section.append(question);
+    for (const [type, label] of [
+      ["helpful", `👍 ${tr("helpful", "Helpful")}`],
+      ["not_helpful", `👎 ${tr("notHelpful", "Not helpful")}`],
+      ["wrong_price", `! ${tr("wrongPrice", "Price is wrong")}`],
+    ]) {
+      const button = createButton(label, "assistant-feedback-button", () =>
+        sendFeedback(record, type, section),
+      );
+      button.classList.toggle("is-selected", record.feedback === type);
+      button.disabled = Boolean(record.feedback);
+      section.append(button);
+    }
+    if (record.feedback) {
+      const thanks = document.createElement("small");
+      thanks.textContent = tr(
+        "feedbackThanks",
+        "Thanks — your feedback was recorded.",
+      );
+      section.append(thanks);
+    }
+    host.append(section);
+  }
+
+  async function sendFeedback(record, feedbackType, section) {
+    if (record.feedback) return;
+    record.feedback = feedbackType;
+    persistChats();
+    section.querySelectorAll("button").forEach((button) => {
+      button.disabled = true;
+    });
+    const thanks = document.createElement("small");
+    thanks.textContent = tr(
+      "feedbackThanks",
+      "Thanks — your feedback was recorded.",
+    );
+    section.append(thanks);
+    try {
+      await fetch("/api/shopping-assistant/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          conversation_id: activeChat.id,
+          message_id: record.id,
+          feedback_type: feedbackType,
+          market: market(),
+          product_ids: (record.response?.recommendations || []).map(
+            (item) => item.catalog_product_id,
+          ),
+        }),
+      });
+    } catch {
+      // Local feedback state remains visible even if analytics is unavailable.
+    }
+  }
+
+  function renderResponse(message, body, record) {
+    const copyElement = message.querySelector(".assistant-message-copy");
+    copyElement.textContent = body.message || "";
+    renderClarifyingQuestions(body.clarifying_questions, message);
     renderRecommendations(body.recommendations, message);
-    renderComparison(body.comparison_notes, message);
-    if (!(body.recommendations || []).length) {
+    renderComparison(body.comparison, message);
+    renderComparisonNotes(body.comparison_notes, message);
+    if (!(body.recommendations || []).length && !body.needs_clarification) {
       renderProducts(body.products, message);
     }
     if (body.follow_up) {
@@ -169,11 +746,161 @@
       followUp.textContent = body.follow_up;
       message.append(followUp);
     }
+    renderFollowUpActions(body, message);
     renderSources(body.sources, message);
+    renderFeedback(record, message);
+  }
+
+  function renderRecord(record) {
+    const message = addMessage(record.role, record.content || "");
+    message.dataset.messageId = record.id;
+    if (record.role === "assistant" && record.response) {
+      renderResponse(message, record.response, record);
+    }
+    if (record.stopped) message.classList.add("is-stopped");
+  }
+
+  function modelHistory() {
+    return activeChat.messages
+      .filter((item) => item.include_in_model !== false)
+      .map((item) => ({
+        role: item.role,
+        content:
+          item.role === "assistant" && item.response
+            ? [
+                item.response.message,
+                (item.response.recommendations || [])
+                  .map(
+                    (product) =>
+                      `${product.title} — ${money(product.price_value, product.currency)} ${product.retailer}`,
+                  )
+                  .join("; "),
+              ]
+                .filter(Boolean)
+                .join(" ")
+                .slice(0, 1200)
+            : item.content,
+      }))
+      .slice(-10);
+  }
+
+  function startLoading(message) {
+    const stages = [
+      tr("thinkingSearch", "Searching for suitable products…"),
+      tr("thinkingPrices", "Checking prices and retailers…"),
+      tr("thinkingCompare", "Comparing the strongest options…"),
+    ];
+    let index = 0;
+    message.querySelector(".assistant-message-copy").textContent = stages[0];
+    loadingTimer = window.setInterval(() => {
+      index = (index + 1) % stages.length;
+      message.querySelector(".assistant-message-copy").textContent = stages[index];
+    }, 1600);
+  }
+
+  function stopLoading() {
+    if (loadingTimer) window.clearInterval(loadingTimer);
+    loadingTimer = null;
+  }
+
+  function setBusy(busy) {
+    submitButton.hidden = busy;
+    stopButton.hidden = !busy;
+    input.disabled = busy;
+  }
+
+  async function sendQuestion(value) {
+    const question = String(value ?? input.value).trim();
+    if (!question || requestController) return;
+    const priorHistory = modelHistory();
+    const userRecord = {
+      id: makeId(),
+      role: "user",
+      content: question,
+      include_in_model: true,
+      created_at: new Date().toISOString(),
+    };
+    if (!activeChat.messages.length) activeChat.title = titleFromQuestion(question);
+    activeChat.draft = false;
+    activeChat.messages.push(userRecord);
+    addMessage("user", question).dataset.messageId = userRecord.id;
+    conversationElement.classList.add("has-conversation");
+    currentTitleElement.textContent = activeChat.title;
+    input.value = "";
+    persistChats();
+    setBusy(true);
+    const pending = addMessage("assistant", "", true);
+    startLoading(pending);
+    requestController = new AbortController();
+    try {
+      const response = await fetch("/api/shopping-assistant", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: requestController.signal,
+        body: JSON.stringify({
+          message: question,
+          messages: priorHistory,
+          market: market(),
+          language: language(),
+        }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok)
+        throw new Error(
+          body.error || tr("failed", "The assistant is unavailable right now."),
+        );
+      if (body.scope === "off_topic") userRecord.include_in_model = false;
+      const assistantRecord = {
+        id: makeId(),
+        role: "assistant",
+        content: body.message || "",
+        response: body,
+        include_in_model: body.scope !== "off_topic",
+        created_at: new Date().toISOString(),
+      };
+      pending.dataset.messageId = assistantRecord.id;
+      renderResponse(pending, body, assistantRecord);
+      pending.classList.remove("is-pending");
+      activeChat.messages.push(assistantRecord);
+      persistChats();
+    } catch (error) {
+      if (error.name === "AbortError") {
+        userRecord.include_in_model = false;
+        const stoppedRecord = {
+          id: makeId(),
+          role: "assistant",
+          content: tr(
+            "stopped",
+            "Stopped. You can edit the request or try again.",
+          ),
+          include_in_model: false,
+          stopped: true,
+          created_at: new Date().toISOString(),
+        };
+        pending.querySelector(".assistant-message-copy").textContent =
+          stoppedRecord.content;
+        pending.classList.add("is-stopped");
+        activeChat.messages.push(stoppedRecord);
+      } else {
+        userRecord.include_in_model = false;
+        pending.querySelector(".assistant-message-copy").textContent =
+          error.message ||
+          tr("failed", "The assistant is unavailable right now.");
+        pending.classList.add("is-error");
+      }
+      pending.classList.remove("is-pending");
+      persistChats();
+    } finally {
+      stopLoading();
+      requestController = null;
+      setBusy(false);
+      input.focus();
+      scrollToLatest();
+    }
   }
 
   function openPanel() {
-    previousFocus = document.activeElement;
+    if (panel.hidden) previousFocus = document.activeElement;
     panel.hidden = false;
     backdrop.hidden = false;
     document.body.classList.add("assistant-open");
@@ -188,6 +915,7 @@
     panel.classList.remove("is-open");
     backdrop.classList.remove("is-open");
     document.body.classList.remove("assistant-open");
+    sidebar.classList.remove("is-open");
     window.setTimeout(() => {
       panel.hidden = true;
       backdrop.hidden = true;
@@ -195,13 +923,71 @@
     }, 180);
   }
 
-  document
-    .querySelectorAll("[data-shopping-assistant-open]")
-    .forEach((button) => button.addEventListener("click", openPanel));
+  function closeSidebarOnMobile() {
+    if (window.matchMedia("(max-width: 760px)").matches)
+      sidebar.classList.remove("is-open");
+  }
+
+  document.querySelectorAll("[data-shopping-assistant-open]").forEach((button) =>
+    button.addEventListener("click", openPanel),
+  );
+  document.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-ask-delia]");
+    if (!button) return;
+    event.preventDefault();
+    setProductContext({
+      id: Number(button.dataset.productId || 0),
+      catalog_product_id: Number(button.dataset.productId || 0),
+      title: button.dataset.productTitle || "Product",
+      score: Number(button.dataset.productScore || 0) || null,
+      url: button.dataset.productUrl || "",
+    });
+  });
   closeButton?.addEventListener("click", closePanel);
   backdrop?.addEventListener("click", closePanel);
+  stopButton?.addEventListener("click", () => requestController?.abort());
+  panel.querySelector("[data-assistant-sidebar-toggle]")?.addEventListener(
+    "click",
+    () => sidebar.classList.toggle("is-open"),
+  );
+  panel.querySelector("[data-assistant-sidebar-close]")?.addEventListener(
+    "click",
+    () => sidebar.classList.remove("is-open"),
+  );
+  panel.querySelectorAll("[data-assistant-new]").forEach((button) =>
+    button.addEventListener("click", newChat),
+  );
+  panel.querySelector("[data-assistant-clear]")?.addEventListener(
+    "click",
+    clearHistory,
+  );
+  compareSavedButton?.addEventListener("click", () => {
+    const names = savedProducts
+      .slice(0, 4)
+      .map((product) => product.title)
+      .join(" vs ");
+    if (names) sendQuestion(`${tr("compareSaved", "Compare saved")}: ${names}`);
+  });
+  panel.querySelectorAll("[data-assistant-prompt]").forEach((button) =>
+    button.addEventListener("click", () =>
+      sendQuestion(button.dataset.assistantPrompt || button.textContent),
+    ),
+  );
+  form?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    sendQuestion(input.value);
+  });
+  input?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      form.requestSubmit();
+    }
+  });
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && !panel.hidden) closePanel();
+    if (event.key === "Escape" && !panel.hidden) {
+      if (sidebar.classList.contains("is-open")) sidebar.classList.remove("is-open");
+      else closePanel();
+    }
     if (event.key !== "Tab" || panel.hidden) return;
     const focusable = [
       ...panel.querySelectorAll(
@@ -219,86 +1005,13 @@
       first.focus();
     }
   });
-  panel.querySelectorAll("[data-assistant-prompt]").forEach((button) =>
-    button.addEventListener("click", () => {
-      input.value = button.dataset.assistantPrompt || button.textContent;
-      input.focus();
-    }),
-  );
 
-  form?.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const question = input.value.trim();
-    if (!question || submitButton.disabled) return;
-    addMessage("user", question);
-    conversationElement?.classList.add("has-conversation");
-    const priorHistory = history.slice(-8);
-    history.push({ role: "user", content: question });
-    input.value = "";
-    submitButton.disabled = true;
-    input.disabled = true;
-    const pending = addMessage(
-      "assistant",
-      text("thinking", "Comparing options…"),
-      true,
-    );
-    try {
-      const response = await fetch("/api/shopping-assistant", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: question,
-          messages: priorHistory,
-          market: window.__ODD_MARKET__ || panel.dataset.market || "us",
-          language: window.__ODD_LANGUAGE__ || panel.dataset.language || "en",
-        }),
-      });
-      const body = await response.json().catch(() => ({}));
-      if (!response.ok)
-        throw new Error(
-          body.error ||
-            text("failed", "The assistant is unavailable right now."),
-        );
-      renderResponse(pending, body);
-      pending.classList.remove("is-pending");
-      const recommendationHistory = (body.recommendations || [])
-        .map((item) => `${item.title} — ${item.price} ${item.retailer}`.trim())
-        .join("; ");
-      if (body.scope === "off_topic") {
-        history.pop();
-      } else {
-        history.push({
-          role: "assistant",
-          content: [body.message, recommendationHistory]
-            .filter(Boolean)
-            .join(" ")
-            .slice(0, 1200),
-        });
-      }
-    } catch (error) {
-      if (
-        history.at(-1)?.role === "user" &&
-        history.at(-1)?.content === question
-      ) {
-        history.pop();
-      }
-      pending.querySelector(".assistant-message-copy").textContent =
-        error.message ||
-        text("failed", "The assistant is unavailable right now.");
-      pending.classList.remove("is-pending");
-      pending.classList.add("is-error");
-    } finally {
-      submitButton.disabled = false;
-      input.disabled = false;
-      input.focus();
-      scrollToLatest();
-    }
-  });
-
-  input?.addEventListener("keydown", (event) => {
-    if (event.key === "Enter" && !event.shiftKey) {
-      event.preventDefault();
-      form.requestSubmit();
-    }
-  });
+  chats = normalizedChats();
+  savedProducts = savedProducts.filter((product) => product && product.title).slice(0, 50);
+  let activeId = "";
+  try {
+    activeId = localStorage.getItem(ACTIVE_KEY) || "";
+  } catch {}
+  setActiveChat(chats.find((chat) => chat.id === activeId) || chats[0] || createDraftChat());
+  renderSavedProducts();
 })();

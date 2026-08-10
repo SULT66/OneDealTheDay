@@ -95,14 +95,20 @@ assert.strictEqual(
 assert(matches[0].score >= 82, "Assistant exposed an unqualified public score");
 
 const calls = [];
+const requestOptions = [];
 const client = {
   responses: {
-    create: async (request) => {
+    create: async (request, options) => {
       calls.push(request);
+      requestOptions.push(options);
       if (calls.length === 1) {
         return {
           output: [],
-          output_text: JSON.stringify({ scope: "shopping" }),
+          output_text: JSON.stringify({
+            scope: "shopping",
+            needs_clarification: false,
+            clarifying_questions: [],
+          }),
         };
       }
       if (calls.length === 2) {
@@ -155,9 +161,18 @@ const client = {
               reason: "It fits the budget and prioritizes quieter operation.",
               url: "https://example.com/blender",
               action_label: "View offer",
+              catalog_product_id: 1,
             },
           ],
           comparison_notes: ["The tracked offer is below the $100 budget."],
+          comparison: [
+            {
+              catalog_product_id: 1,
+              best_for: "Quiet blending under $100",
+              strengths: ["Within budget", "Strong seller terms"],
+              drawbacks: ["Capacity should be confirmed"],
+            },
+          ],
         }),
       };
     },
@@ -171,21 +186,34 @@ const client = {
     market: (code) => ({ code, currency: "USD" }),
     client,
   });
+  const requestController = new AbortController();
   const result = await assistant.respond({
     message: "Find a quiet blender under $100",
     messages: [],
     marketCode: "us",
     language: "en",
+    signal: requestController.signal,
   });
   assert.strictEqual(
     calls.length,
     3,
     "Assistant did not complete the tool round trip",
   );
+  assert(
+    requestOptions.every(
+      (options) => options?.signal === requestController.signal,
+    ),
+    "Abort signal was not propagated to every OpenAI request",
+  );
   assert.strictEqual(
     calls[0].store,
     false,
     "Assistant API request must not persist conversations",
+  );
+  assert.strictEqual(
+    result.comparison[0].delivery,
+    "Free delivery",
+    "Comparison did not use exact catalog delivery data",
   );
   assert(
     !calls[0].tools,
@@ -220,6 +248,16 @@ const client = {
     "Do you care more about noise or capacity?",
     "Structured follow-up was not returned to the UI",
   );
+  assert.strictEqual(
+    result.recommendations[0].image_url,
+    "https://example.com/blender.jpg",
+    "Verified catalog image was not attached to the recommendation",
+  );
+  assert.strictEqual(
+    result.recommendations[0].catalog_product_id,
+    1,
+    "Recommendation was not bound to a verified catalog product",
+  );
   assert(
     calls[1].tools.some(
       (tool) => tool.name === "search_catalog" && tool.strict,
@@ -244,9 +282,11 @@ const client = {
           reason: "The card should render without an unsafe action.",
           url: "javascript:alert(1)",
           action_label: "Open",
+          catalog_product_id: 1,
         },
       ],
       comparison_notes: [],
+      comparison: [],
     }),
   );
   assert.strictEqual(sanitized.recommendations[0].url, "");
@@ -272,7 +312,11 @@ const client = {
           offTopicCalls.push(request);
           return {
             output: [],
-            output_text: JSON.stringify({ scope: "off_topic" }),
+            output_text: JSON.stringify({
+              scope: "off_topic",
+              needs_clarification: false,
+              clarifying_questions: [],
+            }),
           };
         },
       },
@@ -295,6 +339,48 @@ const client = {
     !offTopicCalls[0].tools,
     "Off-topic guardrail call received shopping or web tools",
   );
+  const clarificationCalls = [];
+  const clarificationAssistant = createShoppingAssistant({
+    db,
+    sourceSql,
+    market: (code) => ({ code, currency: "USD" }),
+    client: {
+      responses: {
+        create: async (request) => {
+          clarificationCalls.push(request);
+          return {
+            output: [],
+            output_text: JSON.stringify({
+              scope: "shopping",
+              needs_clarification: true,
+              clarifying_questions: [
+                "What is your budget?",
+                "What size do you need?",
+                "How will you use it?",
+              ],
+            }),
+          };
+        },
+      },
+    },
+  });
+  const clarification = await clarificationAssistant.respond({
+    message: "Find me a TV",
+    messages: [],
+    marketCode: "us",
+    language: "en",
+  });
+  assert.strictEqual(
+    clarificationCalls.length,
+    1,
+    "A broad request searched before Delia clarified the shopper's needs",
+  );
+  assert.strictEqual(clarification.needs_clarification, true);
+  assert.deepStrictEqual(clarification.clarifying_questions, [
+    "What is your budget?",
+    "What size do you need?",
+    "How will you use it?",
+  ]);
   assert.strictEqual(refused.scope, "off_topic");
   assert.strictEqual(refused.recommendations.length, 0);
   assert.strictEqual(refused.products.length, 0);
