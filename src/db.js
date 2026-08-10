@@ -195,6 +195,16 @@ db.exec(`
     processed_at TEXT NOT NULL,
     status TEXT NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS shopping_assistant_feedback(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    conversation_id TEXT NOT NULL,
+    message_id TEXT NOT NULL,
+    feedback_type TEXT NOT NULL,
+    market TEXT NOT NULL DEFAULT 'us',
+    product_ids TEXT NOT NULL DEFAULT '[]',
+    created_at TEXT NOT NULL,
+    ip_hash TEXT NOT NULL DEFAULT ''
+  );
 `);
 
 const userColumns = new Set(db.prepare("PRAGMA table_info(users)").all().map(column => column.name));
@@ -317,6 +327,8 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_source_refresh_provider_market ON source_refresh_runs(provider_id, market, id DESC);
   CREATE INDEX IF NOT EXISTS idx_automation_alerts_open ON automation_alerts(resolved_at, severity, created_at DESC);
   CREATE INDEX IF NOT EXISTS idx_distribution_queue_status ON distribution_queue(status, drop_date, market);
+  CREATE INDEX IF NOT EXISTS idx_assistant_feedback_created ON shopping_assistant_feedback(created_at DESC);
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_assistant_feedback_message_type ON shopping_assistant_feedback(message_id, feedback_type);
 `);
 
 // Remove retired preview and hand-entered records with their dependent

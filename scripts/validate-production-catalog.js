@@ -19,6 +19,7 @@ const files = [
   "src/homepageTemplate.js",
   "src/homepage-seo.js",
   "src/shoppingAssistant.js",
+  "src/shoppingAssistantPanel.js",
   "src/mailer.js",
   "public/app.js",
   "public/shopping-assistant.js"
@@ -52,6 +53,7 @@ for (const required of ["AZURE_PRODUCTION_HOST", "normalizedMarketPath", "normal
 
 const homepage = fs.readFileSync(path.join(root, "src/homepage.js"), "utf8");
 const homepageTemplate = fs.readFileSync(path.join(root, "src/homepageTemplate.js"), "utf8");
+const assistantPanel = fs.readFileSync(path.join(root, "src/shoppingAssistantPanel.js"), "utf8");
 for (const forbidden of ["DEMO PREVIEW", "Sample price", "VIEW PRODUCT PREVIEW", "Development preview", "no API credits are being used"]) {
   if (homepage.includes(forbidden)) throw new Error(`Public homepage still exposes internal catalog wording: ${forbidden}`);
 }
@@ -93,7 +95,7 @@ if (!homepage.includes("offer-facts") || !homepage.includes("price-history-link"
   throw new Error("Homepage live offer details or price-history links are missing");
 }
 for (const required of ["data-shopping-assistant-open", "shoppingAssistant", "assistant.promptOne", "home.realPriceDrops", "page.pastDrops"]) {
-  if (!homepageTemplate.includes(required)) throw new Error(`Homepage redesign is missing: ${required}`);
+  if (!homepageTemplate.includes(required) && !assistantPanel.includes(required)) throw new Error(`Homepage redesign is missing: ${required}`);
 }
 for (const forbidden of ["Trending Drops", "New Drops", "Yesterday's Drops", "Evidence confidence"]) {
   if (homepageTemplate.includes(forbidden)) throw new Error(`Homepage still exposes misleading content: ${forbidden}`);

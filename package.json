@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node app.js",
     "refresh": "node src/refresh-cli.js",
-    "test": "node scripts/test-ranking-integrity.js && node scripts/validate-production-catalog.js && node scripts/test-product-presentation.js && node scripts/test-shopping-assistant.js && node scripts/test-editorial-brief.js && node scripts/test-full-automation.js && node scripts/test-ebay-account-deletion.js && node scripts/test-ebay-browse.js",
+    "test": "node scripts/test-ranking-integrity.js && node scripts/validate-production-catalog.js && node scripts/test-product-presentation.js && node scripts/test-shopping-assistant.js && node scripts/test-delia-chat.js && node scripts/test-editorial-brief.js && node scripts/test-full-automation.js && node scripts/test-ebay-account-deletion.js && node scripts/test-ebay-browse.js",
     "test:ranking": "node scripts/test-ranking-integrity.js",
     "test:automation": "node scripts/test-full-automation.js",
     "test:seo": "node scripts/test-seo-routes.js",

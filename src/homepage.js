@@ -132,6 +132,8 @@ const priceHistoryAction = (product) =>
   isDemo(product) || !hasCurrentOffer(product)
     ? ""
     : `<a class="price-history-link" href="${dealPath(product)}#price-history">${esc(product.display_price_history_label || "PRICE HISTORY")}</a>`;
+const askDeliaButton = (product, language = "en") =>
+  `<button class="ask-delia-button" type="button" data-ask-delia data-product-id="${Number(product.id)}" data-product-title="${esc(fullTitle(product.title))}" data-product-score="${Number(product.display_score || product.score || 0)}" data-product-url="${esc(dealPath(product))}">✦ ${esc(t(language, "assistant.askProduct"))}</button>`;
 const offerFacts = (product) => {
   if (isDemo(product)) return "";
   const seller = clean(product.seller_name) || storeName(product);
@@ -181,7 +183,7 @@ const mainCard = (product, index, language = "en") => `
       <div class="price-row"><span class="price-label">${priceLabel(product)}</span><span class="price">${esc(product.display_current_price || money(product.current_price, product.currency))}</span>${product.original_price ? `<span class="old">${esc(product.display_original_price || money(product.original_price, product.currency))}</span>` : ""}${discount(product) ? `<span class="save-pill">${esc(product.display_save_label || `SAVE ${discount(product)}%`)}</span>` : ""}</div>
       <p class="verification">${esc(statusText(product))}</p>
       ${offerFacts(product)}
-      <div class="card-actions">${action(product, "button", "daily_card_cta")}${priceHistoryAction(product)}</div>
+      <div class="card-actions">${action(product, "button", "daily_card_cta")}${priceHistoryAction(product)}${askDeliaButton(product, language)}</div>
     </div>
   </article>`;
 
@@ -193,7 +195,7 @@ const miniCard = (product, language = "en", atSelection = false) => `
       <h3><a href="${dealPath(product)}" ${trackingAttributes(product, "collection_title")}>${esc(fullTitle(product.title))}</a></h3>
       ${scoreMetrics(product, language, atSelection || (product.drop_score != null && Boolean(product.drop_date)))}
       <div class="mini-price-row"><span class="mini-price-label">${priceLabel(product)}</span><span class="mini-price">${esc(product.display_current_price || money(product.current_price, product.currency))}</span>${product.verified_previous_price ? `<span class="old">${esc(product.display_verified_previous_price || money(product.verified_previous_price, product.currency))}</span><span class="save-pill">${esc(t(language, "product.verifiedDrop", {percent:product.verified_drop_percent}))}</span>` : product.original_price ? `<span class="old">${esc(product.display_original_price || money(product.original_price, product.currency))}</span>` : ""}</div>
-      <a class="mini-action" href="${dealPath(product)}" ${trackingAttributes(product, "collection_details")}>VIEW DETAILS</a>
+      <div class="card-actions"><a class="mini-action" href="${dealPath(product)}" ${trackingAttributes(product, "collection_details")}>VIEW DETAILS</a>${askDeliaButton(product, language)}</div>
     </div>
   </article>`;
 
@@ -402,7 +404,7 @@ module.exports = function homepage(req, res) {
       <div class="featured-price-row"><span class="price-label">${priceLabel(featured)}</span><span class="featured-price">${esc(featured.display_current_price || money(featured.current_price, featured.currency))}</span>${featured.original_price ? `<span class="old">${esc(featured.display_original_price || money(featured.original_price, featured.currency))}</span>` : ""}${discount(featured) ? `<span class="save-pill">${esc(featured.display_save_label || `SAVE ${discount(featured)}%`)}</span>` : ""}</div>
       <p class="verification">${esc(statusText(featured))}</p>
       ${offerFacts(featured)}
-      <div class="card-actions">${action(featured, "featured-button", "featured_cta")}${priceHistoryAction(featured)}</div>
+      <div class="card-actions">${action(featured, "featured-button", "featured_cta")}${priceHistoryAction(featured)}${askDeliaButton(featured, language)}</div>
     </div>`
     : `<div class="featured-body catalog-empty-featured">
       <p class="eyebrow">${esc(t(language, "home.catalogEyebrow"))}</p>

@@ -20,6 +20,7 @@ const { deduplicationKeys, isDailyPickEligible } = require("./ranker");
 const { methodology, methodologyMain } = require("./methodology");
 const { createEditorialBrief } = require("./editorialBrief");
 const { createShoppingAssistant } = require("./shoppingAssistant");
+const renderShoppingAssistantPanel = require("./shoppingAssistantPanel");
 const { passwordResetEmail, subscriptionEmail, clubWaitlistEmail } = require("./mailer");
 const {
   normalizeAction,
@@ -188,12 +189,18 @@ app.post("/api/shopping-assistant", shoppingAssistantRateLimit, async (req, res)
   const selectedMarket = market(requestedMarket || req.market || marketFromIp(req).code);
   const requestedLanguage = String(req.body?.language || req.language || "en").trim().toLowerCase().split("-")[0];
   const language = ["en", "es", "fr", "de"].includes(requestedLanguage) ? requestedLanguage : "en";
+  const requestController = new AbortController();
+  req.once("aborted", () => requestController.abort());
+  res.once("close", () => {
+    if (!res.writableEnded) requestController.abort();
+  });
   try {
     const result = await shoppingAssistant.respond({
       message:req.body?.message,
       messages:req.body?.messages,
       marketCode:selectedMarket.code,
-      language
+      language,
+      signal:requestController.signal
     });
     return res.set("Cache-Control", "no-store").json(result);
   } catch (error) {
@@ -207,6 +214,38 @@ app.post("/api/shopping-assistant", shoppingAssistantRateLimit, async (req, res)
           : "The AI Shopping Assistant could not complete that request. Please try again."
     });
   }
+});
+app.post("/api/shopping-assistant/feedback", shoppingAssistantRateLimit, (req, res) => {
+  const feedbackType = String(req.body?.feedback_type || "").trim();
+  const conversationId = String(req.body?.conversation_id || "").trim().slice(0, 80);
+  const messageId = String(req.body?.message_id || "").trim().slice(0, 80);
+  const selectedMarket = normalizeMarket(req.body?.market) || "us";
+  const productIds = (Array.isArray(req.body?.product_ids) ? req.body.product_ids : [])
+    .map(value => Number(value))
+    .filter(value => Number.isInteger(value) && value > 0)
+    .slice(0, 6);
+  if (!conversationId || !messageId || !["helpful", "not_helpful", "wrong_price"].includes(feedbackType)) {
+    return res.status(400).set("Cache-Control", "no-store").json({error:"Invalid feedback."});
+  }
+  const ipHash = crypto
+    .createHash("sha256")
+    .update(`${String(req.ip || req.socket?.remoteAddress || "unknown")}:${process.env.SESSION_SECRET || "local"}`)
+    .digest("hex")
+    .slice(0, 24);
+  db.prepare(`
+    INSERT OR IGNORE INTO shopping_assistant_feedback(
+      conversation_id,message_id,feedback_type,market,product_ids,created_at,ip_hash
+    ) VALUES(?,?,?,?,?,?,?)
+  `).run(
+    conversationId,
+    messageId,
+    feedbackType,
+    selectedMarket,
+    JSON.stringify(productIds),
+    new Date().toISOString(),
+    ipHash
+  );
+  return res.status(201).set("Cache-Control", "no-store").json({ok:true});
 });
 app.use((req, res, next) => {
   const match = req.url.match(new RegExp(`^/(${marketCodes.join("|")})(?=/|\\?|$)`));
@@ -590,6 +629,8 @@ const matchesSearch = (product, terms) => {
   return terms.every(term => (searchAliases[term] || [term, term.endsWith("s") ? term.slice(0,-1) : `${term}s`]).some(candidate => haystack.includes(candidate)));
 };
 const trackingAttributes = (product, sourcePage, placement) => `data-track-product="${Number(product.id)}" data-track-source="${normalizeSourcePage(sourcePage)}" data-track-placement="${normalizePlacement(placement)}" data-track-action="view_details"`;
+const askDeliaButton = (product, language = "en") =>
+  `<button class="ask-delia-button" type="button" data-ask-delia data-product-id="${Number(product.id)}" data-product-title="${esc(shortTitle(localizeProduct(product, language).title))}" data-product-score="${Number(product.display_score || product.score || 0)}" data-product-url="${esc(dealPath(product))}">✦ ${esc(t(language,"assistant.askProduct"))}</button>`;
 const externalAttributes = 'target="_blank" rel="sponsored noopener noreferrer"';
 const recordClick = (req, product, {
   sourcePage = "unknown",
@@ -629,12 +670,7 @@ const sharedHeader = (code, language = "en", req = null) => {
   return `<header class="site-header"><div class="header-top"><a class="brand" href="${home}"><span class="brand-mark" aria-hidden="true"><img src="/header-bag.svg?v=20260731-larger-bag" alt=""></span><span class="brand-copy"><strong><span>OneDaily</span><span class="brand-drop">Drop</span></strong><small>${esc(t(language,"brand.seoTagline"))}</small></span></a><form class="header-search" action="${marketPath(code, "/search")}"><span aria-hidden="true">⌕</span><input name="q" type="search" placeholder="${esc(t(language,"search.short"))}" aria-label="${esc(t(language,"search.short"))}"></form><button class="header-ai" type="button" data-shopping-assistant-open><span aria-hidden="true">✦</span><span>${esc(t(language,"assistant.short"))}</span></button><a class="header-subscribe" href="${home}#subscribe">${esc(t(language,"nav.subscribe"))}</a><button id="themeToggle" class="theme-button" type="button" aria-label="${esc(t(language,"theme.toDark"))}" title="${esc(t(language,"theme.dark"))}"><span class="theme-button-icon" aria-hidden="true">☾</span><span class="theme-button-label">${esc(t(language,"theme.dark"))}</span></button>${req ? languageSwitcher(req, code, language) : ""}<button class="mobile-menu-toggle" type="button" aria-expanded="false" aria-controls="mainNavigation" aria-label="${esc(t(language,"menu.open"))}"><span></span><span></span><span></span></button></div><nav id="mainNavigation" class="main-nav" aria-label="${esc(t(language,"nav.primary"))}"><a href="${home}">${esc(t(language,"nav.todayShort"))}</a><div class="category-menu"><button type="button" aria-expanded="false">${esc(t(language,"nav.categories"))} <span>⌄</span></button><div class="mega-menu" hidden>${navCategories(code).map(category => `<a href="${catPath(category, code)}">${esc(categoryLabel(category, language))}</a>`).join("")}</div></div><a href="${home}#top">${esc(t(language,"nav.more"))}</a><a href="${marketPath(code, "/archive")}">${esc(t(language,"nav.archive"))}</a><a href="${marketPath(code, "/about")}">${esc(t(language,"nav.about"))}</a></nav></header>`;
 };
 const sharedFooter = (code, language = "en") => `<footer><div class="footer-brand"><b>OneDailyDrop</b><p>${esc(t(language,"brand.seoTagline"))}</p><div class="footer-links"><a href="${marketPath(code, "/about")}">${esc(t(language,"footer.about"))}</a><a href="${marketPath(code, "/contact")}">${esc(t(language,"footer.contact"))}</a><a href="${marketPath(code, "/privacy")}">${esc(t(language,"footer.privacy"))}</a><a href="${marketPath(code, "/terms")}">${esc(t(language,"footer.terms"))}</a><a href="${marketPath(code, "/affiliate-disclosure")}">${esc(t(language,"footer.affiliate"))}</a><a href="${marketPath(code, "/editorial-policy")}">${esc(t(language,"footer.editorial"))}</a></div></div><p class="disclosure">${esc(t(language,"footer.preview"))}</p></footer>`;
-const shoppingAssistantPanel = (code, language) => {
-  const prompts = ["assistant.promptOne", "assistant.promptTwo", "assistant.promptThree"]
-    .map(key => `<button type="button" data-assistant-prompt="${esc(t(language,key))}">${esc(t(language,key))}</button>`)
-    .join("");
-  return `<div id="shoppingAssistantBackdrop" class="assistant-backdrop" hidden></div><aside id="shoppingAssistant" class="shopping-assistant" role="dialog" aria-modal="true" aria-labelledby="shoppingAssistantTitle" hidden data-market="${esc(code)}" data-language="${esc(language)}" data-you="${esc(t(language,"assistant.you"))}" data-thinking="${esc(t(language,"assistant.thinking"))}" data-failed="${esc(t(language,"assistant.failed"))}" data-sources="${esc(t(language,"assistant.sources"))}"><div class="assistant-header"><div class="assistant-title"><span class="assistant-spark" aria-hidden="true">✦</span><div><strong id="shoppingAssistantTitle">${esc(t(language,"assistant.title"))}</strong><small>${esc(t(language,"assistant.subtitle"))}</small></div></div><button class="assistant-close" type="button" data-shopping-assistant-close aria-label="${esc(t(language,"assistant.close"))}">×</button></div><div class="assistant-conversation"><div class="assistant-intro"><p>${esc(t(language,"assistant.intro"))}</p><div class="assistant-prompts">${prompts}</div></div><div class="assistant-messages" data-assistant-messages aria-live="polite"></div><div class="assistant-products" data-assistant-products hidden></div><div class="assistant-sources" data-assistant-sources hidden></div></div><form class="assistant-form"><div class="assistant-input-row"><textarea maxlength="1200" rows="1" required placeholder="${esc(t(language,"assistant.placeholder"))}" aria-label="${esc(t(language,"assistant.placeholder"))}"></textarea><button type="submit" aria-label="${esc(t(language,"assistant.send"))}">↑</button></div><p class="assistant-disclaimer">${esc(t(language,"assistant.disclaimer"))}</p></form></aside>`;
-};
+const shoppingAssistantPanel = renderShoppingAssistantPanel;
 const shell = (title, description, canonical, body, schema = null, image = "", robots = "", code = "us", alternateCodes = marketCodes, req = null) => {
   const selectedMarket = market(code);
   const language = req?.language || "en";
@@ -687,8 +723,8 @@ const shell = (title, description, canonical, body, schema = null, image = "", r
   const html = `<!doctype html><html lang="${esc(locale)}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0a1020"><title>${esc(title)}</title><meta name="description" content="${esc(description.slice(0,160))}"><meta name="robots" content="${esc(robotsContent)}"><link rel="canonical" href="${esc(canonical)}"><link rel="icon" href="/favicon.svg" type="image/svg+xml">${alternates}${imageConnectionHints(image)}<meta property="og:type" content="${ogType}"><meta property="og:site_name" content="OneDailyDrop"><meta property="og:locale" content="${esc(ogLocale)}"><meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(description.slice(0,180))}"><meta property="og:url" content="${esc(canonical)}">${image ? `<meta property="og:image" content="${esc(image)}"><meta property="og:image:alt" content="${esc(title)}">` : ""}<meta name="twitter:card" content="${image ? "summary_large_image" : "summary"}"><meta name="twitter:title" content="${esc(title)}"><meta name="twitter:description" content="${esc(description.slice(0,180))}">${image ? `<meta name="twitter:image" content="${esc(image)}">` : ""}<link rel="stylesheet" href="/styles.css?v=20260731-brand-lockup"><link rel="stylesheet" href="/brand-theme.css?v=20260731-brand-lockup"><link rel="stylesheet" href="/liquid-glass.css?v=20260731-brand-lockup"><script type="application/ld+json">${JSON.stringify(pageSchema).replace(/</g,"\\u003c")}</script><script>window.__ODD_LANGUAGE__=${JSON.stringify(language)};window.__ODD_LOCALE__=${JSON.stringify(locale)};window.__ODD_TEXT__=${JSON.stringify(clientCopy(language)).replace(/</g, "\\u003c")};</script></head><body>${sharedHeader(code, language, req)}${body}${sharedFooter(code, language)}<script src="/theme.js?v=20260728-i18n2"></script><script src="/site-shell.js?v=20260728-i18n2"></script><script src="/click-tracking.js?v=20260805-stage2"></script></body></html>`;
   const versionedHtml = html
     .replace("/styles.css?v=20260731-brand-lockup", "/styles.css?v=20260808-assistant")
-    .replace("</head>", '<link rel="stylesheet" href="/i18n.css?v=20260808-assistant"><link rel="stylesheet" href="/shopping-assistant.css?v=20260809-rich-results"></head>')
-    .replace("</body>", `${shoppingAssistantPanel(code, language)}<script src="/shopping-assistant.js?v=20260809-shopping-scope"></script></body>`);
+    .replace("</head>", '<link rel="stylesheet" href="/i18n.css?v=20260808-assistant"><link rel="stylesheet" href="/shopping-assistant.css?v=20260810-delia-chat"></head>')
+    .replace("</body>", `${shoppingAssistantPanel(code, language)}<script src="/shopping-assistant.js?v=20260810-delia-chat"></script></body>`);
   return localizeHtml(versionedHtml, language);
 };
 
@@ -710,16 +746,16 @@ const scoreMetrics = (display, language = "en", { atSelection = false } = {}) =>
 
 const productCard = (product, index = 0, language = "en", sourcePage = "unknown") => {
   const display = presentProduct(localizeProduct(product, language), language);
-  return `<article class="card catalog-card"><a class="image-wrap" href="${dealPath(product)}" ${trackingAttributes(product, sourcePage, "catalog_media")}><img src="${esc(product.image_url)}" alt="${esc(shortTitle(display.title))}" loading="lazy" decoding="async"></a><div class="card-content">${index ? `<span class="rank">#${index}</span>` : ""}${product.brand ? `<a class="eyebrow" href="${brandPath(product.brand, product.market)}">${esc(product.brand)}</a>` : ""}<h2 class="card-title"><a href="${dealPath(product)}" ${trackingAttributes(product, sourcePage, "catalog_title")}>${esc(shortTitle(display.title))}</a></h2><p class="description editorial-teaser"><strong>${esc(t(language,"product.why"))}</strong> ${esc(whyPicked(display, language))}</p>${scoreMetrics(display, language)}<span class="price card-price">${money(product.current_price, product.currency, languageTag(product.market, language))}</span><a class="button" href="${dealPath(product)}" ${trackingAttributes(product, sourcePage, "catalog_details")}>${esc(t(language,"page.viewDetails"))}</a></div></article>`;
+  return `<article class="card catalog-card"><a class="image-wrap" href="${dealPath(product)}" ${trackingAttributes(product, sourcePage, "catalog_media")}><img src="${esc(product.image_url)}" alt="${esc(shortTitle(display.title))}" loading="lazy" decoding="async"></a><div class="card-content">${index ? `<span class="rank">#${index}</span>` : ""}${product.brand ? `<a class="eyebrow" href="${brandPath(product.brand, product.market)}">${esc(product.brand)}</a>` : ""}<h2 class="card-title"><a href="${dealPath(product)}" ${trackingAttributes(product, sourcePage, "catalog_title")}>${esc(shortTitle(display.title))}</a></h2><p class="description editorial-teaser"><strong>${esc(t(language,"product.why"))}</strong> ${esc(whyPicked(display, language))}</p>${scoreMetrics(display, language)}<span class="price card-price">${money(product.current_price, product.currency, languageTag(product.market, language))}</span><div class="card-actions"><a class="button" href="${dealPath(product)}" ${trackingAttributes(product, sourcePage, "catalog_details")}>${esc(t(language,"page.viewDetails"))}</a>${askDeliaButton(product, language)}</div></div></article>`;
 };
 const alternativeCard = (product, language = "en") => {
   const display = presentProduct(localizeProduct(product, language), language);
-  return `<article class="alternative-card"><a class="alternative-card-media" href="${dealPath(product)}" ${trackingAttributes(product,"related","catalog_media")}><img src="${esc(product.image_url)}" alt="${esc(shortTitle(display.title))}" loading="lazy" decoding="async"></a><div class="alternative-card-body"><p class="cat">${esc(display.display_category)} · ${esc(storeName(product))}</p><h3><a href="${dealPath(product)}" ${trackingAttributes(product,"related","catalog_title")}>${esc(shortTitle(display.title))}</a></h3><div class="alternative-meta">${display.display_score != null ? `<span>${esc(display.display_score_label)} <strong>${Number(display.display_score)}/100</strong></span>` : ""}<span class="price">${money(product.current_price,product.currency,languageTag(product.market,language))}</span></div><a class="alternative-link" href="${dealPath(product)}" ${trackingAttributes(product,"related","catalog_details")}>${esc(t(language,"page.viewDetails"))} →</a></div></article>`;
+  return `<article class="alternative-card"><a class="alternative-card-media" href="${dealPath(product)}" ${trackingAttributes(product,"related","catalog_media")}><img src="${esc(product.image_url)}" alt="${esc(shortTitle(display.title))}" loading="lazy" decoding="async"></a><div class="alternative-card-body"><p class="cat">${esc(display.display_category)} · ${esc(storeName(product))}</p><h3><a href="${dealPath(product)}" ${trackingAttributes(product,"related","catalog_title")}>${esc(shortTitle(display.title))}</a></h3><div class="alternative-meta">${display.display_score != null ? `<span>${esc(display.display_score_label)} <strong>${Number(display.display_score)}/100</strong></span>` : ""}<span class="price">${money(product.current_price,product.currency,languageTag(product.market,language))}</span></div><div class="card-actions"><a class="alternative-link" href="${dealPath(product)}" ${trackingAttributes(product,"related","catalog_details")}>${esc(t(language,"page.viewDetails"))} →</a>${askDeliaButton(product, language)}</div></div></article>`;
 };
 const archiveCard = (product, language = "en") => {
   const display = presentProduct(localizeProduct(product, language), language);
   const locale = languageTag(product.market, language);
-  return `<article class="archive-card"><a class="archive-card-media" href="${dealPath(product)}" ${trackingAttributes(product, "archive", "archive_media")}><img src="${esc(product.image_url)}" alt="${esc(shortTitle(display.title))}" loading="lazy" decoding="async"></a><div class="archive-card-content">${product.category ? `<a class="eyebrow" href="${catPath(product.category, product.market)}">${esc(display.display_category)}</a>` : ""}<h2><a href="${dealPath(product)}" ${trackingAttributes(product, "archive", "archive_title")}>${esc(shortTitle(display.title))}</a></h2><p class="description editorial-teaser">${esc(whyPicked(display, language))}</p>${scoreMetrics(display, language, { atSelection:true })}<div class="archive-prices"><p><span>${esc(t(language,"product.selectionPrice"))}</span><strong>${money(product.drop_price ?? product.current_price, product.drop_currency || product.currency, locale)}</strong></p><p><span>${esc(t(language,"product.currentPrice"))}</span><strong>${money(product.current_price, product.currency, locale)}</strong></p></div><span class="archive-status">${esc(display.display_availability)}</span><a class="button" href="${dealPath(product)}" ${trackingAttributes(product, "archive", "archive_details")}>${esc(t(language,"page.viewDetails"))}</a></div></article>`;
+  return `<article class="archive-card"><a class="archive-card-media" href="${dealPath(product)}" ${trackingAttributes(product, "archive", "archive_media")}><img src="${esc(product.image_url)}" alt="${esc(shortTitle(display.title))}" loading="lazy" decoding="async"></a><div class="archive-card-content">${product.category ? `<a class="eyebrow" href="${catPath(product.category, product.market)}">${esc(display.display_category)}</a>` : ""}<h2><a href="${dealPath(product)}" ${trackingAttributes(product, "archive", "archive_title")}>${esc(shortTitle(display.title))}</a></h2><p class="description editorial-teaser">${esc(whyPicked(display, language))}</p>${scoreMetrics(display, language, { atSelection:true })}<div class="archive-prices"><p><span>${esc(t(language,"product.selectionPrice"))}</span><strong>${money(product.drop_price ?? product.current_price, product.drop_currency || product.currency, locale)}</strong></p><p><span>${esc(t(language,"product.currentPrice"))}</span><strong>${money(product.current_price, product.currency, locale)}</strong></p></div><span class="archive-status">${esc(display.display_availability)}</span><div class="card-actions"><a class="button" href="${dealPath(product)}" ${trackingAttributes(product, "archive", "archive_details")}>${esc(t(language,"page.viewDetails"))}</a>${askDeliaButton(product, language)}</div></div></article>`;
 };
 const findProduct = param => { const id = String(param).match(/-(\d+)$/)?.[1] || (/^\d+$/.test(param) ? param : null); return id ? db.prepare(`SELECT * FROM products WHERE id=? AND status='published' AND ${sourceSql()}`).get(id) : null; };
 const sameProductOffers = product => {
@@ -862,7 +898,7 @@ app.get("/deal/:slug", (req, res) => {
     : "";
   const scoreBlock = scoreMetrics(display, req.language);
   const shopUrl = retailerShopUrl(p);
-  const retailerActions = `<div class="card-actions retailer-actions"><a class="featured-button" href="${esc(outboundPath(p, { sourcePage:"product", placement:"product_cta", action:"view_deal" }))}" ${externalAttributes}>${esc(t(req.language,"product.viewDealAt",{store}))} →</a>${shopUrl ? `<a class="price-history-link retailer-shop-link" href="${esc(outboundPath(p, { sourcePage:"product", placement:"shop_all", action:"shop_all" }))}" ${externalAttributes}>${esc(t(req.language,"product.shopAllAt",{store}))} →</a>` : ""}</div>`;
+  const retailerActions = `<div class="card-actions retailer-actions"><a class="featured-button" href="${esc(outboundPath(p, { sourcePage:"product", placement:"product_cta", action:"view_deal" }))}" ${externalAttributes}>${esc(t(req.language,"product.viewDealAt",{store}))} →</a>${shopUrl ? `<a class="price-history-link retailer-shop-link" href="${esc(outboundPath(p, { sourcePage:"product", placement:"shop_all", action:"shop_all" }))}" ${externalAttributes}>${esc(t(req.language,"product.shopAllAt",{store}))} →</a>` : ""}${askDeliaButton(display, req.language)}</div>`;
   const briefBlock = `<section id="buying-brief" class="buying-brief" aria-labelledby="buyingBriefTitle"><header class="buying-brief-header"><div><p class="eyebrow">${esc(brief.eyebrow)}</p><h2 id="buyingBriefTitle">${esc(brief.heading)}</h2></div><p class="verified-editorial-note">✓ ${esc(brief.verifiedNote)}</p></header><div class="quick-verdict"><strong>${esc(brief.copy.quickVerdict)}</strong><p>${esc(brief.verdict)}</p></div><dl class="buying-facts">${brief.facts.map(([label,value]) => `<div><dt>${esc(label)}</dt><dd>${esc(value)}</dd></div>`).join("")}</dl><div class="brief-pros-cons"><section><h3>✓ ${esc(brief.copy.strengths)}</h3><ul>${brief.strengths.map(item => `<li>${esc(item)}</li>`).join("")}</ul></section><section><h3>! ${esc(brief.copy.watchouts)}</h3><ul>${brief.watchouts.map(item => `<li>${esc(item)}</li>`).join("")}</ul></section></div><div class="buying-brief-grid">${brief.sections.map(section => `<section class="buying-brief-section buying-brief-${esc(section.key)}"><h3>${esc(section.title)}</h3>${section.paragraphs.map(paragraph => `<p>${esc(paragraph)}</p>`).join("")}${section.key === "score" ? `<div class="score-component-list">${brief.components.map(component => `<div class="score-component"><span>${esc(component.label)}</span><div aria-hidden="true"><i style="--component:${Math.round(component.points/component.max*100)}%"></i></div><strong>${component.points}/${component.max}</strong></div>`).join("")}</div>` : ""}</section>`).join("")}</div></section>`;
   const comparisonOffers = offerRows.filter(offer => String(offer.source || "").toLowerCase() !== "demo" && /^https?:\/\//i.test(String(offer.affiliate_url || "")) && Number(offer.current_price) > 0);
   const offerComparisonBlock = comparisonOffers.length > 1 ? `<section class="offer-comparison" aria-labelledby="offerComparisonTitle"><div class="section-heading compact-heading"><div><p class="eyebrow">${esc(brief.copy.compareOffers.toUpperCase())}</p><h2 id="offerComparisonTitle">${esc(brief.compareOffersTitle)}</h2><p>${esc(brief.compareOffersIntro)}</p></div></div><div class="offer-comparison-list">${comparisonOffers.map(offer => { const offerDisplay=presentProduct(localizeProduct(offer,req.language),req.language); const offerStore=storeName(offer); return `<article><div><strong>${esc(offerStore)}</strong><span>${esc(clean(offer.seller_name)||offerStore)}</span></div><div><strong>${money(offer.current_price,offer.currency,pageLocale)}</strong><span>${esc(offerDisplay.display_shipping_summary)} · ${esc(offerDisplay.display_return_summary)}</span></div><a href="${esc(outboundPath(offer,{sourcePage:"product",placement:"offer_comparison",action:"view_deal"}))}" ${externalAttributes}>${esc(brief.copy.viewOffer)} →</a></article>`; }).join("")}</div></section>` : "";

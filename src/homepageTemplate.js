@@ -1,5 +1,6 @@
 const { marketPath } = require("./markets");
 const { t } = require("./i18n");
+const renderShoppingAssistantPanel = require("./shoppingAssistantPanel");
 
 const SITE = "https://www.onedailydrop.com";
 const esc = (value) =>
@@ -44,9 +45,6 @@ module.exports = function homepageTemplate({
   );
   const trustPath = (pathname) => marketPath(selectedMarket.code, pathname);
   const ogLocale = locale.replace("-", "_");
-  const assistantPromptOne = t(language, "assistant.promptOne");
-  const assistantPromptTwo = t(language, "assistant.promptTwo");
-  const assistantPromptThree = t(language, "assistant.promptThree");
   const priceDropsSection = priceDropsCount
     ? `<section id="price-drops" class="collection-section">
     <div class="section-heading"><div><p class="eyebrow">${esc(t(language, "home.verifiedSavings"))}</p><h2>${esc(t(language, "home.realPriceDrops"))}</h2><p>${esc(t(language, "home.realPriceDropsText"))}</p></div></div>
@@ -83,7 +81,7 @@ module.exports = function homepageTemplate({
   <link rel="stylesheet" href="/brand-theme.css?v=20260808-assistant">
   <link rel="stylesheet" href="/liquid-glass.css?v=20260808-assistant">
   <link rel="stylesheet" href="/i18n.css?v=20260808-assistant">
-  <link rel="stylesheet" href="/shopping-assistant.css?v=20260809-rich-results">
+  <link rel="stylesheet" href="/shopping-assistant.css?v=20260810-delia-chat">
 </head>
 <body>
   <header class="site-header">
@@ -136,15 +134,10 @@ module.exports = function homepageTemplate({
     <section id="about" class="how"><p class="eyebrow">${esc(t(language, "home.promise"))}</p><h2>${esc(t(language, "home.lessScrolling"))}</h2><div class="method-grid"><article><span>01</span><b>${esc(t(language, "home.oneWinner"))}</b><p>${esc(t(language, "home.oneWinnerText"))}</p></article><article><span>02</span><b>${esc(t(language, "home.reasons"))}</b><p>${esc(t(language, "home.reasonsText"))}</p></article><article><span>03</span><b>${esc(t(language, "home.transparent"))}</b><p>${esc(t(language, "home.transparentText"))}</p></article></div></section>
   </main>
   <footer><div class="footer-brand"><b>OneDailyDrop</b><p>${esc(t(language, "brand.tagline"))}</p><div class="footer-links"><a href="${trustPath("/about")}">${esc(t(language, "footer.about"))}</a><a href="${trustPath("/contact")}">${esc(t(language, "footer.contact"))}</a><a href="${trustPath("/privacy")}">${esc(t(language, "footer.privacy"))}</a><a href="${trustPath("/terms")}">${esc(t(language, "footer.terms"))}</a><a href="${trustPath("/affiliate-disclosure")}">${esc(t(language, "footer.affiliate"))}</a><a href="${trustPath("/editorial-policy")}">${esc(t(language, "footer.editorial"))}</a><a href="${methodologyPath}">${esc(t(language, "footer.selection"))}</a><a href="${trustPath("/price-disclaimer")}">${esc(t(language, "footer.price"))}</a></div></div><p class="disclosure">${esc(t(language, "footer.disclosure"))}</p></footer>
-  <div id="shoppingAssistantBackdrop" class="assistant-backdrop" hidden></div>
-  <aside id="shoppingAssistant" class="shopping-assistant" role="dialog" aria-modal="true" aria-labelledby="shoppingAssistantTitle" hidden data-market="${esc(selectedMarket.code)}" data-language="${esc(language)}" data-you="${esc(t(language, "assistant.you"))}" data-thinking="${esc(t(language, "assistant.thinking"))}" data-failed="${esc(t(language, "assistant.failed"))}" data-sources="${esc(t(language, "assistant.sources"))}">
-    <div class="assistant-header"><div class="assistant-title"><span class="assistant-spark" aria-hidden="true">✦</span><div><strong id="shoppingAssistantTitle">${esc(t(language, "assistant.title"))}</strong><small>${esc(t(language, "assistant.subtitle"))}</small></div></div><button class="assistant-close" type="button" data-shopping-assistant-close aria-label="${esc(t(language, "assistant.close"))}">×</button></div>
-    <div class="assistant-conversation"><div class="assistant-intro"><p>${esc(t(language, "assistant.intro"))}</p><div class="assistant-prompts"><button type="button" data-assistant-prompt="${esc(assistantPromptOne)}">${esc(assistantPromptOne)}</button><button type="button" data-assistant-prompt="${esc(assistantPromptTwo)}">${esc(assistantPromptTwo)}</button><button type="button" data-assistant-prompt="${esc(assistantPromptThree)}">${esc(assistantPromptThree)}</button></div></div><div class="assistant-messages" data-assistant-messages aria-live="polite"></div><div class="assistant-products" data-assistant-products hidden></div><div class="assistant-sources" data-assistant-sources hidden></div></div>
-    <form class="assistant-form"><div class="assistant-input-row"><textarea maxlength="1200" rows="1" required placeholder="${esc(t(language, "assistant.placeholder"))}" aria-label="${esc(t(language, "assistant.placeholder"))}"></textarea><button type="submit" aria-label="${esc(t(language, "assistant.send"))}">↑</button></div><p class="assistant-disclaimer">${esc(t(language, "assistant.disclaimer"))}</p></form>
-  </aside>
+  ${renderShoppingAssistantPanel(selectedMarket.code, language)}
   <script src="/theme.js?v=20260808-assistant"></script>
   <script src="/app.js?v=20260808-assistant"></script>
-  <script src="/shopping-assistant.js?v=20260809-shopping-scope"></script>
+  <script src="/shopping-assistant.js?v=20260810-delia-chat"></script>
 </body>
 </html>`;
 };

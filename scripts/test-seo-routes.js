@@ -217,7 +217,7 @@ async function run() {
   assert(homepage.includes("OneDailyDrop Score") && homepage.includes("Overall deal score"), "The public OneDailyDrop Score is missing from the homepage");
   assert(!homepage.includes("<small>Evidence confidence</small>"), "Internal evidence confidence is still exposed as a public score");
   assert(homepage.includes("AI Shopping Assistant") && homepage.includes("data-shopping-assistant-open"), "The AI Shopping Assistant entry point is missing");
-  assert(homepage.includes('/shopping-assistant.js?v=20260809-shopping-scope'), "The AI Shopping Assistant client is missing");
+  assert(homepage.includes('/shopping-assistant.js?v=20260810-delia-chat'), "The Delia Shopping Assistant client is missing");
   for (const forbidden of ["Trending Drops", "New Drops", "Yesterday's Drops"]) {
     assert(!homepage.includes(`<h2>${forbidden}</h2>`), `Homepage still exposes a misleading collection: ${forbidden}`);
   }
