@@ -842,6 +842,30 @@ body.assistant-open {
   font-size: 8px;
   line-height: 1.4;
 }
+.assistant-recommendation.is-web .assistant-recommendation-trust {
+  color: #9a5a12;
+}
+.assistant-other-offers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 9px;
+  font-size: 9px;
+}
+.assistant-other-offers:empty {
+  display: none;
+}
+.assistant-other-offers strong {
+  width: 100%;
+  color: var(--muted);
+}
+.assistant-other-offers a {
+  padding: 5px 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--text);
+  text-decoration: none;
+}
 .assistant-recommendation-controls {
   display: grid;
   grid-template-columns: 1fr auto auto;

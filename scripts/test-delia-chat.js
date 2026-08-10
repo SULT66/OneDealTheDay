@@ -25,6 +25,7 @@ for (const required of [
   "data-assistant-clear",
   "data-assistant-stop",
   "data-assistant-product-context",
+  "Live web result",
 ]) {
   assert(panel.includes(required), `Delia panel is missing ${required}`);
 }
@@ -42,6 +43,8 @@ for (const required of [
   "sendFeedback",
   "AbortController",
   "thinkingSearch",
+  "liveWeb",
+  "otherOffers",
 ]) {
   assert(client.includes(required), `Delia client is missing ${required}`);
 }
@@ -49,6 +52,8 @@ for (const required of [
 for (const required of [
   ".assistant-sidebar",
   ".assistant-recommendation-media",
+  ".assistant-recommendation.is-web",
+  ".assistant-other-offers",
   ".assistant-comparison",
   ".assistant-feedback",
   ".assistant-stop",

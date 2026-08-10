@@ -41,6 +41,8 @@ const CLIENT_COPY_KEYS = [
   "assistant.removeSaved",
   "assistant.checked",
   "assistant.inCatalog",
+  "assistant.liveWeb",
+  "assistant.otherOffers",
   "assistant.finalPriceNote",
   "assistant.feedbackQuestion",
   "assistant.helpful",
