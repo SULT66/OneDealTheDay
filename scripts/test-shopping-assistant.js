@@ -115,6 +115,54 @@ const client = {
         return {
           output: [
             {
+              type: "web_search_call",
+              action: {
+                sources: [
+                  {
+                    url: "https://store.example.com/quiet-blender",
+                    title: "QuietPro blender offer",
+                  },
+                  {
+                    url: "https://second.example.com/quiet-blender",
+                    title: "QuietPro second offer",
+                  },
+                ],
+              },
+              results: [
+                {
+                  type: "image_result",
+                  image_url: "https://cdn.example.com/quietpro.jpg",
+                  thumbnail_url: "https://cdn.example.com/quietpro-thumb.jpg",
+                  source_website_url:
+                    "https://store.example.com/quiet-blender",
+                  caption: "QuietPro 900 blender",
+                },
+              ],
+            },
+            {
+              type: "message",
+              content: [
+                {
+                  type: "output_text",
+                  text: "QuietPro 900 is currently listed for $89.",
+                  annotations: [
+                    {
+                      type: "url_citation",
+                      url: "https://example.com/review",
+                      title: "Independent review",
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+          output_text: "QuietPro 900 is currently listed for $89.",
+        };
+      }
+      if (calls.length === 3) {
+        return {
+          output: [
+            {
               type: "function_call",
               name: "search_catalog",
               call_id: "catalog-1",
@@ -161,16 +209,50 @@ const client = {
               reason: "It fits the budget and prioritizes quieter operation.",
               url: "https://example.com/blender",
               action_label: "View offer",
+              source_type: "catalog",
+              image_url: "",
               catalog_product_id: 1,
+            },
+            {
+              title: "QuietPro 900 blender",
+              retailer: "Example Store",
+              price: "$89",
+              badge: "Web alternative",
+              reason: "It is a current outside-catalog option within budget.",
+              url: "https://store.example.com/quiet-blender",
+              action_label: "View live offer",
+              source_type: "web",
+              image_url: "https://cdn.example.com/quietpro.jpg",
+              catalog_product_id: 0,
+            },
+            {
+              title: "QuietPro 900 blender",
+              retailer: "Duplicate Store",
+              price: "$91",
+              badge: "",
+              reason: "This duplicate listing must not become another card.",
+              url: "https://second.example.com/quiet-blender",
+              action_label: "View",
+              source_type: "web",
+              image_url: "https://cdn.example.com/quietpro.jpg",
+              catalog_product_id: 0,
             },
           ],
           comparison_notes: ["The tracked offer is below the $100 budget."],
           comparison: [
             {
               catalog_product_id: 1,
+              recommendation_index: 1,
               best_for: "Quiet blending under $100",
               strengths: ["Within budget", "Strong seller terms"],
               drawbacks: ["Capacity should be confirmed"],
+            },
+            {
+              catalog_product_id: 0,
+              recommendation_index: 2,
+              best_for: "A current option outside the catalog",
+              strengths: ["Within budget", "Current retailer link"],
+              drawbacks: ["Not yet verified by OneDailyDrop"],
             },
           ],
         }),
@@ -196,7 +278,7 @@ const client = {
   });
   assert.strictEqual(
     calls.length,
-    3,
+    4,
     "Assistant did not complete the tool round trip",
   );
   assert(
@@ -229,12 +311,22 @@ const client = {
     "Web search tool is missing",
   );
   assert.strictEqual(
-    calls[2].text.format.type,
+    calls[1].tool_choice,
+    "required",
+    "A concrete shopping request did not force live web discovery",
+  );
+  assert.deepStrictEqual(
+    calls[1].tools[0].search_content_types,
+    ["image", "text"],
+    "Product image search is not enabled",
+  );
+  assert.strictEqual(
+    calls[3].text.format.type,
     "json_schema",
     "Assistant response is not constrained to the visual UI schema",
   );
   assert.strictEqual(
-    calls[2].text.format.strict,
+    calls[3].text.format.strict,
     true,
     "Assistant response schema must be strict",
   );
@@ -259,7 +351,7 @@ const client = {
     "Recommendation was not bound to a verified catalog product",
   );
   assert(
-    calls[1].tools.some(
+    calls[2].tools.some(
       (tool) => tool.name === "search_catalog" && tool.strict,
     ),
     "Strict catalog tool is missing",
@@ -295,11 +387,131 @@ const client = {
   );
   assert.strictEqual(fallback.answer, "Best value : Open offer");
   assert.strictEqual(
-    result.sources[0].url,
+    result.sources.find((source) => source.url === "https://example.com/review")
+      .url,
     "https://example.com/review",
     "Web citation was not surfaced",
   );
+  assert.strictEqual(
+    result.recommendations.length,
+    2,
+    "Duplicate product models were not collapsed",
+  );
+  assert.strictEqual(
+    result.recommendations[1].in_catalog,
+    false,
+    "A trusted live web result was not returned as a card",
+  );
+  assert.strictEqual(
+    result.recommendations[1].image_url,
+    "https://cdn.example.com/quietpro.jpg",
+    "A trusted web-search product image was not attached",
+  );
+  assert.strictEqual(
+    result.recommendations[1].other_offers[0].url,
+    "https://second.example.com/quiet-blender",
+    "A second seller for the same model was not grouped as another offer",
+  );
   assert.strictEqual(result.scope, "shopping");
+
+  const emptyCatalogCalls = [];
+  const emptyCatalogAssistant = createShoppingAssistant({
+    db,
+    sourceSql,
+    market: (code) => ({ code, currency: "USD" }),
+    client: {
+      responses: {
+        create: async (request) => {
+          emptyCatalogCalls.push(request);
+          if (emptyCatalogCalls.length === 1) {
+            return {
+              output: [],
+              output_text: JSON.stringify({
+                scope: "shopping",
+                needs_clarification: false,
+                clarifying_questions: [],
+              }),
+            };
+          }
+          if (emptyCatalogCalls.length === 2) {
+            return {
+              output: [
+                {
+                  type: "web_search_call",
+                  action: {
+                    sources: [
+                      {
+                        url: "https://retailer.example.com/oled-tv",
+                        title: "OLED TV offer",
+                      },
+                    ],
+                  },
+                  results: [],
+                },
+              ],
+              output_text: "A current OLED TV offer was found.",
+            };
+          }
+          return {
+            output: [],
+            output_text: JSON.stringify({
+              answer: "I found a current option outside the OneDailyDrop catalog.",
+              follow_up: "Do you prioritize brightness or movie performance?",
+              recommendations: [
+                {
+                  title: "Example 65-inch OLED TV",
+                  retailer: "Example Retailer",
+                  price: "$1,399.99",
+                  badge: "Live web result",
+                  reason: "It matches the requested size, display type, and budget.",
+                  url: "https://retailer.example.com/oled-tv",
+                  action_label: "View live offer",
+                  source_type: "web",
+                  image_url: "",
+                  catalog_product_id: 0,
+                },
+                {
+                  title: "Invented unsafe offer",
+                  retailer: "Unknown",
+                  price: "$1",
+                  badge: "",
+                  reason: "Its URL was not returned by web search.",
+                  url: "https://untrusted.example.com/fake",
+                  action_label: "View",
+                  source_type: "web",
+                  image_url: "",
+                  catalog_product_id: 0,
+                },
+              ],
+              comparison_notes: [],
+              comparison: [],
+            }),
+          };
+        },
+      },
+    },
+  });
+  const emptyCatalogResult = await emptyCatalogAssistant.respond({
+    message: "Find a 65 inch OLED TV under $1500 for a bright room",
+    messages: [],
+    marketCode: "us",
+    language: "en",
+  });
+  assert.strictEqual(
+    emptyCatalogResult.products.length,
+    0,
+    "The empty-catalog regression unexpectedly found a local product",
+  );
+  assert.strictEqual(
+    emptyCatalogResult.recommendations.length,
+    1,
+    "A valid web product disappeared when the OneDailyDrop catalog was empty",
+  );
+  assert.strictEqual(
+    emptyCatalogResult.recommendations[0].url,
+    "https://retailer.example.com/oled-tv",
+    "The trusted live retailer URL was not preserved",
+  );
 
   const offTopicCalls = [];
   const offTopicAssistant = createShoppingAssistant({

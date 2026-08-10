@@ -221,11 +221,13 @@
 
   function money(value, currency = "USD") {
     if (value == null || value === "") return "";
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue)) return String(value);
     try {
       return new Intl.NumberFormat(window.__ODD_LOCALE__ || undefined, {
         style: "currency",
         currency: currency || "USD",
-      }).format(Number(value));
+      }).format(numericValue);
     } catch {
       return `${currency || ""} ${value}`.trim();
     }
@@ -352,7 +354,7 @@
   function askProductPrompt(action, product) {
     const title = product.title;
     const id = product.catalog_product_id || product.id;
-    const reference = `${title}${id ? ` (OneDailyDrop product #${id})` : ""}`;
+    const reference = `${title}${id ? ` (OneDailyDrop product #${id})` : product.url ? ` (${product.url})` : ""}`;
     const prompts = {
       fit: `${tr("productFit", "Is it right for me?")} ${reference}`,
       compare: `${tr("productCompare", "Compare")} ${reference} with the best alternatives for the same use and budget.`,
@@ -372,12 +374,15 @@
     top.append(label, title);
     const actions = document.createElement("div");
     actions.className = "assistant-product-context-actions";
-    for (const [action, labelText] of [
+    const contextActions = [
       ["fit", tr("productFit", "Is it right for me?")],
       ["compare", tr("productCompare", "Compare")],
       ["alternative", tr("productAlternative", "Find an alternative")],
-      ["score", tr("explainScore", "Explain the Score")],
-    ]) {
+    ];
+    if (product.catalog_product_id || product.id || product.in_catalog) {
+      contextActions.push(["score", tr("explainScore", "Explain the Score")]);
+    }
+    for (const [action, labelText] of contextActions) {
       actions.append(
         createButton(labelText, "assistant-context-action", () => {
           sendQuestion(askProductPrompt(action, product));
@@ -399,7 +404,7 @@
     section.className = "assistant-recommendations";
     recommendations.forEach((recommendation, index) => {
       const card = document.createElement("article");
-      card.className = "assistant-recommendation";
+      card.className = `assistant-recommendation ${recommendation.in_catalog ? "is-catalog" : "is-web"}`;
       const media = document.createElement("div");
       media.className = "assistant-recommendation-media";
       const image = document.createElement("img");
@@ -468,11 +473,35 @@
         ? new Date(recommendation.checked_at).toLocaleString()
         : "";
       trust.textContent = [
-        tr("inCatalog", "Verified OneDailyDrop catalog product"),
-        checked ? `${tr("checked", "Price checked")} ${checked}` : "",
+        recommendation.in_catalog
+          ? tr("inCatalog", "Verified OneDailyDrop catalog product")
+          : tr("liveWeb", "Live web result — not yet verified by OneDailyDrop"),
+        recommendation.in_catalog && checked
+          ? `${tr("checked", "Price checked")} ${checked}`
+          : "",
       ]
         .filter(Boolean)
         .join(" · ");
+      const otherOffers = document.createElement("div");
+      otherOffers.className = "assistant-other-offers";
+      if ((recommendation.other_offers || []).length) {
+        const otherOffersLabel = document.createElement("strong");
+        otherOffersLabel.textContent = tr("otherOffers", "Other offers");
+        otherOffers.append(otherOffersLabel);
+        for (const offer of recommendation.other_offers) {
+          const offerLink = document.createElement("a");
+          offerLink.href = offer.url;
+          offerLink.target = "_blank";
+          offerLink.rel = "noopener noreferrer nofollow";
+          offerLink.textContent = [
+            offer.retailer,
+            money(offer.price_value ?? offer.price, offer.currency),
+          ]
+            .filter(Boolean)
+            .join(" · ");
+          otherOffers.append(offerLink);
+        }
+      }
       const controls = document.createElement("div");
       controls.className = "assistant-recommendation-controls";
       if (recommendation.url) {
@@ -499,7 +528,16 @@
         () => setProductContext(recommendation),
       );
       controls.append(save, ask);
-      content.append(title, meta, signals, reason, facts, trust, controls);
+      content.append(
+        title,
+        meta,
+        signals,
+        reason,
+        facts,
+        trust,
+        otherOffers,
+        controls,
+      );
       card.append(media, content);
       section.append(card);
     });
@@ -545,7 +583,9 @@
       const row = document.createElement("tr");
       const values = [
         item.title,
-        money(item.price, item.currency),
+        typeof item.price === "number"
+          ? money(item.price, item.currency)
+          : item.price || "—",
         item.best_for,
         item.score == null ? "—" : `${item.score}/100`,
         item.delivery || "—",
@@ -722,7 +762,7 @@
           market: market(),
           product_ids: (record.response?.recommendations || []).map(
             (item) => item.catalog_product_id,
-          ),
+          ).filter(Boolean),
         }),
       });
     } catch {
