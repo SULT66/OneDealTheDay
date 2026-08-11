@@ -4,6 +4,7 @@ const {
   classifyShoppingScope,
   createShoppingAssistant,
   normalizeAssistantResponse,
+  recommendationLimit,
   searchCatalog,
 } = require("../src/shoppingAssistant");
 
@@ -75,6 +76,16 @@ db.prepare("INSERT INTO price_history VALUES (?,?,?,?)").run(
 );
 
 const sourceSql = () => "source='ebay'";
+assert.strictEqual(
+  recommendationLimit("Сравни Samsung Galaxy S26 и S26 Ultra"),
+  2,
+  "An explicit comparison can still return more than two product cards",
+);
+assert.strictEqual(
+  recommendationLimit("Find a blender under $100"),
+  5,
+  "Ordinary discovery was incorrectly limited to two products",
+);
 const matches = searchCatalog(
   db,
   sourceSql,
@@ -120,11 +131,11 @@ const client = {
             action: {
               sources: [
                 {
-                  url: "https://store.example.com/quiet-blender",
+                  url: "https://store.example.com/product/quietpro-900-blender",
                   title: "QuietPro blender offer",
                 },
                 {
-                  url: "https://second.example.com/quiet-blender",
+                  url: "https://second.example.com/product/quietpro-900-blender",
                   title: "QuietPro second offer",
                 },
               ],
@@ -135,8 +146,16 @@ const client = {
                 image_url: "https://cdn.example.com/quietpro.jpg",
                 thumbnail_url: "https://cdn.example.com/quietpro-thumb.jpg",
                 source_website_url:
-                  "https://store.example.com/quiet-blender",
+                  "https://store.example.com/product/quietpro-900-blender",
                 caption: "QuietPro 900 blender",
+              },
+              {
+                type: "image_result",
+                image_url: "https://cdn.example.com/quietpro-second.jpg",
+                thumbnail_url: "https://cdn.example.com/quietpro-second-thumb.jpg",
+                source_website_url:
+                  "https://second.example.com/product/quietpro-900-blender",
+                caption: "QuietPro 900 blender second offer",
               },
             ],
           },
@@ -179,7 +198,7 @@ const client = {
               price: "$89",
               badge: "Web alternative",
               reason: "It is a current outside-catalog option within budget.",
-              url: "https://store.example.com/quiet-blender",
+              url: "https://store.example.com/product/quietpro-900-blender",
               action_label: "View live offer",
               source_type: "web",
               image_url: "https://cdn.example.com/quietpro.jpg",
@@ -191,10 +210,10 @@ const client = {
               price: "$91",
               badge: "",
               reason: "This duplicate listing must not become another card.",
-              url: "https://second.example.com/quiet-blender",
+              url: "https://second.example.com/product/quietpro-900-blender",
               action_label: "View",
               source_type: "web",
-              image_url: "https://cdn.example.com/quietpro.jpg",
+              image_url: "https://cdn.example.com/quietpro-second.jpg",
               catalog_product_id: 0,
             },
           ],
@@ -312,6 +331,10 @@ const client = {
     true,
     "Assistant response schema must be strict",
   );
+  assert(
+    calls[0].text.format.schema.required.includes("language"),
+    "Scope guardrail does not return the shopper's language",
+  );
   assert.strictEqual(
     result.recommendations[0].title,
     "Acme quiet countertop blender",
@@ -419,8 +442,13 @@ const client = {
     "A trusted web-search product image was not attached",
   );
   assert.strictEqual(
+    result.recommendations[1].badge,
+    "",
+    "A live web card retained a persuasive recommendation badge",
+  );
+  assert.strictEqual(
     result.recommendations[1].other_offers[0].url,
-    "https://second.example.com/quiet-blender",
+    "https://second.example.com/product/quietpro-900-blender",
     "A second seller for the same model was not grouped as another offer",
   );
   assert.strictEqual(result.scope, "shopping");
@@ -453,12 +481,33 @@ const client = {
                   action: {
                     sources: [
                       {
-                        url: "https://retailer.example.com/oled-tv",
+                        url: "https://retailer.example.com/product/example-65-oled-tv",
                         title: "OLED TV offer",
+                      },
+                      {
+                        url: "https://retailer.example.com/browse/oled-tvs",
+                        title: "OLED TV category",
                       },
                     ],
                   },
-                  results: [],
+                  results: [
+                    {
+                      type: "image_result",
+                      image_url: "https://cdn.example.com/example-65-oled-tv.jpg",
+                      thumbnail_url: "https://cdn.example.com/example-65-oled-tv-thumb.jpg",
+                      source_website_url:
+                        "https://retailer.example.com/product/example-65-oled-tv",
+                      caption: "Example 65-inch OLED TV",
+                    },
+                    {
+                      type: "image_result",
+                      image_url: "https://cdn.example.com/category-tv.jpg",
+                      thumbnail_url: "https://cdn.example.com/category-tv-thumb.jpg",
+                      source_website_url:
+                        "https://retailer.example.com/browse/oled-tvs",
+                      caption: "OLED TV category",
+                    },
+                  ],
                 },
               ],
               output_text: JSON.stringify({
@@ -469,12 +518,12 @@ const client = {
                     title: "Example 65-inch OLED TV",
                     retailer: "Example Retailer",
                     price: "$1,399.99",
-                    badge: "Live web result",
+                    badge: "Best value",
                     reason: "It matches the requested size, display type, and budget.",
-                    url: "https://retailer.example.com/oled-tv",
+                    url: "https://retailer.example.com/product/example-65-oled-tv",
                     action_label: "View live offer",
                     source_type: "web",
-                    image_url: "",
+                    image_url: "https://cdn.example.com/example-65-oled-tv.jpg",
                     catalog_product_id: 0,
                   },
                   {
@@ -487,6 +536,18 @@ const client = {
                     action_label: "View",
                     source_type: "web",
                     image_url: "",
+                    catalog_product_id: 0,
+                  },
+                  {
+                    title: "Example X90 65-inch OLED TV",
+                    retailer: "Example Retailer",
+                    price: "$1,299.99",
+                    badge: "Best overall",
+                    reason: "This has details but points to a category page.",
+                    url: "https://retailer.example.com/browse/oled-tvs",
+                    action_label: "View",
+                    source_type: "web",
+                    image_url: "https://cdn.example.com/category-tv.jpg",
                     catalog_product_id: 0,
                   },
                 ],
@@ -523,8 +584,19 @@ const client = {
   );
   assert.strictEqual(
     emptyCatalogResult.recommendations[0].url,
-    "https://retailer.example.com/oled-tv",
+    "https://retailer.example.com/product/example-65-oled-tv",
     "The trusted live retailer URL was not preserved",
+  );
+  assert.strictEqual(
+    emptyCatalogResult.recommendations[0].badge,
+    "",
+    "An unverified web recommendation kept a persuasive badge",
+  );
+  assert(
+    emptyCatalogResult.sources.some(
+      (source) => source.url === "https://retailer.example.com/browse/oled-tvs",
+    ),
+    "A rejected category page did not remain available as a compact source",
   );
 
   let malformedCalls = 0;
@@ -576,16 +648,22 @@ const client = {
     language: "en",
   });
   assert.strictEqual(malformedCalls, 2);
-  assert.strictEqual(malformedResult.recommendations.length, 1);
   assert.strictEqual(
-    malformedResult.recommendations[0].url,
+    malformedResult.recommendations.length,
+    0,
+    "A citation without a confirmed price and tied image became a product card",
+  );
+  assert.strictEqual(
+    malformedResult.sources[0].url,
     "https://bestbuy.example.com/iphone-15",
+    "A safely rejected card did not remain available as a compact source",
   );
   assert(
     !malformedResult.message.includes('"recommendations"') &&
       /[\u0400-\u04ff]/u.test(malformedResult.message),
     "The production-style malformed payload was not replaced in the shopper's language",
   );
+  assert.strictEqual(malformedResult.language, "ru");
 
   let timeoutCalls = 0;
   const timeoutAssistant = createShoppingAssistant({

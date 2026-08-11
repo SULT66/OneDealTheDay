@@ -65,6 +65,90 @@
   }
 
   const tr = (key, fallback) => copy[key] || fallback;
+  const RESPONSE_LABELS = {
+    en: {
+      product: "Product", price: "Price", bestFor: "Best for", score: "Score",
+      delivery: "Delivery", returns: "Returns", strengths: "Strengths",
+      drawbacks: "Watch-outs", comparisonTitle: "Quick comparison",
+      sources: "Sources", save: "Save", savedLabel: "Saved",
+      askProduct: "Ask Delia", inCatalog: "Verified OneDailyDrop product",
+      productFit: "Is it right for me?", productCompare: "Compare",
+      productAlternative: "Find an alternative", explainScore: "Explain the Score",
+      checked: "Price checked", otherOffers: "Other offers", viewDetails: "View product",
+      actionCompare: "Compare these products", actionCheaper: "Find cheaper options",
+      actionPremium: "Show premium options", actionNew: "Only new products",
+      actionStores: "Check other stores", feedbackQuestion: "Was this useful?",
+      helpful: "Helpful", notHelpful: "Not helpful", wrongPrice: "Price is wrong",
+      feedbackThanks: "Thanks — your feedback was recorded.",
+    },
+    ru: {
+      product: "Товар", price: "Цена", bestFor: "Лучше для", score: "Оценка",
+      delivery: "Доставка", returns: "Возврат", strengths: "Плюсы",
+      drawbacks: "Ограничения", comparisonTitle: "Короткое сравнение",
+      sources: "Источники", save: "Сохранить", savedLabel: "Сохранено",
+      askProduct: "Спросить Delia", inCatalog: "Проверенный товар OneDailyDrop",
+      productFit: "Подойдёт ли мне?", productCompare: "Сравнить",
+      productAlternative: "Найти альтернативу", explainScore: "Объяснить оценку",
+      checked: "Цена проверена", otherOffers: "Другие предложения", viewDetails: "Открыть товар",
+      actionCompare: "Сравнить эти товары", actionCheaper: "Найти дешевле",
+      actionPremium: "Показать премиум-варианты", actionNew: "Только новые товары",
+      actionStores: "Проверить другие магазины", feedbackQuestion: "Ответ был полезен?",
+      helpful: "Полезно", notHelpful: "Не помогло", wrongPrice: "Цена неверна",
+      feedbackThanks: "Спасибо — отзыв сохранён.",
+    },
+    es: {
+      product: "Producto", price: "Precio", bestFor: "Ideal para", score: "Puntuación",
+      delivery: "Entrega", returns: "Devoluciones", strengths: "Ventajas",
+      drawbacks: "A tener en cuenta", comparisonTitle: "Comparación rápida",
+      sources: "Fuentes", save: "Guardar", savedLabel: "Guardado",
+      askProduct: "Preguntar a Delia", inCatalog: "Producto verificado por OneDailyDrop",
+      productFit: "¿Es adecuado para mí?", productCompare: "Comparar",
+      productAlternative: "Buscar una alternativa", explainScore: "Explicar la puntuación",
+      checked: "Precio comprobado", otherOffers: "Otras ofertas", viewDetails: "Ver producto",
+      actionCompare: "Comparar estos productos", actionCheaper: "Buscar opciones más baratas",
+      actionPremium: "Ver opciones premium", actionNew: "Solo productos nuevos",
+      actionStores: "Comprobar otras tiendas", feedbackQuestion: "¿Te sirvió?",
+      helpful: "Útil", notHelpful: "No fue útil", wrongPrice: "El precio es incorrecto",
+      feedbackThanks: "Gracias, guardamos tu opinión.",
+    },
+    fr: {
+      product: "Produit", price: "Prix", bestFor: "Idéal pour", score: "Score",
+      delivery: "Livraison", returns: "Retours", strengths: "Points forts",
+      drawbacks: "À surveiller", comparisonTitle: "Comparaison rapide",
+      sources: "Sources", save: "Enregistrer", savedLabel: "Enregistré",
+      askProduct: "Demander à Delia", inCatalog: "Produit vérifié par OneDailyDrop",
+      productFit: "Est-il adapté pour moi ?", productCompare: "Comparer",
+      productAlternative: "Trouver une alternative", explainScore: "Expliquer le score",
+      checked: "Prix vérifié", otherOffers: "Autres offres", viewDetails: "Voir le produit",
+      actionCompare: "Comparer ces produits", actionCheaper: "Trouver moins cher",
+      actionPremium: "Voir les options premium", actionNew: "Produits neufs uniquement",
+      actionStores: "Vérifier d’autres magasins", feedbackQuestion: "Est-ce utile ?",
+      helpful: "Utile", notHelpful: "Pas utile", wrongPrice: "Le prix est incorrect",
+      feedbackThanks: "Merci, votre avis a été enregistré.",
+    },
+    de: {
+      product: "Produkt", price: "Preis", bestFor: "Am besten für", score: "Bewertung",
+      delivery: "Lieferung", returns: "Rückgabe", strengths: "Stärken",
+      drawbacks: "Zu beachten", comparisonTitle: "Kurzer Vergleich",
+      sources: "Quellen", save: "Speichern", savedLabel: "Gespeichert",
+      askProduct: "Delia fragen", inCatalog: "Von OneDailyDrop geprüftes Produkt",
+      productFit: "Passt es zu mir?", productCompare: "Vergleichen",
+      productAlternative: "Alternative finden", explainScore: "Bewertung erklären",
+      checked: "Preis geprüft", otherOffers: "Weitere Angebote", viewDetails: "Produkt öffnen",
+      actionCompare: "Diese Produkte vergleichen", actionCheaper: "Günstigere Optionen finden",
+      actionPremium: "Premium-Optionen zeigen", actionNew: "Nur neue Produkte",
+      actionStores: "Andere Händler prüfen", feedbackQuestion: "War das hilfreich?",
+      helpful: "Hilfreich", notHelpful: "Nicht hilfreich", wrongPrice: "Preis ist falsch",
+      feedbackThanks: "Danke, Ihr Feedback wurde gespeichert.",
+    },
+  };
+  const responseLanguage = (body = {}) => {
+    const selected = String(body.language || "").toLowerCase();
+    if (RESPONSE_LABELS[selected]) return selected;
+    return /[\u0400-\u04ff]/u.test(String(body.message || "")) ? "ru" : language();
+  };
+  const responseTr = (body, key, fallback) =>
+    RESPONSE_LABELS[responseLanguage(body)]?.[key] || fallback;
   const looksLikeSerializedPayload = (value) => {
     const text = String(value || "").trim();
     return (
@@ -99,6 +183,27 @@
       return "";
     }
   };
+  const hasDisplayPrice = (value) =>
+    /(?:[$€£¥]\s*\d|\d[\d\s,.]*\s*[$€£¥]|\d[\d\s,.]*\s*(?:USD|CAD|GBP|EUR|AUD)\b)/i.test(
+      String(value || ""),
+    );
+  const hasSpecificProductIdentity = (value) =>
+    /[a-z]/i.test(String(value || "")) && /\d/.test(String(value || ""));
+  const isDirectProductPage = (value) => {
+    try {
+      const url = new URL(value, window.location.href);
+      if (url.protocol !== "https:") return false;
+      const path = decodeURIComponent(url.pathname).toLowerCase().replace(/\/+$/, "");
+      if (!path || path === "/") return false;
+      if (/(?:^|\/)(?:search|browse|category|categories|collection|collections|department|departments|results)(?:\/|$)/i.test(path)) return false;
+      if (/\b(?:search|query|keyword|category)\b/i.test(url.search)) return false;
+      if (/\/(?:ip|p|product|products|dp|itm|site)\//i.test(path) || /\/shop\/buy-[^/]+\//i.test(path) || (/(?:^|\/)buy(?:\/|$)/i.test(path) && /\d/.test(path))) return true;
+      const leaf = path.split("/").filter(Boolean).pop() || "";
+      return leaf.length >= 8 && /[a-z]/i.test(leaf) && /\d/.test(leaf);
+    } catch {
+      return false;
+    }
+  };
   function normalizeResponseBody(value) {
     if (!value || typeof value !== "object" || Array.isArray(value)) {
       return {
@@ -127,6 +232,11 @@
         : "");
     return {
       ...value,
+      language: RESPONSE_LABELS[String(value.language || "").toLowerCase()]
+        ? String(value.language).toLowerCase()
+        : /[\u0400-\u04ff]/u.test(message)
+          ? "ru"
+          : language(),
       message: String(message).slice(0, 700),
       follow_up: String(value.follow_up || "").slice(0, 240),
       recommendations: (Array.isArray(value.recommendations)
@@ -139,6 +249,7 @@
           ...item,
           url: safeBrowserUrl(item.url),
           image_url: safeBrowserUrl(item.image_url),
+          badge: "",
           other_offers: (Array.isArray(item.other_offers)
             ? item.other_offers
             : []
@@ -147,7 +258,18 @@
             .map((offer) => ({ ...offer, url: safeBrowserUrl(offer.url) }))
             .filter((offer) => offer.url)
             .slice(0, 2),
-        })),
+        }))
+        .filter((item) => {
+          const hasPrice =
+            item.price_value != null || hasDisplayPrice(item.price);
+          if (!item.title || !item.reason || !item.url || !item.image_url || !hasPrice)
+            return false;
+          if (item.in_catalog) return true;
+          return (
+            hasSpecificProductIdentity(item.title) &&
+            isDirectProductPage(item.url)
+          );
+        }),
       comparison_notes: Array.isArray(value.comparison_notes)
         ? value.comparison_notes.slice(0, 4)
         : [],
@@ -166,7 +288,7 @@
         .filter((item) => item && typeof item === "object")
         .map((item) => ({ ...item, url: safeBrowserUrl(item.url) }))
         .filter((item) => item.url)
-        .slice(0, 8),
+        .slice(0, 6),
       clarifying_questions: Array.isArray(value.clarifying_questions)
         ? value.clarifying_questions.slice(0, 3)
         : [],
@@ -367,6 +489,7 @@
         image_url: product.image_url || "",
         url: product.url || "",
         score: product.score ?? null,
+        response_language: product.response_language || language(),
         saved_at: new Date().toISOString(),
       });
       savedProducts = savedProducts.slice(0, 50);
@@ -378,8 +501,8 @@
       const saved = isSaved(product);
       button.classList.toggle("is-saved", saved);
       button.textContent = saved
-        ? `♥ ${tr("savedLabel", "Saved")}`
-        : `♡ ${tr("save", "Save")}`;
+        ? `♥ ${button.dataset.savedLabel || tr("savedLabel", "Saved")}`
+        : `♡ ${button.dataset.saveLabel || tr("save", "Save")}`;
     });
   }
 
@@ -400,12 +523,22 @@
       const row = document.createElement("article");
       row.className = "assistant-saved-item";
       const image = document.createElement("img");
-      image.src = product.image_url || "/product-placeholder.svg";
       image.alt = "";
       image.loading = "lazy";
-      image.addEventListener("error", () => {
-        image.src = "/product-placeholder.svg";
-      }, { once: true });
+      if (product.image_url) {
+        image.src = product.image_url;
+        image.addEventListener(
+          "error",
+          () => {
+            image.remove();
+            row.classList.add("is-image-missing");
+          },
+          { once: true },
+        );
+      } else {
+        image.hidden = true;
+        row.classList.add("is-image-missing");
+      }
       const copyElement = document.createElement("button");
       copyElement.type = "button";
       copyElement.className = "assistant-saved-open";
@@ -465,32 +598,37 @@
     const title = product.title;
     const id = product.catalog_product_id || product.id;
     const reference = `${title}${id ? ` (OneDailyDrop product #${id})` : product.url ? ` (${product.url})` : ""}`;
+    const productBody = { language: product.response_language || language() };
     const prompts = {
-      fit: `${tr("productFit", "Is it right for me?")} ${reference}`,
-      compare: `${tr("productCompare", "Compare")} ${reference} with the best alternatives for the same use and budget.`,
-      alternative: `${tr("productAlternative", "Find an alternative")} to ${reference}.`,
-      score: `${tr("explainScore", "Explain the Score")} for ${reference}.`,
+      fit: `${responseTr(productBody, "productFit", "Is it right for me?")} ${reference}`,
+      compare: `${responseTr(productBody, "productCompare", "Compare")} ${reference}`,
+      alternative: `${responseTr(productBody, "productAlternative", "Find an alternative")} ${reference}`,
+      score: `${responseTr(productBody, "explainScore", "Explain the Score")} ${reference}`,
     };
     return prompts[action] || prompts.fit;
   }
 
   function setProductContext(product) {
+    const productBody = { language: product.response_language || language() };
     productContextElement.replaceChildren();
     const top = document.createElement("div");
     const label = document.createElement("small");
-    label.textContent = tr("askProduct", "Ask Delia");
+    label.textContent = responseTr(productBody, "askProduct", "Ask Delia");
     const title = document.createElement("strong");
     title.textContent = product.title;
     top.append(label, title);
     const actions = document.createElement("div");
     actions.className = "assistant-product-context-actions";
     const contextActions = [
-      ["fit", tr("productFit", "Is it right for me?")],
-      ["compare", tr("productCompare", "Compare")],
-      ["alternative", tr("productAlternative", "Find an alternative")],
+      ["fit", responseTr(productBody, "productFit", "Is it right for me?")],
+      ["compare", responseTr(productBody, "productCompare", "Compare")],
+      ["alternative", responseTr(productBody, "productAlternative", "Find an alternative")],
     ];
     if (product.catalog_product_id || product.id || product.in_catalog) {
-      contextActions.push(["score", tr("explainScore", "Explain the Score")]);
+      contextActions.push([
+        "score",
+        responseTr(productBody, "explainScore", "Explain the Score"),
+      ]);
     }
     for (const [action, labelText] of contextActions) {
       actions.append(
@@ -508,32 +646,27 @@
     openPanel();
   }
 
-  function renderRecommendations(recommendations = [], host) {
+  function renderRecommendations(recommendations = [], host, responseBody = {}) {
     if (!recommendations.length || !host) return;
     const section = document.createElement("div");
     section.className = "assistant-recommendations";
     recommendations.forEach((recommendation, index) => {
+      recommendation.response_language = responseLanguage(responseBody);
       const card = document.createElement("article");
       card.className = `assistant-recommendation ${recommendation.in_catalog ? "is-catalog" : "is-web"}`;
       const media = document.createElement("div");
       media.className = "assistant-recommendation-media";
       const image = document.createElement("img");
-      image.src = recommendation.image_url || "/product-placeholder.svg";
+      image.src = recommendation.image_url;
       image.alt = recommendation.title;
       image.loading = "lazy";
       image.addEventListener("error", () => {
-        image.src = "/product-placeholder.svg";
+        card.remove();
       }, { once: true });
       const rank = document.createElement("span");
       rank.className = "assistant-recommendation-rank";
       rank.textContent = String(index + 1);
       media.append(image, rank);
-      if (recommendation.badge) {
-        const badge = document.createElement("span");
-        badge.className = "assistant-recommendation-badge";
-        badge.textContent = recommendation.badge;
-        media.append(badge);
-      }
       const content = document.createElement("div");
       content.className = "assistant-recommendation-content";
       const title = document.createElement("h3");
@@ -552,7 +685,7 @@
       signals.className = "assistant-recommendation-signals";
       if (recommendation.score != null) {
         const score = document.createElement("span");
-        score.textContent = `${tr("score", "Score")} ${recommendation.score}/100`;
+        score.textContent = `${responseTr(responseBody, "score", "Score")} ${recommendation.score}/100`;
         signals.append(score);
       }
       if (recommendation.rating) {
@@ -565,8 +698,8 @@
       const facts = document.createElement("dl");
       facts.className = "assistant-recommendation-facts";
       for (const [labelText, value] of [
-        [tr("delivery", "Delivery"), recommendation.delivery],
-        [tr("returns", "Returns"), recommendation.returns],
+        [responseTr(responseBody, "delivery", "Delivery"), recommendation.delivery],
+        [responseTr(responseBody, "returns", "Returns"), recommendation.returns],
       ]) {
         if (!value) continue;
         const wrapper = document.createElement("div");
@@ -582,21 +715,25 @@
       const checked = recommendation.checked_at
         ? new Date(recommendation.checked_at).toLocaleString()
         : "";
-      trust.textContent = [
-        recommendation.in_catalog
-          ? tr("inCatalog", "Verified OneDailyDrop catalog product")
-          : tr("liveWeb", "Live web result — not yet verified by OneDailyDrop"),
-        recommendation.in_catalog && checked
-          ? `${tr("checked", "Price checked")} ${checked}`
-          : "",
-      ]
-        .filter(Boolean)
-        .join(" · ");
+      trust.textContent = recommendation.in_catalog
+        ? [
+            responseTr(responseBody, "inCatalog", "Verified OneDailyDrop product"),
+            checked
+              ? `${responseTr(responseBody, "checked", "Price checked")} ${checked}`
+              : "",
+          ]
+            .filter(Boolean)
+            .join(" · ")
+        : "";
       const otherOffers = document.createElement("div");
       otherOffers.className = "assistant-other-offers";
       if ((recommendation.other_offers || []).length) {
         const otherOffersLabel = document.createElement("strong");
-        otherOffersLabel.textContent = tr("otherOffers", "Other offers");
+        otherOffersLabel.textContent = responseTr(
+          responseBody,
+          "otherOffers",
+          "Other offers",
+        );
         otherOffers.append(otherOffersLabel);
         for (const offer of recommendation.other_offers) {
           const offerLink = document.createElement("a");
@@ -620,20 +757,26 @@
         link.href = recommendation.url;
         link.target = "_blank";
         link.rel = "noopener noreferrer nofollow";
-        link.textContent = recommendation.action_label || "View details";
+        link.textContent = responseTr(
+          responseBody,
+          "viewDetails",
+          "View product",
+        );
         controls.append(link);
       }
       const saved = isSaved(recommendation);
       const save = createButton(
         saved
-          ? `♥ ${tr("savedLabel", "Saved")}`
-          : `♡ ${tr("save", "Save")}`,
+          ? `♥ ${responseTr(responseBody, "savedLabel", "Saved")}`
+          : `♡ ${responseTr(responseBody, "save", "Save")}`,
         `assistant-save-product${saved ? " is-saved" : ""}`,
         () => toggleSaved(recommendation),
       );
       save.dataset.saveProduct = productKey(recommendation);
+      save.dataset.savedLabel = responseTr(responseBody, "savedLabel", "Saved");
+      save.dataset.saveLabel = responseTr(responseBody, "save", "Save");
       const ask = createButton(
-        `✦ ${tr("askProduct", "Ask Delia")}`,
+        `✦ ${responseTr(responseBody, "askProduct", "Ask Delia")}`,
         "assistant-ask-product",
         () => setProductContext(recommendation),
       );
@@ -652,68 +795,89 @@
       section.append(card);
     });
     host.append(section);
-    const note = document.createElement("p");
-    note.className = "assistant-final-price-note";
-    note.textContent = tr(
-      "finalPriceNote",
-      "Final price and availability must be confirmed with the retailer.",
-    );
-    host.append(note);
   }
 
-  function renderComparison(comparison = [], host) {
+  function renderComparison(comparison = [], host, responseBody = {}) {
     if (comparison.length < 2 || !host) return;
     const section = document.createElement("section");
     section.className = "assistant-comparison";
     const heading = document.createElement("h3");
-    heading.textContent = tr("comparisonTitle", "Side-by-side comparison");
-    const scroll = document.createElement("div");
-    scroll.className = "assistant-comparison-scroll";
-    const table = document.createElement("table");
-    const head = document.createElement("thead");
-    const headerRow = document.createElement("tr");
-    for (const label of [
-      "Product",
-      "Price",
-      tr("bestFor", "Best for"),
-      tr("score", "Score"),
-      tr("delivery", "Delivery"),
-      tr("returns", "Returns"),
-      tr("strengths", "Strengths"),
-      tr("drawbacks", "Watch-outs"),
-    ]) {
-      const cell = document.createElement("th");
-      cell.scope = "col";
-      cell.textContent = label;
-      headerRow.append(cell);
-    }
-    head.append(headerRow);
-    const body = document.createElement("tbody");
-    for (const item of comparison) {
-      const row = document.createElement("tr");
-      const values = [
-        item.title,
+    heading.textContent = responseTr(
+      responseBody,
+      "comparisonTitle",
+      "Quick comparison",
+    );
+    const grid = document.createElement("div");
+    grid.className = "assistant-comparison-grid";
+    const addField = (card, labelText, value, emphasis = false) => {
+      if (!value || (Array.isArray(value) && !value.length)) return;
+      const field = document.createElement("div");
+      field.className = `assistant-comparison-field${emphasis ? " is-emphasis" : ""}`;
+      const label = document.createElement("dt");
+      label.textContent = labelText;
+      const detail = document.createElement("dd");
+      if (Array.isArray(value)) {
+        const list = document.createElement("ul");
+        for (const entry of value) {
+          const item = document.createElement("li");
+          item.textContent = entry;
+          list.append(item);
+        }
+        detail.append(list);
+      } else {
+        detail.textContent = value;
+      }
+      field.append(label, detail);
+      card.append(field);
+    };
+    for (const item of comparison.slice(0, 2)) {
+      const card = document.createElement("dl");
+      card.className = "assistant-comparison-item";
+      const title = document.createElement(item.url ? "a" : "strong");
+      title.className = "assistant-comparison-product";
+      title.textContent = item.title;
+      if (item.url) {
+        title.href = item.url;
+        title.target = "_blank";
+        title.rel = "noopener noreferrer nofollow";
+      }
+      card.append(title);
+      addField(
+        card,
+        responseTr(responseBody, "price", "Price"),
         typeof item.price === "number"
           ? money(item.price, item.currency)
-          : item.price || "—",
+          : item.price,
+        true,
+      );
+      addField(
+        card,
+        responseTr(responseBody, "bestFor", "Best for"),
         item.best_for,
-        item.score == null ? "—" : `${item.score}/100`,
-        item.delivery || "—",
-        item.returns || "—",
-        item.strengths.join(" · "),
-        item.drawbacks.join(" · ") || "—",
-      ];
-      values.forEach((value, index) => {
-        const cell = document.createElement(index === 0 ? "th" : "td");
-        if (index === 0) cell.scope = "row";
-        cell.textContent = value;
-        row.append(cell);
-      });
-      body.append(row);
+        true,
+      );
+      if (item.score != null) {
+        addField(
+          card,
+          responseTr(responseBody, "score", "Score"),
+          `${item.score}/100`,
+        );
+      }
+      addField(card, responseTr(responseBody, "delivery", "Delivery"), item.delivery);
+      addField(card, responseTr(responseBody, "returns", "Returns"), item.returns);
+      addField(
+        card,
+        responseTr(responseBody, "strengths", "Strengths"),
+        item.strengths,
+      );
+      addField(
+        card,
+        responseTr(responseBody, "drawbacks", "Watch-outs"),
+        item.drawbacks,
+      );
+      grid.append(card);
     }
-    table.append(head, body);
-    scroll.append(table);
-    section.append(heading, scroll);
+    section.append(heading, grid);
     host.append(section);
   }
 
@@ -729,17 +893,21 @@
     host.append(list);
   }
 
-  function renderProducts(products = [], host) {
+  function renderProducts(products = [], host, responseBody = {}) {
     if (!products.length || !host) return;
     const section = document.createElement("div");
     section.className = "assistant-products";
-    for (const product of products.slice(0, 6)) {
+    for (const product of products
+      .filter((item) => item.image_url && item.url && item.price != null)
+      .slice(0, 6)) {
+      product.response_language = responseLanguage(responseBody);
       const card = document.createElement("article");
       card.className = "assistant-product";
       const image = document.createElement("img");
-      image.src = product.image_url || "/product-placeholder.svg";
+      image.src = product.image_url;
       image.alt = "";
       image.loading = "lazy";
+      image.addEventListener("error", () => card.remove(), { once: true });
       const copyElement = document.createElement("a");
       copyElement.href = product.url;
       const title = document.createElement("strong");
@@ -774,21 +942,24 @@
     host.append(list);
   }
 
-  function renderSources(sources = [], host) {
+  function renderSources(sources = [], host, responseBody = {}) {
     if (!sources.length || !host) return;
-    const section = document.createElement("div");
+    const section = document.createElement("details");
     section.className = "assistant-sources";
-    const label = document.createElement("strong");
-    label.textContent = tr("sources", "Sources");
+    const label = document.createElement("summary");
+    label.textContent = `${responseTr(responseBody, "sources", "Sources")} (${sources.length})`;
     section.append(label);
+    const links = document.createElement("div");
+    links.className = "assistant-source-links";
     for (const source of sources) {
       const link = document.createElement("a");
       link.href = source.url;
       link.target = "_blank";
       link.rel = "noopener noreferrer nofollow";
       link.textContent = source.title;
-      section.append(link);
+      links.append(link);
     }
+    section.append(links);
     host.append(section);
   }
 
@@ -804,7 +975,7 @@
       ["actionNew", "Only new products", ""],
       ["actionStores", "Check other stores", ""],
     ]) {
-      const label = tr(key, fallback);
+      const label = responseTr(body, key, fallback);
       section.append(
         createButton(label, "assistant-quick-action", () =>
           sendQuestion(`${label}${suffix}`),
@@ -814,24 +985,25 @@
     host.append(section);
   }
 
-  function renderFeedback(record, host) {
+  function renderFeedback(record, host, responseBody = {}) {
     if (record.response?.scope !== "shopping" || record.response?.needs_clarification)
       return;
     const section = document.createElement("div");
     section.className = "assistant-feedback";
     const question = document.createElement("span");
-    question.textContent = tr(
+    question.textContent = responseTr(
+      responseBody,
       "feedbackQuestion",
-      "Was this recommendation useful?",
+      "Was this useful?",
     );
     section.append(question);
     for (const [type, label] of [
-      ["helpful", `👍 ${tr("helpful", "Helpful")}`],
-      ["not_helpful", `👎 ${tr("notHelpful", "Not helpful")}`],
-      ["wrong_price", `! ${tr("wrongPrice", "Price is wrong")}`],
+      ["helpful", `👍 ${responseTr(responseBody, "helpful", "Helpful")}`],
+      ["not_helpful", `👎 ${responseTr(responseBody, "notHelpful", "Not helpful")}`],
+      ["wrong_price", `! ${responseTr(responseBody, "wrongPrice", "Price is wrong")}`],
     ]) {
       const button = createButton(label, "assistant-feedback-button", () =>
-        sendFeedback(record, type, section),
+        sendFeedback(record, type, section, responseBody),
       );
       button.classList.toggle("is-selected", record.feedback === type);
       button.disabled = Boolean(record.feedback);
@@ -839,7 +1011,8 @@
     }
     if (record.feedback) {
       const thanks = document.createElement("small");
-      thanks.textContent = tr(
+      thanks.textContent = responseTr(
+        responseBody,
         "feedbackThanks",
         "Thanks — your feedback was recorded.",
       );
@@ -848,7 +1021,7 @@
     host.append(section);
   }
 
-  async function sendFeedback(record, feedbackType, section) {
+  async function sendFeedback(record, feedbackType, section, responseBody = {}) {
     if (record.feedback) return;
     record.feedback = feedbackType;
     persistChats();
@@ -856,7 +1029,8 @@
       button.disabled = true;
     });
     const thanks = document.createElement("small");
-    thanks.textContent = tr(
+    thanks.textContent = responseTr(
+      responseBody,
       "feedbackThanks",
       "Thanks — your feedback was recorded.",
     );
@@ -886,11 +1060,11 @@
     const copyElement = message.querySelector(".assistant-message-copy");
     copyElement.textContent = body.message || "";
     renderClarifyingQuestions(body.clarifying_questions, message);
-    renderRecommendations(body.recommendations, message);
-    renderComparison(body.comparison, message);
+    renderRecommendations(body.recommendations, message, body);
+    renderComparison(body.comparison, message, body);
     renderComparisonNotes(body.comparison_notes, message);
     if (!(body.recommendations || []).length && !body.needs_clarification) {
-      renderProducts(body.products, message);
+      renderProducts(body.products, message, body);
     }
     if (body.follow_up) {
       const followUp = document.createElement("p");
@@ -899,8 +1073,8 @@
       message.append(followUp);
     }
     renderFollowUpActions(body, message);
-    renderSources(body.sources, message);
-    renderFeedback(record, message);
+    renderSources(body.sources, message, body);
+    renderFeedback(record, message, body);
   }
 
   function renderRecord(record) {
@@ -924,7 +1098,7 @@
                 (item.response.recommendations || [])
                   .map(
                     (product) =>
-                      `${product.title} — ${money(product.price_value, product.currency)} ${product.retailer}`,
+                      `${product.title} — ${money(product.price_value, product.currency) || product.price || ""} ${product.retailer}`,
                   )
                   .join("; "),
               ]

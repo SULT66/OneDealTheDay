@@ -25,7 +25,6 @@ for (const required of [
   "data-assistant-clear",
   "data-assistant-stop",
   "data-assistant-product-context",
-  "Live web result",
 ]) {
   assert(panel.includes(required), `Delia panel is missing ${required}`);
 }
@@ -45,9 +44,10 @@ for (const required of [
   "REQUEST_TIMEOUT_MS = 33000",
   "normalizeResponseBody",
   "recoverEmbeddedAnswer",
+  "responseTr",
+  "isDirectProductPage",
   "malformed",
   "thinkingSearch",
-  "liveWeb",
   "otherOffers",
 ]) {
   assert(client.includes(required), `Delia client is missing ${required}`);
@@ -59,6 +59,9 @@ for (const required of [
   ".assistant-recommendation.is-web",
   ".assistant-other-offers",
   ".assistant-comparison",
+  ".assistant-comparison-grid",
+  ".assistant-comparison-item",
+  ".assistant-source-links",
   ".assistant-feedback",
   ".assistant-stop",
   ".ask-delia-button",
@@ -82,6 +85,18 @@ for (const required of [
 assert(
   !styles.includes("width: min(940px, 100%)"),
   "Delia must not be capped at the old 940px desktop width",
+);
+assert(
+  !client.includes("/product-placeholder.svg"),
+  "Delia still renders editorial placeholders as product images",
+);
+assert(
+  !client.includes('createElement("table")'),
+  "Delia still renders the clipped desktop comparison table on mobile",
+);
+assert(
+  !panel.includes("Live web result — not yet verified"),
+  "Delia still exposes the old alarming web-result label",
 );
 
 assert(
