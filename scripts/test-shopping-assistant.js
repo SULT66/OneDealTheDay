@@ -741,16 +741,28 @@ const client = {
                 action: {
                   sources: [
                     {
-                      url: "https://store.example.com/product/samsung-galaxy-z-fold6-256gb-new",
-                      title: "Samsung Galaxy Z Fold6 256GB New",
+                      url: "https://www.samsung.com/us/smartphones/galaxy-z-fold7/buy/galaxy-z-fold7-256gb-unlocked-sku-sm-f966ulgaxaa/",
+                      title: "www.samsung.com",
                     },
                     {
-                      url: "https://store.example.com/product/samsung-galaxy-z-fold5-256gb-refurbished",
-                      title: "Samsung Galaxy Z Fold5 256GB Refurbished",
+                      url: "https://www.amazon.com/samsung-fold-refurbished/s?k=samsung+fold+refurbished",
+                      title: "www.amazon.com",
                     },
                     {
-                      url: "https://news.example.com/product/samsung-galaxy-z-fold6-review",
-                      title: "Samsung Galaxy Z Fold6 review",
+                      url: "https://www.bestbuy.com/site/samsung-galaxy/samsung-galaxy-z-series/pcmcat1719613459128.c?id=pcmcat1719613459128",
+                      title: "www.bestbuy.com",
+                    },
+                    {
+                      url: "https://www.amazon.com/SAMSUNG-Galaxy-Fold-Unlocked-Smartphone/dp/B0CK5V7MWK",
+                      title: "www.amazon.com",
+                    },
+                    {
+                      url: "https://www.bestbuy.com/product/samsung-galaxy-z-fold7-256gb-unlocked-jet-black/JJGRF3XKX4",
+                      title: "www.bestbuy.com",
+                    },
+                    {
+                      url: "https://www.techradar.com/phones/samsung-galaxy-phones/samsung-galaxy-z-fold-7-review",
+                      title: "www.techradar.com",
                     },
                   ],
                 },
@@ -763,20 +775,7 @@ const client = {
               result_state: "closest_alternatives",
               conversation_title: "Samsung Galaxy Z Fold",
               follow_up: "Хотите увеличить бюджет?",
-              recommendations: [
-                {
-                  title: "Samsung Galaxy Z Fold6 256GB New",
-                  retailer: "Example Store",
-                  price: "$1,099.99",
-                  badge: "",
-                  reason: "Новый аппарат без trade-in, но выше бюджета.",
-                  url: "https://store.example.com/product/samsung-galaxy-z-fold6-256gb-new",
-                  action_label: "Открыть",
-                  source_type: "web",
-                  image_url: "",
-                  catalog_product_id: 0,
-                },
-              ],
+              recommendations: [],
               comparison_notes: [],
               comparison: [],
             }),
@@ -797,7 +796,7 @@ const client = {
   });
   assert.strictEqual(foldFollowUpCalls, 2);
   assert.strictEqual(foldFollowUpResult.recommendations.length, 0);
-  assert.strictEqual(foldFollowUpResult.partial_offers.length, 2);
+  assert.strictEqual(foldFollowUpResult.partial_offers.length, 3);
   assert.strictEqual(
     foldFollowUpResult.result_state,
     "closest_alternatives",
@@ -818,15 +817,25 @@ const client = {
   );
   assert(
     foldFollowUpResult.partial_offers.every(
-      (offer) => offer.url.includes("/product/") && offer.evidence_level === "partial",
+      (offer) =>
+        /\/(?:buy|dp|product)\//.test(offer.url) &&
+        offer.evidence_level === "partial" &&
+        /[a-z]/i.test(offer.title) &&
+        /\d/.test(offer.title),
     ),
-    "Direct retailer pages with incomplete image evidence were not retained as compact offers",
+    "Title-less direct retailer pages were not recovered as compact offers",
+  );
+  assert(
+    !foldFollowUpResult.partial_offers.some((offer) =>
+      /(?:pcmcat|\/s\?k=)/i.test(offer.url),
+    ),
+    "A retailer category or search URL was promoted to a compact offer",
   );
   assert(
     foldFollowUpResult.sources.some(
       (source) =>
         source.url ===
-        "https://news.example.com/product/samsung-galaxy-z-fold6-review",
+        "https://www.techradar.com/phones/samsung-galaxy-phones/samsung-galaxy-z-fold-7-review",
     ),
     "Editorial evidence did not remain a source-only link",
   );

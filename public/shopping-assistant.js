@@ -207,7 +207,8 @@
       if (!path || path === "/") return false;
       if (/(?:^|\/)(?:search|browse|category|categories|collection|collections|department|departments|results)(?:\/|$)/i.test(path)) return false;
       if (/\b(?:search|query|keyword|category)\b/i.test(url.search)) return false;
-      if (/\/(?:ip|p|product|products|dp|itm|site)\//i.test(path) || /\/shop\/buy-[^/]+\//i.test(path) || (/(?:^|\/)buy(?:\/|$)/i.test(path) && /\d/.test(path))) return true;
+      if (/pcmcat/i.test(path) || /pcmcat/i.test(url.search)) return false;
+      if (/\/(?:ip|p|product|products|dp|itm)\//i.test(path) || /\/site\/[^/]+\/[^/]+\.p$/i.test(path) || /\/shop\/buy-[^/]+\//i.test(path) || (/(?:^|\/)buy(?:\/|$)/i.test(path) && /\d/.test(path))) return true;
       return false;
     } catch {
       return false;
