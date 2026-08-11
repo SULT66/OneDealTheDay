@@ -16,21 +16,25 @@ body.assistant-open {
 .shopping-assistant {
   position: fixed;
   z-index: 90;
-  top: 0;
-  right: 0;
-  width: min(620px, 100%);
-  height: 100dvh;
+  inset: clamp(10px, 1.25vw, 24px);
+  width: auto;
+  height: auto;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   background: var(--surface);
   color: var(--text);
-  border-left: 1px solid var(--line);
-  box-shadow: -24px 0 80px rgba(8, 18, 36, 0.22);
-  transform: translateX(102%);
-  transition: transform 0.22s ease;
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  box-shadow: 0 28px 100px rgba(8, 18, 36, 0.28);
+  font-size: 16px;
+  transform: translateY(18px) scale(0.985);
+  transform-origin: center;
+  opacity: 0;
+  transition: transform 0.22s ease, opacity 0.18s ease;
 }
 .shopping-assistant.is-open {
-  transform: translateX(0);
+  transform: translateY(0) scale(1);
+  opacity: 1;
 }
 .assistant-header {
   display: flex;
@@ -63,6 +67,7 @@ body.assistant-open {
 .assistant-title small {
   margin-top: 3px;
   color: var(--muted);
+  font-size: 13px;
 }
 .assistant-close {
   width: 42px;
@@ -76,7 +81,9 @@ body.assistant-open {
 }
 .assistant-conversation {
   overflow: auto;
-  padding: 20px 22px;
+  padding: clamp(20px, 2vw, 34px);
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
   background:
     radial-gradient(circle at 90% 0%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 34%),
     var(--bg);
@@ -90,6 +97,7 @@ body.assistant-open {
 .assistant-intro p {
   margin: 0;
   color: var(--muted);
+  font-size: 15px;
   line-height: 1.55;
 }
 .assistant-prompts {
@@ -99,17 +107,19 @@ body.assistant-open {
   margin-top: 14px;
 }
 .assistant-prompts button {
-  padding: 9px 11px;
+  min-height: 42px;
+  padding: 10px 14px;
   border: 1px solid var(--line);
   border-radius: 999px;
   background: var(--surface);
   color: var(--text);
+  font-size: 13px;
   font-weight: 750;
   cursor: pointer;
 }
 .assistant-messages {
   display: grid;
-  gap: 14px;
+  gap: 20px;
   margin-top: 18px;
 }
 .assistant-conversation.has-conversation .assistant-intro {
@@ -132,7 +142,7 @@ body.assistant-open {
   background: transparent;
 }
 .assistant-message.is-user {
-  max-width: 78%;
+  max-width: min(72%, 760px);
   justify-self: end;
   background: var(--text);
   border-color: var(--text);
@@ -141,14 +151,14 @@ body.assistant-open {
 .assistant-message-label {
   display: block;
   margin-bottom: 5px;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 900;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   opacity: 0.68;
 }
 .assistant-message-copy {
-  padding: 15px 16px;
+  padding: 18px 20px;
   border: 1px solid var(--line);
   border-radius: 17px;
   background: var(--surface);
@@ -165,6 +175,7 @@ body.assistant-open {
   margin: 0;
   white-space: pre-wrap;
   line-height: 1.52;
+  font-size: 16px;
 }
 .assistant-message.is-pending .assistant-message-copy {
   opacity: 0.65;
@@ -183,9 +194,9 @@ body.assistant-open {
 }
 .assistant-recommendations {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  margin-top: 11px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 16px;
 }
 .assistant-recommendation {
   min-width: 0;
@@ -228,7 +239,7 @@ body.assistant-open {
 }
 .assistant-recommendation h3 {
   margin: 11px 0 7px;
-  font-size: 14px;
+  font-size: 17px;
   line-height: 1.32;
 }
 .assistant-recommendation-meta {
@@ -240,15 +251,15 @@ body.assistant-open {
 }
 .assistant-recommendation-meta strong {
   color: var(--accent);
-  font-size: 15px;
+  font-size: 20px;
 }
 .assistant-recommendation-meta span {
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
 }
 .assistant-recommendation p {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 14px;
   line-height: 1.45;
 }
 .assistant-recommendation-link {
@@ -282,7 +293,7 @@ body.assistant-open {
   border-radius: 12px;
   background: color-mix(in srgb, var(--surface) 86%, transparent);
   color: var(--muted);
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.42;
 }
 .assistant-comparison-notes li::before {
@@ -298,7 +309,7 @@ body.assistant-open {
   border-left: 3px solid var(--accent);
   border-radius: 0 12px 12px 0;
   background: color-mix(in srgb, var(--accent) 7%, var(--surface));
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 700;
 }
 .assistant-product {
@@ -326,20 +337,20 @@ body.assistant-open {
   display: block;
 }
 .assistant-product strong {
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.35;
 }
 .assistant-product small {
   margin-top: 5px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 .assistant-sources {
   display: flex;
   flex-wrap: wrap;
   gap: 7px;
   margin-top: 14px;
-  font-size: 11px;
+  font-size: 12px;
 }
 .assistant-sources strong {
   width: 100%;
@@ -351,17 +362,21 @@ body.assistant-open {
   color: var(--muted);
 }
 .assistant-form {
-  padding: 15px 18px 18px;
+  grid-area: composer;
+  position: relative;
+  z-index: 2;
+  padding: 16px clamp(20px, 2vw, 34px) 18px;
   border-top: 1px solid var(--line);
   background: var(--surface);
+  box-shadow: 0 -14px 36px rgba(14, 24, 42, 0.05);
 }
 .assistant-input-row {
   display: flex;
   align-items: flex-end;
   gap: 9px;
-  padding: 9px;
-  border: 1px solid var(--line);
-  border-radius: 16px;
+  padding: 8px;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line));
+  border-radius: 18px;
   background: var(--bg);
 }
 .assistant-input-row:focus-within {
@@ -378,6 +393,7 @@ body.assistant-open {
   background: transparent;
   color: var(--text);
   font: inherit;
+  font-size: 16px;
   line-height: 1.4;
   padding: 10px;
 }
@@ -399,7 +415,7 @@ body.assistant-open {
 .assistant-disclaimer {
   margin: 8px 4px 0;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 11px;
   text-align: center;
 }
 .header-ai {
@@ -438,8 +454,11 @@ body.assistant-open {
 }
 @media (max-width: 720px) {
   .shopping-assistant {
+    inset: 0;
     width: 100%;
+    height: 100dvh;
     border-left: 0;
+    border-radius: 0;
   }
   .assistant-header {
     padding: 15px 16px;
@@ -469,29 +488,36 @@ body.assistant-open {
 
 /* Delia chat workspace */
 .shopping-assistant {
-  width: min(940px, 100%);
   display: block;
   overflow: hidden;
 }
 .assistant-layout {
   height: 100%;
   display: grid;
-  grid-template-columns: 250px minmax(0, 1fr);
+  grid-template-columns: clamp(280px, 19vw, 320px) minmax(0, 1fr);
 }
 .assistant-main {
   min-width: 0;
   min-height: 0;
   display: grid;
   grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    "header"
+    "title"
+    "context"
+    "conversation"
+    "composer";
+  overflow: hidden;
   background: var(--surface);
 }
 .assistant-sidebar {
   min-width: 0;
   min-height: 0;
   display: grid;
-  grid-template-rows: auto minmax(120px, 1fr) auto minmax(150px, 0.8fr);
-  gap: 10px;
-  padding: 16px 12px;
+  grid-template-rows: auto minmax(0, auto) auto minmax(150px, 1fr);
+  align-content: stretch;
+  gap: 12px;
+  padding: 20px 16px;
   overflow: hidden;
   border-right: 1px solid var(--line);
   background: color-mix(in srgb, var(--bg) 90%, var(--accent) 4%);
@@ -505,19 +531,20 @@ body.assistant-open {
 }
 .assistant-sidebar-header strong,
 .assistant-saved-heading strong {
-  font-size: 12px;
+  font-size: 13px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 .assistant-sidebar-header button,
 .assistant-saved-heading button,
 .assistant-clear-history {
-  padding: 7px 9px;
+  min-height: 34px;
+  padding: 8px 10px;
   border: 1px solid var(--line);
   border-radius: 9px;
   background: var(--surface);
   color: var(--text);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 800;
   cursor: pointer;
 }
@@ -539,10 +566,13 @@ body.assistant-open {
   gap: 5px;
   overflow: auto;
 }
+.assistant-history-list {
+  max-height: 38dvh;
+}
 .assistant-sidebar-empty {
   margin: 8px 3px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.45;
 }
 .assistant-history-item {
@@ -564,7 +594,7 @@ body.assistant-open {
 }
 .assistant-history-open {
   min-width: 0;
-  padding: 6px;
+  padding: 8px;
   border: 0;
   background: transparent;
   color: var(--text);
@@ -579,12 +609,12 @@ body.assistant-open {
   white-space: nowrap;
 }
 .assistant-history-open strong {
-  font-size: 11px;
+  font-size: 13px;
 }
 .assistant-history-open small {
   margin-top: 3px;
   color: var(--muted);
-  font-size: 9px;
+  font-size: 11px;
 }
 .assistant-history-actions {
   display: flex;
@@ -626,7 +656,7 @@ body.assistant-open {
 }
 .assistant-saved-item {
   display: grid;
-  grid-template-columns: 38px minmax(0, 1fr) 26px;
+  grid-template-columns: 48px minmax(0, 1fr) 30px;
   align-items: center;
   gap: 7px;
   padding: 6px;
@@ -634,8 +664,8 @@ body.assistant-open {
   background: var(--surface);
 }
 .assistant-saved-item img {
-  width: 38px;
-  height: 38px;
+  width: 48px;
+  height: 48px;
   object-fit: contain;
   border-radius: 8px;
   background: #fff;
@@ -657,14 +687,15 @@ body.assistant-open {
   white-space: nowrap;
 }
 .assistant-saved-open strong {
-  font-size: 10px;
+  font-size: 12px;
 }
 .assistant-saved-open small {
   margin-top: 3px;
   color: var(--muted);
-  font-size: 9px;
+  font-size: 11px;
 }
 .assistant-header {
+  grid-area: header;
   min-width: 0;
 }
 .assistant-header-actions {
@@ -696,21 +727,23 @@ body.assistant-open {
   font-size: 8px;
 }
 .assistant-current-chat {
-  padding: 7px 22px;
+  grid-area: title;
+  padding: 9px clamp(20px, 2vw, 34px);
   overflow: hidden;
   border-bottom: 1px solid var(--line);
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 750;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .assistant-product-context {
+  grid-area: context;
   position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 9px 12px;
-  padding: 12px 46px 12px 18px;
+  padding: 14px 52px 14px clamp(20px, 2vw, 34px);
   border-bottom: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line));
   background: color-mix(in srgb, var(--accent) 8%, var(--surface));
 }
@@ -723,13 +756,13 @@ body.assistant-open {
 }
 .assistant-product-context small {
   color: var(--accent);
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 900;
   text-transform: uppercase;
 }
 .assistant-product-context strong {
   margin-top: 3px;
-  font-size: 12px;
+  font-size: 14px;
 }
 .assistant-product-context-actions {
   display: flex;
@@ -746,8 +779,8 @@ body.assistant-open {
   cursor: pointer;
 }
 .assistant-context-action {
-  padding: 7px 9px;
-  font-size: 10px;
+  padding: 8px 11px;
+  font-size: 12px;
   font-weight: 750;
 }
 .assistant-context-close {
@@ -758,6 +791,7 @@ body.assistant-open {
   height: 27px;
 }
 .assistant-conversation {
+  grid-area: conversation;
   min-height: 0;
 }
 .assistant-message,
@@ -774,7 +808,7 @@ body.assistant-open {
 }
 .assistant-recommendation-media {
   position: relative;
-  height: 150px;
+  height: 210px;
   display: grid;
   place-items: center;
   padding: 12px;
@@ -813,7 +847,7 @@ body.assistant-open {
   border-radius: 999px;
   background: color-mix(in srgb, var(--accent) 9%, var(--bg));
   color: var(--text);
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 800;
 }
 .assistant-recommendation-facts {
@@ -823,9 +857,9 @@ body.assistant-open {
 }
 .assistant-recommendation-facts div {
   display: grid;
-  grid-template-columns: 54px minmax(0, 1fr);
+  grid-template-columns: 70px minmax(0, 1fr);
   gap: 6px;
-  font-size: 9px;
+  font-size: 12px;
   line-height: 1.35;
 }
 .assistant-recommendation-facts dt {
@@ -839,7 +873,7 @@ body.assistant-open {
   display: block;
   margin-top: 10px;
   color: #23734f;
-  font-size: 8px;
+  font-size: 11px;
   line-height: 1.4;
 }
 .assistant-recommendation.is-web .assistant-recommendation-trust {
@@ -850,7 +884,7 @@ body.assistant-open {
   flex-wrap: wrap;
   gap: 6px;
   margin-top: 9px;
-  font-size: 9px;
+  font-size: 11px;
 }
 .assistant-other-offers:empty {
   display: none;
@@ -875,14 +909,14 @@ body.assistant-open {
 .assistant-recommendation-link,
 .assistant-save-product,
 .assistant-ask-product {
-  min-height: 34px;
+  min-height: 40px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   padding: 7px 9px;
   border: 1px solid var(--line);
   border-radius: 9px;
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 850;
   cursor: pointer;
 }
@@ -903,28 +937,28 @@ body.assistant-open {
 .assistant-final-price-note {
   margin-top: 8px !important;
   color: var(--muted);
-  font-size: 9px;
+  font-size: 11px;
   text-align: center;
 }
 .assistant-comparison {
   margin-top: 14px;
-  padding: 13px;
+  padding: 18px;
   border: 1px solid var(--line);
   border-radius: 15px;
   background: var(--surface);
 }
 .assistant-comparison h3 {
   margin: 0 0 10px;
-  font-size: 13px;
+  font-size: 16px;
 }
 .assistant-comparison-scroll {
   overflow: auto;
 }
 .assistant-comparison table {
-  min-width: 850px;
+  min-width: 920px;
   width: 100%;
   border-collapse: collapse;
-  font-size: 9px;
+  font-size: 12px;
   line-height: 1.4;
 }
 .assistant-comparison th,
@@ -938,7 +972,7 @@ body.assistant-open {
 .assistant-comparison thead th {
   background: var(--bg);
   color: var(--muted);
-  font-size: 8px;
+  font-size: 10px;
   text-transform: uppercase;
 }
 .assistant-clarifying-questions {
@@ -947,7 +981,7 @@ body.assistant-open {
   margin: 10px 0 0;
   padding-left: 22px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 13px;
 }
 .assistant-quick-actions {
   display: flex;
@@ -956,12 +990,13 @@ body.assistant-open {
   margin-top: 12px;
 }
 .assistant-quick-action {
-  padding: 7px 9px;
+  min-height: 36px;
+  padding: 8px 11px;
   border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--line));
   border-radius: 999px;
   background: color-mix(in srgb, var(--accent) 5%, var(--surface));
   color: var(--text);
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 800;
   cursor: pointer;
 }
@@ -977,15 +1012,16 @@ body.assistant-open {
 .assistant-feedback > span {
   width: 100%;
   color: var(--muted);
-  font-size: 9px;
+  font-size: 11px;
 }
 .assistant-feedback-button {
-  padding: 6px 8px;
+  min-height: 34px;
+  padding: 7px 10px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface);
   color: var(--text);
-  font-size: 9px;
+  font-size: 11px;
   cursor: pointer;
 }
 .assistant-feedback-button.is-selected {
@@ -994,7 +1030,7 @@ body.assistant-open {
 }
 .assistant-feedback small {
   color: #23734f;
-  font-size: 9px;
+  font-size: 11px;
 }
 .assistant-product {
   grid-template-columns: 54px minmax(0, 1fr) auto;
@@ -1037,12 +1073,24 @@ body.assistant-open {
   border-radius: 10px;
   background: color-mix(in srgb, #685bd7 6%, var(--surface));
   color: #5c52c9;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 850;
   cursor: pointer;
 }
 
-@media (max-width: 760px) {
+@media (max-width: 1450px) {
+  .assistant-recommendations {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1200px) {
+  .assistant-layout {
+    grid-template-columns: 270px minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 960px) {
   .assistant-layout {
     grid-template-columns: 1fr;
   }
@@ -1087,6 +1135,39 @@ body.assistant-open {
   .assistant-current-chat {
     padding-inline: 16px;
   }
+  .assistant-history-actions {
+    opacity: 1;
+  }
+}
+
+@media (max-width: 760px) {
+  .shopping-assistant {
+    inset: 0;
+    width: 100%;
+    height: 100dvh;
+    border: 0;
+    border-radius: 0;
+  }
+  .assistant-conversation {
+    padding: 16px;
+    scrollbar-gutter: auto;
+  }
+  .assistant-form {
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+  }
+  .assistant-message.is-user {
+    max-width: 88%;
+  }
+  .assistant-message-copy,
+  .assistant-message p {
+    font-size: 15px;
+  }
+  .assistant-recommendations {
+    grid-template-columns: 1fr;
+  }
+  .assistant-recommendation-media {
+    height: 220px;
+  }
   .assistant-product-context {
     grid-template-columns: 1fr;
     padding-left: 14px;
@@ -1103,8 +1184,5 @@ body.assistant-open {
   }
   .assistant-recommendation-link {
     grid-column: 1 / -1;
-  }
-  .assistant-history-actions {
-    opacity: 1;
   }
 }

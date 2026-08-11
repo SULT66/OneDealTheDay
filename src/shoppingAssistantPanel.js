@@ -81,7 +81,7 @@ function renderShoppingAssistantPanel(code, language) {
     <script type="application/json" data-assistant-copy>${safeCopy}</script>
     <div class="assistant-layout">
       <aside class="assistant-sidebar" data-assistant-sidebar aria-label="${esc(t(language, "assistant.chats"))}">
-        <div class="assistant-sidebar-header"><strong>${esc(t(language, "assistant.chats"))}</strong><div><button type="button" data-assistant-new>＋ ${esc(t(language, "assistant.newChat"))}</button><button class="assistant-sidebar-close" type="button" data-assistant-sidebar-close aria-label="${esc(t(language, "assistant.close"))}">×</button></div></div>
+        <div class="assistant-sidebar-header"><strong>${esc(t(language, "assistant.chats"))}</strong><div><button type="button" data-assistant-new>+ ${esc(t(language, "assistant.newChat"))}</button><button class="assistant-sidebar-close" type="button" data-assistant-sidebar-close aria-label="${esc(t(language, "assistant.close"))}">×</button></div></div>
         <div class="assistant-history-list" data-assistant-history></div>
         <button class="assistant-clear-history" type="button" data-assistant-clear>${esc(t(language, "assistant.clearHistory"))}</button>
         <section class="assistant-saved-section">
@@ -93,7 +93,7 @@ function renderShoppingAssistantPanel(code, language) {
         <div class="assistant-header">
           <button class="assistant-sidebar-toggle" type="button" data-assistant-sidebar-toggle aria-label="${esc(t(language, "assistant.historyToggle"))}">☰</button>
           <div class="assistant-title"><span class="assistant-spark" aria-hidden="true">D</span><div><strong id="shoppingAssistantTitle">Delia</strong><small>D.E.L.I.A. · ${esc(t(language, "assistant.subtitle"))}</small></div></div>
-          <div class="assistant-header-actions"><button class="assistant-new-mobile" type="button" data-assistant-new aria-label="${esc(t(language, "assistant.newChat"))}">＋</button><button class="assistant-close" type="button" data-shopping-assistant-close aria-label="${esc(t(language, "assistant.close"))}">×</button></div>
+          <div class="assistant-header-actions"><button class="assistant-new-mobile" type="button" data-assistant-new aria-label="${esc(t(language, "assistant.newChat"))}">+</button><button class="assistant-close" type="button" data-shopping-assistant-close aria-label="${esc(t(language, "assistant.close"))}">×</button></div>
         </div>
         <div class="assistant-current-chat" data-assistant-current-title>${esc(t(language, "assistant.newChatTitle"))}</div>
         <div class="assistant-product-context" data-assistant-product-context hidden></div>

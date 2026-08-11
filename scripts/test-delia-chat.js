@@ -62,6 +62,24 @@ for (const required of [
   assert(styles.includes(required), `Delia styles are missing ${required}`);
 }
 
+for (const required of [
+  "inset: clamp(10px, 1.25vw, 24px)",
+  "grid-template-columns: clamp(280px, 19vw, 320px) minmax(0, 1fr)",
+  "grid-template-columns: repeat(3, minmax(0, 1fr))",
+  '"conversation"',
+  '"composer"',
+  "font-size: 16px",
+  "height: 100dvh",
+  "env(safe-area-inset-bottom)",
+]) {
+  assert(styles.includes(required), `Delia responsive workspace is missing ${required}`);
+}
+
+assert(
+  !styles.includes("width: min(940px, 100%)"),
+  "Delia must not be capped at the old 940px desktop width",
+);
+
 assert(
   server.includes('app.post("/api/shopping-assistant/feedback"'),
   "Assistant feedback endpoint is missing",
