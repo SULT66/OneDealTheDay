@@ -7,6 +7,7 @@
   const SAVED_KEY = "odd_delia_saved_products_v1";
   const MAX_CHATS = 20;
   const MAX_MESSAGES_PER_CHAT = 80;
+  const REQUEST_TIMEOUT_MS = 33000;
   const backdrop = document.getElementById("shoppingAssistantBackdrop");
   const closeButton = panel.querySelector("[data-shopping-assistant-close]");
   const form = panel.querySelector("form");
@@ -43,6 +44,8 @@
   let savedProducts = readStorage(SAVED_KEY, []);
   let requestController = null;
   let loadingTimer = null;
+  let requestTimeoutTimer = null;
+  let requestTimedOut = false;
 
   function readStorage(key, fallback) {
     try {
@@ -62,6 +65,113 @@
   }
 
   const tr = (key, fallback) => copy[key] || fallback;
+  const looksLikeSerializedPayload = (value) => {
+    const text = String(value || "").trim();
+    return (
+      /^[\[{]/.test(text) ||
+      /^```(?:json)?/i.test(text) ||
+      /"(?:answer|message|recommendations|comparison_notes)"\s*:/i.test(text)
+    );
+  };
+  const recoverEmbeddedAnswer = (value) => {
+    let parsed = String(value || "").trim();
+    for (let depth = 0; depth < 3; depth += 1) {
+      if (typeof parsed !== "string" || !looksLikeSerializedPayload(parsed)) break;
+      try {
+        parsed = JSON.parse(
+          parsed.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, ""),
+        );
+      } catch {
+        return "";
+      }
+    }
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return "";
+    const answer = String(parsed.answer || parsed.message || "").trim();
+    return answer && !looksLikeSerializedPayload(answer) ? answer.slice(0, 700) : "";
+  };
+  const safeBrowserUrl = (value) => {
+    const raw = String(value || "").trim();
+    if (/^\/(?!\/)/.test(raw)) return raw;
+    try {
+      const url = new URL(raw, window.location.href);
+      return url.protocol === "https:" ? url.href : "";
+    } catch {
+      return "";
+    }
+  };
+  function normalizeResponseBody(value) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      return {
+        message: tr("failed", "The assistant is unavailable right now."),
+        follow_up: "",
+        recommendations: [],
+        comparison_notes: [],
+        comparison: [],
+        products: [],
+        sources: [],
+        clarifying_questions: [],
+        needs_clarification: false,
+        scope: "shopping",
+      };
+    }
+    const rawMessage = String(value.message || "").trim();
+    const recovered = looksLikeSerializedPayload(rawMessage)
+      ? recoverEmbeddedAnswer(rawMessage)
+      : rawMessage;
+    const message = recovered ||
+      (looksLikeSerializedPayload(rawMessage)
+        ? tr(
+            "malformed",
+            "I found results, but could not safely format the comparison. Please try again.",
+          )
+        : "");
+    return {
+      ...value,
+      message: String(message).slice(0, 700),
+      follow_up: String(value.follow_up || "").slice(0, 240),
+      recommendations: (Array.isArray(value.recommendations)
+        ? value.recommendations
+        : []
+      )
+        .filter((item) => item && typeof item === "object")
+        .slice(0, 5)
+        .map((item) => ({
+          ...item,
+          url: safeBrowserUrl(item.url),
+          image_url: safeBrowserUrl(item.image_url),
+          other_offers: (Array.isArray(item.other_offers)
+            ? item.other_offers
+            : []
+          )
+            .filter((offer) => offer && typeof offer === "object")
+            .map((offer) => ({ ...offer, url: safeBrowserUrl(offer.url) }))
+            .filter((offer) => offer.url)
+            .slice(0, 2),
+        })),
+      comparison_notes: Array.isArray(value.comparison_notes)
+        ? value.comparison_notes.slice(0, 4)
+        : [],
+      comparison: Array.isArray(value.comparison)
+        ? value.comparison.slice(0, 4)
+        : [],
+      products: (Array.isArray(value.products) ? value.products : [])
+        .filter((item) => item && typeof item === "object")
+        .slice(0, 6)
+        .map((item) => ({
+          ...item,
+          url: safeBrowserUrl(item.url),
+          image_url: safeBrowserUrl(item.image_url),
+        })),
+      sources: (Array.isArray(value.sources) ? value.sources : [])
+        .filter((item) => item && typeof item === "object")
+        .map((item) => ({ ...item, url: safeBrowserUrl(item.url) }))
+        .filter((item) => item.url)
+        .slice(0, 8),
+      clarifying_questions: Array.isArray(value.clarifying_questions)
+        ? value.clarifying_questions.slice(0, 3)
+        : [],
+    };
+  }
   const makeId = () =>
     window.crypto?.randomUUID?.() ||
     `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
@@ -771,6 +881,8 @@
   }
 
   function renderResponse(message, body, record) {
+    body = normalizeResponseBody(body);
+    if (record) record.response = body;
     const copyElement = message.querySelector(".assistant-message-copy");
     copyElement.textContent = body.message || "";
     renderClarifyingQuestions(body.clarifying_questions, message);
@@ -872,6 +984,12 @@
     const pending = addMessage("assistant", "", true);
     startLoading(pending);
     requestController = new AbortController();
+    requestTimedOut = false;
+    requestTimeoutTimer = window.setTimeout(() => {
+      if (!requestController) return;
+      requestTimedOut = true;
+      requestController.abort();
+    }, REQUEST_TIMEOUT_MS);
     try {
       const response = await fetch("/api/shopping-assistant", {
         method: "POST",
@@ -884,11 +1002,13 @@
           language: language(),
         }),
       });
-      const body = await response.json().catch(() => ({}));
+      const responseBody = await response.json().catch(() => ({}));
       if (!response.ok)
         throw new Error(
-          body.error || tr("failed", "The assistant is unavailable right now."),
+          responseBody.error ||
+            tr("failed", "The assistant is unavailable right now."),
         );
+      const body = normalizeResponseBody(responseBody);
       if (body.scope === "off_topic") userRecord.include_in_model = false;
       const assistantRecord = {
         id: makeId(),
@@ -909,17 +1029,22 @@
         const stoppedRecord = {
           id: makeId(),
           role: "assistant",
-          content: tr(
-            "stopped",
-            "Stopped. You can edit the request or try again.",
-          ),
+          content: requestTimedOut
+            ? tr(
+                "timeout",
+                "The live search took too long, so I stopped it. Try again or narrow the model and budget.",
+              )
+            : tr(
+                "stopped",
+                "Stopped. You can edit the request or try again.",
+              ),
           include_in_model: false,
-          stopped: true,
+          stopped: !requestTimedOut,
           created_at: new Date().toISOString(),
         };
         pending.querySelector(".assistant-message-copy").textContent =
           stoppedRecord.content;
-        pending.classList.add("is-stopped");
+        pending.classList.add(requestTimedOut ? "is-error" : "is-stopped");
         activeChat.messages.push(stoppedRecord);
       } else {
         userRecord.include_in_model = false;
@@ -931,8 +1056,11 @@
       pending.classList.remove("is-pending");
       persistChats();
     } finally {
+      if (requestTimeoutTimer) window.clearTimeout(requestTimeoutTimer);
+      requestTimeoutTimer = null;
       stopLoading();
       requestController = null;
+      requestTimedOut = false;
       setBusy(false);
       input.focus();
       scrollToLatest();

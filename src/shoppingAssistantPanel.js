@@ -15,6 +15,8 @@ const CLIENT_COPY_KEYS = [
   "assistant.thinkingPrices",
   "assistant.thinkingCompare",
   "assistant.failed",
+  "assistant.timeout",
+  "assistant.malformed",
   "assistant.sources",
   "assistant.stop",
   "assistant.stopped",
