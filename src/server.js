@@ -724,7 +724,7 @@ const shell = (title, description, canonical, body, schema = null, image = "", r
   const versionedHtml = html
     .replace("/styles.css?v=20260731-brand-lockup", "/styles.css?v=20260808-assistant")
     .replace("</head>", '<link rel="stylesheet" href="/i18n.css?v=20260808-assistant"><link rel="stylesheet" href="/shopping-assistant.css?v=20260810-responsive"></head>')
-    .replace("</body>", `${shoppingAssistantPanel(code, language)}<script src="/shopping-assistant.js?v=20260810-responsive"></script></body>`);
+    .replace("</body>", `${shoppingAssistantPanel(code, language)}<script src="/shopping-assistant.js?v=20260810-response-safety"></script></body>`);
   return localizeHtml(versionedHtml, language);
 };
 

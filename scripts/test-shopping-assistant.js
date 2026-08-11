@@ -1,6 +1,7 @@
 const assert = require("assert");
 const Database = require("better-sqlite3");
 const {
+  classifyShoppingScope,
   createShoppingAssistant,
   normalizeAssistantResponse,
   searchCatalog,
@@ -107,79 +108,38 @@ const client = {
           output_text: JSON.stringify({
             scope: "shopping",
             needs_clarification: false,
+            clarification_reason: "none",
             clarifying_questions: [],
           }),
         };
       }
-      if (calls.length === 2) {
-        return {
-          output: [
-            {
-              type: "web_search_call",
-              action: {
-                sources: [
-                  {
-                    url: "https://store.example.com/quiet-blender",
-                    title: "QuietPro blender offer",
-                  },
-                  {
-                    url: "https://second.example.com/quiet-blender",
-                    title: "QuietPro second offer",
-                  },
-                ],
-              },
-              results: [
-                {
-                  type: "image_result",
-                  image_url: "https://cdn.example.com/quietpro.jpg",
-                  thumbnail_url: "https://cdn.example.com/quietpro-thumb.jpg",
-                  source_website_url:
-                    "https://store.example.com/quiet-blender",
-                  caption: "QuietPro 900 blender",
-                },
-              ],
-            },
-            {
-              type: "message",
-              content: [
-                {
-                  type: "output_text",
-                  text: "QuietPro 900 is currently listed for $89.",
-                  annotations: [
-                    {
-                      type: "url_citation",
-                      url: "https://example.com/review",
-                      title: "Independent review",
-                    },
-                  ],
-                },
-              ],
-            },
-          ],
-          output_text: "QuietPro 900 is currently listed for $89.",
-        };
-      }
-      if (calls.length === 3) {
-        return {
-          output: [
-            {
-              type: "function_call",
-              name: "search_catalog",
-              call_id: "catalog-1",
-              arguments: JSON.stringify({
-                query: "quiet blender",
-                category: "Kitchen",
-                max_price: 100,
-                minimum_score: 82,
-                limit: 3,
-              }),
-            },
-          ],
-          output_text: "",
-        };
-      }
       return {
         output: [
+          {
+            type: "web_search_call",
+            action: {
+              sources: [
+                {
+                  url: "https://store.example.com/quiet-blender",
+                  title: "QuietPro blender offer",
+                },
+                {
+                  url: "https://second.example.com/quiet-blender",
+                  title: "QuietPro second offer",
+                },
+              ],
+            },
+            results: [
+              {
+                type: "image_result",
+                image_url: "https://cdn.example.com/quietpro.jpg",
+                thumbnail_url: "https://cdn.example.com/quietpro-thumb.jpg",
+                source_website_url:
+                  "https://store.example.com/quiet-blender",
+                caption: "QuietPro 900 blender",
+              },
+            ],
+          },
           {
             type: "message",
             content: [
@@ -262,6 +222,30 @@ const client = {
 };
 
 (async () => {
+  const ordinaryPreferenceClassification = await classifyShoppingScope(
+    {
+      responses: {
+        create: async () => ({
+          output: [],
+          output_text: JSON.stringify({
+            scope: "shopping",
+            needs_clarification: true,
+            clarification_reason: "none",
+            clarifying_questions: ["Do you prefer new or refurbished?"],
+          }),
+        }),
+      },
+    },
+    "test-model",
+    "Find a new iPhone 15 under $800",
+    [],
+    "en",
+  );
+  assert.strictEqual(
+    ordinaryPreferenceClassification.needs_clarification,
+    false,
+    "An ordinary preference incorrectly blocked useful starter results",
+  );
   const assistant = createShoppingAssistant({
     db,
     sourceSql,
@@ -278,13 +262,11 @@ const client = {
   });
   assert.strictEqual(
     calls.length,
-    4,
-    "Assistant did not complete the tool round trip",
+    2,
+    "Assistant did not collapse discovery and rendering into one live-search call",
   );
   assert(
-    requestOptions.every(
-      (options) => options?.signal === requestController.signal,
-    ),
+    requestOptions.every((options) => options?.signal instanceof AbortSignal),
     "Abort signal was not propagated to every OpenAI request",
   );
   assert.strictEqual(
@@ -321,12 +303,12 @@ const client = {
     "Product image search is not enabled",
   );
   assert.strictEqual(
-    calls[3].text.format.type,
+    calls[1].text.format.type,
     "json_schema",
     "Assistant response is not constrained to the visual UI schema",
   );
   assert.strictEqual(
-    calls[3].text.format.strict,
+    calls[1].text.format.strict,
     true,
     "Assistant response schema must be strict",
   );
@@ -351,10 +333,14 @@ const client = {
     "Recommendation was not bound to a verified catalog product",
   );
   assert(
-    calls[2].tools.some(
-      (tool) => tool.name === "search_catalog" && tool.strict,
+    !calls[1].tools.some((tool) => tool.type === "function"),
+    "Catalog function round trips must not delay the live result",
+  );
+  assert(
+    JSON.parse(calls[1].input).verified_catalog_results.some(
+      (item) => item.id === 1,
     ),
-    "Strict catalog tool is missing",
+    "Verified catalog results were not supplied to the combined search call",
   );
   assert.strictEqual(
     result.products[0].id,
@@ -386,6 +372,31 @@ const client = {
     "**Best value**: [Open offer](https://example.com/a-very-long-product-url)",
   );
   assert.strictEqual(fallback.answer, "Best value : Open offer");
+  const doubleEncoded = normalizeAssistantResponse(
+    JSON.stringify(
+      JSON.stringify({
+        answer: "A safely decoded answer",
+        follow_up: "",
+        recommendations: [],
+        comparison_notes: [],
+        comparison: [],
+      }),
+    ),
+  );
+  assert.strictEqual(doubleEncoded.answer, "A safely decoded answer");
+  const fenced = normalizeAssistantResponse(
+    '```json\n{"answer":"A fenced answer","follow_up":"","recommendations":[],"comparison_notes":[],"comparison":[]}\n```',
+  );
+  assert.strictEqual(fenced.answer, "A fenced answer");
+  const rawJsonFirewall = normalizeAssistantResponse(
+    '{"message":"unfinished","recommendations":[',
+    { language: "en", userMessage: "Find an iPhone" },
+  );
+  assert(
+    !rawJsonFirewall.answer.includes('"recommendations"'),
+    "Malformed JSON leaked into the shopper-facing answer",
+  );
+  assert.strictEqual(rawJsonFirewall.malformed, true);
   assert.strictEqual(
     result.sources.find((source) => source.url === "https://example.com/review")
       .url,
@@ -429,6 +440,7 @@ const client = {
               output_text: JSON.stringify({
                 scope: "shopping",
                 needs_clarification: false,
+                clarification_reason: "none",
                 clarifying_questions: [],
               }),
             };
@@ -449,44 +461,41 @@ const client = {
                   results: [],
                 },
               ],
-              output_text: "A current OLED TV offer was found.",
+              output_text: JSON.stringify({
+                answer: "I found a current option outside the OneDailyDrop catalog.",
+                follow_up: "Do you prioritize brightness or movie performance?",
+                recommendations: [
+                  {
+                    title: "Example 65-inch OLED TV",
+                    retailer: "Example Retailer",
+                    price: "$1,399.99",
+                    badge: "Live web result",
+                    reason: "It matches the requested size, display type, and budget.",
+                    url: "https://retailer.example.com/oled-tv",
+                    action_label: "View live offer",
+                    source_type: "web",
+                    image_url: "",
+                    catalog_product_id: 0,
+                  },
+                  {
+                    title: "Invented unsafe offer",
+                    retailer: "Unknown",
+                    price: "$1",
+                    badge: "",
+                    reason: "Its URL was not returned by web search.",
+                    url: "https://untrusted.example.com/fake",
+                    action_label: "View",
+                    source_type: "web",
+                    image_url: "",
+                    catalog_product_id: 0,
+                  },
+                ],
+                comparison_notes: [],
+                comparison: [],
+              }),
             };
           }
-          return {
-            output: [],
-            output_text: JSON.stringify({
-              answer: "I found a current option outside the OneDailyDrop catalog.",
-              follow_up: "Do you prioritize brightness or movie performance?",
-              recommendations: [
-                {
-                  title: "Example 65-inch OLED TV",
-                  retailer: "Example Retailer",
-                  price: "$1,399.99",
-                  badge: "Live web result",
-                  reason: "It matches the requested size, display type, and budget.",
-                  url: "https://retailer.example.com/oled-tv",
-                  action_label: "View live offer",
-                  source_type: "web",
-                  image_url: "",
-                  catalog_product_id: 0,
-                },
-                {
-                  title: "Invented unsafe offer",
-                  retailer: "Unknown",
-                  price: "$1",
-                  badge: "",
-                  reason: "Its URL was not returned by web search.",
-                  url: "https://untrusted.example.com/fake",
-                  action_label: "View",
-                  source_type: "web",
-                  image_url: "",
-                  catalog_product_id: 0,
-                },
-              ],
-              comparison_notes: [],
-              comparison: [],
-            }),
-          };
+          throw new Error("Unexpected extra empty-catalog API call");
         },
       },
     },
@@ -497,6 +506,11 @@ const client = {
     marketCode: "us",
     language: "en",
   });
+  assert.strictEqual(
+    emptyCatalogCalls.length,
+    2,
+    "The empty-catalog flow used more than one live-search response",
+  );
   assert.strictEqual(
     emptyCatalogResult.products.length,
     0,
@@ -513,6 +527,112 @@ const client = {
     "The trusted live retailer URL was not preserved",
   );
 
+  let malformedCalls = 0;
+  const malformedAssistant = createShoppingAssistant({
+    db,
+    sourceSql,
+    market: (code) => ({ code, currency: "USD" }),
+    client: {
+      responses: {
+        create: async () => {
+          malformedCalls += 1;
+          if (malformedCalls === 1) {
+            return {
+              output: [],
+              output_text: JSON.stringify({
+                scope: "shopping",
+                needs_clarification: false,
+                clarification_reason: "none",
+                clarifying_questions: [],
+              }),
+            };
+          }
+          return {
+            output: [
+              {
+                type: "web_search_call",
+                action: {
+                  sources: [
+                    {
+                      url: "https://bestbuy.example.com/iphone-15",
+                      title: "Apple iPhone 15 128GB",
+                    },
+                  ],
+                },
+                results: [],
+              },
+            ],
+            output_text:
+              '{"answer":"Нашла варианты","recommendations":[{"title":"iPhone 15"}',
+          };
+        },
+      },
+    },
+  });
+  const malformedResult = await malformedAssistant.respond({
+    message: "Найди новый iPhone 15 до $800",
+    messages: [],
+    marketCode: "us",
+    language: "en",
+  });
+  assert.strictEqual(malformedCalls, 2);
+  assert.strictEqual(malformedResult.recommendations.length, 1);
+  assert.strictEqual(
+    malformedResult.recommendations[0].url,
+    "https://bestbuy.example.com/iphone-15",
+  );
+  assert(
+    !malformedResult.message.includes('"recommendations"') &&
+      /[\u0400-\u04ff]/u.test(malformedResult.message),
+    "The production-style malformed payload was not replaced in the shopper's language",
+  );
+
+  let timeoutCalls = 0;
+  const timeoutAssistant = createShoppingAssistant({
+    db,
+    sourceSql,
+    market: (code) => ({ code, currency: "USD" }),
+    searchTimeoutMs: 5,
+    client: {
+      responses: {
+        create: async (_request, options) => {
+          timeoutCalls += 1;
+          if (timeoutCalls === 1) {
+            return {
+              output: [],
+              output_text: JSON.stringify({
+                scope: "shopping",
+                needs_clarification: false,
+                clarification_reason: "none",
+                clarifying_questions: [],
+              }),
+            };
+          }
+          return new Promise((resolve, reject) => {
+            const fail = () => {
+              const error = new Error("aborted");
+              error.name = "AbortError";
+              reject(error);
+            };
+            if (options.signal.aborted) fail();
+            else options.signal.addEventListener("abort", fail, { once: true });
+          });
+        },
+      },
+    },
+  });
+  const timedOut = await timeoutAssistant.respond({
+    message: "Find an iPhone 15 under $800",
+    messages: [],
+    marketCode: "us",
+    language: "en",
+  });
+  assert.strictEqual(timedOut.timed_out, true);
+  assert(
+    timedOut.message.includes("took too long"),
+    "A slow live search did not return a bounded shopper-facing timeout",
+  );
+
   const offTopicCalls = [];
   const offTopicAssistant = createShoppingAssistant({
     db,
@@ -527,6 +647,7 @@ const client = {
             output_text: JSON.stringify({
               scope: "off_topic",
               needs_clarification: false,
+              clarification_reason: "none",
               clarifying_questions: [],
             }),
           };
@@ -565,10 +686,9 @@ const client = {
             output_text: JSON.stringify({
               scope: "shopping",
               needs_clarification: true,
+              clarification_reason: "compatibility",
               clarifying_questions: [
-                "What is your budget?",
-                "What size do you need?",
-                "How will you use it?",
+                "Which refrigerator model is this filter for?",
               ],
             }),
           };
@@ -577,7 +697,7 @@ const client = {
     },
   });
   const clarification = await clarificationAssistant.respond({
-    message: "Find me a TV",
+    message: "Find a replacement water filter for my refrigerator",
     messages: [],
     marketCode: "us",
     language: "en",
@@ -589,9 +709,7 @@ const client = {
   );
   assert.strictEqual(clarification.needs_clarification, true);
   assert.deepStrictEqual(clarification.clarifying_questions, [
-    "What is your budget?",
-    "What size do you need?",
-    "How will you use it?",
+    "Which refrigerator model is this filter for?",
   ]);
   assert.strictEqual(refused.scope, "off_topic");
   assert.strictEqual(refused.recommendations.length, 0);
@@ -610,7 +728,7 @@ const client = {
     false,
   );
   console.log(
-    "OpenAI shopping assistant catalog tools and privacy settings passed.",
+    "Delia structured output, live-source fallback, timeout, and privacy checks passed.",
   );
 })().catch((error) => {
   console.error(error);
