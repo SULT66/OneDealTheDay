@@ -599,6 +599,120 @@ const client = {
     "A rejected category page did not remain available as a compact source",
   );
 
+  let partialComparisonCalls = 0;
+  const partialComparisonAssistant = createShoppingAssistant({
+    db,
+    sourceSql,
+    market: (code) => ({ code, currency: "USD" }),
+    client: {
+      responses: {
+        create: async () => {
+          partialComparisonCalls += 1;
+          if (partialComparisonCalls === 1) {
+            return {
+              output: [],
+              output_text: JSON.stringify({
+                scope: "shopping",
+                needs_clarification: false,
+                clarification_reason: "none",
+                clarifying_questions: [],
+                language: "ru",
+              }),
+            };
+          }
+          return {
+            output: [
+              {
+                type: "web_search_call",
+                action: {
+                  sources: [
+                    {
+                      url: "https://shop.example.com/category/unsafepro-2000",
+                      title: "UnsafePro 2000 category",
+                    },
+                  ],
+                },
+                results: [],
+              },
+            ],
+            output_text: JSON.stringify({
+              answer:
+                "Acme стоит $79, а UnsafePro 2000 стоит $31.99 в Amazon.",
+              follow_up: "Хотите купить UnsafePro в Amazon?",
+              recommendations: [
+                {
+                  title: "Acme quiet countertop blender",
+                  retailer: "eBay",
+                  price: "$79",
+                  badge: "",
+                  reason: "Проверенный товар из каталога.",
+                  url: "https://example.com/blender",
+                  action_label: "Открыть товар",
+                  source_type: "catalog",
+                  image_url: "",
+                  catalog_product_id: 1,
+                },
+                {
+                  title: "UnsafePro 2000",
+                  retailer: "Amazon",
+                  price: "$31.99",
+                  badge: "",
+                  reason: "Неподтверждённый второй вариант.",
+                  url: "https://shop.example.com/category/unsafepro-2000",
+                  action_label: "Открыть",
+                  source_type: "web",
+                  image_url: "",
+                  catalog_product_id: 0,
+                },
+              ],
+              comparison_notes: ["UnsafePro якобы дешевле."],
+              comparison: [
+                {
+                  catalog_product_id: 1,
+                  recommendation_index: 1,
+                  best_for: "Проверенный вариант",
+                  strengths: ["Цена подтверждена"],
+                  drawbacks: [],
+                },
+                {
+                  catalog_product_id: 0,
+                  recommendation_index: 2,
+                  best_for: "Низкая цена",
+                  strengths: ["Дешевле"],
+                  drawbacks: ["Не подтверждено"],
+                },
+              ],
+            }),
+          };
+        },
+      },
+    },
+  });
+  const partialComparisonResult = await partialComparisonAssistant.respond({
+    message: "Сравни Acme quiet countertop blender и UnsafePro 2000",
+    messages: [],
+    marketCode: "us",
+    language: "en",
+  });
+  assert.strictEqual(partialComparisonResult.recommendations.length, 1);
+  assert.strictEqual(partialComparisonResult.comparison.length, 1);
+  assert.deepStrictEqual(partialComparisonResult.comparison_notes, []);
+  assert.strictEqual(partialComparisonResult.follow_up, "");
+  assert(
+    /[\u0400-\u04ff]/u.test(partialComparisonResult.message) &&
+      !partialComparisonResult.message.includes("$31.99") &&
+      !partialComparisonResult.message.includes("Amazon"),
+    "A rejected comparison result leaked an unverified price or retailer into the narrative",
+  );
+  assert(
+    partialComparisonResult.sources.some(
+      (source) =>
+        source.url ===
+        "https://shop.example.com/category/unsafepro-2000",
+    ),
+    "A rejected comparison result did not remain available as a compact source",
+  );
+
   let malformedCalls = 0;
   const malformedAssistant = createShoppingAssistant({
     db,
