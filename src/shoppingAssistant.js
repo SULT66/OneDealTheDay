@@ -1011,8 +1011,10 @@ function isDirectProductPage(value) {
       return false;
     }
     if (/\b(?:search|query|keyword|category)\b/i.test(url.search)) return false;
+    if (/pcmcat/i.test(path) || /pcmcat/i.test(url.search)) return false;
     if (
-      /\/(?:ip|p|product|products|dp|itm|site)\//i.test(path) ||
+      /\/(?:ip|p|product|products|dp|itm)\//i.test(path) ||
+      /\/site\/[^/]+\/[^/]+\.p$/i.test(path) ||
       /\/shop\/buy-[^/]+\//i.test(path) ||
       (/(?:^|\/)buy(?:\/|$)/i.test(path) && /\d/.test(path))
     ) {
@@ -1065,6 +1067,51 @@ function retailerFromUrl(value) {
     );
   } catch {
     return "Retailer";
+  }
+}
+
+function productTitleFromSource(source) {
+  const explicitTitle = cleanDisplayText(source?.title).slice(0, 140);
+  if (hasSpecificProductIdentity(explicitTitle)) return explicitTitle;
+  try {
+    const url = new URL(source?.url);
+    const segments = decodeURIComponent(url.pathname)
+      .split("/")
+      .map((segment) => segment.replace(/\.p$/i, "").trim())
+      .filter(
+        (segment) =>
+          segment &&
+          /[a-z]/i.test(segment) &&
+          !/^(?:buy|dp|ip|itm|p|product|products|site)$/i.test(segment),
+      );
+    const descriptive = segments
+      .filter((segment) => !/^[a-z0-9]{8,16}$/i.test(segment))
+      .sort((left, right) => {
+        const score = (segment) =>
+          (segment.match(/[-_]/g) || []).length * 20 +
+          Math.min(segment.length, 100);
+        return score(right) - score(left);
+      })[0];
+    if (!descriptive) return "";
+    let candidate = descriptive;
+    if (!/\d/.test(candidate)) {
+      const modelToken = segments.find(
+        (segment) =>
+          segment !== descriptive &&
+          /^[a-z0-9]{6,20}$/i.test(segment) &&
+          /[a-z]/i.test(segment) &&
+          /\d/.test(segment),
+      );
+      if (modelToken) candidate = `${candidate} ${modelToken}`;
+    }
+    const inferred = cleanDisplayText(
+      candidate
+        .replace(/[-_]+/g, " ")
+        .replace(/\b[a-z]/g, (letter) => letter.toUpperCase()),
+    ).slice(0, 140);
+    return hasSpecificProductIdentity(inferred) ? inferred : "";
+  } catch {
+    return "";
   }
 }
 
@@ -1428,15 +1475,19 @@ function createShoppingAssistant({
         ),
       );
       const sourceRecommendationCandidates = trustedSources
+        .map((source) => ({
+          ...source,
+          inferred_title: productTitleFromSource(source),
+        }))
         .filter(
           (source) =>
             !structuredUrls.has(comparableUrl(source.url)) &&
             isDirectProductPage(source.url) &&
-            !isEditorialProductSource(source.title, source.url) &&
-            hasSpecificProductIdentity(source.title),
+            !isEditorialProductSource(source.inferred_title, source.url) &&
+            hasSpecificProductIdentity(source.inferred_title),
         )
         .map((source, index) => ({
-          title: cleanDisplayText(source.title).slice(0, 140),
+          title: source.inferred_title,
           retailer: retailerFromUrl(source.url),
           price: "",
           badge: "",
