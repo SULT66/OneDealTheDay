@@ -80,6 +80,8 @@
       actionStores: "Check other stores", feedbackQuestion: "Was this useful?",
       helpful: "Helpful", notHelpful: "Not helpful", wrongPrice: "Price is wrong",
       feedbackThanks: "Thanks — your feedback was recorded.",
+      partialTitle: "Current product pages", partialStatus: "Details not independently verified",
+      checkPrice: "Check live price", viewOffer: "Open retailer page",
     },
     ru: {
       product: "Товар", price: "Цена", bestFor: "Лучше для", score: "Оценка",
@@ -95,6 +97,8 @@
       actionStores: "Проверить другие магазины", feedbackQuestion: "Ответ был полезен?",
       helpful: "Полезно", notHelpful: "Не помогло", wrongPrice: "Цена неверна",
       feedbackThanks: "Спасибо — отзыв сохранён.",
+      partialTitle: "Актуальные товарные страницы", partialStatus: "Часть данных не подтверждена независимо",
+      checkPrice: "Проверить цену", viewOffer: "Открыть страницу магазина",
     },
     es: {
       product: "Producto", price: "Precio", bestFor: "Ideal para", score: "Puntuación",
@@ -110,6 +114,8 @@
       actionStores: "Comprobar otras tiendas", feedbackQuestion: "¿Te sirvió?",
       helpful: "Útil", notHelpful: "No fue útil", wrongPrice: "El precio es incorrecto",
       feedbackThanks: "Gracias, guardamos tu opinión.",
+      partialTitle: "Páginas de producto actuales", partialStatus: "Datos no verificados de forma independiente",
+      checkPrice: "Comprobar precio", viewOffer: "Abrir página de la tienda",
     },
     fr: {
       product: "Produit", price: "Prix", bestFor: "Idéal pour", score: "Score",
@@ -125,6 +131,8 @@
       actionStores: "Vérifier d’autres magasins", feedbackQuestion: "Est-ce utile ?",
       helpful: "Utile", notHelpful: "Pas utile", wrongPrice: "Le prix est incorrect",
       feedbackThanks: "Merci, votre avis a été enregistré.",
+      partialTitle: "Pages produit actuelles", partialStatus: "Données non vérifiées indépendamment",
+      checkPrice: "Vérifier le prix", viewOffer: "Ouvrir la page du vendeur",
     },
     de: {
       product: "Produkt", price: "Preis", bestFor: "Am besten für", score: "Bewertung",
@@ -140,6 +148,8 @@
       actionStores: "Andere Händler prüfen", feedbackQuestion: "War das hilfreich?",
       helpful: "Hilfreich", notHelpful: "Nicht hilfreich", wrongPrice: "Preis ist falsch",
       feedbackThanks: "Danke, Ihr Feedback wurde gespeichert.",
+      partialTitle: "Aktuelle Produktseiten", partialStatus: "Angaben nicht unabhängig bestätigt",
+      checkPrice: "Aktuellen Preis prüfen", viewOffer: "Händlerseite öffnen",
     },
   };
   const responseLanguage = (body = {}) => {
@@ -198,10 +208,25 @@
       if (/(?:^|\/)(?:search|browse|category|categories|collection|collections|department|departments|results)(?:\/|$)/i.test(path)) return false;
       if (/\b(?:search|query|keyword|category)\b/i.test(url.search)) return false;
       if (/\/(?:ip|p|product|products|dp|itm|site)\//i.test(path) || /\/shop\/buy-[^/]+\//i.test(path) || (/(?:^|\/)buy(?:\/|$)/i.test(path) && /\d/.test(path))) return true;
-      const leaf = path.split("/").filter(Boolean).pop() || "";
-      return leaf.length >= 8 && /[a-z]/i.test(leaf) && /\d/.test(leaf);
+      return false;
     } catch {
       return false;
+    }
+  };
+  const isEditorialProductPage = (title, value) => {
+    try {
+      const url = new URL(value, window.location.href);
+      return (
+        /(?:^|\.)(?:cnet|esquire|pcmag|reddit|techradar|theverge|tistory|tomsguide|wired|youtube)\./i.test(
+          url.hostname,
+        ) ||
+        /\/(?:article|blog|guide|news|review)s?(?:\/|$)/i.test(url.pathname) ||
+        /\b(?:hands-on|launch|news|review|rumou?r|shopping guide)\b/i.test(
+          String(title || ""),
+        )
+      );
+    } catch {
+      return true;
     }
   };
   function normalizeResponseBody(value) {
@@ -210,6 +235,7 @@
         message: tr("failed", "The assistant is unavailable right now."),
         follow_up: "",
         recommendations: [],
+        partial_offers: [],
         comparison_notes: [],
         comparison: [],
         products: [],
@@ -238,6 +264,7 @@
           ? "ru"
           : language(),
       message: String(message).slice(0, 700),
+      conversation_title: String(value.conversation_title || "").slice(0, 60),
       follow_up: String(value.follow_up || "").slice(0, 240),
       recommendations: (Array.isArray(value.recommendations)
         ? value.recommendations
@@ -267,9 +294,34 @@
           if (item.in_catalog) return true;
           return (
             hasSpecificProductIdentity(item.title) &&
-            isDirectProductPage(item.url)
+            isDirectProductPage(item.url) &&
+            !isEditorialProductPage(item.title, item.url)
           );
         }),
+      partial_offers: (Array.isArray(value.partial_offers)
+        ? value.partial_offers
+        : []
+      )
+        .filter((item) => item && typeof item === "object")
+        .slice(0, 5)
+        .map((item) => ({
+          ...item,
+          url: safeBrowserUrl(item.url),
+          image_url: safeBrowserUrl(item.image_url),
+          price: hasDisplayPrice(item.price) ? String(item.price).slice(0, 40) : "",
+          badge: "",
+          evidence_level: "partial",
+        }))
+        .filter(
+          (item) =>
+            item.title &&
+            item.retailer &&
+            item.reason &&
+            item.url &&
+            hasSpecificProductIdentity(item.title) &&
+            isDirectProductPage(item.url) &&
+            !isEditorialProductPage(item.title, item.url),
+        ),
       comparison_notes: Array.isArray(value.comparison_notes)
         ? value.comparison_notes.slice(0, 4)
         : [],
@@ -797,6 +849,65 @@
     host.append(section);
   }
 
+  function renderPartialOffers(offers = [], host, responseBody = {}) {
+    if (!offers.length || !host) return;
+    const section = document.createElement("section");
+    section.className = "assistant-partial-offers";
+    const heading = document.createElement("h3");
+    heading.textContent = responseTr(
+      responseBody,
+      "partialTitle",
+      "Current product pages",
+    );
+    section.append(heading);
+    for (const offer of offers) {
+      const card = document.createElement("article");
+      card.className = "assistant-partial-offer";
+      if (offer.image_url) {
+        const image = document.createElement("img");
+        image.src = offer.image_url;
+        image.alt = offer.title;
+        image.loading = "lazy";
+        image.addEventListener("error", () => image.remove(), { once: true });
+        card.append(image);
+      } else {
+        card.classList.add("is-image-missing");
+      }
+      const content = document.createElement("div");
+      content.className = "assistant-partial-offer-copy";
+      const title = document.createElement("strong");
+      title.textContent = offer.title;
+      const meta = document.createElement("span");
+      meta.textContent = [
+        offer.price || responseTr(responseBody, "checkPrice", "Check live price"),
+        offer.retailer,
+      ]
+        .filter(Boolean)
+        .join(" · ");
+      const status = document.createElement("small");
+      status.textContent = responseTr(
+        responseBody,
+        "partialStatus",
+        "Details not independently verified",
+      );
+      const reason = document.createElement("p");
+      reason.textContent = offer.reason;
+      content.append(title, meta, status, reason);
+      const link = document.createElement("a");
+      link.href = offer.url;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer nofollow";
+      link.textContent = responseTr(
+        responseBody,
+        "viewOffer",
+        "Open retailer page",
+      );
+      card.append(content, link);
+      section.append(card);
+    }
+    host.append(section);
+  }
+
   function renderComparison(comparison = [], host, responseBody = {}) {
     if (comparison.length < 2 || !host) return;
     const section = document.createElement("section");
@@ -986,7 +1097,12 @@
   }
 
   function renderFeedback(record, host, responseBody = {}) {
-    if (record.response?.scope !== "shopping" || record.response?.needs_clarification)
+    if (
+      record.response?.scope !== "shopping" ||
+      record.response?.needs_clarification ||
+      (!(record.response?.recommendations || []).length &&
+        !(record.response?.partial_offers || []).length)
+    )
       return;
     const section = document.createElement("div");
     section.className = "assistant-feedback";
@@ -1061,9 +1177,14 @@
     copyElement.textContent = body.message || "";
     renderClarifyingQuestions(body.clarifying_questions, message);
     renderRecommendations(body.recommendations, message, body);
+    renderPartialOffers(body.partial_offers, message, body);
     renderComparison(body.comparison, message, body);
     renderComparisonNotes(body.comparison_notes, message);
-    if (!(body.recommendations || []).length && !body.needs_clarification) {
+    if (
+      !(body.recommendations || []).length &&
+      !(body.partial_offers || []).length &&
+      !body.needs_clarification
+    ) {
       renderProducts(body.products, message, body);
     }
     if (body.follow_up) {
@@ -1095,7 +1216,10 @@
           item.role === "assistant" && item.response
             ? [
                 item.response.message,
-                (item.response.recommendations || [])
+                [
+                  ...(item.response.recommendations || []),
+                  ...(item.response.partial_offers || []),
+                ]
                   .map(
                     (product) =>
                       `${product.title} — ${money(product.price_value, product.currency) || product.price || ""} ${product.retailer}`,
@@ -1184,6 +1308,10 @@
         );
       const body = normalizeResponseBody(responseBody);
       if (body.scope === "off_topic") userRecord.include_in_model = false;
+      if (body.scope === "shopping" && body.conversation_title) {
+        activeChat.title = body.conversation_title;
+        currentTitleElement.textContent = activeChat.title;
+      }
       const assistantRecord = {
         id: makeId(),
         role: "assistant",

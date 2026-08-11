@@ -34,6 +34,7 @@ for (const required of [
   "MAX_CHATS = 20",
   "titleFromQuestion",
   "renderRecommendations",
+  "renderPartialOffers",
   "renderComparison",
   "renderClarifyingQuestions",
   "renderFollowUpActions",
@@ -46,9 +47,12 @@ for (const required of [
   "recoverEmbeddedAnswer",
   "responseTr",
   "isDirectProductPage",
+  "isEditorialProductPage",
   "malformed",
   "thinkingSearch",
   "otherOffers",
+  "conversation_title",
+  "partial_offers",
 ]) {
   assert(client.includes(required), `Delia client is missing ${required}`);
 }
@@ -58,6 +62,8 @@ for (const required of [
   ".assistant-recommendation-media",
   ".assistant-recommendation.is-web",
   ".assistant-other-offers",
+  ".assistant-partial-offers",
+  ".assistant-partial-offer",
   ".assistant-comparison",
   ".assistant-comparison-grid",
   ".assistant-comparison-item",

@@ -1022,6 +1022,75 @@ body.assistant-open {
   padding-top: 10px;
   border-top: 1px solid var(--line);
 }
+.assistant-partial-offers {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+.assistant-partial-offers h3 {
+  margin: 0 0 2px;
+  color: var(--text);
+  font-size: 14px;
+}
+.assistant-partial-offer {
+  display: grid;
+  grid-template-columns: 68px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: var(--surface);
+}
+.assistant-partial-offer.is-image-missing {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+.assistant-partial-offer img {
+  width: 68px;
+  height: 68px;
+  object-fit: contain;
+  border-radius: 9px;
+  background: #fff;
+}
+.assistant-partial-offer-copy {
+  min-width: 0;
+}
+.assistant-partial-offer-copy strong,
+.assistant-partial-offer-copy span,
+.assistant-partial-offer-copy small {
+  display: block;
+}
+.assistant-partial-offer-copy strong {
+  font-size: 13px;
+  line-height: 1.35;
+}
+.assistant-partial-offer-copy span {
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 800;
+}
+.assistant-partial-offer-copy small {
+  margin-top: 3px;
+  color: #8a6720;
+  font-size: 10px;
+  font-weight: 750;
+}
+.assistant-partial-offer-copy p {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+.assistant-partial-offer > a {
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 850;
+  text-align: center;
+  text-decoration: none;
+}
 .assistant-feedback > span {
   width: 100%;
   color: var(--muted);
@@ -1196,6 +1265,20 @@ body.assistant-open {
     grid-template-columns: 1fr 1fr;
   }
   .assistant-recommendation-link {
+    grid-column: 1 / -1;
+  }
+  .assistant-partial-offer,
+  .assistant-partial-offer.is-image-missing {
+    grid-template-columns: 54px minmax(0, 1fr);
+  }
+  .assistant-partial-offer.is-image-missing {
+    grid-template-columns: 1fr;
+  }
+  .assistant-partial-offer img {
+    width: 54px;
+    height: 54px;
+  }
+  .assistant-partial-offer > a {
     grid-column: 1 / -1;
   }
   .assistant-comparison {

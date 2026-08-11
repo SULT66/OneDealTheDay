@@ -713,6 +713,124 @@ const client = {
     "A rejected comparison result did not remain available as a compact source",
   );
 
+  let foldFollowUpCalls = 0;
+  const foldFollowUpAssistant = createShoppingAssistant({
+    db,
+    sourceSql,
+    market: (code) => ({ code, currency: "USD" }),
+    client: {
+      responses: {
+        create: async () => {
+          foldFollowUpCalls += 1;
+          if (foldFollowUpCalls === 1) {
+            return {
+              output: [],
+              output_text: JSON.stringify({
+                scope: "shopping",
+                needs_clarification: false,
+                clarification_reason: "none",
+                clarifying_questions: [],
+                language: "ru",
+              }),
+            };
+          }
+          return {
+            output: [
+              {
+                type: "web_search_call",
+                action: {
+                  sources: [
+                    {
+                      url: "https://store.example.com/product/samsung-galaxy-z-fold6-256gb-new",
+                      title: "Samsung Galaxy Z Fold6 256GB New",
+                    },
+                    {
+                      url: "https://store.example.com/product/samsung-galaxy-z-fold5-256gb-refurbished",
+                      title: "Samsung Galaxy Z Fold5 256GB Refurbished",
+                    },
+                    {
+                      url: "https://news.example.com/product/samsung-galaxy-z-fold6-review",
+                      title: "Samsung Galaxy Z Fold6 review",
+                    },
+                  ],
+                },
+                results: [],
+              },
+            ],
+            output_text: JSON.stringify({
+              answer:
+                "Нового Galaxy Z Fold без trade-in за $600 нет. Показываю ближайшие варианты.",
+              result_state: "closest_alternatives",
+              conversation_title: "Samsung Galaxy Z Fold",
+              follow_up: "Хотите увеличить бюджет?",
+              recommendations: [
+                {
+                  title: "Samsung Galaxy Z Fold6 256GB New",
+                  retailer: "Example Store",
+                  price: "$1,099.99",
+                  badge: "",
+                  reason: "Новый аппарат без trade-in, но выше бюджета.",
+                  url: "https://store.example.com/product/samsung-galaxy-z-fold6-256gb-new",
+                  action_label: "Открыть",
+                  source_type: "web",
+                  image_url: "",
+                  catalog_product_id: 0,
+                },
+              ],
+              comparison_notes: [],
+              comparison: [],
+            }),
+          };
+        },
+      },
+    },
+  });
+  const foldFollowUpResult = await foldFollowUpAssistant.respond({
+    message: "новый и без обмена",
+    messages: [
+      { role: "user", content: "покажи Samsung Galaxy Fold примерно за $600" },
+      { role: "assistant", content: "Я нашла актуальные источники." },
+      { role: "user", content: "ну покажи уже что-нибудь" },
+    ],
+    marketCode: "us",
+    language: "en",
+  });
+  assert.strictEqual(foldFollowUpCalls, 2);
+  assert.strictEqual(foldFollowUpResult.recommendations.length, 0);
+  assert.strictEqual(foldFollowUpResult.partial_offers.length, 2);
+  assert.strictEqual(
+    foldFollowUpResult.result_state,
+    "closest_alternatives",
+  );
+  assert.strictEqual(
+    foldFollowUpResult.conversation_title,
+    "Samsung Galaxy Z Fold",
+  );
+  assert.strictEqual(
+    foldFollowUpResult.follow_up,
+    "",
+    "Delia asked another question instead of showing the closest Fold offers",
+  );
+  assert(
+    foldFollowUpResult.message.startsWith("Точного предложения") &&
+      !foldFollowUpResult.message.includes("Хотите"),
+    "The impossible-budget Fold response did not lead with a direct localized outcome",
+  );
+  assert(
+    foldFollowUpResult.partial_offers.every(
+      (offer) => offer.url.includes("/product/") && offer.evidence_level === "partial",
+    ),
+    "Direct retailer pages with incomplete image evidence were not retained as compact offers",
+  );
+  assert(
+    foldFollowUpResult.sources.some(
+      (source) =>
+        source.url ===
+        "https://news.example.com/product/samsung-galaxy-z-fold6-review",
+    ),
+    "Editorial evidence did not remain a source-only link",
+  );
+
   let malformedCalls = 0;
   const malformedAssistant = createShoppingAssistant({
     db,
