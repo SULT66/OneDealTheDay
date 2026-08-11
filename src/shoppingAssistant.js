@@ -246,6 +246,12 @@ const RESPONSE_COPY = {
     timeout:
       "The live search took too long, so I stopped it instead of making you wait. Try again or narrow the request to a model or budget.",
     sourceAnswer: "I found current sources worth checking.",
+    partialComparison:
+      "I could verify only one complete product card, so I am not showing an unverified comparison.",
+    partialSingle:
+      "I verified one complete product card. I omitted incomplete results instead of repeating unconfirmed prices or sellers.",
+    partialMultiple:
+      "I verified {count} complete product cards. I omitted incomplete results instead of repeating unconfirmed prices or sellers.",
   },
   ru: {
     malformed:
@@ -255,6 +261,12 @@ const RESPONSE_COPY = {
     timeout:
       "Поиск занял слишком много времени, поэтому я остановила его, чтобы не заставлять вас ждать. Попробуйте ещё раз или уточните модель и бюджет.",
     sourceAnswer: "Я нашла актуальные источники, которые стоит проверить.",
+    partialComparison:
+      "Мне удалось полностью подтвердить только одну карточку товара, поэтому я не показываю неподтверждённое сравнение.",
+    partialSingle:
+      "Мне удалось полностью подтвердить одну карточку товара. Неполные результаты скрыты, чтобы не повторять неподтверждённые цены или магазины.",
+    partialMultiple:
+      "Полностью подтверждённые карточки товаров: {count}. Неполные результаты скрыты, чтобы не повторять неподтверждённые цены или магазины.",
   },
   es: {
     malformed:
@@ -264,6 +276,12 @@ const RESPONSE_COPY = {
     timeout:
       "La búsqueda tardó demasiado y la detuve para no hacerte esperar. Inténtalo de nuevo o concreta el modelo y el presupuesto.",
     sourceAnswer: "Encontré fuentes actuales que vale la pena revisar.",
+    partialComparison:
+      "Solo pude verificar una ficha de producto completa, así que no mostraré una comparación sin verificar.",
+    partialSingle:
+      "Verifiqué una ficha de producto completa. Omití los resultados incompletos para no repetir precios o vendedores sin confirmar.",
+    partialMultiple:
+      "Verifiqué {count} fichas de producto completas. Omití los resultados incompletos para no repetir precios o vendedores sin confirmar.",
   },
   fr: {
     malformed:
@@ -273,6 +291,12 @@ const RESPONSE_COPY = {
     timeout:
       "La recherche a pris trop de temps et je l’ai arrêtée pour ne pas vous faire attendre. Réessayez ou précisez le modèle et le budget.",
     sourceAnswer: "J’ai trouvé des sources actuelles à vérifier.",
+    partialComparison:
+      "Je n’ai pu vérifier qu’une seule fiche produit complète, donc je n’affiche pas de comparaison non vérifiée.",
+    partialSingle:
+      "J’ai vérifié une fiche produit complète. J’ai écarté les résultats incomplets pour ne pas répéter de prix ou de vendeurs non confirmés.",
+    partialMultiple:
+      "J’ai vérifié {count} fiches produit complètes. J’ai écarté les résultats incomplets pour ne pas répéter de prix ou de vendeurs non confirmés.",
   },
   de: {
     malformed:
@@ -282,12 +306,24 @@ const RESPONSE_COPY = {
     timeout:
       "Die Suche dauerte zu lange und wurde beendet, damit Sie nicht weiter warten müssen. Versuchen Sie es erneut oder grenzen Sie Modell und Budget ein.",
     sourceAnswer: "Ich habe aktuelle Quellen gefunden, die sich zu prüfen lohnen.",
+    partialComparison:
+      "Ich konnte nur eine vollständige Produktkarte verifizieren und zeige daher keinen unbestätigten Vergleich.",
+    partialSingle:
+      "Ich habe eine vollständige Produktkarte verifiziert. Unvollständige Ergebnisse wurden ausgelassen, damit keine unbestätigten Preise oder Händler wiederholt werden.",
+    partialMultiple:
+      "Ich habe {count} vollständige Produktkarten verifiziert. Unvollständige Ergebnisse wurden ausgelassen, damit keine unbestätigten Preise oder Händler wiederholt werden.",
   },
 };
 
 function responseCopy(message, language) {
   const selected = responseLanguage(message, language);
   return RESPONSE_COPY[selected] || RESPONSE_COPY.en;
+}
+
+function partialRecommendationMessage(copy, count, comparisonRequest) {
+  if (comparisonRequest && count < 2) return copy.partialComparison;
+  if (count === 1) return copy.partialSingle;
+  return copy.partialMultiple.replace("{count}", String(count));
 }
 
 function timeoutResponse(message, language, catalogProducts, model) {
@@ -1260,10 +1296,22 @@ function createShoppingAssistant({
             };
           })
           .filter(Boolean);
-      const recommendations = deduplicateRecommendations(primaryRecommendations).slice(
-        0,
-        recommendationLimit(userMessage),
+      const deduplicatedRecommendations = deduplicateRecommendations(
+        primaryRecommendations,
       );
+      const recommendationCap = recommendationLimit(userMessage);
+      const recommendations = deduplicatedRecommendations.slice(
+        0,
+        recommendationCap,
+      );
+      const comparisonRequest = isComparisonRequest(userMessage);
+      const hasRejectedRecommendation =
+        primaryRecommendations.length !== structured.recommendations.length ||
+        deduplicatedRecommendations.length > recommendationCap;
+      const hasIncompleteComparison =
+        comparisonRequest && recommendations.length < 2;
+      const mustReplaceNarrative =
+        hasRejectedRecommendation || hasIncompleteComparison;
       const comparison = structured.comparison
         .map((row) => {
           const recommendation =
@@ -1294,7 +1342,7 @@ function createShoppingAssistant({
           };
         })
         .filter(Boolean)
-        .slice(0, isComparisonRequest(userMessage) ? 2 : 4);
+        .slice(0, comparisonRequest ? 2 : 4);
       const copy = responseCopy(userMessage, shopperLanguage);
       const remainingSources = trustedSources
         .filter(
@@ -1308,13 +1356,19 @@ function createShoppingAssistant({
       return {
         message:
           recommendations.length > 0
-            ? structured.answer
+            ? mustReplaceNarrative
+              ? partialRecommendationMessage(
+                  copy,
+                  recommendations.length,
+                  comparisonRequest,
+                )
+              : structured.answer
             : structured.malformed
               ? copy.malformed
               : remainingSources.length
                 ? copy.sourceAnswer
                 : copy.empty,
-        follow_up: structured.follow_up,
+        follow_up: mustReplaceNarrative ? "" : structured.follow_up,
         recommendations: recommendations.map(
           ({ _recommendation_index, product_key, ...recommendation }) =>
             recommendation,
