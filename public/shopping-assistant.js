@@ -70,6 +70,7 @@
   const LOCAL_GREETING_REPLIES = {
     en: ["Hey! 👋 How are you?", "Hi! 😊 How's it going?", "Hey there! How are things?"],
     ru: ["Привет! 👋 Как дела?", "Здорово! 😄 Как ты?", "Привет-привет! Как настроение?"],
+    az: ["Salam! 👋 Necəsiniz?", "Salam! 😊 Necə gedir?"],
     es: ["¡Hola! 👋 ¿Cómo estás?", "¡Buenas! 😊 ¿Qué tal?"],
     fr: ["Salut ! 👋 Comment ça va ?", "Bonjour ! 😊 Ça va ?"],
     de: ["Hallo! 👋 Wie geht’s?", "Hi! 😊 Wie geht es dir?"],
@@ -77,6 +78,7 @@
   const LOCAL_CHECK_IN_REPLIES = {
     en: ["I'm doing well, thanks 😄 How about you?", "All good here! How are you?"],
     ru: ["Привет! Всё хорошо 😄 А у тебя как?", "Всё отлично, спасибо! Как ты?", "Хорошо, спасибо 😊 Как твои дела?"],
+    az: ["Yaxşıyam, təşəkkür edirəm 😄 Siz necəsiniz?", "Hər şey yaxşıdır! Siz necəsiniz?"],
     es: ["¡Todo bien, gracias! 😄 ¿Y tú?", "¡Muy bien! ¿Cómo estás tú?"],
     fr: ["Tout va bien, merci ! 😄 Et vous ?", "Très bien, merci ! Et toi ?"],
     de: ["Mir geht’s gut, danke! 😄 Und dir?", "Alles gut! Wie geht es dir?"],
@@ -104,6 +106,11 @@
         "ru",
         /^(?:(?:привет(?:ик|ики)?|прив|здравствуй(?:те)?|здорово|здорова|здарова|здаров|салют|хай|ку|доброе утро|добрый день|добрый вечер|доброго времени суток)(?:\s+(?:бро|брат|друг|делия))?(?:\s+(?:как (?:у тебя )?(?:дела|делишки)|как (?:ты|сам|сама)|как поживаешь|как жизнь|как настроение|что нового|ч[её] как))?|(?:как (?:у тебя )?(?:дела|делишки)|как (?:ты|сам|сама)|как поживаешь|как жизнь|как настроение|что нового|ч[её] как|дела|делишки))$/u,
         /(?:как (?:у тебя )?(?:дела|делишки)|как (?:ты|сам|сама)|как поживаешь|как жизнь|как настроение|что нового|ч[её] как|дела|делишки)/u,
+      ],
+      [
+        "az",
+        /^(?:(?:salam|salamlar|sabahınız xeyir|axşamınız xeyir)(?:\s+(?:dostum|qardaş|bro))?(?:\s+(?:necəsən|necəsiniz|necə gedir|nə var nə yox))?|(?:necəsən|necəsiniz|necə gedir|nə var nə yox))$/u,
+        /(?:necəsən|necəsiniz|necə gedir|nə var nə yox)/u,
       ],
       [
         "es",
@@ -267,10 +274,10 @@
     if (RESPONSE_LABELS[selected]) return selected;
     return /[\u0400-\u04ff]/u.test(String(body.message || "")) ? "ru" : language();
   };
-  const responseTr = (body, key, fallback) =>
-    RESPONSE_LABELS[responseLanguage(body)]?.[key] || fallback;
+  const responseTr = (_body, key, fallback) =>
+    RESPONSE_LABELS[language()]?.[key] || tr(key, fallback);
   const responseOptionCountLabel = (body, count) => {
-    const selectedLanguage = responseLanguage(body);
+    const selectedLanguage = language();
     if (selectedLanguage === "ru") {
       const finalTwoDigits = count % 100;
       if (finalTwoDigits >= 11 && finalTwoDigits <= 14) return "вариантов";
@@ -285,39 +292,16 @@
       count === 1 ? "option" : "options",
     );
   };
-  const messageLanguage = (value) =>
-    /[\u0400-\u04ff]/u.test(String(value || "")) ? "ru" : language();
+  const messageLanguage = (value) => {
+    const text = String(value || "").toLocaleLowerCase();
+    if (/[\u0400-\u04ff]/u.test(text)) return "ru";
+    if (/[\u0259ğışüöç]/u.test(text) || /\b(?:salam|mən|istəyirəm|tap|qiymət|qulaqcıq|zəhmət)\b/u.test(text)) return "az";
+    if (/\b(?:hello|hey|hi|please|find|want|need|looking|buy|price|gift)\b/u.test(text)) return "en";
+    return language();
+  };
   function updateConversationLocale(body = {}) {
     const selectedLanguage = responseLanguage(body);
-    const localizedBody = { language: selectedLanguage };
-    input.placeholder = responseTr(
-      localizedBody,
-      "placeholder",
-      tr("placeholder", "What are you shopping for?"),
-    );
-    if (disclaimerElement) {
-      disclaimerElement.textContent = responseTr(
-        localizedBody,
-        "disclaimer",
-        tr(
-          "disclaimer",
-          "Prices and availability can change. Confirm final details with the retailer.",
-        ),
-      );
-    }
-    if (subtitleElement) {
-      subtitleElement.textContent = `D.E.L.I.A. · ${responseTr(
-        localizedBody,
-        "subtitle",
-        tr("subtitle", "Your OneDailyDrop shopping assistant"),
-      )}`;
-    }
     panel.dataset.conversationLanguage = selectedLanguage;
-    messagesElement
-      .querySelectorAll(".assistant-message.is-user .assistant-message-label")
-      .forEach((label) => {
-        label.textContent = responseTr(localizedBody, "you", "You");
-      });
   }
   const looksLikeSerializedPayload = (value) => {
     const text = String(value || "").trim();
