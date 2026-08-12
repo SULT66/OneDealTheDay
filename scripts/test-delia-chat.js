@@ -44,6 +44,7 @@ for (const required of [
   "AbortController",
   "REQUEST_TIMEOUT_MS = 33000",
   "normalizeResponseBody",
+  "localGreetingResponse",
   "recoverEmbeddedAnswer",
   "responseTr",
   "isDirectProductPage",
@@ -56,6 +57,26 @@ for (const required of [
 ]) {
   assert(client.includes(required), `Delia client is missing ${required}`);
 }
+
+assert(
+  client.includes("Привет! Я Delia. Скажи, что хочешь купить"),
+  "Delia does not answer a Russian greeting naturally",
+);
+const greetingBranch = client.indexOf("const greeting = localGreetingResponse(question)");
+const networkBranch = client.indexOf('fetch("/api/shopping-assistant"', greetingBranch);
+assert(
+  greetingBranch >= 0 && networkBranch > greetingBranch &&
+    client.slice(greetingBranch, networkBranch).includes("return;"),
+  "A simple greeting is not resolved locally before the shopping request",
+);
+assert(
+  client.includes('card.classList.add("is-image-missing")'),
+  "A failed partial-offer image still leaves the mobile card in the image layout",
+);
+assert(
+  client.includes("if (!greetingLanguage) return \"\""),
+  "Shopping requests that merely begin with a greeting may be intercepted",
+);
 
 for (const required of [
   ".assistant-sidebar",
