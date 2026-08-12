@@ -1842,7 +1842,16 @@ const client = {
       [
         { title: "Nike A", retailer: "eBay" },
         { title: "Nike B", retailer: "eBay" },
-        { title: "Nike C", retailer: "Nike" },
+        {
+          title: "Nike C",
+          retailer: "Nike",
+          url: "https://www.nike.com/t/nike-c",
+        },
+        {
+          title: "Nike D",
+          retailer: "Nike US",
+          url: "https://nike.com/t/nike-d",
+        },
       ],
       3,
     ).length,
