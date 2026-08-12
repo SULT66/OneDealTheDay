@@ -20,6 +20,10 @@ const { deduplicationKeys, isDailyPickEligible } = require("./ranker");
 const { methodology, methodologyMain } = require("./methodology");
 const { createEditorialBrief } = require("./editorialBrief");
 const { createShoppingAssistant } = require("./shoppingAssistant");
+const {
+  createEbayClient: createAssistantEbayClient,
+  searchProducts: searchAssistantEbayProducts,
+} = require("./providers/ebay");
 const renderShoppingAssistantPanel = require("./shoppingAssistantPanel");
 const { passwordResetEmail, subscriptionEmail, clubWaitlistEmail } = require("./mailer");
 const {
@@ -49,7 +53,35 @@ const {
 } = require("./i18n");
 
 const app = express();
-const shoppingAssistant = createShoppingAssistant({ db, sourceSql, market });
+const assistantEbayClient =
+  c.ebayClientId && c.ebayClientSecret && /^\d{10}$/.test(c.ebayCampaignId)
+    ? createAssistantEbayClient({
+        clientId: c.ebayClientId,
+        clientSecret: c.ebayClientSecret,
+        campaignId: c.ebayCampaignId,
+        environment: c.ebayEnvironment,
+      })
+    : null;
+const assistantRetailerSearch = assistantEbayClient
+  ? ({ query, market: selectedMarket }) =>
+      searchAssistantEbayProducts({
+        clientId: c.ebayClientId,
+        clientSecret: c.ebayClientSecret,
+        campaignId: c.ebayCampaignId,
+        environment: c.ebayEnvironment,
+        keywords: [query],
+        market: selectedMarket,
+        client: assistantEbayClient,
+        detailLimit: 18,
+        targetEligible: 6,
+      })
+  : null;
+const shoppingAssistant = createShoppingAssistant({
+  db,
+  sourceSql,
+  market,
+  retailerSearch: assistantRetailerSearch,
+});
 app.set("trust proxy", 1);
 app.disable("x-powered-by");
 const publicDir = path.join(__dirname, "..", "public");
@@ -723,8 +755,8 @@ const shell = (title, description, canonical, body, schema = null, image = "", r
   const html = `<!doctype html><html lang="${esc(locale)}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0a1020"><title>${esc(title)}</title><meta name="description" content="${esc(description.slice(0,160))}"><meta name="robots" content="${esc(robotsContent)}"><link rel="canonical" href="${esc(canonical)}"><link rel="icon" href="/favicon.svg" type="image/svg+xml">${alternates}${imageConnectionHints(image)}<meta property="og:type" content="${ogType}"><meta property="og:site_name" content="OneDailyDrop"><meta property="og:locale" content="${esc(ogLocale)}"><meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(description.slice(0,180))}"><meta property="og:url" content="${esc(canonical)}">${image ? `<meta property="og:image" content="${esc(image)}"><meta property="og:image:alt" content="${esc(title)}">` : ""}<meta name="twitter:card" content="${image ? "summary_large_image" : "summary"}"><meta name="twitter:title" content="${esc(title)}"><meta name="twitter:description" content="${esc(description.slice(0,180))}">${image ? `<meta name="twitter:image" content="${esc(image)}">` : ""}<link rel="stylesheet" href="/styles.css?v=20260731-brand-lockup"><link rel="stylesheet" href="/brand-theme.css?v=20260731-brand-lockup"><link rel="stylesheet" href="/liquid-glass.css?v=20260731-brand-lockup"><script type="application/ld+json">${JSON.stringify(pageSchema).replace(/</g,"\\u003c")}</script><script>window.__ODD_LANGUAGE__=${JSON.stringify(language)};window.__ODD_LOCALE__=${JSON.stringify(locale)};window.__ODD_TEXT__=${JSON.stringify(clientCopy(language)).replace(/</g, "\\u003c")};</script></head><body>${sharedHeader(code, language, req)}${body}${sharedFooter(code, language)}<script src="/theme.js?v=20260728-i18n2"></script><script src="/site-shell.js?v=20260728-i18n2"></script><script src="/click-tracking.js?v=20260805-stage2"></script></body></html>`;
   const versionedHtml = html
     .replace("/styles.css?v=20260731-brand-lockup", "/styles.css?v=20260808-assistant")
-    .replace("</head>", '<link rel="stylesheet" href="/i18n.css?v=20260808-assistant"><link rel="stylesheet" href="/shopping-assistant.css?v=20260811-greeting-layout"></head>')
-    .replace("</body>", `${shoppingAssistantPanel(code, language)}<script src="/shopping-assistant.js?v=20260811-greeting-layout"></script></body>`);
+    .replace("</head>", '<link rel="stylesheet" href="/i18n.css?v=20260808-assistant"><link rel="stylesheet" href="/shopping-assistant.css?v=20260811-query-relevance"></head>')
+    .replace("</body>", `${shoppingAssistantPanel(code, language)}<script src="/shopping-assistant.js?v=20260811-query-relevance"></script></body>`);
   return localizeHtml(versionedHtml, language);
 };
 

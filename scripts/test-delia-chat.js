@@ -59,8 +59,16 @@ for (const required of [
 }
 
 assert(
-  client.includes("Привет! Я Delia. Скажи, что хочешь купить"),
+  client.includes("Привет! 👋 Что хочешь купить?"),
   "Delia does not answer a Russian greeting naturally",
+);
+assert(
+  client.includes("bro|dude|man|there"),
+  "A friendly 'hi bro' still falls through to the shopping-scope refusal",
+);
+assert(
+  client.includes("item.in_catalog || item.verified_retailer"),
+  "Verified retailer API results are rejected by the browser trust gate",
 );
 const greetingBranch = client.indexOf("const greeting = localGreetingResponse(question)");
 const networkBranch = client.indexOf('fetch("/api/shopping-assistant"', greetingBranch);
