@@ -2400,9 +2400,9 @@ function selectRetailerDiverseCandidates(items, limit) {
   const selectedItems = new Set();
   const retailers = new Set();
   for (const item of candidates) {
-    const retailer = normalizeSearch(
-      item?.retailer || retailerFromUrl(item?.url),
-    );
+    const retailer =
+      sourceHostKey(item?.url) ||
+      normalizeSearch(item?.retailer || retailerFromUrl(item?.url));
     if (!retailer || retailers.has(retailer)) continue;
     selected.push(item);
     selectedItems.add(item);
