@@ -29,6 +29,18 @@
   const productContextElement = panel.querySelector(
     "[data-assistant-product-context]",
   );
+  const clarificationElement = panel.querySelector(
+    "[data-assistant-clarification]",
+  );
+  const clarificationQuestionElement = panel.querySelector(
+    "[data-assistant-clarification-question]",
+  );
+  const clarificationProgressElement = panel.querySelector(
+    "[data-assistant-clarification-progress]",
+  );
+  const clarificationOptionsElement = panel.querySelector(
+    "[data-assistant-clarification-options]",
+  );
   const sidebar = panel.querySelector("[data-assistant-sidebar]");
   const copy = (() => {
     try {
@@ -48,6 +60,7 @@
   let loadingTimer = null;
   let requestTimeoutTimer = null;
   let requestTimedOut = false;
+  let clarificationFlow = null;
 
   function readStorage(key, fallback) {
     try {
@@ -572,6 +585,21 @@
       clarifying_questions: Array.isArray(value.clarifying_questions)
         ? value.clarifying_questions.slice(0, 3)
         : [],
+      clarification_prompts: (Array.isArray(value.clarification_prompts)
+        ? value.clarification_prompts
+        : (Array.isArray(value.clarifying_questions)
+          ? value.clarifying_questions.map((question) => ({ question, options: [] }))
+          : []))
+        .filter((prompt) => prompt && typeof prompt === "object")
+        .slice(0, 3)
+        .map((prompt) => ({
+          question: String(prompt.question || "").slice(0, 240),
+          options: (Array.isArray(prompt.options) ? prompt.options : [])
+            .map((option) => String(option || "").slice(0, 80))
+            .filter(Boolean)
+            .slice(0, 4),
+        }))
+        .filter((prompt) => prompt.question),
     };
   }
   const makeId = () =>
@@ -637,6 +665,7 @@
   }
 
   function setActiveChat(chat) {
+    clearClarificationBar();
     activeChat = chat || createDraftChat();
     activeChat.shopping_context = String(activeChat.shopping_context || "").slice(
       0,
@@ -1411,6 +1440,58 @@
     host.append(list);
   }
 
+  function clearClarificationBar() {
+    clarificationFlow = null;
+    if (!clarificationElement) return;
+    clarificationElement.hidden = true;
+    clarificationQuestionElement.textContent = "";
+    clarificationProgressElement.textContent = "";
+    clarificationOptionsElement.replaceChildren();
+    input.placeholder = tr("placeholder", "What are you shopping for?");
+  }
+
+  function renderClarificationStep() {
+    if (!clarificationFlow || !clarificationElement) return;
+    const prompt = clarificationFlow.prompts[clarificationFlow.index];
+    if (!prompt) return clearClarificationBar();
+    clarificationElement.hidden = false;
+    clarificationQuestionElement.textContent = prompt.question;
+    clarificationProgressElement.textContent = `${clarificationFlow.index + 1}/${clarificationFlow.prompts.length}`;
+    clarificationOptionsElement.replaceChildren();
+    for (const option of prompt.options) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = option;
+      button.addEventListener("click", () => answerClarification(option));
+      clarificationOptionsElement.append(button);
+    }
+    input.placeholder = prompt.question;
+    input.focus();
+  }
+
+  function showClarificationBar(prompts = []) {
+    if (!prompts.length) return clearClarificationBar();
+    clarificationFlow = { prompts, index: 0, answers: [] };
+    renderClarificationStep();
+  }
+
+  function answerClarification(value) {
+    const answer = String(value || "").trim();
+    if (!clarificationFlow || !answer) return;
+    const prompt = clarificationFlow.prompts[clarificationFlow.index];
+    clarificationFlow.answers.push(`${prompt.question} ${answer}`);
+    input.value = "";
+    clarificationFlow.index += 1;
+    if (clarificationFlow.index < clarificationFlow.prompts.length) {
+      renderClarificationStep();
+      return;
+    }
+    const combinedAnswer = clarificationFlow.answers.join(" ");
+    clearClarificationBar();
+    input.placeholder = tr("placeholder", "What are you shopping for?");
+    sendQuestion(combinedAnswer);
+  }
+
   function renderSources(sources = [], host, responseBody = {}) {
     if (!sources.length || !host) return;
     const section = document.createElement("details");
@@ -1635,6 +1716,8 @@
     const copyElement = message.querySelector(".assistant-message-copy");
     copyElement.textContent = body.message || "";
     renderClarifyingQuestions(body.clarifying_questions, message);
+    if (body.clarification_prompts.length) showClarificationBar(body.clarification_prompts);
+    else clearClarificationBar();
     renderMarketContext(body, message);
     renderRecommendations(body.recommendations, message, body);
     renderPartialOffers(body.partial_offers, message, body);
@@ -2043,6 +2126,10 @@
   );
   form?.addEventListener("submit", (event) => {
     event.preventDefault();
+    if (clarificationFlow) {
+      answerClarification(input.value);
+      return;
+    }
     sendQuestion(input.value);
   });
   input?.addEventListener("keydown", (event) => {

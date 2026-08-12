@@ -148,6 +148,12 @@ const MARKET_SEARCH_RETAILERS = {
   fr: ["fnac.com", "darty.com", "amazon.fr", "boulanger.com"],
   de: ["mediamarkt.de", "amazon.de", "saturn.de", "otto.de"],
 };
+const PRODUCT_FAMILY_RETAILERS = {
+  us: {
+    footwear: ["nike.com", "footlocker.com", "zappos.com"],
+    electronics: ["bestbuy.com", "walmart.com", "target.com"],
+  },
+};
 const MARKET_LABELS = {
   en: { us: "the United States", ca: "Canada", uk: "the United Kingdom", fr: "France", de: "Germany" },
   ru: { us: "США", ca: "Канада", uk: "Великобритания", fr: "Франция", de: "Германия" },
@@ -415,6 +421,35 @@ const ASSISTANT_RESPONSE_FORMAT = {
       "comparison_notes",
       "comparison",
     ],
+    additionalProperties: false,
+  },
+};
+
+const RETAILER_DISCOVERY_RESPONSE_FORMAT = {
+  type: "json_schema",
+  name: "retailer_product_discovery",
+  strict: true,
+  schema: {
+    type: "object",
+    properties: {
+      offers: {
+        type: "array",
+        maxItems: 1,
+        items: {
+          type: "object",
+          properties: {
+            title: { type: "string" },
+            retailer: { type: "string" },
+            price: { type: "string" },
+            url: { type: "string" },
+            image_url: { type: "string" },
+          },
+          required: ["title", "retailer", "price", "url", "image_url"],
+          additionalProperties: false,
+        },
+      },
+    },
+    required: ["offers"],
     additionalProperties: false,
   },
 };
@@ -1082,6 +1117,74 @@ function broadDiscoveryQuestions(missionValue, language, latestRequest, hadActiv
   return { message: copy.intro, questions: [copy.budget, categoryQuestion] };
 }
 
+const CLARIFICATION_CHOICES = {
+  en: {
+    budget: ["Under $100", "$100-$200", "$200+"],
+    headphone: ["Earbuds", "Over-ear", "No preference"],
+    tv: ["Up to 43 inches", "50-55 inches", "65 inches or larger"],
+    general: ["Best quality", "Most features", "Lowest price"],
+    size: ["US 8", "US 9", "US 10", "Another size"],
+  },
+  ru: {
+    budget: ["До $100", "$100-$200", "$200+"],
+    headphone: ["Вкладыши", "Полноразмерные", "Без разницы"],
+    tv: ["До 43 дюймов", "50-55 дюймов", "65 дюймов и больше"],
+    general: ["Лучшее качество", "Больше функций", "Самая низкая цена"],
+    size: ["US 8", "US 9", "US 10", "Другой размер"],
+  },
+  az: {
+    budget: ["$100-a qədər", "$100-$200", "$200+"],
+    headphone: ["Qulaqdaxili", "Qulaqüstü", "Fərqi yoxdur"],
+    tv: ["43 düymə qədər", "50-55 düym", "65 düym və daha böyük"],
+    general: ["Ən yaxşı keyfiyyət", "Daha çox funksiya", "Ən aşağı qiymət"],
+    size: ["US 8", "US 9", "US 10", "Başqa ölçü"],
+  },
+  es: {
+    budget: ["Menos de $100", "$100-$200", "$200+"],
+    headphone: ["De botón", "De diadema", "Sin preferencia"],
+    tv: ["Hasta 43 pulgadas", "50-55 pulgadas", "65 pulgadas o más"],
+    general: ["Mejor calidad", "Más funciones", "Precio más bajo"],
+    size: ["US 8", "US 9", "US 10", "Otra talla"],
+  },
+  fr: {
+    budget: ["Moins de 100 $", "100-200 $", "200 $ et plus"],
+    headphone: ["Écouteurs", "Casque", "Sans préférence"],
+    tv: ["Jusqu’à 43 pouces", "50-55 pouces", "65 pouces ou plus"],
+    general: ["Meilleure qualité", "Plus de fonctions", "Prix le plus bas"],
+    size: ["US 8", "US 9", "US 10", "Autre taille"],
+  },
+  de: {
+    budget: ["Unter 100 $", "100-200 $", "200 $ und mehr"],
+    headphone: ["In-Ear", "Over-Ear", "Keine Präferenz"],
+    tv: ["Bis 43 Zoll", "50-55 Zoll", "65 Zoll oder größer"],
+    general: ["Beste Qualität", "Meiste Funktionen", "Niedrigster Preis"],
+    size: ["US 8", "US 9", "US 10", "Andere Größe"],
+  },
+};
+
+function clarificationPrompts(questions, language) {
+  const copy = DISCOVERY_QUESTION_COPY[language] || DISCOVERY_QUESTION_COPY.en;
+  const choices = CLARIFICATION_CHOICES[language] || CLARIFICATION_CHOICES.en;
+  return (Array.isArray(questions) ? questions : []).slice(0, 3).map((question) => {
+    const normalized = clean(question);
+    const type = normalized === copy.budget
+      ? "budget"
+      : normalized === copy.headphone
+        ? "headphone"
+        : normalized === copy.tv
+          ? "tv"
+          : normalized === copy.general
+            ? "general"
+            : /(?:\bsize\b|размер|ölçü|talla|taille|größe)/iu.test(normalized)
+              ? "size"
+              : "custom";
+    return {
+      question: normalized,
+      options: type === "custom" ? [] : choices[type],
+    };
+  }).filter((prompt) => prompt.question);
+}
+
 function retailerSearchQueries(missionValue, fallbackRequest = "") {
   const mission = normalizeShoppingMission(missionValue);
   const product = mission.product_type || retailerSearchQuery(fallbackRequest) || "product";
@@ -1113,6 +1216,36 @@ function retailerWebSearchQueries(missionValue, fallbackRequest = "", marketCode
     .slice(0, 4)
     .map((host) => `${primary} site:${host}`);
   return [...new Set([...siteQueries, ...baseQueries])].slice(0, 10);
+}
+
+function retailerDiscoveryHosts(missionValue, marketCode = "us") {
+  const mission = normalizeShoppingMission(missionValue);
+  const family = missionProductFamily(mission.product_type);
+  const brandHosts = {
+    nike: "nike.com",
+    adidas: "adidas.com",
+    samsung: "samsung.com",
+  };
+  const preferredHosts = {
+    amazon: `amazon.${marketCode === "uk" ? "co.uk" : marketCode === "us" ? "com" : marketCode}`,
+    "best buy": marketCode === "ca" ? "bestbuy.ca" : "bestbuy.com",
+    target: "target.com",
+    walmart: marketCode === "ca" ? "walmart.ca" : "walmart.com",
+  };
+  const familyGroup = ["shoes", "clothing", "underwear"].includes(family)
+    ? "footwear"
+    : "electronics";
+  const familyHosts = PRODUCT_FAMILY_RETAILERS[marketCode]?.[familyGroup] || [];
+  const defaults = MARKET_SEARCH_RETAILERS[marketCode] || [];
+  const requested = preferredHosts[mission.preferred_retailer.toLowerCase()];
+  return [...new Set([
+    requested,
+    ...mission.brands.map((brand) => brandHosts[brand]),
+    ...familyHosts,
+    ...defaults,
+  ].filter(Boolean))]
+    .filter((host) => (MARKET_RETAILER_HOSTS[marketCode] || new Set()).has(host))
+    .slice(0, 3);
 }
 
 function requestedMarketCode(value, fallback = "us") {
@@ -2257,6 +2390,67 @@ function extractImageResults(response) {
   return [...images.values()].slice(0, 12);
 }
 
+async function discoverRetailerProductPages({
+  openai,
+  model,
+  mission,
+  resolvedRequest,
+  selectedMarket,
+  shopperLanguage,
+  signal,
+  timeoutMs,
+}) {
+  const hosts = retailerDiscoveryHosts(mission, selectedMarket.code);
+  const query = retailerSearchQueries(mission, resolvedRequest)[0] || resolvedRequest;
+  const searches = hosts.map(async (host) => {
+    try {
+      const response = await withRequestTimeout(
+        (requestSignal) => openai.responses.create({
+          model,
+          store: false,
+          reasoning: { effort: "low" },
+          max_output_tokens: 420,
+          instructions: `Find one current product sold on ${host} that matches the shopping request. Search only ${host}. Return a specific direct product-detail page, never a category, collection, search, editorial, or review page. The page must serve market ${selectedMarket.code.toUpperCase()} and use ${selectedMarket.currency}. Copy the exact cited HTTPS product URL. Copy a price only when the page supports it. Copy image_url only from an image result tied to that exact product page. If any requirement cannot be verified, return an empty offers array. Write the product title exactly as sold and use ${shopperLanguage} only for ordinary prose.`,
+          text: { format: RETAILER_DISCOVERY_RESPONSE_FORMAT },
+          tools: [webSearchTool(selectedMarket.code, { images: true })],
+          tool_choice: "required",
+          include: ["web_search_call.action.sources", "web_search_call.results"],
+          input: JSON.stringify({ query: `${query} site:${host}`, shopping_request: resolvedRequest }),
+        }, { signal: requestSignal }),
+        signal,
+        timeoutMs,
+      );
+      const parsed = parseStructuredObject(response?.output_text);
+      const offer = Array.isArray(parsed?.offers) ? parsed.offers[0] : null;
+      return {
+        offers: offer ? [{
+          title: cleanDisplayText(offer.title).slice(0, 140),
+          retailer: cleanDisplayText(offer.retailer).slice(0, 80) || retailerFromUrl(offer.url),
+          price: cleanDisplayText(offer.price).slice(0, 40),
+          badge: "",
+          reason: "",
+          url: safeUrl(offer.url),
+          action_label: "",
+          source_type: "web",
+          image_url: safeUrl(offer.image_url),
+          catalog_product_id: 0,
+        }] : [],
+        sources: extractSources(response || {}),
+        images: extractImageResults(response || {}),
+      };
+    } catch (error) {
+      if (signal?.aborted) throw error;
+      return { offers: [], sources: [], images: [] };
+    }
+  });
+  const results = await Promise.all(searches);
+  return {
+    offers: results.flatMap((result) => result.offers),
+    sources: results.flatMap((result) => result.sources),
+    images: results.flatMap((result) => result.images),
+  };
+}
+
 function comparableUrl(value) {
   const safe = safeUrl(value);
   if (!/^https:\/\//i.test(safe)) return "";
@@ -2775,6 +2969,8 @@ function createShoppingAssistant({
   scopeTimeoutMs = SCOPE_TIMEOUT_MS,
   searchTimeoutMs = SEARCH_TIMEOUT_MS,
   retailerSearchTimeoutMs = 12000,
+  storeDiscoveryEnabled = !client,
+  storeDiscoveryTimeoutMs = 9000,
 } = {}) {
   const openai = client || (apiKey ? new OpenAI({ apiKey }) : null);
 
@@ -2952,6 +3148,7 @@ function createShoppingAssistant({
           products: [],
           sources: [],
           clarifying_questions: questions,
+          clarification_prompts: clarificationPrompts(questions, shopperLanguage),
           needs_clarification: true,
           model,
           scope: "shopping",
@@ -3039,6 +3236,18 @@ function createShoppingAssistant({
           ],
         }),
       });
+      const storeDiscoveryPromise = storeDiscoveryEnabled
+        ? discoverRetailerProductPages({
+            openai,
+            model,
+            mission: activeMission,
+            resolvedRequest,
+            selectedMarket,
+            shopperLanguage,
+            signal,
+            timeoutMs: storeDiscoveryTimeoutMs,
+          }).catch(() => ({ offers: [], sources: [], images: [] }))
+        : Promise.resolve({ offers: [], sources: [], images: [] });
       let response;
       try {
         response = await withRequestTimeout(
@@ -3085,14 +3294,43 @@ function createShoppingAssistant({
         }
       }
 
-      const trustedSources = extractSources(response || {});
-      const webImages = extractImageResults(response || {});
+      let trustedSources = extractSources(response || {});
+      let webImages = extractImageResults(response || {});
       const retailerProducts = await retailerResultsPromise;
       const structured = normalizeAssistantResponse(response?.output_text, {
         language: shopperLanguage,
         userMessage,
       });
       const copy = responseCopy(userMessage, shopperLanguage);
+      const initialRetailerHosts = new Set([
+        ...retailerProducts.map((product) => sourceHostKey(product.url)),
+        ...structured.recommendations
+          .filter((recommendation) =>
+            recommendation.source_type === "catalog" ||
+            (isDirectProductPage(recommendation.url) &&
+              trustedWebUrl(recommendation.url, trustedSources)),
+          )
+          .map((recommendation) => sourceHostKey(recommendation.url)),
+      ].filter(Boolean));
+      if (storeDiscoveryEnabled && initialRetailerHosts.size < 2) {
+        const discovery = await storeDiscoveryPromise;
+        const sourceMap = new Map(
+          [...trustedSources, ...discovery.sources]
+            .map((source) => [comparableUrl(source.url), source])
+            .filter(([url]) => url),
+        );
+        const imageMap = new Map(
+          [...webImages, ...discovery.images]
+            .map((image) => [comparableUrl(image.image_url), image])
+            .filter(([url]) => url),
+        );
+        trustedSources = [...sourceMap.values()].slice(0, 24);
+        webImages = [...imageMap.values()].slice(0, 24);
+        structured.recommendations.push(...discovery.offers.map((offer) => ({
+          ...offer,
+          reason: copy.sourceOfferReason,
+        })));
+      }
       const structuredRecommendationCandidates = structured.recommendations
         .map((recommendation, index) => {
           const product = referencedProducts.get(
@@ -3345,13 +3583,19 @@ function createShoppingAssistant({
         ? "no_match"
         : verifiedRetailerCount
           ? "exact_matches"
-          : structured.result_state;
+          : structured.result_state === "no_match"
+            ? "closest_alternatives"
+            : structured.result_state;
       const preferredRetailer = requestedRetailer(userMessage);
       const usefulFollowUp = usefulShoppingFollowUp(
         resolvedRequest,
         shopperLanguage,
         visibleOfferCount,
       );
+      const finalFollowUp = usefulFollowUp ||
+        (mustReplaceNarrative || !visibleOfferCount || resultState === "no_match"
+          ? ""
+          : structured.follow_up);
       return {
         message: structured.malformed && !visibleOfferCount
           ? copy.malformed
@@ -3365,11 +3609,7 @@ function createShoppingAssistant({
               resultState,
               lowerPriceRequested: isLowerPriceRequest(userMessage),
             }),
-        follow_up:
-          usefulFollowUp ||
-          (mustReplaceNarrative || !visibleOfferCount || resultState === "no_match"
-            ? ""
-            : structured.follow_up),
+        follow_up: finalFollowUp,
         recommendations: recommendations.map(
           ({ _recommendation_index, product_key, ...recommendation }) =>
             recommendation,
@@ -3384,6 +3624,9 @@ function createShoppingAssistant({
         products: [...referencedProducts.values()].slice(0, 6),
         sources: remainingSources,
         clarifying_questions: [],
+        clarification_prompts: finalFollowUp
+          ? clarificationPrompts([finalFollowUp], shopperLanguage)
+          : [],
         needs_clarification: false,
         model,
         scope: "shopping",
@@ -3413,6 +3656,7 @@ module.exports = {
   missionFromText,
   normalizeAssistantResponse,
   recommendationLimit,
+  retailerDiscoveryHosts,
   retailerSearchQueries,
   retailerWebSearchQueries,
   responseLanguage,

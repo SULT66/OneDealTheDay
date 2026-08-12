@@ -373,6 +373,59 @@ body.assistant-open {
   background: var(--surface);
   box-shadow: 0 -14px 36px rgba(14, 24, 42, 0.05);
 }
+.assistant-clarification-bar {
+  margin: 0 0 10px;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--accent) 58%, var(--line));
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--accent) 9%, var(--surface));
+  box-shadow: 0 10px 30px rgba(51, 90, 220, 0.12);
+}
+.assistant-clarification-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.35;
+}
+.assistant-clarification-heading span {
+  flex: none;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+.assistant-clarification-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 11px;
+}
+.assistant-clarification-options button {
+  min-height: 38px;
+  padding: 8px 13px;
+  border: 1px solid color-mix(in srgb, var(--accent) 42%, var(--line));
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.assistant-clarification-options button:hover,
+.assistant-clarification-options button:focus-visible {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  outline: none;
+}
+.assistant-clarification-bar small {
+  display: block;
+  margin-top: 9px;
+  color: var(--muted);
+  font-size: 11px;
+}
 .assistant-input-row {
   display: flex;
   align-items: flex-end;
@@ -1298,6 +1351,16 @@ body.assistant-open {
   }
   .assistant-form {
     padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
+  }
+  .assistant-clarification-bar {
+    padding: 12px;
+  }
+  .assistant-clarification-options {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .assistant-clarification-options button {
+    border-radius: 11px;
   }
   .assistant-input-row {
     gap: 6px;
