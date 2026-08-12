@@ -49,8 +49,8 @@ const {
 } = require("./i18n");
 
 const app = express();
-const assistantRetailerSearch = ({ query, market: selectedMarket }) =>
-  searchForAssistant(c, {query, market:selectedMarket});
+const assistantRetailerSearch = ({ query, queries, market: selectedMarket }) =>
+  searchForAssistant(c, {query, queries, market:selectedMarket});
 const shoppingAssistant = createShoppingAssistant({
   db,
   sourceSql,
@@ -195,7 +195,7 @@ app.post("/api/shopping-assistant", shoppingAssistantRateLimit, async (req, res)
   const requestedMarket = normalizeMarket(req.body?.market);
   const selectedMarket = market(requestedMarket || req.market || marketFromIp(req).code);
   const requestedLanguage = String(req.body?.language || req.language || "en").trim().toLowerCase().split("-")[0];
-  const language = ["en", "es", "fr", "de"].includes(requestedLanguage) ? requestedLanguage : "en";
+  const language = ["en", "ru", "es", "fr", "de"].includes(requestedLanguage) ? requestedLanguage : "en";
   const requestController = new AbortController();
   req.once("aborted", () => requestController.abort());
   res.once("close", () => {
@@ -206,6 +206,7 @@ app.post("/api/shopping-assistant", shoppingAssistantRateLimit, async (req, res)
       message:req.body?.message,
       messages:req.body?.messages,
       shoppingContext:req.body?.shopping_context,
+      shoppingMission:req.body?.shopping_mission,
       marketCode:selectedMarket.code,
       language,
       signal:requestController.signal

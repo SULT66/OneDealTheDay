@@ -3,9 +3,14 @@ const Database = require("better-sqlite3");
 const {
   classifyShoppingScope,
   createShoppingAssistant,
+  greetingContext,
+  mergeShoppingMission,
+  missionFromText,
   normalizeAssistantResponse,
   recommendationLimit,
+  retailerSearchQueries,
   searchCatalog,
+  shoppingMissionText,
   urlMatchesMarket,
 } = require("../src/shoppingAssistant");
 
@@ -125,6 +130,56 @@ assert(
     !urlMatchesMarket("https://www.amazon.ca/dp/B000000002", "us") &&
     !urlMatchesMarket("https://www.samsung.com/us/tvs/the-frame/model-55/", "de"),
   "A foreign retailer page passed the regional market gate",
+);
+
+for (const greeting of [
+  "приветик как ты бро",
+  "делишки",
+  "ну привет, как жизнь, бро",
+]) {
+  assert(
+    greetingContext(greeting),
+    `A natural Russian greeting still falls through to the scope refusal: ${greeting}`,
+  );
+}
+
+const winterSneakerRequest =
+  "ок мне нужны классные кроссовки на зиму типа адидас или найк такие молодежные";
+const winterSneakerMission = mergeShoppingMission(
+  null,
+  {},
+  winterSneakerRequest,
+  false,
+);
+assert.deepStrictEqual(winterSneakerMission.brands, ["adidas", "nike"]);
+assert.strictEqual(winterSneakerMission.product_type, "sneakers");
+assert.strictEqual(winterSneakerMission.season, "winter");
+assert.strictEqual(winterSneakerMission.style, "youth");
+assert.deepStrictEqual(
+  retailerSearchQueries(winterSneakerMission, winterSneakerRequest).slice(0, 2),
+  ["adidas sneakers winter youth", "nike sneakers winter youth"],
+  "A two-brand Russian request was not split into useful retailer queries",
+);
+const winterFollowUpMission = mergeShoppingMission(
+  winterSneakerMission,
+  {},
+  "в сша нет кроссовок?",
+  false,
+);
+assert.deepStrictEqual(winterFollowUpMission.brands, ["adidas", "nike"]);
+assert.strictEqual(winterFollowUpMission.season, "winter");
+assert.strictEqual(winterFollowUpMission.market, "us");
+assert(
+  shoppingMissionText(winterFollowUpMission).includes("adidas or nike sneakers"),
+  "A skeptical follow-up replaced the active shopping mission",
+);
+assert.deepStrictEqual(missionFromText("найк кроссовки").brands, ["nike"]);
+assert(
+  urlMatchesMarket(
+    "https://www.nike.com/t/air-max-90-mens-shoes-abc123/CN8490-100",
+    "us",
+  ),
+  "A direct Nike US product page was rejected by the market gate",
 );
 const matches = searchCatalog(
   db,
@@ -318,8 +373,8 @@ const client = {
   );
   assert.strictEqual(
     greetingResult.scope,
-    "off_topic",
-    "A greeting should stay out of shopping model history",
+    "social",
+    "A greeting should be recognized as friendly social conversation",
   );
   const russianCheckInResult = await offlineGreetingAssistant.respond({
     message: "привет как дела",
@@ -334,8 +389,8 @@ const client = {
   );
   assert.strictEqual(
     russianCheckInResult.scope,
-    "off_topic",
-    "A short check-in should stay out of shopping model history",
+    "social",
+    "A short check-in should be recognized as social conversation",
   );
   const punctuatedRussianCheckIn = await offlineGreetingAssistant.respond({
     message: "Привет, как дела?",
@@ -622,7 +677,7 @@ const client = {
   );
   assert.strictEqual(tvConversationResult.result_state, "exact_matches");
   assert(
-    tvConversationResult.message.includes("Current retailer options") &&
+    tvConversationResult.message.includes("I found") &&
       !tvConversationResult.message.includes("sources worth checking"),
     "The verified TV result kept the empty generic source narrative",
   );
@@ -646,9 +701,11 @@ const client = {
     tvConversationCalls[1].input,
   ).resolved_shopping_request;
   assert(
-    resolvedTvRequest.includes("Samsung TVs under $500") &&
-      resolvedTvRequest.includes("i said TV"),
-    "The live search did not receive the resolved request and correction",
+    resolvedTvRequest.toLowerCase().includes("samsung") &&
+      resolvedTvRequest.toLowerCase().includes("tv") &&
+      resolvedTvRequest.includes("under 500") &&
+      resolvedTvRequest.includes("in US"),
+    "The live search did not receive the structured active shopping mission",
   );
 
   const frameCalls = [];
@@ -1483,7 +1540,7 @@ const client = {
     "Delia asked another question instead of showing the closest Fold offers",
   );
   assert(
-    foldFollowUpResult.message.startsWith("Прямого предложения") &&
+    foldFollowUpResult.message.startsWith("В регионе") &&
       !foldFollowUpResult.message.includes("Хотите"),
     "The impossible-budget Fold response did not lead with a direct localized outcome",
   );
@@ -1658,8 +1715,8 @@ const client = {
   );
   assert(
     /calvin/i.test(calvinCorrection.resolved_request) &&
-      /доставк/u.test(calvinCorrection.resolved_request) &&
-      /боксерк/u.test(calvinCorrection.resolved_request),
+      /home delivery/i.test(calvinCorrection.resolved_request) &&
+      /boxer briefs/i.test(calvinCorrection.resolved_request),
     `The corrected context lost the brand, delivery request, or requested subtype: ${calvinCorrection.resolved_request}`,
   );
   assert(
@@ -1901,10 +1958,10 @@ const client = {
     "Delia did not perform the active search herself after being told to check",
   );
   assert(
-    calvinRetailerQueries.every(
+    calvinRetailerQueries.some(
       (query) =>
-        /calvin/i.test(query) && /klein/i.test(query) && /underwear/i.test(query),
-    ),
+        /calvin klein/i.test(query) && /boxer briefs/i.test(query),
+    ) && calvinRetailerQueries.every((query) => /boxer briefs/i.test(query)),
     "The retailer retry lost the active Calvin Klein underwear intent",
   );
   assert(
@@ -1989,8 +2046,7 @@ const client = {
     adidasRetailerQueries.some(
       (query) =>
         /adidas/i.test(query) &&
-        /clothing/i.test(query) &&
-        /tank/i.test(query) &&
+        /tank top/i.test(query) &&
         /black/i.test(query) &&
         !/[а-яё]/iu.test(query),
     ),
