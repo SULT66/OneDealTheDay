@@ -12,6 +12,7 @@
   const closeButton = panel.querySelector("[data-shopping-assistant-close]");
   const form = panel.querySelector("form");
   const input = panel.querySelector("textarea");
+  const subtitleElement = panel.querySelector("[data-assistant-subtitle]");
   const disclaimerElement = panel.querySelector("[data-assistant-disclaimer]");
   const messagesElement = panel.querySelector("[data-assistant-messages]");
   const conversationElement = panel.querySelector(".assistant-conversation");
@@ -67,32 +68,39 @@
 
   const tr = (key, fallback) => copy[key] || fallback;
   const LOCAL_GREETING_REPLIES = {
-    en: "Hey! 👋 What are you looking to buy?",
-    ru: "Привет! 👋 Что хочешь купить?",
-    es: "¡Hola! 👋 ¿Qué quieres comprar?",
-    fr: "Salut ! 👋 Qu’est-ce que vous cherchez à acheter ?",
-    de: "Hallo! 👋 Was möchtest du kaufen?",
+    en: ["Hey! 👋 How are you?", "Hi! 😊 How's it going?", "Hey there! How are things?"],
+    ru: ["Привет! 👋 Как дела?", "Здорово! 😄 Как ты?", "Привет-привет! Как настроение?"],
+    es: ["¡Hola! 👋 ¿Cómo estás?", "¡Buenas! 😊 ¿Qué tal?"],
+    fr: ["Salut ! 👋 Comment ça va ?", "Bonjour ! 😊 Ça va ?"],
+    de: ["Hallo! 👋 Wie geht’s?", "Hi! 😊 Wie geht es dir?"],
   };
   const LOCAL_CHECK_IN_REPLIES = {
-    en: "I'm doing well, thanks 😄 What are you looking to buy?",
-    ru: "Привет! Всё хорошо, спасибо 😄 Что хочешь купить?",
-    es: "¡Todo bien, gracias! 😄 ¿Qué quieres comprar?",
-    fr: "Tout va bien, merci ! 😄 Qu’est-ce que vous cherchez à acheter ?",
-    de: "Mir geht’s gut, danke! 😄 Was möchtest du kaufen?",
+    en: ["I'm doing well, thanks 😄 How about you?", "All good here! How are you?"],
+    ru: ["Привет! Всё хорошо 😄 А у тебя как?", "Всё отлично, спасибо! Как ты?", "Хорошо, спасибо 😊 Как твои дела?"],
+    es: ["¡Todo bien, gracias! 😄 ¿Y tú?", "¡Muy bien! ¿Cómo estás tú?"],
+    fr: ["Tout va bien, merci ! 😄 Et vous ?", "Très bien, merci ! Et toi ?"],
+    de: ["Mir geht’s gut, danke! 😄 Und dir?", "Alles gut! Wie geht es dir?"],
+  };
+  const stableReply = (replies, seed) => {
+    const hash = [...String(seed || "")].reduce(
+      (total, character) => total + character.codePointAt(0),
+      0,
+    );
+    return replies[hash % replies.length];
   };
   const localGreetingResponse = (value) => {
     const normalized = String(value || "")
       .normalize("NFKC")
       .trim()
       .toLocaleLowerCase()
-      .replace(/[!?.,…:;¡¿]+/gu, " ")
+      .replace(/[^\p{L}\p{N}'’]+/gu, " ")
       .replace(/\s+/g, " ")
       .trim();
     const greeting = [
       [
         "ru",
-        /^(?:(?:привет(?:ик)?|здравствуй(?:те)?|доброе утро|добрый день|добрый вечер)(?:\s+(?:бро|брат|друг))?(?:\s+(?:как (?:у тебя )?дела|как ты|что нового))?|(?:как (?:у тебя )?дела|как ты|что нового))$/u,
-        /(?:как (?:у тебя )?дела|как ты|что нового)/u,
+        /^(?:(?:привет(?:ик|ики)?|прив|здравствуй(?:те)?|здорово|здорова|здарова|здаров|салют|хай|ку|доброе утро|добрый день|добрый вечер|доброго времени суток)(?:\s+(?:бро|брат|друг|делия))?(?:\s+(?:как (?:у тебя )?(?:дела|делишки)|как (?:ты|сам|сама)|как поживаешь|как жизнь|как настроение|что нового|ч[её] как))?|(?:как (?:у тебя )?(?:дела|делишки)|как (?:ты|сам|сама)|как поживаешь|как жизнь|как настроение|что нового|ч[её] как))$/u,
+        /(?:как (?:у тебя )?(?:дела|делишки)|как (?:ты|сам|сама)|как поживаешь|как жизнь|как настроение|что нового|ч[её] как)/u,
       ],
       [
         "es",
@@ -118,12 +126,15 @@
     if (!greeting) return "";
     const [greetingLanguage, , checkInPattern] = greeting;
     if (checkInPattern.test(normalized)) {
-      return LOCAL_CHECK_IN_REPLIES[greetingLanguage];
+      return stableReply(LOCAL_CHECK_IN_REPLIES[greetingLanguage], normalized);
     }
     if (greetingLanguage === "en") {
-      return tr("greeting", LOCAL_GREETING_REPLIES.en);
+      const translated = tr("greeting", "");
+      if (translated && !/(?:buy|shopping|looking for)/i.test(translated)) {
+        return translated;
+      }
     }
-    return LOCAL_GREETING_REPLIES[greetingLanguage];
+    return stableReply(LOCAL_GREETING_REPLIES[greetingLanguage], normalized);
   };
   const RESPONSE_LABELS = {
     en: {
@@ -146,6 +157,9 @@
       actionSimilar: "Show similar models", actionRetry: "Search again",
       you: "You", placeholder: "What are you shopping for?",
       disclaimer: "Prices and availability can change. Confirm final details with the retailer.",
+      subtitle: "Your OneDailyDrop shopping assistant",
+      totalPrice: "Total delivered", comparisonReady: "I compared the products already shown — no new search needed.",
+      noNewStores: "I couldn't find any new matching offers in other stores yet.",
       positionBestOverall: "Best overall", positionLowestPrice: "Lowest price", positionAlternative: "Alternative",
       availability: "Availability", pack: "Pack", sizes: "Sizes",
     },
@@ -169,6 +183,9 @@
       actionSimilar: "Показать похожие модели", actionRetry: "Повторить поиск",
       you: "Вы", placeholder: "Что хотите купить?",
       disclaimer: "Цена и наличие могут измениться. Проверьте итоговые условия у магазина.",
+      subtitle: "Ваш помощник по покупкам OneDailyDrop",
+      totalPrice: "Итого с доставкой", comparisonReady: "Сравнила уже найденные варианты — повторный поиск не нужен.",
+      noNewStores: "Новых подходящих предложений в других магазинах пока не найдено.",
       positionBestOverall: "Лучший выбор", positionLowestPrice: "Самая низкая цена", positionAlternative: "Альтернатива",
       availability: "Наличие", pack: "В упаковке", sizes: "Размеры",
     },
@@ -285,6 +302,13 @@
         ),
       );
     }
+    if (subtitleElement) {
+      subtitleElement.textContent = `D.E.L.I.A. · ${responseTr(
+        localizedBody,
+        "subtitle",
+        tr("subtitle", "Your OneDailyDrop shopping assistant"),
+      )}`;
+    }
     panel.dataset.conversationLanguage = selectedLanguage;
     messagesElement
       .querySelectorAll(".assistant-message.is-user .assistant-message-label")
@@ -363,6 +387,33 @@
       return true;
     }
   };
+  const numericAmount = (value) => {
+    if (value == null || value === "") return null;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+  const shippingCostFromText = (value) => {
+    const text = String(value || "").trim();
+    if (!text) return null;
+    if (/(?:\bfree\s+(?:shipping|delivery)\b|бесплатн\p{L}*\s+доставк\p{L}*)/iu.test(text)) {
+      return 0;
+    }
+    const amount = text.match(
+      /(?:USD|CAD|GBP|EUR|AUD|[$€£])\s*([\d]+(?:[.,]\d{1,2})?)\s*(?:shipping|delivery|доставк\p{L}*)/iu,
+    );
+    return amount ? numericAmount(String(amount[1]).replace(",", ".")) : null;
+  };
+  const totalDelivered = (item = {}) => {
+    const explicit = numericAmount(item.total_price ?? item.landed_cost);
+    if (explicit != null) return explicit;
+    const base = numericAmount(item.price_value);
+    if (base == null) return null;
+    const explicitShipping = numericAmount(item.shipping_cost);
+    const shipping = explicitShipping == null
+      ? shippingCostFromText(item.delivery)
+      : explicitShipping;
+    return shipping == null ? base : base + Math.max(0, shipping);
+  };
   function normalizeResponseBody(value) {
     if (!value || typeof value !== "object" || Array.isArray(value)) {
       return {
@@ -407,36 +458,49 @@
       )
         .filter((item) => item && typeof item === "object")
         .slice(0, 3)
-        .map((item) => ({
-          ...item,
-          url: safeBrowserUrl(item.url),
-          image_url: safeBrowserUrl(item.image_url),
-          position_role: ["best_overall", "lowest_price", "alternative"].includes(
-            item.position_role,
-          )
-            ? item.position_role
-            : "alternative",
-          availability: String(item.availability || "").slice(0, 100),
-          available_sizes: (Array.isArray(item.available_sizes)
-            ? item.available_sizes
-            : [])
-            .map((size) => String(size).slice(0, 20))
-            .filter(Boolean)
-            .slice(0, 8),
-          pack_count:
-            Number.isInteger(Number(item.pack_count)) && Number(item.pack_count) > 1
-              ? Number(item.pack_count)
-              : null,
-          badge: "",
-          other_offers: (Array.isArray(item.other_offers)
-            ? item.other_offers
-            : []
-          )
-            .filter((offer) => offer && typeof offer === "object")
-            .map((offer) => ({ ...offer, url: safeBrowserUrl(offer.url) }))
-            .filter((offer) => offer.url)
-            .slice(0, 2),
-        }))
+        .map((item) => {
+          const priceValue = numericAmount(item.price_value);
+          const shippingCost = numericAmount(item.shipping_cost) ??
+            shippingCostFromText(item.delivery);
+          const totalPrice = totalDelivered({
+            ...item,
+            price_value: priceValue,
+            shipping_cost: shippingCost,
+          });
+          return {
+            ...item,
+            price_value: priceValue,
+            shipping_cost: shippingCost,
+            total_price: totalPrice,
+            url: safeBrowserUrl(item.url),
+            image_url: safeBrowserUrl(item.image_url),
+            position_role: ["best_overall", "lowest_price", "alternative"].includes(
+              item.position_role,
+            )
+              ? item.position_role
+              : "alternative",
+            availability: String(item.availability || "").slice(0, 100),
+            available_sizes: (Array.isArray(item.available_sizes)
+              ? item.available_sizes
+              : [])
+              .map((size) => String(size).slice(0, 20))
+              .filter(Boolean)
+              .slice(0, 8),
+            pack_count:
+              Number.isInteger(Number(item.pack_count)) && Number(item.pack_count) > 1
+                ? Number(item.pack_count)
+                : null,
+            badge: "",
+            other_offers: (Array.isArray(item.other_offers)
+              ? item.other_offers
+              : []
+            )
+              .filter((offer) => offer && typeof offer === "object")
+              .map((offer) => ({ ...offer, url: safeBrowserUrl(offer.url) }))
+              .filter((offer) => offer.url)
+              .slice(0, 2),
+          };
+        })
         .filter((item) => {
           const hasPrice =
             item.price_value != null || hasDisplayPrice(item.price);
@@ -681,6 +745,39 @@
     }
   }
 
+  function localizeRetailerFact(value, type, body = {}) {
+    const raw = String(value || "").trim();
+    if (!raw || responseLanguage(body) !== "ru") return raw;
+    if (type === "availability") {
+      const availability = {
+        "in stock": "В наличии",
+        "out of stock": "Нет в наличии",
+        "limited stock": "Ограниченное наличие",
+        available: "В наличии",
+      };
+      return availability[raw.toLowerCase()] || raw;
+    }
+    if (type === "delivery") {
+      const free = raw.match(/^free\s+(?:shipping|delivery)(?:\s+via\s+(.+))?$/i);
+      if (free) return `Бесплатная доставка${free[1] ? ` · ${free[1]}` : ""}`;
+      const paid = raw.match(/^((?:USD|CAD|GBP|EUR|AUD|[$€£])\s*[\d.,]+)\s+(?:shipping|delivery)(?:\s+via\s+(.+))?$/i);
+      if (paid) return `Доставка ${paid[1]}${paid[2] ? ` · ${paid[2]}` : ""}`;
+      if (/^home delivery available$/i.test(raw)) return "Доступна доставка домой";
+      if (/^delivery options shown at checkout$/i.test(raw)) return "Варианты доставки при оформлении";
+      if (/^standard home delivery$/i.test(raw)) return "Стандартная доставка домой";
+      return raw;
+    }
+    if (type === "returns") {
+      const calendarDays = raw.match(/^(\d+)\s+calendar days(?:,\s*seller-paid return shipping)?$/i);
+      if (calendarDays) {
+        return `${calendarDays[1]} дней${/seller-paid/i.test(raw) ? " · обратную доставку оплачивает продавец" : ""}`;
+      }
+      const accepted = raw.match(/^returns accepted within\s+(\d+)\s+days?$/i);
+      if (accepted) return `Возврат в течение ${accepted[1]} дней`;
+    }
+    return raw;
+  }
+
   function productKey(product) {
     return String(product.catalog_product_id || product.id || product.url || "");
   }
@@ -701,7 +798,13 @@
         title: product.title,
         retailer: product.retailer || "",
         price_value: product.price_value ?? product.price ?? null,
+        shipping_cost: product.shipping_cost ?? null,
+        total_price: product.total_price ?? totalDelivered(product),
         currency: product.currency || "USD",
+        reason: product.reason || "",
+        availability: product.availability || "",
+        delivery: product.delivery || "",
+        returns: product.returns || "",
         image_url: product.image_url || "",
         url: product.url || "",
         score: product.score ?? null,
@@ -946,10 +1049,18 @@
       reason.textContent = recommendation.reason;
       const facts = document.createElement("dl");
       facts.className = "assistant-recommendation-facts";
+      const deliveredTotal = totalDelivered(recommendation);
+      const basePrice = numericAmount(recommendation.price_value);
       for (const [labelText, value] of [
-        [responseTr(responseBody, "availability", "Availability"), recommendation.availability],
-        [responseTr(responseBody, "delivery", "Delivery"), recommendation.delivery],
-        [responseTr(responseBody, "returns", "Returns"), recommendation.returns],
+        [
+          responseTr(responseBody, "totalPrice", "Total delivered"),
+          deliveredTotal != null && basePrice != null && deliveredTotal > basePrice
+            ? money(deliveredTotal, recommendation.currency)
+            : "",
+        ],
+        [responseTr(responseBody, "availability", "Availability"), localizeRetailerFact(recommendation.availability, "availability", responseBody)],
+        [responseTr(responseBody, "delivery", "Delivery"), localizeRetailerFact(recommendation.delivery, "delivery", responseBody)],
+        [responseTr(responseBody, "returns", "Returns"), localizeRetailerFact(recommendation.returns, "returns", responseBody)],
         [
           responseTr(responseBody, "pack", "Pack"),
           recommendation.pack_count ? String(recommendation.pack_count) : "",
@@ -1150,7 +1261,7 @@
       field.append(label, detail);
       card.append(field);
     };
-    for (const item of comparison.slice(0, 2)) {
+    for (const item of comparison.slice(0, 3)) {
       const card = document.createElement("dl");
       card.className = "assistant-comparison-item";
       const title = document.createElement(item.url ? "a" : "strong");
@@ -1170,6 +1281,17 @@
           : item.price,
         true,
       );
+      const comparisonTotal = numericAmount(item.total_price);
+      const comparisonPrice = numericAmount(item.price);
+      addField(
+        card,
+        responseTr(responseBody, "totalPrice", "Total delivered"),
+        comparisonTotal != null &&
+          (comparisonPrice == null || comparisonTotal > comparisonPrice)
+          ? money(comparisonTotal, item.currency)
+          : "",
+        true,
+      );
       addField(
         card,
         responseTr(responseBody, "bestFor", "Best for"),
@@ -1183,8 +1305,21 @@
           `${item.score}/100`,
         );
       }
-      addField(card, responseTr(responseBody, "delivery", "Delivery"), item.delivery);
-      addField(card, responseTr(responseBody, "returns", "Returns"), item.returns);
+      addField(
+        card,
+        responseTr(responseBody, "availability", "Availability"),
+        localizeRetailerFact(item.availability, "availability", responseBody),
+      );
+      addField(
+        card,
+        responseTr(responseBody, "delivery", "Delivery"),
+        localizeRetailerFact(item.delivery, "delivery", responseBody),
+      );
+      addField(
+        card,
+        responseTr(responseBody, "returns", "Returns"),
+        localizeRetailerFact(item.returns, "returns", responseBody),
+      );
       addField(
         card,
         responseTr(responseBody, "strengths", "Strengths"),
@@ -1283,6 +1418,83 @@
     host.append(section);
   }
 
+  function showLocalComparison(body, labelOverride = "") {
+    const recommendations = (body.recommendations || []).slice(0, 3);
+    if (recommendations.length < 2 || requestController) return;
+    const latestAction = activeChat.messages.at(-1)?.response?.trigger_action;
+    if (latestAction === "compare") return;
+    const label = labelOverride ||
+      responseTr(body, "actionCompare", "Compare these products");
+    const userRecord = {
+      id: makeId(),
+      role: "user",
+      content: label,
+      action: "compare",
+      include_in_model: false,
+      created_at: new Date().toISOString(),
+    };
+    activeChat.messages.push(userRecord);
+    addMessage("user", label).dataset.messageId = userRecord.id;
+    const comparisonBody = normalizeResponseBody({
+      message: responseTr(
+        body,
+        "comparisonReady",
+        "I compared the products already shown — no new search needed.",
+      ),
+      follow_up: "",
+      recommendations: [],
+      partial_offers: [],
+      comparison_notes: [],
+      comparison: recommendations.map((recommendation) => ({
+        title: recommendation.title,
+        retailer: recommendation.retailer,
+        price: recommendation.price_value ?? recommendation.price,
+        total_price: totalDelivered(recommendation),
+        currency: recommendation.currency,
+        best_for: recommendation.reason,
+        score: recommendation.score,
+        availability: recommendation.availability,
+        delivery: recommendation.delivery,
+        returns: recommendation.returns,
+        url: recommendation.url,
+      })),
+      products: [],
+      sources: [],
+      clarifying_questions: [],
+      needs_clarification: false,
+      scope: "shopping",
+      language: responseLanguage(body),
+      result_state: "exact_matches",
+      trigger_action: "compare",
+    });
+    const assistantRecord = {
+      id: makeId(),
+      role: "assistant",
+      content: comparisonBody.message,
+      response: comparisonBody,
+      include_in_model: false,
+      created_at: new Date().toISOString(),
+    };
+    const message = addMessage("assistant", comparisonBody.message);
+    message.dataset.messageId = assistantRecord.id;
+    renderResponse(message, comparisonBody, assistantRecord);
+    activeChat.messages.push(assistantRecord);
+    persistChats();
+    scrollToLatest();
+  }
+
+  function cheaperRequest(body, label) {
+    const totals = (body.recommendations || [])
+      .map((recommendation) => totalDelivered(recommendation))
+      .filter((value) => value != null && value > 0);
+    if (!totals.length) return label;
+    const ceiling = Math.max(0.01, Math.min(...totals) - 0.01).toFixed(2);
+    const currency = body.currency || body.recommendations?.[0]?.currency || "USD";
+    return responseLanguage(body) === "ru"
+      ? `Найти дешевле: до ${ceiling} ${currency} с учетом доставки`
+      : `${label}: under ${ceiling} ${currency} including delivery`;
+  }
+
   function renderFollowUpActions(body, host) {
     const recommendations = body.recommendations || [];
     const partialOffers = body.partial_offers || [];
@@ -1291,31 +1503,41 @@
       body.needs_clarification ||
       (!recommendations.length && !partialOffers.length && body.result_state !== "no_match")
     ) return;
-    const products = body.recommendations.map((item) => item.title).join(", ");
     const section = document.createElement("div");
     section.className = "assistant-quick-actions";
     const actions = recommendations.length
       ? [
           ...(recommendations.length >= 2
-            ? [["actionCompare", "Compare these products", `: ${products}`]]
+            ? [["compare", "actionCompare", "Compare these products"]]
             : []),
-          ["actionCheaper", "Find cheaper options", ""],
-          ["actionStores", "Check other stores", ""],
+          ["cheaper", "actionCheaper", "Find cheaper options"],
+          ["stores", "actionStores", "Check other stores"],
         ]
       : [
-          ["actionStores", "Check other stores", ""],
-          ["actionSimilar", "Show similar models", ""],
-          ["actionRetry", "Search again", ""],
+          ["stores", "actionStores", "Check other stores"],
+          ["similar", "actionSimilar", "Show similar models"],
+          ["retry", "actionRetry", "Search again"],
         ];
-    for (const [key, fallback, suffix] of actions.slice(0, 3)) {
+    for (const [action, key, fallback] of actions
+      .filter(([action]) => body.trigger_action !== action)
+      .slice(0, 3)) {
       const label = responseTr(body, key, fallback);
       section.append(
-        createButton(label, "assistant-quick-action", () =>
-          sendQuestion(`${label}${suffix}`),
-        ),
+        createButton(label, "assistant-quick-action", () => {
+          if (action === "compare") {
+            showLocalComparison(body);
+            return;
+          }
+          sendQuestion(label, {
+            action,
+            requestQuestion: action === "cheaper"
+              ? cheaperRequest(body, label)
+              : label,
+          });
+        }),
       );
     }
-    host.append(section);
+    if (section.childElementCount) host.append(section);
   }
 
   function renderFeedback(record, host, responseBody = {}) {
@@ -1458,6 +1680,42 @@
       .slice(-10);
   }
 
+  function comparableSourceUrl(value) {
+    try {
+      const url = new URL(value, window.location.href);
+      url.hash = "";
+      for (const key of [...url.searchParams.keys()]) {
+        if (/^(?:utm_|ref$|ref_|tag$|aff|affiliate|campaign)/i.test(key)) {
+          url.searchParams.delete(key);
+        }
+      }
+      return url.href.replace(/\/$/, "");
+    } catch {
+      return "";
+    }
+  }
+
+  function previousSourceUrls() {
+    return new Set(
+      activeChat.messages.flatMap((record) =>
+        (record.response?.sources || [])
+          .map((source) => comparableSourceUrl(source.url))
+          .filter(Boolean),
+      ),
+    );
+  }
+
+  function previousOfferUrls() {
+    return new Set(
+      activeChat.messages.flatMap((record) => [
+        ...(record.response?.recommendations || []),
+        ...(record.response?.partial_offers || []),
+      ]
+        .map((offer) => comparableSourceUrl(offer.url))
+        .filter(Boolean)),
+    );
+  }
+
   function startLoading(message) {
     const stages = [
       tr("thinkingSearch", "Searching for suitable products…"),
@@ -1483,14 +1741,26 @@
     input.disabled = busy;
   }
 
-  async function sendQuestion(value) {
+  async function sendQuestion(value, options = {}) {
     const question = String(value ?? input.value).trim();
-    if (!question || requestController) return;
+    const requestQuestion = String(options.requestQuestion || question).trim();
+    const action = String(options.action || "");
+    const latestResponse = activeChat.messages.at(-1)?.response;
+    if (
+      !question ||
+      !requestQuestion ||
+      requestController ||
+      (action && latestResponse?.trigger_action === action &&
+        latestResponse?.result_state === "no_match")
+    ) return;
     const priorHistory = modelHistory();
+    const seenSources = previousSourceUrls();
+    const seenOffers = previousOfferUrls();
     const userRecord = {
       id: makeId(),
       role: "user",
       content: question,
+      action,
       include_in_model: true,
       created_at: new Date().toISOString(),
     };
@@ -1538,7 +1808,7 @@
         headers: { "Content-Type": "application/json" },
         signal: requestController.signal,
         body: JSON.stringify({
-          message: question,
+          message: requestQuestion,
           messages: priorHistory,
           shopping_context: activeChat.shopping_context || "",
           market: market(),
@@ -1552,6 +1822,39 @@
             tr("failed", "The assistant is unavailable right now."),
         );
       const body = normalizeResponseBody(responseBody);
+      const responseSources = new Set();
+      body.sources = body.sources.filter((source) => {
+        const key = comparableSourceUrl(source.url);
+        if (!key || seenSources.has(key) || responseSources.has(key)) return false;
+        responseSources.add(key);
+        return true;
+      });
+      body.trigger_action = action;
+      if (action === "stores") {
+        body.recommendations = body.recommendations.filter(
+          (recommendation) =>
+            !seenOffers.has(comparableSourceUrl(recommendation.url)),
+        );
+        body.partial_offers = body.partial_offers.filter(
+          (offer) => !seenOffers.has(comparableSourceUrl(offer.url)),
+        );
+        if (!body.recommendations.length && !body.partial_offers.length) {
+          body.comparison = [];
+          body.comparison_notes = [];
+        }
+      }
+      if (
+        action === "stores" &&
+        !(body.recommendations || []).length &&
+        !(body.partial_offers || []).length
+      ) {
+        body.message = responseTr(
+          body,
+          "noNewStores",
+          "I couldn't find any new matching offers in other stores yet.",
+        );
+        body.result_state = "no_match";
+      }
       activeChat.conversation_language = body.language || messageLanguage(question);
       if (body.scope === "shopping" && body.resolved_request) {
         activeChat.shopping_context = body.resolved_request;
@@ -1701,11 +2004,19 @@
     clearHistory,
   );
   compareSavedButton?.addEventListener("click", () => {
-    const names = savedProducts
-      .slice(0, 4)
-      .map((product) => product.title)
-      .join(" vs ");
-    if (names) sendQuestion(`${tr("compareSaved", "Compare saved")}: ${names}`);
+    const recommendations = savedProducts.slice(0, 3);
+    if (recommendations.length < 2) return;
+    showLocalComparison(
+      {
+        recommendations,
+        language:
+          recommendations[0].response_language ||
+          activeChat.conversation_language ||
+          language(),
+      },
+      tr("compareSaved", "Compare saved"),
+    );
+    sidebar.classList.remove("is-open");
   });
   panel.querySelectorAll("[data-assistant-prompt]").forEach((button) =>
     button.addEventListener("click", () =>

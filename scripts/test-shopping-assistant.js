@@ -311,10 +311,10 @@ const client = {
     marketCode: "ca",
     language: "en",
   });
-  assert.strictEqual(
-    greetingResult.message,
-    "Hey! 👋 What are you looking to buy?",
-    "A friendly greeting was answered with the shopping-scope refusal",
+  assert(
+    /how|going|things/i.test(greetingResult.message) &&
+      !/buy|shopping/i.test(greetingResult.message),
+    "A friendly greeting was answered with a rigid shopping prompt",
   );
   assert.strictEqual(
     greetingResult.scope,
@@ -327,10 +327,10 @@ const client = {
     marketCode: "us",
     language: "ru",
   });
-  assert.strictEqual(
-    russianCheckInResult.message,
-    "Привет! Всё хорошо, спасибо 😄 Что хочешь купить?",
-    "A short Russian check-in fell through to the shopping-scope refusal",
+  assert(
+    /(?:у тебя|как ты|твои дела)/iu.test(russianCheckInResult.message) &&
+      !/(?:купить|товар)/u.test(russianCheckInResult.message),
+    "A short Russian check-in fell through to a rigid shopping prompt",
   );
   assert.strictEqual(
     russianCheckInResult.scope,
@@ -343,10 +343,31 @@ const client = {
     marketCode: "us",
     language: "ru",
   });
-  assert.strictEqual(
-    punctuatedRussianCheckIn.message,
-    "Привет! Всё хорошо, спасибо 😄 Что хочешь купить?",
+  assert(
+    /(?:у тебя|как ты|твои дела)/iu.test(punctuatedRussianCheckIn.message) &&
+      !/(?:купить|товар)/u.test(punctuatedRussianCheckIn.message),
     "Natural punctuation broke the Russian check-in fast path",
+  );
+  const colloquialRussianCheckIn = await offlineGreetingAssistant.respond({
+    message: "Привет как делишки",
+    messages: [],
+    marketCode: "us",
+    language: "ru",
+  });
+  assert(
+    /(?:у тебя|как ты|твои дела)/iu.test(colloquialRussianCheckIn.message) &&
+      !/(?:купить|товар)/u.test(colloquialRussianCheckIn.message),
+    "The colloquial Russian check-in was not handled as friendly small talk",
+  );
+  const colloquialRussianGreeting = await offlineGreetingAssistant.respond({
+    message: "здарова",
+    messages: [],
+    marketCode: "us",
+    language: "ru",
+  });
+  assert(
+    /(?:как дела|как ты|как настроение)/iu.test(colloquialRussianGreeting.message),
+    "A colloquial Russian greeting was not recognized",
   );
   await assert.rejects(
     offlineGreetingAssistant.respond({
@@ -1644,6 +1665,106 @@ const client = {
   assert(
     /размер/u.test(calvinCorrection.follow_up),
     "An apparel result without a size did not ask the one useful fit question",
+  );
+
+  const cheaperNikeAssistant = createShoppingAssistant({
+    db,
+    sourceSql,
+    market: (code) => ({ code, currency: "USD" }),
+    retailerSearch: async () => [
+      {
+        external_id: "nike-retro",
+        product_key: "nike:retro",
+        title: "Nike Air Force One Retro Shoes White Trainers Silver Swoosh Sneakers Men Shoes",
+        brand: "Nike",
+        category: "Shoes",
+        current_price: 84.43,
+        currency: "USD",
+        image_url: "https://images.example.com/nike-retro.jpg",
+        affiliate_url: "https://www.ebay.com/itm/100000000001",
+        retailer_name: "eBay",
+        shipping_summary: "USD 20.00 shipping via USPS Priority Mail",
+        return_summary: "30 calendar days",
+        availability: "In stock",
+      },
+      {
+        external_id: "nike-fv5951001",
+        product_key: "nike:fv5951001",
+        title: "Shoes Nike Air Force 1 FV5951001",
+        brand: "Nike",
+        category: "Shoes",
+        current_price: 215,
+        currency: "USD",
+        image_url: "https://images.example.com/nike-fv5951001.jpg",
+        affiliate_url: "https://www.ebay.com/itm/100000000002",
+        retailer_name: "eBay",
+        shipping_summary: "Free shipping via Standard Shipping",
+        return_summary: "30 calendar days",
+        availability: "In stock",
+      },
+      {
+        external_id: "nike-fv5951111",
+        product_key: "nike:fv5951111",
+        title: "Shoes Nike Air Force 1 Le (gs) FV5951111",
+        brand: "Nike",
+        category: "Shoes",
+        current_price: 222,
+        currency: "USD",
+        image_url: "https://images.example.com/nike-fv5951111.jpg",
+        affiliate_url: "https://www.ebay.com/itm/100000000003",
+        retailer_name: "eBay",
+        shipping_summary: "Free shipping via Standard Shipping",
+        return_summary: "30 calendar days",
+        availability: "In stock",
+      },
+    ],
+    client: {
+      responses: {
+        create: async (request) => request.tools
+          ? {
+              output: [],
+              output_text: JSON.stringify({
+                answer: "Нашла более дешёвые варианты.",
+                result_state: "exact_matches",
+                conversation_title: "Nike Air Force 1",
+                follow_up: "",
+                recommendations: [],
+                comparison_notes: [],
+                comparison: [],
+              }),
+            }
+          : {
+              output: [],
+              output_text: JSON.stringify({
+                scope: "shopping",
+                needs_clarification: false,
+                clarification_reason: "none",
+                clarifying_questions: [],
+                language: "ru",
+              }),
+            },
+      },
+    },
+  });
+  const cheaperNike = await cheaperNikeAssistant.respond({
+    message: "Найти дешевле: до 214.99 USD с учетом доставки",
+    messages: [],
+    shoppingContext: "Найди кроссовки Nike Air Force 1",
+    marketCode: "us",
+    language: "ru",
+  });
+  assert.strictEqual(
+    cheaperNike.recommendations.length,
+    1,
+    "A cheaper request still returned offers above the delivered-price ceiling",
+  );
+  assert.strictEqual(cheaperNike.recommendations[0].price_value, 84.43);
+  assert.strictEqual(cheaperNike.recommendations[0].shipping_cost, 20);
+  assert.strictEqual(cheaperNike.recommendations[0].total_price, 104.43);
+  assert.strictEqual(
+    cheaperNike.recommendations[0].position_role,
+    "lowest_price",
+    "The cheaper result is not labeled as the lowest delivered price",
   );
 
   const calvinRetry = await calvinAssistant.respond({
