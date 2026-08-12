@@ -2391,8 +2391,30 @@ function rankRecommendationCandidates(items, request) {
         right.evidence - left.evidence ||
         left.index - right.index;
     })
-    .map(({ item }) => item)
-    .slice(0, MAX_RECOMMENDATIONS);
+    .map(({ item }) => item);
+}
+
+function selectRetailerDiverseCandidates(items, limit) {
+  const candidates = Array.isArray(items) ? items : [];
+  const selected = [];
+  const selectedItems = new Set();
+  const retailers = new Set();
+  for (const item of candidates) {
+    const retailer = normalizeSearch(
+      item?.retailer || retailerFromUrl(item?.url),
+    );
+    if (!retailer || retailers.has(retailer)) continue;
+    selected.push(item);
+    selectedItems.add(item);
+    retailers.add(retailer);
+    if (selected.length >= limit) return selected;
+  }
+  for (const item of candidates) {
+    if (selectedItems.has(item)) continue;
+    selected.push(item);
+    if (selected.length >= limit) break;
+  }
+  return selected;
 }
 
 function assignRecommendationRoles(items, request = "") {
@@ -3010,25 +3032,27 @@ function createShoppingAssistant({
         recommendationCandidates,
       );
       const recommendationCap = recommendationLimit(userMessage);
-      const visualCandidates = deduplicatedCandidates.filter(
+      const displayableCandidates = deduplicatedCandidates.filter(
         (recommendation) =>
+          recommendation.evidence_level === "partial" ||
           /^https:\/\//i.test(safeUrl(recommendation.image_url)),
       );
       const lowerPriceBudget = isLowerPriceRequest(resolvedRequest)
         ? catalogSearchArgs(resolvedRequest).max_price
         : 0;
       const budgetFilteredCandidates = lowerPriceBudget
-        ? visualCandidates.filter(
+        ? displayableCandidates.filter(
             (recommendation) =>
               landedPrice(recommendation) > 0 &&
               landedPrice(recommendation) <= lowerPriceBudget,
           )
-        : visualCandidates;
+        : displayableCandidates;
+      const rankedCandidates = rankRecommendationCandidates(
+        budgetFilteredCandidates,
+        resolvedRequest,
+      );
       const visibleCandidates = assignRecommendationRoles(
-        rankRecommendationCandidates(
-          budgetFilteredCandidates,
-          resolvedRequest,
-        ).slice(0, recommendationCap),
+        selectRetailerDiverseCandidates(rankedCandidates, recommendationCap),
         resolvedRequest,
       );
       const recommendations = visibleCandidates.filter(

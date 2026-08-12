@@ -1522,13 +1522,13 @@ const client = {
   assert.strictEqual(foldFollowUpResult.recommendations.length, 0);
   assert.strictEqual(
     foldFollowUpResult.partial_offers.length,
-    0,
-    "A product page without a tied photo was still rendered as a card",
+    3,
+    "Direct retailer product pages without tied photos were hidden instead of shown as partial offers",
   );
   assert.strictEqual(
     foldFollowUpResult.result_state,
-    "no_match",
-    "A filtered-empty closest-alternatives response did not become a recoverable no-match state",
+    "closest_alternatives",
+    "Valid direct product pages did not remain closest alternatives",
   );
   assert.strictEqual(
     foldFollowUpResult.conversation_title,
@@ -1540,18 +1540,17 @@ const client = {
     "Delia asked another question instead of showing the closest Fold offers",
   );
   assert(
-    foldFollowUpResult.message.startsWith("В регионе") &&
+    foldFollowUpResult.message.startsWith("Точного предложения") &&
       !foldFollowUpResult.message.includes("Хотите"),
     "The impossible-budget Fold response did not lead with a direct localized outcome",
   );
-  assert(
-    foldFollowUpResult.sources.filter((source) =>
-      /\/(?:buy|dp|product)\//.test(source.url),
-    ).length >= 3,
-    "Photo-less direct retailer pages were not preserved as compact sources",
+  assert.deepStrictEqual(
+    new Set(foldFollowUpResult.partial_offers.map((offer) => offer.retailer)),
+    new Set(["Samsung", "Amazon", "Best Buy"]),
+    "Photo-less direct offers did not preserve multi-store diversity",
   );
   assert(
-    !foldFollowUpResult.sources.some((source) =>
+    !foldFollowUpResult.partial_offers.some((source) =>
       /(?:pcmcat|\/s\?k=)/i.test(source.url),
     ),
     "A retailer category or search URL displaced a direct product source",
