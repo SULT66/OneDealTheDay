@@ -100,6 +100,37 @@ const fetchImpl = async (url, options = {}) => {
   assert.strictEqual(searchCalls, 1);
   assert.strictEqual(detailCalls, 1);
 
+  let reusableSearchCalls = 0;
+  let reusableDetailCalls = 0;
+  const reusableProducts = await searchProducts({
+    clientId:"production-client-id",
+    clientSecret:"production-client-secret",
+    campaignId,
+    keywords:["samsung tv"],
+    market,
+    client:{
+      search:async () => {
+        reusableSearchCalls += 1;
+        return [summary];
+      },
+      getItem:async () => {
+        reusableDetailCalls += 1;
+        return {
+          ...summary,
+          primaryProductReviewRating:{averageRating:"4.7", reviewCount:321}
+        };
+      }
+    },
+    fetchImpl:async () => {
+      throw new Error("The reusable assistant client was ignored");
+    },
+    detailLimit:1,
+    targetEligible:1
+  });
+  assert.strictEqual(reusableProducts.length, 1);
+  assert.strictEqual(reusableSearchCalls, 1);
+  assert.strictEqual(reusableDetailCalls, 1);
+
   const noReturns = normalizeItem({
     ...summary,
     primaryProductReviewRating:{averageRating:"4.5", reviewCount:100},

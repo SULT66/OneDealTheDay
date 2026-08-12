@@ -62,6 +62,25 @@ db.prepare(
     .map(() => "?")
     .join(",")})`,
 ).run(...Object.values(product));
+const irrelevantUndercoatProduct = {
+  ...product,
+  id: 2,
+  title: "Furminator Undercoat Long Hair Deshedding Tool For Dogs - Blue L",
+  brand: "Furminator",
+  category: "Pet Supplies",
+  current_price: 18.99,
+  original_price: 24.99,
+  image_url: "https://i.ebayimg.com/furminator.jpg",
+  affiliate_url: "https://www.ebay.com/itm/987654321012",
+  score: 87,
+};
+db.prepare(
+  `INSERT INTO products (${Object.keys(irrelevantUndercoatProduct).join(",")}) VALUES (${Object.keys(
+    irrelevantUndercoatProduct,
+  )
+    .map(() => "?")
+    .join(",")})`,
+).run(...Object.values(irrelevantUndercoatProduct));
 db.prepare("INSERT INTO price_history VALUES (?,?,?,?)").run(
   1,
   89,
@@ -105,6 +124,24 @@ assert.strictEqual(
   "Qualified regional catalog result was not returned",
 );
 assert(matches[0].score >= 82, "Assistant exposed an unqualified public score");
+const samsungTvMatches = searchCatalog(
+  db,
+  sourceSql,
+  {
+    query: "Could I check if there are Samsung TVs under $500 in the US?",
+    category: "",
+    max_price: 500,
+    minimum_score: 82,
+    limit: 6,
+  },
+  "us",
+  "en",
+);
+assert.deepStrictEqual(
+  samsungTvMatches,
+  [],
+  "The word 'under' in a budget still matched Furminator Undercoat as a TV",
+);
 
 const calls = [];
 const requestOptions = [];
@@ -168,8 +205,8 @@ const client = {
                 annotations: [
                   {
                     type: "url_citation",
-                    url: "https://example.com/review",
-                    title: "Independent review",
+                    url: "https://example.com/reviews/quietpro-900-blender",
+                    title: "Independent QuietPro 900 blender review",
                   },
                 ],
               },
@@ -241,6 +278,29 @@ const client = {
 };
 
 (async () => {
+  const offlineGreetingAssistant = createShoppingAssistant({
+    db,
+    sourceSql,
+    market: (code) => ({ code, currency: "USD" }),
+    apiKey: "",
+  });
+  const greetingResult = await offlineGreetingAssistant.respond({
+    message: "hi bro",
+    messages: [],
+    marketCode: "us",
+    language: "en",
+  });
+  assert.strictEqual(
+    greetingResult.message,
+    "Hey! 👋 What are you looking to buy?",
+    "A friendly greeting was answered with the shopping-scope refusal",
+  );
+  assert.strictEqual(
+    greetingResult.scope,
+    "off_topic",
+    "A greeting should stay out of shopping model history",
+  );
+
   const ordinaryPreferenceClassification = await classifyShoppingScope(
     {
       responses: {
@@ -265,6 +325,167 @@ const client = {
     false,
     "An ordinary preference incorrectly blocked useful starter results",
   );
+
+  const tvConversationCalls = [];
+  const retailerQueries = [];
+  const tvConversationAssistant = createShoppingAssistant({
+    db,
+    sourceSql,
+    market: (code) => ({ code, currency: "USD" }),
+    retailerSearch: async ({ query }) => {
+      retailerQueries.push(query);
+      return [
+        {
+          external_id: "tv-123",
+          product_key: "epid:tv-123",
+          title: "Samsung 55-inch Crystal UHD 4K Smart TV",
+          brand: "Samsung",
+          category: "TV",
+          current_price: 479.99,
+          currency: "USD",
+          image_url: "https://i.ebayimg.com/samsung-tv.jpg",
+          affiliate_url: "https://www.ebay.com/itm/123456789012",
+          retailer_name: "eBay",
+          rating: 4.6,
+          review_count: 318,
+          shipping_summary: "Free shipping",
+          return_summary: "30-day returns",
+          checked_at: "2026-08-11T22:30:00Z",
+        },
+        {
+          external_id: "dog-987",
+          title: "Furminator 2-in-1 Undercoat Tool For Dogs",
+          brand: "Furminator",
+          category: "Pet Supplies",
+          current_price: 18.99,
+          currency: "USD",
+          image_url: "https://i.ebayimg.com/furminator-live.jpg",
+          affiliate_url: "https://www.ebay.com/itm/987654321012",
+          retailer_name: "eBay",
+          checked_at: "2026-08-11T22:30:00Z",
+        },
+      ];
+    },
+    client: {
+      responses: {
+        create: async (request) => {
+          tvConversationCalls.push(request);
+          if (tvConversationCalls.length === 1) {
+            return {
+              output: [],
+              output_text: JSON.stringify({
+                scope: "shopping",
+                needs_clarification: false,
+                clarification_reason: "none",
+                clarifying_questions: [],
+                language: "en",
+              }),
+            };
+          }
+          return {
+            output: [
+              {
+                type: "web_search_call",
+                action: {
+                  sources: [
+                    {
+                      url: "https://www.tomsguide.com/tvs/samsung-tvs-under-500",
+                      title: "Samsung TVs under $500",
+                    },
+                    {
+                      url: "https://www.ebay.com/itm/987654321012",
+                      title: "Furminator 2-in-1 Undercoat Tool For Dogs",
+                    },
+                  ],
+                },
+                results: [
+                  {
+                    type: "image_result",
+                    image_url: "https://i.ebayimg.com/furminator-live.jpg",
+                    source_website_url:
+                      "https://www.ebay.com/itm/987654321012",
+                    caption: "Furminator 2-in-1 Undercoat Tool For Dogs",
+                  },
+                ],
+              },
+            ],
+            output_text: JSON.stringify({
+              answer: "I found current sources worth checking.",
+              result_state: "exact_matches",
+              conversation_title: "Samsung TVs Under $500",
+              follow_up: "",
+              recommendations: [
+                {
+                  title: "Furminator 2-in-1 Undercoat Tool For Dogs",
+                  retailer: "eBay",
+                  price: "$18.99",
+                  badge: "",
+                  reason: "This unrelated cached item must never be shown.",
+                  url: "https://www.ebay.com/itm/987654321012",
+                  action_label: "View",
+                  source_type: "web",
+                  image_url: "https://i.ebayimg.com/furminator-live.jpg",
+                  catalog_product_id: 0,
+                },
+              ],
+              comparison_notes: [],
+              comparison: [],
+            }),
+          };
+        },
+      },
+    },
+  });
+  const tvConversationResult = await tvConversationAssistant.respond({
+    message: "no bro what u saying i said TV",
+    messages: [
+      {
+        role: "user",
+        content: "Could I check if there are Samsung TVs under $500 in the US?",
+      },
+      {
+        role: "assistant",
+        content: "I found current sources worth checking.",
+      },
+    ],
+    marketCode: "us",
+    language: "en",
+  });
+  assert.strictEqual(retailerQueries.length, 1);
+  assert(
+    retailerQueries[0].includes("samsung") && retailerQueries[0].includes("tv"),
+    "The correction 'I said TV' did not recover the Samsung TV search intent",
+  );
+  assert.strictEqual(tvConversationResult.recommendations.length, 1);
+  assert.strictEqual(
+    tvConversationResult.recommendations[0].title,
+    "Samsung 55-inch Crystal UHD 4K Smart TV",
+    "A relevant verified retailer listing was not returned",
+  );
+  assert.strictEqual(
+    tvConversationResult.recommendations[0].verified_retailer,
+    true,
+    "The direct retailer API result lost its evidence tier",
+  );
+  assert.strictEqual(tvConversationResult.result_state, "exact_matches");
+  assert(
+    tvConversationResult.message.includes("current retailer listing") &&
+      !tvConversationResult.message.includes("sources worth checking"),
+    "The verified TV result kept the empty generic source narrative",
+  );
+  assert(
+    !JSON.stringify(tvConversationResult).includes("Furminator"),
+    "An unrelated Furminator offer leaked into the Samsung TV response",
+  );
+  const resolvedTvRequest = JSON.parse(
+    tvConversationCalls[1].input,
+  ).resolved_shopping_request;
+  assert(
+    resolvedTvRequest.includes("Samsung TVs under $500") &&
+      resolvedTvRequest.includes("i said TV"),
+    "The live search did not receive the resolved request and correction",
+  );
+
   const assistant = createShoppingAssistant({
     db,
     sourceSql,
@@ -421,9 +642,12 @@ const client = {
   );
   assert.strictEqual(rawJsonFirewall.malformed, true);
   assert.strictEqual(
-    result.sources.find((source) => source.url === "https://example.com/review")
-      .url,
-    "https://example.com/review",
+    result.sources.find(
+      (source) =>
+        source.url ===
+        "https://example.com/reviews/quietpro-900-blender",
+    ).url,
+    "https://example.com/reviews/quietpro-900-blender",
     "Web citation was not surfaced",
   );
   assert.strictEqual(

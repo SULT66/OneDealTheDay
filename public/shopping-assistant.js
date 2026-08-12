@@ -66,11 +66,11 @@
 
   const tr = (key, fallback) => copy[key] || fallback;
   const LOCAL_GREETING_REPLIES = {
-    en: "Hi! I’m Delia. Tell me what you want to buy and your budget — I’ll find and compare suitable options.",
-    ru: "Привет! Я Delia. Скажи, что хочешь купить и какой у тебя бюджет — я найду и сравню подходящие варианты.",
-    es: "¡Hola! Soy Delia. Dime qué quieres comprar y tu presupuesto; buscaré y compararé opciones adecuadas.",
-    fr: "Bonjour ! Je suis Delia. Dites-moi ce que vous voulez acheter et votre budget : je chercherai et comparerai les options adaptées.",
-    de: "Hallo! Ich bin Delia. Sag mir, was du kaufen möchtest und wie hoch dein Budget ist – ich finde und vergleiche passende Optionen.",
+    en: "Hey! 👋 What are you looking to buy?",
+    ru: "Привет! 👋 Что хочешь купить?",
+    es: "¡Hola! 👋 ¿Qué quieres comprar?",
+    fr: "Salut ! 👋 Qu’est-ce que vous cherchez à acheter ?",
+    de: "Hallo! 👋 Was möchtest du kaufen?",
   };
   const localGreetingResponse = (value) => {
     const normalized = String(value || "")
@@ -80,11 +80,11 @@
       .replace(/[\s!?.,…:;¡¿]+$/gu, "")
       .replace(/\s+/g, " ");
     const greetingLanguage = [
-      ["ru", /^(?:привет(?:ик)?|здравствуй(?:те)?|доброе утро|добрый день|добрый вечер)$/u],
-      ["es", /^(?:hola|buenos días|buenas tardes|buenas noches)$/u],
-      ["fr", /^(?:bonjour|bonsoir|salut|coucou)$/u],
-      ["de", /^(?:hallo|guten morgen|guten tag|guten abend)$/u],
-      ["en", /^(?:hello|hey|hi|good morning|good afternoon|good evening)$/u],
+      ["ru", /^(?:привет(?:ик)?|здравствуй(?:те)?|доброе утро|добрый день|добрый вечер)(?:\s+(?:бро|брат|друг))?$/u],
+      ["es", /^(?:hola|buenos días|buenas tardes|buenas noches)(?:\s+(?:amigo|bro))?$/u],
+      ["fr", /^(?:bonjour|bonsoir|salut|coucou)(?:\s+(?:ami|frère|bro))?$/u],
+      ["de", /^(?:hallo|guten morgen|guten tag|guten abend)(?:\s+(?:freund|bruder|bro))?$/u],
+      ["en", /^(?:hello|hey|hi|yo|good morning|good afternoon|good evening)(?:\s+(?:bro|dude|man|there))?$/u],
     ].find(([, pattern]) => pattern.test(normalized))?.[0];
     if (!greetingLanguage) return "";
     if (greetingLanguage === "en") {
@@ -319,7 +319,7 @@
             item.price_value != null || hasDisplayPrice(item.price);
           if (!item.title || !item.reason || !item.url || !item.image_url || !hasPrice)
             return false;
-          if (item.in_catalog) return true;
+          if (item.in_catalog || item.verified_retailer) return true;
           return (
             hasSpecificProductIdentity(item.title) &&
             isDirectProductPage(item.url) &&

@@ -243,6 +243,7 @@ async function searchProducts({
   environment = "production",
   keywords,
   market,
+  client,
   fetchImpl = global.fetch,
   detailLimit = DEFAULT_DETAIL_LIMIT,
   targetEligible = DEFAULT_TARGET_ELIGIBLE
@@ -253,8 +254,8 @@ async function searchProducts({
   const searchTerms = [...new Set((keywords || []).map(text).filter(Boolean))];
   if (!searchTerms.length) throw new Error("eBay search keywords are missing");
 
-  const client = createEbayClient({clientId, clientSecret, campaignId, environment, fetchImpl});
-  const searches = await mapLimit(searchTerms, SEARCH_CONCURRENCY, (keyword) => client.search(keyword, market));
+  const ebayClient = client || createEbayClient({clientId, clientSecret, campaignId, environment, fetchImpl});
+  const searches = await mapLimit(searchTerms, SEARCH_CONCURRENCY, (keyword) => ebayClient.search(keyword, market));
   const candidates = new Map();
   const failures = [];
   searches.forEach((result, keywordIndex) => {
@@ -286,7 +287,7 @@ async function searchProducts({
 
   for (let offset = 0; offset < maximumDetails && products.length < eligibleTarget; offset += DETAIL_CONCURRENCY) {
     const batch = queue.slice(offset, Math.min(offset + DETAIL_CONCURRENCY, maximumDetails));
-    const details = await mapLimit(batch, DETAIL_CONCURRENCY, candidate => client.getItem(candidate.item.itemId, market));
+    const details = await mapLimit(batch, DETAIL_CONCURRENCY, candidate => ebayClient.getItem(candidate.item.itemId, market));
     details.forEach((result, index) => {
       if (result.status !== "fulfilled") return;
       const candidate = batch[index];
