@@ -809,6 +809,26 @@ body.assistant-open {
   padding: 0;
   overflow: hidden;
 }
+.assistant-market-context {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 13px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--line));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--accent) 5%, var(--surface));
+}
+.assistant-market-context strong {
+  font-size: 13px;
+}
+.assistant-market-context span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
 .assistant-recommendation-media {
   position: relative;
   height: 156px;
@@ -1246,6 +1266,11 @@ body.assistant-open {
   }
   .assistant-recommendations {
     grid-template-columns: 1fr;
+  }
+  .assistant-market-context {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
   }
   .assistant-recommendation-media {
     height: 124px;

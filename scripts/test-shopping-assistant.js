@@ -6,6 +6,7 @@ const {
   normalizeAssistantResponse,
   recommendationLimit,
   searchCatalog,
+  urlMatchesMarket,
 } = require("../src/shoppingAssistant");
 
 const db = new Database(":memory:");
@@ -102,8 +103,28 @@ assert.strictEqual(
 );
 assert.strictEqual(
   recommendationLimit("Find a blender under $100"),
-  5,
-  "Ordinary discovery was incorrectly limited to two products",
+  3,
+  "Ordinary discovery should return a focused top three",
+);
+for (const [url, marketCode] of [
+  ["https://www.amazon.com/dp/B000000001", "us"],
+  ["https://www.amazon.ca/dp/B000000002", "ca"],
+  ["https://www.amazon.co.uk/dp/B000000003", "uk"],
+  ["https://www.amazon.fr/dp/B000000004", "fr"],
+  ["https://www.amazon.de/dp/B000000005", "de"],
+  ["https://www.samsung.com/ca/tvs/the-frame/model-55/", "ca"],
+]) {
+  assert(
+    urlMatchesMarket(url, marketCode),
+    `A valid ${marketCode.toUpperCase()} retailer page was rejected`,
+  );
+}
+assert(
+  !urlMatchesMarket("https://www.amazon.com/dp/B000000001", "ca") &&
+    !urlMatchesMarket("https://www.bestbuy.com/site/example-tv/123456.p", "ca") &&
+    !urlMatchesMarket("https://www.amazon.ca/dp/B000000002", "us") &&
+    !urlMatchesMarket("https://www.samsung.com/us/tvs/the-frame/model-55/", "de"),
+  "A foreign retailer page passed the regional market gate",
 );
 const matches = searchCatalog(
   db,
@@ -543,7 +564,7 @@ const client = {
   );
   assert.strictEqual(tvConversationResult.result_state, "exact_matches");
   assert(
-    tvConversationResult.message.includes("current retailer listing") &&
+    tvConversationResult.message.includes("Current retailer options") &&
       !tvConversationResult.message.includes("sources worth checking"),
     "The verified TV result kept the empty generic source narrative",
   );
@@ -570,6 +591,173 @@ const client = {
     resolvedTvRequest.includes("Samsung TVs under $500") &&
       resolvedTvRequest.includes("i said TV"),
     "The live search did not receive the resolved request and correction",
+  );
+
+  const frameCalls = [];
+  const frameRetailerQueries = [];
+  const frameRetailerMarkets = [];
+  const frameAssistant = createShoppingAssistant({
+    db,
+    sourceSql,
+    market: (code) => ({
+      code,
+      name: code === "ca" ? "Canada" : "United States",
+      currency: code === "ca" ? "CAD" : "USD",
+    }),
+    retailerSearch: async ({ query, market: selectedMarket }) => {
+      frameRetailerQueries.push(query);
+      frameRetailerMarkets.push(selectedMarket.code);
+      return [];
+    },
+    client: {
+      responses: {
+        create: async (request) => {
+          frameCalls.push(request);
+          if (frameCalls.length === 1) {
+            return {
+              output: [],
+              output_text: JSON.stringify({
+                scope: "shopping",
+                needs_clarification: false,
+                clarification_reason: "none",
+                clarifying_questions: [],
+                language: "ru",
+              }),
+            };
+          }
+          const canadaOffers = [
+            {
+              url: "https://www.amazon.ca/dp/B0FRAME5501",
+              title: "Samsung 55-inch The Frame LS03D 4K TV",
+              image: "https://images.example.com/frame-amazon-ca.jpg",
+              retailer: "Amazon",
+              price: "CAD 1,298.00",
+            },
+            {
+              url: "https://www.bestbuy.ca/en-ca/product/samsung-65-the-frame-ls03d-4k-tv/17987654",
+              title: "Samsung 65-inch The Frame LS03D 4K TV",
+              image: "https://images.example.com/frame-bestbuy-ca.jpg",
+              retailer: "Best Buy",
+              price: "CAD 1,349.99",
+            },
+            {
+              url: "https://www.walmart.ca/en/ip/samsung-50-the-frame-ls03d-4k-tv/6000207654321",
+              title: "Samsung 50-inch The Frame LS03D 4K TV",
+              image: "https://images.example.com/frame-walmart-ca.jpg",
+              retailer: "Walmart",
+              price: "CAD 1,098.00",
+            },
+          ];
+          const wrongMarketOffers = [
+            {
+              url: "https://www.amazon.com/dp/B0FRAMEUS01",
+              title: "Samsung 55-inch The Frame LS03D 4K TV",
+              image: "https://images.example.com/frame-amazon-us.jpg",
+              retailer: "Amazon",
+              price: "USD 899.99",
+            },
+            {
+              url: "https://www.bestbuy.com/site/samsung-55-the-frame-ls03d-4k-tv/6591111.p",
+              title: "Samsung 55-inch The Frame LS03D 4K TV",
+              image: "https://images.example.com/frame-bestbuy-us.jpg",
+              retailer: "Best Buy",
+              price: "USD 949.99",
+            },
+          ];
+          const allOffers = [...wrongMarketOffers, ...canadaOffers];
+          return {
+            output: [
+              {
+                type: "web_search_call",
+                action: {
+                  sources: [
+                    ...allOffers.map(({ url, title }) => ({ url, title })),
+                    {
+                      url: "https://www.amazon.ca/dp/B0FRAME6502",
+                      title: "Samsung 65-inch The Frame LS03D 4K TV",
+                    },
+                  ],
+                },
+                results: allOffers.map(({ url, title, image }) => ({
+                  type: "image_result",
+                  image_url: image,
+                  source_website_url: url,
+                  caption: title,
+                })),
+              },
+            ],
+            output_text: JSON.stringify({
+              answer: "Я проверила Amazon и другие магазины Канады.",
+              result_state: "exact_matches",
+              conversation_title: "Samsung The Frame дешевле",
+              follow_up: "",
+              recommendations: allOffers.map((offer) => ({
+                title: offer.title,
+                retailer: offer.retailer,
+                price: offer.price,
+                badge: "",
+                reason: "Актуальная страница этой модели в выбранном регионе.",
+                url: offer.url,
+                action_label: "Открыть",
+                source_type: "web",
+                image_url: offer.image,
+                catalog_product_id: 0,
+              })),
+              comparison_notes: [],
+              comparison: [],
+            }),
+          };
+        },
+      },
+    },
+  });
+  const frameResult = await frameAssistant.respond({
+    message: "есть ли на амазоне и есть ли подешевле?",
+    messages: [
+      { role: "user", content: "хочу посмотреть телевизор самсунг frame" },
+      {
+        role: "assistant",
+        content: "Нашла Samsung 55-inch The Frame LS03D в Best Buy Canada за CAD 1,349.99.",
+      },
+    ],
+    marketCode: "ca",
+    language: "en",
+  });
+  assert.deepStrictEqual(frameRetailerMarkets, ["ca"]);
+  assert(
+    frameRetailerQueries[0].includes("samsung") &&
+      frameRetailerQueries[0].includes("tv") &&
+      frameRetailerQueries[0].includes("frame"),
+    "The Amazon/cheaper follow-up forgot the active Samsung The Frame product",
+  );
+  assert.strictEqual(frameResult.market_code, "ca");
+  assert.strictEqual(frameResult.currency, "CAD");
+  assert.strictEqual(frameResult.recommendations.length, 3);
+  assert.strictEqual(frameResult.recommendations[0].retailer, "Amazon");
+  assert(
+    frameResult.recommendations.every(
+      (offer) =>
+        /(?:amazon\.ca|bestbuy\.ca|walmart\.ca)/i.test(offer.url) &&
+        offer.currency === "CAD",
+    ),
+    "The Canada top three included a foreign retailer page or currency",
+  );
+  assert(
+    !JSON.stringify(frameResult).includes("amazon.com/dp") &&
+      !JSON.stringify(frameResult).includes("bestbuy.com/site"),
+    "US retailer pages leaked into the Canada response",
+  );
+  assert(
+    frameResult.message.includes("Amazon") &&
+      frameResult.message.includes("Walmart") &&
+      frameResult.message.includes("Канад") &&
+      frameResult.message.includes("CAD"),
+    "The retailer follow-up did not answer Amazon availability and the cheaper regional alternative",
+  );
+  assert.strictEqual(
+    new Set(frameResult.sources.map((source) => new URL(source.url).hostname)).size,
+    frameResult.sources.length,
+    "Duplicate retailer domains still clutter the source list",
   );
 
   const assistant = createShoppingAssistant({
