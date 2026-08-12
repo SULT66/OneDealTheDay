@@ -321,6 +321,43 @@ const client = {
     "off_topic",
     "A greeting should stay out of shopping model history",
   );
+  const russianCheckInResult = await offlineGreetingAssistant.respond({
+    message: "привет как дела",
+    messages: [],
+    marketCode: "us",
+    language: "ru",
+  });
+  assert.strictEqual(
+    russianCheckInResult.message,
+    "Привет! Всё хорошо, спасибо 😄 Что хочешь купить?",
+    "A short Russian check-in fell through to the shopping-scope refusal",
+  );
+  assert.strictEqual(
+    russianCheckInResult.scope,
+    "off_topic",
+    "A short check-in should stay out of shopping model history",
+  );
+  const punctuatedRussianCheckIn = await offlineGreetingAssistant.respond({
+    message: "Привет, как дела?",
+    messages: [],
+    marketCode: "us",
+    language: "ru",
+  });
+  assert.strictEqual(
+    punctuatedRussianCheckIn.message,
+    "Привет! Всё хорошо, спасибо 😄 Что хочешь купить?",
+    "Natural punctuation broke the Russian check-in fast path",
+  );
+  await assert.rejects(
+    offlineGreetingAssistant.respond({
+      message: "привет найди iPhone 15",
+      messages: [],
+      marketCode: "us",
+      language: "ru",
+    }),
+    (error) => error?.statusCode === 503,
+    "A shopping request that starts with a greeting was intercepted as small talk",
+  );
 
   const ordinaryPreferenceClassification = await classifyShoppingScope(
     {

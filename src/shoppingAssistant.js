@@ -457,19 +457,48 @@ function matchesRelatedSource(source, request) {
   });
 }
 
-function isGreeting(value) {
+function greetingContext(value) {
   const normalized = clean(value)
     .normalize("NFKC")
     .toLowerCase()
-    .replace(/[\s!?.,…:;¡¿]+$/gu, "")
-    .replace(/\s+/g, " ");
-  return [
-    /^(?:привет(?:ик)?|здравствуй(?:те)?|доброе утро|добрый день|добрый вечер)(?:\s+(?:бро|брат|друг))?$/u,
-    /^(?:hola|buenos días|buenas tardes|buenas noches)(?:\s+(?:amigo|bro))?$/u,
-    /^(?:bonjour|bonsoir|salut|coucou)(?:\s+(?:ami|frère|bro))?$/u,
-    /^(?:hallo|guten morgen|guten tag|guten abend)(?:\s+(?:freund|bruder|bro))?$/u,
-    /^(?:hello|hey|hi|yo)(?:\s+(?:bro|dude|man|there))?$/u,
-  ].some((pattern) => pattern.test(normalized));
+    .replace(/[!?.,…:;¡¿]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const patterns = [
+    [
+      "ru",
+      /^(?:(?:привет(?:ик)?|здравствуй(?:те)?|доброе утро|добрый день|добрый вечер)(?:\s+(?:бро|брат|друг))?(?:\s+(?:как (?:у тебя )?дела|как ты|что нового))?|(?:как (?:у тебя )?дела|как ты|что нового))$/u,
+      /(?:как (?:у тебя )?дела|как ты|что нового)/u,
+    ],
+    [
+      "es",
+      /^(?:(?:hola|buenos días|buenas tardes|buenas noches)(?:\s+(?:amigo|bro))?(?:\s+(?:cómo estás|como estas|qué tal|que tal|cómo va|como va))?|(?:cómo estás|como estas|qué tal|que tal|cómo va|como va))$/u,
+      /(?:cómo estás|como estas|qué tal|que tal|cómo va|como va)/u,
+    ],
+    [
+      "fr",
+      /^(?:(?:bonjour|bonsoir|salut|coucou)(?:\s+(?:ami|frère|bro))?(?:\s+(?:comment ça va|comment ca va|ça va|ca va))?|(?:comment ça va|comment ca va|ça va|ca va))$/u,
+      /(?:comment ça va|comment ca va|ça va|ca va)/u,
+    ],
+    [
+      "de",
+      /^(?:(?:hallo|guten morgen|guten tag|guten abend)(?:\s+(?:freund|bruder|bro))?(?:\s+(?:wie geht es dir|wie geht['’]?s|wie gehts))?|(?:wie geht es dir|wie geht['’]?s|wie gehts))$/u,
+      /(?:wie geht es dir|wie geht['’]?s|wie gehts)/u,
+    ],
+    [
+      "en",
+      /^(?:(?:hello|hey|hi|yo|good morning|good afternoon|good evening)(?:\s+(?:bro|dude|man|there))?(?:\s+(?:how are you|how['’]?s it going|what['’]?s up|how are things))?|(?:how are you|how['’]?s it going|what['’]?s up|how are things))$/u,
+      /(?:how are you|how['’]?s it going|what['’]?s up|how are things)/u,
+    ],
+  ];
+  const match = patterns.find(([, pattern]) => pattern.test(normalized));
+  return match
+    ? { language: match[0], checkIn: match[2].test(normalized) }
+    : null;
+}
+
+function isGreeting(value) {
+  return Boolean(greetingContext(value));
 }
 
 function requestedRetailer(value) {
@@ -488,14 +517,22 @@ function isRetailerOrPriceFollowUp(value) {
 }
 
 function greetingMessage(message, language) {
-  const selected = responseLanguage(message, language);
-  return {
+  const context = greetingContext(message);
+  const selected = context?.language || responseLanguage(message, language);
+  const replies = context?.checkIn ? {
+    en: "I'm doing well, thanks 😄 What are you looking to buy?",
+    ru: "Привет! Всё хорошо, спасибо 😄 Что хочешь купить?",
+    es: "¡Todo bien, gracias! 😄 ¿Qué quieres comprar?",
+    fr: "Tout va bien, merci ! 😄 Qu’est-ce que vous cherchez à acheter ?",
+    de: "Mir geht’s gut, danke! 😄 Was möchtest du kaufen?",
+  } : {
     en: "Hey! 👋 What are you looking to buy?",
     ru: "Привет! 👋 Что хочешь купить?",
     es: "¡Hola! 👋 ¿Qué quieres comprar?",
     fr: "Salut ! 👋 Qu’est-ce que vous cherchez à acheter ?",
     de: "Hallo! 👋 Was möchtest du kaufen?",
-  }[selected];
+  };
+  return replies[selected];
 }
 
 function resolveShoppingRequest(message, messages) {
