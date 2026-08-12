@@ -69,6 +69,8 @@ const BRAND_ALIASES = new Map([
   ["кляйн", "klein"],
   ["клайн", "klein"],
   ["адидас", "adidas"],
+  ["найк", "nike"],
+  ["нике", "nike"],
 ]);
 const SEARCH_SUBTYPE_TERMS = new Set([
   "tank",
@@ -103,6 +105,12 @@ const SHOPPING_TERM_ALIASES = new Map([
   ["чёрную", "black"],
   ["чёрного", "black"],
   ["чёрной", "black"],
+  ["кроссовки", "sneakers"],
+  ["кроссовок", "sneakers"],
+  ["кроссовкам", "sneakers"],
+  ["осень", "autumn"],
+  ["осенние", "autumn"],
+  ["осенних", "autumn"],
 ]);
 const RETAILER_PATTERNS = [
   ["Amazon", /(?:^|[^\p{L}\p{N}])(?:amazon|амазон\p{L}*)(?=$|[^\p{L}\p{N}])/iu],

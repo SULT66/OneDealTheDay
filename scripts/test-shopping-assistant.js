@@ -1667,6 +1667,119 @@ const client = {
     "An apparel result without a size did not ask the one useful fit question",
   );
 
+  const nikeAutumnAssistant = createShoppingAssistant({
+    db,
+    sourceSql,
+    market: (code) => ({ code, currency: "USD" }),
+    retailerSearch: async () => [
+      {
+        external_id: "wrong-book",
+        product_key: "book:far-away",
+        title: "Так далеко",
+        brand: "Сильвия Дэй",
+        category: "Books",
+        current_price: 23.66,
+        currency: "USD",
+        image_url: "https://images.example.com/far-away-book.jpg",
+        affiliate_url: "https://www.ebay.com/itm/100000000010",
+        retailer_name: "eBay",
+        availability: "In stock",
+      },
+      {
+        external_id: "nike-air-max-90",
+        product_key: "nike:air-max-90",
+        title: "Nike Air Max 90 Men's Sneakers",
+        brand: "Nike",
+        category: "Shoes",
+        current_price: 119,
+        currency: "USD",
+        image_url: "https://images.example.com/nike-air-max-90.jpg",
+        affiliate_url: "https://www.nike.com/us/product/air-max-90-mens-shoes-1001",
+        retailer_name: "Nike",
+        availability: "In stock",
+      },
+      {
+        external_id: "nike-p6000",
+        product_key: "nike:p6000",
+        title: "Nike P-6000 Men's Sneakers",
+        brand: "Nike",
+        category: "Shoes",
+        current_price: 89,
+        currency: "USD",
+        image_url: "https://images.example.com/nike-p6000.jpg",
+        affiliate_url: "https://www.walmart.com/ip/nike-p6000-mens-sneakers/1002",
+        retailer_name: "Walmart",
+        availability: "In stock",
+      },
+      {
+        external_id: "nike-af1",
+        product_key: "nike:af1",
+        title: "Nike Air Force 1 '07 Men's Sneakers",
+        brand: "Nike",
+        category: "Shoes",
+        current_price: 115,
+        currency: "USD",
+        image_url: "https://images.example.com/nike-air-force-1.jpg",
+        affiliate_url: "https://www.target.com/p/nike-air-force-1-mens-sneakers/-/A-1003",
+        retailer_name: "Target",
+        availability: "In stock",
+      },
+    ],
+    client: {
+      responses: {
+        create: async (request) => request.tools
+          ? {
+              output: [],
+              output_text: JSON.stringify({
+                answer: "Нашла варианты Nike на осень.",
+                result_state: "exact_matches",
+                conversation_title: "Осенние кроссовки Nike",
+                follow_up: "",
+                recommendations: [],
+                comparison_notes: [],
+                comparison: [],
+              }),
+            }
+          : {
+              output: [],
+              output_text: JSON.stringify({
+                scope: "shopping",
+                needs_clarification: false,
+                clarification_reason: "none",
+                clarifying_questions: [],
+                language: "ru",
+              }),
+            },
+      },
+    },
+  });
+  const nikeAutumn = await nikeAutumnAssistant.respond({
+    message: "мне нужно найти красивые кроссовки от найк на осень",
+    messages: [],
+    marketCode: "us",
+    language: "ru",
+  });
+  assert.strictEqual(
+    nikeAutumn.recommendations.length,
+    3,
+    "A clear Nike sneaker mission did not produce three valid choices",
+  );
+  assert(
+    nikeAutumn.recommendations.every(item =>
+      /nike/i.test(item.title) && /sneakers?/i.test(item.title)
+    ),
+    "A different category or brand survived the Nike sneaker gate",
+  );
+  assert(
+    !nikeAutumn.recommendations.some(item => /так далеко/iu.test(item.title)),
+    "The unrelated book survived product-category validation",
+  );
+  assert.deepStrictEqual(
+    new Set(nikeAutumn.recommendations.map(item => item.retailer)),
+    new Set(["Nike", "Walmart", "Target"]),
+    "Delia collapsed a multi-store result back to one retailer",
+  );
+
   const cheaperNikeAssistant = createShoppingAssistant({
     db,
     sourceSql,

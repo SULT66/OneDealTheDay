@@ -42,6 +42,7 @@ Module._load = function load(request, parent, isMain) {
 process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "onedailydrop-automation-"));
 
 const { RETAILERS, feedDefinitions } = require("../src/retailerCatalog");
+const { searchForAssistant } = require("../src/providers/registry");
 const { download, parseDelimited, parseRecords, safeFeedUrl } = require("../src/providers/affiliateFeed");
 const { scoreOffers, selectUniqueProducts } = require("../src/ranker");
 const { refreshMarket, sortByCurrentScore } = require("../src/refresh");
@@ -143,6 +144,16 @@ const config = {
 
 (async () => {
   try {
+    const assistantProducts = await searchForAssistant(config, {
+      query:"Acme Product",
+      market
+    });
+    assert.deepStrictEqual(
+      new Set(assistantProducts.map(product => product.retailer_name)),
+      new Set(["Target", "Best Buy"]),
+      "Delia did not aggregate every successful configured retailer while isolating a failed store"
+    );
+
     const awinCsv = "aw_product_id|product_name|search_price|currency|merchant_image_url|aw_deep_link\n1|Mooncool TK1|1299|USD|https://images.test/tk1.jpg|https://www.awin1.com/cread.php?id=1\n";
     const compressed = zlib.gzipSync(Buffer.from(awinCsv));
     const downloaded = await download({url:"https://productdata.awin.com/mooncool", headersJson:""}, async () =>
