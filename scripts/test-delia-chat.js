@@ -157,7 +157,7 @@ for (const required of [
   "font-size: 16px",
   "height: 100dvh",
   "env(safe-area-inset-bottom)",
-  "width: clamp(64px, 6vw, 84px)",
+  "width: clamp(112px, 9vw, 148px)",
   "object-fit: contain",
   "max-height: 100%",
   "repeat(auto-fit, minmax(220px, 1fr))",
@@ -183,6 +183,15 @@ assert(
     styles.includes("overflow-wrap: anywhere") &&
     styles.includes("max-width: 100%"),
   "Delia workspace is not protected against horizontal overflow",
+);
+assert(
+  client.includes("const responseTr = (_body, key, fallback)") &&
+    !client.includes("input.placeholder = responseTr("),
+  "A shopper message can still overwrite the site interface language",
+);
+assert(
+  client.includes('az: ["Salam!') && client.includes('return "az";'),
+  "The browser chat does not preserve Azerbaijani conversation language",
 );
 assert(
   !client.includes('createElement("table")'),

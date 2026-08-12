@@ -819,7 +819,7 @@ body.assistant-open {
 }
 .assistant-recommendation {
   display: grid;
-  grid-template-columns: clamp(64px, 6vw, 84px) minmax(0, 1fr);
+  grid-template-columns: clamp(112px, 9vw, 148px) minmax(0, 1fr);
   align-items: start;
   gap: 12px;
   padding: 12px;
@@ -847,8 +847,8 @@ body.assistant-open {
 }
 .assistant-recommendation-media {
   position: relative;
-  width: clamp(64px, 6vw, 84px);
-  height: clamp(64px, 6vw, 84px);
+  width: clamp(112px, 9vw, 148px);
+  height: clamp(112px, 9vw, 148px);
   display: grid;
   place-items: center;
   padding: 6px;
@@ -1358,8 +1358,8 @@ body.assistant-open {
     gap: 3px;
   }
   .assistant-recommendation-media {
-    width: 64px;
-    height: 64px;
+    width: 96px;
+    height: 96px;
     padding: 5px;
   }
   .assistant-product-context {

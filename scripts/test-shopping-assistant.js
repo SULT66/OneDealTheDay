@@ -10,6 +10,9 @@ const {
   normalizeDeliaPunctuation,
   recommendationLimit,
   retailerSearchQueries,
+  retailerWebSearchQueries,
+  matchesShoppingIntent,
+  responseLanguage,
   selectRetailerDiverseCandidates,
   searchCatalog,
   shoppingMissionText,
@@ -162,6 +165,44 @@ assert.deepStrictEqual(
   ["adidas sneakers winter youth", "nike sneakers winter youth"],
   "A two-brand Russian request was not split into useful retailer queries",
 );
+const headphoneStorePlan = retailerWebSearchQueries(
+  missionFromText("Apple AirPods Pro"),
+  "Apple AirPods Pro",
+  "us",
+);
+assert(
+  headphoneStorePlan.some((query) => query.includes("site:bestbuy.com")) &&
+    headphoneStorePlan.some((query) => query.includes("site:amazon.com")) &&
+    headphoneStorePlan.some((query) => query.includes("site:walmart.com")),
+  "The US web plan does not explicitly check multiple retailer domains",
+);
+assert.strictEqual(
+  matchesShoppingIntent(
+    {
+      title: "6 Pairs AirPods Pro Replacement Earbuds Silicone Covers",
+      retailer: "eBay",
+      url: "https://www.ebay.com/itm/123456789",
+    },
+    "Apple AirPods Pro headphones",
+  ),
+  false,
+  "AirPods accessories still pass as complete headphones",
+);
+assert.strictEqual(
+  matchesShoppingIntent(
+    {
+      title: "Apple AirPods Pro 2 Wireless Earbuds with MagSafe Charging Case",
+      brand: "Apple",
+      retailer: "Best Buy",
+      url: "https://www.bestbuy.com/site/apple-airpods-pro-2/6447382.p",
+    },
+    "Apple AirPods Pro headphones",
+  ),
+  true,
+  "A complete AirPods Pro product was rejected as an accessory",
+);
+assert.strictEqual(responseLanguage("Salam, qulaqcıq tap", "en"), "az");
+assert.strictEqual(responseLanguage("Find me good headphones", "ru"), "en");
 const winterFollowUpMission = mergeShoppingMission(
   winterSneakerMission,
   {},
@@ -2270,6 +2311,69 @@ const client = {
   assert.deepStrictEqual(clarification.clarifying_questions, [
     "Which refrigerator model is this filter for?",
   ]);
+  const broadHeadphoneCalls = [];
+  const broadHeadphoneAssistant = createShoppingAssistant({
+    db,
+    sourceSql,
+    market: (code) => ({ code, currency: "USD" }),
+    client: {
+      responses: {
+        create: async (request) => {
+          broadHeadphoneCalls.push(request);
+          return {
+            output: [],
+            output_text: JSON.stringify({
+              scope: "shopping",
+              needs_clarification: false,
+              clarification_reason: "none",
+              clarifying_questions: [],
+              language: "ru",
+              social_reply: "",
+              starts_new_mission: false,
+              mission_patch: {
+                product_type: "headphones",
+                brands: [],
+                use_case: "gift",
+                season: "",
+                style: "",
+                audience: "",
+                size: "",
+                market: "",
+                preferred_retailer: "",
+                budget_max: 0,
+                query_terms: [],
+              },
+            }),
+          };
+        },
+      },
+    },
+  });
+  const broadHeadphones = await broadHeadphoneAssistant.respond({
+    message: "Хочу подарить девушке какие-нибудь наушники",
+    messages: [],
+    marketCode: "us",
+    language: "en",
+  });
+  assert.strictEqual(broadHeadphoneCalls.length, 1);
+  assert.strictEqual(broadHeadphones.language, "ru");
+  assert.strictEqual(broadHeadphones.needs_clarification, true);
+  assert.strictEqual(broadHeadphones.clarifying_questions.length, 2);
+  assert(
+    broadHeadphones.clarifying_questions.some((question) => /бюджет/u.test(question)) &&
+      broadHeadphones.clarifying_questions.some((question) => /вкладыши|полноразмерные/u.test(question)),
+    "A broad headphone request did not ask the two useful questions",
+  );
+  assert.strictEqual(broadHeadphones.shopping_mission.product_type, "headphone");
+  const azGreeting = await offlineGreetingAssistant.respond({
+    message: "Salam, necəsiniz?",
+    messages: [],
+    marketCode: "us",
+    language: "en",
+  });
+  assert.strictEqual(azGreeting.scope, "social");
+  assert.strictEqual(azGreeting.language, "az");
+  assert(/yaxşı|necəsiniz/iu.test(azGreeting.message));
   assert.strictEqual(refused.scope, "off_topic");
   assert.strictEqual(refused.recommendations.length, 0);
   assert.strictEqual(refused.products.length, 0);
