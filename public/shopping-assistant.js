@@ -95,12 +95,15 @@
       .toLocaleLowerCase()
       .replace(/[^\p{L}\p{N}'’]+/gu, " ")
       .replace(/\s+/g, " ")
+      .trim()
+      .replace(/^(?:ну|слушай|эй|ой)\s+/u, "")
+      .replace(/\s+(?:бро|брат|друг|делия)$/u, "")
       .trim();
     const greeting = [
       [
         "ru",
-        /^(?:(?:привет(?:ик|ики)?|прив|здравствуй(?:те)?|здорово|здорова|здарова|здаров|салют|хай|ку|доброе утро|добрый день|добрый вечер|доброго времени суток)(?:\s+(?:бро|брат|друг|делия))?(?:\s+(?:как (?:у тебя )?(?:дела|делишки)|как (?:ты|сам|сама)|как поживаешь|как жизнь|как настроение|что нового|ч[её] как))?|(?:как (?:у тебя )?(?:дела|делишки)|как (?:ты|сам|сама)|как поживаешь|как жизнь|как настроение|что нового|ч[её] как))$/u,
-        /(?:как (?:у тебя )?(?:дела|делишки)|как (?:ты|сам|сама)|как поживаешь|как жизнь|как настроение|что нового|ч[её] как)/u,
+        /^(?:(?:привет(?:ик|ики)?|прив|здравствуй(?:те)?|здорово|здорова|здарова|здаров|салют|хай|ку|доброе утро|добрый день|добрый вечер|доброго времени суток)(?:\s+(?:бро|брат|друг|делия))?(?:\s+(?:как (?:у тебя )?(?:дела|делишки)|как (?:ты|сам|сама)|как поживаешь|как жизнь|как настроение|что нового|ч[её] как))?|(?:как (?:у тебя )?(?:дела|делишки)|как (?:ты|сам|сама)|как поживаешь|как жизнь|как настроение|что нового|ч[её] как|дела|делишки))$/u,
+        /(?:как (?:у тебя )?(?:дела|делишки)|как (?:ты|сам|сама)|как поживаешь|как жизнь|как настроение|что нового|ч[её] как|дела|делишки)/u,
       ],
       [
         "es",
@@ -414,6 +417,30 @@
       : explicitShipping;
     return shipping == null ? base : base + Math.max(0, shipping);
   };
+  const normalizeShoppingMission = (value) => {
+    const mission = value && typeof value === "object" && !Array.isArray(value)
+      ? value
+      : {};
+    return {
+      product_type: String(mission.product_type || "").slice(0, 60),
+      brands: (Array.isArray(mission.brands) ? mission.brands : [])
+        .map((item) => String(item || "").slice(0, 40))
+        .filter(Boolean)
+        .slice(0, 4),
+      use_case: String(mission.use_case || "").slice(0, 100),
+      season: String(mission.season || "").slice(0, 30),
+      style: String(mission.style || "").slice(0, 60),
+      audience: String(mission.audience || "").slice(0, 30),
+      size: String(mission.size || "").slice(0, 20),
+      market: String(mission.market || "").slice(0, 10),
+      preferred_retailer: String(mission.preferred_retailer || "").slice(0, 50),
+      budget_max: Math.max(0, Number(mission.budget_max) || 0),
+      query_terms: (Array.isArray(mission.query_terms) ? mission.query_terms : [])
+        .map((item) => String(item || "").slice(0, 60))
+        .filter(Boolean)
+        .slice(0, 6),
+    };
+  };
   function normalizeResponseBody(value) {
     if (!value || typeof value !== "object" || Array.isArray(value)) {
       return {
@@ -451,6 +478,7 @@
       message: String(message).slice(0, 700),
       conversation_title: String(value.conversation_title || "").slice(0, 60),
       resolved_request: String(value.resolved_request || "").slice(0, 1200),
+      shopping_mission: normalizeShoppingMission(value.shopping_mission),
       follow_up: String(value.follow_up || "").slice(0, 240),
       recommendations: (Array.isArray(value.recommendations)
         ? value.recommendations
@@ -580,6 +608,7 @@
       title: tr("newChatTitle", "New shopping chat"),
       messages: [],
       shopping_context: "",
+      shopping_mission: normalizeShoppingMission(null),
       conversation_language: language(),
       market: market(),
       language: language(),
@@ -629,6 +658,7 @@
       0,
       1200,
     );
+    activeChat.shopping_mission = normalizeShoppingMission(activeChat.shopping_mission);
     activeChat.conversation_language =
       RESPONSE_LABELS[activeChat.conversation_language]
         ? activeChat.conversation_language
@@ -1811,6 +1841,7 @@
           message: requestQuestion,
           messages: priorHistory,
           shopping_context: activeChat.shopping_context || "",
+          shopping_mission: activeChat.shopping_mission || normalizeShoppingMission(null),
           market: market(),
           language: language(),
         }),
@@ -1859,7 +1890,10 @@
       if (body.scope === "shopping" && body.resolved_request) {
         activeChat.shopping_context = body.resolved_request;
       }
-      if (body.scope === "off_topic") userRecord.include_in_model = false;
+      if (body.scope === "shopping" && body.shopping_mission) {
+        activeChat.shopping_mission = normalizeShoppingMission(body.shopping_mission);
+      }
+      if (["off_topic", "social"].includes(body.scope)) userRecord.include_in_model = false;
       if (body.scope === "shopping" && body.conversation_title) {
         activeChat.title = body.conversation_title;
         currentTitleElement.textContent = activeChat.title;

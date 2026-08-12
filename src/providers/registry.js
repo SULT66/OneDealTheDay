@@ -1,5 +1,10 @@
 const affiliateFeed = require("./affiliateFeed");
 
+const normalizeTokenText = value => String(value || "")
+  .normalize("NFKD")
+  .replace(/([A-Za-z])[\u0300-\u036f]+/g, "$1")
+  .normalize("NFC");
+
 function nativeProviders(config) {
   const providers = [];
   if (config.ebayClientId && config.ebayClientSecret && /^\d{10}$/.test(config.ebayCampaignId)) {
@@ -111,12 +116,13 @@ async function searchAll(config, market) {
 // searches the shopper's active mission instead of the scheduled broad
 // keywords. Provider failures are isolated so one unavailable store never
 // collapses the complete multi-retailer answer.
-async function searchForAssistant(config, {query, market, perSourceLimit = 12}) {
-  const keywords = [String(query || "").trim()].filter(Boolean);
+async function searchForAssistant(config, {query, queries, market, perSourceLimit = 12}) {
+  const keywords = [...new Set([
+    ...(Array.isArray(queries) ? queries : []),
+    query,
+  ].map(value => String(value || "").trim()).filter(Boolean))].slice(0, 8);
   if (!keywords.length) return [];
-  const queryTokens = new Set(keywords[0]
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
+  const queryTokens = new Set(normalizeTokenText(keywords.join(" "))
     .toLowerCase()
     .match(/[\p{L}\p{N}]+/gu) || []);
   const providers = providersForMarket(config, market);
@@ -135,9 +141,7 @@ async function searchForAssistant(config, {query, market, perSourceLimit = 12}) 
     return (Array.isArray(result.value) ? result.value : [])
       .map(product => ({...product, source:product.source || provider.source}))
       .map(product => {
-        const productTokens = new Set(`${product.title || ""} ${product.brand || ""} ${product.category || ""} ${product.model_number || ""}`
-          .normalize("NFKD")
-          .replace(/[\u0300-\u036f]/g, "")
+        const productTokens = new Set(normalizeTokenText(`${product.title || ""} ${product.brand || ""} ${product.category || ""} ${product.model_number || ""}`)
           .toLowerCase()
           .match(/[\p{L}\p{N}]+/gu) || []);
         const relevance = [...queryTokens].filter(token => productTokens.has(token)).length;
