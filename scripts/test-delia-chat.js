@@ -35,6 +35,8 @@ for (const required of [
   "titleFromQuestion",
   "renderRecommendations",
   "renderPartialOffers",
+  "renderMarketContext",
+  "timeoutBody",
   "renderComparison",
   "renderClarifyingQuestions",
   "renderFollowUpActions",
@@ -89,6 +91,7 @@ assert(
 for (const required of [
   ".assistant-sidebar",
   ".assistant-recommendation-media",
+  ".assistant-market-context",
   ".assistant-recommendation.is-web",
   ".assistant-other-offers",
   ".assistant-partial-offers",

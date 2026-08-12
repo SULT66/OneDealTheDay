@@ -109,6 +109,8 @@
       feedbackThanks: "Thanks — your feedback was recorded.",
       partialTitle: "Current product pages", partialStatus: "Details not independently verified",
       checkPrice: "Check live price", viewOffer: "Open retailer page",
+      topThree: "Top 3 in", topOptions: "Top options in", options: "options",
+      actionSimilar: "Show similar models", actionRetry: "Search again",
     },
     ru: {
       product: "Товар", price: "Цена", bestFor: "Лучше для", score: "Оценка",
@@ -126,6 +128,8 @@
       feedbackThanks: "Спасибо — отзыв сохранён.",
       partialTitle: "Актуальные товарные страницы", partialStatus: "Часть данных не подтверждена независимо",
       checkPrice: "Проверить цену", viewOffer: "Открыть страницу магазина",
+      topThree: "Топ-3 ·", topOptions: "Лучшие варианты ·", options: "варианта",
+      actionSimilar: "Показать похожие модели", actionRetry: "Повторить поиск",
     },
     es: {
       product: "Producto", price: "Precio", bestFor: "Ideal para", score: "Puntuación",
@@ -143,6 +147,8 @@
       feedbackThanks: "Gracias, guardamos tu opinión.",
       partialTitle: "Páginas de producto actuales", partialStatus: "Datos no verificados de forma independiente",
       checkPrice: "Comprobar precio", viewOffer: "Abrir página de la tienda",
+      topThree: "Top 3 ·", topOptions: "Mejores opciones ·", options: "opciones",
+      actionSimilar: "Ver modelos similares", actionRetry: "Buscar de nuevo",
     },
     fr: {
       product: "Produit", price: "Prix", bestFor: "Idéal pour", score: "Score",
@@ -160,6 +166,8 @@
       feedbackThanks: "Merci, votre avis a été enregistré.",
       partialTitle: "Pages produit actuelles", partialStatus: "Données non vérifiées indépendamment",
       checkPrice: "Vérifier le prix", viewOffer: "Ouvrir la page du vendeur",
+      topThree: "Top 3 ·", topOptions: "Meilleures options ·", options: "options",
+      actionSimilar: "Voir des modèles similaires", actionRetry: "Relancer la recherche",
     },
     de: {
       product: "Produkt", price: "Preis", bestFor: "Am besten für", score: "Bewertung",
@@ -177,6 +185,8 @@
       feedbackThanks: "Danke, Ihr Feedback wurde gespeichert.",
       partialTitle: "Aktuelle Produktseiten", partialStatus: "Angaben nicht unabhängig bestätigt",
       checkPrice: "Aktuellen Preis prüfen", viewOffer: "Händlerseite öffnen",
+      topThree: "Top 3 ·", topOptions: "Beste Optionen ·", options: "Optionen",
+      actionSimilar: "Ähnliche Modelle zeigen", actionRetry: "Erneut suchen",
     },
   };
   const responseLanguage = (body = {}) => {
@@ -299,7 +309,7 @@
         : []
       )
         .filter((item) => item && typeof item === "object")
-        .slice(0, 5)
+        .slice(0, 3)
         .map((item) => ({
           ...item,
           url: safeBrowserUrl(item.url),
@@ -331,7 +341,7 @@
         : []
       )
         .filter((item) => item && typeof item === "object")
-        .slice(0, 5)
+        .slice(0, 3)
         .map((item) => ({
           ...item,
           url: safeBrowserUrl(item.url),
@@ -539,6 +549,7 @@
       return new Intl.NumberFormat(window.__ODD_LOCALE__ || undefined, {
         style: "currency",
         currency: currency || "USD",
+        currencyDisplay: "code",
       }).format(numericValue);
     } catch {
       return `${currency || ""} ${value}`.trim();
@@ -726,6 +737,24 @@
     openPanel();
   }
 
+  function renderMarketContext(body, host) {
+    const count = (body.recommendations || []).length +
+      (body.partial_offers || []).length;
+    if (!host || !count || !body.market_name || !body.currency) return;
+    const context = document.createElement("div");
+    context.className = "assistant-market-context";
+    const title = document.createElement("strong");
+    title.textContent = `${responseTr(
+      body,
+      count === 3 ? "topThree" : "topOptions",
+      count === 3 ? "Top 3 in" : "Top options in",
+    )} ${body.market_name}`;
+    const details = document.createElement("span");
+    details.textContent = `${body.currency} · ${count} ${responseTr(body, "options", "options")}`;
+    context.append(title, details);
+    host.append(context);
+  }
+
   function renderRecommendations(recommendations = [], host, responseBody = {}) {
     if (!recommendations.length || !host) return;
     const section = document.createElement("div");
@@ -910,7 +939,9 @@
       title.textContent = offer.title;
       const meta = document.createElement("span");
       meta.textContent = [
-        offer.price || responseTr(responseBody, "checkPrice", "Check live price"),
+        money(offer.price_value, offer.currency) ||
+          offer.price ||
+          responseTr(responseBody, "checkPrice", "Check live price"),
         offer.retailer,
       ]
         .filter(Boolean)
@@ -1106,17 +1137,30 @@
   }
 
   function renderFollowUpActions(body, host) {
-    if (!(body.recommendations || []).length) return;
+    const recommendations = body.recommendations || [];
+    const partialOffers = body.partial_offers || [];
+    if (
+      body.scope !== "shopping" ||
+      body.needs_clarification ||
+      (!recommendations.length && !partialOffers.length && body.result_state !== "no_match")
+    ) return;
     const products = body.recommendations.map((item) => item.title).join(", ");
     const section = document.createElement("div");
     section.className = "assistant-quick-actions";
-    for (const [key, fallback, suffix] of [
-      ["actionCompare", "Compare these products", `: ${products}`],
-      ["actionCheaper", "Find cheaper options", ""],
-      ["actionPremium", "Show premium options", ""],
-      ["actionNew", "Only new products", ""],
-      ["actionStores", "Check other stores", ""],
-    ]) {
+    const actions = recommendations.length
+      ? [
+          ...(recommendations.length >= 2
+            ? [["actionCompare", "Compare these products", `: ${products}`]]
+            : []),
+          ["actionCheaper", "Find cheaper options", ""],
+          ["actionStores", "Check other stores", ""],
+        ]
+      : [
+          ["actionStores", "Check other stores", ""],
+          ["actionSimilar", "Show similar models", ""],
+          ["actionRetry", "Search again", ""],
+        ];
+    for (const [key, fallback, suffix] of actions.slice(0, 3)) {
       const label = responseTr(body, key, fallback);
       section.append(
         createButton(label, "assistant-quick-action", () =>
@@ -1207,6 +1251,7 @@
     const copyElement = message.querySelector(".assistant-message-copy");
     copyElement.textContent = body.message || "";
     renderClarifyingQuestions(body.clarifying_questions, message);
+    renderMarketContext(body, message);
     renderRecommendations(body.recommendations, message, body);
     renderPartialOffers(body.partial_offers, message, body);
     renderComparison(body.comparison, message, body);
@@ -1377,23 +1422,43 @@
     } catch (error) {
       if (error.name === "AbortError") {
         userRecord.include_in_model = false;
+        const timeoutMessage = tr(
+          "timeout",
+          "The live search took too long, so I stopped it. Try again or narrow the model and budget.",
+        );
+        const timeoutBody = requestTimedOut
+          ? normalizeResponseBody({
+              message: timeoutMessage,
+              follow_up: "",
+              recommendations: [],
+              partial_offers: [],
+              comparison_notes: [],
+              comparison: [],
+              products: [],
+              sources: [],
+              clarifying_questions: [],
+              needs_clarification: false,
+              scope: "shopping",
+              result_state: "no_match",
+              timed_out: true,
+            })
+          : null;
         const stoppedRecord = {
           id: makeId(),
           role: "assistant",
           content: requestTimedOut
-            ? tr(
-                "timeout",
-                "The live search took too long, so I stopped it. Try again or narrow the model and budget.",
-              )
+            ? timeoutMessage
             : tr(
                 "stopped",
                 "Stopped. You can edit the request or try again.",
               ),
+          ...(timeoutBody ? { response: timeoutBody } : {}),
           include_in_model: false,
           stopped: !requestTimedOut,
           created_at: new Date().toISOString(),
         };
-        pending.querySelector(".assistant-message-copy").textContent =
+        if (timeoutBody) renderResponse(pending, timeoutBody, stoppedRecord);
+        else pending.querySelector(".assistant-message-copy").textContent =
           stoppedRecord.content;
         pending.classList.add(requestTimedOut ? "is-error" : "is-stopped");
         activeChat.messages.push(stoppedRecord);
