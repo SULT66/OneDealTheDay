@@ -844,6 +844,14 @@ const client = {
                     },
                   ],
                 },
+                results: [
+                  {
+                    type: "image_result",
+                    image_url: "https://images.example.com/frame-amazon-ca-current.jpg",
+                    source_website_url: amazonUrl,
+                    caption: "Samsung The Frame 50-inch LS03FA 4K Smart TV",
+                  },
+                ],
               },
             ],
             output_text: JSON.stringify({
@@ -861,7 +869,7 @@ const client = {
                   url: amazonUrl,
                   action_label: "Открыть",
                   source_type: "web",
-                  image_url: "",
+                  image_url: "https://images.example.com/frame-amazon-ca-current.jpg",
                   catalog_product_id: 0,
                 },
               ],
@@ -1434,7 +1442,11 @@ const client = {
   });
   assert.strictEqual(foldFollowUpCalls, 2);
   assert.strictEqual(foldFollowUpResult.recommendations.length, 0);
-  assert.strictEqual(foldFollowUpResult.partial_offers.length, 3);
+  assert.strictEqual(
+    foldFollowUpResult.partial_offers.length,
+    0,
+    "A product page without a tied photo was still rendered as a card",
+  );
   assert.strictEqual(
     foldFollowUpResult.result_state,
     "closest_alternatives",
@@ -1449,25 +1461,21 @@ const client = {
     "Delia asked another question instead of showing the closest Fold offers",
   );
   assert(
-    foldFollowUpResult.message.startsWith("Точного предложения") &&
+    foldFollowUpResult.message.startsWith("Прямого предложения") &&
       !foldFollowUpResult.message.includes("Хотите"),
     "The impossible-budget Fold response did not lead with a direct localized outcome",
   );
   assert(
-    foldFollowUpResult.partial_offers.every(
-      (offer) =>
-        /\/(?:buy|dp|product)\//.test(offer.url) &&
-        offer.evidence_level === "partial" &&
-        /[a-z]/i.test(offer.title) &&
-        /\d/.test(offer.title),
-    ),
-    "Title-less direct retailer pages were not recovered as compact offers",
+    foldFollowUpResult.sources.filter((source) =>
+      /\/(?:buy|dp|product)\//.test(source.url),
+    ).length >= 3,
+    "Photo-less direct retailer pages were not preserved as compact sources",
   );
   assert(
-    !foldFollowUpResult.partial_offers.some((offer) =>
-      /(?:pcmcat|\/s\?k=)/i.test(offer.url),
+    !foldFollowUpResult.sources.some((source) =>
+      /(?:pcmcat|\/s\?k=)/i.test(source.url),
     ),
-    "A retailer category or search URL was promoted to a compact offer",
+    "A retailer category or search URL displaced a direct product source",
   );
   assert(
     foldFollowUpResult.sources.some(
@@ -1476,6 +1484,197 @@ const client = {
         "https://www.techradar.com/phones/samsung-galaxy-phones/samsung-galaxy-z-fold-7-review",
     ),
     "Editorial evidence did not remain a source-only link",
+  );
+
+  const calvinRetailerQueries = [];
+  const calvinRetailerProducts = [
+    {
+      external_id: "ck-briefs-3",
+      product_key: "ck:briefs-3",
+      title: "Calvin Klein Men's Cotton Classics Briefs Underwear, 3-Pack",
+      brand: "Calvin Klein",
+      category: "Men's Underwear",
+      current_price: 34.99,
+      currency: "USD",
+      image_url: "https://images.example.com/ck-briefs-3.jpg",
+      affiliate_url: "https://www.macys.com/shop/product/calvin-klein-cotton-classics-briefs-3-pack?id=100001",
+      retailer_name: "Macy's",
+      shipping_summary: "Home delivery available",
+      availability: "In stock",
+      checked_at: "2026-08-12T14:45:00Z",
+    },
+    {
+      external_id: "ck-boxer-3-macys",
+      product_key: "ck:boxer-3-macys",
+      title: "Calvin Klein Men's Cotton Classics Boxer Briefs, 3-Pack",
+      brand: "Calvin Klein",
+      category: "Men's Underwear",
+      current_price: 34.99,
+      currency: "USD",
+      image_url: "https://images.example.com/ck-boxer-3-macys.jpg",
+      affiliate_url: "https://www.macys.com/shop/product/calvin-klein-cotton-classics-boxer-briefs-3-pack?id=100002",
+      retailer_name: "Macy's",
+      shipping_summary: "Home delivery available",
+      availability: "In stock",
+      checked_at: "2026-08-12T14:45:00Z",
+    },
+    {
+      external_id: "ck-boxer-3-amazon",
+      product_key: "ck:boxer-3-amazon",
+      title: "Calvin Klein Men's Micro Stretch Boxer Briefs, 3-Pack",
+      brand: "Calvin Klein",
+      category: "Men's Underwear",
+      current_price: 29.99,
+      currency: "USD",
+      image_url: "https://images.example.com/ck-boxer-3-amazon.jpg",
+      affiliate_url: "https://www.amazon.com/dp/B0CKBOXER03",
+      retailer_name: "Amazon",
+      shipping_summary: "Delivery options shown at checkout",
+      availability: "In stock",
+      checked_at: "2026-08-12T14:45:00Z",
+    },
+    {
+      external_id: "ck-boxer-3-brand",
+      product_key: "ck:boxer-3-brand",
+      title: "Calvin Klein Men's Cotton Stretch Boxer Briefs, 3-Pack",
+      brand: "Calvin Klein",
+      category: "Men's Underwear",
+      current_price: 39.5,
+      currency: "USD",
+      image_url: "https://images.example.com/ck-boxer-3-brand.jpg",
+      affiliate_url: "https://www.calvinklein.us/en/underwear/product/nb4006-ub1",
+      retailer_name: "Calvin Klein",
+      shipping_summary: "Standard home delivery",
+      availability: "In stock",
+      checked_at: "2026-08-12T14:45:00Z",
+    },
+  ];
+  const calvinAssistant = createShoppingAssistant({
+    db,
+    sourceSql,
+    market: (code) => ({ code, currency: "USD" }),
+    retailerSearch: async ({ query }) => {
+      calvinRetailerQueries.push(query);
+      return calvinRetailerProducts;
+    },
+    client: {
+      responses: {
+        create: async (request) => {
+          if (!request.tools) {
+            const latest = JSON.parse(request.input).latest_message;
+            return {
+              output: [],
+              output_text: JSON.stringify({
+                scope: /сам проверь/u.test(latest) ? "off_topic" : "shopping",
+                needs_clarification: false,
+                clarification_reason: "none",
+                clarifying_questions: [],
+                language: "ru",
+              }),
+            };
+          }
+          return {
+            output: [],
+            output_text: JSON.stringify({
+              answer: "Нашла варианты.",
+              result_state: "exact_matches",
+              conversation_title: "Боксерки Calvin Klein",
+              follow_up: "",
+              recommendations: [],
+              comparison_notes: [],
+              comparison: [],
+            }),
+          };
+        },
+      },
+    },
+  });
+  const calvinCorrection = await calvinAssistant.respond({
+    message: "Не не я хочу боксерки",
+    messages: [
+      {
+        role: "user",
+        content:
+          "Я хочу посмотреть трусы кевин кляйн хочу заказать с доставкой домой",
+      },
+      {
+        role: "assistant",
+        content:
+          "Calvin Klein Men's Cotton Classics Briefs Underwear, 3-Pack",
+      },
+    ],
+    shoppingContext:
+      "Я хочу посмотреть трусы кевин кляйн хочу заказать с доставкой домой",
+    marketCode: "us",
+    language: "en",
+  });
+  assert.strictEqual(
+    calvinCorrection.recommendations.length,
+    3,
+    "The boxer correction did not return a useful top three",
+  );
+  assert(
+    calvinCorrection.recommendations.every(
+      (item) =>
+        /boxer briefs/i.test(item.title) &&
+        item.image_url &&
+        item.availability === "In stock" &&
+        item.pack_count === 3,
+    ),
+    "A briefs listing, missing photo, availability, or pack count survived the boxer correction",
+  );
+  assert(
+    !calvinCorrection.recommendations.some((item) =>
+      /classics briefs underwear/i.test(item.title),
+    ),
+    "Plain briefs were shown after the shopper corrected the subtype to boxers",
+  );
+  assert.deepStrictEqual(
+    new Set(calvinCorrection.recommendations.map((item) => item.position_role)),
+    new Set(["best_overall", "lowest_price", "alternative"]),
+    "The top three were not given distinct, honest decision roles",
+  );
+  assert(
+    /calvin/i.test(calvinCorrection.resolved_request) &&
+      /доставк/u.test(calvinCorrection.resolved_request) &&
+      /боксерк/u.test(calvinCorrection.resolved_request),
+    `The corrected context lost the brand, delivery request, or requested subtype: ${calvinCorrection.resolved_request}`,
+  );
+  assert(
+    /размер/u.test(calvinCorrection.follow_up),
+    "An apparel result without a size did not ask the one useful fit question",
+  );
+
+  const calvinRetry = await calvinAssistant.respond({
+    message: "Так сам проверь это твоя работа зачем тогда ты нужен",
+    messages: [
+      { role: "user", content: "Не не я хочу боксерки" },
+      { role: "assistant", content: calvinCorrection.message },
+    ],
+    shoppingContext: calvinCorrection.resolved_request,
+    marketCode: "us",
+    language: "en",
+  });
+  assert.strictEqual(
+    calvinRetry.scope,
+    "shopping",
+    "A direct request to continue the active product search hit the off-topic refusal",
+  );
+  assert.strictEqual(
+    calvinRetry.recommendations.length,
+    3,
+    "Delia did not perform the active search herself after being told to check",
+  );
+  assert(
+    calvinRetailerQueries.every(
+      (query) =>
+        /calvin/i.test(query) && /klein/i.test(query) && /underwear/i.test(query),
+    ),
+    "The retailer retry lost the active Calvin Klein underwear intent",
+  );
+  assert(
+    !calvinRetry.message.startsWith("Я могу помочь только"),
+    "The retry still returned the shopping-scope refusal",
   );
 
   let malformedCalls = 0;

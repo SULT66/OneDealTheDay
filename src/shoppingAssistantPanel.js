@@ -104,7 +104,7 @@ function renderShoppingAssistantPanel(code, language) {
         </div>
         <form class="assistant-form">
           <div class="assistant-input-row"><textarea maxlength="1200" rows="1" required placeholder="${esc(t(language, "assistant.placeholder"))}" aria-label="${esc(t(language, "assistant.placeholder"))}"></textarea><button class="assistant-stop" type="button" data-assistant-stop hidden>${esc(t(language, "assistant.stop"))}</button><button class="assistant-send" type="submit" aria-label="${esc(t(language, "assistant.send"))}">↑</button></div>
-          <p class="assistant-disclaimer">${esc(t(language, "assistant.disclaimer"))}</p>
+          <p class="assistant-disclaimer" data-assistant-disclaimer>${esc(t(language, "assistant.disclaimer"))}</p>
         </form>
       </div>
     </div>

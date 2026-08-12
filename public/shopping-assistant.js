@@ -12,6 +12,7 @@
   const closeButton = panel.querySelector("[data-shopping-assistant-close]");
   const form = panel.querySelector("form");
   const input = panel.querySelector("textarea");
+  const disclaimerElement = panel.querySelector("[data-assistant-disclaimer]");
   const messagesElement = panel.querySelector("[data-assistant-messages]");
   const conversationElement = panel.querySelector(".assistant-conversation");
   const submitButton = panel.querySelector(".assistant-send");
@@ -139,10 +140,14 @@
       actionStores: "Check other stores", feedbackQuestion: "Was this useful?",
       helpful: "Helpful", notHelpful: "Not helpful", wrongPrice: "Price is wrong",
       feedbackThanks: "Thanks — your feedback was recorded.",
-      partialTitle: "Current product pages", partialStatus: "Details not independently verified",
+      partialTitle: "Current product pages", partialStatus: "Confirm current price and availability with the retailer",
       checkPrice: "Check live price", viewOffer: "Open retailer page",
       topThree: "Top 3 in", topOne: "Top option in", topOptions: "Top options in", option: "option", options: "options",
       actionSimilar: "Show similar models", actionRetry: "Search again",
+      you: "You", placeholder: "What are you shopping for?",
+      disclaimer: "Prices and availability can change. Confirm final details with the retailer.",
+      positionBestOverall: "Best overall", positionLowestPrice: "Lowest price", positionAlternative: "Alternative",
+      availability: "Availability", pack: "Pack", sizes: "Sizes",
     },
     ru: {
       product: "Товар", price: "Цена", bestFor: "Лучше для", score: "Оценка",
@@ -158,10 +163,14 @@
       actionStores: "Проверить другие магазины", feedbackQuestion: "Ответ был полезен?",
       helpful: "Полезно", notHelpful: "Не помогло", wrongPrice: "Цена неверна",
       feedbackThanks: "Спасибо — отзыв сохранён.",
-      partialTitle: "Актуальные товарные страницы", partialStatus: "Часть данных не подтверждена независимо",
+      partialTitle: "Актуальные товарные страницы", partialStatus: "Уточните текущую цену и наличие у магазина",
       checkPrice: "Проверить цену", viewOffer: "Открыть страницу магазина",
       topThree: "Топ-3 ·", topOne: "Лучший вариант ·", topOptions: "Лучшие варианты ·", option: "вариант", options: "варианты",
       actionSimilar: "Показать похожие модели", actionRetry: "Повторить поиск",
+      you: "Вы", placeholder: "Что хотите купить?",
+      disclaimer: "Цена и наличие могут измениться. Проверьте итоговые условия у магазина.",
+      positionBestOverall: "Лучший выбор", positionLowestPrice: "Самая низкая цена", positionAlternative: "Альтернатива",
+      availability: "Наличие", pack: "В упаковке", sizes: "Размеры",
     },
     es: {
       product: "Producto", price: "Precio", bestFor: "Ideal para", score: "Puntuación",
@@ -177,10 +186,14 @@
       actionStores: "Comprobar otras tiendas", feedbackQuestion: "¿Te sirvió?",
       helpful: "Útil", notHelpful: "No fue útil", wrongPrice: "El precio es incorrecto",
       feedbackThanks: "Gracias, guardamos tu opinión.",
-      partialTitle: "Páginas de producto actuales", partialStatus: "Datos no verificados de forma independiente",
+      partialTitle: "Páginas de producto actuales", partialStatus: "Confirma el precio y la disponibilidad con la tienda",
       checkPrice: "Comprobar precio", viewOffer: "Abrir página de la tienda",
       topThree: "Top 3 ·", topOne: "Mejor opción ·", topOptions: "Mejores opciones ·", option: "opción", options: "opciones",
       actionSimilar: "Ver modelos similares", actionRetry: "Buscar de nuevo",
+      you: "Tú", placeholder: "¿Qué quieres comprar?",
+      disclaimer: "El precio y la disponibilidad pueden cambiar. Confirma los detalles con la tienda.",
+      positionBestOverall: "Mejor opción", positionLowestPrice: "Precio más bajo", positionAlternative: "Alternativa",
+      availability: "Disponibilidad", pack: "Paquete", sizes: "Tallas",
     },
     fr: {
       product: "Produit", price: "Prix", bestFor: "Idéal pour", score: "Score",
@@ -196,10 +209,14 @@
       actionStores: "Vérifier d’autres magasins", feedbackQuestion: "Est-ce utile ?",
       helpful: "Utile", notHelpful: "Pas utile", wrongPrice: "Le prix est incorrect",
       feedbackThanks: "Merci, votre avis a été enregistré.",
-      partialTitle: "Pages produit actuelles", partialStatus: "Données non vérifiées indépendamment",
+      partialTitle: "Pages produit actuelles", partialStatus: "Confirmez le prix et la disponibilité auprès du vendeur",
       checkPrice: "Vérifier le prix", viewOffer: "Ouvrir la page du vendeur",
       topThree: "Top 3 ·", topOne: "Meilleure option ·", topOptions: "Meilleures options ·", option: "option", options: "options",
       actionSimilar: "Voir des modèles similaires", actionRetry: "Relancer la recherche",
+      you: "Vous", placeholder: "Que souhaitez-vous acheter ?",
+      disclaimer: "Le prix et la disponibilité peuvent changer. Confirmez les détails auprès du vendeur.",
+      positionBestOverall: "Meilleur choix", positionLowestPrice: "Prix le plus bas", positionAlternative: "Alternative",
+      availability: "Disponibilité", pack: "Lot", sizes: "Tailles",
     },
     de: {
       product: "Produkt", price: "Preis", bestFor: "Am besten für", score: "Bewertung",
@@ -215,10 +232,14 @@
       actionStores: "Andere Händler prüfen", feedbackQuestion: "War das hilfreich?",
       helpful: "Hilfreich", notHelpful: "Nicht hilfreich", wrongPrice: "Preis ist falsch",
       feedbackThanks: "Danke, Ihr Feedback wurde gespeichert.",
-      partialTitle: "Aktuelle Produktseiten", partialStatus: "Angaben nicht unabhängig bestätigt",
+      partialTitle: "Aktuelle Produktseiten", partialStatus: "Preis und Verfügbarkeit beim Händler bestätigen",
       checkPrice: "Aktuellen Preis prüfen", viewOffer: "Händlerseite öffnen",
       topThree: "Top 3 ·", topOne: "Beste Option ·", topOptions: "Beste Optionen ·", option: "Option", options: "Optionen",
       actionSimilar: "Ähnliche Modelle zeigen", actionRetry: "Erneut suchen",
+      you: "Sie", placeholder: "Was möchten Sie kaufen?",
+      disclaimer: "Preis und Verfügbarkeit können sich ändern. Prüfen Sie die endgültigen Angaben beim Händler.",
+      positionBestOverall: "Beste Wahl", positionLowestPrice: "Niedrigster Preis", positionAlternative: "Alternative",
+      availability: "Verfügbarkeit", pack: "Packung", sizes: "Größen",
     },
   };
   const responseLanguage = (body = {}) => {
@@ -244,6 +265,33 @@
       count === 1 ? "option" : "options",
     );
   };
+  const messageLanguage = (value) =>
+    /[\u0400-\u04ff]/u.test(String(value || "")) ? "ru" : language();
+  function updateConversationLocale(body = {}) {
+    const selectedLanguage = responseLanguage(body);
+    const localizedBody = { language: selectedLanguage };
+    input.placeholder = responseTr(
+      localizedBody,
+      "placeholder",
+      tr("placeholder", "What are you shopping for?"),
+    );
+    if (disclaimerElement) {
+      disclaimerElement.textContent = responseTr(
+        localizedBody,
+        "disclaimer",
+        tr(
+          "disclaimer",
+          "Prices and availability can change. Confirm final details with the retailer.",
+        ),
+      );
+    }
+    panel.dataset.conversationLanguage = selectedLanguage;
+    messagesElement
+      .querySelectorAll(".assistant-message.is-user .assistant-message-label")
+      .forEach((label) => {
+        label.textContent = responseTr(localizedBody, "you", "You");
+      });
+  }
   const looksLikeSerializedPayload = (value) => {
     const text = String(value || "").trim();
     return (
@@ -351,6 +399,7 @@
           : language(),
       message: String(message).slice(0, 700),
       conversation_title: String(value.conversation_title || "").slice(0, 60),
+      resolved_request: String(value.resolved_request || "").slice(0, 1200),
       follow_up: String(value.follow_up || "").slice(0, 240),
       recommendations: (Array.isArray(value.recommendations)
         ? value.recommendations
@@ -362,6 +411,22 @@
           ...item,
           url: safeBrowserUrl(item.url),
           image_url: safeBrowserUrl(item.image_url),
+          position_role: ["best_overall", "lowest_price", "alternative"].includes(
+            item.position_role,
+          )
+            ? item.position_role
+            : "alternative",
+          availability: String(item.availability || "").slice(0, 100),
+          available_sizes: (Array.isArray(item.available_sizes)
+            ? item.available_sizes
+            : [])
+            .map((size) => String(size).slice(0, 20))
+            .filter(Boolean)
+            .slice(0, 8),
+          pack_count:
+            Number.isInteger(Number(item.pack_count)) && Number(item.pack_count) > 1
+              ? Number(item.pack_count)
+              : null,
           badge: "",
           other_offers: (Array.isArray(item.other_offers)
             ? item.other_offers
@@ -404,6 +469,7 @@
             item.retailer &&
             item.reason &&
             item.url &&
+            item.image_url &&
             hasSpecificProductIdentity(item.title) &&
             isDirectProductPage(item.url) &&
             !isEditorialProductPage(item.title, item.url),
@@ -449,6 +515,8 @@
       id: makeId(),
       title: tr("newChatTitle", "New shopping chat"),
       messages: [],
+      shopping_context: "",
+      conversation_language: language(),
       market: market(),
       language: language(),
       created_at: new Date().toISOString(),
@@ -493,6 +561,15 @@
 
   function setActiveChat(chat) {
     activeChat = chat || createDraftChat();
+    activeChat.shopping_context = String(activeChat.shopping_context || "").slice(
+      0,
+      1200,
+    );
+    activeChat.conversation_language =
+      RESPONSE_LABELS[activeChat.conversation_language]
+        ? activeChat.conversation_language
+        : activeChat.language || language();
+    updateConversationLocale({ language: activeChat.conversation_language });
     productContextElement.hidden = true;
     productContextElement.replaceChildren();
     messagesElement.replaceChildren();
@@ -714,7 +791,10 @@
     message.className = `assistant-message is-${role}${pending ? " is-pending" : ""}`;
     const label = document.createElement("span");
     label.className = "assistant-message-label";
-    label.textContent = role === "user" ? tr("you", "You") : "Delia";
+    label.textContent =
+      role === "user"
+        ? responseTr({ language: messageLanguage(content) }, "you", "You")
+        : "Delia";
     const body = document.createElement("div");
     body.className = "assistant-message-copy";
     body.textContent = content;
@@ -824,6 +904,20 @@
       media.append(image, rank);
       const content = document.createElement("div");
       content.className = "assistant-recommendation-content";
+      const position = document.createElement("span");
+      position.className = "assistant-recommendation-role";
+      const positionLabels = {
+        best_overall: ["positionBestOverall", "Best overall"],
+        lowest_price: ["positionLowestPrice", "Lowest price"],
+        alternative: ["positionAlternative", "Alternative"],
+      };
+      const [positionKey, positionFallback] =
+        positionLabels[recommendation.position_role] || positionLabels.alternative;
+      position.textContent = responseTr(
+        responseBody,
+        positionKey,
+        positionFallback,
+      );
       const title = document.createElement("h3");
       title.textContent = recommendation.title;
       const meta = document.createElement("div");
@@ -853,8 +947,17 @@
       const facts = document.createElement("dl");
       facts.className = "assistant-recommendation-facts";
       for (const [labelText, value] of [
+        [responseTr(responseBody, "availability", "Availability"), recommendation.availability],
         [responseTr(responseBody, "delivery", "Delivery"), recommendation.delivery],
         [responseTr(responseBody, "returns", "Returns"), recommendation.returns],
+        [
+          responseTr(responseBody, "pack", "Pack"),
+          recommendation.pack_count ? String(recommendation.pack_count) : "",
+        ],
+        [
+          responseTr(responseBody, "sizes", "Sizes"),
+          (recommendation.available_sizes || []).join(", "),
+        ],
       ]) {
         if (!value) continue;
         const wrapper = document.createElement("div");
@@ -937,6 +1040,7 @@
       );
       controls.append(save, ask);
       content.append(
+        position,
         title,
         meta,
         signals,
@@ -972,12 +1076,9 @@
         image.alt = offer.title;
         image.loading = "lazy";
         image.addEventListener("error", () => {
-          image.remove();
-          card.classList.add("is-image-missing");
+          card.remove();
         }, { once: true });
         card.append(image);
-      } else {
-        card.classList.add("is-image-missing");
       }
       const content = document.createElement("div");
       content.className = "assistant-partial-offer-copy";
@@ -1293,6 +1394,7 @@
 
   function renderResponse(message, body, record) {
     body = normalizeResponseBody(body);
+    updateConversationLocale(body);
     if (record) record.response = body;
     const copyElement = message.querySelector(".assistant-message-copy");
     copyElement.textContent = body.message || "";
@@ -1402,6 +1504,8 @@
     persistChats();
     const greeting = localGreetingResponse(question);
     if (greeting) {
+      activeChat.conversation_language = messageLanguage(question);
+      updateConversationLocale({ language: activeChat.conversation_language });
       userRecord.include_in_model = false;
       const assistantRecord = {
         id: makeId(),
@@ -1436,6 +1540,7 @@
         body: JSON.stringify({
           message: question,
           messages: priorHistory,
+          shopping_context: activeChat.shopping_context || "",
           market: market(),
           language: language(),
         }),
@@ -1447,6 +1552,10 @@
             tr("failed", "The assistant is unavailable right now."),
         );
       const body = normalizeResponseBody(responseBody);
+      activeChat.conversation_language = body.language || messageLanguage(question);
+      if (body.scope === "shopping" && body.resolved_request) {
+        activeChat.shopping_context = body.resolved_request;
+      }
       if (body.scope === "off_topic") userRecord.include_in_model = false;
       if (body.scope === "shopping" && body.conversation_title) {
         activeChat.title = body.conversation_title;

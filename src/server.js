@@ -230,6 +230,7 @@ app.post("/api/shopping-assistant", shoppingAssistantRateLimit, async (req, res)
     const result = await shoppingAssistant.respond({
       message:req.body?.message,
       messages:req.body?.messages,
+      shoppingContext:req.body?.shopping_context,
       marketCode:selectedMarket.code,
       language,
       signal:requestController.signal
@@ -755,8 +756,8 @@ const shell = (title, description, canonical, body, schema = null, image = "", r
   const html = `<!doctype html><html lang="${esc(locale)}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0a1020"><title>${esc(title)}</title><meta name="description" content="${esc(description.slice(0,160))}"><meta name="robots" content="${esc(robotsContent)}"><link rel="canonical" href="${esc(canonical)}"><link rel="icon" href="/favicon.svg" type="image/svg+xml">${alternates}${imageConnectionHints(image)}<meta property="og:type" content="${ogType}"><meta property="og:site_name" content="OneDailyDrop"><meta property="og:locale" content="${esc(ogLocale)}"><meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(description.slice(0,180))}"><meta property="og:url" content="${esc(canonical)}">${image ? `<meta property="og:image" content="${esc(image)}"><meta property="og:image:alt" content="${esc(title)}">` : ""}<meta name="twitter:card" content="${image ? "summary_large_image" : "summary"}"><meta name="twitter:title" content="${esc(title)}"><meta name="twitter:description" content="${esc(description.slice(0,180))}">${image ? `<meta name="twitter:image" content="${esc(image)}">` : ""}<link rel="stylesheet" href="/styles.css?v=20260731-brand-lockup"><link rel="stylesheet" href="/brand-theme.css?v=20260731-brand-lockup"><link rel="stylesheet" href="/liquid-glass.css?v=20260731-brand-lockup"><script type="application/ld+json">${JSON.stringify(pageSchema).replace(/</g,"\\u003c")}</script><script>window.__ODD_LANGUAGE__=${JSON.stringify(language)};window.__ODD_LOCALE__=${JSON.stringify(locale)};window.__ODD_TEXT__=${JSON.stringify(clientCopy(language)).replace(/</g, "\\u003c")};</script></head><body>${sharedHeader(code, language, req)}${body}${sharedFooter(code, language)}<script src="/theme.js?v=20260728-i18n2"></script><script src="/site-shell.js?v=20260728-i18n2"></script><script src="/click-tracking.js?v=20260805-stage2"></script></body></html>`;
   const versionedHtml = html
     .replace("/styles.css?v=20260731-brand-lockup", "/styles.css?v=20260808-assistant")
-    .replace("</head>", '<link rel="stylesheet" href="/i18n.css?v=20260808-assistant"><link rel="stylesheet" href="/shopping-assistant.css?v=20260812-regional-top-three"></head>')
-    .replace("</body>", `${shoppingAssistantPanel(code, language)}<script src="/shopping-assistant.js?v=20260812-friendly-small-talk"></script></body>`);
+    .replace("</head>", '<link rel="stylesheet" href="/i18n.css?v=20260808-assistant"><link rel="stylesheet" href="/shopping-assistant.css?v=20260812-context-photo-cards"></head>')
+    .replace("</body>", `${shoppingAssistantPanel(code, language)}<script src="/shopping-assistant.js?v=20260812-context-photo-cards"></script></body>`);
   return localizeHtml(versionedHtml, language);
 };
 
