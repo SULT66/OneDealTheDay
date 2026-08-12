@@ -722,6 +722,9 @@ const OUTCOME_COPY = {
     picks: "Current retailer options for {market}: {count}. Prices are shown in {currency}.",
     partial: "Direct product pages for {market}: {count}. Some details still need confirmation from the retailer; prices are in {currency}.",
     retailerFound: "I found a matching option on {retailer} for {market}. Below are the strongest regional choices in {currency}.",
+    retailerPriceUnavailable: "I found a matching option on {retailer}, but its price is not visible in the search result. I cannot confirm whether it is cheaper. Direct regional product pages found: {count}; I did not pad the list with category or review pages.",
+    retailerPriceOnly: "{retailer} is {retailerPrice}, but I could not confirm a second matching regional offer with a visible price. I cannot verify whether it is the cheapest option for {market} yet.",
+    retailerPriceUnavailableWithAlternative: "I found a matching option on {retailer}, but its price is not visible in the search result. I cannot confirm whether it is cheaper. The lowest visible regional price I found is {alternativePrice} at {alternativeRetailer}.",
     retailerCheaper: "{retailer} is {retailerPrice}, which is {difference} cheaper than the next priced option I found for {market}.",
     alternativeCheaper: "{retailer} is {retailerPrice}. {alternativeRetailer} is cheaper at {alternativePrice}, a difference of {difference} for {market}.",
     retailerSamePrice: "{retailer} and {alternativeRetailer} are both {retailerPrice} for {market}.",
@@ -734,6 +737,9 @@ const OUTCOME_COPY = {
     picks: "Нашла лучшие актуальные варианты для региона {market}: {count}. Цены показаны в {currency}.",
     partial: "Нашла прямые товарные страницы для региона {market}: {count}. Часть данных нужно проверить у магазина; цены указаны в {currency}.",
     retailerFound: "На {retailer} найден подходящий вариант. Ниже — лучшие предложения для региона {market}; цены указаны в {currency}.",
+    retailerPriceUnavailable: "На {retailer} найден подходящий вариант, но цена в результатах поиска не отображается. Подтвердить, что там дешевле, нельзя. Прямых региональных товарных страниц найдено: {count}; список не дополнен страницами категорий или обзорами.",
+    retailerPriceOnly: "На {retailer} цена {retailerPrice}, но второго подходящего регионального предложения с видимой ценой найти не удалось. Поэтому пока нельзя подтвердить, что это самый дешёвый вариант для региона {market}.",
+    retailerPriceUnavailableWithAlternative: "На {retailer} найден подходящий вариант, но цена в результатах поиска не отображается, поэтому подтвердить, что там дешевле, нельзя. Самая низкая видимая региональная цена — {alternativePrice} у {alternativeRetailer}.",
     retailerCheaper: "На {retailer} цена {retailerPrice}; это на {difference} дешевле следующего найденного варианта для региона {market}.",
     alternativeCheaper: "На {retailer} цена {retailerPrice}. У {alternativeRetailer} дешевле: {alternativePrice}; разница — {difference} для региона {market}.",
     retailerSamePrice: "На {retailer} и у {alternativeRetailer} одинаковая цена: {retailerPrice} для региона {market}.",
@@ -746,6 +752,9 @@ const OUTCOME_COPY = {
     picks: "Encontré {count} opciones actuales destacadas para {market}. Los precios están en {currency}.",
     partial: "Encontré {count} páginas directas de producto para {market}. Confirma algunos datos con la tienda; los precios están en {currency}.",
     retailerFound: "Encontré una opción adecuada en {retailer} para {market}. Debajo están las mejores alternativas regionales en {currency}.",
+    retailerPriceUnavailable: "Encontré una opción adecuada en {retailer}, pero el precio no aparece en el resultado. No puedo confirmar si es más barata. Páginas regionales directas encontradas: {count}; no completé la lista con páginas de categorías o reseñas.",
+    retailerPriceOnly: "{retailer} cuesta {retailerPrice}, pero no pude confirmar una segunda oferta regional adecuada con precio visible. Aún no puedo verificar que sea la opción más barata para {market}.",
+    retailerPriceUnavailableWithAlternative: "Encontré una opción adecuada en {retailer}, pero su precio no aparece en el resultado, así que no puedo confirmar si es más barata. El precio regional visible más bajo que encontré es {alternativePrice} en {alternativeRetailer}.",
     retailerCheaper: "{retailer} cuesta {retailerPrice}, {difference} menos que la siguiente opción con precio para {market}.",
     alternativeCheaper: "{retailer} cuesta {retailerPrice}. {alternativeRetailer} es más barato: {alternativePrice}, una diferencia de {difference} para {market}.",
     retailerSamePrice: "{retailer} y {alternativeRetailer} cuestan {retailerPrice} para {market}.",
@@ -758,6 +767,9 @@ const OUTCOME_COPY = {
     picks: "J’ai trouvé {count} options actuelles solides pour la région {market}. Les prix sont en {currency}.",
     partial: "J’ai trouvé {count} pages produit directes pour la région {market}. Certains détails restent à confirmer auprès du vendeur ; les prix sont en {currency}.",
     retailerFound: "J’ai trouvé une option correspondante sur {retailer} pour la région {market}. Voici les meilleures options régionales en {currency}.",
+    retailerPriceUnavailable: "J’ai trouvé une option correspondante sur {retailer}, mais son prix n’apparaît pas dans le résultat. Je ne peux pas confirmer qu’elle est moins chère. Pages produit régionales directes trouvées : {count} ; je n’ai pas complété la liste avec des pages de catégorie ou des avis.",
+    retailerPriceOnly: "{retailer} est à {retailerPrice}, mais je n’ai pas pu confirmer une deuxième offre régionale correspondante avec un prix visible. Je ne peux pas encore vérifier qu’il s’agit de l’option la moins chère pour {market}.",
+    retailerPriceUnavailableWithAlternative: "J’ai trouvé une option correspondante sur {retailer}, mais son prix n’apparaît pas dans le résultat ; je ne peux donc pas confirmer qu’elle est moins chère. Le prix régional visible le plus bas trouvé est {alternativePrice} chez {alternativeRetailer}.",
     retailerCheaper: "{retailer} est à {retailerPrice}, soit {difference} de moins que l’option tarifée suivante pour la région {market}.",
     alternativeCheaper: "{retailer} est à {retailerPrice}. {alternativeRetailer} est moins cher à {alternativePrice}, soit {difference} d’écart pour la région {market}.",
     retailerSamePrice: "{retailer} et {alternativeRetailer} sont tous deux à {retailerPrice} pour la région {market}.",
@@ -770,6 +782,9 @@ const OUTCOME_COPY = {
     picks: "Ich habe {count} starke aktuelle Optionen für den Markt {market} gefunden. Die Preise sind in {currency}.",
     partial: "Ich habe {count} direkte Produktseiten für den Markt {market} gefunden. Einige Angaben müssen beim Händler bestätigt werden; die Preise sind in {currency}.",
     retailerFound: "Ich habe bei {retailer} eine passende Option für den Markt {market} gefunden. Unten stehen die stärksten regionalen Angebote in {currency}.",
+    retailerPriceUnavailable: "Ich habe bei {retailer} eine passende Option gefunden, aber der Preis ist im Suchergebnis nicht sichtbar. Ich kann nicht bestätigen, ob sie günstiger ist. Gefundene direkte regionale Produktseiten: {count}; die Liste wurde nicht mit Kategorie- oder Testseiten aufgefüllt.",
+    retailerPriceOnly: "{retailer} kostet {retailerPrice}, aber ich konnte kein zweites passendes regionales Angebot mit sichtbarem Preis bestätigen. Daher kann ich noch nicht bestätigen, dass dies die günstigste Option für {market} ist.",
+    retailerPriceUnavailableWithAlternative: "Ich habe bei {retailer} eine passende Option gefunden, aber der Preis ist im Suchergebnis nicht sichtbar; daher kann ich nicht bestätigen, ob sie günstiger ist. Der niedrigste sichtbare regionale Preis ist {alternativePrice} bei {alternativeRetailer}.",
     retailerCheaper: "{retailer} kostet {retailerPrice} und ist damit {difference} günstiger als die nächste bepreiste Option für den Markt {market}.",
     alternativeCheaper: "{retailer} kostet {retailerPrice}. {alternativeRetailer} ist mit {alternativePrice} günstiger; die Differenz beträgt {difference} für den Markt {market}.",
     retailerSamePrice: "{retailer} und {alternativeRetailer} kosten für den Markt {market} jeweils {retailerPrice}.",
@@ -819,6 +834,12 @@ function offerMatchesRetailer(offer, retailer) {
     .includes(normalized);
 }
 
+function isLowerPriceRequest(value) {
+  return /(?:\b(?:cheap|cheaper|cheapest|lower\s+price)\b|подешевле|дешевле|mas\s+barato|moins\s+cher|g[uü]nstiger)/iu.test(
+    clean(value),
+  );
+}
+
 function regionalOutcomeMessage({
   language,
   marketCode,
@@ -827,6 +848,7 @@ function regionalOutcomeMessage({
   recommendations,
   partialOffers,
   resultState,
+  lowerPriceRequested,
 }) {
   const selectedLanguage = OUTCOME_COPY[language] ? language : "en";
   const copy = OUTCOME_COPY[selectedLanguage];
@@ -877,6 +899,31 @@ function regionalOutcomeMessage({
           return fillCopy(copy.alternativeCheaper, comparisonValues);
         }
         return fillCopy(copy.retailerSamePrice, comparisonValues);
+      }
+      if (lowerPriceRequested && retailerPrice <= 0 && alternatives.length) {
+        const alternative = alternatives[0];
+        return fillCopy(copy.retailerPriceUnavailableWithAlternative, {
+          ...values,
+          alternativeRetailer: alternative.offer.retailer || "Retailer",
+          alternativePrice: formatOutcomeMoney(
+            alternative.price,
+            currency,
+            selectedLanguage,
+          ),
+        });
+      }
+      if (lowerPriceRequested && retailerPrice > 0) {
+        return fillCopy(copy.retailerPriceOnly, {
+          ...values,
+          retailerPrice: formatOutcomeMoney(
+            retailerPrice,
+            currency,
+            selectedLanguage,
+          ),
+        });
+      }
+      if (lowerPriceRequested) {
+        return fillCopy(copy.retailerPriceUnavailable, values);
       }
       return fillCopy(copy.retailerFound, values);
     }
@@ -1803,9 +1850,7 @@ function deduplicateRecommendations(items) {
 
 function rankRecommendationCandidates(items, request) {
   const preferredRetailer = requestedRetailer(request);
-  const wantsLowerPrice = /(?:\b(?:cheap|cheaper|cheapest|lower\s+price)\b|подешевле|дешевле|mas\s+barato|moins\s+cher|gunstiger)/iu.test(
-    request,
-  );
+  const wantsLowerPrice = isLowerPriceRequest(request);
   const evidenceRank = {
     verified_catalog: 4,
     verified_retailer: 3,
@@ -2375,6 +2420,7 @@ function createShoppingAssistant({
               recommendations,
               partialOffers,
               resultState,
+              lowerPriceRequested: isLowerPriceRequest(userMessage),
             }),
         follow_up:
           mustReplaceNarrative || !visibleOfferCount || resultState === "no_match"

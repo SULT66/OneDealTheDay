@@ -49,6 +49,7 @@ for (const required of [
   "localGreetingResponse",
   "recoverEmbeddedAnswer",
   "responseTr",
+  "responseOptionCountLabel",
   "isDirectProductPage",
   "isEditorialProductPage",
   "malformed",
@@ -63,6 +64,11 @@ for (const required of [
 assert(
   client.includes("Привет! 👋 Что хочешь купить?"),
   "Delia does not answer a Russian greeting naturally",
+);
+assert(
+  client.includes('topOne: "Лучший вариант ·"') &&
+    client.includes('if (finalDigit === 1) return "вариант"'),
+  "Delia still renders the Russian one-result label with incorrect plural grammar",
 );
 assert(
   client.includes("bro|dude|man|there"),

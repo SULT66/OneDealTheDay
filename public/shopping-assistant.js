@@ -109,7 +109,7 @@
       feedbackThanks: "Thanks — your feedback was recorded.",
       partialTitle: "Current product pages", partialStatus: "Details not independently verified",
       checkPrice: "Check live price", viewOffer: "Open retailer page",
-      topThree: "Top 3 in", topOptions: "Top options in", options: "options",
+      topThree: "Top 3 in", topOne: "Top option in", topOptions: "Top options in", option: "option", options: "options",
       actionSimilar: "Show similar models", actionRetry: "Search again",
     },
     ru: {
@@ -128,7 +128,7 @@
       feedbackThanks: "Спасибо — отзыв сохранён.",
       partialTitle: "Актуальные товарные страницы", partialStatus: "Часть данных не подтверждена независимо",
       checkPrice: "Проверить цену", viewOffer: "Открыть страницу магазина",
-      topThree: "Топ-3 ·", topOptions: "Лучшие варианты ·", options: "варианта",
+      topThree: "Топ-3 ·", topOne: "Лучший вариант ·", topOptions: "Лучшие варианты ·", option: "вариант", options: "варианты",
       actionSimilar: "Показать похожие модели", actionRetry: "Повторить поиск",
     },
     es: {
@@ -147,7 +147,7 @@
       feedbackThanks: "Gracias, guardamos tu opinión.",
       partialTitle: "Páginas de producto actuales", partialStatus: "Datos no verificados de forma independiente",
       checkPrice: "Comprobar precio", viewOffer: "Abrir página de la tienda",
-      topThree: "Top 3 ·", topOptions: "Mejores opciones ·", options: "opciones",
+      topThree: "Top 3 ·", topOne: "Mejor opción ·", topOptions: "Mejores opciones ·", option: "opción", options: "opciones",
       actionSimilar: "Ver modelos similares", actionRetry: "Buscar de nuevo",
     },
     fr: {
@@ -166,7 +166,7 @@
       feedbackThanks: "Merci, votre avis a été enregistré.",
       partialTitle: "Pages produit actuelles", partialStatus: "Données non vérifiées indépendamment",
       checkPrice: "Vérifier le prix", viewOffer: "Ouvrir la page du vendeur",
-      topThree: "Top 3 ·", topOptions: "Meilleures options ·", options: "options",
+      topThree: "Top 3 ·", topOne: "Meilleure option ·", topOptions: "Meilleures options ·", option: "option", options: "options",
       actionSimilar: "Voir des modèles similaires", actionRetry: "Relancer la recherche",
     },
     de: {
@@ -185,7 +185,7 @@
       feedbackThanks: "Danke, Ihr Feedback wurde gespeichert.",
       partialTitle: "Aktuelle Produktseiten", partialStatus: "Angaben nicht unabhängig bestätigt",
       checkPrice: "Aktuellen Preis prüfen", viewOffer: "Händlerseite öffnen",
-      topThree: "Top 3 ·", topOptions: "Beste Optionen ·", options: "Optionen",
+      topThree: "Top 3 ·", topOne: "Beste Option ·", topOptions: "Beste Optionen ·", option: "Option", options: "Optionen",
       actionSimilar: "Ähnliche Modelle zeigen", actionRetry: "Erneut suchen",
     },
   };
@@ -196,6 +196,22 @@
   };
   const responseTr = (body, key, fallback) =>
     RESPONSE_LABELS[responseLanguage(body)]?.[key] || fallback;
+  const responseOptionCountLabel = (body, count) => {
+    const selectedLanguage = responseLanguage(body);
+    if (selectedLanguage === "ru") {
+      const finalTwoDigits = count % 100;
+      if (finalTwoDigits >= 11 && finalTwoDigits <= 14) return "вариантов";
+      const finalDigit = count % 10;
+      if (finalDigit === 1) return "вариант";
+      if (finalDigit >= 2 && finalDigit <= 4) return "варианта";
+      return "вариантов";
+    }
+    return responseTr(
+      body,
+      count === 1 ? "option" : "options",
+      count === 1 ? "option" : "options",
+    );
+  };
   const looksLikeSerializedPayload = (value) => {
     const text = String(value || "").trim();
     return (
@@ -744,13 +760,11 @@
     const context = document.createElement("div");
     context.className = "assistant-market-context";
     const title = document.createElement("strong");
-    title.textContent = `${responseTr(
-      body,
-      count === 3 ? "topThree" : "topOptions",
-      count === 3 ? "Top 3 in" : "Top options in",
-    )} ${body.market_name}`;
+    const titleKey = count === 3 ? "topThree" : count === 1 ? "topOne" : "topOptions";
+    const titleFallback = count === 3 ? "Top 3 in" : count === 1 ? "Top option in" : "Top options in";
+    title.textContent = `${responseTr(body, titleKey, titleFallback)} ${body.market_name}`;
     const details = document.createElement("span");
-    details.textContent = `${body.currency} · ${count} ${responseTr(body, "options", "options")}`;
+    details.textContent = `${body.currency} · ${count} ${responseOptionCountLabel(body, count)}`;
     context.append(title, details);
     host.append(context);
   }

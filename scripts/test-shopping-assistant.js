@@ -760,6 +760,109 @@ const client = {
     "Duplicate retailer domains still clutter the source list",
   );
 
+  const unpricedFrameCalls = [];
+  const unpricedFrameAssistant = createShoppingAssistant({
+    db,
+    sourceSql,
+    market: (code) => ({
+      code,
+      name: code === "ca" ? "Canada" : "United States",
+      currency: code === "ca" ? "CAD" : "USD",
+    }),
+    retailerSearch: async () => [],
+    client: {
+      responses: {
+        create: async (request) => {
+          unpricedFrameCalls.push(request);
+          if (unpricedFrameCalls.length === 1) {
+            return {
+              output: [],
+              output_text: JSON.stringify({
+                scope: "shopping",
+                needs_clarification: false,
+                clarification_reason: "none",
+                clarifying_questions: [],
+                language: "ru",
+              }),
+            };
+          }
+          const amazonUrl = "https://www.amazon.ca/dp/B0FRAME5001";
+          return {
+            output: [
+              {
+                type: "web_search_call",
+                action: {
+                  sources: [
+                    {
+                      url: amazonUrl,
+                      title: "Samsung The Frame 50-inch LS03FA 4K Smart TV",
+                    },
+                    {
+                      url: "https://www.bestbuy.ca/en-ca/collection/samsung-the-frame-tv/66090",
+                      title: "Samsung The Frame TV collection",
+                    },
+                    {
+                      url: "https://blog.bestbuy.ca/review/samsung-frame-tv-review",
+                      title: "Samsung The Frame TV review",
+                    },
+                  ],
+                },
+              },
+            ],
+            output_text: JSON.stringify({
+              answer: "На Amazon найден подходящий вариант.",
+              result_state: "exact_matches",
+              conversation_title: "Samsung The Frame дешевле",
+              follow_up: "",
+              recommendations: [
+                {
+                  title: "Samsung The Frame 50-inch LS03FA 4K Smart TV",
+                  retailer: "Amazon",
+                  price: "",
+                  badge: "",
+                  reason: "Точная модель на Amazon.ca; цена не отображается.",
+                  url: amazonUrl,
+                  action_label: "Открыть",
+                  source_type: "web",
+                  image_url: "",
+                  catalog_product_id: 0,
+                },
+              ],
+              comparison_notes: [],
+              comparison: [],
+            }),
+          };
+        },
+      },
+    },
+  });
+  const unpricedFrameResult = await unpricedFrameAssistant.respond({
+    message: "есть ли на амазоне и есть ли подешевле?",
+    messages: [
+      { role: "user", content: "хочу посмотреть телевизор самсунг frame" },
+      {
+        role: "assistant",
+        content: "Нашла Samsung The Frame в Costco Canada, но цена не отображается.",
+      },
+    ],
+    marketCode: "ca",
+    language: "en",
+  });
+  assert.strictEqual(unpricedFrameResult.recommendations.length, 0);
+  assert.strictEqual(unpricedFrameResult.partial_offers.length, 1);
+  assert.strictEqual(unpricedFrameResult.partial_offers[0].retailer, "Amazon");
+  assert(
+    unpricedFrameResult.message.includes("цена") &&
+      unpricedFrameResult.message.includes("не отображается") &&
+      unpricedFrameResult.message.includes("Подтвердить, что там дешевле, нельзя") &&
+      unpricedFrameResult.message.includes("Прямых региональных товарных страниц найдено: 1"),
+    "An unpriced Amazon result still pretends to answer the cheaper-price question",
+  );
+  assert(
+    !unpricedFrameResult.message.includes("Ниже — лучшие предложения"),
+    "An unpriced single retailer page still overstates the result as a regional price comparison",
+  );
+
   const assistant = createShoppingAssistant({
     db,
     sourceSql,
