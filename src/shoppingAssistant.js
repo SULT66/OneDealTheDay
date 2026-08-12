@@ -31,7 +31,7 @@ const INTENT_CONSTRAINT_WORDS = new Set(
   gebraucht geschäft geschäfte kaufen neu preiswert zustand`.split(/\s+/),
 );
 const PRODUCT_CATEGORY_GROUPS = {
-  tv: ["tv", "tvs", "television", "televisions", "qled", "oled"],
+  tv: ["tv", "tvs", "television", "televisions", "qled", "oled", "uhd", "4k", "8k"],
   phone: ["phone", "phones", "smartphone", "smartphones", "iphone"],
   laptop: ["laptop", "laptops", "notebook", "notebooks", "macbook"],
   tablet: ["tablet", "tablets", "ipad"],
@@ -51,6 +51,15 @@ const PRODUCT_CATEGORY_BY_ALIAS = new Map(
 const BRAND_TERMS = new Set(
   `acer amazon apple asus beats bose canon dell dyson google hisense hp lg lenovo meta microsoft motorola nikon nintendo oneplus panasonic philips roku samsung shark sony tcl vizio walmart xbox`.split(/\s+/),
 );
+const TV_ACCESSORY_PATTERN =
+  /\b(?:amp|amplifier|antenna|backlight|board|bracket|cable|cover|detector|headset|keypad|lamp|mainboard|mount|panel|parts?|power\s+supply|remote|replacement|sensor|soundbar|speaker|stand|t-?con|wall\s+mount)\b/iu;
+const REQUEST_MARKET_PATTERNS = [
+  ["us", /\b(?:u\.?s\.?a?|united states|america|сша|соедин[её]нн(?:ые|ых) штат)/iu],
+  ["ca", /\b(?:canada|канад[аеуы]?)\b/iu],
+  ["uk", /\b(?:u\.?k\.?|united kingdom|great britain|britain|великобритани[яию])\b/iu],
+  ["fr", /\b(?:france|франци[яию])\b/iu],
+  ["de", /\b(?:germany|deutschland|германи[яию])\b/iu],
+];
 
 const SHOPPING_SCOPE_RESPONSE_FORMAT = {
   type: "json_schema",
@@ -313,6 +322,21 @@ function categoryTokens(tokens) {
   return [...new Set(tokens.map((token) => PRODUCT_CATEGORY_BY_ALIAS.get(token)).filter(Boolean))];
 }
 
+function matchesRequestedCategory(candidate, category, tokens) {
+  if (category !== "tv") {
+    return PRODUCT_CATEGORY_GROUPS[category].some((alias) => tokens.has(alias));
+  }
+  const identity = clean(
+    `${candidate?.title || ""} ${candidate?.brand || ""} ${candidate?.model_number || ""}`,
+  );
+  if (TV_ACCESSORY_PATTERN.test(identity)) return false;
+  const identityTokens = candidateTokens(identity);
+  return (
+    PRODUCT_CATEGORY_GROUPS.tv.some((alias) => identityTokens.has(alias)) ||
+    /\b(?:un|qn|q|oled)\d{2,3}[a-z0-9-]*\b/iu.test(identity)
+  );
+}
+
 function matchesShoppingIntent(candidate, request) {
   const requestTokens = normalizedIntentTokens(request);
   if (!requestTokens.length) return false;
@@ -328,10 +352,21 @@ function matchesShoppingIntent(candidate, request) {
     .filter(Boolean)
     .join(" ");
   const tokens = candidateTokens(haystack);
+  const identityTokens = candidateTokens(
+    [
+      candidate?.title,
+      candidate?.brand,
+      candidate?.model_number,
+      candidate?.url,
+      candidate?.affiliate_url,
+    ]
+      .filter(Boolean)
+      .join(" "),
+  );
   const requestedCategories = categoryTokens(requestTokens);
   if (
-    requestedCategories.some((category) =>
-      PRODUCT_CATEGORY_GROUPS[category].every((alias) => !tokens.has(alias)),
+    requestedCategories.some(
+      (category) => !matchesRequestedCategory(candidate, category, tokens),
     )
   ) {
     return false;
@@ -340,15 +375,18 @@ function matchesShoppingIntent(candidate, request) {
   if (
     requestedBrands.length &&
     (isComparisonRequest(request) || requestedBrands.length > 1
-      ? requestedBrands.every((brand) => !tokens.has(brand))
-      : requestedBrands.some((brand) => !tokens.has(brand)))
+      ? requestedBrands.every((brand) => !identityTokens.has(brand))
+      : requestedBrands.some((brand) => !identityTokens.has(brand)))
   ) {
     return false;
   }
   const requestedModels = requestTokens.filter((token) => /\d/.test(token));
-  if (requestedModels.length && requestedModels.every((model) => !tokens.has(model))) {
+  if (
+    requestedModels.length &&
+    requestedModels.every((model) => !identityTokens.has(model))
+  ) {
     const descriptiveOverlap = requestTokens.filter(
-      (token) => !/\d/.test(token) && tokens.has(token),
+      (token) => !/\d/.test(token) && identityTokens.has(token),
     ).length;
     if (!isComparisonRequest(request) || descriptiveOverlap < 2) return false;
   }
@@ -453,6 +491,13 @@ function retailerSearchQuery(value) {
     ),
   ];
   return [...new Set(prioritized)].slice(0, 7).join(" ");
+}
+
+function requestedMarketCode(value, fallback = "us") {
+  return (
+    REQUEST_MARKET_PATTERNS.find(([, pattern]) => pattern.test(clean(value)))?.[0] ||
+    fallback
+  );
 }
 
 function responseLanguage(message, fallback = "en") {
@@ -1461,7 +1506,9 @@ function verifiedRetailerRecommendations(products, request, copy) {
   const { max_price: maxPrice } = catalogSearchArgs(request);
   return deduplicateRecommendations(
     (Array.isArray(products) ? products : [])
-      .filter((product) => matchesShoppingIntent(product, request))
+      .filter((product) =>
+        matchesShoppingIntent({ ...product, category: "" }, request),
+      )
       .filter(
         (product) =>
           number(product?.current_price, 0) > 0 &&
@@ -1559,8 +1606,6 @@ function createShoppingAssistant({
         error.statusCode = 503;
         throw error;
       }
-      const selectedMarket = market(marketCode);
-
       let classification;
       try {
         classification = await withRequestTimeout(
@@ -1631,6 +1676,9 @@ function createShoppingAssistant({
       }
 
       const resolvedRequest = resolveShoppingRequest(userMessage, messages);
+      const selectedMarket = market(
+        requestedMarketCode(resolvedRequest, marketCode),
+      );
       const retailerQuery = retailerSearchQuery(resolvedRequest);
       const retailerResultsPromise =
         typeof retailerSearch === "function" && retailerQuery

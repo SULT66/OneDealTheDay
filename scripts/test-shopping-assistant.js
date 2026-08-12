@@ -287,7 +287,7 @@ const client = {
   const greetingResult = await offlineGreetingAssistant.respond({
     message: "hi bro",
     messages: [],
-    marketCode: "us",
+    marketCode: "ca",
     language: "en",
   });
   assert.strictEqual(
@@ -328,19 +328,24 @@ const client = {
 
   const tvConversationCalls = [];
   const retailerQueries = [];
+  const retailerMarkets = [];
   const tvConversationAssistant = createShoppingAssistant({
     db,
     sourceSql,
-    market: (code) => ({ code, currency: "USD" }),
-    retailerSearch: async ({ query }) => {
+    market: (code) => ({
+      code,
+      currency: code === "ca" ? "CAD" : "USD",
+    }),
+    retailerSearch: async ({ query, market: selectedMarket }) => {
       retailerQueries.push(query);
+      retailerMarkets.push(selectedMarket.code);
       return [
         {
           external_id: "tv-123",
           product_key: "epid:tv-123",
           title: "Samsung 55-inch Crystal UHD 4K Smart TV",
           brand: "Samsung",
-          category: "TV",
+          category: "samsung tv",
           current_price: 479.99,
           currency: "USD",
           image_url: "https://i.ebayimg.com/samsung-tv.jpg",
@@ -350,6 +355,70 @@ const client = {
           review_count: 318,
           shipping_summary: "Free shipping",
           return_summary: "30-day returns",
+          checked_at: "2026-08-11T22:30:00Z",
+        },
+        {
+          external_id: "amp-2101",
+          title: "KA2101 SAMSUNG TV Sound IF AMP",
+          brand: "Samsung",
+          category: "samsung tv",
+          current_price: 11.08,
+          currency: "USD",
+          image_url: "https://i.ebayimg.com/samsung-tv-amp.jpg",
+          affiliate_url: "https://www.ebay.com/itm/210100000001",
+          retailer_name: "eBay",
+          checked_at: "2026-08-11T22:30:00Z",
+        },
+        {
+          external_id: "detector-222",
+          title:
+            "DRIVE THRU Ultrasonic Vehicle Detector Car Sensor Loop for Headset HME 3M G5 PAR",
+          brand: "HME",
+          category: "samsung tv",
+          current_price: 397.29,
+          currency: "USD",
+          image_url: "https://i.ebayimg.com/vehicle-detector.jpg",
+          affiliate_url: "https://www.ebay.com/itm/210100000002",
+          retailer_name: "eBay",
+          checked_at: "2026-08-11T22:30:00Z",
+        },
+        {
+          external_id: "board-7592",
+          title:
+            "Samsung Tv Electronics Control Board BN94-07592A for UN40H5003AFXZA Version IF02",
+          brand: "Samsung",
+          category: "samsung tv",
+          current_price: 86.08,
+          currency: "USD",
+          image_url: "https://i.ebayimg.com/samsung-tv-board.jpg",
+          affiliate_url: "https://www.ebay.com/itm/210100000003",
+          retailer_name: "eBay",
+          checked_at: "2026-08-11T22:30:00Z",
+        },
+        {
+          external_id: "keypad-333",
+          title:
+            'DSC HS2TCHP PowerSeries Neo 7" Hardwired Touchscreen Security Alarm Keypad NEW',
+          brand: "DSC",
+          category: "samsung tv",
+          current_price: 340.14,
+          currency: "USD",
+          image_url: "https://i.ebayimg.com/alarm-keypad.jpg",
+          affiliate_url: "https://www.ebay.com/itm/210100000004",
+          retailer_name: "eBay",
+          checked_at: "2026-08-11T22:30:00Z",
+        },
+        {
+          external_id: "mount-132",
+          title:
+            "Jumbo XL Fixed Flat TV Wall Mount Bracket 32-85 Inch Adjustable VESA Load 132lbs",
+          brand: "Unbranded",
+          category: "samsung tv",
+          current_price: 52.94,
+          currency: "USD",
+          image_url: "https://i.ebayimg.com/tv-wall-mount.jpg",
+          affiliate_url: "https://www.ebay.com/itm/210100000005",
+          retailer_name: "eBay",
           checked_at: "2026-08-11T22:30:00Z",
         },
         {
@@ -448,13 +517,18 @@ const client = {
         content: "I found current sources worth checking.",
       },
     ],
-    marketCode: "us",
+    marketCode: "ca",
     language: "en",
   });
   assert.strictEqual(retailerQueries.length, 1);
   assert(
     retailerQueries[0].includes("samsung") && retailerQueries[0].includes("tv"),
     "The correction 'I said TV' did not recover the Samsung TV search intent",
+  );
+  assert.deepStrictEqual(
+    retailerMarkets,
+    ["us"],
+    "An explicit US request was incorrectly searched in the page's Canada market",
   );
   assert.strictEqual(tvConversationResult.recommendations.length, 1);
   assert.strictEqual(
@@ -477,6 +551,18 @@ const client = {
     !JSON.stringify(tvConversationResult).includes("Furminator"),
     "An unrelated Furminator offer leaked into the Samsung TV response",
   );
+  for (const rejectedTitle of [
+    "Sound IF AMP",
+    "Vehicle Detector",
+    "Control Board",
+    "Alarm Keypad",
+    "Wall Mount",
+  ]) {
+    assert(
+      !JSON.stringify(tvConversationResult).includes(rejectedTitle),
+      `A non-TV search result leaked into the Samsung TV response: ${rejectedTitle}`,
+    );
+  }
   const resolvedTvRequest = JSON.parse(
     tvConversationCalls[1].input,
   ).resolved_shopping_request;
