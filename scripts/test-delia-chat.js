@@ -57,6 +57,10 @@ for (const required of [
   "otherOffers",
   "conversation_title",
   "partial_offers",
+  "shopping_context",
+  "resolved_request",
+  "updateConversationLocale",
+  "position_role",
 ]) {
   assert(client.includes(required), `Delia client is missing ${required}`);
 }
@@ -94,8 +98,14 @@ assert(
   "A simple greeting is not resolved locally before the shopping request",
 );
 assert(
-  client.includes('card.classList.add("is-image-missing")'),
-  "A failed partial-offer image still leaves the mobile card in the image layout",
+  client.includes("image.addEventListener(\"error\", () => {") &&
+    client.includes("card.remove();"),
+  "A failed product image can still leave a photo-less offer card visible",
+);
+assert(
+  client.includes("item.image_url &&") &&
+    client.includes("data-assistant-disclaimer"),
+  "Visible offer cards can still render without a product photo or localized composer",
 );
 assert(
   client.includes("if (!greeting) return \"\""),
@@ -130,6 +140,8 @@ for (const required of [
   "font-size: 16px",
   "height: 100dvh",
   "env(safe-area-inset-bottom)",
+  "width: clamp(64px, 6vw, 84px)",
+  "object-fit: contain",
 ]) {
   assert(styles.includes(required), `Delia responsive workspace is missing ${required}`);
 }

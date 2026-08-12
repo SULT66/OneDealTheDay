@@ -806,7 +806,11 @@ body.assistant-open {
   max-width: 100%;
 }
 .assistant-recommendation {
-  padding: 0;
+  display: grid;
+  grid-template-columns: clamp(64px, 6vw, 84px) minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+  padding: 12px;
   overflow: hidden;
 }
 .assistant-market-context {
@@ -831,10 +835,13 @@ body.assistant-open {
 }
 .assistant-recommendation-media {
   position: relative;
-  height: 156px;
+  width: clamp(64px, 6vw, 84px);
+  height: clamp(64px, 6vw, 84px);
   display: grid;
   place-items: center;
-  padding: 12px;
+  padding: 6px;
+  border: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
+  border-radius: 11px;
   background: #fff;
 }
 .assistant-recommendation-media img {
@@ -848,10 +855,26 @@ body.assistant-open {
   left: 10px;
 }
 .assistant-recommendation-content {
-  padding: 13px;
+  min-width: 0;
+  padding: 0;
 }
 .assistant-recommendation-content h3 {
-  margin-top: 0;
+  margin: 4px 0 7px;
+  font-size: 14px;
+  line-height: 1.32;
+}
+.assistant-recommendation-role {
+  display: inline-flex;
+  align-items: center;
+  min-height: 21px;
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  color: var(--accent);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 .assistant-recommendation-signals {
   display: flex;
@@ -919,7 +942,7 @@ body.assistant-open {
 }
 .assistant-recommendation-controls {
   display: grid;
-  grid-template-columns: 1fr auto auto;
+  grid-template-columns: 1fr 1fr;
   gap: 6px;
   margin-top: 11px;
 }
@@ -938,6 +961,7 @@ body.assistant-open {
   cursor: pointer;
 }
 .assistant-recommendation-link {
+  grid-column: 1 / -1;
   margin: 0;
   background: var(--text);
   color: var(--bg);
@@ -1251,7 +1275,7 @@ body.assistant-open {
     border-radius: 0;
   }
   .assistant-conversation {
-    padding: 16px;
+    padding: 12px;
     scrollbar-gutter: auto;
   }
   .assistant-form {
@@ -1273,7 +1297,9 @@ body.assistant-open {
     gap: 3px;
   }
   .assistant-recommendation-media {
-    height: 124px;
+    width: 64px;
+    height: 64px;
+    padding: 5px;
   }
   .assistant-product-context {
     grid-template-columns: 1fr;
@@ -1294,14 +1320,14 @@ body.assistant-open {
   }
   .assistant-partial-offer,
   .assistant-partial-offer.is-image-missing {
-    grid-template-columns: 54px minmax(0, 1fr);
+    grid-template-columns: 56px minmax(0, 1fr);
   }
   .assistant-partial-offer.is-image-missing {
     grid-template-columns: 1fr;
   }
   .assistant-partial-offer img {
-    width: 54px;
-    height: 54px;
+    width: 56px;
+    height: 56px;
   }
   .assistant-partial-offer > a {
     grid-column: 1 / -1;
