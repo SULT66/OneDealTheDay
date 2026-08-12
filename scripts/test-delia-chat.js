@@ -109,7 +109,8 @@ assert(
 );
 assert(
   client.includes("image.addEventListener(\"error\", () => {") &&
-    client.includes("card.remove();"),
+    client.includes("card.remove();") &&
+    client.includes("if (!section.children.length) section.remove();"),
   "A failed product image can still leave a photo-less offer card visible",
 );
 assert(
@@ -172,6 +173,16 @@ assert(
 assert(
   !client.includes("/product-placeholder.svg"),
   "Delia still renders editorial placeholders as product images",
+);
+assert(
+  !/[—–]/u.test(client),
+  "Delia client copy still contains long dashes",
+);
+assert(
+  styles.includes("overflow-x: hidden") &&
+    styles.includes("overflow-wrap: anywhere") &&
+    styles.includes("max-width: 100%"),
+  "Delia workspace is not protected against horizontal overflow",
 );
 assert(
   !client.includes('createElement("table")'),
