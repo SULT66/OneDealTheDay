@@ -561,7 +561,6 @@
             item.retailer &&
             item.reason &&
             item.url &&
-            item.image_url &&
             hasSpecificProductIdentity(item.title) &&
             isDirectProductPage(item.url) &&
             !isEditorialProductPage(item.title, item.url),
@@ -1217,7 +1216,7 @@
         image.alt = offer.title;
         image.loading = "lazy";
         image.addEventListener("error", () => {
-          card.remove();
+          image.remove();
         }, { once: true });
         card.append(image);
       }
