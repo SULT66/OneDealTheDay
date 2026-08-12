@@ -8,13 +8,15 @@ function nativeProviders(config) {
       source:"ebay",
       name:"eBay Browse API",
       markets:["us", "ca", "uk", "fr", "de"],
-      search:({market}) => require("./ebay").searchProducts({
+      search:({market, keywords = market.searchKeywords, detailLimit, targetEligible}) => require("./ebay").searchProducts({
         clientId:config.ebayClientId,
         clientSecret:config.ebayClientSecret,
         campaignId:config.ebayCampaignId,
         environment:config.ebayEnvironment,
-        keywords:market.searchKeywords,
-        market
+        keywords,
+        market,
+        detailLimit,
+        targetEligible
       })
     });
   }
@@ -25,10 +27,10 @@ function nativeProviders(config) {
       name:"Amazon product API",
       markets:["us", "ca", "uk", "fr", "de"],
       configuredFor:market => Boolean(market.affiliateTag),
-      search:({market}) => require("./rainforest").searchProducts({
+      search:({market, keywords = market.searchKeywords}) => require("./rainforest").searchProducts({
         apiKey:config.rainforestApiKey,
         affiliateTag:market.affiliateTag,
-        keywords:market.searchKeywords,
+        keywords,
         market
       })
     });
@@ -40,10 +42,10 @@ function nativeProviders(config) {
       name:"Walmart product API",
       markets:["us", "ca"],
       configuredFor:market => Boolean(config.walmartAffiliateTemplateForMarket(market.code)),
-      search:({market}) => require("./walmart").searchProducts({
+      search:({market, keywords = market.searchKeywords}) => require("./walmart").searchProducts({
         apiKey:config.bluecartApiKey,
         affiliateTemplate:config.walmartAffiliateTemplateForMarket(market.code),
-        keywords:market.searchKeywords,
+        keywords,
         market
       })
     });
@@ -105,4 +107,47 @@ async function searchAll(config, market) {
   return {products, reports};
 }
 
-module.exports = { enabledProviders, feedProviders, nativeProviders, providersForMarket, searchAll };
+// Delia uses the same approved provider registry as the catalog refresh, but
+// searches the shopper's active mission instead of the scheduled broad
+// keywords. Provider failures are isolated so one unavailable store never
+// collapses the complete multi-retailer answer.
+async function searchForAssistant(config, {query, market, perSourceLimit = 12}) {
+  const keywords = [String(query || "").trim()].filter(Boolean);
+  if (!keywords.length) return [];
+  const queryTokens = new Set(keywords[0]
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .match(/[\p{L}\p{N}]+/gu) || []);
+  const providers = providersForMarket(config, market);
+  if (!providers.length) return [];
+  const settled = await Promise.allSettled(providers.map(provider =>
+    provider.search({
+      market,
+      keywords,
+      detailLimit:18,
+      targetEligible:6
+    })
+  ));
+  return settled.flatMap((result, index) => {
+    if (result.status !== "fulfilled") return [];
+    const provider = providers[index];
+    return (Array.isArray(result.value) ? result.value : [])
+      .map(product => ({...product, source:product.source || provider.source}))
+      .map(product => {
+        const productTokens = new Set(`${product.title || ""} ${product.brand || ""} ${product.category || ""} ${product.model_number || ""}`
+          .normalize("NFKD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .toLowerCase()
+          .match(/[\p{L}\p{N}]+/gu) || []);
+        const relevance = [...queryTokens].filter(token => productTokens.has(token)).length;
+        return {product, relevance};
+      })
+      .filter(entry => entry.relevance > 0)
+      .sort((left, right) => right.relevance - left.relevance)
+      .slice(0, perSourceLimit)
+      .map(entry => entry.product);
+  });
+}
+
+module.exports = { enabledProviders, feedProviders, nativeProviders, providersForMarket, searchAll, searchForAssistant };
