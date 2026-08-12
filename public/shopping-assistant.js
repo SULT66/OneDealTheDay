@@ -72,21 +72,53 @@
     fr: "Salut ! 👋 Qu’est-ce que vous cherchez à acheter ?",
     de: "Hallo! 👋 Was möchtest du kaufen?",
   };
+  const LOCAL_CHECK_IN_REPLIES = {
+    en: "I'm doing well, thanks 😄 What are you looking to buy?",
+    ru: "Привет! Всё хорошо, спасибо 😄 Что хочешь купить?",
+    es: "¡Todo bien, gracias! 😄 ¿Qué quieres comprar?",
+    fr: "Tout va bien, merci ! 😄 Qu’est-ce que vous cherchez à acheter ?",
+    de: "Mir geht’s gut, danke! 😄 Was möchtest du kaufen?",
+  };
   const localGreetingResponse = (value) => {
     const normalized = String(value || "")
       .normalize("NFKC")
       .trim()
       .toLocaleLowerCase()
-      .replace(/[\s!?.,…:;¡¿]+$/gu, "")
-      .replace(/\s+/g, " ");
-    const greetingLanguage = [
-      ["ru", /^(?:привет(?:ик)?|здравствуй(?:те)?|доброе утро|добрый день|добрый вечер)(?:\s+(?:бро|брат|друг))?$/u],
-      ["es", /^(?:hola|buenos días|buenas tardes|buenas noches)(?:\s+(?:amigo|bro))?$/u],
-      ["fr", /^(?:bonjour|bonsoir|salut|coucou)(?:\s+(?:ami|frère|bro))?$/u],
-      ["de", /^(?:hallo|guten morgen|guten tag|guten abend)(?:\s+(?:freund|bruder|bro))?$/u],
-      ["en", /^(?:hello|hey|hi|yo|good morning|good afternoon|good evening)(?:\s+(?:bro|dude|man|there))?$/u],
-    ].find(([, pattern]) => pattern.test(normalized))?.[0];
-    if (!greetingLanguage) return "";
+      .replace(/[!?.,…:;¡¿]+/gu, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    const greeting = [
+      [
+        "ru",
+        /^(?:(?:привет(?:ик)?|здравствуй(?:те)?|доброе утро|добрый день|добрый вечер)(?:\s+(?:бро|брат|друг))?(?:\s+(?:как (?:у тебя )?дела|как ты|что нового))?|(?:как (?:у тебя )?дела|как ты|что нового))$/u,
+        /(?:как (?:у тебя )?дела|как ты|что нового)/u,
+      ],
+      [
+        "es",
+        /^(?:(?:hola|buenos días|buenas tardes|buenas noches)(?:\s+(?:amigo|bro))?(?:\s+(?:cómo estás|como estas|qué tal|que tal|cómo va|como va))?|(?:cómo estás|como estas|qué tal|que tal|cómo va|como va))$/u,
+        /(?:cómo estás|como estas|qué tal|que tal|cómo va|como va)/u,
+      ],
+      [
+        "fr",
+        /^(?:(?:bonjour|bonsoir|salut|coucou)(?:\s+(?:ami|frère|bro))?(?:\s+(?:comment ça va|comment ca va|ça va|ca va))?|(?:comment ça va|comment ca va|ça va|ca va))$/u,
+        /(?:comment ça va|comment ca va|ça va|ca va)/u,
+      ],
+      [
+        "de",
+        /^(?:(?:hallo|guten morgen|guten tag|guten abend)(?:\s+(?:freund|bruder|bro))?(?:\s+(?:wie geht es dir|wie geht['’]?s|wie gehts))?|(?:wie geht es dir|wie geht['’]?s|wie gehts))$/u,
+        /(?:wie geht es dir|wie geht['’]?s|wie gehts)/u,
+      ],
+      [
+        "en",
+        /^(?:(?:hello|hey|hi|yo|good morning|good afternoon|good evening)(?:\s+(?:bro|dude|man|there))?(?:\s+(?:how are you|how['’]?s it going|what['’]?s up|how are things))?|(?:how are you|how['’]?s it going|what['’]?s up|how are things))$/u,
+        /(?:how are you|how['’]?s it going|what['’]?s up|how are things)/u,
+      ],
+    ].find(([, pattern]) => pattern.test(normalized));
+    if (!greeting) return "";
+    const [greetingLanguage, , checkInPattern] = greeting;
+    if (checkInPattern.test(normalized)) {
+      return LOCAL_CHECK_IN_REPLIES[greetingLanguage];
+    }
     if (greetingLanguage === "en") {
       return tr("greeting", LOCAL_GREETING_REPLIES.en);
     }

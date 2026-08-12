@@ -66,6 +66,10 @@ assert(
   "Delia does not answer a Russian greeting naturally",
 );
 assert(
+  client.includes("Привет! Всё хорошо, спасибо 😄 Что хочешь купить?"),
+  "Delia does not answer a short Russian check-in naturally",
+);
+assert(
   client.includes('topOne: "Лучший вариант ·"') &&
     client.includes('if (finalDigit === 1) return "вариант"'),
   "Delia still renders the Russian one-result label with incorrect plural grammar",
@@ -73,6 +77,10 @@ assert(
 assert(
   client.includes("bro|dude|man|there"),
   "A friendly 'hi bro' still falls through to the shopping-scope refusal",
+);
+assert(
+  client.includes("как (?:у тебя )?дела|как ты|что нового"),
+  "Russian greeting follow-ups still fall through to the shopping-scope refusal",
 );
 assert(
   client.includes("item.in_catalog || item.verified_retailer"),
@@ -90,7 +98,7 @@ assert(
   "A failed partial-offer image still leaves the mobile card in the image layout",
 );
 assert(
-  client.includes("if (!greetingLanguage) return \"\""),
+  client.includes("if (!greeting) return \"\""),
   "Shopping requests that merely begin with a greeting may be intercepted",
 );
 
