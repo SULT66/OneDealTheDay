@@ -9,6 +9,7 @@ const {
   normalizeAssistantResponse,
   normalizeDeliaPunctuation,
   recommendationLimit,
+  retailerDiscoveryHosts,
   retailerSearchQueries,
   retailerWebSearchQueries,
   matchesShoppingIntent,
@@ -2311,6 +2312,12 @@ const client = {
   assert.deepStrictEqual(clarification.clarifying_questions, [
     "Which refrigerator model is this filter for?",
   ]);
+  assert.deepStrictEqual(clarification.clarification_prompts, [
+    {
+      question: "Which refrigerator model is this filter for?",
+      options: [],
+    },
+  ]);
   const broadHeadphoneCalls = [];
   const broadHeadphoneAssistant = createShoppingAssistant({
     db,
@@ -2359,12 +2366,142 @@ const client = {
   assert.strictEqual(broadHeadphones.language, "ru");
   assert.strictEqual(broadHeadphones.needs_clarification, true);
   assert.strictEqual(broadHeadphones.clarifying_questions.length, 2);
+  assert.strictEqual(broadHeadphones.clarification_prompts.length, 2);
+  assert.deepStrictEqual(
+    broadHeadphones.clarification_prompts[0].options,
+    ["До $100", "$100-$200", "$200+"],
+  );
   assert(
     broadHeadphones.clarifying_questions.some((question) => /бюджет/u.test(question)) &&
       broadHeadphones.clarifying_questions.some((question) => /вкладыши|полноразмерные/u.test(question)),
     "A broad headphone request did not ask the two useful questions",
   );
   assert.strictEqual(broadHeadphones.shopping_mission.product_type, "headphone");
+  assert.deepStrictEqual(
+    retailerDiscoveryHosts({
+      product_type: "sneakers",
+      brands: ["nike"],
+    }, "us"),
+    ["nike.com", "footlocker.com", "zappos.com"],
+    "Nike discovery did not fan out across the official and specialist stores",
+  );
+  const multiStoreCalls = [];
+  const multiStoreOffers = {
+    "nike.com": {
+      title: "Nike Pegasus 41 Bright Crimson Men's Road Running Shoes",
+      retailer: "Nike",
+      price: "$145.00",
+      url: "https://www.nike.com/us/t/pegasus-41-road-running-shoes/FD2722-600",
+      image_url: "https://static.nike.com/pegasus-41-crimson.jpg",
+    },
+    "footlocker.com": {
+      title: "Nike Air Max Dn8 Bright Crimson Men's Shoes",
+      retailer: "Foot Locker",
+      price: "$190.00",
+      url: "https://www.footlocker.com/product/~/A1234.html",
+      image_url: "https://images.footlocker.com/A1234.jpg",
+    },
+    "zappos.com": {
+      title: "Nike Vomero 18 Hyper Pink Running Shoes",
+      retailer: "Zappos",
+      price: "$155.00",
+      url: "https://www.zappos.com/p/nike-vomero-18-hyper-pink/product/1234/color/6628",
+      image_url: "https://m.media-amazon.com/images/zappos-vomero-18.jpg",
+    },
+  };
+  const multiStoreAssistant = createShoppingAssistant({
+    db,
+    sourceSql,
+    market: (code) => ({ code, currency: "USD" }),
+    storeDiscoveryEnabled: true,
+    retailerSearch: async () => [],
+    client: {
+      responses: {
+        create: async (request) => {
+          multiStoreCalls.push(request);
+          const format = request.text?.format?.name;
+          if (format === "shopping_scope_guardrail") {
+            return {
+              output: [],
+              output_text: JSON.stringify({
+                scope: "shopping",
+                needs_clarification: false,
+                clarification_reason: "none",
+                clarifying_questions: [],
+                language: "ru",
+                social_reply: "",
+                starts_new_mission: false,
+                mission_patch: {
+                  product_type: "sneakers",
+                  brands: ["nike"],
+                  use_case: "",
+                  season: "",
+                  style: "bright",
+                  audience: "men",
+                  size: "",
+                  market: "us",
+                  preferred_retailer: "",
+                  budget_max: 0,
+                  query_terms: ["bright colors"],
+                },
+              }),
+            };
+          }
+          if (format === "shopping_assistant_response") {
+            return {
+              output: [],
+              output_text: JSON.stringify({
+                answer: "Не удалось найти карточки.",
+                result_state: "no_match",
+                conversation_title: "Яркие кроссовки Nike",
+                follow_up: "",
+                recommendations: [],
+                comparison_notes: [],
+                comparison: [],
+              }),
+            };
+          }
+          const input = JSON.parse(request.input);
+          const host = Object.keys(multiStoreOffers).find((candidate) =>
+            input.query.includes(`site:${candidate}`),
+          );
+          const offer = multiStoreOffers[host];
+          return {
+            output: [{
+              type: "web_search_call",
+              action: { sources: [{ url: offer.url, title: offer.title }] },
+              results: [{
+                type: "image_result",
+                image_url: offer.image_url,
+                thumbnail_url: offer.image_url,
+                source_website_url: offer.url,
+                caption: offer.title,
+              }],
+            }],
+            output_text: JSON.stringify({ offers: [offer] }),
+          };
+        },
+      },
+    },
+  });
+  const multiStoreResult = await multiStoreAssistant.respond({
+    message: "Хочу яркие мужские кроссовки Nike в США",
+    messages: [],
+    marketCode: "us",
+    language: "en",
+  });
+  assert.strictEqual(
+    multiStoreCalls.filter((request) =>
+      request.text?.format?.name === "retailer_product_discovery",
+    ).length,
+    3,
+    "The sparse result did not trigger three store-specific searches",
+  );
+  assert.deepStrictEqual(
+    multiStoreResult.recommendations.map((offer) => offer.retailer).sort(),
+    ["Foot Locker", "Nike", "Zappos"],
+    "Store-specific search did not return retailer-diverse product cards",
+  );
   const azGreeting = await offlineGreetingAssistant.respond({
     message: "Salam, necəsiniz?",
     messages: [],

@@ -18,6 +18,8 @@ const CLIENT_COPY_KEYS = [
   "assistant.failed",
   "assistant.timeout",
   "assistant.malformed",
+  "assistant.placeholder",
+  "assistant.clarificationHint",
   "assistant.sources",
   "assistant.stop",
   "assistant.stopped",
@@ -103,6 +105,11 @@ function renderShoppingAssistantPanel(code, language) {
           <div class="assistant-messages" data-assistant-messages aria-live="polite"></div>
         </div>
         <form class="assistant-form">
+          <section class="assistant-clarification-bar" data-assistant-clarification hidden aria-live="polite">
+            <div class="assistant-clarification-heading"><strong data-assistant-clarification-question></strong><span data-assistant-clarification-progress></span></div>
+            <div class="assistant-clarification-options" data-assistant-clarification-options></div>
+            <small data-assistant-clarification-hint>${esc(t(language, "assistant.clarificationHint") || "Choose an option or type your own answer below")}</small>
+          </section>
           <div class="assistant-input-row"><textarea maxlength="1200" rows="1" required placeholder="${esc(t(language, "assistant.placeholder"))}" aria-label="${esc(t(language, "assistant.placeholder"))}"></textarea><button class="assistant-stop" type="button" data-assistant-stop hidden>${esc(t(language, "assistant.stop"))}</button><button class="assistant-send" type="submit" aria-label="${esc(t(language, "assistant.send"))}">↑</button></div>
           <p class="assistant-disclaimer" data-assistant-disclaimer>${esc(t(language, "assistant.disclaimer"))}</p>
         </form>

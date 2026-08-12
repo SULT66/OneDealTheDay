@@ -26,6 +26,8 @@ for (const required of [
   "data-assistant-stop",
   "data-assistant-product-context",
   "data-assistant-subtitle",
+  "data-assistant-clarification",
+  "data-assistant-clarification-options",
 ]) {
   assert(panel.includes(required), `Delia panel is missing ${required}`);
 }
@@ -40,6 +42,8 @@ for (const required of [
   "timeoutBody",
   "renderComparison",
   "renderClarifyingQuestions",
+  "showClarificationBar",
+  "answerClarification",
   "renderFollowUpActions",
   "setProductContext",
   "toggleSaved",
@@ -143,6 +147,8 @@ for (const required of [
   ".assistant-source-links",
   ".assistant-feedback",
   ".assistant-stop",
+  ".assistant-clarification-bar",
+  ".assistant-clarification-options",
   ".ask-delia-button",
 ]) {
   assert(styles.includes(required), `Delia styles are missing ${required}`);
