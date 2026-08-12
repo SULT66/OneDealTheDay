@@ -536,14 +536,14 @@ function greetingContext(value) {
   const normalized = clean(value)
     .normalize("NFKC")
     .toLowerCase()
-    .replace(/[!?.,…:;¡¿]+/gu, " ")
+    .replace(/[^\p{L}\p{N}'’]+/gu, " ")
     .replace(/\s+/g, " ")
     .trim();
   const patterns = [
     [
       "ru",
-      /^(?:(?:привет(?:ик)?|здравствуй(?:те)?|доброе утро|добрый день|добрый вечер)(?:\s+(?:бро|брат|друг))?(?:\s+(?:как (?:у тебя )?дела|как ты|что нового))?|(?:как (?:у тебя )?дела|как ты|что нового))$/u,
-      /(?:как (?:у тебя )?дела|как ты|что нового)/u,
+      /^(?:(?:привет(?:ик|ики)?|прив|здравствуй(?:те)?|здорово|здорова|здарова|здаров|салют|хай|ку|доброе утро|добрый день|добрый вечер|доброго времени суток)(?:\s+(?:бро|брат|друг|делия))?(?:\s+(?:как (?:у тебя )?(?:дела|делишки)|как (?:ты|сам|сама)|как поживаешь|как жизнь|как настроение|что нового|ч[её] как))?|(?:как (?:у тебя )?(?:дела|делишки)|как (?:ты|сам|сама)|как поживаешь|как жизнь|как настроение|что нового|ч[её] как))$/u,
+      /(?:как (?:у тебя )?(?:дела|делишки)|как (?:ты|сам|сама)|как поживаешь|как жизнь|как настроение|что нового|ч[её] как)/u,
     ],
     [
       "es",
@@ -633,19 +633,24 @@ function greetingMessage(message, language) {
   const context = greetingContext(message);
   const selected = context?.language || responseLanguage(message, language);
   const replies = context?.checkIn ? {
-    en: "I'm doing well, thanks 😄 What are you looking to buy?",
-    ru: "Привет! Всё хорошо, спасибо 😄 Что хочешь купить?",
-    es: "¡Todo bien, gracias! 😄 ¿Qué quieres comprar?",
-    fr: "Tout va bien, merci ! 😄 Qu’est-ce que vous cherchez à acheter ?",
-    de: "Mir geht’s gut, danke! 😄 Was möchtest du kaufen?",
+    en: ["I'm doing well, thanks 😄 How about you?", "All good here! How are you?"],
+    ru: ["Привет! Всё хорошо 😄 А у тебя как?", "Всё отлично, спасибо! Как ты?", "Хорошо, спасибо 😊 Как твои дела?"],
+    es: ["¡Todo bien, gracias! 😄 ¿Y tú?", "¡Muy bien! ¿Cómo estás tú?"],
+    fr: ["Tout va bien, merci ! 😄 Et vous ?", "Très bien, merci ! Et toi ?"],
+    de: ["Mir geht’s gut, danke! 😄 Und dir?", "Alles gut! Wie geht es dir?"],
   } : {
-    en: "Hey! 👋 What are you looking to buy?",
-    ru: "Привет! 👋 Что хочешь купить?",
-    es: "¡Hola! 👋 ¿Qué quieres comprar?",
-    fr: "Salut ! 👋 Qu’est-ce que vous cherchez à acheter ?",
-    de: "Hallo! 👋 Was möchtest du kaufen?",
+    en: ["Hey! 👋 How are you?", "Hi! 😊 How's it going?", "Hey there! How are things?"],
+    ru: ["Привет! 👋 Как дела?", "Здорово! 😄 Как ты?", "Привет-привет! Как настроение?"],
+    es: ["¡Hola! 👋 ¿Cómo estás?", "¡Buenas! 😊 ¿Qué tal?"],
+    fr: ["Salut ! 👋 Comment ça va ?", "Bonjour ! 😊 Ça va ?"],
+    de: ["Hallo! 👋 Wie geht’s?", "Hi! 😊 Wie geht es dir?"],
   };
-  return replies[selected];
+  const choices = replies[selected] || replies.en;
+  const hash = [...clean(message)].reduce(
+    (total, character) => total + character.codePointAt(0),
+    0,
+  );
+  return choices[hash % choices.length];
 }
 
 function resolveShoppingRequest(message, messages, shoppingContext = "") {
@@ -959,7 +964,37 @@ function fillCopy(template, values) {
 }
 
 function outcomePrice(offer) {
-  return number(offer?.price_value, priceValueFromDisplay(offer?.price));
+  return landedPrice(offer);
+}
+
+function shippingCostFromDelivery(value) {
+  const delivery = cleanDisplayText(value);
+  if (!delivery) return null;
+  if (
+    /(?:\bfree\s+(?:shipping|delivery)\b|бесплатн\p{L}*\s+доставк\p{L}*|livraison\s+gratuite|entrega\s+gratis|kostenlos\p{L}*\s+(?:versand|lieferung))/iu.test(
+      delivery,
+    )
+  ) {
+    return 0;
+  }
+  const amount = delivery.match(
+    /(?:USD|CAD|GBP|EUR|AUD|[$€£])\s*([\d]+(?:[.,]\d{1,2})?)\s*(?:shipping|delivery|доставк\p{L}*|livraison|entrega|versand|lieferung)/iu,
+  ) || delivery.match(
+    /(?:shipping|delivery|доставк\p{L}*|livraison|entrega|versand|lieferung)\D{0,16}(?:USD|CAD|GBP|EUR|AUD|[$€£])?\s*([\d]+(?:[.,]\d{1,2})?)/iu,
+  );
+  return amount ? number(String(amount[1]).replace(",", "."), null) : null;
+}
+
+function landedPrice(offer) {
+  const explicit = number(offer?.total_price ?? offer?.landed_cost, null);
+  if (explicit > 0) return explicit;
+  const base = number(offer?.price_value, priceValueFromDisplay(offer?.price));
+  if (!(base > 0)) return 0;
+  const explicitShipping = number(offer?.shipping_cost, null);
+  const shipping = explicitShipping != null
+    ? explicitShipping
+    : shippingCostFromDelivery(offer?.delivery || offer?.shipping_summary);
+  return shipping == null ? base : base + Math.max(0, shipping);
 }
 
 function formatOutcomeMoney(value, currency, language) {
@@ -1146,6 +1181,14 @@ function productUrl(product) {
 
 function assistantProduct(product, language = "en") {
   const presented = presentProduct(product, language);
+  const price = number(product.current_price, null);
+  const shippingCost = number(product.shipping_cost, null);
+  const totalPrice = number(
+    product.landed_cost,
+    price == null
+      ? null
+      : price + Math.max(0, shippingCost == null ? 0 : shippingCost),
+  );
   return {
     id: Number(product.id),
     product_key: clean(product.product_key),
@@ -1153,7 +1196,9 @@ function assistantProduct(product, language = "en") {
     brand: clean(product.brand),
     category: clean(presented.display_category || product.category),
     retailer: clean(product.retailer_name || product.source),
-    price: number(product.current_price, null),
+    price,
+    shipping_cost: shippingCost,
+    total_price: totalPrice,
     currency: clean(product.currency),
     score: presented.display_score,
     rating: number(product.rating, null),
@@ -1199,7 +1244,7 @@ function searchCatalog(db, sourceSql, args, marketCode, language) {
     .filter((product) => product.score != null && product.score >= minimumScore)
     .filter(
       (product) =>
-        !maxPrice || (product.price != null && product.price <= maxPrice),
+        !maxPrice || (product.total_price != null && product.total_price <= maxPrice),
     )
     .filter(
       (product) =>
@@ -2057,28 +2102,32 @@ function rankRecommendationCandidates(items, request) {
       index,
       retailerMatch: preferredRetailer && offerMatchesRetailer(item, preferredRetailer) ? 1 : 0,
       evidence: evidenceRank[item.evidence_level] || 0,
-      price: number(item.price_value, priceValueFromDisplay(item.price)),
+      price: landedPrice(item),
     }))
-    .sort((left, right) =>
-      right.retailerMatch - left.retailerMatch ||
-      right.evidence - left.evidence ||
-      (wantsLowerPrice && left.price && right.price ? left.price - right.price : 0) ||
-      left.index - right.index,
-    )
+    .sort((left, right) => {
+      const priceDifference = left.price > 0 && right.price > 0
+        ? left.price - right.price
+        : Number(right.price > 0) - Number(left.price > 0);
+      return right.retailerMatch - left.retailerMatch ||
+        (wantsLowerPrice ? priceDifference : 0) ||
+        right.evidence - left.evidence ||
+        left.index - right.index;
+    })
     .map(({ item }) => item)
     .slice(0, MAX_RECOMMENDATIONS);
 }
 
-function assignRecommendationRoles(items) {
+function assignRecommendationRoles(items, request = "") {
   if (!items.length) return [];
+  const wantsLowerPrice = isLowerPriceRequest(request);
   const roles = items.map((_item, index) =>
-    index === 0 ? "best_overall" : "alternative",
+    !wantsLowerPrice && index === 0 ? "best_overall" : "alternative",
   );
   const priced = items
-    .map((item, index) => ({ index, price: outcomePrice(item) }))
+    .map((item, index) => ({ index, price: landedPrice(item) }))
     .filter(({ price }) => price > 0)
     .sort((left, right) => left.price - right.price);
-  if (priced.length && priced[0].index !== 0) {
+  if (priced.length && (wantsLowerPrice || priced[0].index !== 0)) {
     roles[priced[0].index] = "lowest_price";
   }
   return items.map((item, index) => ({
@@ -2156,7 +2205,6 @@ function verifiedRetailerRecommendations(products, request, copy, selectedMarket
       .filter(
         (product) =>
           number(product?.current_price, 0) > 0 &&
-          (!maxPrice || number(product.current_price, 0) <= maxPrice) &&
           clean(product.currency).toUpperCase() === selectedMarket.currency,
       )
       .filter(
@@ -2165,7 +2213,17 @@ function verifiedRetailerRecommendations(products, request, copy, selectedMarket
           isDirectProductPage(product?.affiliate_url) &&
           urlMatchesMarket(product?.affiliate_url, selectedMarket.code),
       )
-      .map((product, index) => ({
+      .map((product, index) => {
+        const priceValue = number(product.current_price, null);
+        const parsedShipping = shippingCostFromDelivery(product.shipping_summary);
+        const shippingCost = number(product.shipping_cost, parsedShipping);
+        const totalPrice = number(
+          product.landed_cost,
+          priceValue == null
+            ? null
+            : priceValue + Math.max(0, shippingCost == null ? 0 : shippingCost),
+        );
+        return {
         title: cleanDisplayText(product.title).slice(0, 140),
         retailer: cleanDisplayText(product.retailer_name || product.source).slice(
           0,
@@ -2181,7 +2239,9 @@ function verifiedRetailerRecommendations(products, request, copy, selectedMarket
         catalog_product_id: 0,
         _recommendation_index: index + 1,
         product_key: clean(product.product_key || product.external_id),
-        price_value: number(product.current_price, null),
+        price_value: priceValue,
+        shipping_cost: shippingCost,
+        total_price: totalPrice,
         currency: selectedMarket.currency,
         score: null,
         rating: number(product.rating, 0) || null,
@@ -2202,7 +2262,9 @@ function verifiedRetailerRecommendations(products, request, copy, selectedMarket
         in_catalog: false,
         verified_retailer: true,
         evidence_level: "verified_retailer",
-      }))
+        };
+      })
+      .filter((product) => !maxPrice || landedPrice(product) <= maxPrice)
       .filter((product) => product.title && product.retailer),
   ).slice(0, MAX_RECOMMENDATIONS);
 }
@@ -2481,6 +2543,8 @@ function createShoppingAssistant({
               title: product.title,
               retailer: product.retailer,
               price_value: product.price,
+              shipping_cost: product.shipping_cost,
+              total_price: product.total_price,
               currency: product.currency,
               url: product.url,
               image_url: product.image_url,
@@ -2533,6 +2597,8 @@ function createShoppingAssistant({
             price: supportedPrice,
             badge: "",
             price_value: supportedPriceValue,
+            shipping_cost: shippingCostFromDelivery(recommendation.delivery),
+            total_price: supportedPriceValue,
             currency: supportedPriceValue ? selectedMarket.currency : "",
             score: null,
             rating: null,
@@ -2624,11 +2690,22 @@ function createShoppingAssistant({
         (recommendation) =>
           /^https:\/\//i.test(safeUrl(recommendation.image_url)),
       );
+      const lowerPriceBudget = isLowerPriceRequest(resolvedRequest)
+        ? catalogSearchArgs(resolvedRequest).max_price
+        : 0;
+      const budgetFilteredCandidates = lowerPriceBudget
+        ? visualCandidates.filter(
+            (recommendation) =>
+              landedPrice(recommendation) > 0 &&
+              landedPrice(recommendation) <= lowerPriceBudget,
+          )
+        : visualCandidates;
       const visibleCandidates = assignRecommendationRoles(
         rankRecommendationCandidates(
-          visualCandidates,
+          budgetFilteredCandidates,
           resolvedRequest,
         ).slice(0, recommendationCap),
+        resolvedRequest,
       );
       const recommendations = visibleCandidates.filter(
         (recommendation) => recommendation.evidence_level !== "partial",
@@ -2672,6 +2749,7 @@ function createShoppingAssistant({
               recommendation.price_value == null
                 ? recommendation.price
                 : recommendation.price_value,
+            total_price: recommendation.total_price,
             currency: recommendation.currency,
             score: recommendation.score,
             delivery: recommendation.delivery,

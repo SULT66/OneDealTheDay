@@ -25,6 +25,7 @@ for (const required of [
   "data-assistant-clear",
   "data-assistant-stop",
   "data-assistant-product-context",
+  "data-assistant-subtitle",
 ]) {
   assert(panel.includes(required), `Delia panel is missing ${required}`);
 }
@@ -61,16 +62,25 @@ for (const required of [
   "resolved_request",
   "updateConversationLocale",
   "position_role",
+  "showLocalComparison",
+  "cheaperRequest",
+  "requestQuestion",
+  "trigger_action",
+  "localizeRetailerFact",
+  "totalDelivered",
+  "noNewStores",
 ]) {
   assert(client.includes(required), `Delia client is missing ${required}`);
 }
 
 assert(
-  client.includes("Привет! 👋 Что хочешь купить?"),
+  client.includes("Привет! 👋 Как дела?") &&
+    client.includes("Здорово! 😄 Как ты?"),
   "Delia does not answer a Russian greeting naturally",
 );
 assert(
-  client.includes("Привет! Всё хорошо, спасибо 😄 Что хочешь купить?"),
+  client.includes("Привет! Всё хорошо 😄 А у тебя как?") &&
+    !client.includes("Что хочешь купить?"),
   "Delia does not answer a short Russian check-in naturally",
 );
 assert(
@@ -83,7 +93,7 @@ assert(
   "A friendly 'hi bro' still falls through to the shopping-scope refusal",
 );
 assert(
-  client.includes("как (?:у тебя )?дела|как ты|что нового"),
+  client.includes("(?:дела|делишки)") && client.includes("здарова"),
   "Russian greeting follow-ups still fall through to the shopping-scope refusal",
 );
 assert(
@@ -108,9 +118,9 @@ assert(
   "Visible offer cards can still render without a product photo or localized composer",
 );
 assert(
-  client.includes('["actionStores", "Check other stores", ""]') &&
-    client.includes('["actionSimilar", "Show similar models", ""]') &&
-    client.includes('["actionRetry", "Search again", ""]'),
+  client.includes('["stores", "actionStores", "Check other stores"]') &&
+    client.includes('["similar", "actionSimilar", "Show similar models"]') &&
+    client.includes('["retry", "actionRetry", "Search again"]'),
   "A no-match answer no longer offers useful recovery actions",
 );
 assert(
@@ -148,6 +158,9 @@ for (const required of [
   "env(safe-area-inset-bottom)",
   "width: clamp(64px, 6vw, 84px)",
   "object-fit: contain",
+  "max-height: 100%",
+  "repeat(auto-fit, minmax(220px, 1fr))",
+  "-webkit-line-clamp: 2",
 ]) {
   assert(styles.includes(required), `Delia responsive workspace is missing ${required}`);
 }

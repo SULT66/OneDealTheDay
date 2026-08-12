@@ -93,7 +93,7 @@ function renderShoppingAssistantPanel(code, language) {
       <div class="assistant-main">
         <div class="assistant-header">
           <button class="assistant-sidebar-toggle" type="button" data-assistant-sidebar-toggle aria-label="${esc(t(language, "assistant.historyToggle"))}">☰</button>
-          <div class="assistant-title"><span class="assistant-spark" aria-hidden="true">D</span><div><strong id="shoppingAssistantTitle">Delia</strong><small>D.E.L.I.A. · ${esc(t(language, "assistant.subtitle"))}</small></div></div>
+          <div class="assistant-title"><span class="assistant-spark" aria-hidden="true">D</span><div><strong id="shoppingAssistantTitle">Delia</strong><small data-assistant-subtitle>D.E.L.I.A. · ${esc(t(language, "assistant.subtitle"))}</small></div></div>
           <div class="assistant-header-actions"><button class="assistant-new-mobile" type="button" data-assistant-new aria-label="${esc(t(language, "assistant.newChat"))}">+</button><button class="assistant-close" type="button" data-shopping-assistant-close aria-label="${esc(t(language, "assistant.close"))}">×</button></div>
         </div>
         <div class="assistant-current-chat" data-assistant-current-title>${esc(t(language, "assistant.newChatTitle"))}</div>
