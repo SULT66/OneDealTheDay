@@ -153,7 +153,7 @@
       actionPremium: "Show premium options", actionNew: "Only new products",
       actionStores: "Check other stores", feedbackQuestion: "Was this useful?",
       helpful: "Helpful", notHelpful: "Not helpful", wrongPrice: "Price is wrong",
-      feedbackThanks: "Thanks — your feedback was recorded.",
+      feedbackThanks: "Thanks, your feedback was recorded.",
       partialTitle: "Current product pages", partialStatus: "Confirm current price and availability with the retailer",
       checkPrice: "Check live price", viewOffer: "Open retailer page",
       topThree: "Top 3 in", topOne: "Top option in", topOptions: "Top options in", option: "option", options: "options",
@@ -161,7 +161,7 @@
       you: "You", placeholder: "What are you shopping for?",
       disclaimer: "Prices and availability can change. Confirm final details with the retailer.",
       subtitle: "Your OneDailyDrop shopping assistant",
-      totalPrice: "Total delivered", comparisonReady: "I compared the products already shown — no new search needed.",
+      totalPrice: "Total delivered", comparisonReady: "I compared the products already shown. No new search is needed.",
       noNewStores: "I couldn't find any new matching offers in other stores yet.",
       positionBestOverall: "Best overall", positionLowestPrice: "Lowest price", positionAlternative: "Alternative",
       availability: "Availability", pack: "Pack", sizes: "Sizes",
@@ -179,7 +179,7 @@
       actionPremium: "Показать премиум-варианты", actionNew: "Только новые товары",
       actionStores: "Проверить другие магазины", feedbackQuestion: "Ответ был полезен?",
       helpful: "Полезно", notHelpful: "Не помогло", wrongPrice: "Цена неверна",
-      feedbackThanks: "Спасибо — отзыв сохранён.",
+      feedbackThanks: "Спасибо, отзыв сохранён.",
       partialTitle: "Актуальные товарные страницы", partialStatus: "Уточните текущую цену и наличие у магазина",
       checkPrice: "Проверить цену", viewOffer: "Открыть страницу магазина",
       topThree: "Топ-3 ·", topOne: "Лучший вариант ·", topOptions: "Лучшие варианты ·", option: "вариант", options: "варианты",
@@ -187,7 +187,7 @@
       you: "Вы", placeholder: "Что хотите купить?",
       disclaimer: "Цена и наличие могут измениться. Проверьте итоговые условия у магазина.",
       subtitle: "Ваш помощник по покупкам OneDailyDrop",
-      totalPrice: "Итого с доставкой", comparisonReady: "Сравнила уже найденные варианты — повторный поиск не нужен.",
+      totalPrice: "Итого с доставкой", comparisonReady: "Сравнила уже найденные варианты. Повторный поиск не нужен.",
       noNewStores: "Новых подходящих предложений в других магазинах пока не найдено.",
       positionBestOverall: "Лучший выбор", positionLowestPrice: "Самая низкая цена", positionAlternative: "Альтернатива",
       availability: "Наличие", pack: "В упаковке", sizes: "Размеры",
@@ -561,6 +561,7 @@
             item.retailer &&
             item.reason &&
             item.url &&
+            item.image_url &&
             hasSpecificProductIdentity(item.title) &&
             isDirectProductPage(item.url) &&
             !isEditorialProductPage(item.title, item.url),
@@ -1029,6 +1030,7 @@
       image.loading = "lazy";
       image.addEventListener("error", () => {
         card.remove();
+        if (!section.children.length) section.remove();
       }, { once: true });
       const rank = document.createElement("span");
       rank.className = "assistant-recommendation-rank";
@@ -1210,16 +1212,15 @@
     for (const offer of offers) {
       const card = document.createElement("article");
       card.className = "assistant-partial-offer";
-      if (offer.image_url) {
-        const image = document.createElement("img");
-        image.src = offer.image_url;
-        image.alt = offer.title;
-        image.loading = "lazy";
-        image.addEventListener("error", () => {
-          image.remove();
-        }, { once: true });
-        card.append(image);
-      }
+      const image = document.createElement("img");
+      image.src = offer.image_url;
+      image.alt = offer.title;
+      image.loading = "lazy";
+      image.addEventListener("error", () => {
+        card.remove();
+        if (section.children.length === 1) section.remove();
+      }, { once: true });
+      card.append(image);
       const content = document.createElement("div");
       content.className = "assistant-partial-offer-copy";
       const title = document.createElement("strong");
@@ -1468,7 +1469,7 @@
       message: responseTr(
         body,
         "comparisonReady",
-        "I compared the products already shown — no new search needed.",
+        "I compared the products already shown. No new search is needed.",
       ),
       follow_up: "",
       recommendations: [],
@@ -1603,7 +1604,7 @@
       thanks.textContent = responseTr(
         responseBody,
         "feedbackThanks",
-        "Thanks — your feedback was recorded.",
+        "Thanks, your feedback was recorded.",
       );
       section.append(thanks);
     }
@@ -1621,7 +1622,7 @@
     thanks.textContent = responseTr(
       responseBody,
       "feedbackThanks",
-      "Thanks — your feedback was recorded.",
+      "Thanks, your feedback was recorded.",
     );
     section.append(thanks);
     try {
@@ -1697,7 +1698,7 @@
                 ]
                   .map(
                     (product) =>
-                      `${product.title} — ${money(product.price_value, product.currency) || product.price || ""} ${product.retailer}`,
+                      `${product.title}. ${money(product.price_value, product.currency) || product.price || ""} ${product.retailer}`,
                   )
                   .join("; "),
               ]
