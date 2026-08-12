@@ -9,6 +9,7 @@ const {
   normalizeAssistantResponse,
   recommendationLimit,
   retailerSearchQueries,
+  selectRetailerDiverseCandidates,
   searchCatalog,
   shoppingMissionText,
   urlMatchesMarket,
@@ -1834,6 +1835,19 @@ const client = {
     new Set(nikeAutumn.recommendations.map(item => item.retailer)),
     new Set(["Nike", "Walmart", "Target"]),
     "Delia collapsed a multi-store result back to one retailer",
+  );
+
+  assert.strictEqual(
+    selectRetailerDiverseCandidates(
+      [
+        { title: "Nike A", retailer: "eBay" },
+        { title: "Nike B", retailer: "eBay" },
+        { title: "Nike C", retailer: "Nike" },
+      ],
+      3,
+    ).length,
+    2,
+    "Delia padded three result slots with repeated listings from one retailer",
   );
 
   const cheaperNikeAssistant = createShoppingAssistant({
