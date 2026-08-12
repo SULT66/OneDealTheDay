@@ -13,17 +13,13 @@ const { reasonFor } = require("./demoEditorial");
 const { localizeProduct } = require("./demoTranslations");
 const { priceIntelligence } = require("./priceIntelligence");
 const { sourceSql, isPublicSource } = require("./publicCatalog");
-const { enabledProviders } = require("./providers/registry");
+const { enabledProviders, searchForAssistant } = require("./providers/registry");
 const { coverage: retailerCoverage } = require("./retailerCatalog");
 const { presentProduct } = require("./productPresentation");
 const { deduplicationKeys, isDailyPickEligible } = require("./ranker");
 const { methodology, methodologyMain } = require("./methodology");
 const { createEditorialBrief } = require("./editorialBrief");
 const { createShoppingAssistant } = require("./shoppingAssistant");
-const {
-  createEbayClient: createAssistantEbayClient,
-  searchProducts: searchAssistantEbayProducts,
-} = require("./providers/ebay");
 const renderShoppingAssistantPanel = require("./shoppingAssistantPanel");
 const { passwordResetEmail, subscriptionEmail, clubWaitlistEmail } = require("./mailer");
 const {
@@ -53,29 +49,8 @@ const {
 } = require("./i18n");
 
 const app = express();
-const assistantEbayClient =
-  c.ebayClientId && c.ebayClientSecret && /^\d{10}$/.test(c.ebayCampaignId)
-    ? createAssistantEbayClient({
-        clientId: c.ebayClientId,
-        clientSecret: c.ebayClientSecret,
-        campaignId: c.ebayCampaignId,
-        environment: c.ebayEnvironment,
-      })
-    : null;
-const assistantRetailerSearch = assistantEbayClient
-  ? ({ query, market: selectedMarket }) =>
-      searchAssistantEbayProducts({
-        clientId: c.ebayClientId,
-        clientSecret: c.ebayClientSecret,
-        campaignId: c.ebayCampaignId,
-        environment: c.ebayEnvironment,
-        keywords: [query],
-        market: selectedMarket,
-        client: assistantEbayClient,
-        detailLimit: 18,
-        targetEligible: 6,
-      })
-  : null;
+const assistantRetailerSearch = ({ query, market: selectedMarket }) =>
+  searchForAssistant(c, {query, market:selectedMarket});
 const shoppingAssistant = createShoppingAssistant({
   db,
   sourceSql,
