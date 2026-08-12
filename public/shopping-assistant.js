@@ -65,6 +65,33 @@
   }
 
   const tr = (key, fallback) => copy[key] || fallback;
+  const LOCAL_GREETING_REPLIES = {
+    en: "Hi! I’m Delia. Tell me what you want to buy and your budget — I’ll find and compare suitable options.",
+    ru: "Привет! Я Delia. Скажи, что хочешь купить и какой у тебя бюджет — я найду и сравню подходящие варианты.",
+    es: "¡Hola! Soy Delia. Dime qué quieres comprar y tu presupuesto; buscaré y compararé opciones adecuadas.",
+    fr: "Bonjour ! Je suis Delia. Dites-moi ce que vous voulez acheter et votre budget : je chercherai et comparerai les options adaptées.",
+    de: "Hallo! Ich bin Delia. Sag mir, was du kaufen möchtest und wie hoch dein Budget ist – ich finde und vergleiche passende Optionen.",
+  };
+  const localGreetingResponse = (value) => {
+    const normalized = String(value || "")
+      .normalize("NFKC")
+      .trim()
+      .toLocaleLowerCase()
+      .replace(/[\s!?.,…:;¡¿]+$/gu, "")
+      .replace(/\s+/g, " ");
+    const greetingLanguage = [
+      ["ru", /^(?:привет(?:ик)?|здравствуй(?:те)?|доброе утро|добрый день|добрый вечер)$/u],
+      ["es", /^(?:hola|buenos días|buenas tardes|buenas noches)$/u],
+      ["fr", /^(?:bonjour|bonsoir|salut|coucou)$/u],
+      ["de", /^(?:hallo|guten morgen|guten tag|guten abend)$/u],
+      ["en", /^(?:hello|hey|hi|good morning|good afternoon|good evening)$/u],
+    ].find(([, pattern]) => pattern.test(normalized))?.[0];
+    if (!greetingLanguage) return "";
+    if (greetingLanguage === "en") {
+      return tr("greeting", LOCAL_GREETING_REPLIES.en);
+    }
+    return LOCAL_GREETING_REPLIES[greetingLanguage];
+  };
   const RESPONSE_LABELS = {
     en: {
       product: "Product", price: "Price", bestFor: "Best for", score: "Score",
@@ -869,7 +896,10 @@
         image.src = offer.image_url;
         image.alt = offer.title;
         image.loading = "lazy";
-        image.addEventListener("error", () => image.remove(), { once: true });
+        image.addEventListener("error", () => {
+          image.remove();
+          card.classList.add("is-image-missing");
+        }, { once: true });
         card.append(image);
       } else {
         card.classList.add("is-image-missing");
@@ -1279,6 +1309,24 @@
     currentTitleElement.textContent = activeChat.title;
     input.value = "";
     persistChats();
+    const greeting = localGreetingResponse(question);
+    if (greeting) {
+      userRecord.include_in_model = false;
+      const assistantRecord = {
+        id: makeId(),
+        role: "assistant",
+        content: greeting,
+        include_in_model: false,
+        created_at: new Date().toISOString(),
+      };
+      const localMessage = addMessage("assistant", greeting);
+      localMessage.dataset.messageId = assistantRecord.id;
+      activeChat.messages.push(assistantRecord);
+      persistChats();
+      input.focus();
+      scrollToLatest();
+      return;
+    }
     setBusy(true);
     const pending = addMessage("assistant", "", true);
     startLoading(pending);

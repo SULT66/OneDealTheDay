@@ -11,6 +11,7 @@ const esc = (value) =>
 
 const CLIENT_COPY_KEYS = [
   "assistant.you",
+  "assistant.greeting",
   "assistant.thinkingSearch",
   "assistant.thinkingPrices",
   "assistant.thinkingCompare",
