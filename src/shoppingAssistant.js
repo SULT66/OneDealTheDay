@@ -19,10 +19,12 @@ const MARKET_COUNTRIES = {
 };
 const INTENT_STOP_WORDS = new Set(
   `a an and are at be bro but can check could did do does dude find for from give got had has have hey hi how i in is it item items just looking man me my need no of offer offers on only option options or please price prices product products say saying search see show store stores tell than that the their them there these they this to u under up us want what where which with would you your
-  а без бро бы в вам вас все где для до есть и из или как ли мне мой на найди не нибудь но ну о от по покажи подобрать привет примерно при уже что это я
+  а без бро бы в вам вас все где для до есть и из или как ли мне мой на найди не нибудь но ну о от по покажи подобрать пожалуйста привет примерно при уже хочу цвет цвета цвете что это я
   de des du en et la le les moi ou pour prix produit produits recherche trouver un une vous
   das der die ein eine finden für ich im in mit oder preis produkt produkte sie und von zu
-  el ella en encontrar la las los me o para precio producto productos que un una y yo`.split(/\s+/),
+  el ella en encontrar la las los me o para precio producto productos que un una y yo`
+    .split(/\s+/)
+    .map((token) => token.normalize("NFKD").replace(/[\u0300-\u036f]/g, "")),
 );
 const INTENT_CONSTRAINT_WORDS = new Set(
   `available availability best better budget buy buying cheap cheaper cheapest condition current deal deals exchange expensive latest listing listings new newest open box premium refurbished renewed retailer retailers seller sellers shipping shop shopping store stores trade used warranty without
@@ -45,7 +47,7 @@ const PRODUCT_CATEGORY_GROUPS = {
   console: ["console", "consoles", "playstation", "xbox", "switch", "консоль", "консоли", "consola", "consolas", "konsole", "konsolen"],
   underwear: ["underwear", "brief", "briefs", "boxer", "boxers", "boxerbrief", "boxerbriefs", "trunk", "trunks", "трусы", "белье", "бельё", "боксеры", "боксерки", "брифы", "ropa interior", "calzoncillos", "sous-vetements", "sous-vêtement", "unterwasche", "unterwäsche"],
   shoes: ["shoe", "shoes", "sneaker", "sneakers", "boot", "boots", "обувь", "кроссовки", "ботинки", "туфли", "zapato", "zapatos", "zapatillas", "chaussure", "chaussures", "schuh", "schuhe"],
-  clothing: ["clothing", "apparel", "shirt", "shirts", "jacket", "jackets", "pants", "одежда", "рубашка", "куртка", "брюки", "camisa", "chaqueta", "ropa", "vêtement", "vetement", "kleidung"],
+  clothing: ["clothing", "apparel", "shirt", "shirts", "tank", "tanktop", "singlet", "vest", "jacket", "jackets", "pants", "одежда", "майка", "майку", "майки", "маек", "безрукавка", "безрукавку", "безрукавки", "рубашка", "куртка", "брюки", "camisa", "chaqueta", "ropa", "vêtement", "vetement", "kleidung"],
 };
 const PRODUCT_CATEGORY_BY_ALIAS = new Map(
   Object.entries(PRODUCT_CATEGORY_GROUPS).flatMap(([category, aliases]) =>
@@ -66,6 +68,41 @@ const BRAND_ALIASES = new Map([
   ["кельвин", "calvin"],
   ["кляйн", "klein"],
   ["клайн", "klein"],
+  ["адидас", "adidas"],
+]);
+const SEARCH_SUBTYPE_TERMS = new Set([
+  "tank",
+  "tanktop",
+  "singlet",
+  "boxer",
+  "boxers",
+  "boxerbrief",
+  "boxerbriefs",
+  "brief",
+  "briefs",
+  "trunk",
+  "trunks",
+]);
+const SHOPPING_TERM_ALIASES = new Map([
+  ["майка", "tank"],
+  ["майку", "tank"],
+  ["майки", "tank"],
+  ["маек", "tank"],
+  ["безрукавка", "tank"],
+  ["безрукавку", "tank"],
+  ["безрукавки", "tank"],
+  ["черный", "black"],
+  ["черная", "black"],
+  ["черное", "black"],
+  ["черную", "black"],
+  ["черного", "black"],
+  ["черной", "black"],
+  ["чёрный", "black"],
+  ["чёрная", "black"],
+  ["чёрное", "black"],
+  ["чёрную", "black"],
+  ["чёрного", "black"],
+  ["чёрной", "black"],
 ]);
 const RETAILER_PATTERNS = [
   ["Amazon", /(?:^|[^\p{L}\p{N}])(?:amazon|амазон\p{L}*)(?=$|[^\p{L}\p{N}])/iu],
@@ -347,7 +384,9 @@ function normalizedIntentTokens(value, { includeConstraints = false } = {}) {
       if (token.length < 2 || INTENT_STOP_WORDS.has(token)) return false;
       return includeConstraints || !INTENT_CONSTRAINT_WORDS.has(token);
     }) || [];
-  return tokens.map((token) => BRAND_ALIASES.get(token) || token);
+  return tokens.map(
+    (token) => BRAND_ALIASES.get(token) || SHOPPING_TERM_ALIASES.get(token) || token,
+  );
 }
 
 function candidateTokens(value) {
@@ -576,6 +615,10 @@ function previousShoppingRequest(messages) {
 
 function canonicalizeShoppingRequest(value) {
   return clean(value)
+    .replace(
+      /(?<!\p{L})майк\p{L}*\s*[-–—]?\s*бокс[её]рк\p{L}*(?!\p{L})/giu,
+      "tank top",
+    )
     .replace(/(?<!\p{L})(?:кевин|кельвин)(?!\p{L})/giu, "Calvin")
     .replace(/(?<!\p{L})(?:кляйн|клайн)(?!\p{L})/giu, "Klein")
     .slice(0, MAX_MESSAGE_LENGTH);
@@ -652,6 +695,7 @@ function retailerSearchQuery(value) {
     ...tokens
       .map((token) => PRODUCT_CATEGORY_BY_ALIAS.get(token))
       .filter(Boolean),
+    ...tokens.filter((token) => SEARCH_SUBTYPE_TERMS.has(token)),
     ...tokens.filter((token) => /\d/.test(token)),
     ...tokens.filter(
       (token) =>
@@ -2649,10 +2693,12 @@ function createShoppingAssistant({
         .filter((source) => urlMatchesMarket(source.url, selectedMarket.code))
         .filter((source) => matchesRelatedSource(source, resolvedRequest))
       ).slice(0, 6);
-      const resultState = verifiedRetailerCount
-        ? "exact_matches"
-        : structured.result_state;
       const visibleOfferCount = recommendations.length + partialOffers.length;
+      const resultState = !visibleOfferCount
+        ? "no_match"
+        : verifiedRetailerCount
+          ? "exact_matches"
+          : structured.result_state;
       const preferredRetailer = requestedRetailer(userMessage);
       const usefulFollowUp = usefulShoppingFollowUp(
         resolvedRequest,

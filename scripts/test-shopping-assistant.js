@@ -1449,7 +1449,8 @@ const client = {
   );
   assert.strictEqual(
     foldFollowUpResult.result_state,
-    "closest_alternatives",
+    "no_match",
+    "A filtered-empty closest-alternatives response did not become a recoverable no-match state",
   );
   assert.strictEqual(
     foldFollowUpResult.conversation_title,
@@ -1675,6 +1676,95 @@ const client = {
   assert(
     !calvinRetry.message.startsWith("Я могу помочь только"),
     "The retry still returned the shopping-scope refusal",
+  );
+
+  const adidasRetailerQueries = [];
+  const adidasAssistant = createShoppingAssistant({
+    db,
+    sourceSql,
+    market: (code) => ({ code, currency: "USD" }),
+    retailerSearch: async ({ query }) => {
+      adidasRetailerQueries.push(query);
+      return [
+        {
+          external_id: "adidas-black-tank-1",
+          product_key: "adidas:black-tank-1",
+          title: "adidas Men's Essentials Rib Tank Top - Black",
+          brand: "adidas",
+          category: "Men's Clothing",
+          current_price: 24.99,
+          currency: "USD",
+          image_url: "https://images.example.com/adidas-black-tank.jpg",
+          affiliate_url: "https://www.ebay.com/itm/123456789012",
+          retailer_name: "eBay",
+          shipping_summary: "Home delivery available",
+          availability: "In stock",
+          checked_at: "2026-08-12T15:30:00Z",
+        },
+      ];
+    },
+    client: {
+      responses: {
+        create: async (request) => {
+          if (!request.tools) {
+            return {
+              output: [],
+              output_text: JSON.stringify({
+                scope: "shopping",
+                needs_clarification: false,
+                clarification_reason: "none",
+                clarifying_questions: [],
+                language: "ru",
+              }),
+            };
+          }
+          return {
+            output: [],
+            output_text: JSON.stringify({
+              answer: "Нашла чёрную майку Adidas.",
+              result_state: "no_match",
+              conversation_title: "Чёрная майка Adidas",
+              follow_up: "",
+              recommendations: [],
+              comparison_notes: [],
+              comparison: [],
+            }),
+          };
+        },
+      },
+    },
+  });
+  const adidasTank = await adidasAssistant.respond({
+    message: "Привет, хочу майку боксерку адидас найди что нибудь черного цвета",
+    messages: [],
+    marketCode: "us",
+    language: "en",
+  });
+  assert.strictEqual(
+    adidasTank.recommendations.length,
+    1,
+    "The Russian Adidas tank-top request still ended with an empty result",
+  );
+  assert(
+    /adidas/i.test(adidasTank.recommendations[0].title) &&
+      /tank top/i.test(adidasTank.recommendations[0].title) &&
+      /black/i.test(adidasTank.recommendations[0].title),
+    "The result did not preserve the requested Adidas brand, tank-top style, and black color",
+  );
+  assert(
+    adidasRetailerQueries.some(
+      (query) =>
+        /adidas/i.test(query) &&
+        /clothing/i.test(query) &&
+        /tank/i.test(query) &&
+        /black/i.test(query) &&
+        !/[а-яё]/iu.test(query),
+    ),
+    `The US retailer query was not canonicalized for the Russian tank-top request: ${adidasRetailerQueries.join(" | ")}`,
+  );
+  assert(
+    /размер/u.test(adidasTank.follow_up),
+    "A tank-top result did not ask for the shopper's size",
   );
 
   let malformedCalls = 0;

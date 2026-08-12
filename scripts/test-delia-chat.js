@@ -108,6 +108,12 @@ assert(
   "Visible offer cards can still render without a product photo or localized composer",
 );
 assert(
+  client.includes('["actionStores", "Check other stores", ""]') &&
+    client.includes('["actionSimilar", "Show similar models", ""]') &&
+    client.includes('["actionRetry", "Search again", ""]'),
+  "A no-match answer no longer offers useful recovery actions",
+);
+assert(
   client.includes("if (!greeting) return \"\""),
   "Shopping requests that merely begin with a greeting may be intercepted",
 );
