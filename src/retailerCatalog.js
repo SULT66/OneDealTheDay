@@ -27,6 +27,20 @@ const RETAILERS = Object.freeze([
       excludeTitleTerms:["not sold separately", "not for sale", "non-delivery"]
     }
   },
+  {
+    id:"giftlab",
+    name:"Giftlab",
+    network:"Awin",
+    markets:["us"],
+    feedPolicy:{
+      excludeCategoryLeaves:["Lingerie"],
+      excludeTitleTerms:[
+        "not sold separately", "not for sale", "non-delivery",
+        "sexy", "nude", "naked", "penis", "vagina", "dildo",
+        "vibrator", "erotic", "porn", "fuck", "boob"
+      ]
+    }
+  },
   {id:"currys", name:"Currys", network:"Awin", markets:["uk"]},
   {id:"ao", name:"AO.com", network:"Awin", markets:["uk"]},
   {id:"fnac", name:"Fnac", network:"Awin", markets:["fr"]},
