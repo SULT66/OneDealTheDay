@@ -3521,14 +3521,50 @@ function providerFirstResponse({
   allowSingleRetailer = false,
 }) {
   const copy = responseCopy(userMessage, shopperLanguage);
-  const candidates = verifiedRetailerRecommendations(
-    retailerProducts,
-    resolvedRequest,
-    copy,
-    selectedMarket,
+  const catalogCandidates = catalogProducts.map((product, index) => ({
+    title: product.title,
+    retailer: product.retailer,
+    price: "",
+    badge: "",
+    reason: copy.verifiedRetailerReason,
+    url: product.url,
+    action_label: "",
+    source_type: "catalog",
+    image_url: product.image_url,
+    catalog_product_id: product.id,
+    _recommendation_index: index + 1,
+    product_key: product.product_key,
+    price_value: product.price,
+    shipping_cost: product.shipping_cost,
+    total_price: product.total_price,
+    currency: product.currency,
+    score: product.score,
+    rating: product.rating,
+    reviews: product.reviews,
+    delivery: product.delivery,
+    returns: product.returns,
+    availability: product.availability,
+    available_sizes: product.available_sizes || [],
+    pack_count: product.pack_count,
+    checked_at: product.checked_at,
+    in_catalog: true,
+    verified_retailer: false,
+    evidence_level: "verified_catalog",
+  }));
+  const candidates = selectRetailerDiverseCandidates(
+    deduplicateRecommendations([
+      ...catalogCandidates,
+      ...verifiedRetailerRecommendations(
+        retailerProducts,
+        resolvedRequest,
+        copy,
+        selectedMarket,
+      ),
+    ]),
+    MAX_RECOMMENDATIONS,
   ).filter((recommendation) =>
-    !excludedUrls.has(comparableUrl(recommendation.url)),
-  );
+      !excludedUrls.has(comparableUrl(recommendation.url)),
+    );
   const recommendations = assignRecommendationRoles(
     rankRecommendationCandidates(candidates, resolvedRequest),
     resolvedRequest,

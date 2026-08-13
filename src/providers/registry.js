@@ -64,6 +64,7 @@ function feedProviders(config) {
     source:definition.source,
     name:`${definition.retailerName} ${definition.network} feed`,
     markets:definition.markets,
+    assistantLiveSearch:false,
     search:({market, keywords, signal}) => affiliateFeed.searchProducts({definition, market, keywords, signal})
   }));
 }
@@ -125,7 +126,13 @@ async function searchForAssistant(config, {query, queries, market, signal, perSo
   const queryTokens = new Set(normalizeTokenText(keywords.join(" "))
     .toLowerCase()
     .match(/[\p{L}\p{N}]+/gu) || []);
-  const providers = providersForMarket(config, market);
+  // Affiliate feeds are already refreshed into the verified catalog. Parsing
+  // a complete compressed feed inside an HTTP chat request can block Node's
+  // event loop, so Delia searches only native live APIs here and reads feed
+  // products from searchCatalog instead.
+  const providers = providersForMarket(config, market).filter(
+    provider => provider.assistantLiveSearch !== false,
+  );
   if (!providers.length) return [];
   const settled = await Promise.allSettled(providers.map(provider =>
     provider.search({
