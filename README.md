@@ -52,9 +52,9 @@ schema. Example: `{"title":"merchant_product_name","affiliate_url":"aw_deep_link
 The optional `*_HEADERS_JSON` setting supplies feed authorization headers and
 must be stored only in the hosting provider's encrypted app settings.
 
-### Tribesigns, Mooncool and Giftlab through Awin
+### Tribesigns, Mooncool, Giftlab and King Koil through Awin
 
-Tribesigns (US), Mooncool (US and Canada), and Giftlab (US) are built-in Awin retailers. In
+Tribesigns (US), Mooncool (US and Canada), Giftlab (US), and King Koil (US) are built-in Awin retailers. In
 Awin, create a separate market/currency feed for each storefront. Google-format
 feeds should include at least `id`, `title`, `description`,
 `google_product_category`, `brand`, `price`, `sale_price`, `image_link`,
@@ -64,6 +64,7 @@ feeds should include at least `id`, `title`, `description`,
 - `AFFILIATE_FEED_MOONCOOL_US_URL`
 - `AFFILIATE_FEED_MOONCOOL_CA_URL`
 - `AFFILIATE_FEED_GIFTLAB_US_URL`
+- `AFFILIATE_FEED_KING_KOIL_US_URL`
 
 The importer accepts Awin comma-, tab- or pipe-delimited CSV and gzip responses.
 It uses `sale_price` before `price` and `aw_deep_link` before the untracked
@@ -73,6 +74,9 @@ Giftlab's lingerie category and explicit adult-themed titles are excluded at
 import time. Its built-in catalog limit is 3,000 products, which retains the
 current safe US assortment; Delia balances matching results across retailers
 after catalog search so the larger feed cannot occupy every recommendation.
+King Koil imports only the `Mattresses` category. When Awin supplies several
+variant rows with the same product title, the public catalog's product-family
+deduplication prevents repeated cards while retaining the tracked variant URLs.
 
 The ranking compares landed price, product evidence, seller reliability, demand signals, delivery and returns. A public score appears only after an offer clears the editorial gate; no-return listings, unknown delivery costs and disproportionate shipping charges are excluded from the Daily Drop. Previous products are archived and the best qualified offers are published.
 

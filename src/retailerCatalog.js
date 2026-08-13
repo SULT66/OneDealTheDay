@@ -45,6 +45,16 @@ const RETAILERS = Object.freeze([
       ]
     }
   },
+  {
+    id:"king-koil",
+    name:"King Koil",
+    network:"Awin",
+    markets:["us"],
+    feedPolicy:{
+      categoryLeaves:["Mattresses"],
+      excludeTitleTerms:["not sold separately", "not for sale", "non-delivery"]
+    }
+  },
   {id:"currys", name:"Currys", network:"Awin", markets:["uk"]},
   {id:"ao", name:"AO.com", network:"Awin", markets:["uk"]},
   {id:"fnac", name:"Fnac", network:"Awin", markets:["fr"]},
