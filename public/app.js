@@ -511,7 +511,7 @@
   // The complete verified catalog remains searchable server-side and through
   // Delia. The homepage only needs a representative working set; downloading
   // several thousand full product records blocks mobile rendering.
-  fetch(`/api/products?market=${encodeURIComponent(marketCode)}&limit=600`, { headers: { Accept: "application/json" } })
+  fetch(`/api/products?market=${encodeURIComponent(marketCode)}&limit=200`, { headers: { Accept: "application/json" } })
     .then(async response => {
       if (!response.ok) throw new Error(`Products API returned HTTP ${response.status}`);
       return response.json();
