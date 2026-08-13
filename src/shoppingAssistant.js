@@ -222,7 +222,7 @@ const PHONE_ACCESSORY_PATTERN =
 const PHONE_ACCESSORY_REQUEST_PATTERN =
   /\b(?:accessor(?:y|ies)|adapter|cable|case|charger|charging|cover|dock|holder|mount|protector|stand|stylus)\b|(?:аксессуар\p{L}*|чехол|кабель|зарядк\p{L}*|держател\p{L}*|стекло|пл[её]нк\p{L}*)/iu;
 const SOFA_ACCESSORY_PATTERN =
-  /\b(?:sofa|couch)\s+(?:console\s+)?(?:table|cover|slipcover|protector|tray|legs?|feet|cushions?|pillows?)\b|\b(?:console|entryway)\s+table\b|(?:чехол|накидк\p{L}*|подушк\p{L}*|ножк\p{L}*)\s+(?:для\s+)?диван/iu;
+  /\b(?:sofa|couch)\s+(?:(?:bedside|end|side|console|entryway|accent|coffee)\s+)?(?:table|cover|slipcover|protector|tray|legs?|feet|cushions?|pillows?)\b|\b(?:bedside|end|side|console|entryway|accent|coffee)\s+table\b|\btv\s+stand\b|(?:чехол|накидк\p{L}*|подушк\p{L}*|ножк\p{L}*)\s+(?:для\s+)?диван/iu;
 const UNDERWEAR_BOXER_PATTERN =
   /(?:\bboxer(?:\s*brief)?s?\b|\bboxerbriefs?\b|боксер(?:ы|ки|ок|ов)?)/iu;
 const UNDERWEAR_TRUNK_PATTERN = /(?:\btrunks?\b|транк(?:и|ов)?)/iu;
