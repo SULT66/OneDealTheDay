@@ -398,7 +398,10 @@ async function searchProducts({definition, market, keywords = [], fetchImpl = gl
       .sort((left, right) => right.relevance - left.relevance || left.product.source_rank - right.product.source_rank)
       .map(entry => entry.product);
   }
-  products = products.slice(0, 2000);
+  const catalogLimit = Number(definition.maxProducts) > 0
+    ? Math.max(50, Math.min(10000, Math.round(Number(definition.maxProducts))))
+    : 2000;
+  products = products.slice(0, catalogLimit);
   if (!products.length) throw new Error(`${definition.retailerName} feed returned no usable commissionable products`);
   return products;
 }

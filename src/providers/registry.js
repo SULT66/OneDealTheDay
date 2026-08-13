@@ -64,6 +64,7 @@ function feedProviders(config) {
     source:definition.source,
     name:`${definition.retailerName} ${definition.network} feed`,
     markets:definition.markets,
+    catalogLimit:definition.maxProducts,
     assistantLiveSearch:false,
     search:({market, keywords, signal}) => affiliateFeed.searchProducts({definition, market, keywords, signal})
   }));
@@ -98,9 +99,12 @@ async function searchAll(config, market) {
     if (result.status === "rejected") {
       return {id:provider.id, source:provider.source, name:provider.name, status:"failed", found:0, error:result.reason?.message || "refresh failed"};
     }
+    const sourceLimit = Number(provider.catalogLimit) > 0
+      ? Number(provider.catalogLimit)
+      : config.maxProductsPerSource || 500;
     const normalized = (Array.isArray(result.value) ? result.value : [])
       .map(product => ({...product, source:provider.source}))
-      .slice(0, config.maxProductsPerSource || 500);
+      .slice(0, sourceLimit);
     products.push(...normalized);
     return {id:provider.id, source:provider.source, name:provider.name, status:"success", found:normalized.length, error:""};
   });

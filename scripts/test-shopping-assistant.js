@@ -122,6 +122,15 @@ db.prepare(
     .map(() => "?")
     .join(",")})`,
 ).run(...Object.values(verifiedFeedDesk));
+for (const candidate of [
+  {...product, id:4, title:"Personalized custom family gift one", source:"feed-giftlab", retailer_name:"Giftlab", score:95, affiliate_url:"https://www.awin1.com/giftlab-1"},
+  {...product, id:5, title:"Personalized custom family gift two", source:"feed-giftlab", retailer_name:"Giftlab", score:94, affiliate_url:"https://www.awin1.com/giftlab-2"},
+  {...product, id:6, title:"Personalized custom family gift from eBay", source:"ebay", retailer_name:"eBay", score:83, affiliate_url:"https://www.ebay.com/itm/custom-gift"},
+]) {
+  db.prepare(
+    `INSERT INTO products (${Object.keys(candidate).join(",")}) VALUES (${Object.keys(candidate).map(() => "?").join(",")})`,
+  ).run(...Object.values(candidate));
+}
 db.prepare("INSERT INTO price_history VALUES (?,?,?,?)").run(
   1,
   89,
@@ -562,6 +571,18 @@ const feedMatches = searchCatalog(
 assert.strictEqual(feedMatches.length, 1, "Delia hid a verified affiliate-feed product without review evidence");
 assert.strictEqual(feedMatches[0].retailer, "Tribesigns");
 assert.strictEqual(feedMatches[0].score, null, "A sparse affiliate product received a public OneDailyDrop Score");
+const balancedGiftMatches = searchCatalog(
+  db,
+  () => "source<>'demo'",
+  {query:"personalized custom family gift", category:"", max_price:500, minimum_score:82, limit:3},
+  "us",
+  "en",
+);
+assert.deepStrictEqual(
+  balancedGiftMatches.map(item => item.retailer),
+  ["Giftlab", "eBay", "Giftlab"],
+  "A larger Giftlab catalog displaced every other matching retailer before Delia ranking",
+);
 const samsungTvMatches = searchCatalog(
   db,
   sourceSql,

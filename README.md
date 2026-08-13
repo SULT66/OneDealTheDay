@@ -70,7 +70,9 @@ It uses `sale_price` before `price` and `aw_deep_link` before the untracked
 merchant URL. Large feeds are filtered against Delia's current shopping query
 before the per-source limit is applied.
 Giftlab's lingerie category and explicit adult-themed titles are excluded at
-import time.
+import time. Its built-in catalog limit is 3,000 products, which retains the
+current safe US assortment; Delia balances matching results across retailers
+after catalog search so the larger feed cannot occupy every recommendation.
 
 The ranking compares landed price, product evidence, seller reliability, demand signals, delivery and returns. A public score appears only after an offer clears the editorial gate; no-return listings, unknown delivery costs and disproportionate shipping charges are excluded from the Daily Drop. Previous products are archived and the best qualified offers are published.
 
