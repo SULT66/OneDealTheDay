@@ -250,6 +250,9 @@ const config = {
     }, market);
     assert.strictEqual(sourceLimited.reports[0].found, 4, "A feed-specific catalog limit was ignored");
 
+    const targeted = await searchAll(config, market, {providerIds:["feed-target-us"]});
+    assert.deepStrictEqual(targeted.reports.map(report => report.id), ["feed-target-us"], "Targeted startup recovery searched unrelated sources");
+
     const scored = scoreOffers([...targetRecords, ...bestBuyRecords].map((item, index) => ({
       ...item,
       external_id:item.id,
