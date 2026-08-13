@@ -127,6 +127,7 @@ function expressWithHomepage(...args) {
     const responseLimit = Number.isFinite(requestedLimit) && requestedLimit > 0
       ? Math.max(10, Math.min(1000, Math.round(requestedLimit)))
       : Number.MAX_SAFE_INTEGER;
+    const compactResponse = String(req.query.compact || "") === "1";
     const catalogRowLimit = responseLimit < Number.MAX_SAFE_INTEGER
       ? ` LIMIT ${Math.min(2000, responseLimit * 2)}`
       : "";
@@ -151,7 +152,28 @@ function expressWithHomepage(...args) {
       selection_reason: product.daily_selection_reason || product.selection_reason
     })), ...catalog]).slice(0, responseLimit);
     const presented = products
-      .map(product => presentProduct(localizeProduct(product, language), language));
+      .map(product => presentProduct(localizeProduct(product, language), language))
+      .map(product => {
+        if (!compactResponse) return product;
+        const {
+          affiliate_url,
+          retailer_shop_url,
+          score_breakdown,
+          external_id,
+          provider_external_id,
+          upc,
+          gtin,
+          ean,
+          mpn,
+          model_number,
+          manufacturer,
+          ...visible
+        } = product;
+        return {
+          ...visible,
+          description:String(product.description || "").slice(0, 500),
+        };
+      });
     return res.json(presented);
   });
 
