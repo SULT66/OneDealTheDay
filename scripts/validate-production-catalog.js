@@ -50,6 +50,9 @@ if (!app.includes('forwardedHost === "onedailydrop.com"') || !app.includes("CANO
 for (const required of ["AZURE_PRODUCTION_HOST", "normalizedMarketPath", "normalizedPath", "insecureCanonicalRequest"]) {
   if (!app.includes(required)) throw new Error(`Canonical URL normalization is missing: ${required}`);
 }
+if (!app.includes("responseLimit") || !app.includes("Math.min(1000")) {
+  throw new Error("Production products API cannot cap large homepage responses");
+}
 
 const homepage = fs.readFileSync(path.join(root, "src/homepage.js"), "utf8");
 const homepageTemplate = fs.readFileSync(path.join(root, "src/homepageTemplate.js"), "utf8");
@@ -103,6 +106,7 @@ for (const forbidden of ["Trending Drops", "New Drops", "Yesterday's Drops", "Ev
 
 const browserApp = fs.readFileSync(path.join(root, "public/app.js"), "utf8");
 if (browserApp.includes("shortTitle")) throw new Error("Client-side titles are still truncated");
+if (!browserApp.includes("&limit=600")) throw new Error("Homepage still downloads the complete product catalog");
 if (!browserApp.includes('searchParams.delete("country")')) throw new Error("Stale country parameter cleanup is missing");
 if (!browserApp.includes("return products.slice(1, 10);")) {
   throw new Error("Client-side rendering still repeats Today's Drop in the additional list");
