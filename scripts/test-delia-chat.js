@@ -196,9 +196,10 @@ assert(
   "Delia workspace is not protected against horizontal overflow",
 );
 assert(
-  client.includes("const responseTr = (_body, key, fallback)") &&
-    !client.includes("input.placeholder = responseTr("),
-  "A shopper message can still overwrite the site interface language",
+  client.includes("const responseTr = (body, key, fallback)") &&
+    client.includes("RESPONSE_LABELS[responseLanguage(body)]") &&
+    client.includes("input.placeholder = responseTr("),
+  "The assistant interface does not follow the shopper's conversation language",
 );
 assert(
   client.includes('az: ["Salam!') && client.includes('return "az";'),

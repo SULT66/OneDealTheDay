@@ -212,6 +212,32 @@
       positionBestOverall: "Лучший выбор", positionLowestPrice: "Самая низкая цена", positionAlternative: "Альтернатива",
       availability: "Наличие", pack: "В упаковке", sizes: "Размеры",
     },
+    az: {
+      product: "Məhsul", price: "Qiymət", bestFor: "Ən uyğunu", score: "Qiymətləndirmə",
+      delivery: "Çatdırılma", returns: "Qaytarma", strengths: "Üstünlüklər",
+      drawbacks: "Nəzərə alın", comparisonTitle: "Qısa müqayisə",
+      sources: "Mənbələr", save: "Yadda saxla", savedLabel: "Yadda saxlanılıb",
+      askProduct: "Delia-dan soruş", inCatalog: "OneDailyDrop tərəfindən yoxlanmış məhsul",
+      productFit: "Mənə uyğundur?", productCompare: "Müqayisə et",
+      productAlternative: "Alternativ tap", explainScore: "Qiymətləndirməni izah et",
+      checked: "Qiymət yoxlanılıb", otherOffers: "Digər təkliflər", viewDetails: "Məhsula bax",
+      actionCompare: "Bu məhsulları müqayisə et", actionCheaper: "Daha ucuz variantlar tap",
+      actionPremium: "Premium variantları göstər", actionNew: "Yalnız yeni məhsullar",
+      actionStores: "Digər mağazaları yoxla", feedbackQuestion: "Bu faydalı oldu?",
+      helpful: "Faydalı", notHelpful: "Faydalı olmadı", wrongPrice: "Qiymət yanlışdır",
+      feedbackThanks: "Təşəkkürlər, rəyiniz yadda saxlanıldı.",
+      partialTitle: "Aktual məhsul səhifələri", partialStatus: "Qiyməti və mövcudluğu mağazada təsdiqləyin",
+      checkPrice: "Qiyməti yoxla", viewOffer: "Mağaza səhifəsini aç",
+      topThree: "Top 3 ·", topOne: "Ən yaxşı variant ·", topOptions: "Ən yaxşı variantlar ·", option: "variant", options: "variant",
+      actionSimilar: "Oxşar modelləri göstər", actionRetry: "Yenidən axtar",
+      you: "Siz", placeholder: "Nə almaq istəyirsiniz?",
+      disclaimer: "Qiymət və mövcudluq dəyişə bilər. Son məlumatları mağazada təsdiqləyin.",
+      subtitle: "OneDailyDrop alış-veriş köməkçiniz",
+      totalPrice: "Çatdırılma ilə cəmi", comparisonReady: "Göstərilən məhsulları artıq müqayisə etdim. Yeni axtarış lazım deyil.",
+      noNewStores: "Digər mağazalarda hələ yeni uyğun təklif tapılmadı.",
+      positionBestOverall: "Ən yaxşı seçim", positionLowestPrice: "Ən aşağı qiymət", positionAlternative: "Alternativ",
+      availability: "Mövcudluq", pack: "Paket", sizes: "Ölçülər",
+    },
     es: {
       product: "Producto", price: "Precio", bestFor: "Ideal para", score: "Puntuación",
       delivery: "Entrega", returns: "Devoluciones", strengths: "Ventajas",
@@ -287,10 +313,10 @@
     if (RESPONSE_LABELS[selected]) return selected;
     return /[\u0400-\u04ff]/u.test(String(body.message || "")) ? "ru" : language();
   };
-  const responseTr = (_body, key, fallback) =>
-    RESPONSE_LABELS[language()]?.[key] || tr(key, fallback);
+  const responseTr = (body, key, fallback) =>
+    RESPONSE_LABELS[responseLanguage(body)]?.[key] || tr(key, fallback);
   const responseOptionCountLabel = (body, count) => {
-    const selectedLanguage = language();
+    const selectedLanguage = responseLanguage(body);
     if (selectedLanguage === "ru") {
       const finalTwoDigits = count % 100;
       if (finalTwoDigits >= 11 && finalTwoDigits <= 14) return "вариантов";
@@ -315,6 +341,29 @@
   function updateConversationLocale(body = {}) {
     const selectedLanguage = responseLanguage(body);
     panel.dataset.conversationLanguage = selectedLanguage;
+    const localeBody = { language: selectedLanguage };
+    if (subtitleElement) {
+      subtitleElement.textContent = `D.E.L.I.A. · ${responseTr(
+        localeBody,
+        "subtitle",
+        "Your OneDailyDrop shopping assistant",
+      )}`;
+    }
+    if (disclaimerElement) {
+      disclaimerElement.textContent = responseTr(
+        localeBody,
+        "disclaimer",
+        "Prices and availability can change. Confirm final details with the retailer.",
+      );
+    }
+    if (input && !clarificationFlow) {
+      input.placeholder = responseTr(
+        localeBody,
+        "placeholder",
+        "What are you shopping for?",
+      );
+      input.setAttribute("aria-label", input.placeholder);
+    }
   }
   const looksLikeSerializedPayload = (value) => {
     const text = String(value || "").trim();
@@ -365,7 +414,16 @@
       if (/(?:^|\/)(?:search|browse|category|categories|collection|collections|department|departments|results)(?:\/|$)/i.test(path)) return false;
       if (/\b(?:search|query|keyword|category)\b/i.test(url.search)) return false;
       if (/pcmcat/i.test(path) || /pcmcat/i.test(url.search)) return false;
-      if (/\/(?:ip|p|product|products|dp|itm)\//i.test(path) || /\/site\/[^/]+\/[^/]+\.p$/i.test(path) || /\/shop\/buy-[^/]+\//i.test(path) || (/(?:^|\/)buy(?:\/|$)/i.test(path) && /\d/.test(path))) return true;
+      if (
+        /\/(?:ip|p|product|products|productpage|dp|itm)\//i.test(path) ||
+        /\/site\/[^/]+\/[^/]+\.p$/i.test(path) ||
+        /\/shop\/buy-[^/]+\//i.test(path) ||
+        /\/t\/[^/]+\/[^/]+/i.test(path) ||
+        /\/(?:us|ca|gb|uk|fr|de)\/(?:(?:en|fr|de)\/)?[^/]+\/[^/]+\.html$/i.test(path) ||
+        /\/[^/]+\/[a-z0-9-]{4,}\.html$/i.test(path) ||
+        /\.product\.\d+\.html$/i.test(path) ||
+        (/(?:^|\/)buy(?:\/|$)/i.test(path) && /\d/.test(path))
+      ) return true;
       return false;
     } catch {
       return false;
@@ -1447,7 +1505,11 @@
     clarificationQuestionElement.textContent = "";
     clarificationProgressElement.textContent = "";
     clarificationOptionsElement.replaceChildren();
-    input.placeholder = tr("placeholder", "What are you shopping for?");
+    input.placeholder = responseTr(
+      { language: activeChat?.conversation_language || language() },
+      "placeholder",
+      "What are you shopping for?",
+    );
   }
 
   function renderClarificationStep() {
@@ -1488,7 +1550,6 @@
     }
     const combinedAnswer = clarificationFlow.answers.join(" ");
     clearClarificationBar();
-    input.placeholder = tr("placeholder", "What are you shopping for?");
     sendQuestion(combinedAnswer);
   }
 
@@ -1911,6 +1972,7 @@
           messages: priorHistory,
           shopping_context: activeChat.shopping_context || "",
           shopping_mission: activeChat.shopping_mission || normalizeShoppingMission(null),
+          excluded_offer_urls: [...seenOffers].slice(0, 12),
           market: market(),
           language: language(),
         }),

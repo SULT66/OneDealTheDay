@@ -258,9 +258,58 @@ assert.deepStrictEqual(
     source_type: "web",
     image_url: "https://static.nike.com/pegasus-41.jpg",
     catalog_product_id: 0,
+    price_value: 145,
+    currency: "USD",
+    availability: "",
   },
   "A verified Nike product page could not hydrate a complete card",
 );
+for (const fixture of [
+  { market: "ca", currency: "CAD", url: "https://www.adidas.ca/en/supernova-rise-2-running-shoes/JI4512.html", price: "CAD 180", image: "https://assets.adidas.ca/JI4512.jpg" },
+  { market: "uk", currency: "GBP", url: "https://www.adidas.co.uk/supernova-rise-2-running-shoes/JI4512.html", price: "GBP 130", image: "https://assets.adidas.co.uk/JI4512.jpg" },
+  { market: "fr", currency: "EUR", url: "https://www.adidas.fr/chaussure-supernova-rise-2/JI4512.html", price: "EUR 150", image: "https://assets.adidas.fr/JI4512.jpg" },
+  { market: "de", currency: "EUR", url: "https://www.adidas.de/supernova-rise-2-laufschuh/JI4512.html", price: "EUR 150", image: "https://assets.adidas.de/JI4512.jpg" },
+]) {
+  assert(urlMatchesMarket(fixture.url, fixture.market));
+  const hydrated = productMetadataFromHtml(
+    `<meta content="Adidas Supernova Rise 2 Running Shoes" property="og:title">
+     <meta content="${fixture.image}" property="og:image">
+     <meta content="${fixture.price.split(" ")[1]}" property="product:price:amount">
+     <meta content="${fixture.currency}" property="product:price:currency">`,
+    fixture.url,
+    fixture.currency,
+  );
+  assert(hydrated, `${fixture.market.toUpperCase()} product metadata was rejected`);
+  assert.strictEqual(hydrated.price, fixture.price);
+}
+for (const [marketCode, expectedHosts] of Object.entries({
+  us: ["nike.com", "footlocker.com", "dickssportinggoods.com"],
+  ca: ["nike.com", "adidas.ca", "footlocker.ca"],
+  uk: ["nike.com", "adidas.co.uk", "jdsports.co.uk"],
+  fr: ["nike.com", "adidas.fr", "footlocker.fr"],
+  de: ["nike.com", "adidas.de", "footlocker.de"],
+})) {
+  const hosts = retailerDiscoveryHosts(
+    { product_type: "sneakers", brands: ["nike"] },
+    marketCode,
+  );
+  for (const host of expectedHosts) {
+    assert(
+      hosts.includes(host),
+      `${marketCode.toUpperCase()} footwear discovery omitted ${host}`,
+    );
+  }
+}
+const sizedRunningMission = mergeShoppingMission(
+  missionFromText("мужские беговые adidas кроссовки"),
+  {},
+  "мне нужен 10 размер, покажи еще варианты",
+  false,
+);
+assert.strictEqual(sizedRunningMission.size, "10");
+assert.strictEqual(sizedRunningMission.use_case, "running");
+assert.strictEqual(sizedRunningMission.product_type, "sneakers");
+assert.deepStrictEqual(sizedRunningMission.brands, ["adidas"]);
 assert.deepStrictEqual(
   coherentClarificationPrompts(
     [
@@ -2460,7 +2509,7 @@ const client = {
   assert.strictEqual(broadHeadphones.clarification_prompts.length, 2);
   assert.deepStrictEqual(
     broadHeadphones.clarification_prompts[0].options,
-    ["До $100", "$100-$200", "$200+"],
+    ["$0-100", "$100-200", "$200+"],
   );
   assert(
     broadHeadphones.clarifying_questions.some((question) => /бюджет/u.test(question)) &&
