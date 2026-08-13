@@ -127,6 +127,9 @@ function expressWithHomepage(...args) {
     const responseLimit = Number.isFinite(requestedLimit) && requestedLimit > 0
       ? Math.max(10, Math.min(1000, Math.round(requestedLimit)))
       : Number.MAX_SAFE_INTEGER;
+    const catalogRowLimit = responseLimit < Number.MAX_SAFE_INTEGER
+      ? ` LIMIT ${Math.min(2000, responseLimit * 2)}`
+      : "";
     const sourceCondition = sourceSql();
     const daily = db.prepare(`
       SELECT p.*,d.rank AS daily_rank,d.selection_reason AS daily_selection_reason
@@ -141,6 +144,7 @@ function expressWithHomepage(...args) {
       SELECT * FROM products
       WHERE market=? AND status='published' AND ${sourceCondition}
       ORDER BY score DESC,updated_at DESC
+      ${catalogRowLimit}
     `).all(selectedMarket).filter(product => !dailyIds.has(product.id));
     const products = uniqueProductsInOrder([...daily.map(product => ({
       ...product,
