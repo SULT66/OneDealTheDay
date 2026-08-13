@@ -32,6 +32,10 @@ const RETAILERS = Object.freeze([
     name:"Giftlab",
     network:"Awin",
     markets:["us"],
+    // Giftlab's current US feed is small enough to keep in full after the
+    // safety policy below. Recommendation diversity is enforced separately,
+    // so catalog ingestion does not need to discard most of the assortment.
+    maxCatalogProducts:3000,
     feedPolicy:{
       excludeCategoryLeaves:["Lingerie"],
       excludeTitleTerms:[
@@ -57,6 +61,12 @@ function environmentPrefix(retailerId, marketCode) {
   return `AFFILIATE_FEED_${String(retailerId).replace(/-/g, "_").toUpperCase()}_${String(marketCode).toUpperCase()}`;
 }
 
+function optionalProductLimit(value, fallback = null) {
+  const selected = value == null || String(value).trim() === "" ? fallback : value;
+  const parsed = Number(selected);
+  return Number.isFinite(parsed) ? Math.max(50, Math.min(10000, Math.round(parsed))) : null;
+}
+
 function feedDefinitions(env = process.env) {
   const definitions = [];
   for (const retailer of RETAILERS) {
@@ -75,6 +85,7 @@ function feedDefinitions(env = process.env) {
         format:String(env[`${prefix}_FORMAT`] || "auto").trim().toLowerCase(),
         headersJson:String(env[`${prefix}_HEADERS_JSON`] || "").trim(),
         fieldMapJson:String(env[`${prefix}_FIELD_MAP_JSON`] || "").trim(),
+        maxProducts:optionalProductLimit(env[`${prefix}_MAX_PRODUCTS`], retailer.maxCatalogProducts),
         feedPolicy:retailer.feedPolicy || null
       });
     }
@@ -108,7 +119,8 @@ function feedDefinitions(env = process.env) {
         url,
         format:String(custom?.format || "auto").trim().toLowerCase(),
         headersJson:custom?.headers && typeof custom.headers === "object" ? JSON.stringify(custom.headers) : String(custom?.headersJson || "").trim(),
-        fieldMapJson:custom?.fieldMap && typeof custom.fieldMap === "object" ? JSON.stringify(custom.fieldMap) : String(custom?.fieldMapJson || "").trim()
+        fieldMapJson:custom?.fieldMap && typeof custom.fieldMap === "object" ? JSON.stringify(custom.fieldMap) : String(custom?.fieldMapJson || "").trim(),
+        maxProducts:optionalProductLimit(custom?.maxProducts)
       });
     }
   }

@@ -2110,6 +2110,25 @@ function normalizeSearch(value) {
   return clean(value).toLowerCase().slice(0, 160);
 }
 
+function selectBalancedCatalogProducts(products, limit) {
+  const selected = [];
+  const deferred = [];
+  const retailers = new Set();
+  for (const product of products) {
+    const retailer = normalizeSearch(product.retailer || product.source);
+    if (retailer && !retailers.has(retailer)) {
+      selected.push(product);
+      retailers.add(retailer);
+      if (selected.length >= limit) return selected;
+    } else deferred.push(product);
+  }
+  for (const product of deferred) {
+    selected.push(product);
+    if (selected.length >= limit) break;
+  }
+  return selected;
+}
+
 function searchCatalog(db, sourceSql, args, marketCode, language) {
   const query = normalizeSearch(args.query);
   const category = normalizeSearch(args.category);
@@ -2126,12 +2145,12 @@ function searchCatalog(db, sourceSql, args, marketCode, language) {
     SELECT * FROM products
     WHERE market=? AND status='published' AND ${sourceSql()}
     ORDER BY score DESC,evidence_confidence DESC,updated_at DESC
-    LIMIT 2000
+    LIMIT 10000
   `,
     )
     .all(marketCode);
 
-  return rows
+  const ranked = rows
     .map((product) => assistantProduct(product, language))
     // A verified affiliate-feed product can still be useful for discovery when
     // the merchant does not provide enough review/seller evidence to earn a
@@ -2172,8 +2191,8 @@ function searchCatalog(db, sourceSql, args, marketCode, language) {
         right.matches - left.matches ||
         right.product.score - left.product.score,
     )
-    .slice(0, limit)
     .map((entry) => entry.product);
+  return selectBalancedCatalogProducts(ranked, limit);
 }
 
 function priceHistory(db, sourceSql, args, marketCode) {

@@ -42,7 +42,7 @@ Module._load = function load(request, parent, isMain) {
 process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "onedailydrop-automation-"));
 
 const { RETAILERS, feedDefinitions } = require("../src/retailerCatalog");
-const { searchForAssistant } = require("../src/providers/registry");
+const { searchAll, searchForAssistant } = require("../src/providers/registry");
 const { allowedByFeedPolicy, download, parseDelimited, parseRecords, safeFeedUrl } = require("../src/providers/affiliateFeed");
 const { scoreOffers, selectUniqueProducts } = require("../src/ranker");
 const { refreshMarket, sortByCurrentScore } = require("../src/refresh");
@@ -73,6 +73,7 @@ assert.strictEqual(definitions.find(item => item.id === "target-us").retailerNam
 assert.strictEqual(definitions.find(item => item.id === "tribesigns-us").retailerName, "Tribesigns");
 assert.strictEqual(definitions.find(item => item.id === "giftlab-us").retailerName, "Giftlab");
 const giftlabDefinition = definitions.find(item => item.id === "giftlab-us");
+assert.strictEqual(giftlabDefinition.maxProducts, 3000, "Giftlab cannot retain its complete safe catalog");
 assert.strictEqual(
   allowedByFeedPolicy({title:"Custom Sexy Apron", category:"Gifts"}, giftlabDefinition),
   false,
@@ -223,6 +224,18 @@ const config = {
     assert.strictEqual(tribesignsProducts[0].original_price, 499.99, "Tribesigns regular price was not retained");
     assert(tribesignsProducts[0].affiliate_url.includes("awinaffid=3018019"), "Tribesigns untracked merchant URL replaced the Awin deep link");
     assert(!tribesignsProducts.some(product => product.external_id === "desk-oos"), "Delia search retained an unavailable Tribesigns offer");
+    const expandedGiftlabProducts = await require("../src/providers/affiliateFeed").searchProducts({
+      definition:{...giftlabDefinition, url:"https://productdata.awin.com/giftlab-expanded.csv", format:"csv"},
+      market:{code:"us", currency:"USD"},
+      fetchImpl:async () => new Response(tribesignsFeed, {status:200, headers:{"content-type":"text/csv"}})
+    });
+    assert.strictEqual(expandedGiftlabProducts.length, 2101, "Giftlab was still truncated at the old 2,000-product feed ceiling");
+
+    const sourceLimited = await searchAll({
+      ...config,
+      affiliateFeeds:[{...config.affiliateFeeds[0], maxProducts:4}],
+    }, market);
+    assert.strictEqual(sourceLimited.reports[0].found, 4, "A feed-specific catalog limit was ignored");
 
     const scored = scoreOffers([...targetRecords, ...bestBuyRecords].map((item, index) => ({
       ...item,
