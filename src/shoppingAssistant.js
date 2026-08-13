@@ -9,7 +9,7 @@ const MAX_MESSAGE_LENGTH = 1200;
 const MAX_RECOMMENDATIONS = 3;
 const MAX_RECOMMENDATION_CANDIDATES = 8;
 const SCOPE_TIMEOUT_MS = 4500;
-const SEARCH_TIMEOUT_MS = 22000;
+const SEARCH_TIMEOUT_MS = 18000;
 const normalizeTokenText = (value) =>
   String(value || "")
     .normalize("NFKD")
@@ -4375,5 +4375,6 @@ module.exports = {
   normalizeDeliaPunctuation,
   searchCatalog,
   shoppingMissionText,
+  timeoutResponse,
   urlMatchesMarket,
 };
