@@ -53,6 +53,7 @@ const PRODUCT_CATEGORY_GROUPS = {
   underwear: ["underwear", "brief", "briefs", "boxer", "boxers", "boxerbrief", "boxerbriefs", "trunk", "trunks", "трусы", "белье", "бельё", "боксеры", "боксерки", "брифы", "ropa interior", "calzoncillos", "sous-vetements", "sous-vêtement", "unterwasche", "unterwäsche"],
   shoes: ["shoe", "shoes", "sneaker", "sneakers", "boot", "boots", "обувь", "кроссовки", "ботинки", "туфли", "zapato", "zapatos", "zapatillas", "chaussure", "chaussures", "schuh", "schuhe"],
   clothing: ["clothing", "apparel", "shirt", "shirts", "tank", "tanktop", "singlet", "vest", "jacket", "jackets", "pants", "одежда", "майка", "майку", "майки", "маек", "безрукавка", "безрукавку", "безрукавки", "рубашка", "куртка", "брюки", "camisa", "chaqueta", "ropa", "vêtement", "vetement", "kleidung"],
+  chair: ["chair", "chairs", "stool", "stools", "стул", "стула", "стулья", "стульев", "стульям", "silla", "sillas", "chaise", "chaises", "stuhl", "stuhle", "stühle"],
   furniture: ["furniture", "sofa", "sofas", "couch", "couches", "sectional", "sectionals", "loveseat", "loveseats", "диван", "диваны", "диван-кровать", "мебель", "sofá", "sofa", "canapé", "canape", "möbel", "mobel"],
 };
 const PRODUCT_CATEGORY_BY_ALIAS = new Map(
@@ -115,6 +116,11 @@ const SHOPPING_TERM_ALIASES = new Map([
   ["кроссовки", "sneakers"],
   ["кроссовок", "sneakers"],
   ["кроссовкам", "sneakers"],
+  ["стул", "chairs"],
+  ["стула", "chairs"],
+  ["стулья", "chairs"],
+  ["стульев", "chairs"],
+  ["стульям", "chairs"],
   ["осень", "autumn"],
   ["осенние", "autumn"],
   ["осенних", "autumn"],
@@ -983,7 +989,7 @@ function missionFromText(value) {
       : "";
   const style = tokens.includes("youth")
     ? "youth"
-    : /(?:minimalist|минималист|classic|классическ|sporty|спортивн)/iu.exec(text)?.[0] || "";
+    : /(?:minimalist|минималист|modern|современн\p{L}*|classic|классическ|sporty|спортивн)/iu.exec(text)?.[0] || "";
   const audience = /(?:\bmen(?:'s)?\b|мужск\p{L}*)/iu.test(text)
     ? "men"
     : /(?:\bwomen(?:'s)?\b|женск\p{L}*)/iu.test(text)
@@ -4010,7 +4016,7 @@ function createShoppingAssistant({
           return timeoutFallback();
         }
         if (![400, 422].includes(Number(error?.status || error?.statusCode))) {
-          throw error;
+          return timeoutFallback();
         }
         try {
           response = await withRequestTimeout(
@@ -4023,7 +4029,6 @@ function createShoppingAssistant({
           );
         } catch (retryError) {
           if (signal?.aborted) throw retryError;
-          if (!retryError.assistantTimeout) throw retryError;
           return timeoutFallback();
         }
       }
