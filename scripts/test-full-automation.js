@@ -280,6 +280,16 @@ const config = {
       ["feed-wayfair-us"],
       "Startup recovery did not distinguish populated sources from a failed empty source"
     );
+    const expandedTargetConfig = {
+      ...config,
+      affiliateFeeds:[{...config.affiliateFeeds[0], maxProducts:10}],
+      maxProductsPerSource:6,
+    };
+    assert.deepStrictEqual(
+      missingConfiguredProviders(expandedTargetConfig, "us"),
+      ["feed-target-us"],
+      "Startup recovery did not re-import a source that was truncated at the old shared limit",
+    );
     assert.strictEqual(db.prepare("SELECT COUNT(*) n FROM automation_alerts WHERE resolved_at IS NULL").get().n, 1);
     assert.strictEqual(db.prepare("SELECT COUNT(*) n FROM distribution_queue WHERE status='ready'").get().n, 2);
     assert(db.prepare("SELECT COUNT(*) n FROM products WHERE provider_external_id LIKE 'feed-%:%'").get().n === 12, "Provider IDs are not source-qualified");
