@@ -246,6 +246,10 @@ function allowedByFeedPolicy(product, definition) {
     ? policy.categoryLeaves.map(value => compactText(value).toLowerCase()).filter(Boolean)
     : [];
   if (categoryLeaves.length && !categoryLeaves.includes(leaf)) return false;
+  const excludedCategoryLeaves = Array.isArray(policy.excludeCategoryLeaves)
+    ? policy.excludeCategoryLeaves.map(value => compactText(value).toLowerCase()).filter(Boolean)
+    : [];
+  if (excludedCategoryLeaves.includes(leaf)) return false;
   const title = compactText(product.title).toLowerCase();
   const excludedTerms = Array.isArray(policy.excludeTitleTerms)
     ? policy.excludeTitleTerms.map(value => compactText(value).toLowerCase()).filter(Boolean)

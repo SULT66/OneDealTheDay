@@ -43,7 +43,7 @@ process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "onedailydrop-autom
 
 const { RETAILERS, feedDefinitions } = require("../src/retailerCatalog");
 const { searchForAssistant } = require("../src/providers/registry");
-const { download, parseDelimited, parseRecords, safeFeedUrl } = require("../src/providers/affiliateFeed");
+const { allowedByFeedPolicy, download, parseDelimited, parseRecords, safeFeedUrl } = require("../src/providers/affiliateFeed");
 const { scoreOffers, selectUniqueProducts } = require("../src/ranker");
 const { refreshMarket, sortByCurrentScore } = require("../src/refresh");
 const { recalculateCatalog } = require("../src/catalogRecalculation");
@@ -51,7 +51,7 @@ const { missingConfiguredProviders } = require("../src/catalogRecovery");
 const db = require("../src/db");
 
 assert(RETAILERS.length >= 20, "The complete target retailer catalog is missing");
-for (const retailer of ["Amazon", "eBay", "Walmart", "Target", "Best Buy", "Tribesigns", "Mooncool", "Currys", "Fnac", "Darty", "MediaMarkt", "Saturn", "OTTO", "Samsung"]) {
+for (const retailer of ["Amazon", "eBay", "Walmart", "Target", "Best Buy", "Tribesigns", "Mooncool", "Giftlab", "Currys", "Fnac", "Darty", "MediaMarkt", "Saturn", "OTTO", "Samsung"]) {
   assert(RETAILERS.some(item => item.name === retailer), `${retailer} is missing from retailer coverage`);
 }
 assert.throws(() => safeFeedUrl("http://localhost/feed.csv"), /public HTTPS/);
@@ -64,12 +64,30 @@ const feedEnv = {
   AFFILIATE_FEED_TARGET_US_URL:"https://feed.test/target.csv",
   AFFILIATE_FEED_TRIBESIGNS_US_URL:"https://productdata.awin.com/tribesigns-us.csv.gz",
   AFFILIATE_FEED_MOONCOOL_US_URL:"https://productdata.awin.com/mooncool-us.csv.gz",
-  AFFILIATE_FEED_MOONCOOL_CA_URL:"https://productdata.awin.com/mooncool-ca.csv.gz"
+  AFFILIATE_FEED_MOONCOOL_CA_URL:"https://productdata.awin.com/mooncool-ca.csv.gz",
+  AFFILIATE_FEED_GIFTLAB_US_URL:"https://productdata.awin.com/giftlab-us.csv.gz"
 };
 const definitions = feedDefinitions(feedEnv);
-assert.strictEqual(definitions.length, 4);
+assert.strictEqual(definitions.length, 5);
 assert.strictEqual(definitions.find(item => item.id === "target-us").retailerName, "Target");
 assert.strictEqual(definitions.find(item => item.id === "tribesigns-us").retailerName, "Tribesigns");
+assert.strictEqual(definitions.find(item => item.id === "giftlab-us").retailerName, "Giftlab");
+const giftlabDefinition = definitions.find(item => item.id === "giftlab-us");
+assert.strictEqual(
+  allowedByFeedPolicy({title:"Custom Sexy Apron", category:"Gifts"}, giftlabDefinition),
+  false,
+  "Giftlab explicit adult title was not rejected",
+);
+assert.strictEqual(
+  allowedByFeedPolicy({title:"Custom Face Boxer Briefs", category:"Lingerie"}, giftlabDefinition),
+  false,
+  "Giftlab lingerie category was not rejected",
+);
+assert.strictEqual(
+  allowedByFeedPolicy({title:"Personalized Family Keychain", category:"Gifts"}, giftlabDefinition),
+  true,
+  "A normal Giftlab product was rejected",
+);
 assert.deepStrictEqual(definitions.filter(item => item.retailerId === "mooncool").map(item => item.markets[0]), ["us", "ca"]);
 const customDefinitions = feedDefinitions({AFFILIATE_FEEDS_JSON:JSON.stringify([{
   id:"future-store", retailerName:"Future Store", market:"ca", url:"https://feed.test/future.json", format:"json"
