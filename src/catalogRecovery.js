@@ -1,6 +1,7 @@
 const db = require("./db");
 const { refreshProducts } = require("./refresh");
 const { sourceSql } = require("./publicCatalog");
+const { providersForMarket } = require("./providers/registry");
 
 function countLiveProducts(marketCode = "") {
   const marketFilter = marketCode ? " AND market=?" : "";
@@ -34,6 +35,16 @@ function recordConfigurationFailure(config, message) {
     .run(config.provider, now, now, 0, 0, message);
 }
 
+function missingConfiguredProviders(config, marketCode) {
+  const selectedMarket = config.marketConfig(marketCode);
+  const configured = providersForMarket(config, selectedMarket).map(provider => provider.id);
+  if (!configured.length) return [];
+  const attempted = new Set(db.prepare(
+    "SELECT DISTINCT provider_id FROM source_refresh_runs WHERE market=?"
+  ).all(marketCode).map(row => String(row.provider_id || "")));
+  return configured.filter(providerId => !attempted.has(providerId));
+}
+
 module.exports = async function recoverProductionCatalog(config) {
   const demoCount = countDemoProducts();
   const refreshErrors = [];
@@ -41,8 +52,12 @@ module.exports = async function recoverProductionCatalog(config) {
 
   if (config.provider !== "unconfigured") {
     for (const marketCode of marketCodes) {
-      if (countLiveProducts(marketCode)) continue;
-      console.log(`Refreshing ${marketCode.toUpperCase()} production catalog with provider ${config.provider}.`);
+      const missingProviders = missingConfiguredProviders(config, marketCode);
+      if (countLiveProducts(marketCode) && !missingProviders.length) continue;
+      const reason = missingProviders.length
+        ? `new sources ${missingProviders.join(", ")}`
+        : "an empty live catalog";
+      console.log(`Refreshing ${marketCode.toUpperCase()} production catalog for ${reason}.`);
       try {
         await refreshProducts(config, { market: marketCode });
       } catch (error) {
@@ -76,3 +91,5 @@ module.exports = async function recoverProductionCatalog(config) {
     refreshError
   };
 };
+
+module.exports.missingConfiguredProviders = missingConfiguredProviders;

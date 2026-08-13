@@ -47,6 +47,7 @@ const { download, parseDelimited, parseRecords, safeFeedUrl } = require("../src/
 const { scoreOffers, selectUniqueProducts } = require("../src/ranker");
 const { refreshMarket, sortByCurrentScore } = require("../src/refresh");
 const { recalculateCatalog } = require("../src/catalogRecalculation");
+const { missingConfiguredProviders } = require("../src/catalogRecovery");
 const db = require("../src/db");
 
 assert(RETAILERS.length >= 20, "The complete target retailer catalog is missing");
@@ -223,6 +224,12 @@ const config = {
     assert.strictEqual(selectUniqueProducts(scored).length, 11, "Daily selection did not deduplicate the matching product");
     assert(scored.some(product => product.score < 60), "The catalog fixture is missing its below-selection offer");
 
+    assert.deepStrictEqual(
+      missingConfiguredProviders(config, "us"),
+      ["feed-target-us", "feed-best-buy-us", "feed-wayfair-us"],
+      "Existing products from another retailer can hide newly configured sources"
+    );
+
     const result = await refreshMarket(config, "us");
     assert.strictEqual(result.selected, 10);
     assert.strictEqual(result.sources.length, 3);
@@ -233,6 +240,11 @@ const config = {
     assert.strictEqual(db.prepare("SELECT COUNT(*) n FROM products WHERE product_key=?").get(`gtin:${targetRecords[0].gtin}`).n, 2, "Matching cross-store offers were not retained");
     assert.strictEqual(db.prepare("SELECT COUNT(*) n FROM daily_drops").get().n, 10);
     assert.strictEqual(db.prepare("SELECT COUNT(*) n FROM source_refresh_runs").get().n, 3);
+    assert.deepStrictEqual(
+      missingConfiguredProviders(config, "us"),
+      [],
+      "A completed multi-source refresh was not recorded for startup recovery"
+    );
     assert.strictEqual(db.prepare("SELECT COUNT(*) n FROM automation_alerts WHERE resolved_at IS NULL").get().n, 1);
     assert.strictEqual(db.prepare("SELECT COUNT(*) n FROM distribution_queue WHERE status='ready'").get().n, 2);
     assert(db.prepare("SELECT COUNT(*) n FROM products WHERE provider_external_id LIKE 'feed-%:%'").get().n === 12, "Provider IDs are not source-qualified");
