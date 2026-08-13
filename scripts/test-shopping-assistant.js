@@ -2,11 +2,13 @@ const assert = require("assert");
 const Database = require("better-sqlite3");
 const {
   classifyShoppingScope,
+  coherentClarificationPrompts,
   createShoppingAssistant,
   greetingContext,
   mergeShoppingMission,
   missionFromText,
   normalizeAssistantResponse,
+  productMetadataFromHtml,
   normalizeDeliaPunctuation,
   recommendationLimit,
   retailerDiscoveryHosts,
@@ -229,6 +231,64 @@ assert.strictEqual(
 );
 assert.strictEqual(responseLanguage("Salam, qulaqcıq tap", "en"), "az");
 assert.strictEqual(responseLanguage("Find me good headphones", "ru"), "en");
+assert.strictEqual(
+  urlMatchesMarket("https://www.nike.qa/en/w/mens-running-shoes-37v7j", "us"),
+  false,
+  "A foreign Nike regional domain still passes as a US source",
+);
+assert.deepStrictEqual(
+  productMetadataFromHtml(
+    `<html><head>
+      <meta property="og:title" content="Nike Pegasus 41 Men's Road Running Shoes">
+      <meta property="og:image" content="https://static.nike.com/pegasus-41.jpg">
+      <meta property="product:price:amount" content="145.00">
+      <meta property="product:price:currency" content="USD">
+    </head></html>`,
+    "https://www.nike.com/us/t/pegasus-41-road-running-shoes/FD2722-600",
+    "USD",
+  ),
+  {
+    title: "Nike Pegasus 41 Men's Road Running Shoes",
+    retailer: "Nike",
+    price: "USD 145",
+    badge: "",
+    reason: "",
+    url: "https://www.nike.com/us/t/pegasus-41-road-running-shoes/FD2722-600",
+    action_label: "",
+    source_type: "web",
+    image_url: "https://static.nike.com/pegasus-41.jpg",
+    catalog_product_id: 0,
+  },
+  "A verified Nike product page could not hydrate a complete card",
+);
+assert.deepStrictEqual(
+  coherentClarificationPrompts(
+    [
+      {
+        question: "Какой у вас бюджет?",
+        options: ["До $100", "$100-$200", "$200+"],
+      },
+      {
+        question: "Что важнее: качество, функции или самая низкая цена?",
+        options: ["Качество", "Функции", "Самая низкая цена"],
+      },
+    ],
+    ["Какой у вас бюджет?", "Для чего в основном нужны кроссовки?"],
+    "ru",
+    { product_type: "sneakers" },
+  ),
+  [
+    {
+      question: "Какой у вас бюджет?",
+      options: ["До $100", "$100-$200", "$200+"],
+    },
+    {
+      question: "Для чего в основном нужны кроссовки?",
+      options: ["Бег", "Зал и тренировки", "На каждый день", "Походы и трейлы"],
+    },
+  ],
+  "A generic feature/lowest-price question was not replaced with a shoe-specific decision",
+);
 const winterFollowUpMission = mergeShoppingMission(
   winterSneakerMission,
   {},
@@ -2275,6 +2335,7 @@ const client = {
               needs_clarification: false,
               clarification_reason: "none",
               clarifying_questions: [],
+              clarification_prompts: [],
             }),
           };
         },
@@ -2316,6 +2377,10 @@ const client = {
               clarifying_questions: [
                 "Which refrigerator model is this filter for?",
               ],
+              clarification_prompts: [{
+                question: "Which refrigerator model is this filter for?",
+                options: ["Samsung RF28", "LG LFXS", "Another model"],
+              }],
             }),
           };
         },
@@ -2340,7 +2405,7 @@ const client = {
   assert.deepStrictEqual(clarification.clarification_prompts, [
     {
       question: "Which refrigerator model is this filter for?",
-      options: [],
+      options: ["Samsung RF28", "LG LFXS", "Another model"],
     },
   ]);
   const broadHeadphoneCalls = [];
@@ -2359,6 +2424,7 @@ const client = {
               needs_clarification: false,
               clarification_reason: "none",
               clarifying_questions: [],
+              clarification_prompts: [],
               language: "ru",
               social_reply: "",
               starts_new_mission: false,
@@ -2520,7 +2586,9 @@ const client = {
                 type: "image_result",
                 image_url: offer.image_url,
                 thumbnail_url: offer.image_url,
-                source_website_url: offer.url,
+                source_website_url: host === "nike.com"
+                  ? "https://www.nike.com/us/t/pegasus-41-road-running-shoes/HF0013-600"
+                  : offer.url,
                 caption: offer.title,
               }],
             }],

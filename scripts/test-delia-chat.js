@@ -132,6 +132,11 @@ assert(
   client.includes("if (!greeting) return \"\""),
   "Shopping requests that merely begin with a greeting may be intercepted",
 );
+assert(
+  client.includes("if (!body.clarification_prompts.length)") &&
+    client.includes("renderClarifyingQuestions(body.clarifying_questions, message)"),
+  "Clarification questions are still duplicated in the message and composer",
+);
 
 for (const required of [
   ".assistant-sidebar",
