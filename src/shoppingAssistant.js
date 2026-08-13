@@ -242,6 +242,26 @@ const SHOPPING_SCOPE_RESPONSE_FORMAT = {
           "One to three concise questions in the shopper's language, or an empty array.",
         items: { type: "string" },
       },
+      clarification_prompts: {
+        type: "array",
+        maxItems: 2,
+        description:
+          "The same clarification questions with two to four short, mutually exclusive answer options for each question.",
+        items: {
+          type: "object",
+          properties: {
+            question: { type: "string" },
+            options: {
+              type: "array",
+              minItems: 2,
+              maxItems: 4,
+              items: { type: "string" },
+            },
+          },
+          required: ["question", "options"],
+          additionalProperties: false,
+        },
+      },
       language: {
         type: "string",
         enum: ["en", "ru", "az", "es", "fr", "de"],
@@ -286,6 +306,7 @@ const SHOPPING_SCOPE_RESPONSE_FORMAT = {
       "needs_clarification",
       "clarification_reason",
       "clarifying_questions",
+      "clarification_prompts",
       "language",
       "social_reply",
       "starts_new_mission",
@@ -1100,42 +1121,60 @@ const DISCOVERY_QUESTION_COPY = {
     budget: "What budget should I stay within?",
     headphone: "Would you prefer earbuds or over-ear headphones?",
     tv: "What screen size do you want?",
-    general: "What matters most: quality, features, or the lowest price?",
+    shoes: "What will you mainly use the shoes for?",
+    furniture: "How many people should it seat?",
+    phone: "Which phone priority matters most to you?",
+    general: "How will you mainly use this product?",
   },
   ru: {
     intro: "Чтобы подобрать действительно хорошие варианты, уточню два момента:",
     budget: "Какой у вас бюджет?",
     headphone: "Нужны внутриканальные вкладыши или полноразмерные наушники?",
     tv: "Какой размер экрана вам нужен?",
-    general: "Что важнее: качество, функции или самая низкая цена?",
+    shoes: "Для чего в основном нужны кроссовки?",
+    furniture: "На сколько человек должен быть рассчитан диван?",
+    phone: "Что для вас важнее всего в смартфоне?",
+    general: "Как вы будете в основном использовать этот товар?",
   },
   az: {
     intro: "Həqiqətən yaxşı variantlar seçmək üçün iki qısa sual:",
     budget: "Büdcəniz nə qədərdir?",
     headphone: "Qulaqdaxili, yoxsa qulaqüstü qulaqlıq istəyirsiniz?",
     tv: "Hansı ekran ölçüsünü istəyirsiniz?",
-    general: "Sizin üçün nə daha vacibdir: keyfiyyət, funksiyalar, yoxsa ən aşağı qiymət?",
+    shoes: "Ayaqqabını əsasən nə üçün istifadə edəcəksiniz?",
+    furniture: "Divan neçə nəfərlik olmalıdır?",
+    phone: "Smartfonda sizin üçün ən vacib olan nədir?",
+    general: "Bu məhsuldan əsasən necə istifadə edəcəksiniz?",
   },
   es: {
     intro: "Para elegir opciones realmente buenas, necesito dos datos:",
     budget: "¿Qué presupuesto debo respetar?",
     headphone: "¿Prefieres auriculares de botón o de diadema?",
     tv: "¿Qué tamaño de pantalla quieres?",
-    general: "¿Qué importa más: calidad, funciones o el precio más bajo?",
+    shoes: "¿Para qué usarás principalmente el calzado?",
+    furniture: "¿Para cuántas personas debe ser el sofá?",
+    phone: "¿Qué prioridad del teléfono te importa más?",
+    general: "¿Cómo usarás principalmente este producto?",
   },
   fr: {
     intro: "Pour choisir de très bonnes options, j’ai deux questions rapides :",
     budget: "Quel budget dois-je respecter ?",
     headphone: "Préférez-vous des écouteurs ou un casque ?",
     tv: "Quelle taille d’écran souhaitez-vous ?",
-    general: "Qu’est-ce qui compte le plus : la qualité, les fonctions ou le prix le plus bas ?",
+    shoes: "Pour quel usage principal souhaitez-vous ces chaussures ?",
+    furniture: "Combien de personnes le canapé doit-il accueillir ?",
+    phone: "Quelle priorité compte le plus pour votre téléphone ?",
+    general: "Comment utiliserez-vous principalement ce produit ?",
   },
   de: {
     intro: "Damit ich wirklich gute Optionen auswählen kann, zwei kurze Fragen:",
     budget: "Welches Budget soll ich einhalten?",
     headphone: "Möchten Sie In-Ear- oder Over-Ear-Kopfhörer?",
     tv: "Welche Bildschirmgröße möchten Sie?",
-    general: "Was ist wichtiger: Qualität, Funktionen oder der niedrigste Preis?",
+    shoes: "Wofür werden Sie die Schuhe hauptsächlich verwenden?",
+    furniture: "Für wie viele Personen soll das Sofa geeignet sein?",
+    phone: "Welche Smartphone-Eigenschaft ist Ihnen am wichtigsten?",
+    general: "Wie werden Sie dieses Produkt hauptsächlich verwenden?",
   },
 };
 
@@ -1145,24 +1184,30 @@ function broadDiscoveryQuestions(missionValue, language, latestRequest, hadActiv
   if (!mission.product_type) return null;
   const hasSpecificModel = mission.query_terms.some((term) => /\d/.test(term)) ||
     /\b(?:pro|max|ultra|plus)\s*\d+\b/i.test(latestRequest);
-  const hasUsefulConstraint = Boolean(
-    mission.brands.length ||
-    mission.budget_max ||
-    mission.style ||
-    mission.season ||
-    mission.audience ||
-    mission.size ||
-    hasSpecificModel
-  );
-  if (hasUsefulConstraint) return null;
+  if (hasSpecificModel) return null;
   const copy = DISCOVERY_QUESTION_COPY[language] || DISCOVERY_QUESTION_COPY.en;
   const category = missionProductFamily(mission.product_type);
   const categoryQuestion = category === "headphone"
     ? copy.headphone
     : category === "tv"
       ? copy.tv
-      : copy.general;
-  return { message: copy.intro, questions: [copy.budget, categoryQuestion] };
+      : category === "shoes"
+        ? copy.shoes
+        : category === "furniture"
+          ? copy.furniture
+          : category === "phone"
+            ? copy.phone
+            : copy.general;
+  const hasCategoryDecision = Boolean(
+    (mission.use_case && mission.use_case !== "gift") ||
+    mission.style || mission.season || mission.size || mission.query_terms.length,
+  );
+  if (hasCategoryDecision && !mission.budget_max) return null;
+  const questions = [
+    ...(!mission.budget_max ? [copy.budget] : []),
+    ...(!hasCategoryDecision ? [categoryQuestion] : []),
+  ].slice(0, 2);
+  return questions.length ? { message: copy.intro, questions } : null;
 }
 
 const CLARIFICATION_CHOICES = {
@@ -1170,42 +1215,60 @@ const CLARIFICATION_CHOICES = {
     budget: ["Under $100", "$100-$200", "$200+"],
     headphone: ["Earbuds", "Over-ear", "No preference"],
     tv: ["Up to 43 inches", "50-55 inches", "65 inches or larger"],
-    general: ["Best quality", "Most features", "Lowest price"],
+    general: ["Everyday use", "Work", "Travel", "Gift"],
+    shoes: ["Running", "Gym and training", "Everyday wear", "Hiking or trails"],
+    furniture: ["1-2 people", "3 people", "4 or more", "Sleeper sofa"],
+    phone: ["Camera", "Battery life", "Compact size", "Large display"],
     size: ["US 8", "US 9", "US 10", "Another size"],
   },
   ru: {
     budget: ["До $100", "$100-$200", "$200+"],
     headphone: ["Вкладыши", "Полноразмерные", "Без разницы"],
     tv: ["До 43 дюймов", "50-55 дюймов", "65 дюймов и больше"],
-    general: ["Лучшее качество", "Больше функций", "Самая низкая цена"],
+    general: ["На каждый день", "Для работы", "Для поездок", "В подарок"],
+    shoes: ["Бег", "Зал и тренировки", "На каждый день", "Походы и трейлы"],
+    furniture: ["1-2 человека", "3 человека", "4 и больше", "Диван-кровать"],
+    phone: ["Камера", "Автономность", "Компактный размер", "Большой экран"],
     size: ["US 8", "US 9", "US 10", "Другой размер"],
   },
   az: {
     budget: ["$100-a qədər", "$100-$200", "$200+"],
     headphone: ["Qulaqdaxili", "Qulaqüstü", "Fərqi yoxdur"],
     tv: ["43 düymə qədər", "50-55 düym", "65 düym və daha böyük"],
-    general: ["Ən yaxşı keyfiyyət", "Daha çox funksiya", "Ən aşağı qiymət"],
+    general: ["Gündəlik istifadə", "İş", "Səyahət", "Hədiyyə"],
+    shoes: ["Qaçış", "Zal və məşq", "Gündəlik istifadə", "Gəzinti və treyl"],
+    furniture: ["1-2 nəfər", "3 nəfər", "4 və daha çox", "Yataq-divan"],
+    phone: ["Kamera", "Batareya", "Kompakt ölçü", "Böyük ekran"],
     size: ["US 8", "US 9", "US 10", "Başqa ölçü"],
   },
   es: {
     budget: ["Menos de $100", "$100-$200", "$200+"],
     headphone: ["De botón", "De diadema", "Sin preferencia"],
     tv: ["Hasta 43 pulgadas", "50-55 pulgadas", "65 pulgadas o más"],
-    general: ["Mejor calidad", "Más funciones", "Precio más bajo"],
+    general: ["Uso diario", "Trabajo", "Viajes", "Regalo"],
+    shoes: ["Correr", "Gimnasio", "Uso diario", "Senderismo"],
+    furniture: ["1-2 personas", "3 personas", "4 o más", "Sofá cama"],
+    phone: ["Cámara", "Batería", "Tamaño compacto", "Pantalla grande"],
     size: ["US 8", "US 9", "US 10", "Otra talla"],
   },
   fr: {
     budget: ["Moins de 100 $", "100-200 $", "200 $ et plus"],
     headphone: ["Écouteurs", "Casque", "Sans préférence"],
     tv: ["Jusqu’à 43 pouces", "50-55 pouces", "65 pouces ou plus"],
-    general: ["Meilleure qualité", "Plus de fonctions", "Prix le plus bas"],
+    general: ["Usage quotidien", "Travail", "Voyage", "Cadeau"],
+    shoes: ["Course", "Salle et entraînement", "Usage quotidien", "Randonnée"],
+    furniture: ["1-2 personnes", "3 personnes", "4 ou plus", "Canapé-lit"],
+    phone: ["Appareil photo", "Autonomie", "Format compact", "Grand écran"],
     size: ["US 8", "US 9", "US 10", "Autre taille"],
   },
   de: {
     budget: ["Unter 100 $", "100-200 $", "200 $ und mehr"],
     headphone: ["In-Ear", "Over-Ear", "Keine Präferenz"],
     tv: ["Bis 43 Zoll", "50-55 Zoll", "65 Zoll oder größer"],
-    general: ["Beste Qualität", "Meiste Funktionen", "Niedrigster Preis"],
+    general: ["Alltag", "Arbeit", "Reisen", "Geschenk"],
+    shoes: ["Laufen", "Fitnessstudio", "Alltag", "Wandern"],
+    furniture: ["1-2 Personen", "3 Personen", "4 oder mehr", "Schlafsofa"],
+    phone: ["Kamera", "Akkulaufzeit", "Kompakte Größe", "Großes Display"],
     size: ["US 8", "US 9", "US 10", "Andere Größe"],
   },
 };
@@ -1221,16 +1284,71 @@ function clarificationPrompts(questions, language) {
         ? "headphone"
         : normalized === copy.tv
           ? "tv"
-          : normalized === copy.general
-            ? "general"
-            : /(?:\bsize\b|размер|ölçü|talla|taille|größe)/iu.test(normalized)
-              ? "size"
-              : "custom";
+          : normalized === copy.shoes
+            ? "shoes"
+            : normalized === copy.furniture
+              ? "furniture"
+              : normalized === copy.phone
+                ? "phone"
+                : normalized === copy.general
+                  ? "general"
+                  : /(?:\bsize\b|размер|ölçü|talla|taille|größe)/iu.test(normalized)
+                    ? "size"
+                    : "custom";
     return {
       question: normalized,
       options: type === "custom" ? [] : choices[type],
     };
   }).filter((prompt) => prompt.question);
+}
+
+function coherentClarificationPrompts(
+  modelPrompts,
+  fallbackQuestions,
+  language,
+  missionValue = null,
+) {
+  const fallback = clarificationPrompts(fallbackQuestions, language);
+  const candidates = (Array.isArray(modelPrompts) ? modelPrompts : [])
+    .map((prompt) => ({
+      question: cleanDisplayText(prompt?.question).slice(0, 180),
+      options: (Array.isArray(prompt?.options) ? prompt.options : [])
+        .slice(0, 4)
+        .map((option) => cleanDisplayText(option).slice(0, 80))
+        .filter(Boolean),
+    }))
+    .filter((prompt) => prompt.question && prompt.options.length >= 2);
+  const budgetPattern = /(?:budget|price\s+range|spend|бюджет|сколько\s+потратить|büdcə|presupuesto|budget|prix|preis)/iu;
+  const repeatedPricePattern = /(?:lowest|cheapest|low\s+price|affordab|value\s+for\s+money|низк\p{L}*\s+цен|дешев|эконом|aşağı\s+qiym|ucuz|precio\s+más\s+bajo|moins\s+cher|niedrigst\p{L}*\s+preis)/iu;
+  const genericPriorityPattern = /(?:quality|features?|качество|функци\p{L}*|keyfiyyət|funksiy|calidad|funciones|qualité|fonctions|qualität|funktionen)/iu;
+  const knownProductPattern = /(?:what\s+(?:product|type)|which\s+product|что\s+именно|какой\s+товар|nə\s+məhsul|qué\s+producto|quel\s+produit|welches\s+produkt)/iu;
+  const useQuestionPattern = /(?:what\s+(?:will|do)\s+you\s+use|main\s+use|which\s+activity|для\s+чего|для\s+какого\s+использования|как\s+будете\s+использовать|nə\s+üçün|para\s+qué|quel\s+usage|wofür)/iu;
+  const mission = normalizeShoppingMission(missionValue);
+  const combinedRaw = [...candidates, ...fallback];
+  const budgetPrompt = combinedRaw.find((prompt) => budgetPattern.test(prompt.question));
+  const combined = budgetPrompt && !mission.budget_max
+    ? [budgetPrompt, ...combinedRaw.filter((prompt) => prompt !== budgetPrompt)]
+    : combinedRaw;
+  const hasBudget = combined.some((prompt) => budgetPattern.test(prompt.question));
+  const selected = [];
+  let selectedBudget = false;
+  for (const prompt of combined) {
+    const fullPrompt = `${prompt.question} ${prompt.options.join(" ")}`;
+    const isBudget = budgetPattern.test(prompt.question);
+    if (isBudget && selectedBudget) continue;
+    if (hasBudget && repeatedPricePattern.test(fullPrompt)) continue;
+    if (genericPriorityPattern.test(fullPrompt)) continue;
+    if (mission.product_type && knownProductPattern.test(prompt.question)) continue;
+    if (
+      (mission.use_case || mission.query_terms.length) &&
+      useQuestionPattern.test(prompt.question)
+    ) continue;
+    if (selected.some((item) => item.question.toLowerCase() === prompt.question.toLowerCase())) continue;
+    selected.push(prompt);
+    if (isBudget) selectedBudget = true;
+    if (selected.length >= 2) break;
+  }
+  return selected;
 }
 
 function retailerSearchQueries(missionValue, fallbackRequest = "") {
@@ -2078,10 +2196,10 @@ async function classifyShoppingScope(
       model,
       store: false,
       reasoning: { effort: "low" },
-      max_output_tokens: 520,
+      max_output_tokens: 700,
       instructions: `${shoppingScopeInstructions(language)}
 
-For a shopping request, decide whether Delia should clarify before searching. Use discovery when a broad or vague request would otherwise produce arbitrary low-quality products. Ask no more than two short questions, focused on budget and the choice that most changes the product, such as earbuds versus over-ear headphones. Compatibility, fit, and safety remain blocking reasons when every result could otherwise be unusable. Do not clarify a short follow-up that is understandable from recent context. Detect the latest request's language as en, ru, az, es, fr, or de and use it for every clarifying question. Azerbaijani must be returned as az. For social and off_topic requests, needs_clarification must be false, clarification_reason must be none, and clarifying_questions must be empty.`,
+For a shopping request, decide whether Delia should clarify before searching. Use discovery when a broad or vague request would otherwise produce arbitrary low-quality products. Ask no more than two short, non-overlapping questions and provide two to four short, mutually exclusive answer options for each in clarification_prompts. The questions must be specific to the requested product, not a reusable generic template. Ask budget first only when it is unknown. After asking budget, never ask whether the shopper wants the lowest price, affordability, value, quality, or generic "features"; that repeats the budget decision. The second question must address the category decision that most changes the product. For shoes ask about activity, terrain, support, cushioning, or fit. For furniture ask about room size, seating capacity, material, or sleeper requirement. For phones ask about operating system, camera, battery, size, or storage. For headphones ask earbuds versus over-ear or the main use. For TVs ask screen size or room conditions. Never ask what product type or brand they want when the latest request already states it. Compatibility, fit, and safety remain blocking reasons when every result could otherwise be unusable. Do not clarify a short follow-up that is understandable from recent context. clarifying_questions and clarification_prompts must contain the same questions in the same order. Detect the latest request's language as en, ru, az, es, fr, or de and use it for every question and option. Azerbaijani must be returned as az. For social and off_topic requests, needs_clarification must be false, clarification_reason must be none, and both clarification arrays must be empty.`,
       text: { format: SHOPPING_SCOPE_RESPONSE_FORMAT },
       input: JSON.stringify({
         recent_context_for_pronouns_only: context,
@@ -2121,6 +2239,18 @@ For a shopping request, decide whether Delia should clarify before searching. Us
       .slice(0, 3)
       .map((item) => cleanDisplayText(item).slice(0, 180))
       .filter(Boolean),
+    clarification_prompts: (Array.isArray(parsed?.clarification_prompts)
+      ? parsed.clarification_prompts
+      : [])
+      .slice(0, 2)
+      .map((prompt) => ({
+        question: cleanDisplayText(prompt?.question).slice(0, 180),
+        options: (Array.isArray(prompt?.options) ? prompt.options : [])
+          .slice(0, 4)
+          .map((option) => cleanDisplayText(option).slice(0, 80))
+          .filter(Boolean),
+      }))
+      .filter((prompt) => prompt.question && prompt.options.length >= 2),
     language: ["en", "ru", "az", "es", "fr", "de"].includes(parsed?.language)
       ? parsed.language
       : responseLanguage(userMessage, language),
@@ -2178,7 +2308,8 @@ function urlMatchesMarket(value, marketCode = "us") {
       .map(([key]) => key);
     if (matchingMarkets.length) return matchingMarkets.includes(code);
     if (code === "us") {
-      return !/\.(?:ca|fr|de)$/i.test(hostname) && !/\.co\.uk$/i.test(hostname);
+      return /(?:\.com|\.us)$/i.test(hostname) &&
+        !/^\/(?:ca|uk|fr|de|ae|qa)(?:\/|$)/i.test(url.pathname);
     }
     const regionalSuffix = {
       ca: /\.ca$/i,
@@ -2451,6 +2582,141 @@ function extractImageResults(response) {
   return [...images.values()].slice(0, 12);
 }
 
+function decodeHtml(value) {
+  return clean(String(value || "")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">"));
+}
+
+function productMetadataFromHtml(htmlValue, pageUrl, currency) {
+  const html = String(htmlValue || "").slice(0, 5_000_000);
+  const metadata = new Map();
+  for (const tag of html.match(/<meta\b[^>]*>/gi) || []) {
+    const attributes = Object.fromEntries(
+      [...tag.matchAll(/([:\w-]+)\s*=\s*(["'])(.*?)\2/gi)]
+        .map((match) => [match[1].toLowerCase(), decodeHtml(match[3])]),
+    );
+    const key = (attributes.property || attributes.name || "").toLowerCase();
+    if (key && attributes.content) metadata.set(key, attributes.content);
+  }
+  const productObjects = [];
+  const visit = (value) => {
+    if (!value || typeof value !== "object") return;
+    if (Array.isArray(value)) return value.forEach(visit);
+    const types = Array.isArray(value["@type"]) ? value["@type"] : [value["@type"]];
+    if (types.some((type) => String(type || "").toLowerCase() === "product")) {
+      productObjects.push(value);
+    }
+    Object.values(value).forEach(visit);
+  };
+  for (const match of html.matchAll(/<script\b[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)) {
+    try {
+      visit(JSON.parse(match[1].trim()));
+    } catch {
+      // Invalid retailer JSON-LD is ignored; OpenGraph remains available.
+    }
+  }
+  const product = productObjects[0] || {};
+  const offers = Array.isArray(product.offers) ? product.offers[0] : product.offers || {};
+  const rawImage = Array.isArray(product.image) ? product.image[0] :
+    typeof product.image === "object" ? product.image?.url : product.image;
+  const title = decodeHtml(
+    product.name || metadata.get("og:title") || metadata.get("twitter:title"),
+  ).slice(0, 140);
+  const priceValue = number(
+    offers.price || offers.lowPrice || metadata.get("product:price:amount") ||
+      metadata.get("og:price:amount"),
+    null,
+  );
+  const priceCurrency = clean(
+    offers.priceCurrency || metadata.get("product:price:currency") || currency,
+  ).toUpperCase();
+  const rawImageUrl = safeUrl(
+    rawImage || metadata.get("og:image:secure_url") || metadata.get("og:image") ||
+      metadata.get("twitter:image"),
+  );
+  let imageUrl = rawImageUrl;
+  if (rawImageUrl && !/^https:\/\//i.test(rawImageUrl)) {
+    try {
+      imageUrl = new URL(rawImageUrl, pageUrl).href;
+    } catch {
+      imageUrl = "";
+    }
+  }
+  if (!title || priceValue == null || priceCurrency !== currency || !imageUrl) {
+    return null;
+  }
+  return {
+    title,
+    retailer: retailerFromUrl(pageUrl),
+    price: `${currency} ${priceValue}`,
+    badge: "",
+    reason: "",
+    url: pageUrl,
+    action_label: "",
+    source_type: "web",
+    image_url: imageUrl,
+    catalog_product_id: 0,
+  };
+}
+
+async function hydrateRetailerProductPages({
+  sources,
+  selectedMarket,
+  signal,
+  timeoutMs,
+  fetchFn = globalThis.fetch,
+}) {
+  if (typeof fetchFn !== "function") return { offers: [], images: [] };
+  const urls = [...new Set((Array.isArray(sources) ? sources : [])
+    .map((source) => safeUrl(source?.url))
+    .filter((url) => isDirectProductPage(url))
+    .filter((url) => urlMatchesMarket(url, selectedMarket.code))
+    .filter((url) => (MARKET_RETAILER_HOSTS[selectedMarket.code] || new Set())
+      .has(sourceHostKey(url))))]
+    .slice(0, 6);
+  const results = await Promise.all(urls.map(async (url) => {
+    try {
+      const response = await withRequestTimeout(
+        (requestSignal) => fetchFn(url, {
+          signal: requestSignal,
+          redirect: "manual",
+          headers: {
+            accept: "text/html,application/xhtml+xml",
+            "user-agent": "Mozilla/5.0 (compatible; OneDailyDrop/1.0; product metadata)",
+          },
+        }),
+        signal,
+        timeoutMs,
+      );
+      if (!response?.ok || !/text\/html/i.test(response.headers?.get?.("content-type") || "")) {
+        return null;
+      }
+      return productMetadataFromHtml(
+        await response.text(),
+        url,
+        selectedMarket.currency,
+      );
+    } catch (error) {
+      if (signal?.aborted) throw error;
+      return null;
+    }
+  }));
+  const offers = results.filter(Boolean);
+  return {
+    offers,
+    images: offers.map((offer) => ({
+      image_url: offer.image_url,
+      thumbnail_url: offer.image_url,
+      source_website_url: offer.url,
+      caption: offer.title,
+    })),
+  };
+}
+
 async function discoverRetailerProductPages({
   openai,
   model,
@@ -2463,7 +2729,27 @@ async function discoverRetailerProductPages({
 }) {
   const hosts = retailerDiscoveryHosts(mission, selectedMarket.code);
   const query = retailerSearchQueries(mission, resolvedRequest)[0] || resolvedRequest;
+  const directPathHints = {
+    "amazon.com": "/dp/",
+    "amazon.ca": "/dp/",
+    "ashleyfurniture.com": "/p/",
+    "bestbuy.com": "/site/",
+    "bestbuy.ca": "/site/",
+    "dickssportinggoods.com": "/p/",
+    "finishline.com": "/store/product/",
+    "footlocker.com": "/product/",
+    "ikea.com": `/${selectedMarket.code}/en/p/`,
+    "nike.com": `/${selectedMarket.code}/t/`,
+    "target.com": "/p/",
+    "walmart.com": "/ip/",
+    "walmart.ca": "/ip/",
+    "wayfair.com": "/pdp/",
+    "wayfair.ca": "/pdp/",
+    "zappos.com": "/p/",
+  };
   const searches = hosts.map(async (host) => {
+    const directPath = directPathHints[host] || "";
+    const siteTarget = directPath ? `${host}${directPath}` : host;
     try {
       const response = await withRequestTimeout(
         (requestSignal) => openai.responses.create({
@@ -2471,12 +2757,17 @@ async function discoverRetailerProductPages({
           store: false,
           reasoning: { effort: "low" },
           max_output_tokens: 420,
-          instructions: `Find one current product sold on ${host} that matches the shopping request. Search only ${host}. Return a specific direct product-detail page, never a category, collection, search, editorial, or review page. The page must serve market ${selectedMarket.code.toUpperCase()} and use ${selectedMarket.currency}. Copy the exact cited HTTPS product URL. Copy a price only when the page supports it. Copy image_url only from an image result tied to that exact product page. If any requirement cannot be verified, return an empty offers array. Write the product title exactly as sold and use ${shopperLanguage} only for ordinary prose.`,
+          instructions: `Find one current product sold on ${host} that matches the shopping request. Search only ${host}${directPath ? ` and prioritize URLs containing ${directPath}` : ""}. Return a specific direct product-detail page, never a category, collection, search, editorial, regional home page, or review page. The page must serve market ${selectedMarket.code.toUpperCase()} and use ${selectedMarket.currency}. Copy the exact cited HTTPS product URL and the current supported price. Copy image_url only from a product image result for the same named model at the same retailer. If a direct product URL cannot be verified, return an empty offers array. Write the product title exactly as sold and use ${shopperLanguage} only for ordinary prose.`,
           text: { format: RETAILER_DISCOVERY_RESPONSE_FORMAT },
           tools: [webSearchTool(selectedMarket.code, { images: true })],
           tool_choice: "required",
           include: ["web_search_call.action.sources", "web_search_call.results"],
-          input: JSON.stringify({ query: `${query} site:${host}`, shopping_request: resolvedRequest }),
+          input: JSON.stringify({
+            query: `${query} price site:${siteTarget}`,
+            shopping_request: resolvedRequest,
+            required_retailer: host,
+            required_direct_path: directPath,
+          }),
         }, { signal: requestSignal }),
         signal,
         timeoutMs,
@@ -2486,6 +2777,13 @@ async function discoverRetailerProductPages({
       const offer = parsedOffer && hostnameMatches(sourceHostKey(parsedOffer.url), host)
         ? parsedOffer
         : null;
+      const sources = extractSources(response || {});
+      const prioritizedSources = offer
+        ? [...sources].sort((left, right) =>
+            Number(comparableUrl(right.url) === comparableUrl(offer.url)) -
+            Number(comparableUrl(left.url) === comparableUrl(offer.url)),
+          )
+        : sources;
       return {
         offers: offer ? [{
           title: cleanDisplayText(offer.title).slice(0, 140),
@@ -2499,7 +2797,7 @@ async function discoverRetailerProductPages({
           image_url: safeUrl(offer.image_url),
           catalog_product_id: 0,
         }] : [],
-        sources: extractSources(response || {}),
+        sources: prioritizedSources,
         images: extractImageResults(response || {}),
       };
     } catch (error) {
@@ -2554,16 +2852,29 @@ function trustedImageUrl(value, images) {
   return trusted?.image_url || "";
 }
 
-function trustedProductImage(value, productUrl, images) {
+function trustedProductImage(value, productUrl, images, productTitle = "") {
   const image = trustedImageUrl(value, images);
   if (!image) return "";
   const product = comparableUrl(productUrl);
   const sourceImage = images.find(
     (candidate) => comparableUrl(candidate.image_url) === comparableUrl(image),
   );
-  return product && comparableUrl(sourceImage?.source_website_url) === product
-    ? image
-    : "";
+  if (!product || !sourceImage) return "";
+  if (comparableUrl(sourceImage.source_website_url) === product) return image;
+  if (sourceHostKey(sourceImage.source_website_url) !== sourceHostKey(product)) {
+    return "";
+  }
+  const titleTokens = normalizedIntentTokens(productTitle, {
+    includeConstraints: true,
+  });
+  const captionTokens = new Set(normalizedIntentTokens(sourceImage.caption, {
+    includeConstraints: true,
+  }));
+  const overlap = titleTokens.filter((token) => captionTokens.has(token));
+  const distinctiveOverlap = overlap.filter(
+    (token) => !BRAND_TERMS.has(token) && !PRODUCT_CATEGORY_BY_ALIAS.has(token),
+  );
+  return overlap.length >= 2 && distinctiveOverlap.length >= 1 ? image : "";
 }
 
 function trustedImageForProductUrl(productUrl, images) {
@@ -3043,6 +3354,9 @@ function createShoppingAssistant({
   retailerSearchTimeoutMs = 12000,
   storeDiscoveryEnabled = !client,
   storeDiscoveryTimeoutMs = 9000,
+  retailerPageHydrationEnabled = !client,
+  retailerPageHydrationTimeoutMs = 2500,
+  retailerPageFetch = globalThis.fetch,
 } = {}) {
   const openai = client || (apiKey ? new OpenAI({ apiKey }) : null);
 
@@ -3207,9 +3521,16 @@ function createShoppingAssistant({
         (classification.needs_clarification &&
           classification.clarifying_questions.length)
       ) {
-        const questions = discoveryClarification?.questions ||
+        const fallbackQuestions = discoveryClarification?.questions ||
           classification.clarifying_questions.slice(0, 2);
-        return {
+        const prompts = coherentClarificationPrompts(
+          classification.clarification_prompts,
+          fallbackQuestions,
+          shopperLanguage,
+          activeMission,
+        );
+        const questions = prompts.map((prompt) => prompt.question);
+        if (prompts.length) return {
           message: discoveryClarification?.message ||
             (DISCOVERY_QUESTION_COPY[shopperLanguage] || DISCOVERY_QUESTION_COPY.en).intro,
           follow_up: "",
@@ -3220,7 +3541,7 @@ function createShoppingAssistant({
           products: [],
           sources: [],
           clarifying_questions: questions,
-          clarification_prompts: clarificationPrompts(questions, shopperLanguage),
+          clarification_prompts: prompts,
           needs_clarification: true,
           model,
           scope: "shopping",
@@ -3386,9 +3707,28 @@ function createShoppingAssistant({
             .map((image) => [comparableUrl(image.image_url), image])
             .filter(([url]) => url),
         );
-        trustedSources = [...sourceMap.values()].slice(0, 24);
-        webImages = [...imageMap.values()].slice(0, 24);
+        trustedSources = [...sourceMap.values()].slice(0, 48);
+        webImages = [...imageMap.values()].slice(0, 48);
         structured.recommendations.push(...discovery.offers.map((offer) => ({
+          ...offer,
+          reason: copy.sourceOfferReason,
+        })));
+      }
+      if (retailerPageHydrationEnabled) {
+        const hydrated = await hydrateRetailerProductPages({
+          sources: trustedSources,
+          selectedMarket,
+          signal,
+          timeoutMs: retailerPageHydrationTimeoutMs,
+          fetchFn: retailerPageFetch,
+        });
+        const imageMap = new Map(
+          [...webImages, ...hydrated.images]
+            .map((image) => [comparableUrl(image.image_url), image])
+            .filter(([url]) => url),
+        );
+        webImages = [...imageMap.values()].slice(0, 48);
+        structured.recommendations.push(...hydrated.offers.map((offer) => ({
           ...offer,
           reason: copy.sourceOfferReason,
         })));
@@ -3435,6 +3775,7 @@ function createShoppingAssistant({
             recommendation.image_url,
             url,
             webImages,
+            recommendation.title,
           );
           if (
             !url ||
@@ -3711,12 +4052,14 @@ module.exports = {
   DEFAULT_MODEL,
   assistantProduct,
   classifyShoppingScope,
+  coherentClarificationPrompts,
   createShoppingAssistant,
   greetingContext,
   mergeShoppingMission,
   matchesShoppingIntent,
   missionFromText,
   normalizeAssistantResponse,
+  productMetadataFromHtml,
   recommendationLimit,
   retailerDiscoveryHosts,
   retailerSearchQueries,

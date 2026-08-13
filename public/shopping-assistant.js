@@ -1715,7 +1715,9 @@
     if (record) record.response = body;
     const copyElement = message.querySelector(".assistant-message-copy");
     copyElement.textContent = body.message || "";
-    renderClarifyingQuestions(body.clarifying_questions, message);
+    if (!body.clarification_prompts.length) {
+      renderClarifyingQuestions(body.clarifying_questions, message);
+    }
     if (body.clarification_prompts.length) showClarificationBar(body.clarification_prompts);
     else clearClarificationBar();
     renderMarketContext(body, message);
