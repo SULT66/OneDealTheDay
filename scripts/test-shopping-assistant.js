@@ -378,6 +378,26 @@ assert(
   "A skeptical follow-up replaced the active shopping mission",
 );
 assert.deepStrictEqual(missionFromText("найк кроссовки").brands, ["nike"]);
+const russianChairMission = missionFromText(
+  "Найди набор из четырех современных обеденных стульев для кухни до $150",
+);
+assert.strictEqual(russianChairMission.product_type, "chair");
+assert(russianChairMission.style.toLowerCase().startsWith("современн"));
+assert.strictEqual(russianChairMission.budget_max, 150);
+assert(
+  matchesShoppingIntent(
+    {title:"Set of 4 modern dining chairs", category:"Dining Furniture > Chairs"},
+    "chair modern style under 150",
+  ),
+  "A matching dining chair was rejected",
+);
+assert(
+  !matchesShoppingIntent(
+    {title:"5-tier ladder bookshelf", category:"Furniture > Shelving"},
+    "chair modern style under 150",
+  ),
+  "A bookshelf still matches a chair request",
+);
 assert(
   urlMatchesMarket(
     "https://www.nike.com/t/air-max-90-mens-shoes-abc123/CN8490-100",
