@@ -81,7 +81,7 @@ module.exports = function homepageTemplate({
   <link rel="stylesheet" href="/brand-theme.css?v=20260808-assistant">
   <link rel="stylesheet" href="/liquid-glass.css?v=20260808-assistant">
   <link rel="stylesheet" href="/i18n.css?v=20260808-assistant">
-  <link rel="stylesheet" href="/shopping-assistant.css?v=20260812-dynamic-questions">
+  <link rel="stylesheet" href="/shopping-assistant.css?v=20260812-all-markets-v2">
 </head>
 <body>
   <header class="site-header">
@@ -137,7 +137,7 @@ module.exports = function homepageTemplate({
   ${renderShoppingAssistantPanel(selectedMarket.code, language)}
   <script src="/theme.js?v=20260808-assistant"></script>
   <script src="/app.js?v=20260808-assistant"></script>
-  <script src="/shopping-assistant.js?v=20260812-dynamic-questions"></script>
+  <script src="/shopping-assistant.js?v=20260812-all-markets-v2"></script>
 </body>
 </html>`;
 };
