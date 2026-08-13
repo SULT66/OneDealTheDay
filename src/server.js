@@ -19,7 +19,7 @@ const { presentProduct } = require("./productPresentation");
 const { deduplicationKeys, isDailyPickEligible } = require("./ranker");
 const { methodology, methodologyMain } = require("./methodology");
 const { createEditorialBrief } = require("./editorialBrief");
-const { createShoppingAssistant } = require("./shoppingAssistant");
+const { createShoppingAssistant, timeoutResponse } = require("./shoppingAssistant");
 const renderShoppingAssistantPanel = require("./shoppingAssistantPanel");
 const { passwordResetEmail, subscriptionEmail, clubWaitlistEmail } = require("./mailer");
 const {
@@ -49,8 +49,9 @@ const {
 } = require("./i18n");
 
 const app = express();
-const assistantRetailerSearch = ({ query, queries, market: selectedMarket }) =>
-  searchForAssistant(c, {query, queries, market:selectedMarket});
+const SHOPPING_ASSISTANT_HARD_TIMEOUT_MS = 32000;
+const assistantRetailerSearch = ({ query, queries, market: selectedMarket, signal }) =>
+  searchForAssistant(c, {query, queries, market:selectedMarket, signal});
 const shoppingAssistant = createShoppingAssistant({
   db,
   sourceSql,
@@ -201,8 +202,9 @@ app.post("/api/shopping-assistant", shoppingAssistantRateLimit, async (req, res)
   res.once("close", () => {
     if (!res.writableEnded) requestController.abort();
   });
+  let hardTimeoutTimer;
   try {
-    const result = await shoppingAssistant.respond({
+    const assistantTask = shoppingAssistant.respond({
       message:req.body?.message,
       messages:req.body?.messages,
       shoppingContext:req.body?.shopping_context,
@@ -212,8 +214,23 @@ app.post("/api/shopping-assistant", shoppingAssistantRateLimit, async (req, res)
       language,
       signal:requestController.signal
     });
+    const hardTimeoutTask = new Promise(resolve => {
+      hardTimeoutTimer = setTimeout(() => {
+        resolve(timeoutResponse(
+          req.body?.message,
+          language,
+          [],
+          shoppingAssistant.model,
+          selectedMarket
+        ));
+        requestController.abort();
+      }, SHOPPING_ASSISTANT_HARD_TIMEOUT_MS);
+    });
+    const result = await Promise.race([assistantTask, hardTimeoutTask]);
+    clearTimeout(hardTimeoutTimer);
     return res.set("Cache-Control", "no-store").json(result);
   } catch (error) {
+    clearTimeout(hardTimeoutTimer);
     const status = Number(error.statusCode) || 502;
     if (status >= 500) console.error("Shopping assistant request failed:", error.message);
     return res.status(status).set("Cache-Control", "no-store").json({

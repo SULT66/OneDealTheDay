@@ -64,7 +64,7 @@ function feedProviders(config) {
     source:definition.source,
     name:`${definition.retailerName} ${definition.network} feed`,
     markets:definition.markets,
-    search:({market, keywords}) => affiliateFeed.searchProducts({definition, market, keywords})
+    search:({market, keywords, signal}) => affiliateFeed.searchProducts({definition, market, keywords, signal})
   }));
 }
 
@@ -116,7 +116,7 @@ async function searchAll(config, market) {
 // searches the shopper's active mission instead of the scheduled broad
 // keywords. Provider failures are isolated so one unavailable store never
 // collapses the complete multi-retailer answer.
-async function searchForAssistant(config, {query, queries, market, perSourceLimit = 12}) {
+async function searchForAssistant(config, {query, queries, market, signal, perSourceLimit = 12}) {
   const keywords = [...new Set([
     ...(Array.isArray(queries) ? queries : []),
     query,
@@ -131,6 +131,7 @@ async function searchForAssistant(config, {query, queries, market, perSourceLimi
     provider.search({
       market,
       keywords,
+      signal,
       detailLimit:18,
       targetEligible:6
     })

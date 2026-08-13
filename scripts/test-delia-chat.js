@@ -223,6 +223,12 @@ assert(
   "Client disconnects are not propagated to the OpenAI request",
 );
 assert(
+  server.includes("SHOPPING_ASSISTANT_HARD_TIMEOUT_MS = 32000") &&
+    server.includes("Promise.race([assistantTask, hardTimeoutTask])") &&
+    server.includes("timeoutResponse("),
+  "The server can still leave a Delia request open beyond the browser deadline",
+);
+assert(
   db.includes("shopping_assistant_feedback"),
   "Assistant feedback storage is missing",
 );

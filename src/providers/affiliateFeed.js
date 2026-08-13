@@ -76,12 +76,14 @@ function safeHeaders(headersJson) {
     .map(([key, value]) => [key, String(value)]));
 }
 
-async function download(definition, fetchImpl = global.fetch, redirectCount = 0) {
+async function download(definition, fetchImpl = global.fetch, redirectCount = 0, signal) {
   const url = safeFeedUrl(definition.url);
   const response = await fetchImpl(url, {
     headers:{Accept:"application/json,text/csv,text/tab-separated-values,application/xml,text/xml;q=0.9,*/*;q=0.5", ...safeHeaders(definition.headersJson)},
     redirect:"manual",
-    signal:AbortSignal.timeout(30000)
+    signal:signal
+      ? AbortSignal.any([signal, AbortSignal.timeout(30000)])
+      : AbortSignal.timeout(30000)
   });
   if (response.status >= 300 && response.status < 400) {
     if (redirectCount >= MAX_REDIRECTS) throw new Error("Affiliate feed redirected too many times");
@@ -92,7 +94,7 @@ async function download(definition, fetchImpl = global.fetch, redirectCount = 0)
       ...definition,
       url:redirectedUrl.toString(),
       headersJson:redirectedUrl.origin === url.origin ? definition.headersJson : ""
-    }, fetchImpl, redirectCount + 1);
+    }, fetchImpl, redirectCount + 1, signal);
   }
   if (!response.ok) throw new Error(`Affiliate feed request failed with HTTP ${response.status}`);
   const declaredLength = Number(response.headers.get("content-length") || 0);
@@ -334,7 +336,17 @@ function normalize(record, definition, market, index, map) {
   };
 }
 
-async function searchProducts({definition, market, keywords = [], fetchImpl = global.fetch}) {
+function awaitWithSignal(promise, signal) {
+  if (!signal) return promise;
+  if (signal.aborted) return Promise.reject(signal.reason || new Error("Affiliate feed search aborted"));
+  return new Promise((resolve, reject) => {
+    const abort = () => reject(signal.reason || new Error("Affiliate feed search aborted"));
+    signal.addEventListener("abort", abort, {once:true});
+    promise.then(resolve, reject).finally(() => signal.removeEventListener("abort", abort));
+  });
+}
+
+async function searchProducts({definition, market, keywords = [], fetchImpl = global.fetch, signal}) {
   if (!definition?.markets?.includes(market?.code)) return [];
   const useCache = fetchImpl === global.fetch;
   const cacheKey = useCache
@@ -355,7 +367,7 @@ async function searchProducts({definition, market, keywords = [], fetchImpl = gl
     productPromise = (async () => {
       const map = Object.fromEntries(Object.entries(parseJson(definition.fieldMapJson, "Affiliate feed field map"))
         .map(([key, value]) => [String(key).trim().toLowerCase(), String(value).trim().toLowerCase()]));
-      const downloaded = await download(definition, fetchImpl);
+      const downloaded = await download(definition, fetchImpl, 0, signal);
       const records = parseRecords(downloaded, definition.format).map(normalizedRecord);
       const loaded = records
         .map((record, index) => normalize(record, definition, market, index, map))
@@ -372,7 +384,7 @@ async function searchProducts({definition, market, keywords = [], fetchImpl = gl
       productPromise.catch(() => feedProductCache.delete(cacheKey));
     }
   }
-  let products = await productPromise;
+  let products = await awaitWithSignal(productPromise, signal);
   const tokens = searchTokens(keywords);
   if (tokens.length) {
     products = products
