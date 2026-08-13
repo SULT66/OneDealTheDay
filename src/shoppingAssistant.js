@@ -3918,7 +3918,24 @@ function createShoppingAssistant({
         });
         if (providerResult) return providerResult;
       }
-      const timeoutFallback = () => providerFirstResponse({
+      const fastProviderFallback = !requiresDeepSearch
+        ? providerFirstResponse({
+            userMessage,
+            shopperLanguage,
+            catalogProducts,
+            model,
+            selectedMarket,
+            retailerProducts,
+            resolvedRequest,
+            shoppingMission: activeMission,
+            excludedUrls,
+            allowSingleRetailer: true,
+          })
+        : null;
+      const liveSearchTimeoutMs = fastProviderFallback
+        ? Math.min(searchTimeoutMs, 8000)
+        : searchTimeoutMs;
+      const timeoutFallback = () => fastProviderFallback || providerFirstResponse({
         userMessage,
         shopperLanguage,
         catalogProducts,
@@ -3985,7 +4002,7 @@ function createShoppingAssistant({
               signal: requestSignal,
             }),
           signal,
-          searchTimeoutMs,
+          liveSearchTimeoutMs,
         );
       } catch (error) {
         if (signal?.aborted) throw error;
@@ -4002,7 +4019,7 @@ function createShoppingAssistant({
                 signal: requestSignal,
               }),
             signal,
-            searchTimeoutMs,
+            liveSearchTimeoutMs,
           );
         } catch (retryError) {
           if (signal?.aborted) throw retryError;
