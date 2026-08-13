@@ -2297,12 +2297,16 @@ async function withRequestTimeout(task, parentSignal, timeoutMs) {
 
 function catalogSearchArgs(message) {
   const normalized = clean(message);
+  const budgetRange = normalized.match(
+    /(?:\b(?:usd|cad|gbp|eur)\b\s*)?[$€£]?\s*([\d][\d\s,.]*)\s*(?:-|–|—|\bto\b|\bдо\b|\bà\b|\ba\b|\bbis\b)\s*(?:\b(?:usd|cad|gbp|eur)\b\s*)?[$€£]?\s*([\d][\d\s,.]*)/iu,
+  );
   const budgetMatch = normalized.match(
     /(?<!\p{L})(?:under|below|less\s+than|up\s+to|max(?:imum)?|budget|до|не\s+дороже|бюджет|moins\s+de|jusqu['’]?à|unter|bis\s+zu)(?!\p{L})\D{0,18}([$€£]?\s*[\d][\d\s,.]*)/iu,
   ) || normalized.match(/([$€£]\s*[\d][\d\s,.]*)/u);
-  const maxPrice = budgetMatch
+  const budgetValue = budgetRange?.[2] || budgetMatch?.[1] || budgetMatch?.[0];
+  const maxPrice = budgetValue
     ? number(
-        String(budgetMatch[1] || budgetMatch[0])
+        String(budgetValue)
           .replace(/[^\d.,]/g, "")
           .replace(/,(?=\d{3}(?:\D|$))/g, "")
           .replace(/,/g, "."),
