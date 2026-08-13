@@ -53,6 +53,7 @@ const PRODUCT_CATEGORY_GROUPS = {
   underwear: ["underwear", "brief", "briefs", "boxer", "boxers", "boxerbrief", "boxerbriefs", "trunk", "trunks", "трусы", "белье", "бельё", "боксеры", "боксерки", "брифы", "ropa interior", "calzoncillos", "sous-vetements", "sous-vêtement", "unterwasche", "unterwäsche"],
   shoes: ["shoe", "shoes", "sneaker", "sneakers", "boot", "boots", "обувь", "кроссовки", "ботинки", "туфли", "zapato", "zapatos", "zapatillas", "chaussure", "chaussures", "schuh", "schuhe"],
   clothing: ["clothing", "apparel", "shirt", "shirts", "tank", "tanktop", "singlet", "vest", "jacket", "jackets", "pants", "одежда", "майка", "майку", "майки", "маек", "безрукавка", "безрукавку", "безрукавки", "рубашка", "куртка", "брюки", "camisa", "chaqueta", "ropa", "vêtement", "vetement", "kleidung"],
+  furniture: ["furniture", "sofa", "sofas", "couch", "couches", "sectional", "sectionals", "loveseat", "loveseats", "диван", "диваны", "диван-кровать", "мебель", "sofá", "sofa", "canapé", "canape", "möbel", "mobel"],
 };
 const PRODUCT_CATEGORY_BY_ALIAS = new Map(
   Object.entries(PRODUCT_CATEGORY_GROUPS).flatMap(([category, aliases]) =>
@@ -135,8 +136,8 @@ const RETAILER_PATTERNS = [
   ["Target", /(?:^|[^\p{L}\p{N}])target(?=$|[^\p{L}\p{N}])/iu],
 ];
 const MARKET_RETAILER_HOSTS = {
-  us: new Set(["adidas.com", "amazon.com", "bestbuy.com", "dickssportinggoods.com", "ebay.com", "finishline.com", "footlocker.com", "macys.com", "nike.com", "nordstrom.com", "samsung.com", "target.com", "walmart.com", "zappos.com"]),
-  ca: new Set(["amazon.ca", "bestbuy.ca", "canadiantire.ca", "costco.ca", "ebay.ca", "samsung.com", "staples.ca", "thesource.ca", "walmart.ca"]),
+  us: new Set(["adidas.com", "amazon.com", "apple.com", "ashleyfurniture.com", "bestbuy.com", "bhphotovideo.com", "costco.com", "dickssportinggoods.com", "ebay.com", "finishline.com", "footlocker.com", "homedepot.com", "ikea.com", "lowes.com", "macys.com", "nike.com", "nordstrom.com", "samsung.com", "store.google.com", "target.com", "walmart.com", "wayfair.com", "zappos.com"]),
+  ca: new Set(["amazon.ca", "apple.com", "bestbuy.ca", "canadiantire.ca", "costco.ca", "ebay.ca", "ikea.com", "leons.ca", "samsung.com", "staples.ca", "thebay.com", "thebrick.com", "thesource.ca", "walmart.ca", "wayfair.ca"]),
   uk: new Set(["amazon.co.uk", "ao.com", "argos.co.uk", "currys.co.uk", "ebay.co.uk", "johnlewis.com", "samsung.com", "very.co.uk"]),
   fr: new Set(["amazon.fr", "boulanger.com", "carrefour.fr", "cdiscount.com", "darty.com", "ebay.fr", "fnac.com", "samsung.com"]),
   de: new Set(["alternate.de", "amazon.de", "ebay.de", "mediamarkt.de", "otto.de", "samsung.com", "saturn.de"]),
@@ -150,8 +151,34 @@ const MARKET_SEARCH_RETAILERS = {
 };
 const PRODUCT_FAMILY_RETAILERS = {
   us: {
-    footwear: ["nike.com", "footlocker.com", "zappos.com"],
-    electronics: ["bestbuy.com", "walmart.com", "target.com"],
+    footwear: ["nike.com", "footlocker.com", "zappos.com", "dickssportinggoods.com", "finishline.com"],
+    electronics: ["bestbuy.com", "walmart.com", "target.com", "amazon.com", "bhphotovideo.com"],
+    furniture: ["wayfair.com", "ikea.com", "ashleyfurniture.com", "walmart.com", "target.com"],
+    general: ["walmart.com", "target.com", "amazon.com", "costco.com", "homedepot.com"],
+  },
+  ca: {
+    footwear: ["amazon.ca", "walmart.ca", "costco.ca", "thebay.com"],
+    electronics: ["bestbuy.ca", "walmart.ca", "amazon.ca", "costco.ca", "staples.ca"],
+    furniture: ["wayfair.ca", "ikea.com", "thebrick.com", "leons.ca", "walmart.ca"],
+    general: ["walmart.ca", "amazon.ca", "costco.ca", "canadiantire.ca", "staples.ca"],
+  },
+  uk: {
+    footwear: ["amazon.co.uk", "johnlewis.com", "very.co.uk"],
+    electronics: ["currys.co.uk", "amazon.co.uk", "argos.co.uk", "johnlewis.com"],
+    furniture: ["johnlewis.com", "argos.co.uk", "very.co.uk"],
+    general: ["amazon.co.uk", "argos.co.uk", "johnlewis.com", "very.co.uk"],
+  },
+  fr: {
+    footwear: ["amazon.fr", "carrefour.fr", "cdiscount.com"],
+    electronics: ["fnac.com", "darty.com", "amazon.fr", "boulanger.com"],
+    furniture: ["carrefour.fr", "cdiscount.com", "amazon.fr"],
+    general: ["amazon.fr", "carrefour.fr", "cdiscount.com", "fnac.com"],
+  },
+  de: {
+    footwear: ["amazon.de", "otto.de"],
+    electronics: ["mediamarkt.de", "amazon.de", "saturn.de", "alternate.de"],
+    furniture: ["otto.de", "amazon.de"],
+    general: ["amazon.de", "otto.de", "mediamarkt.de", "saturn.de"],
   },
 };
 const MARKET_LABELS = {
@@ -168,6 +195,10 @@ const HEADPHONE_ACCESSORY_PATTERN =
   /\b(?:adapter|cover|covers|cushion|cushions|ear\s*pad|ear\s*pads|ear\s*tip|ear\s*tips|earpiece\s+cover|headband|holder|replacement|silicone|skin|sleeve|tips?|wax\s+guard)\b|\b(?:case|cover)\s+for\s+(?:apple\s+)?(?:airpods?|headphones?|earbuds?)\b/iu;
 const HEADPHONE_ACCESSORY_REQUEST_PATTERN =
   /\b(?:accessor(?:y|ies)|adapter|case|cover|cushion|ear\s*pad|ear\s*tip|replacement|silicone|tips?)\b|(?:чехол|амбушюр|насадк|аксессуар)\p{L}*/iu;
+const PHONE_ACCESSORY_PATTERN =
+  /\b(?:adapter|battery|cable|case|charger|charging|cord|cover|dock|holder|mount|power\s*bank|protector|screen\s*protector|stand|stylus)\b|(?:чехол|кабель|зарядк\p{L}*|держател\p{L}*|стекло|пл[её]нк\p{L}*)/iu;
+const PHONE_ACCESSORY_REQUEST_PATTERN =
+  /\b(?:accessor(?:y|ies)|adapter|cable|case|charger|charging|cover|dock|holder|mount|protector|stand|stylus)\b|(?:аксессуар\p{L}*|чехол|кабель|зарядк\p{L}*|держател\p{L}*|стекло|пл[её]нк\p{L}*)/iu;
 const UNDERWEAR_BOXER_PATTERN =
   /(?:\bboxer(?:\s*brief)?s?\b|\bboxerbriefs?\b|боксер(?:ы|ки|ок|ов)?)/iu;
 const UNDERWEAR_TRUNK_PATTERN = /(?:\btrunks?\b|транк(?:и|ов)?)/iu;
@@ -523,6 +554,12 @@ function matchesRequestedCategory(candidate, category, tokens) {
       PRODUCT_CATEGORY_GROUPS.headphone.some((alias) => tokens.has(alias))
     );
   }
+  if (category === "phone") {
+    return (
+      !PHONE_ACCESSORY_PATTERN.test(identity) &&
+      PRODUCT_CATEGORY_GROUPS.phone.some((alias) => tokens.has(alias))
+    );
+  }
   if (category !== "tv") {
     return PRODUCT_CATEGORY_GROUPS[category].some((alias) => tokens.has(alias));
   }
@@ -567,6 +604,13 @@ function matchesRequestedSubtype(candidate, request) {
     categoryTokens(normalizedIntentTokens(request)).includes("headphone") &&
     !HEADPHONE_ACCESSORY_REQUEST_PATTERN.test(request) &&
     HEADPHONE_ACCESSORY_PATTERN.test(identity)
+  ) {
+    return false;
+  }
+  if (
+    categoryTokens(normalizedIntentTokens(request)).includes("phone") &&
+    !PHONE_ACCESSORY_REQUEST_PATTERN.test(request) &&
+    PHONE_ACCESSORY_PATTERN.test(identity)
   ) {
     return false;
   }
@@ -878,6 +922,7 @@ function normalizedProductType(value) {
   if (UNDERWEAR_BRIEF_PATTERN.test(raw)) return "briefs";
   const tokens = normalizedIntentTokens(raw, { includeConstraints: true });
   if (tokens.includes("sneakers") || /\bsneakers?\b/i.test(raw)) return "sneakers";
+  if (tokens.some((token) => ["sofa", "sofas", "couch", "couches", "sectional", "sectionals", "loveseat", "loveseats", "диван", "диваны"].includes(token))) return "sofa";
   const category = categoryTokens(tokens)[0];
   return category || raw.replace(/[^a-z0-9 -]/g, " ").replace(/\s+/g, " ").trim();
 }
@@ -905,6 +950,8 @@ function missionFromText(value) {
                 ? "tank top"
                 : tokens.includes("sneakers")
                   ? "sneakers"
+                  : tokens.some((token) => ["sofa", "sofas", "couch", "couches", "sectional", "sectionals", "loveseat", "loveseats", "диван", "диваны"].includes(token))
+                    ? "sofa"
                   : categoryTokens(tokens)[0] || "";
   const season = tokens.includes("winter")
     ? "winter"
@@ -991,6 +1038,7 @@ function missionProductFamily(value) {
   if (productType.startsWith("airpods")) return "headphone";
   if (["boxer briefs", "trunks", "briefs"].includes(productType)) return "underwear";
   if (productType === "sneakers") return "shoes";
+  if (productType === "sofa") return "furniture";
   if (productType === "tank top") return "clothing";
   return productType;
 }
@@ -1222,6 +1270,8 @@ function retailerDiscoveryHosts(missionValue, marketCode = "us") {
   const mission = normalizeShoppingMission(missionValue);
   const family = missionProductFamily(mission.product_type);
   const brandHosts = {
+    apple: "apple.com",
+    google: marketCode === "ca" ? "bestbuy.ca" : "store.google.com",
     nike: "nike.com",
     adidas: "adidas.com",
     samsung: "samsung.com",
@@ -1234,7 +1284,11 @@ function retailerDiscoveryHosts(missionValue, marketCode = "us") {
   };
   const familyGroup = ["shoes", "clothing", "underwear"].includes(family)
     ? "footwear"
-    : "electronics";
+    : family === "furniture"
+      ? "furniture"
+      : ["tv", "phone", "laptop", "tablet", "monitor", "headphone", "camera", "watch", "console"].includes(family)
+        ? "electronics"
+        : "general";
   const familyHosts = PRODUCT_FAMILY_RETAILERS[marketCode]?.[familyGroup] || [];
   const defaults = MARKET_SEARCH_RETAILERS[marketCode] || [];
   const requested = preferredHosts[mission.preferred_retailer.toLowerCase()];
@@ -1245,7 +1299,7 @@ function retailerDiscoveryHosts(missionValue, marketCode = "us") {
     ...defaults,
   ].filter(Boolean))]
     .filter((host) => (MARKET_RETAILER_HOSTS[marketCode] || new Set()).has(host))
-    .slice(0, 3);
+    .slice(0, 5);
 }
 
 function requestedMarketCode(value, fallback = "us") {
@@ -2110,6 +2164,13 @@ function urlMatchesMarket(value, marketCode = "us") {
     if (hostnameMatches(hostname, "samsung.com")) {
       return new RegExp(`^/${code}(?:/|$)`, "i").test(url.pathname);
     }
+    if (hostnameMatches(hostname, "ikea.com")) {
+      return new RegExp(`^/${code}/(?:en|fr)(?:/|$)`, "i").test(url.pathname);
+    }
+    if (hostnameMatches(hostname, "apple.com")) {
+      if (code === "ca") return /^\/ca(?:\/|$)/i.test(url.pathname);
+      if (code === "us") return !/^\/(?:ca|uk|fr|de)(?:\/|$)/i.test(url.pathname);
+    }
     const matchingMarkets = Object.entries(MARKET_RETAILER_HOSTS)
       .filter(([, hosts]) =>
         [...hosts].some((host) => hostnameMatches(hostname, host)),
@@ -2421,7 +2482,10 @@ async function discoverRetailerProductPages({
         timeoutMs,
       );
       const parsed = parseStructuredObject(response?.output_text);
-      const offer = Array.isArray(parsed?.offers) ? parsed.offers[0] : null;
+      const parsedOffer = Array.isArray(parsed?.offers) ? parsed.offers[0] : null;
+      const offer = parsedOffer && hostnameMatches(sourceHostKey(parsedOffer.url), host)
+        ? parsedOffer
+        : null;
       return {
         offers: offer ? [{
           title: cleanDisplayText(offer.title).slice(0, 140),
@@ -2566,8 +2630,12 @@ function isDirectProductPage(value) {
       /\/shop\/buy-[^/]+\//i.test(path) ||
       /\/t\/[^/]+\/[^/]+/i.test(path) ||
       /\/product\/[^/]+\.html$/i.test(path) ||
+      /\/pdp\/[^/]+\.html$/i.test(path) ||
+      /\/pd\/[^/]+\/\d+/i.test(path) ||
       /\/p\/[^/]+\/product\//i.test(path) ||
       /\/us\/[^/]+\/[^/]+\.html$/i.test(path) ||
+      /\/us\/en\/p\/[^/]+-\d+$/i.test(path) ||
+      /\.product\.\d+\.html$/i.test(path) ||
       (/(?:^|\/)buy(?:\/|$)/i.test(path) && /\d/.test(path))
     ) {
       return true;
@@ -2765,6 +2833,8 @@ function rankRecommendationCandidates(items, request) {
       item,
       index,
       retailerMatch: preferredRetailer && offerMatchesRetailer(item, preferredRetailer) ? 1 : 0,
+      complete: item.evidence_level === "partial" ? 0 : 1,
+      regionalRetailer: /(?:^|\.)(?:ebay|amazon)\./i.test(sourceHostKey(item?.url)) ? 0 : 1,
       evidence: evidenceRank[item.evidence_level] || 0,
       quality: qualityScore(item),
       qualityFloor: qualityScore(item) < 0 ? -1 : 0,
@@ -2776,6 +2846,8 @@ function rankRecommendationCandidates(items, request) {
         : Number(right.price > 0) - Number(left.price > 0);
       return right.retailerMatch - left.retailerMatch ||
         (wantsLowerPrice ? priceDifference : 0) ||
+        right.complete - left.complete ||
+        right.regionalRetailer - left.regionalRetailer ||
         right.qualityFloor - left.qualityFloor ||
         right.evidence - left.evidence ||
         right.quality - left.quality ||
@@ -3302,17 +3374,7 @@ function createShoppingAssistant({
         userMessage,
       });
       const copy = responseCopy(userMessage, shopperLanguage);
-      const initialRetailerHosts = new Set([
-        ...retailerProducts.map((product) => sourceHostKey(product.url)),
-        ...structured.recommendations
-          .filter((recommendation) =>
-            recommendation.source_type === "catalog" ||
-            (isDirectProductPage(recommendation.url) &&
-              trustedWebUrl(recommendation.url, trustedSources)),
-          )
-          .map((recommendation) => sourceHostKey(recommendation.url)),
-      ].filter(Boolean));
-      if (storeDiscoveryEnabled && initialRetailerHosts.size < 2) {
+      if (storeDiscoveryEnabled) {
         const discovery = await storeDiscoveryPromise;
         const sourceMap = new Map(
           [...trustedSources, ...discovery.sources]
