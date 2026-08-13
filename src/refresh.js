@@ -44,13 +44,13 @@ function availabilityStatus(product) {
   return "Available";
 }
 
-async function loadProducts(config, selectedMarket) {
+async function loadProducts(config, selectedMarket, options = {}) {
   if (config.provider === "demo") {
     const provider = require("./providers/demo");
     const products = await provider.searchProducts({ market: selectedMarket });
     return {products, reports:[{id:"demo", source:"demo", name:"Demo", status:"success", found:products.length, error:""}]};
   }
-  return searchAll(config, selectedMarket);
+  return searchAll(config, selectedMarket, {providerIds:options.providerIds});
 }
 
 function qualifiedProviderId(product) {
@@ -182,7 +182,7 @@ async function refreshMarket(config, marketCode, options = {}) {
   ).run(config.provider, selectedMarket.code, started).lastInsertRowid);
 
   try {
-    const loaded = await loadProducts(config, selectedMarket);
+    const loaded = await loadProducts(config, selectedMarket, options);
     recordSourceReports(runId, selectedMarket.code, started, loaded.reports);
     const failedReports = loaded.reports.filter(report => report.status === "failed");
     if (failedReports.length) console.error(`Partial ${selectedMarket.name} refresh: ${failedReports.map(report => `${report.name}: ${report.error}`).join(" | ")}`);
@@ -203,7 +203,9 @@ async function refreshMarket(config, marketCode, options = {}) {
     if (!Array.isArray(found) || found.length < 1 || catalogProducts.length < 1) {
       throw new Error(`${selectedMarket.name} refresh returned no valid catalog products (${found.length} found, ${catalogProducts.length} valid)`);
     }
-    const selected = selectDailyProducts(ranked, selectedMarket.code, selectedMarket.timezone, Boolean(options.preserveDailySelection));
+    const selected = options.skipDailySelection
+      ? []
+      : selectDailyProducts(ranked, selectedMarket.code, selectedMarket.timezone, Boolean(options.preserveDailySelection));
     const updatedAt = new Date().toISOString();
     const dropDate = localDate(selectedMarket.timezone);
     const existingSnapshots = options.preserveDailySelection
@@ -318,7 +320,7 @@ async function refreshMarket(config, marketCode, options = {}) {
           selection_reason=excluded.selection_reason,availability_status=excluded.availability_status,
           selected_at=excluded.selected_at
       `);
-      db.prepare("DELETE FROM daily_drops WHERE market=? AND drop_date=?").run(selectedMarket.code, dropDate);
+      if (!options.skipDailySelection) db.prepare("DELETE FROM daily_drops WHERE market=? AND drop_date=?").run(selectedMarket.code, dropDate);
       selected.forEach((product, index) => {
         const productId = idsByProviderExternalId.get(qualifiedProviderId(product));
         const snapshot = existingSnapshots.get(productId);
@@ -345,7 +347,7 @@ async function refreshMarket(config, marketCode, options = {}) {
           WHERE market=? AND source=? AND status='published' AND COALESCE(last_seen_at,'')<?
         `).run(updatedAt, updatedAt, selectedMarket.code, report.source, staleCutoff);
       }
-      queueDistributionPackets(selectedMarket.code, dropDate, selected, updatedAt);
+      if (!options.skipDailySelection) queueDistributionPackets(selectedMarket.code, dropDate, selected, updatedAt);
     })();
 
     db.prepare(`

@@ -89,8 +89,11 @@ function enabledProviders(config) {
   return [...byId.values()];
 }
 
-async function searchAll(config, market) {
-  const providers = providersForMarket(config, market);
+async function searchAll(config, market, {providerIds = []} = {}) {
+  const selectedIds = new Set((providerIds || []).map(value => String(value || "").trim()).filter(Boolean));
+  const providers = providersForMarket(config, market).filter(provider =>
+    !selectedIds.size || selectedIds.has(provider.id)
+  );
   if (!providers.length) throw new Error(`No approved retailer API or affiliate feed is configured for ${market.name}`);
   const settled = await Promise.allSettled(providers.map(provider => provider.search({market})));
   const products = [];

@@ -79,7 +79,11 @@ module.exports = async function recoverProductionCatalog(config) {
         : "an empty live catalog";
       console.log(`Refreshing ${marketCode.toUpperCase()} production catalog for ${reason}.`);
       try {
-        await refreshProducts(config, { market: marketCode });
+        await refreshProducts(config, missingProviders.length ? {
+          market:marketCode,
+          providerIds:missingProviders,
+          skipDailySelection:true,
+        } : {market:marketCode});
       } catch (error) {
         refreshErrors.push(`${marketCode}: ${error.message}`);
         console.error(`${marketCode.toUpperCase()} catalog recovery failed: ${error.message}`);
