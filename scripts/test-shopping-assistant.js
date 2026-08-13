@@ -385,6 +385,18 @@ const russianChairMission = missionFromText(
 assert.strictEqual(russianChairMission.product_type, "chair");
 assert(russianChairMission.style.toLowerCase().startsWith("современн"));
 assert.strictEqual(russianChairMission.budget_max, 150);
+assert.strictEqual(
+  missionFromText(
+    "What is your maximum budget for the sofa? USD 500-1,500. Large sectional",
+  ).budget_max,
+  1500,
+  "A selected budget range used its lower bound as the maximum",
+);
+assert.strictEqual(
+  missionFromText("Бюджет CAD 700–2,000").budget_max,
+  2000,
+  "A localized budget range did not use its upper bound",
+);
 assert.deepStrictEqual(
   broadDiscoveryQuestions(
     {product_type:"sofa"},
