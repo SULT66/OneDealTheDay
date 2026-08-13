@@ -1,6 +1,7 @@
 const assert = require("assert");
 const Database = require("better-sqlite3");
 const {
+  broadDiscoveryQuestions,
   classifyShoppingScope,
   coherentClarificationPrompts,
   createShoppingAssistant,
@@ -384,6 +385,36 @@ const russianChairMission = missionFromText(
 assert.strictEqual(russianChairMission.product_type, "chair");
 assert(russianChairMission.style.toLowerCase().startsWith("современн"));
 assert.strictEqual(russianChairMission.budget_max, 150);
+assert.deepStrictEqual(
+  broadDiscoveryQuestions(
+    {product_type:"sofa"},
+    "ru",
+    "Найди диван",
+    false,
+  )?.questions,
+  ["Какой у вас бюджет?", "На сколько человек должен быть рассчитан диван?"],
+  "A broad sofa request lost its useful sofa-specific clarification",
+);
+assert.deepStrictEqual(
+  broadDiscoveryQuestions(
+    {product_type:"furniture"},
+    "ru",
+    "Найди мебель",
+    false,
+  )?.questions,
+  ["Какой у вас бюджет?", "Как вы будете в основном использовать этот товар?"],
+  "A generic furniture request was incorrectly treated as a sofa request",
+);
+assert.deepStrictEqual(
+  broadDiscoveryQuestions(
+    {product_type:"desk"},
+    "ru",
+    "Найди письменный стол",
+    false,
+  )?.questions,
+  ["Какой у вас бюджет?", "Как вы будете в основном использовать этот товар?"],
+  "A non-sofa broad request did not receive general clarification",
+);
 assert(
   matchesShoppingIntent(
     {title:"Set of 4 modern dining chairs", category:"Dining Furniture > Chairs"},
@@ -397,6 +428,58 @@ assert(
     "chair modern style under 150",
   ),
   "A bookshelf still matches a chair request",
+);
+assert(
+  matchesShoppingIntent(
+    {title:"Large modular 5-seat sectional sofa", category:"Furniture > Sofas"},
+    "large sectional sofa under 1500",
+    "sofa",
+  ),
+  "A matching sectional sofa was rejected",
+);
+assert(
+  !matchesShoppingIntent(
+    {
+      title:"63-inch executive computer desk",
+      category:"Furniture > Home Office Desks",
+      reason:"A strong sofa option for the requested room and budget",
+    },
+    "large sectional sofa under 1500",
+    "sofa",
+  ),
+  "A desk still matches a sofa request through the broad furniture category or generated reason",
+);
+assert(
+  !matchesShoppingIntent(
+    {title:"Queen platform bed frame", category:"Bedroom Furniture > Beds"},
+    "queen mattress under 700",
+    "mattress",
+  ),
+  "A bed frame still matches a mattress request",
+);
+assert(
+  !matchesShoppingIntent(
+    {title:"Modern floating wall shelf", category:"Furniture > Shelving"},
+    "small dining table",
+    "table",
+  ),
+  "A shelf still matches a table request",
+);
+assert(
+  !matchesShoppingIntent(
+    {title:"Stainless steel coffee grinder", category:"Kitchen Appliances"},
+    "compact espresso machine",
+    "espresso machine",
+  ),
+  "An unknown exact product type was accepted from a descriptive-word overlap",
+);
+assert(
+  matchesShoppingIntent(
+    {title:"Compact espresso machine with milk frother", category:"Coffee Makers"},
+    "compact espresso machine",
+    "espresso machine",
+  ),
+  "An exact unknown product type was rejected",
 );
 assert(
   urlMatchesMarket(

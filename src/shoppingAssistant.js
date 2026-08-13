@@ -54,7 +54,15 @@ const PRODUCT_CATEGORY_GROUPS = {
   shoes: ["shoe", "shoes", "sneaker", "sneakers", "boot", "boots", "обувь", "кроссовки", "ботинки", "туфли", "zapato", "zapatos", "zapatillas", "chaussure", "chaussures", "schuh", "schuhe"],
   clothing: ["clothing", "apparel", "shirt", "shirts", "tank", "tanktop", "singlet", "vest", "jacket", "jackets", "pants", "одежда", "майка", "майку", "майки", "маек", "безрукавка", "безрукавку", "безрукавки", "рубашка", "куртка", "брюки", "camisa", "chaqueta", "ropa", "vêtement", "vetement", "kleidung"],
   chair: ["chair", "chairs", "stool", "stools", "стул", "стула", "стулья", "стульев", "стульям", "silla", "sillas", "chaise", "chaises", "stuhl", "stuhle", "stühle"],
-  furniture: ["furniture", "sofa", "sofas", "couch", "couches", "sectional", "sectionals", "loveseat", "loveseats", "диван", "диваны", "диван-кровать", "мебель", "sofá", "sofa", "canapé", "canape", "möbel", "mobel"],
+  sofa: ["sofa", "sofas", "couch", "couches", "sectional", "sectionals", "loveseat", "loveseats", "диван", "диваны", "sofá", "canapé", "canape"],
+  desk: ["desk", "desks", "workstation", "workstations", "письменный", "компьютерный", "escritorio", "escritorios", "bureau", "bureaux", "schreibtisch", "schreibtische"],
+  table: ["table", "tables", "стол", "столы", "mesa", "mesas", "tisch", "tische"],
+  shelf: ["shelf", "shelves", "bookshelf", "bookshelves", "bookcase", "bookcases", "shelving", "полка", "полки", "стеллаж", "стеллажи", "estante", "estantes", "étagère", "etagere", "regal", "regale"],
+  bed: ["bed", "beds", "bedframe", "кровать", "кровати", "cama", "camas", "lit", "lits", "bett", "betten"],
+  mattress: ["mattress", "mattresses", "airbed", "airbeds", "матрас", "матрасы", "colchón", "colchon", "colchones", "matelas", "matratze", "matratzen"],
+  dresser: ["dresser", "dressers", "chest", "drawers", "комод", "комоды", "cómoda", "comoda", "commode", "kommode", "kommoden"],
+  cabinet: ["cabinet", "cabinets", "cupboard", "cupboards", "шкаф", "шкафы", "armario", "armarios", "armoire", "schrank", "schränke"],
+  furniture: ["furniture", "мебель", "muebles", "meubles", "möbel", "mobel"],
 };
 const PRODUCT_CATEGORY_BY_ALIAS = new Map(
   Object.entries(PRODUCT_CATEGORY_GROUPS).flatMap(([category, aliases]) =>
@@ -93,6 +101,10 @@ const SEARCH_SUBTYPE_TERMS = new Set([
   "trunk",
   "trunks",
 ]);
+const PRODUCT_TYPE_DESCRIPTOR_TERMS = new Set(
+  `adult adults affordable autumn best black blue budget cheap classic compact contemporary dining electric ergonomic fall folding gaming gray green home indoor kitchen large leather men mens mini modern office outdoor pink portable premium professional red small smart summer traditional travel white winter wireless women womens youth
+  взрослый взрослые белый белая белое большой большие голубой домашний домашняя зеленый зеленая игровой игровые кожаный компактный красный красная кухонный кухонная маленький маленькая мужской мужские офисный офисная портативный профессиональный современный современная складной складные уличный уличная черный черная чёрный чёрная женский женские`.split(/\s+/),
+);
 const SHOPPING_TERM_ALIASES = new Map([
   ["майка", "tank"],
   ["майку", "tank"],
@@ -121,6 +133,8 @@ const SHOPPING_TERM_ALIASES = new Map([
   ["стулья", "chairs"],
   ["стульев", "chairs"],
   ["стульям", "chairs"],
+  ["диван", "sofas"],
+  ["диваны", "sofas"],
   ["осень", "autumn"],
   ["осенние", "autumn"],
   ["осенних", "autumn"],
@@ -573,6 +587,17 @@ function categoryTokens(tokens) {
   return [...new Set(tokens.map((token) => PRODUCT_CATEGORY_BY_ALIAS.get(token)).filter(Boolean))];
 }
 
+function identityHasToken(tokens, token) {
+  if (tokens.has(token)) return true;
+  if (token.length > 3 && token.endsWith("s") && tokens.has(token.slice(0, -1))) {
+    return true;
+  }
+  return token.length > 3 && [...tokens].some(
+    (candidateToken) =>
+      candidateToken.endsWith("s") && candidateToken.slice(0, -1) === token,
+  );
+}
+
 function matchesRequestedCategory(candidate, category, tokens) {
   const identity = clean(
     `${candidate?.title || ""} ${candidate?.brand || ""} ${candidate?.model_number || ""}`,
@@ -598,6 +623,30 @@ function matchesRequestedCategory(candidate, category, tokens) {
     PRODUCT_CATEGORY_GROUPS.tv.some((alias) => identityTokens.has(alias)) ||
     /\b(?:un|qn|q|oled)\d{2,3}[a-z0-9-]*\b/iu.test(identity)
   );
+}
+
+function matchesRequiredProductType(candidate, productType) {
+  const required = normalizedProductType(productType);
+  if (!required) return true;
+  const identity = clean(
+    `${candidate?.title || ""} ${candidate?.category || ""} ${candidate?.model_number || ""}`,
+  );
+  const identityTokens = candidateTokens(identity);
+  const requiredTokens = normalizedIntentTokens(required, { includeConstraints: true });
+  const requiredCategories = categoryTokens(requiredTokens);
+  if (requiredCategories.length) {
+    return requiredCategories.every((category) =>
+      matchesRequestedCategory(candidate, category, identityTokens),
+    );
+  }
+  const identityTerms = requiredTokens.filter(
+    (token) =>
+      !PRODUCT_TYPE_DESCRIPTOR_TERMS.has(token) &&
+      !BRAND_TERMS.has(token) &&
+      !/^\d+(?:[.,]\d+)?$/.test(token),
+  );
+  if (!identityTerms.length) return false;
+  return identityTerms.every((token) => identityHasToken(identityTokens, token));
 }
 
 function matchesRequestedSubtype(candidate, request) {
@@ -646,7 +695,7 @@ function matchesRequestedSubtype(candidate, request) {
   return true;
 }
 
-function matchesShoppingIntent(candidate, request) {
+function matchesShoppingIntent(candidate, request, requiredProductType = "") {
   const requestTokens = normalizedIntentTokens(request);
   if (!requestTokens.length) return false;
   const haystack = [
@@ -656,7 +705,6 @@ function matchesShoppingIntent(candidate, request) {
     candidate?.model_number,
     candidate?.retailer,
     candidate?.url,
-    candidate?.reason,
   ]
     .filter(Boolean)
     .join(" ");
@@ -665,6 +713,7 @@ function matchesShoppingIntent(candidate, request) {
     [
       candidate?.title,
       candidate?.brand,
+      candidate?.category,
       candidate?.model_number,
       candidate?.url,
       candidate?.affiliate_url,
@@ -672,11 +721,12 @@ function matchesShoppingIntent(candidate, request) {
       .filter(Boolean)
       .join(" "),
   );
+  if (!matchesRequiredProductType(candidate, requiredProductType)) return false;
   if (!matchesRequestedSubtype(candidate, request)) return false;
   const requestedCategories = categoryTokens(requestTokens);
   if (
     requestedCategories.some(
-      (category) => !matchesRequestedCategory(candidate, category, tokens),
+      (category) => !matchesRequestedCategory(candidate, category, identityTokens),
     )
   ) {
     return false;
@@ -703,7 +753,7 @@ function matchesShoppingIntent(candidate, request) {
   return requestTokens.some((token) => {
     const category = PRODUCT_CATEGORY_BY_ALIAS.get(token);
     return category
-      ? PRODUCT_CATEGORY_GROUPS[category].some((alias) => tokens.has(alias))
+      ? PRODUCT_CATEGORY_GROUPS[category].some((alias) => identityTokens.has(alias))
       : tokens.has(token);
   });
 }
@@ -1200,13 +1250,14 @@ function broadDiscoveryQuestions(missionValue, language, latestRequest, hadActiv
   if (hasSpecificModel) return null;
   const copy = DISCOVERY_QUESTION_COPY[language] || DISCOVERY_QUESTION_COPY.en;
   const category = missionProductFamily(mission.product_type);
+  const exactProductType = normalizedProductType(mission.product_type);
   const categoryQuestion = category === "headphone"
     ? copy.headphone
     : category === "tv"
       ? copy.tv
       : category === "shoes"
         ? copy.shoes
-        : category === "furniture"
+        : category === "furniture" && exactProductType === "sofa"
           ? copy.furniture
           : category === "phone"
             ? copy.phone
@@ -2079,7 +2130,9 @@ function searchCatalog(db, sourceSql, args, marketCode, language) {
       (product) =>
         !category || product.category.toLowerCase().includes(category),
     )
-    .filter((product) => !tokens.length || matchesShoppingIntent(product, query))
+    .filter((product) =>
+      !tokens.length || matchesShoppingIntent(product, query, args.product_type),
+    )
     .map((product) => {
       const haystack = candidateTokens(
         `${product.title} ${product.brand} ${product.category}`,
@@ -3432,7 +3485,13 @@ function safeHistory(messages) {
     .filter((item) => item.content);
 }
 
-function verifiedRetailerRecommendations(products, request, copy, selectedMarket) {
+function verifiedRetailerRecommendations(
+  products,
+  request,
+  copy,
+  selectedMarket,
+  requiredProductType = "",
+) {
   if (
     /(?:\bused\b|\brefurbished\b|\brenewed\b|\bopen[ -]?box\b|\bpre-?owned\b|\bб\/?у\b|восстановлен|gebraucht|reconditionn|reacondicionad)/iu.test(
       request,
@@ -3444,7 +3503,11 @@ function verifiedRetailerRecommendations(products, request, copy, selectedMarket
   return selectRetailerDiverseCandidates(deduplicateRecommendations(
     (Array.isArray(products) ? products : [])
       .filter((product) =>
-        matchesShoppingIntent({ ...product, category: "" }, request),
+        matchesShoppingIntent(
+          { ...product, category: "" },
+          request,
+          requiredProductType,
+        ),
       )
       .filter(
         (product) =>
@@ -3565,6 +3628,7 @@ function providerFirstResponse({
         resolvedRequest,
         copy,
         selectedMarket,
+        shoppingMission?.product_type,
       ),
     ]),
     MAX_RECOMMENDATIONS,
@@ -3883,7 +3947,10 @@ function createShoppingAssistant({
       const catalogProducts = searchCatalog(
         db,
         sourceSql,
-        catalogSearchArgs(resolvedRequest),
+        {
+          ...catalogSearchArgs(resolvedRequest),
+          product_type: activeMission.product_type,
+        },
         selectedMarket.code,
         language,
       );
@@ -4176,13 +4243,18 @@ function createShoppingAssistant({
         })
         .filter(Boolean)
         .filter((recommendation) =>
-          matchesShoppingIntent(recommendation, resolvedRequest),
+          matchesShoppingIntent(
+            recommendation,
+            resolvedRequest,
+            activeMission.product_type,
+          ),
         );
       const retailerRecommendationCandidates = verifiedRetailerRecommendations(
         retailerProducts,
         resolvedRequest,
         copy,
         selectedMarket,
+        activeMission.product_type,
       );
       const structuredUrls = new Set(
         [
@@ -4210,6 +4282,7 @@ function createShoppingAssistant({
                 url: source.url,
               },
               resolvedRequest,
+              activeMission.product_type,
             ),
         )
         .map((source, index) => ({
@@ -4415,6 +4488,7 @@ module.exports = {
   SHOPPING_SCOPE_RESPONSE_FORMAT,
   DEFAULT_MODEL,
   assistantProduct,
+  broadDiscoveryQuestions,
   classifyShoppingScope,
   coherentClarificationPrompts,
   createShoppingAssistant,
