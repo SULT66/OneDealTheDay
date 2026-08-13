@@ -242,8 +242,8 @@ const config = {
     assert.strictEqual(db.prepare("SELECT COUNT(*) n FROM source_refresh_runs").get().n, 3);
     assert.deepStrictEqual(
       missingConfiguredProviders(config, "us"),
-      [],
-      "A completed multi-source refresh was not recorded for startup recovery"
+      ["feed-wayfair-us"],
+      "Startup recovery did not distinguish populated sources from a failed empty source"
     );
     assert.strictEqual(db.prepare("SELECT COUNT(*) n FROM automation_alerts WHERE resolved_at IS NULL").get().n, 1);
     assert.strictEqual(db.prepare("SELECT COUNT(*) n FROM distribution_queue WHERE status='ready'").get().n, 2);
