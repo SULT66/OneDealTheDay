@@ -341,7 +341,7 @@ assert.deepStrictEqual(
     [
       {
         question: "Какой у вас бюджет?",
-        options: ["До $100", "$100-$200", "$200+"],
+        options: ["USD 0-100", "USD 100-200", "USD 200+"],
       },
       {
         question: "Что важнее: качество, функции или самая низкая цена?",
@@ -355,7 +355,7 @@ assert.deepStrictEqual(
   [
     {
       question: "Какой у вас бюджет?",
-      options: ["До $100", "$100-$200", "$200+"],
+      options: ["USD 0-100", "USD 100-200", "USD 200+"],
     },
     {
       question: "Для чего в основном нужны кроссовки?",
@@ -2410,6 +2410,95 @@ const client = {
     "A slow live search did not return a bounded shopper-facing timeout",
   );
 
+  let providerFirstModelCalls = 0;
+  const providerFirstAssistant = createShoppingAssistant({
+    db,
+    sourceSql,
+    market: (code) => ({ code, currency: "USD" }),
+    retailerSearch: async () => [
+      {
+        title: "Ergonomic high-back office chair with lumbar support",
+        retailer_name: "Tribesigns",
+        source: "feed-tribesigns",
+        current_price: 189.99,
+        currency: "USD",
+        affiliate_url: "https://www.awin1.com/cread.php?awinmid=92307&awinaffid=3018019&ued=https%3A%2F%2Ftribesigns.com%2Fproducts%2Fergonomic-high-back-office-chair",
+        image_url: "https://cdn.example.com/tribesigns-office-chair.jpg",
+        availability: "In stock",
+        external_id: "tribesigns-chair-1",
+      },
+      {
+        title: "Ergonomic mesh office chair with adjustable arms",
+        retailer_name: "eBay",
+        source: "ebay",
+        current_price: 159.99,
+        currency: "USD",
+        affiliate_url: "https://www.ebay.com/itm/123456789012",
+        image_url: "https://i.ebayimg.com/images/office-chair.jpg",
+        availability: "In stock",
+        external_id: "ebay-chair-1",
+      },
+      {
+        title: "Executive ergonomic office chair with headrest",
+        retailer_name: "Walmart",
+        source: "feed-walmart",
+        current_price: 219.99,
+        currency: "USD",
+        affiliate_url: "https://www.walmart.com/ip/ergonomic-office-chair/123456",
+        image_url: "https://i5.walmartimages.com/office-chair.jpg",
+        availability: "In stock",
+        external_id: "walmart-chair-1",
+      },
+    ],
+    client: {
+      responses: {
+        create: async (request) => {
+          providerFirstModelCalls += 1;
+          if (request.text?.format?.name !== "shopping_scope_guardrail") {
+            throw new Error("Provider-first result unnecessarily reached deep web search");
+          }
+          return {
+            output: [],
+            output_text: JSON.stringify({
+              scope: "shopping",
+              needs_clarification: false,
+              clarification_reason: "none",
+              clarifying_questions: [],
+              clarification_prompts: [],
+              language: "ru",
+              social_reply: "",
+              starts_new_mission: false,
+              mission_patch: {
+                product_type: "office chair",
+                brands: [],
+                use_case: "home office",
+                season: "",
+                style: "ergonomic",
+                audience: "",
+                size: "",
+                market: "us",
+                preferred_retailer: "",
+                budget_max: 500,
+                query_terms: ["ergonomic", "lumbar support"],
+              },
+            }),
+          };
+        },
+      },
+    },
+  });
+  const providerFirst = await providerFirstAssistant.respond({
+    message: "Найди эргономичное офисное кресло в США до USD 500",
+    messages: [],
+    marketCode: "us",
+    language: "en",
+  });
+  assert.strictEqual(providerFirstModelCalls, 1);
+  assert.strictEqual(providerFirst.provider_first, true);
+  assert.strictEqual(providerFirst.currency, "USD");
+  assert.strictEqual(providerFirst.language, "ru");
+  assert.strictEqual(providerFirst.recommendations.length, 3);
+
   const offTopicCalls = [];
   const offTopicAssistant = createShoppingAssistant({
     db,
@@ -2551,7 +2640,7 @@ const client = {
   assert.strictEqual(broadHeadphones.clarification_prompts.length, 2);
   assert.deepStrictEqual(
     broadHeadphones.clarification_prompts[0].options,
-    ["$0-100", "$100-200", "$200+"],
+    ["USD 0-100", "USD 100-200", "USD 200+"],
   );
   assert(
     broadHeadphones.clarifying_questions.some((question) => /бюджет/u.test(question)) &&
@@ -2559,6 +2648,25 @@ const client = {
     "A broad headphone request did not ask the two useful questions",
   );
   assert.strictEqual(broadHeadphones.shopping_mission.product_type, "headphone");
+  const regionalFurniturePrompts = coherentClarificationPrompts(
+    [{
+      question: "Какой у вас бюджет?",
+      options: ["75 000-150 000 ₽", "150 000-250 000 ₽", "250 000 ₽+"],
+    }],
+    ["Какой у вас бюджет?"],
+    "ru",
+    { product_type: "furniture" },
+    "us",
+  );
+  assert.deepStrictEqual(
+    regionalFurniturePrompts[0].options,
+    ["USD 0-500", "USD 500-1,500", "USD 1,500+"],
+    "Russian-language clarification changed the US market currency",
+  );
+  assert(
+    !regionalFurniturePrompts[0].options.some((option) => option.includes("₽")),
+    "A foreign currency survived deterministic market normalization",
+  );
   assert.deepStrictEqual(
     retailerDiscoveryHosts({
       product_type: "sneakers",

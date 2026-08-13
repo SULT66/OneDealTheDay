@@ -7,7 +7,7 @@
   const SAVED_KEY = "odd_delia_saved_products_v1";
   const MAX_CHATS = 20;
   const MAX_MESSAGES_PER_CHAT = 80;
-  const REQUEST_TIMEOUT_MS = 33000;
+  const REQUEST_TIMEOUT_MS = 40000;
   const backdrop = document.getElementById("shoppingAssistantBackdrop");
   const closeButton = panel.querySelector("[data-shopping-assistant-close]");
   const form = panel.querySelector("form");
@@ -183,6 +183,7 @@
       subtitle: "Your OneDailyDrop shopping assistant",
       totalPrice: "Total delivered", comparisonReady: "I compared the products already shown. No new search is needed.",
       noNewStores: "I couldn't find any new matching offers in other stores yet.",
+      timeout: "The live search took too long. I stopped it, but you can retry with a model or a narrower request.",
       positionBestOverall: "Best overall", positionLowestPrice: "Lowest price", positionAlternative: "Alternative",
       availability: "Availability", pack: "Pack", sizes: "Sizes",
     },
@@ -209,6 +210,7 @@
       subtitle: "Ваш помощник по покупкам OneDailyDrop",
       totalPrice: "Итого с доставкой", comparisonReady: "Сравнила уже найденные варианты. Повторный поиск не нужен.",
       noNewStores: "Новых подходящих предложений в других магазинах пока не найдено.",
+      timeout: "Живой поиск занял слишком много времени. Я остановила его; попробуйте указать модель или сузить запрос.",
       positionBestOverall: "Лучший выбор", positionLowestPrice: "Самая низкая цена", positionAlternative: "Альтернатива",
       availability: "Наличие", pack: "В упаковке", sizes: "Размеры",
     },
@@ -235,6 +237,7 @@
       subtitle: "OneDailyDrop alış-veriş köməkçiniz",
       totalPrice: "Çatdırılma ilə cəmi", comparisonReady: "Göstərilən məhsulları artıq müqayisə etdim. Yeni axtarış lazım deyil.",
       noNewStores: "Digər mağazalarda hələ yeni uyğun təklif tapılmadı.",
+      timeout: "Canlı axtarış çox uzun çəkdi. Modeli göstərin və ya sorğunu daraldıb yenidən cəhd edin.",
       positionBestOverall: "Ən yaxşı seçim", positionLowestPrice: "Ən aşağı qiymət", positionAlternative: "Alternativ",
       availability: "Mövcudluq", pack: "Paket", sizes: "Ölçülər",
     },
@@ -258,6 +261,7 @@
       actionSimilar: "Ver modelos similares", actionRetry: "Buscar de nuevo",
       you: "Tú", placeholder: "¿Qué quieres comprar?",
       disclaimer: "El precio y la disponibilidad pueden cambiar. Confirma los detalles con la tienda.",
+      timeout: "La búsqueda en vivo tardó demasiado. Indica un modelo o acota la solicitud e inténtalo de nuevo.",
       positionBestOverall: "Mejor opción", positionLowestPrice: "Precio más bajo", positionAlternative: "Alternativa",
       availability: "Disponibilidad", pack: "Paquete", sizes: "Tallas",
     },
@@ -281,6 +285,7 @@
       actionSimilar: "Voir des modèles similaires", actionRetry: "Relancer la recherche",
       you: "Vous", placeholder: "Que souhaitez-vous acheter ?",
       disclaimer: "Le prix et la disponibilité peuvent changer. Confirmez les détails auprès du vendeur.",
+      timeout: "La recherche en direct a pris trop de temps. Indiquez un modèle ou précisez la demande, puis réessayez.",
       positionBestOverall: "Meilleur choix", positionLowestPrice: "Prix le plus bas", positionAlternative: "Alternative",
       availability: "Disponibilité", pack: "Lot", sizes: "Tailles",
     },
@@ -304,6 +309,7 @@
       actionSimilar: "Ähnliche Modelle zeigen", actionRetry: "Erneut suchen",
       you: "Sie", placeholder: "Was möchten Sie kaufen?",
       disclaimer: "Preis und Verfügbarkeit können sich ändern. Prüfen Sie die endgültigen Angaben beim Händler.",
+      timeout: "Die Live-Suche hat zu lange gedauert. Nennen Sie ein Modell oder grenzen Sie die Anfrage ein und versuchen Sie es erneut.",
       positionBestOverall: "Beste Wahl", positionLowestPrice: "Niedrigster Preis", positionAlternative: "Alternative",
       availability: "Verfügbarkeit", pack: "Packung", sizes: "Größen",
     },
@@ -2045,7 +2051,9 @@
     } catch (error) {
       if (error.name === "AbortError") {
         userRecord.include_in_model = false;
-        const timeoutMessage = tr(
+        const timeoutLanguage = messageLanguage(question);
+        const timeoutMessage = responseTr(
+          { language: timeoutLanguage },
           "timeout",
           "The live search took too long, so I stopped it. Try again or narrow the model and budget.",
         );
@@ -2062,6 +2070,7 @@
               clarifying_questions: [],
               needs_clarification: false,
               scope: "shopping",
+              language: timeoutLanguage,
               result_state: "no_match",
               timed_out: true,
             })

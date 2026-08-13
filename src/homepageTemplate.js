@@ -137,7 +137,7 @@ module.exports = function homepageTemplate({
   ${renderShoppingAssistantPanel(selectedMarket.code, language)}
   <script src="/theme.js?v=20260808-assistant"></script>
   <script src="/app.js?v=20260808-assistant"></script>
-  <script src="/shopping-assistant.js?v=20260812-all-markets-v2"></script>
+  <script src="/shopping-assistant.js?v=20260813-provider-first-v1"></script>
 </body>
 </html>`;
 };

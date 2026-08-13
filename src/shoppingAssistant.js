@@ -9,7 +9,7 @@ const MAX_MESSAGE_LENGTH = 1200;
 const MAX_RECOMMENDATIONS = 3;
 const MAX_RECOMMENDATION_CANDIDATES = 8;
 const SCOPE_TIMEOUT_MS = 4500;
-const SEARCH_TIMEOUT_MS = 26000;
+const SEARCH_TIMEOUT_MS = 22000;
 const normalizeTokenText = (value) =>
   String(value || "")
     .normalize("NFKD")
@@ -134,6 +134,8 @@ const RETAILER_PATTERNS = [
   ["Walmart", /(?:^|[^\p{L}\p{N}])(?:walmart|wal-mart|волмарт\p{L}*)(?=$|[^\p{L}\p{N}])/iu],
   ["eBay", /(?:^|[^\p{L}\p{N}])(?:ebay|и\s*бэй|ибэй)(?=$|[^\p{L}\p{N}])/iu],
   ["Target", /(?:^|[^\p{L}\p{N}])target(?=$|[^\p{L}\p{N}])/iu],
+  ["Mooncool", /(?:^|[^\p{L}\p{N}])(?:mooncool|moon\s*cool|мункул|мун\s*кул)(?=$|[^\p{L}\p{N}])/iu],
+  ["Tribesigns", /(?:^|[^\p{L}\p{N}])(?:tribesigns|tribe\s*signs|трайбсайнс|трибсайнс)(?=$|[^\p{L}\p{N}])/iu],
 ];
 const MARKET_RETAILER_HOSTS = {
   us: new Set(["adidas.com", "amazon.com", "apple.com", "ashleyfurniture.com", "bestbuy.com", "bhphotovideo.com", "champssports.com", "costco.com", "dickssportinggoods.com", "ebay.com", "famousfootwear.com", "finishline.com", "footlocker.com", "homedepot.com", "ikea.com", "jdsports.com", "kohls.com", "lowes.com", "macys.com", "nike.com", "nordstrom.com", "rei.com", "samsung.com", "store.google.com", "target.com", "walmart.com", "wayfair.com", "zappos.com"]),
@@ -1278,16 +1280,37 @@ const CLARIFICATION_CHOICES = {
   },
 };
 
+const MARKET_BUDGET_CHOICES = Object.freeze({
+  us: {
+    default: ["USD 0-100", "USD 100-200", "USD 200+"],
+    furniture: ["USD 0-500", "USD 500-1,500", "USD 1,500+"],
+  },
+  ca: {
+    default: ["CAD 0-150", "CAD 150-250", "CAD 250+"],
+    furniture: ["CAD 0-700", "CAD 700-2,000", "CAD 2,000+"],
+  },
+  uk: {
+    default: ["GBP 0-80", "GBP 80-160", "GBP 160+"],
+    furniture: ["GBP 0-400", "GBP 400-1,200", "GBP 1,200+"],
+  },
+  fr: {
+    default: ["EUR 0-100", "EUR 100-200", "EUR 200+"],
+    furniture: ["EUR 0-450", "EUR 450-1,300", "EUR 1,300+"],
+  },
+  de: {
+    default: ["EUR 0-100", "EUR 100-200", "EUR 200+"],
+    furniture: ["EUR 0-450", "EUR 450-1,300", "EUR 1,300+"],
+  },
+});
+
+function marketBudgetChoices(marketCode, productFamily = "") {
+  const choices = MARKET_BUDGET_CHOICES[marketCode] || MARKET_BUDGET_CHOICES.us;
+  return [...(choices[productFamily] || choices.default)];
+}
+
 function clarificationPrompts(questions, language, marketCode = "us") {
   const copy = DISCOVERY_QUESTION_COPY[language] || DISCOVERY_QUESTION_COPY.en;
   const choices = { ...(CLARIFICATION_CHOICES[language] || CLARIFICATION_CHOICES.en) };
-  const budgetChoices = {
-    us: ["$0-100", "$100-200", "$200+"],
-    ca: ["CAD 0-150", "CAD 150-250", "CAD 250+"],
-    uk: ["£0-80", "£80-160", "£160+"],
-    fr: ["€0-100", "€100-200", "€200+"],
-    de: ["€0-100", "€100-200", "€200+"],
-  };
   const shoeSizes = {
     us: ["US 8", "US 9", "US 10"],
     ca: ["US 8", "US 9", "US 10"],
@@ -1295,7 +1318,7 @@ function clarificationPrompts(questions, language, marketCode = "us") {
     fr: ["EU 41", "EU 42", "EU 43"],
     de: ["EU 41", "EU 42", "EU 43"],
   };
-  choices.budget = budgetChoices[marketCode] || choices.budget;
+  choices.budget = marketBudgetChoices(marketCode);
   choices.size = shoeSizes[marketCode]
     ? [...shoeSizes[marketCode], choices.size[3]]
     : choices.size;
@@ -1362,7 +1385,15 @@ function coherentClarificationPrompts(
     if (budgetPattern.test(prompt.question)) return true;
     return !categoryRelevant || categoryRelevant.test(fullPrompt);
   });
-  const combinedRaw = [...validatedCandidates, ...fallback];
+  const marketCandidates = validatedCandidates.map((prompt) =>
+    budgetPattern.test(prompt.question)
+      ? {
+          ...prompt,
+          options: marketBudgetChoices(marketCode, category),
+        }
+      : prompt,
+  );
+  const combinedRaw = [...marketCandidates, ...fallback];
   const budgetPrompt = combinedRaw.find((prompt) => budgetPattern.test(prompt.question));
   const combined = budgetPrompt && !mission.budget_max
     ? [budgetPrompt, ...combinedRaw.filter((prompt) => prompt !== budgetPrompt)]
@@ -2324,6 +2355,22 @@ function safeUrl(value) {
   }
 }
 
+function affiliateDestinationUrl(value) {
+  const safe = safeUrl(value);
+  if (!/^https:\/\//i.test(safe)) return "";
+  try {
+    const url = new URL(safe);
+    const hostname = url.hostname.toLowerCase().replace(/^www\./, "");
+    if (!hostnameMatches(hostname, "awin1.com") || !/\/cread\.php$/i.test(url.pathname)) {
+      return "";
+    }
+    const destination = safeUrl(url.searchParams.get("ued"));
+    return /^https:\/\//i.test(destination) ? destination : "";
+  } catch {
+    return "";
+  }
+}
+
 function marketLabel(code, language) {
   const selectedLanguage = MARKET_LABELS[language] ? language : "en";
   return MARKET_LABELS[selectedLanguage][code] || String(code || "").toUpperCase();
@@ -3018,6 +3065,8 @@ function hasSupportedPrice(value) {
 function isDirectProductPage(value) {
   const safe = safeUrl(value);
   if (!/^https:\/\//i.test(safe)) return false;
+  const affiliateDestination = affiliateDestinationUrl(safe);
+  if (affiliateDestination) return isDirectProductPage(affiliateDestination);
   try {
     const url = new URL(safe);
     const path = decodeURIComponent(url.pathname).toLowerCase().replace(/\/+$/, "");
@@ -3271,9 +3320,7 @@ function selectRetailerDiverseCandidates(items, limit) {
   const selectedItems = new Set();
   const retailers = new Set();
   for (const item of candidates) {
-    const retailer =
-      sourceHostKey(item?.url) ||
-      normalizeSearch(item?.retailer || retailerFromUrl(item?.url));
+    const retailer = retailerDiversityKey(item);
     if (!retailer || retailers.has(retailer)) continue;
     selected.push(item);
     selectedItems.add(item);
@@ -3281,6 +3328,14 @@ function selectRetailerDiverseCandidates(items, limit) {
     if (selected.length >= limit) return selected;
   }
   return selected;
+}
+
+function retailerDiversityKey(item) {
+  return (
+    sourceHostKey(affiliateDestinationUrl(item?.url)) ||
+    sourceHostKey(item?.url) ||
+    normalizeSearch(item?.retailer || retailerFromUrl(item?.url))
+  );
 }
 
 function assignRecommendationRoles(items, request = "") {
@@ -3380,7 +3435,7 @@ function verifiedRetailerRecommendations(products, request, copy, selectedMarket
     return [];
   }
   const { max_price: maxPrice } = catalogSearchArgs(request);
-  return deduplicateRecommendations(
+  return selectRetailerDiverseCandidates(deduplicateRecommendations(
     (Array.isArray(products) ? products : [])
       .filter((product) =>
         matchesShoppingIntent({ ...product, category: "" }, request),
@@ -3394,7 +3449,8 @@ function verifiedRetailerRecommendations(products, request, copy, selectedMarket
         (product) =>
           /^https:\/\//i.test(safeUrl(product?.image_url)) &&
           isDirectProductPage(product?.affiliate_url) &&
-          urlMatchesMarket(product?.affiliate_url, selectedMarket.code),
+          (urlMatchesMarket(product?.affiliate_url, selectedMarket.code) ||
+            Boolean(affiliateDestinationUrl(product?.affiliate_url))),
       )
       .map((product, index) => {
         const priceValue = number(product.current_price, null);
@@ -3449,7 +3505,94 @@ function verifiedRetailerRecommendations(products, request, copy, selectedMarket
       })
       .filter((product) => !maxPrice || landedPrice(product) <= maxPrice)
       .filter((product) => product.title && product.retailer),
+  ), MAX_RECOMMENDATIONS);
+}
+
+function providerFirstResponse({
+  userMessage,
+  shopperLanguage,
+  catalogProducts,
+  model,
+  selectedMarket,
+  retailerProducts,
+  resolvedRequest,
+  shoppingMission,
+  excludedUrls = new Set(),
+  allowSingleRetailer = false,
+}) {
+  const copy = responseCopy(userMessage, shopperLanguage);
+  const candidates = verifiedRetailerRecommendations(
+    retailerProducts,
+    resolvedRequest,
+    copy,
+    selectedMarket,
+  ).filter((recommendation) =>
+    !excludedUrls.has(comparableUrl(recommendation.url)),
+  );
+  const recommendations = assignRecommendationRoles(
+    rankRecommendationCandidates(candidates, resolvedRequest),
+    resolvedRequest,
   ).slice(0, MAX_RECOMMENDATIONS);
+  if (!recommendations.length) return null;
+  const requested = requestedRetailer(userMessage);
+  const requestedMatch = requested && recommendations.some((recommendation) =>
+    offerMatchesRetailer(recommendation, requested),
+  );
+  const retailerCount = new Set(
+    recommendations.map(retailerDiversityKey),
+  ).size;
+  if (
+    !allowSingleRetailer &&
+    !requestedMatch &&
+    recommendations.length < MAX_RECOMMENDATIONS &&
+    retailerCount < 2
+  ) {
+    return null;
+  }
+  const followUp = usefulShoppingFollowUp(
+    resolvedRequest,
+    shopperLanguage,
+    recommendations.length,
+  );
+  return {
+    message: regionalOutcomeMessage({
+      language: shopperLanguage,
+      marketCode: selectedMarket.code,
+      currency: selectedMarket.currency,
+      retailer: requested,
+      recommendations,
+      partialOffers: [],
+      resultState: "exact_matches",
+      lowerPriceRequested: isLowerPriceRequest(userMessage),
+    }),
+    follow_up: followUp,
+    recommendations: recommendations.map(
+      ({ _recommendation_index, product_key, ...recommendation }) =>
+        recommendation,
+    ),
+    partial_offers: [],
+    comparison_notes: [],
+    comparison: [],
+    products: catalogProducts.slice(0, 6),
+    sources: [],
+    clarifying_questions: [],
+    clarification_prompts: followUp
+      ? clarificationPrompts([followUp], shopperLanguage, selectedMarket.code)
+      : [],
+    needs_clarification: false,
+    timed_out: false,
+    provider_first: true,
+    model,
+    scope: "shopping",
+    language: shopperLanguage,
+    market_code: selectedMarket.code,
+    market_name: marketLabel(selectedMarket.code, shopperLanguage),
+    currency: selectedMarket.currency,
+    conversation_title: "",
+    resolved_request: resolvedRequest,
+    shopping_mission: shoppingMission,
+    result_state: "exact_matches",
+  };
 }
 
 function createShoppingAssistant({
@@ -3462,11 +3605,11 @@ function createShoppingAssistant({
   retailerSearch,
   scopeTimeoutMs = SCOPE_TIMEOUT_MS,
   searchTimeoutMs = SEARCH_TIMEOUT_MS,
-  retailerSearchTimeoutMs = 12000,
+  retailerSearchTimeoutMs = 5000,
   storeDiscoveryEnabled = !client,
   storeDiscoveryTimeoutMs = 12000,
   retailerPageHydrationEnabled = !client,
-  retailerPageHydrationTimeoutMs = 6000,
+  retailerPageHydrationTimeoutMs = 3000,
   retailerPageFetch = globalThis.fetch,
 } = {}) {
   const openai = client || (apiKey ? new OpenAI({ apiKey }) : null);
@@ -3719,6 +3862,44 @@ function createShoppingAssistant({
             ),
           )
         : [];
+      const retailerProducts = await retailerResultsPromise;
+      const requiresDeepSearch =
+        isComparisonRequest(userMessage) ||
+        wantsPriceHistory ||
+        excludedUrls.size > 0 ||
+        isRetailerOrPriceFollowUp(userMessage);
+      if (!requiresDeepSearch) {
+        const providerResult = providerFirstResponse({
+          userMessage,
+          shopperLanguage,
+          catalogProducts,
+          model,
+          selectedMarket,
+          retailerProducts,
+          resolvedRequest,
+          shoppingMission: activeMission,
+          excludedUrls,
+        });
+        if (providerResult) return providerResult;
+      }
+      const timeoutFallback = () => providerFirstResponse({
+        userMessage,
+        shopperLanguage,
+        catalogProducts,
+        model,
+        selectedMarket,
+        retailerProducts,
+        resolvedRequest,
+        shoppingMission: activeMission,
+        excludedUrls,
+        allowSingleRetailer: true,
+      }) || timeoutResponse(
+        userMessage,
+        shopperLanguage,
+        catalogProducts,
+        model,
+        selectedMarket,
+      );
       const assistantRequest = (images = true) => ({
         model,
         store: false,
@@ -3773,13 +3954,7 @@ function createShoppingAssistant({
       } catch (error) {
         if (signal?.aborted) throw error;
         if (error.assistantTimeout) {
-          return timeoutResponse(
-            userMessage,
-            shopperLanguage,
-            catalogProducts,
-            model,
-            selectedMarket,
-          );
+          return timeoutFallback();
         }
         if (![400, 422].includes(Number(error?.status || error?.statusCode))) {
           throw error;
@@ -3796,19 +3971,12 @@ function createShoppingAssistant({
         } catch (retryError) {
           if (signal?.aborted) throw retryError;
           if (!retryError.assistantTimeout) throw retryError;
-          return timeoutResponse(
-            userMessage,
-            shopperLanguage,
-            catalogProducts,
-            model,
-            selectedMarket,
-          );
+          return timeoutFallback();
         }
       }
 
       let trustedSources = extractSources(response || {});
       let webImages = extractImageResults(response || {});
-      const retailerProducts = await retailerResultsPromise;
       const structured = normalizeAssistantResponse(response?.output_text, {
         language: shopperLanguage,
         userMessage,
