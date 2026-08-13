@@ -463,6 +463,17 @@ assert(
 );
 assert(
   !matchesShoppingIntent(
+    {
+      title:'55" Console Table, Sofa Table TV Stand with 3-Tier Storage Shelves',
+      category:"Furniture > Console Tables",
+    },
+    "large sectional sofa under 1500",
+    "sofa",
+  ),
+  "A sofa table still matches a request for a sofa",
+);
+assert(
+  !matchesShoppingIntent(
     {title:"Queen platform bed frame", category:"Bedroom Furniture > Beds"},
     "queen mattress under 700",
     "mattress",

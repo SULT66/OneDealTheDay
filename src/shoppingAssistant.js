@@ -221,6 +221,8 @@ const PHONE_ACCESSORY_PATTERN =
   /\b(?:adapter|battery|cable|case|charger|charging|cord|cover|dock|holder|mount|power\s*bank|protector|screen\s*protector|stand|stylus)\b|(?:чехол|кабель|зарядк\p{L}*|держател\p{L}*|стекло|пл[её]нк\p{L}*)/iu;
 const PHONE_ACCESSORY_REQUEST_PATTERN =
   /\b(?:accessor(?:y|ies)|adapter|cable|case|charger|charging|cover|dock|holder|mount|protector|stand|stylus)\b|(?:аксессуар\p{L}*|чехол|кабель|зарядк\p{L}*|держател\p{L}*|стекло|пл[её]нк\p{L}*)/iu;
+const SOFA_ACCESSORY_PATTERN =
+  /\b(?:sofa|couch)\s+(?:console\s+)?(?:table|cover|slipcover|protector|tray|legs?|feet|cushions?|pillows?)\b|\b(?:console|entryway)\s+table\b|(?:чехол|накидк\p{L}*|подушк\p{L}*|ножк\p{L}*)\s+(?:для\s+)?диван/iu;
 const UNDERWEAR_BOXER_PATTERN =
   /(?:\bboxer(?:\s*brief)?s?\b|\bboxerbriefs?\b|боксер(?:ы|ки|ок|ов)?)/iu;
 const UNDERWEAR_TRUNK_PATTERN = /(?:\btrunks?\b|транк(?:и|ов)?)/iu;
@@ -557,6 +559,10 @@ const number = (value, fallback = 0) => {
 function stripBudget(value) {
   return clean(value)
     .replace(
+      /(?<!\p{L})(?:(?:usd|cad|gbp|eur)\s*)?[$€£¥]?\s*\d[\d\s,.]*\s*[-–—]\s*(?:(?:usd|cad|gbp|eur)\s*)?[$€£¥]?\s*\d[\d\s,.]*/giu,
+      " ",
+    )
+    .replace(
       /(?<!\p{L})(?:under|below|less\s+than|up\s+to|max(?:imum)?|budget|до|не\s+дороже|бюджет|moins\s+de|jusqu['’]?à|unter|bis\s+zu)(?!\p{L})\D{0,18}[$€£¥]?\s*\d[\d\s,.]*/giu,
       " ",
     )
@@ -614,6 +620,7 @@ function matchesRequestedCategory(candidate, category, tokens) {
       PRODUCT_CATEGORY_GROUPS.phone.some((alias) => tokens.has(alias))
     );
   }
+  if (category === "sofa" && SOFA_ACCESSORY_PATTERN.test(identity)) return false;
   if (category !== "tv") {
     return PRODUCT_CATEGORY_GROUPS[category].some((alias) => tokens.has(alias));
   }
