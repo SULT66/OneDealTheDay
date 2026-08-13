@@ -1975,6 +1975,7 @@ function assistantProduct(product, language = "en") {
   );
   return {
     id: Number(product.id),
+    source: clean(product.source),
     product_key: clean(product.product_key),
     title: clean(product.title),
     brand: clean(product.brand),
@@ -2018,14 +2019,21 @@ function searchCatalog(db, sourceSql, args, marketCode, language) {
     SELECT * FROM products
     WHERE market=? AND status='published' AND ${sourceSql()}
     ORDER BY score DESC,evidence_confidence DESC,updated_at DESC
-    LIMIT 160
+    LIMIT 2000
   `,
     )
     .all(marketCode);
 
   return rows
     .map((product) => assistantProduct(product, language))
-    .filter((product) => product.score != null && product.score >= minimumScore)
+    // A verified affiliate-feed product can still be useful for discovery when
+    // the merchant does not provide enough review/seller evidence to earn a
+    // public OneDailyDrop Score. Keep the facts and omit the score instead of
+    // hiding the product from Delia altogether.
+    .filter((product) =>
+      product.source.startsWith("feed-") ||
+      (product.score != null && product.score >= minimumScore)
+    )
     .filter(
       (product) =>
         !maxPrice || (product.total_price != null && product.total_price <= maxPrice),
