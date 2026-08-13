@@ -111,7 +111,9 @@ targetRecords[5].review_count = "0";
 targetRecords[5].original_price = targetRecords[5].price;
 
 const originalFetch = global.fetch;
+let feedFetchCount = 0;
 global.fetch = async url => {
+  feedFetchCount += 1;
   const value = String(url);
   if (value.includes("failed")) return new Response("no", {status:503});
   const body = value.includes("target") ? targetRecords : bestBuyRecords;
@@ -147,14 +149,16 @@ const config = {
 
 (async () => {
   try {
+    const feedFetchesBeforeAssistant = feedFetchCount;
     const assistantProducts = await searchForAssistant(config, {
       query:"Acme Product",
       market
     });
-    assert.deepStrictEqual(
-      new Set(assistantProducts.map(product => product.retailer_name)),
-      new Set(["Target", "Best Buy"]),
-      "Delia did not aggregate every successful configured retailer while isolating a failed store"
+    assert.deepStrictEqual(assistantProducts, [], "Delia unexpectedly parsed a full affiliate feed during a chat request");
+    assert.strictEqual(
+      feedFetchCount,
+      feedFetchesBeforeAssistant,
+      "Delia downloaded affiliate feeds instead of using their refreshed catalog products",
     );
 
     const awinCsv = "aw_product_id|product_name|search_price|currency|merchant_image_url|aw_deep_link\n1|Mooncool TK1|1299|USD|https://images.test/tk1.jpg|https://www.awin1.com/cread.php?id=1\n";
