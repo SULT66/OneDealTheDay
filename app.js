@@ -1,5 +1,5 @@
 // Bluehost cPanel / Phusion Passenger entry point.
-// Deployment refresh: homepage anchors and search, July 28, 2026.
+// Runtime restart marker: compact homepage catalog payload, August 13, 2026.
 // Register catalog mode safeguards and the SEO homepage before src/server adds express.static().
 const express = require("express");
 const helmet = require("helmet");
