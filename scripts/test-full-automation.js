@@ -50,7 +50,7 @@ const { recalculateCatalog } = require("../src/catalogRecalculation");
 const db = require("../src/db");
 
 assert(RETAILERS.length >= 20, "The complete target retailer catalog is missing");
-for (const retailer of ["Amazon", "eBay", "Walmart", "Target", "Best Buy", "Mooncool", "Currys", "Fnac", "Darty", "MediaMarkt", "Saturn", "OTTO", "Samsung"]) {
+for (const retailer of ["Amazon", "eBay", "Walmart", "Target", "Best Buy", "Tribesigns", "Mooncool", "Currys", "Fnac", "Darty", "MediaMarkt", "Saturn", "OTTO", "Samsung"]) {
   assert(RETAILERS.some(item => item.name === retailer), `${retailer} is missing from retailer coverage`);
 }
 assert.throws(() => safeFeedUrl("http://localhost/feed.csv"), /public HTTPS/);
@@ -61,12 +61,14 @@ assert.strictEqual(parseRecords({body:"<products><product><id>1</id><title>Test<
 
 const feedEnv = {
   AFFILIATE_FEED_TARGET_US_URL:"https://feed.test/target.csv",
+  AFFILIATE_FEED_TRIBESIGNS_US_URL:"https://productdata.awin.com/tribesigns-us.csv.gz",
   AFFILIATE_FEED_MOONCOOL_US_URL:"https://productdata.awin.com/mooncool-us.csv.gz",
   AFFILIATE_FEED_MOONCOOL_CA_URL:"https://productdata.awin.com/mooncool-ca.csv.gz"
 };
 const definitions = feedDefinitions(feedEnv);
-assert.strictEqual(definitions.length, 3);
+assert.strictEqual(definitions.length, 4);
 assert.strictEqual(definitions.find(item => item.id === "target-us").retailerName, "Target");
+assert.strictEqual(definitions.find(item => item.id === "tribesigns-us").retailerName, "Tribesigns");
 assert.deepStrictEqual(definitions.filter(item => item.retailerId === "mooncool").map(item => item.markets[0]), ["us", "ca"]);
 const customDefinitions = feedDefinitions({AFFILIATE_FEEDS_JSON:JSON.stringify([{
   id:"future-store", retailerName:"Future Store", market:"ca", url:"https://feed.test/future.json", format:"json"
@@ -176,6 +178,28 @@ const config = {
     assert.strictEqual(googleProducts[0].current_price, 1399, "Google sale_price was not preferred");
     assert.strictEqual(googleProducts[0].original_price, 1699, "Google regular price was not retained");
     assert.strictEqual(googleProducts[0].availability, "Out of stock", "Google availability was not normalized");
+
+    const tribesignsRows = Array.from({length:2101}, (_, index) => index === 2100
+      ? `desk-1,Tribesigns Executive Desk,Furniture for a home office,Furniture > Office Furniture > Desks,Tribesigns,499.99 USD,399.99 USD,https://images.test/desk.jpg,https://tribesigns.test/desk,https://www.awin1.com/cread.php?awinaffid=3018019&ued=desk,in_stock`
+      : index === 2099
+        ? `desk-oos,Tribesigns Executive Desk,Furniture for a home office,Furniture > Office Furniture > Desks,Tribesigns,599.99 USD,299.99 USD,https://images.test/desk-oos.jpg,https://tribesigns.test/desk-oos,https://www.awin1.com/cread.php?awinaffid=3018019&ued=desk-oos,out_of_stock`
+        : `shelf-${index},Tribesigns Shelf ${index},Storage shelf,Furniture > Shelving,Tribesigns,99.99 USD,,https://images.test/shelf-${index}.jpg,https://tribesigns.test/shelf-${index},https://www.awin1.com/cread.php?awinaffid=3018019&ued=shelf-${index},in_stock`);
+    const tribesignsFeed = [
+      "id,title,description,google_product_category,brand,price,sale_price,image_link,link,aw_deep_link,availability",
+      ...tribesignsRows
+    ].join("\n");
+    const tribesignsDefinition = feedDefinitions({AFFILIATE_FEED_TRIBESIGNS_US_URL:"https://productdata.awin.com/tribesigns-google.csv"})[0];
+    const tribesignsProducts = await require("../src/providers/affiliateFeed").searchProducts({
+      definition:{...tribesignsDefinition, format:"csv"},
+      market:{code:"us", currency:"USD"},
+      keywords:["executive desk"],
+      fetchImpl:async () => new Response(tribesignsFeed, {status:200, headers:{"content-type":"text/csv"}})
+    });
+    assert.strictEqual(tribesignsProducts[0].external_id, "desk-1", "Delia search did not reach a relevant Tribesigns product after the old 2,000-row limit");
+    assert.strictEqual(tribesignsProducts[0].current_price, 399.99, "Tribesigns sale price was not preferred");
+    assert.strictEqual(tribesignsProducts[0].original_price, 499.99, "Tribesigns regular price was not retained");
+    assert(tribesignsProducts[0].affiliate_url.includes("awinaffid=3018019"), "Tribesigns untracked merchant URL replaced the Awin deep link");
+    assert(!tribesignsProducts.some(product => product.external_id === "desk-oos"), "Delia search retained an unavailable Tribesigns offer");
 
     const scored = scoreOffers([...targetRecords, ...bestBuyRecords].map((item, index) => ({
       ...item,
