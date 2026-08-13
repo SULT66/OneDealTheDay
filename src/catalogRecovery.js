@@ -37,12 +37,14 @@ function recordConfigurationFailure(config, message) {
 
 function missingConfiguredProviders(config, marketCode) {
   const selectedMarket = config.marketConfig(marketCode);
-  const configured = providersForMarket(config, selectedMarket).map(provider => provider.id);
+  const configured = providersForMarket(config, selectedMarket);
   if (!configured.length) return [];
-  const attempted = new Set(db.prepare(
-    "SELECT DISTINCT provider_id FROM source_refresh_runs WHERE market=?"
-  ).all(marketCode).map(row => String(row.provider_id || "")));
-  return configured.filter(providerId => !attempted.has(providerId));
+  const catalogSources = new Set(db.prepare(
+    "SELECT DISTINCT LOWER(source) AS source FROM products WHERE market=? AND status='published'"
+  ).all(marketCode).map(row => String(row.source || "").toLowerCase()));
+  return configured
+    .filter(provider => !catalogSources.has(String(provider.source || "").toLowerCase()))
+    .map(provider => provider.id);
 }
 
 module.exports = async function recoverProductionCatalog(config) {
