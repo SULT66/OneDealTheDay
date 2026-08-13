@@ -474,6 +474,17 @@ assert(
 );
 assert(
   !matchesShoppingIntent(
+    {
+      title:"Faux Marble End Table, 2-Tier Round Sofa Bedside Table with Shelves",
+      category:"Furniture > End Tables",
+    },
+    "large sectional sofa under 1500",
+    "sofa",
+  ),
+  "An end or bedside table still matches a request for a sofa",
+);
+assert(
+  !matchesShoppingIntent(
     {title:"Queen platform bed frame", category:"Bedroom Furniture > Beds"},
     "queen mattress under 700",
     "mattress",
