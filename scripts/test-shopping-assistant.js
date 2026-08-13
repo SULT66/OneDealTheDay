@@ -95,6 +95,32 @@ db.prepare(
     .map(() => "?")
     .join(",")})`,
 ).run(...Object.values(irrelevantUndercoatProduct));
+const verifiedFeedDesk = {
+  ...product,
+  id: 3,
+  title: "Tribesigns 63 inch executive desk",
+  brand: "Tribesigns",
+  category: "Office Furniture > Desks",
+  source: "feed-tribesigns",
+  retailer_name: "Tribesigns",
+  current_price: 199.99,
+  original_price: 249.99,
+  rating: 0,
+  review_count: 0,
+  seller_rating: 0,
+  seller_feedback_count: 0,
+  image_url: "https://images.example.com/tribesigns-desk.jpg",
+  affiliate_url: "https://www.awin1.com/cread.php?awinaffid=3018019&ued=desk",
+  score: 7,
+  evidence_confidence: 10,
+};
+db.prepare(
+  `INSERT INTO products (${Object.keys(verifiedFeedDesk).join(",")}) VALUES (${Object.keys(
+    verifiedFeedDesk,
+  )
+    .map(() => "?")
+    .join(",")})`,
+).run(...Object.values(verifiedFeedDesk));
 db.prepare("INSERT INTO price_history VALUES (?,?,?,?)").run(
   1,
   89,
@@ -383,6 +409,22 @@ assert.strictEqual(
   "Qualified regional catalog result was not returned",
 );
 assert(matches[0].score >= 82, "Assistant exposed an unqualified public score");
+const feedMatches = searchCatalog(
+  db,
+  () => "source<>'demo'",
+  {
+    query: "Tribesigns executive desk",
+    category: "",
+    max_price: 500,
+    minimum_score: 82,
+    limit: 6,
+  },
+  "us",
+  "en",
+);
+assert.strictEqual(feedMatches.length, 1, "Delia hid a verified affiliate-feed product without review evidence");
+assert.strictEqual(feedMatches[0].retailer, "Tribesigns");
+assert.strictEqual(feedMatches[0].score, null, "A sparse affiliate product received a public OneDailyDrop Score");
 const samsungTvMatches = searchCatalog(
   db,
   sourceSql,
