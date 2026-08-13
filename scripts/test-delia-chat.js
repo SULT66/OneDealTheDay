@@ -49,7 +49,7 @@ for (const required of [
   "toggleSaved",
   "sendFeedback",
   "AbortController",
-  "REQUEST_TIMEOUT_MS = 33000",
+  "REQUEST_TIMEOUT_MS = 40000",
   "normalizeResponseBody",
   "localGreetingResponse",
   "recoverEmbeddedAnswer",

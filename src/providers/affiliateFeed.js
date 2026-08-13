@@ -3,6 +3,8 @@ const zlib = require("zlib");
 
 const MAX_FEED_BYTES = 30 * 1024 * 1024;
 const MAX_REDIRECTS = 3;
+const FEED_CACHE_TTL_MS = 10 * 60 * 1000;
+const feedProductCache = new Map();
 
 const FIELD_ALIASES = Object.freeze({
   id:["id", "sku", "product_id", "productid", "merchant_product_id", "aw_product_id", "item_id", "asin"],
@@ -334,14 +336,43 @@ function normalize(record, definition, market, index, map) {
 
 async function searchProducts({definition, market, keywords = [], fetchImpl = global.fetch}) {
   if (!definition?.markets?.includes(market?.code)) return [];
-  const map = Object.fromEntries(Object.entries(parseJson(definition.fieldMapJson, "Affiliate feed field map"))
-    .map(([key, value]) => [String(key).trim().toLowerCase(), String(value).trim().toLowerCase()]));
-  const downloaded = await download(definition, fetchImpl);
-  const records = parseRecords(downloaded, definition.format).map(normalizedRecord);
-  let products = records
-    .map((record, index) => normalize(record, definition, market, index, map))
-    .filter(product => product.title && product.image_url && product.affiliate_url && product.current_price > 0)
-    .filter(product => allowedByFeedPolicy(product, definition));
+  const useCache = fetchImpl === global.fetch;
+  const cacheKey = useCache
+    ? crypto.createHash("sha256").update([
+        definition.id,
+        market.code,
+        definition.url,
+        definition.format,
+        definition.fieldMapJson,
+        definition.headersJson,
+      ].join("|")).digest("hex")
+    : "";
+  const now = Date.now();
+  let productPromise = useCache && feedProductCache.get(cacheKey)?.expiresAt > now
+    ? feedProductCache.get(cacheKey).promise
+    : null;
+  if (!productPromise) {
+    productPromise = (async () => {
+      const map = Object.fromEntries(Object.entries(parseJson(definition.fieldMapJson, "Affiliate feed field map"))
+        .map(([key, value]) => [String(key).trim().toLowerCase(), String(value).trim().toLowerCase()]));
+      const downloaded = await download(definition, fetchImpl);
+      const records = parseRecords(downloaded, definition.format).map(normalizedRecord);
+      const loaded = records
+        .map((record, index) => normalize(record, definition, market, index, map))
+        .filter(product => product.title && product.image_url && product.affiliate_url && product.current_price > 0)
+        .filter(product => allowedByFeedPolicy(product, definition));
+      if (!loaded.length) throw new Error(`${definition.retailerName} feed returned no usable commissionable products`);
+      return loaded;
+    })();
+    if (useCache) {
+      feedProductCache.set(cacheKey, {
+        expiresAt: now + FEED_CACHE_TTL_MS,
+        promise: productPromise,
+      });
+      productPromise.catch(() => feedProductCache.delete(cacheKey));
+    }
+  }
+  let products = await productPromise;
   const tokens = searchTokens(keywords);
   if (tokens.length) {
     products = products
