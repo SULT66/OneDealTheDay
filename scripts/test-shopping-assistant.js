@@ -202,6 +202,31 @@ assert.strictEqual(
   true,
   "A complete AirPods Pro product was rejected as an accessory",
 );
+assert.strictEqual(
+  matchesShoppingIntent(
+    {
+      title: "120W Super Fast USB Type-C Phone Charger Cable with Display",
+      retailer: "eBay",
+      url: "https://www.ebay.com/itm/123456789",
+    },
+    "smartphones",
+  ),
+  false,
+  "A phone charger cable still passes as a smartphone",
+);
+assert.strictEqual(
+  matchesShoppingIntent(
+    {
+      title: "Samsung Galaxy S25 128GB Unlocked Smartphone",
+      brand: "Samsung",
+      retailer: "Best Buy",
+      url: "https://www.bestbuy.com/site/samsung-galaxy-s25/1234567.p",
+    },
+    "smartphones",
+  ),
+  true,
+  "A complete smartphone was rejected by the phone accessory guardrail",
+);
 assert.strictEqual(responseLanguage("Salam, qulaqcıq tap", "en"), "az");
 assert.strictEqual(responseLanguage("Find me good headphones", "ru"), "en");
 const winterFollowUpMission = mergeShoppingMission(
@@ -2382,8 +2407,19 @@ const client = {
       product_type: "sneakers",
       brands: ["nike"],
     }, "us"),
-    ["nike.com", "footlocker.com", "zappos.com"],
+    ["nike.com", "footlocker.com", "zappos.com", "dickssportinggoods.com", "finishline.com"],
     "Nike discovery did not fan out across the official and specialist stores",
+  );
+  assert.strictEqual(missionFromText("белый диван-кровать").product_type, "sofa");
+  assert.deepStrictEqual(
+    retailerDiscoveryHosts({ product_type: "sofa" }, "us"),
+    ["wayfair.com", "ikea.com", "ashleyfurniture.com", "walmart.com", "target.com"],
+    "US furniture discovery did not use regional furniture retailers",
+  );
+  assert.deepStrictEqual(
+    retailerDiscoveryHosts({ product_type: "sofa" }, "ca"),
+    ["wayfair.ca", "ikea.com", "thebrick.com", "leons.ca", "walmart.ca"],
+    "Canada furniture discovery did not use Canadian furniture retailers",
   );
   const multiStoreCalls = [];
   const multiStoreOffers = {
@@ -2414,7 +2450,17 @@ const client = {
     sourceSql,
     market: (code) => ({ code, currency: "USD" }),
     storeDiscoveryEnabled: true,
-    retailerSearch: async () => [],
+    retailerSearch: async () => [{
+      title: "Nike Revolution 8 Bright Red Men's Running Shoes",
+      brand: "Nike",
+      retailer_name: "eBay",
+      current_price: 89.99,
+      currency: "USD",
+      affiliate_url: "https://www.ebay.com/itm/9988776655",
+      image_url: "https://i.ebayimg.com/images/nike-revolution-8.jpg",
+      availability: "In stock",
+      external_id: "9988776655",
+    }],
     client: {
       responses: {
         create: async (request) => {
@@ -2494,13 +2540,13 @@ const client = {
     multiStoreCalls.filter((request) =>
       request.text?.format?.name === "retailer_product_discovery",
     ).length,
-    3,
-    "The sparse result did not trigger three store-specific searches",
+    5,
+    "The request did not trigger five store-specific searches",
   );
   assert.deepStrictEqual(
     multiStoreResult.recommendations.map((offer) => offer.retailer).sort(),
     ["Foot Locker", "Nike", "Zappos"],
-    "Store-specific search did not return retailer-diverse product cards",
+    "A valid eBay result displaced retailer-diverse direct-store cards",
   );
   const azGreeting = await offlineGreetingAssistant.respond({
     message: "Salam, necəsiniz?",
