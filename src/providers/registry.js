@@ -64,7 +64,7 @@ function feedProviders(config) {
     source:definition.source,
     name:`${definition.retailerName} ${definition.network} feed`,
     markets:definition.markets,
-    search:({market}) => affiliateFeed.searchProducts({definition, market})
+    search:({market, keywords}) => affiliateFeed.searchProducts({definition, market, keywords})
   }));
 }
 

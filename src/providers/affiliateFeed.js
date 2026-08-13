@@ -249,6 +249,32 @@ function allowedByFeedPolicy(product, definition) {
   return !excludedTerms.some(term => title.includes(term));
 }
 
+function searchTokens(keywords) {
+  const values = Array.isArray(keywords) ? keywords : [keywords];
+  return [...new Set(values
+    .flatMap(value => String(value || "")
+      .normalize("NFKD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .match(/[\p{L}\p{N}]+/gu) || [])
+    .filter(token => token.length >= 2))];
+}
+
+function searchRelevance(product, tokens) {
+  if (!tokens.length) return 0;
+  const searchable = value => String(value || "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  const title = searchable(`${product.title || ""} ${product.brand || ""} ${product.model_number || ""}`);
+  const category = searchable(product.category);
+  const description = searchable(product.description);
+  return tokens.reduce((score, token) => score +
+    (title.includes(token) ? 4 : 0) +
+    (category.includes(token) ? 2 : 0) +
+    (description.includes(token) ? 1 : 0), 0);
+}
+
 function normalize(record, definition, market, index, map) {
   const source = `feed-${definition.retailerId}`;
   const title = compactText(field(record, map, "title"));
@@ -281,7 +307,10 @@ function normalize(record, definition, market, index, map) {
     manufacturer:compactText(field(record, map, "manufacturer")),
     title,
     category:compactText(field(record, map, "category")) || "Featured products",
-    description:compactText(field(record, map, "description")),
+    // Merchant feeds sometimes embed complete sales-page CSS and JavaScript in
+    // this field. Keep enough copy for search/editorial context without
+    // turning each catalog row into a copy of the storefront page.
+    description:compactText(field(record, map, "description")).slice(0, 4000),
     rating:numberValue(field(record, map, "rating")) || 0,
     review_count:Math.max(0, Math.round(numberValue(field(record, map, "review_count")) || 0)),
     current_price:currentPrice,
@@ -303,17 +332,26 @@ function normalize(record, definition, market, index, map) {
   };
 }
 
-async function searchProducts({definition, market, fetchImpl = global.fetch}) {
+async function searchProducts({definition, market, keywords = [], fetchImpl = global.fetch}) {
   if (!definition?.markets?.includes(market?.code)) return [];
   const map = Object.fromEntries(Object.entries(parseJson(definition.fieldMapJson, "Affiliate feed field map"))
     .map(([key, value]) => [String(key).trim().toLowerCase(), String(value).trim().toLowerCase()]));
   const downloaded = await download(definition, fetchImpl);
   const records = parseRecords(downloaded, definition.format).map(normalizedRecord);
-  const products = records
+  let products = records
     .map((record, index) => normalize(record, definition, market, index, map))
     .filter(product => product.title && product.image_url && product.affiliate_url && product.current_price > 0)
-    .filter(product => allowedByFeedPolicy(product, definition))
-    .slice(0, 2000);
+    .filter(product => allowedByFeedPolicy(product, definition));
+  const tokens = searchTokens(keywords);
+  if (tokens.length) {
+    products = products
+      .filter(product => !/\b(out of stock|unavailable|sold out|expired|discontinued)\b/i.test(String(product.availability || "")))
+      .map(product => ({product, relevance:searchRelevance(product, tokens)}))
+      .filter(entry => entry.relevance > 0)
+      .sort((left, right) => right.relevance - left.relevance || left.product.source_rank - right.product.source_rank)
+      .map(entry => entry.product);
+  }
+  products = products.slice(0, 2000);
   if (!products.length) throw new Error(`${definition.retailerName} feed returned no usable commissionable products`);
   return products;
 }
@@ -325,5 +363,7 @@ module.exports = {
   parseDelimited,
   parseRecords,
   safeFeedUrl,
+  searchRelevance,
+  searchTokens,
   searchProducts
 };

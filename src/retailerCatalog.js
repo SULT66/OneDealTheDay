@@ -9,6 +9,15 @@ const RETAILERS = Object.freeze([
   {id:"wayfair", name:"Wayfair", network:"CJ Affiliate", markets:["us", "ca", "uk", "de"]},
   {id:"aliexpress", name:"AliExpress", network:"AliExpress Portals", markets:["us", "ca", "uk", "fr", "de"]},
   {
+    id:"tribesigns",
+    name:"Tribesigns",
+    network:"Awin",
+    markets:["us"],
+    feedPolicy:{
+      excludeTitleTerms:["not sold separately", "not for sale", "non-delivery"]
+    }
+  },
+  {
     id:"mooncool",
     name:"Mooncool",
     network:"Awin",

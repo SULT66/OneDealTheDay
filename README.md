@@ -34,7 +34,7 @@ cross-store comparisons, while the daily Top 10 contains unique products.
 
 Native adapters cover eBay, Amazon and Walmart. Approved affiliate feeds cover
 Walmart, Target, Best Buy, Home Depot, Lowe's, Wayfair, AliExpress, Currys,
-Mooncool, AO.com, Fnac, Cdiscount, Darty, MediaMarkt, Saturn, OTTO, ALTERNATE and Samsung
+Tribesigns, Mooncool, AO.com, Fnac, Cdiscount, Darty, MediaMarkt, Saturn, OTTO, ALTERNATE and Samsung
 across the US, Canada, UK, France and Germany. Feeds may be JSON, CSV, TSV, XML
 or gzip-compressed and are enabled only by their encrypted `AFFILIATE_FEED_*_URL`
 setting. No retailer is scraped.
@@ -52,19 +52,22 @@ schema. Example: `{"title":"merchant_product_name","affiliate_url":"aw_deep_link
 The optional `*_HEADERS_JSON` setting supplies feed authorization headers and
 must be stored only in the hosting provider's encrypted app settings.
 
-### Mooncool through Awin
+### Tribesigns and Mooncool through Awin
 
-Mooncool is a built-in Awin retailer for the US and Canada. In Awin, create a
-separate market/currency feed for each storefront and include at least
-`aw_product_id`, `product_name`, `description`, `merchant_category`,
-`brand_name`, `search_price`, `rrp_price`, `currency`, `merchant_image_url`,
-`aw_deep_link` and `in_stock`. Store the signed URLs only as:
+Tribesigns (US) and Mooncool (US and Canada) are built-in Awin retailers. In
+Awin, create a separate market/currency feed for each storefront. Google-format
+feeds should include at least `id`, `title`, `description`,
+`google_product_category`, `brand`, `price`, `sale_price`, `image_link`,
+`aw_deep_link` and `availability`. Store the signed URLs only as:
 
+- `AFFILIATE_FEED_TRIBESIGNS_US_URL`
 - `AFFILIATE_FEED_MOONCOOL_US_URL`
 - `AFFILIATE_FEED_MOONCOOL_CA_URL`
 
 The importer accepts Awin comma-, tab- or pipe-delimited CSV and gzip responses.
-It uses `aw_deep_link`, not the untracked merchant URL, for outbound clicks.
+It uses `sale_price` before `price` and `aw_deep_link` before the untracked
+merchant URL. Large feeds are filtered against Delia's current shopping query
+before the per-source limit is applied.
 
 The ranking compares landed price, product evidence, seller reliability, demand signals, delivery and returns. A public score appears only after an offer clears the editorial gate; no-return listings, unknown delivery costs and disproportionate shipping charges are excluded from the Daily Drop. Previous products are archived and the best qualified offers are published.
 
