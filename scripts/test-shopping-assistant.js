@@ -2542,6 +2542,9 @@ const client = {
     language: "en",
   });
   assert.strictEqual(timedOut.timed_out, true);
+  assert.strictEqual(timedOut.shopping_mission.product_type, "phone");
+  assert.strictEqual(timedOut.shopping_mission.budget_max, 800);
+  assert(timedOut.resolved_request.includes("under 800"));
   assert(
     timedOut.message.includes("took too long"),
     "A slow live search did not return a bounded shopper-facing timeout",

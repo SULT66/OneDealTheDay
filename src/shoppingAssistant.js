@@ -32,7 +32,7 @@ const INTENT_STOP_WORDS = new Set(
     .map((token) => normalizeTokenText(token)),
 );
 const INTENT_CONSTRAINT_WORDS = new Set(
-  `available availability best better budget buy buying cheap cheaper cheapest condition current deal deals exchange expensive latest listing listings new newest open box premium refurbished renewed retailer retailers seller sellers shipping shop shopping store stores trade used warranty without
+  `available availability best better budget buy buying cheap cheaper cheapest condition current deal deals exchange expensive fits latest listing listings max maximum new newest open box premium refurbished renewed retailer retailers seller sellers setup shipping shop shopping store stores trade used warranty without
   бюджет купить дешевле доставка магазин магазины новый новые обмен обмена обменом продавец продавцы состояние товар цена цены
   comprar condición nuevo reacondicionado tienda tiendas usado
   acheter boutique boutiques état neuf occasion reconditionné
@@ -1058,6 +1058,7 @@ function missionFromText(value) {
     text.match(/([\d]{1,2}(?:[.,]5)?)\s*(?:размер|size|taille|talla|größe)(?!\p{L})/iu);
   const queryTerms = tokens
     .filter((token) => /^[a-z0-9-]+$/i.test(token))
+    .filter((token) => !INTENT_CONSTRAINT_WORDS.has(token))
     .filter((token) => !brands.includes(token))
     .filter((token) => !PRODUCT_CATEGORY_BY_ALIAS.has(token))
     .filter((token) => !productType.split(/\s+/).includes(token))
@@ -2015,7 +2016,15 @@ function responseCopy(message, language) {
   return RESPONSE_COPY[selected] || RESPONSE_COPY.en;
 }
 
-function timeoutResponse(message, language, catalogProducts, model, selectedMarket) {
+function timeoutResponse(
+  message,
+  language,
+  catalogProducts,
+  model,
+  selectedMarket,
+  shoppingMission = null,
+  resolvedRequest = "",
+) {
   const shopperLanguage = responseLanguage(message, language);
   return {
     message: responseCopy(message, language).timeout,
@@ -2027,6 +2036,7 @@ function timeoutResponse(message, language, catalogProducts, model, selectedMark
     products: catalogProducts.slice(0, 6),
     sources: [],
     clarifying_questions: [],
+    clarification_prompts: [],
     needs_clarification: false,
     timed_out: true,
     model,
@@ -2038,6 +2048,8 @@ function timeoutResponse(message, language, catalogProducts, model, selectedMark
       : "",
     currency: selectedMarket?.currency || "",
     conversation_title: "",
+    resolved_request: clean(resolvedRequest),
+    shopping_mission: normalizeShoppingMission(shoppingMission),
     result_state: "no_match",
   };
 }
@@ -4036,6 +4048,8 @@ function createShoppingAssistant({
         catalogProducts,
         model,
         selectedMarket,
+        activeMission,
+        resolvedRequest,
       );
       const assistantRequest = (images = true) => ({
         model,

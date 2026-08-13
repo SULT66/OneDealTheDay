@@ -19,7 +19,12 @@ const { presentProduct } = require("./productPresentation");
 const { deduplicationKeys, isDailyPickEligible } = require("./ranker");
 const { methodology, methodologyMain } = require("./methodology");
 const { createEditorialBrief } = require("./editorialBrief");
-const { createShoppingAssistant, timeoutResponse } = require("./shoppingAssistant");
+const {
+  createShoppingAssistant,
+  mergeShoppingMission,
+  shoppingMissionText,
+  timeoutResponse,
+} = require("./shoppingAssistant");
 const renderShoppingAssistantPanel = require("./shoppingAssistantPanel");
 const { passwordResetEmail, subscriptionEmail, clubWaitlistEmail } = require("./mailer");
 const {
@@ -216,12 +221,20 @@ app.post("/api/shopping-assistant", shoppingAssistantRateLimit, async (req, res)
     });
     const hardTimeoutTask = new Promise(resolve => {
       hardTimeoutTimer = setTimeout(() => {
+        const timeoutMission = mergeShoppingMission(
+          req.body?.shopping_mission,
+          {},
+          req.body?.message,
+          false,
+        );
         resolve(timeoutResponse(
           req.body?.message,
           language,
           [],
           shoppingAssistant.model,
-          selectedMarket
+          selectedMarket,
+          timeoutMission,
+          shoppingMissionText(timeoutMission, req.body?.message),
         ));
         requestController.abort();
       }, SHOPPING_ASSISTANT_HARD_TIMEOUT_MS);
