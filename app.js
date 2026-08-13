@@ -123,6 +123,10 @@ function expressWithHomepage(...args) {
     if (!config.isProduction) return next();
     const selectedMarket = normalizeMarket(req.query.market) || marketFromIp(req).code;
     const language = resolveLanguage(req, res, selectedMarket);
+    const requestedLimit = Number(req.query.limit);
+    const responseLimit = Number.isFinite(requestedLimit) && requestedLimit > 0
+      ? Math.max(10, Math.min(1000, Math.round(requestedLimit)))
+      : Number.MAX_SAFE_INTEGER;
     const sourceCondition = sourceSql();
     const daily = db.prepare(`
       SELECT p.*,d.rank AS daily_rank,d.selection_reason AS daily_selection_reason
@@ -141,7 +145,7 @@ function expressWithHomepage(...args) {
     const products = uniqueProductsInOrder([...daily.map(product => ({
       ...product,
       selection_reason: product.daily_selection_reason || product.selection_reason
-    })), ...catalog]);
+    })), ...catalog]).slice(0, responseLimit);
     const presented = products
       .map(product => presentProduct(localizeProduct(product, language), language));
     return res.json(presented);
