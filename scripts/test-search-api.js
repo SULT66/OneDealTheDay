@@ -86,12 +86,21 @@ const repeatB = searchCatalogProducts([...rows].reverse(), parseSearchOptions({q
 assert.deepStrictEqual(repeatA.products.map(item => item.id), repeatB.products.map(item => item.id), "Identical search inputs produced order-dependent results");
 assert(repeatA.facets.merchants.some(item => item.value === "Tribesigns" && item.count === 2), "Merchant facets are missing deterministic counts");
 
+const availabilityRows = [...rows, product(7, {title:"Unavailable product", availability:"Out of stock"})];
+const availableOnly = searchCatalogProducts(availabilityRows, parseSearchOptions({availability:"available"}));
+assert(!availableOnly.products.some(item => item.id === 7), "Default availability leaked an explicitly unavailable offer");
+
 const appSource = fs.readFileSync(path.join(__dirname, "..", "app.js"), "utf8");
+const serverSource = fs.readFileSync(path.join(__dirname, "..", "src", "server.js"), "utf8");
 const workflowSource = fs.readFileSync(path.join(__dirname, "..", ".github", "workflows", "production-verify.yml"), "utf8");
 assert(appSource.includes('app.get("/api/search"'), "The public Search API route is not registered");
 assert(appSource.includes("pagination:result.pagination") && appSource.includes("facets:result.facets"), "The Search API contract is missing pagination or facets");
 assert(appSource.includes("X-Robots-Tag") && appSource.includes("noindex, nofollow"), "Search API responses are not protected from indexing");
 assert(workflowSource.includes("require('./src/release').RELEASE_ID"), "Production verification is pinned to a stale release string");
 assert(workflowSource.includes("/api/search?market=us"), "Production verification does not exercise the Search API");
+assert(serverSource.includes("data-results-ui=\"facets-sorting-badges-v1\""), "Day 10 results UI marker is missing");
+assert(serverSource.includes("searchCatalogProducts(rows, options)"), "Results UI does not share the deterministic Search API engine");
+assert(serverSource.includes("data-results-filters") && serverSource.includes("search-badge-match"), "Facets or transparent result badges are missing");
+assert(workflowSource.includes("/us/search?q=office") && workflowSource.includes("facets-sorting-badges-v1"), "Production verification does not exercise the Day 10 results UI");
 
-console.log("Day 8 deterministic Search API validation passed.");
+console.log("Day 8 Search API and Day 10 result constraints passed.");
