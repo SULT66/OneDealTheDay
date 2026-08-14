@@ -120,12 +120,35 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS price_history(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     product_id INTEGER NOT NULL,
+    offer_id INTEGER,
+    ingestion_run_id INTEGER,
     price REAL NOT NULL,
     original_price REAL,
+    price_minor INTEGER,
+    reference_price_minor INTEGER,
     currency TEXT NOT NULL DEFAULT 'USD',
     source TEXT,
+    availability TEXT,
+    shipping_minor INTEGER,
+    source_updated_at TEXT,
+    our_observed_at TEXT,
     observed_at TEXT NOT NULL,
-    FOREIGN KEY(product_id) REFERENCES products(id)
+    FOREIGN KEY(product_id) REFERENCES products(id),
+    FOREIGN KEY(offer_id) REFERENCES products(id),
+    FOREIGN KEY(ingestion_run_id) REFERENCES refresh_runs(id)
+  );
+  CREATE TABLE IF NOT EXISTS price_snapshot_quarantine(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ingestion_run_id INTEGER NOT NULL,
+    external_id TEXT NOT NULL DEFAULT '',
+    source TEXT NOT NULL DEFAULT '',
+    market TEXT NOT NULL DEFAULT '',
+    reason_code TEXT NOT NULL,
+    reason_detail TEXT NOT NULL DEFAULT '',
+    payload_json TEXT NOT NULL DEFAULT '{}',
+    quarantined_at TEXT NOT NULL,
+    UNIQUE(ingestion_run_id,external_id,reason_code),
+    FOREIGN KEY(ingestion_run_id) REFERENCES refresh_runs(id)
   );
   CREATE TABLE IF NOT EXISTS subscribers(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -233,6 +256,32 @@ for (const [column, definition] of [
 const dailyDropColumns = new Set(db.prepare("PRAGMA table_info(daily_drops)").all().map(column => column.name));
 if (!dailyDropColumns.has("score_model")) db.exec("ALTER TABLE daily_drops ADD COLUMN score_model TEXT");
 
+const priceHistoryColumns = new Set(db.prepare("PRAGMA table_info(price_history)").all().map(column => column.name));
+for (const [column, type] of [
+  ["offer_id", "INTEGER"],
+  ["ingestion_run_id", "INTEGER"],
+  ["price_minor", "INTEGER"],
+  ["reference_price_minor", "INTEGER"],
+  ["availability", "TEXT"],
+  ["shipping_minor", "INTEGER"],
+  ["source_updated_at", "TEXT"],
+  ["our_observed_at", "TEXT"]
+]) {
+  if (!priceHistoryColumns.has(column)) db.exec(`ALTER TABLE price_history ADD COLUMN ${column} ${type}`);
+}
+
+db.exec(`
+  UPDATE price_history
+  SET offer_id=COALESCE(offer_id,product_id),
+      price_minor=COALESCE(price_minor,CAST(ROUND(price * 100) AS INTEGER)),
+      reference_price_minor=CASE
+        WHEN reference_price_minor IS NOT NULL THEN reference_price_minor
+        WHEN original_price IS NOT NULL AND original_price>0 THEN CAST(ROUND(original_price * 100) AS INTEGER)
+        ELSE NULL
+      END,
+      our_observed_at=COALESCE(NULLIF(our_observed_at,''),observed_at);
+`);
+
 const productColumns = new Set(db.prepare("PRAGMA table_info(products)").all().map(column => column.name));
 for (const [column, type] of [
   ["seller_rating", "REAL"],
@@ -318,6 +367,9 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_products_brand_score ON products(brand_slug, score DESC);
   CREATE INDEX IF NOT EXISTS idx_products_brand_name ON products(brand);
   CREATE INDEX IF NOT EXISTS idx_price_history_product_date ON price_history(product_id, observed_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_price_history_offer_date ON price_history(offer_id, our_observed_at DESC);
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_price_history_offer_run ON price_history(offer_id, ingestion_run_id) WHERE ingestion_run_id IS NOT NULL;
+  CREATE INDEX IF NOT EXISTS idx_snapshot_quarantine_run ON price_snapshot_quarantine(ingestion_run_id, reason_code);
   CREATE INDEX IF NOT EXISTS idx_subscribers_status ON subscribers(status, created_at DESC);
   CREATE INDEX IF NOT EXISTS idx_user_sessions_expiry ON user_sessions(expires_at);
   CREATE INDEX IF NOT EXISTS idx_password_reset_user ON password_reset_tokens(user_id, expires_at DESC);
@@ -345,9 +397,15 @@ db.transaction(() => {
 // Seed one observation for existing products so price intelligence works
 // immediately after deployment without discarding any catalog data.
 db.exec(`
-  INSERT INTO price_history(product_id, price, original_price, currency, source, observed_at)
-  SELECT p.id, p.current_price, p.original_price, COALESCE(NULLIF(p.currency,''),'USD'), p.source,
-         COALESCE(NULLIF(p.updated_at,''), datetime('now'))
+  INSERT INTO price_history(
+    product_id,offer_id,price,original_price,price_minor,reference_price_minor,currency,source,our_observed_at,observed_at
+  )
+  SELECT p.id,p.id,p.current_price,p.original_price,
+         CAST(ROUND(p.current_price * 100) AS INTEGER),
+         CASE WHEN p.original_price IS NOT NULL AND p.original_price>0 THEN CAST(ROUND(p.original_price * 100) AS INTEGER) ELSE NULL END,
+         COALESCE(NULLIF(p.currency,''),'USD'),p.source,
+         COALESCE(NULLIF(p.updated_at,''),datetime('now')),
+         COALESCE(NULLIF(p.updated_at,''),datetime('now'))
   FROM products p
   WHERE p.current_price IS NOT NULL
     AND p.current_price > 0

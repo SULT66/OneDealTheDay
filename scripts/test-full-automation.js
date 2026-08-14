@@ -287,6 +287,10 @@ const config = {
     assert.strictEqual(result.sources.filter(source => source.status === "success").length, 2);
     assert.strictEqual(result.sources.filter(source => source.status === "failed").length, 1);
     assert.strictEqual(db.prepare("SELECT COUNT(*) n FROM products").get().n, 12, "All valid store offers were not persisted");
+    assert.deepStrictEqual(result.snapshots, {inserted:12, duplicate:0, quarantined:0, duplicateQuarantine:0});
+    assert.strictEqual(db.prepare("SELECT COUNT(*) n FROM price_history WHERE ingestion_run_id IS NOT NULL").get().n, 12, "The refresh did not append one snapshot per offer");
+    assert.strictEqual(db.prepare("SELECT COUNT(*) n FROM price_history WHERE price_minor IS NULL OR our_observed_at IS NULL").get().n, 0, "Snapshot contract fields were not populated");
+    assert.strictEqual(db.prepare("SELECT COUNT(*) n FROM price_snapshot_quarantine").get().n, 0, "Valid offers were quarantined");
     assert.strictEqual(db.prepare("SELECT COUNT(*) n FROM products WHERE status='published' AND score<60").get().n, 1, "A valid catalog offer disappeared only because it missed the Daily Drop threshold");
     assert.strictEqual(db.prepare("SELECT COUNT(*) n FROM products WHERE product_key=?").get(`gtin:${targetRecords[0].gtin}`).n, 2, "Matching cross-store offers were not retained");
     assert.strictEqual(db.prepare("SELECT COUNT(*) n FROM daily_drops").get().n, 10);
@@ -317,6 +321,31 @@ const config = {
     assert(!/does.*apply/i.test(db.prepare("SELECT product_key FROM products WHERE id=?").get(placeholderProduct.id).product_key), "Placeholder ID survived catalog recalculation");
     assert.strictEqual(db.prepare("SELECT status FROM products WHERE id=?").get(unavailableProduct.id).status, "archived", "Unavailable product remained public");
     assert(db.prepare("SELECT COUNT(*) n FROM daily_drops WHERE market='us'").get().n <= 10, "Daily selection was not rebuilt");
+    const committedSnapshots = db.prepare("SELECT COUNT(*) n FROM price_history WHERE ingestion_run_id IS NOT NULL").get().n;
+    const committedCatalog = db.prepare("SELECT COUNT(*) n FROM products").get().n;
+    db.exec(`
+      CREATE TRIGGER simulate_snapshot_transaction_failure
+      BEFORE UPDATE ON products
+      BEGIN
+        SELECT RAISE(ABORT, 'simulated snapshot transaction failure');
+      END;
+    `);
+    await assert.rejects(refreshMarket(config, "us"), /simulated snapshot transaction failure/);
+    db.exec("DROP TRIGGER simulate_snapshot_transaction_failure");
+    assert.strictEqual(db.prepare("SELECT COUNT(*) n FROM products").get().n, committedCatalog, "A failed run changed the committed catalog");
+    assert.strictEqual(db.prepare("SELECT COUNT(*) n FROM price_history WHERE ingestion_run_id IS NOT NULL").get().n, committedSnapshots, "A failed run changed committed snapshot history");
+    const secondRun = await refreshMarket(config, "us");
+    assert.deepStrictEqual(secondRun.snapshots, {inserted:12, duplicate:0, quarantined:0, duplicateQuarantine:0});
+    assert.strictEqual(db.prepare("SELECT COUNT(*) n FROM price_history WHERE ingestion_run_id IS NOT NULL").get().n, 24, "An unchanged price was not appended for the next ingestion run");
+    assert.strictEqual(db.prepare(`
+      SELECT COUNT(*) n FROM (
+        SELECT offer_id,ingestion_run_id,COUNT(*) copies
+        FROM price_history
+        WHERE ingestion_run_id IS NOT NULL
+        GROUP BY offer_id,ingestion_run_id
+        HAVING copies>1
+      )
+    `).get().n, 0, "A run created duplicate offer snapshots");
     console.log("Full multi-retailer automation validation passed.");
   } finally {
     global.fetch = originalFetch;
