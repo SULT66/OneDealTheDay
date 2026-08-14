@@ -15,6 +15,8 @@ const { sourceSql, isPublicProduct } = require("./src/publicCatalog");
 const { enabledProviders } = require("./src/providers/registry");
 const { coverage: retailerCoverage } = require("./src/retailerCatalog");
 const { recalculateCatalog } = require("./src/catalogRecalculation");
+const { TAXONOMY_VERSION } = require("./src/catalogTaxonomy");
+const { RELEASE_ID } = require("./src/release");
 const { deduplicationKeys } = require("./src/ranker");
 const createExpressApp = express;
 const CANONICAL_HOST = "www.onedailydrop.com";
@@ -61,6 +63,8 @@ function catalogStatus(marketCode = "") {
     ? db.prepare("SELECT provider,market,started_at,finished_at,found_count,published_count,status,message FROM refresh_runs WHERE market=? ORDER BY id DESC LIMIT 1").get(marketCode) || null
     : db.prepare("SELECT provider,market,started_at,finished_at,found_count,published_count,status,message FROM refresh_runs ORDER BY id DESC LIMIT 1").get() || null;
   return {
+    releaseId: RELEASE_ID,
+    taxonomyVersion: TAXONOMY_VERSION,
     siteMode: config.siteMode,
     provider: config.provider,
     requestedProvider: config.requestedProvider,

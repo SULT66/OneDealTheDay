@@ -189,6 +189,9 @@ async function run() {
   });
   assert(azureApi.status === 200, "Azure API health endpoints must remain available to workflows");
   assert(azureApi.headers.get("x-robots-tag") === "noindex, nofollow", "Catalog status endpoint must not be indexed");
+  const azureStatus = await azureApi.json();
+  assert(azureStatus.releaseId === "2026-08-14-day7-validation-fix-v1", "Production release marker is missing");
+  assert(azureStatus.taxonomyVersion === "catalog-taxonomy-v1", "Production taxonomy marker is missing");
 
   const trailingSlash = await get("/us/?ref=test");
   assert(trailingSlash.status === 301, "Trailing-slash duplicate must redirect permanently");
