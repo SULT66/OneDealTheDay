@@ -666,7 +666,7 @@ const whyPicked = (product, language = "en") => {
 };
 const searchAliases = {cat:["cat","cats","pet","pets"],cats:["cat","cats","pet","pets"],dog:["dog","dogs","pet","pets"],dogs:["dog","dogs","pet","pets"],phone:["phone","phones","smartphone","smartphones","mobile"],tv:["tv","television","televisions"],car:["car","cars","automotive","auto"]};
 const matchesSearch = (product, terms) => {
-  const haystack = `${product.title || ""} ${product.description || ""} ${product.category || ""} ${product.brand || ""}`.toLowerCase();
+  const haystack = `${product.title || ""} ${product.description || ""} ${product.category || ""} ${product.brand || ""} ${product.retailer_name || ""} ${product.source || ""}`.toLowerCase();
   return terms.every(term => (searchAliases[term] || [term, term.endsWith("s") ? term.slice(0,-1) : `${term}s`]).some(candidate => haystack.includes(candidate)));
 };
 const trackingAttributes = (product, sourcePage, placement) => `data-track-product="${Number(product.id)}" data-track-source="${normalizeSourcePage(sourcePage)}" data-track-placement="${normalizePlacement(placement)}" data-track-action="view_details"`;
