@@ -1,4 +1,6 @@
 const { rankingLayers } = require("./ranker");
+const { canonicalCategory } = require("./catalogTaxonomy");
+const { capabilityCoverage } = require("./sourceCapabilities");
 
 const DEFAULT_MARKETS = ["us", "ca", "uk", "fr", "de"];
 const DEFAULT_MERCHANT_PROFILES = [
@@ -54,7 +56,7 @@ function merchantInvarianceAudit(products, options = {}) {
     maximumDelta = Math.max(maximumDelta, delta);
     if (delta > tolerance) failures.push({
       market:clean(product.market).toLowerCase(),
-      category:clean(product.category),
+      category:canonicalCategory(product),
       product:clean(product.title),
       delta:round(delta)
     });
@@ -98,11 +100,12 @@ function rankingValidationReport(products, options = {}) {
     const topRows = marketRows.slice(0, topK);
     const topIds = new Set(topRows);
     const merchantGroups = groupBy(marketRows, merchantName);
-    const categoryGroups = groupBy(marketRows, product => clean(product.category) || "Uncategorized");
+    const categoryGroups = groupBy(marketRows, product => canonicalCategory(product));
     const merchants = [...merchantGroups.entries()].map(([merchant, merchantRows]) => ({
       merchant,
       catalog_share:share(merchantRows.length, marketRows.length),
       top_share:share(merchantRows.filter(product => topIds.has(product)).length, topRows.length),
+      capability_coverage:capabilityCoverage(merchantRows),
       ...sliceMetrics(merchantRows, topIds)
     })).sort((left, right) => right.products - left.products || left.merchant.localeCompare(right.merchant));
     const categories = [...categoryGroups.entries()].map(([category, categoryRows]) => {
@@ -123,8 +126,10 @@ function rankingValidationReport(products, options = {}) {
       };
     }).sort((left, right) => right.products - left.products || left.category.localeCompare(right.category));
     const crossMerchantCategories = categories.filter(category => category.merchant_count >= 2).length;
-    if (marketRows.length && crossMerchantCategories === 0) {
+    if (merchantGroups.size >= 2 && crossMerchantCategories === 0) {
       issues.push({severity:"warning", code:"no_cross_merchant_category", market});
+    } else if (marketRows.length && merchantGroups.size === 1) {
+      issues.push({severity:"coverage", code:"single_merchant_market", market});
     }
     return {
       market,
@@ -150,10 +155,11 @@ function rankingValidationReport(products, options = {}) {
       products:rows.length,
       markets_with_products:markets.filter(market => market.products > 0).length,
       merchants:new Set(rows.map(merchantName)).size,
-      categories:new Set(rows.map(product => key(product.category))).size,
+      categories:new Set(rows.map(product => key(canonicalCategory(product)))).size,
       complete_ranking_rows:rows.filter(product => requiredScores.every(field => product[field] != null && Number.isFinite(Number(product[field])))).length,
       errors:errors.length,
-      warnings:warnings.length
+      warnings:warnings.length,
+      coverage_gaps:issues.filter(issue => issue.severity === "coverage").length
     },
     invariance,
     markets,

@@ -112,7 +112,7 @@ function textMatchScore(product, query, intent = {}) {
   const fields = {
     title:normalizedTitle(product.title),
     brand:normalizedTitle(product.brand),
-    category:normalizedTitle(product.category),
+    category:normalizedTitle(product.normalized_category || product.category),
     description:normalizedTitle(product.description)
   };
   let relevance = terms.length
@@ -256,7 +256,7 @@ function isEligible(product, options = {}) {
   if (options.minimumPrice != null && number(options.minimumPrice) > 0 && totalPrice < number(options.minimumPrice)) return false;
   const intent = options.intent && typeof options.intent === "object" ? options.intent : {};
   const requestedCategory = normalizedTitle(intent.category || "");
-  const productCategory = normalizedTitle(product.category || "");
+  const productCategory = normalizedTitle(product.normalized_category || product.category || "");
   if (requestedCategory && !productCategory.includes(requestedCategory) && !requestedCategory.includes(productCategory)) return false;
   const requestedBrand = normalizedTitle(intent.brand || "");
   if (requestedBrand && normalizedTitle(product.brand || "") !== requestedBrand) return false;

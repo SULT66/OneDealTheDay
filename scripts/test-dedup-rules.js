@@ -30,13 +30,13 @@ const sourceVariantA = {
   retailer_name:"Store A",
   external_id:"variant-111",
   title:"Modern Office Desk Black",
-  retailer_shop_url:productUrlA
+  product_url:productUrlA
 };
 const sourceVariantB = {
   ...sourceVariantA,
   external_id:"variant-222",
   title:"Modern Office Desk White",
-  retailer_shop_url:productUrlB
+  product_url:productUrlB
 };
 assert.strictEqual(sourceGroupKey(sourceVariantA), sourceGroupKey(sourceVariantB));
 assert.notStrictEqual(sourceVariantKey(sourceVariantA), sourceVariantKey(sourceVariantB));
@@ -50,8 +50,8 @@ const otherMerchant = {
 };
 assert.strictEqual(selectUniqueProducts([sourceVariantA, otherMerchant]).length, 2, "Merchant URL grouping leaked across sources");
 
-const explicitGroupA = {...sourceVariantA, retailer_shop_url:"", source_group_key:"desk-family"};
-const explicitGroupB = {...otherMerchant, retailer_shop_url:"", source_group_key:"desk-family"};
+const explicitGroupA = {...sourceVariantA, product_url:"", source_group_key:"desk-family"};
+const explicitGroupB = {...otherMerchant, product_url:"", source_group_key:"desk-family"};
 assert.notStrictEqual(sourceGroupKey(explicitGroupA), sourceGroupKey(explicitGroupB), "Unscoped source-group IDs leaked across merchants");
 const normalizedExplicitGroup = normalizeProductIdentity(explicitGroupA);
 assert.strictEqual(
@@ -122,8 +122,20 @@ const kingKoilVariants = Array.from({length:29}, (_, index) => ({
   retailer_name:"King Koil",
   external_id:`variant-${index + 1}`,
   title:"King Koil Luxury Air Mattress with High Speed Built-in Pump",
-  retailer_shop_url:`https://kingkoilairbeds.com/products/king-koil-luxury-air-mattress?variant=${40196727636056 + index}`
+  product_url:`https://kingkoilairbeds.com/products/king-koil-luxury-air-mattress?variant=${40196727636056 + index}`
 }));
 assert.strictEqual(selectUniqueProducts(kingKoilVariants).length, 1, "King Koil source variants did not group into one family");
+
+const sharedStorefrontProducts = [1, 2].map(index => ({
+  source:"ebay",
+  market:"us",
+  retailer_name:"eBay",
+  external_id:`ebay-distinct-${index}`,
+  title:`Distinct eBay product ${index}`,
+  retailer_shop_url:"https://www.ebay.com/sch/i.html?_nkw=smart+home&campid=5339179772",
+  affiliate_url:`https://www.ebay.com/itm/${1000 + index}?campid=5339179772`
+}));
+assert.strictEqual(selectUniqueProducts(sharedStorefrontProducts).length, 2,
+  "A shared retailer storefront incorrectly merged distinct product offers");
 
 console.log("Day 3 dedup rules passed: validated identity, source grouping, variants, candidates and title-only safety.");

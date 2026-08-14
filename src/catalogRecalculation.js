@@ -1,6 +1,7 @@
 const { market } = require("./markets");
 const { normalizeProductIdentity } = require("./productIdentity");
 const { SCORE_MODEL, isDailyPickEligible, scoreOffers, selectUniqueProducts } = require("./ranker");
+const { TAXONOMY_VERSION, normalizeCatalogProduct } = require("./catalogTaxonomy");
 
 function localDate(timezone, value = new Date()) {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -23,12 +24,14 @@ function needsRecalculation(db) {
       OR commerce_quality IS NULL
       OR ranking_score IS NULL
       OR landed_cost IS NULL
+      OR COALESCE(normalized_category,'')=''
+      OR COALESCE(taxonomy_version,'')<>?
       OR LOWER(COALESCE(product_key,'')) LIKE 'gtin:%does%apply%'
       OR LOWER(COALESCE(product_key,'')) LIKE 'gtin:%not%applicable%'
       OR LOWER(COALESCE(product_key,'')) LIKE 'gtin:%nicht%zutreffend%'
     )
     LIMIT 1
-  `).get(`%"model":"${SCORE_MODEL}"%`));
+  `).get(`%"model":"${SCORE_MODEL}"%`, TAXONOMY_VERSION));
 }
 
 function recalculateCatalog(db, marketCodes = ["us", "ca", "uk", "fr", "de"], options = {}) {
@@ -40,7 +43,7 @@ function recalculateCatalog(db, marketCodes = ["us", "ca", "uk", "fr", "de"], op
   const selectedByMarket = new Map();
   const selectionMarkets = Array.isArray(options.selectionMarkets) ? options.selectionMarkets : marketCodes;
 
-  for (const row of rows) normalizedById.set(row.id, normalizeProductIdentity(row));
+  for (const row of rows) normalizedById.set(row.id, normalizeProductIdentity(normalizeCatalogProduct(row)));
   for (const code of marketCodes) {
     const candidates = rows.filter(row => row.market === code).map(row => normalizedById.get(row.id));
     const scored = scoreOffers(candidates, {
@@ -60,7 +63,7 @@ function recalculateCatalog(db, marketCodes = ["us", "ca", "uk", "fr", "de"], op
     const updateProduct = db.prepare(`
       UPDATE products
       SET product_key=?,gtin=?,upc=?,ean=?,shipping_cost=?,landed_cost=?,score=?,relevance_score=?,
-          commerce_quality=?,ranking_score=?,evidence_confidence=?,
+          commerce_quality=?,ranking_score=?,evidence_confidence=?,normalized_category=?,taxonomy_version=?,
           score_breakdown=?,selection_reason=?,status=?,updated_at=?
       WHERE id=?
     `);
@@ -81,6 +84,8 @@ function recalculateCatalog(db, marketCodes = ["us", "ca", "uk", "fr", "de"], op
         scored?.commerce_quality ?? 0,
         scored?.ranking_score ?? 0,
         scored?.evidence_confidence ?? 0,
+        normalized.normalized_category,
+        normalized.taxonomy_version,
         JSON.stringify(scored?.score_breakdown || {model:SCORE_MODEL}),
         scored?.selection_reason || "",
         publicStatus,

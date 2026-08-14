@@ -45,7 +45,9 @@ const score = scoreProduct({
   return_summary: "30-day returns",
   source_rank: 1
 });
-assert(score.total >= 70 && score.total <= 100, `strong real offer should score credibly, received ${score.total}`);
+assert(score.total >= 65 && score.total <= 100, `strong real offer should score credibly, received ${score.total}`);
+assert.equal(score.breakdown.price_quality, 15,
+  "a retailer reference price alone must not exceed half of the price-quality component");
 assert.equal(score.breakdown.model, "current-offer-v7");
 
 const newListing = {
