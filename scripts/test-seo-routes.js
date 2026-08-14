@@ -5,6 +5,7 @@ const Module = require("module");
 const { DatabaseSync } = require("node:sqlite");
 const { localizeProduct } = require("../src/demoTranslations");
 const { categoryLabel } = require("../src/i18n");
+const { RELEASE_ID } = require("../src/release");
 
 class TestDatabase {
   constructor(filename) {
@@ -190,8 +191,19 @@ async function run() {
   assert(azureApi.status === 200, "Azure API health endpoints must remain available to workflows");
   assert(azureApi.headers.get("x-robots-tag") === "noindex, nofollow", "Catalog status endpoint must not be indexed");
   const azureStatus = await azureApi.json();
-  assert(azureStatus.releaseId === "2026-08-14-day7-validation-fix-v1", "Production release marker is missing");
+  assert(azureStatus.releaseId === RELEASE_ID, "Production release marker is missing");
   assert(azureStatus.taxonomyVersion === "catalog-taxonomy-v1", "Production taxonomy marker is missing");
+
+  const searchApi = await fetch(`${base}/api/search?market=us&q=eBay%20Test%20Product&max_price=500&sort=price_asc&page=1&limit=5`);
+  assert(searchApi.status === 200, "Search API route is unavailable");
+  assert(searchApi.headers.get("x-robots-tag") === "noindex, nofollow", "Search API must not be indexed");
+  const searchResult = await searchApi.json();
+  assert(searchResult.ranking_model === "ranking-v1", "Search API ranking contract is missing");
+  assert(searchResult.pagination.total > 0 && searchResult.products.length <= 5, "Search API pagination is invalid");
+  assert(searchResult.facets.categories.length > 0 && searchResult.facets.merchants.length > 0, "Search API facets are missing");
+  assert(searchResult.products.every((product, index, products) => index === 0 || Number(products[index - 1].landed_cost || products[index - 1].current_price) <= Number(product.landed_cost || product.current_price)), "Search API price sorting is unstable");
+  const invalidSearch = await fetch(`${base}/api/search?market=us&min_price=500&max_price=100`);
+  assert(invalidSearch.status === 400, "Search API accepted contradictory price filters");
 
   const trailingSlash = await get("/us/?ref=test");
   assert(trailingSlash.status === 301, "Trailing-slash duplicate must redirect permanently");

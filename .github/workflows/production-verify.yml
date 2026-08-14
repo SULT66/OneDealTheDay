@@ -12,20 +12,35 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      - name: Check out the expected release
+        uses: actions/checkout@v4
+
       - name: Wait for Azure and verify the live catalog
         shell: bash
         run: |
+          expected_release="$(node -p "require('./src/release').RELEASE_ID")"
           for attempt in {1..30}; do
-            payload="$(curl --fail --silent --show-error --max-time 20 'https://www.onedailydrop.com/api/status?market=us' || true)"
-            if jq -e '
-              .releaseId == "2026-08-14-day7-validation-fix-v1" and
+            status_payload="$(curl --fail --silent --show-error --max-time 20 'https://www.onedailydrop.com/api/status?market=us' || true)"
+            if jq -e --arg release "${expected_release}" '
+              .releaseId == $release and
               .taxonomyVersion == "catalog-taxonomy-v1" and
               .market == "us" and
               .liveProducts > 0
-            ' <<<"${payload}" >/dev/null 2>&1; then
-              echo "Azure is serving the expected OneDailyDrop release."
-              jq '{releaseId,taxonomyVersion,market,liveProducts,provider}' <<<"${payload}"
-              exit 0
+            ' <<<"${status_payload}" >/dev/null 2>&1; then
+              search_payload="$(curl --fail --silent --show-error --max-time 20 \
+                'https://www.onedailydrop.com/api/search?market=us&sort=best_match&page=1&limit=1' || true)"
+              if jq -e '
+                .ranking_model == "ranking-v1" and
+                .market == "us" and
+                .sort == "best_match" and
+                .pagination.total > 0 and
+                (.products | length) == 1
+              ' <<<"${search_payload}" >/dev/null 2>&1; then
+                echo "Azure is serving the expected OneDailyDrop release and Search API."
+                jq '{releaseId,taxonomyVersion,market,liveProducts,provider}' <<<"${status_payload}"
+                jq '{ranking_model,sort,pagination,returned:(.products | length)}' <<<"${search_payload}"
+                exit 0
+              fi
             fi
             echo "Attempt ${attempt}/30: Azure has not switched to the expected release yet."
             sleep 20
