@@ -352,6 +352,7 @@ async function run() {
   assert(searchPage.includes("eBay Test Product 3"), "Search does not find a verified eBay product");
   assert(!searchPage.includes("eBay Test Product 2"), "Search reintroduced a duplicate GTIN listing");
   assert(searchPage.includes("deal-metrics") && searchPage.includes("OneDailyDrop Score"), "Search results are missing the OneDailyDrop Score");
+  assert(searchPage.includes('data-analytics-page="search"') && searchPage.includes('data-analytics-query="product 3"'), "Search analytics context is missing");
 
   const archivePage = await (await get("/us/archive")).text();
   assert(archivePage.includes("OneDailyDrop Score at selection"), "Past Drops does not preserve the score at selection");
@@ -390,6 +391,8 @@ async function run() {
     method:"POST",
     headers:{"content-type":"application/json"},
     body:JSON.stringify({
+      eventId:"internal-click-0001",
+      sessionId:"seo-session-000001",
       productId:products[0].id,
       sourcePage:"search",
       placement:"catalog_title",
@@ -398,7 +401,43 @@ async function run() {
   });
   assert(internalClick.status === 204, "An internal product click was not accepted");
 
-  const retailerClick = await get(`/us/go/${products[0].id}?source=product&placement=product_cta&action=view_deal`);
+  const baselineEvents = {
+    market:"us",
+    events:[
+      {
+        eventId:"search-event-00001",
+        sessionId:"seo-session-000001",
+        eventType:"search",
+        sourcePage:"search",
+        query:"product 1",
+        resultCount:1
+      },
+      {
+        eventId:"impression-event-01",
+        sessionId:"seo-session-000001",
+        eventType:"impression",
+        sourcePage:"search",
+        placement:"catalog_title",
+        productId:products[0].id,
+        position:1
+      }
+    ]
+  };
+  const analyticsEvents = await fetch(`${base}/api/analytics/events`, {
+    method:"POST",
+    headers:{"content-type":"application/json"},
+    body:JSON.stringify(baselineEvents)
+  });
+  assert(analyticsEvents.status === 204, "Search and impression events were not accepted");
+  const duplicateAnalyticsEvents = await fetch(`${base}/api/analytics/events`, {
+    method:"POST",
+    headers:{"content-type":"application/json"},
+    body:JSON.stringify(baselineEvents)
+  });
+  assert(duplicateAnalyticsEvents.status === 204, "Idempotent analytics retry was rejected");
+  assert(db.prepare("SELECT COUNT(*) AS total FROM analytics_events").get().total === 2, "Analytics event IDs did not prevent duplicates");
+
+  const retailerClick = await get(`/us/go/${products[0].id}?source=product&placement=product_cta&action=view_deal&sid=seo-session-000001&eid=outbound-click-001`);
   assert(retailerClick.status === 302, "The retailer action did not redirect");
   assert(retailerClick.headers.get("location").includes("campid=5339179772"), "The original affiliate destination was not preserved");
 
@@ -408,11 +447,13 @@ async function run() {
   assert(shopAllLocation.includes("/sch/i.html") && shopAllLocation.includes("campid=5339179772"), "The shop-all link lost retailer attribution");
 
   const recordedClicks = db.prepare(`
-    SELECT source_page,placement,action_type,destination_type,retailer_name
+    SELECT event_id,session_id,source_page,placement,action_type,destination_type,retailer_name
     FROM clicks WHERE product_id=? ORDER BY id
   `).all(products[0].id);
   assert(recordedClicks.some(click => click.source_page === "search" && click.action_type === "view_details" && click.destination_type === "internal"), "Internal click dimensions were not stored");
+  assert(recordedClicks.some(click => click.event_id === "internal-click-0001" && click.session_id === "seo-session-000001"), "Internal click session attribution is missing");
   assert(recordedClicks.some(click => click.source_page === "product" && click.action_type === "view_deal" && click.destination_type === "retailer"), "Retailer click dimensions were not stored");
+  assert(recordedClicks.some(click => click.event_id === "outbound-click-001" && click.session_id === "seo-session-000001"), "Outbound click session attribution is missing");
   assert(recordedClicks.some(click => click.placement === "shop_all" && click.action_type === "shop_all" && click.retailer_name === "eBay"), "Shop-all click dimensions were not stored");
 
   const analyticsResponse = await fetch(`${base}/api/admin/click-analytics?days=7`, {
@@ -422,6 +463,18 @@ async function run() {
   assert(analyticsResponse.status === 200, "Admin click analytics is unavailable");
   assert(Number(analytics.totals.internal_product_clicks) === 1, "Internal click analytics total is incorrect");
   assert(Number(analytics.totals.retailer_clicks) === 2, "Retailer click analytics total is incorrect");
+
+  const baselineResponse = await fetch(`${base}/api/admin/analytics-baseline?days=7`, {
+    headers:{"x-admin-key":"test-admin-key"}
+  });
+  const baseline = await baselineResponse.json();
+  assert(baselineResponse.status === 200, "Day 5 analytics baseline is unavailable");
+  assert(Number(baseline.totals.searches) === 1, "Search baseline total is incorrect");
+  assert(Number(baseline.totals.impressions) === 1, "Impression baseline total is incorrect");
+  assert(Number(baseline.totals.product_clicks) === 1, "Product-click baseline total is incorrect");
+  assert(Number(baseline.totals.outbound_clicks) === 2, "Outbound-click baseline total is incorrect");
+  assert(Number(baseline.rates.searches_per_session) === 1, "Searches-per-session baseline is incorrect");
+  assert(Number(baseline.rates.result_ctr) === 1, "Result CTR baseline is incorrect");
 
   const missingResponse = await get("/us/deal/not-a-real-product-999999");
   const missingPage = await missingResponse.text();

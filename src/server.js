@@ -669,6 +669,14 @@ const matchesSearch = (product, terms) => {
   return terms.every(term => (searchAliases[term] || [term, term.endsWith("s") ? term.slice(0,-1) : `${term}s`]).some(candidate => haystack.includes(candidate)));
 };
 const trackingAttributes = (product, sourcePage, placement) => `data-track-product="${Number(product.id)}" data-track-source="${normalizeSourcePage(sourcePage)}" data-track-placement="${normalizePlacement(placement)}" data-track-action="view_details"`;
+const analyticsToken = value => {
+  const token = String(value || "").trim();
+  return /^[A-Za-z0-9_-]{16,80}$/.test(token) ? token : "";
+};
+const analyticsPosition = value => {
+  const position = Number(value);
+  return Number.isInteger(position) && position > 0 && position <= 10000 ? position : null;
+};
 const askDeliaButton = (product, language = "en") =>
   `<button class="ask-delia-button" type="button" data-ask-delia data-product-id="${Number(product.id)}" data-product-title="${esc(shortTitle(localizeProduct(product, language).title))}" data-product-score="${Number(product.display_score || product.score || 0)}" data-product-url="${esc(dealPath(product))}">✦ ${esc(t(language,"assistant.askProduct"))}</button>`;
 const externalAttributes = 'target="_blank" rel="sponsored noopener noreferrer"';
@@ -676,14 +684,18 @@ const recordClick = (req, product, {
   sourcePage = "unknown",
   placement = "unknown",
   action = "view_deal",
-  destinationType = "retailer"
+  destinationType = "retailer",
+  sessionId = "",
+  eventId = ""
 } = {}) => {
   db.prepare(`
-    INSERT INTO clicks(
-      product_id,market,retailer_name,source_page,placement,action_type,destination_type,
-      clicked_at,referrer,user_agent
-    ) VALUES(?,?,?,?,?,?,?,?,?,?)
+    INSERT OR IGNORE INTO clicks(
+      event_id,session_id,product_id,market,retailer_name,source_page,placement,action_type,
+      destination_type,clicked_at,referrer,user_agent
+    ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
   `).run(
+    analyticsToken(eventId) || null,
+    analyticsToken(sessionId),
     product.id,
     product.market || "us",
     storeName(product).slice(0, 120),
@@ -760,7 +772,7 @@ const shell = (title, description, canonical, body, schema = null, image = "", r
     ]
   };
   const ogType = suppliedNodes.some(node => node?.["@type"] === "Product") ? "product" : "website";
-  const html = `<!doctype html><html lang="${esc(locale)}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0a1020"><title>${esc(title)}</title><meta name="description" content="${esc(description.slice(0,160))}"><meta name="robots" content="${esc(robotsContent)}"><link rel="canonical" href="${esc(canonical)}"><link rel="icon" href="/favicon.svg" type="image/svg+xml">${alternates}${imageConnectionHints(image)}<meta property="og:type" content="${ogType}"><meta property="og:site_name" content="OneDailyDrop"><meta property="og:locale" content="${esc(ogLocale)}"><meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(description.slice(0,180))}"><meta property="og:url" content="${esc(canonical)}">${image ? `<meta property="og:image" content="${esc(image)}"><meta property="og:image:alt" content="${esc(title)}">` : ""}<meta name="twitter:card" content="${image ? "summary_large_image" : "summary"}"><meta name="twitter:title" content="${esc(title)}"><meta name="twitter:description" content="${esc(description.slice(0,180))}">${image ? `<meta name="twitter:image" content="${esc(image)}">` : ""}<link rel="stylesheet" href="/styles.css?v=20260731-brand-lockup"><link rel="stylesheet" href="/brand-theme.css?v=20260731-brand-lockup"><link rel="stylesheet" href="/liquid-glass.css?v=20260731-brand-lockup"><script type="application/ld+json">${JSON.stringify(pageSchema).replace(/</g,"\\u003c")}</script><script>window.__ODD_LANGUAGE__=${JSON.stringify(language)};window.__ODD_LOCALE__=${JSON.stringify(locale)};window.__ODD_TEXT__=${JSON.stringify(clientCopy(language)).replace(/</g, "\\u003c")};</script></head><body>${sharedHeader(code, language, req)}${body}${sharedFooter(code, language)}<script src="/theme.js?v=20260728-i18n2"></script><script src="/site-shell.js?v=20260728-i18n2"></script><script src="/click-tracking.js?v=20260805-stage2"></script></body></html>`;
+  const html = `<!doctype html><html lang="${esc(locale)}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0a1020"><title>${esc(title)}</title><meta name="description" content="${esc(description.slice(0,160))}"><meta name="robots" content="${esc(robotsContent)}"><link rel="canonical" href="${esc(canonical)}"><link rel="icon" href="/favicon.svg" type="image/svg+xml">${alternates}${imageConnectionHints(image)}<meta property="og:type" content="${ogType}"><meta property="og:site_name" content="OneDailyDrop"><meta property="og:locale" content="${esc(ogLocale)}"><meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(description.slice(0,180))}"><meta property="og:url" content="${esc(canonical)}">${image ? `<meta property="og:image" content="${esc(image)}"><meta property="og:image:alt" content="${esc(title)}">` : ""}<meta name="twitter:card" content="${image ? "summary_large_image" : "summary"}"><meta name="twitter:title" content="${esc(title)}"><meta name="twitter:description" content="${esc(description.slice(0,180))}">${image ? `<meta name="twitter:image" content="${esc(image)}">` : ""}<link rel="stylesheet" href="/styles.css?v=20260731-brand-lockup"><link rel="stylesheet" href="/brand-theme.css?v=20260731-brand-lockup"><link rel="stylesheet" href="/liquid-glass.css?v=20260731-brand-lockup"><script type="application/ld+json">${JSON.stringify(pageSchema).replace(/</g,"\\u003c")}</script><script>window.__ODD_LANGUAGE__=${JSON.stringify(language)};window.__ODD_LOCALE__=${JSON.stringify(locale)};window.__ODD_TEXT__=${JSON.stringify(clientCopy(language)).replace(/</g, "\\u003c")};</script></head><body>${sharedHeader(code, language, req)}${body}${sharedFooter(code, language)}<script src="/theme.js?v=20260728-i18n2"></script><script src="/site-shell.js?v=20260728-i18n2"></script><script src="/click-tracking.js?v=20260814-day5"></script></body></html>`;
   const versionedHtml = html
     .replace("/styles.css?v=20260731-brand-lockup", "/styles.css?v=20260808-assistant")
     .replace("</head>", '<link rel="stylesheet" href="/i18n.css?v=20260808-assistant"><link rel="stylesheet" href="/shopping-assistant.css?v=20260812-all-markets-v2"></head>')
@@ -982,7 +994,7 @@ app.get("/search", (req, res) => {
   const products = query ? all.filter(product => matchesSearch(product, terms)) : [];
   const count = t(req.language, "search.found", { count: products.length });
   const empty = query ? t(req.language,"page.searchNoMatch",{query}) : t(req.language,"page.searchPrompt");
-  const body = `<main><section class="deals-section"><div class="section-heading"><div><p class="eyebrow">${esc(marketName(selectedMarket.code, req.language).toUpperCase())} · ${esc(t(req.language,"search.results").toUpperCase())}</p><h1>${query ? `${esc(t(req.language,"search.results"))}: “${esc(query)}”` : esc(t(req.language,"search.short"))}</h1></div><p class="result-count">${count}</p></div>${products.length ? `<div class="grid">${products.map((product,index)=>productCard(product,index+1,req.language,"search")).join("")}</div>` : `<div class="empty-state">${esc(empty)}<div class="empty-actions"><a class="primary-cta" href="${marketPath(selectedMarket.code)}">${esc(t(req.language,"page.backToday"))}</a></div></div>`}</section></main>`;
+  const body = `<main data-analytics-page="search" data-analytics-query="${esc(query)}" data-analytics-result-count="${products.length}"><section class="deals-section"><div class="section-heading"><div><p class="eyebrow">${esc(marketName(selectedMarket.code, req.language).toUpperCase())} · ${esc(t(req.language,"search.results").toUpperCase())}</p><h1>${query ? `${esc(t(req.language,"search.results"))}: “${esc(query)}”` : esc(t(req.language,"search.short"))}</h1></div><p class="result-count">${count}</p></div>${products.length ? `<div class="grid">${products.map((product,index)=>productCard(product,index+1,req.language,"search")).join("")}</div>` : `<div class="empty-state">${esc(empty)}<div class="empty-actions"><a class="primary-cta" href="${marketPath(selectedMarket.code)}">${esc(t(req.language,"page.backToday"))}</a></div></div>`}</section></main>`;
   const canonicalPath = marketPath(selectedMarket.code, "/search");
   res.send(shell(`${query ? `${query} Deals in ${selectedMarket.name}` : `Search ${selectedMarket.name} Deals`} | OneDailyDrop`, `Search OneDailyDrop deals in ${selectedMarket.name}${query ? ` for ${query}` : ""}.`, `${SITE}${canonicalPath}${query ? `?q=${encodeURIComponent(query)}` : ""}`, body, null, "", "noindex,follow", selectedMarket.code, marketCodes, req));
 });
@@ -1141,8 +1153,60 @@ app.post("/api/click-events", (req, res) => {
     sourcePage:req.body?.sourcePage,
     placement:req.body?.placement,
     action,
-    destinationType:"internal"
+    destinationType:"internal",
+    sessionId:req.body?.sessionId,
+    eventId:req.body?.eventId
   });
+  return res.sendStatus(204);
+});
+app.post("/api/analytics/events", (req, res) => {
+  const submitted = Array.isArray(req.body?.events) ? req.body.events : [req.body];
+  if (!submitted.length || submitted.length > 50) return res.status(400).json({error:"Submit between 1 and 50 events."});
+  const selectedMarket = normalizeMarket(req.body?.market || submitted[0]?.market) || requestMarket(req).code;
+  const now = new Date().toISOString();
+  const insert = db.prepare(`
+    INSERT OR IGNORE INTO analytics_events(
+      event_id,session_id,event_type,market,source_page,placement,product_id,position,
+      query_text,result_count,occurred_at,received_at,referrer,user_agent
+    ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+  `);
+  const productById = db.prepare(`SELECT id,market FROM products WHERE id=? AND status='published' AND ${sourceSql()}`);
+  try {
+    db.transaction(events => {
+      for (const event of events) {
+        const eventId = analyticsToken(event?.eventId);
+        const sessionId = analyticsToken(event?.sessionId);
+        const eventType = String(event?.eventType || "").trim().toLowerCase();
+        if (!eventId || !sessionId || !new Set(["search", "impression"]).has(eventType)) throw new Error("Invalid analytics event.");
+        const productId = eventType === "impression" ? Number(event?.productId) : null;
+        if (eventType === "impression") {
+          const product = Number.isInteger(productId) && productId > 0 ? productById.get(productId) : null;
+          if (!product || product.market !== selectedMarket) throw new Error("Invalid impression product.");
+        }
+        const resultCount = eventType === "search" && Number.isInteger(Number(event?.resultCount))
+          ? Math.max(0, Math.min(100000, Number(event.resultCount)))
+          : null;
+        insert.run(
+          eventId,
+          sessionId,
+          eventType,
+          selectedMarket,
+          normalizeSourcePage(event?.sourcePage),
+          normalizePlacement(event?.placement),
+          productId,
+          analyticsPosition(event?.position),
+          eventType === "search" ? clean(event?.query).slice(0, 80) : "",
+          resultCount,
+          now,
+          now,
+          String(req.get("referer") || "").slice(0, 1000),
+          String(req.get("user-agent") || "").slice(0, 500)
+        );
+      }
+    })(submitted);
+  } catch (error) {
+    return res.status(400).json({error:error.message});
+  }
   return res.sendStatus(204);
 });
 app.get("/api/admin/click-analytics", admin, (req, res) => {
@@ -1166,6 +1230,67 @@ app.get("/api/admin/click-analytics", admin, (req, res) => {
     FROM clicks WHERE clicked_at>=?
   `).get(since);
   res.json({days,since,totals,events});
+});
+app.get("/api/admin/analytics-baseline", admin, (req, res) => {
+  const requestedDays = Number(req.query.days || 30);
+  const days = Number.isFinite(requestedDays) ? Math.min(90, Math.max(1, Math.round(requestedDays))) : 30;
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+  const appTotals = db.prepare(`
+    SELECT
+      SUM(CASE WHEN event_type='search' THEN 1 ELSE 0 END) AS searches,
+      SUM(CASE WHEN event_type='impression' THEN 1 ELSE 0 END) AS impressions,
+      COUNT(DISTINCT CASE WHEN event_type='search' THEN session_id END) AS search_sessions,
+      SUM(CASE WHEN event_type='search' AND result_count=0 THEN 1 ELSE 0 END) AS zero_result_searches
+    FROM analytics_events WHERE occurred_at>=?
+  `).get(since);
+  const clickTotals = db.prepare(`
+    SELECT
+      SUM(CASE WHEN destination_type='internal' THEN 1 ELSE 0 END) AS product_clicks,
+      SUM(CASE WHEN destination_type='retailer' THEN 1 ELSE 0 END) AS outbound_clicks
+    FROM clicks WHERE clicked_at>=?
+  `).get(since);
+  const searches = Number(appTotals.searches || 0);
+  const impressions = Number(appTotals.impressions || 0);
+  const searchSessions = Number(appTotals.search_sessions || 0);
+  const productClicks = Number(clickTotals.product_clicks || 0);
+  const outboundClicks = Number(clickTotals.outbound_clicks || 0);
+  const queries = db.prepare(`
+    SELECT market,query_text,COUNT(*) AS searches,
+      ROUND(AVG(result_count),2) AS average_results,
+      SUM(CASE WHEN result_count=0 THEN 1 ELSE 0 END) AS zero_result_searches
+    FROM analytics_events
+    WHERE event_type='search' AND occurred_at>=?
+    GROUP BY market,query_text
+    ORDER BY searches DESC,query_text ASC
+    LIMIT 100
+  `).all(since);
+  const merchants = db.prepare(`
+    SELECT market,retailer_name,COUNT(*) AS outbound_clicks
+    FROM clicks
+    WHERE destination_type='retailer' AND clicked_at>=?
+    GROUP BY market,retailer_name
+    ORDER BY outbound_clicks DESC,retailer_name ASC
+  `).all(since);
+  res.json({
+    days,
+    since,
+    totals:{
+      searches,
+      impressions,
+      product_clicks:productClicks,
+      outbound_clicks:outboundClicks,
+      search_sessions:searchSessions,
+      zero_result_searches:Number(appTotals.zero_result_searches || 0)
+    },
+    rates:{
+      searches_per_session:searchSessions ? searches / searchSessions : 0,
+      result_ctr:impressions ? productClicks / impressions : 0,
+      outbound_ctr:impressions ? outboundClicks / impressions : 0,
+      zero_result_rate:searches ? Number(appTotals.zero_result_searches || 0) / searches : 0
+    },
+    queries,
+    merchants
+  });
 });
 app.get("/api/products", (req, res) => {
   const selectedMarket = normalizeMarket(req.query.market) || requestMarket(req).code;
@@ -1300,7 +1425,9 @@ app.get("/go/:id", (req,res) => {
     sourcePage:req.query.source,
     placement:req.query.placement,
     action:requestedAction,
-    destinationType:"retailer"
+    destinationType:"retailer",
+    sessionId:req.query.sid,
+    eventId:req.query.eid
   });
   res.redirect(302, destinationUrl.toString());
 });

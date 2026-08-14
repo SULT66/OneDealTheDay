@@ -106,6 +106,8 @@ db.exec(`
   );
   CREATE TABLE IF NOT EXISTS clicks(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_id TEXT,
+    session_id TEXT NOT NULL DEFAULT '',
     product_id INTEGER,
     market TEXT NOT NULL DEFAULT 'us',
     retailer_name TEXT NOT NULL DEFAULT '',
@@ -116,6 +118,24 @@ db.exec(`
     clicked_at TEXT,
     referrer TEXT,
     user_agent TEXT
+  );
+  CREATE TABLE IF NOT EXISTS analytics_events(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_id TEXT NOT NULL UNIQUE,
+    session_id TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    market TEXT NOT NULL DEFAULT 'us',
+    source_page TEXT NOT NULL DEFAULT 'unknown',
+    placement TEXT NOT NULL DEFAULT 'unknown',
+    product_id INTEGER,
+    position INTEGER,
+    query_text TEXT NOT NULL DEFAULT '',
+    result_count INTEGER,
+    occurred_at TEXT NOT NULL,
+    received_at TEXT NOT NULL,
+    referrer TEXT NOT NULL DEFAULT '',
+    user_agent TEXT NOT NULL DEFAULT '',
+    FOREIGN KEY(product_id) REFERENCES products(id)
   );
   CREATE TABLE IF NOT EXISTS price_history(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -244,6 +264,8 @@ if (!refreshRunColumns.has("market")) db.exec("ALTER TABLE refresh_runs ADD COLU
 const clickColumns = new Set(db.prepare("PRAGMA table_info(clicks)").all().map(column => column.name));
 if (!clickColumns.has("market")) db.exec("ALTER TABLE clicks ADD COLUMN market TEXT NOT NULL DEFAULT 'us'");
 for (const [column, definition] of [
+  ["event_id", "TEXT"],
+  ["session_id", "TEXT NOT NULL DEFAULT ''"],
   ["retailer_name", "TEXT NOT NULL DEFAULT ''"],
   ["source_page", "TEXT NOT NULL DEFAULT 'unknown'"],
   ["placement", "TEXT NOT NULL DEFAULT 'unknown'"],
@@ -379,6 +401,11 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_source_refresh_provider_market ON source_refresh_runs(provider_id, market, id DESC);
   CREATE INDEX IF NOT EXISTS idx_automation_alerts_open ON automation_alerts(resolved_at, severity, created_at DESC);
   CREATE INDEX IF NOT EXISTS idx_distribution_queue_status ON distribution_queue(status, drop_date, market);
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_clicks_event_id ON clicks(event_id) WHERE event_id IS NOT NULL AND event_id<>'';
+  CREATE INDEX IF NOT EXISTS idx_clicks_session_date ON clicks(session_id, clicked_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_analytics_events_type_date ON analytics_events(event_type, occurred_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_analytics_events_session_date ON analytics_events(session_id, occurred_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_analytics_events_product_date ON analytics_events(product_id, occurred_at DESC);
   CREATE INDEX IF NOT EXISTS idx_assistant_feedback_created ON shopping_assistant_feedback(created_at DESC);
   CREATE UNIQUE INDEX IF NOT EXISTS idx_assistant_feedback_message_type ON shopping_assistant_feedback(message_id, feedback_type);
 `);
@@ -391,6 +418,7 @@ db.transaction(() => {
   db.prepare(`DELETE FROM daily_drops WHERE product_id IN (${retiredIds})`).run();
   db.prepare(`DELETE FROM price_history WHERE product_id IN (${retiredIds})`).run();
   db.prepare(`DELETE FROM clicks WHERE product_id IN (${retiredIds})`).run();
+  db.prepare(`DELETE FROM analytics_events WHERE product_id IN (${retiredIds})`).run();
   db.prepare("DELETE FROM products WHERE LOWER(COALESCE(source,'')) IN ('demo','amazon-manual')").run();
 })();
 
