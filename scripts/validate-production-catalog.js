@@ -190,7 +190,7 @@ const publicCatalog = fs.readFileSync(path.join(root, "src/publicCatalog.js"), "
 if (publicCatalog.includes('"amazon-manual"')) {
   throw new Error("Manual Amazon products remain eligible for public pages");
 }
-for (const field of ["market", "score_breakdown", "selection_reason", "provider_external_id", "shipping_cost", "landed_cost", "evidence_confidence"]) {
+for (const field of ["market", "score_breakdown", "selection_reason", "provider_external_id", "shipping_cost", "landed_cost", "relevance_score", "commerce_quality", "ranking_score", "evidence_confidence"]) {
   if (!database.includes(field)) throw new Error(`Market-aware product selection field is missing from the database: ${field}`);
 }
 if (!database.includes("score_model")) throw new Error("Daily-drop snapshots do not preserve the scoring model version");
@@ -199,7 +199,7 @@ for (const field of ["retailer_name", "seller_name", "seller_rating", "seller_fe
 }
 const refresh = fs.readFileSync(path.join(root, "src/refresh.js"), "utf8");
 const recalculation = fs.readFileSync(path.join(root, "src/catalogRecalculation.js"), "utf8");
-for (const field of ["@retailer_name", "@seller_name", "@seller_rating", "@seller_feedback_count", "@shipping_summary", "@shipping_cost", "@landed_cost", "@return_summary", "@availability", "@checked_at", "@evidence_confidence"]) {
+for (const field of ["@retailer_name", "@seller_name", "@seller_rating", "@seller_feedback_count", "@shipping_summary", "@shipping_cost", "@landed_cost", "@return_summary", "@availability", "@checked_at", "@relevance_score", "@commerce_quality", "@ranking_score", "@evidence_confidence"]) {
   if (!refresh.includes(field)) throw new Error(`Live offer field is not persisted during refresh: ${field}`);
 }
 for (const required of ["selectDailyProducts", "INSERT INTO daily_drops", "minimumScore: 0", "isDailyPickEligible", "preserveDailySelection", "existingSnapshots"]) {
@@ -213,14 +213,14 @@ const methodology = fs.readFileSync(path.join(root, "src/methodology.js"), "utf8
 for (const required of ["price_quality", "product_quality", "review_confidence", "seller_reliability", "demand_usefulness", "shipping_returns"]) {
   if (!ranker.includes(required)) throw new Error(`OneDailyDrop Score component is missing: ${required}`);
 }
-for (const required of ["current-offer-v6", "comparable_median_landed_cost", "return referenceScore", "evidenceConfidence", "return rankPoints + reviewDemand + badge", "maximumShippingRatio", "isDailyPickEligible", "returnsNotAccepted", "referenceGap * 30"]) {
+for (const required of ["current-offer-v7", "ranking-v1", "comparable_median_landed_cost", "trackedPriceQuality", "evidenceConfidence", "commerceQuality", "rankingLayers", "relevance:0.60", "commerce_quality:0.25", "data_confidence:0.15", "maximumShippingRatio", "isDailyPickEligible", "returnsNotAccepted", "referenceGap * 30"]) {
   if (!ranker.includes(required)) throw new Error(`OneDailyDrop Score weighting is incomplete: ${required}`);
 }
-for (const forbidden of ["average_30_day_price", "average_90_day_price", "price_history_observation_count", "evidencePenalty"]) {
+for (const forbidden of ["evidencePenalty"]) {
   if (ranker.includes(forbidden)) throw new Error(`Public OneDailyDrop Score still depends on unavailable evidence: ${forbidden}`);
 }
-if (!ranker.includes("item.score >= number(options.minimumScore, 60)")) {
-  throw new Error("Live products below the minimum OneDailyDrop Score are not excluded");
+if (!ranker.includes("quality >= number(options.minimumDailyCommerceQuality, 0.45)")) {
+  throw new Error("Daily selection does not enforce the merchant-neutral Commerce Quality gate");
 }
 for (const required of ["82 to 95", "quality * 0.75", "evidenceQuality * 0.25"]) {
   if (!methodology.includes(required) && !fs.readFileSync(path.join(root, "src/productPresentation.js"), "utf8").includes(required)) {

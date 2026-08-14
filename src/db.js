@@ -49,6 +49,9 @@ db.exec(`
     currency TEXT,
     badge TEXT,
     score REAL,
+    relevance_score REAL,
+    commerce_quality REAL,
+    ranking_score REAL,
     evidence_confidence REAL,
     score_breakdown TEXT,
     selection_reason TEXT,
@@ -310,6 +313,9 @@ for (const [column, type] of [
   ["seller_feedback_count", "INTEGER"],
   ["shipping_cost", "REAL"],
   ["landed_cost", "REAL"],
+  ["relevance_score", "REAL"],
+  ["commerce_quality", "REAL"],
+  ["ranking_score", "REAL"],
   ["evidence_confidence", "REAL"]
 ]) {
   if (!productColumns.has(column)) db.exec(`ALTER TABLE products ADD COLUMN ${column} ${type}`);
@@ -384,6 +390,7 @@ db.exec(`
      OR LOWER(COALESCE(availability,'')) LIKE '%discontinued%';
   CREATE INDEX IF NOT EXISTS idx_products_status_score ON products(status, score DESC);
   CREATE INDEX IF NOT EXISTS idx_products_market_status_score ON products(market, status, score DESC);
+  CREATE INDEX IF NOT EXISTS idx_products_market_status_rank ON products(market, status, ranking_score DESC);
   CREATE INDEX IF NOT EXISTS idx_products_market_provider_id ON products(market, provider_external_id);
   CREATE INDEX IF NOT EXISTS idx_products_category_score ON products(category, score DESC);
   CREATE INDEX IF NOT EXISTS idx_products_brand_score ON products(brand_slug, score DESC);
