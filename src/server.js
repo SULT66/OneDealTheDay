@@ -18,6 +18,7 @@ const { coverage: retailerCoverage } = require("./retailerCatalog");
 const { presentProduct } = require("./productPresentation");
 const { deduplicationKeys, isDailyPickEligible, scoreOffers, selectUniqueProducts } = require("./ranker");
 const { parseSearchOptions, searchCatalogProducts } = require("./catalogSearch");
+const { applySearchIntent } = require("./searchIntent");
 const { offerIdentity, offerSummary, sourceKey } = require("./productOffers");
 const { rankingValidationReport } = require("./rankingValidation");
 const { methodology, methodologyMain } = require("./methodology");
@@ -777,7 +778,18 @@ const searchRowsForMarket = code => {
 };
 const sharedHeader = (code, language = "en", req = null) => {
   const home = marketPath(code);
-  return `<header class="site-header"><div class="header-top"><a class="brand" href="${home}"><span class="brand-mark" aria-hidden="true"><img src="/header-bag.svg?v=20260731-larger-bag" alt=""></span><span class="brand-copy"><strong><span>OneDaily</span><span class="brand-drop">Drop</span></strong><small>${esc(t(language,"brand.seoTagline"))}</small></span></a><form class="header-search" action="${marketPath(code, "/search")}"><span aria-hidden="true">⌕</span><input name="q" type="search" placeholder="${esc(t(language,"search.short"))}" aria-label="${esc(t(language,"search.short"))}"></form><button class="header-ai" type="button" data-shopping-assistant-open><span aria-hidden="true">✦</span><span>${esc(t(language,"assistant.short"))}</span></button><a class="header-subscribe" href="${home}#subscribe">${esc(t(language,"nav.subscribe"))}</a><button id="themeToggle" class="theme-button" type="button" aria-label="${esc(t(language,"theme.toDark"))}" title="${esc(t(language,"theme.dark"))}"><span class="theme-button-icon" aria-hidden="true">☾</span><span class="theme-button-label">${esc(t(language,"theme.dark"))}</span></button>${req ? languageSwitcher(req, code, language) : ""}<button class="mobile-menu-toggle" type="button" aria-expanded="false" aria-controls="mainNavigation" aria-label="${esc(t(language,"menu.open"))}"><span></span><span></span><span></span></button></div><nav id="mainNavigation" class="main-nav" aria-label="${esc(t(language,"nav.primary"))}"><a href="${home}">${esc(t(language,"nav.todayShort"))}</a><div class="category-menu"><button type="button" aria-expanded="false">${esc(t(language,"nav.categories"))} <span>⌄</span></button><div class="mega-menu" hidden>${navCategories(code).map(category => `<a href="${catPath(category, code)}">${esc(categoryLabel(category, language))}</a>`).join("")}</div></div><a href="${home}#top">${esc(t(language,"nav.more"))}</a><a href="${marketPath(code, "/archive")}">${esc(t(language,"nav.archive"))}</a><a href="${marketPath(code, "/about")}">${esc(t(language,"nav.about"))}</a></nav></header>`;
+  const search = marketPath(code, "/search");
+  return `<header class="site-header">
+    <div class="header-top">
+      <a class="brand" href="${home}"><span class="brand-mark" aria-hidden="true"><img src="/header-bag.svg?v=20260731-larger-bag" alt=""></span><span class="brand-copy"><strong><span>OneDaily</span><span class="brand-drop">Drop</span></strong><small>${esc(t(language,"brand.seoTagline"))}</small></span></a>
+      <a class="header-search-link" href="${search}"><span aria-hidden="true">⌕</span><span>${esc(t(language,"search.short"))}</span></a>
+      <a class="header-subscribe" href="${home}#subscribe">${esc(t(language,"nav.subscribe"))}</a>
+      <button id="themeToggle" class="theme-button" type="button" aria-label="${esc(t(language,"theme.toDark"))}" title="${esc(t(language,"theme.dark"))}"><span class="theme-button-icon" aria-hidden="true">☾</span><span class="theme-button-label">${esc(t(language,"theme.dark"))}</span></button>
+      ${req ? languageSwitcher(req, code, language) : ""}
+      <button class="mobile-menu-toggle" type="button" aria-expanded="false" aria-controls="mainNavigation" aria-label="${esc(t(language,"menu.open"))}"><span></span><span></span><span></span></button>
+    </div>
+    <nav id="mainNavigation" class="main-nav" aria-label="${esc(t(language,"nav.primary"))}"><a href="${home}">${esc(t(language,"nav.todayShort"))}</a><div class="category-menu"><button type="button" aria-expanded="false">${esc(t(language,"nav.categories"))} <span>⌄</span></button><div class="mega-menu" hidden>${navCategories(code).map(category => `<a href="${catPath(category, code)}">${esc(categoryLabel(category, language))}</a>`).join("")}</div></div><a href="${home}#top">${esc(t(language,"nav.more"))}</a><a href="${marketPath(code, "/archive")}">${esc(t(language,"nav.archive"))}</a><a href="${marketPath(code, "/about")}">${esc(t(language,"nav.about"))}</a></nav>
+  </header>`;
 };
 const sharedFooter = (code, language = "en") => `<footer><div class="footer-brand"><b>OneDailyDrop</b><p>${esc(t(language,"brand.seoTagline"))}</p><div class="footer-links"><a href="${marketPath(code, "/about")}">${esc(t(language,"footer.about"))}</a><a href="${marketPath(code, "/contact")}">${esc(t(language,"footer.contact"))}</a><a href="${marketPath(code, "/privacy")}">${esc(t(language,"footer.privacy"))}</a><a href="${marketPath(code, "/terms")}">${esc(t(language,"footer.terms"))}</a><a href="${marketPath(code, "/affiliate-disclosure")}">${esc(t(language,"footer.affiliate"))}</a><a href="${marketPath(code, "/editorial-policy")}">${esc(t(language,"footer.editorial"))}</a></div></div><p class="disclosure">${esc(t(language,"footer.preview"))}</p></footer>`;
 const shoppingAssistantPanel = renderShoppingAssistantPanel;
@@ -832,10 +844,10 @@ const shell = (title, description, canonical, body, schema = null, image = "", r
   const ogType = suppliedNodes.some(node => node?.["@type"] === "Product") ? "product" : "website";
   const html = `<!doctype html><html lang="${esc(locale)}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0a1020"><title>${esc(title)}</title><meta name="description" content="${esc(description.slice(0,160))}"><meta name="robots" content="${esc(robotsContent)}"><link rel="canonical" href="${esc(canonical)}"><link rel="icon" href="/favicon.svg" type="image/svg+xml">${alternates}${imageConnectionHints(image)}<meta property="og:type" content="${ogType}"><meta property="og:site_name" content="OneDailyDrop"><meta property="og:locale" content="${esc(ogLocale)}"><meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(description.slice(0,180))}"><meta property="og:url" content="${esc(canonical)}">${image ? `<meta property="og:image" content="${esc(image)}"><meta property="og:image:alt" content="${esc(title)}">` : ""}<meta name="twitter:card" content="${image ? "summary_large_image" : "summary"}"><meta name="twitter:title" content="${esc(title)}"><meta name="twitter:description" content="${esc(description.slice(0,180))}">${image ? `<meta name="twitter:image" content="${esc(image)}">` : ""}<link rel="stylesheet" href="/styles.css?v=20260731-brand-lockup"><link rel="stylesheet" href="/brand-theme.css?v=20260731-brand-lockup"><link rel="stylesheet" href="/liquid-glass.css?v=20260731-brand-lockup"><script type="application/ld+json">${JSON.stringify(pageSchema).replace(/</g,"\\u003c")}</script><script>window.__ODD_LANGUAGE__=${JSON.stringify(language)};window.__ODD_LOCALE__=${JSON.stringify(locale)};window.__ODD_TEXT__=${JSON.stringify(clientCopy(language)).replace(/</g, "\\u003c")};</script></head><body>${sharedHeader(code, language, req)}${body}${sharedFooter(code, language)}<script src="/theme.js?v=20260728-i18n2"></script><script src="/site-shell.js?v=20260728-i18n2"></script><script src="/click-tracking.js?v=20260814-day5"></script></body></html>`;
   const versionedHtml = html
-    .replace("/styles.css?v=20260731-brand-lockup", "/styles.css?v=20260814-day11-product-offers")
+    .replace("/styles.css?v=20260731-brand-lockup", "/styles.css?v=20260814-day12-unified-search")
     .replace("/site-shell.js?v=20260728-i18n2", "/site-shell.js?v=20260814-day11-prefetch")
     .replace("</head>", '<link rel="stylesheet" href="/i18n.css?v=20260808-assistant"><link rel="stylesheet" href="/shopping-assistant.css?v=20260812-all-markets-v2"></head>')
-    .replace("</body>", `${shoppingAssistantPanel(code, language)}<script src="/shopping-assistant.js?v=20260813-provider-first-v1"></script></body>`);
+    .replace("</body>", `${shoppingAssistantPanel(code, language)}<script src="/shopping-assistant.js?v=20260814-day12-product-gate"></script></body>`);
   return localizeHtml(versionedHtml, language);
 };
 
@@ -1076,21 +1088,23 @@ app.get("/category/:slug", (req, res) => {
 
 app.get("/search", (req, res) => {
   const selectedMarket = requestMarket(req);
+  const rows = searchRowsForMarket(selectedMarket.code);
+  const interpreted = applySearchIntent(req.query, rows);
   let invalidFilters = false;
   let options;
   try {
-    options = parseSearchOptions({...req.query, limit:24});
+    options = parseSearchOptions({...interpreted.query, limit:24});
   } catch {
     invalidFilters = true;
     options = parseSearchOptions({q:req.query.q, limit:24});
   }
-  const rows = searchRowsForMarket(selectedMarket.code);
   let result = searchCatalogProducts(rows, options);
   if (result.pagination.total_pages > 0 && options.page > result.pagination.total_pages) {
     options = {...options,page:result.pagination.total_pages};
     result = searchCatalogProducts(rows, options);
   }
   const query = options.query;
+  const displayQuery = interpreted.intent.originalQuery || query;
   const products = result.products;
   const pagination = result.pagination;
   const searchPath = marketPath(selectedMarket.code, "/search");
@@ -1143,7 +1157,9 @@ app.get("/search", (req, res) => {
   const sortHidden = `${hidden("q",query)}${options.categories.length?hidden("category",options.categories.join(",")):""}${options.merchants.length?hidden("merchant",options.merchants.join(",")):""}${options.availability!=="available"?hidden("availability",options.availability):""}${hidden("min_price",options.minimumPrice)}${hidden("max_price",options.maximumPrice)}${preserveLanguage?hidden("lang",req.language):""}`;
   const sorts = [["best_match","search.sort.bestMatch"],["price_asc","search.sort.priceLow"],["price_desc","search.sort.priceHigh"],["newest","search.sort.newest"],["quality","search.sort.quality"]];
   const sortForm = `<form class="search-sort" action="${searchPath}" method="get">${sortHidden}<label for="searchSort">${esc(t(req.language,"search.sortBy"))}</label><select id="searchSort" name="sort">${sorts.map(([value,key])=>`<option value="${value}" ${options.sort===value?"selected":""}>${esc(t(req.language,key))}</option>`).join("")}</select><button type="submit">${esc(t(req.language,"search.applySort"))}</button></form>`;
-  const activeFilterBar = activeFilters.length ? `<div class="active-search-filters" aria-label="${esc(t(req.language,"search.activeFilters"))}"><span>${esc(t(req.language,"search.activeFilters"))}</span>${activeFilters.map(filter=>`<a href="${esc(filter.href)}" aria-label="${esc(t(req.language,"search.removeFilter",{filter:filter.label}))}">${esc(filter.label)} ×</a>`).join("")}</div>` : "";
+  const intentApplied = interpreted.intent.inferred.length > 0;
+  const activeFilterLabel = intentApplied ? t(req.language,"search.intentFilters") : t(req.language,"search.activeFilters");
+  const activeFilterBar = activeFilters.length ? `<div class="active-search-filters${intentApplied?" is-intent-driven":""}" aria-label="${esc(activeFilterLabel)}"><span>${intentApplied?"✦ ":""}${esc(activeFilterLabel)}</span>${activeFilters.map(filter=>`<a href="${esc(filter.href)}" aria-label="${esc(t(req.language,"search.removeFilter",{filter:filter.label}))}">${esc(filter.label)} ×</a>`).join("")}${intentApplied?`<small>${esc(t(req.language,"search.intentNote"))}</small>`:""}</div>` : "";
   const firstResult = pagination.total ? (pagination.page-1)*pagination.limit+1 : 0;
   const lastResult = Math.min(pagination.total,pagination.page*pagination.limit);
   const pageNumbers = [];
@@ -1151,11 +1167,11 @@ app.get("/search", (req, res) => {
   const paginationHtml = pagination.total_pages>1 ? `<nav class="search-pagination" aria-label="${esc(t(req.language,"search.pagination"))}">${pagination.has_previous?`<a rel="prev" href="${esc(searchHref({page:pagination.page-1}))}">← ${esc(t(req.language,"search.previous"))}</a>`:`<span aria-disabled="true">← ${esc(t(req.language,"search.previous"))}</span>`}<div>${pageNumbers.map(page=>`<a href="${esc(searchHref({page}))}" ${page===pagination.page?'aria-current="page"':""}>${page}</a>`).join("")}</div>${pagination.has_next?`<a rel="next" href="${esc(searchHref({page:pagination.page+1}))}">${esc(t(req.language,"search.next"))} →</a>`:`<span aria-disabled="true">${esc(t(req.language,"search.next"))} →</span>`}</nav>` : "";
   const resultSummary = t(req.language,"search.showing",{first:firstResult,last:lastResult,count:pagination.total});
   const cards = products.map((product,index)=>searchResultCard(product,(pagination.page-1)*pagination.limit+index+1,req.language,Boolean(query))).join("");
-  const empty = query ? t(req.language,"page.searchNoMatch",{query}) : t(req.language,"page.searchPrompt");
+  const empty = displayQuery ? t(req.language,"page.searchNoMatch",{query:displayQuery}) : t(req.language,"page.searchPrompt");
   const results = products.length ? `<div class="grid search-results-grid">${cards}</div>${paginationHtml}` : `<div class="empty-state">${esc(empty)}<div class="empty-actions"><a class="primary-cta" href="${esc(searchHref({categories:[],merchants:[],availability:"available",minimumPrice:null,maximumPrice:null,page:1}))}">${esc(t(req.language,"search.clearFilters"))}</a></div></div>`;
-  const body = `<main class="search-results-page" data-results-ui="facets-sorting-badges-v1" data-analytics-page="search" data-analytics-query="${esc(query)}" data-analytics-result-count="${pagination.total}"><section class="search-results-hero"><p class="eyebrow">${esc(marketName(selectedMarket.code,req.language).toUpperCase())} · ${esc(t(req.language,"search.results").toUpperCase())}</p><h1>${query?`${esc(t(req.language,"search.resultsFor"))} “${esc(query)}”`:esc(t(req.language,"search.allProducts"))}</h1><form class="results-page-search" action="${searchPath}" method="get" role="search"><input name="q" type="search" value="${esc(query)}" placeholder="${esc(t(req.language,"search.placeholder"))}" aria-label="${esc(t(req.language,"search.short"))}">${preserveLanguage?hidden("lang",req.language):""}<button type="submit">${esc(t(req.language,"search.short"))}</button></form><p class="search-badge-explanation">${esc(t(req.language,"search.badgeExplanation"))}</p></section>${activeFilterBar}<div class="search-results-toolbar"><p>${esc(resultSummary)}</p>${sortForm}</div><div class="search-results-layout">${filterPanel}<section class="search-results-list" aria-live="polite">${results}</section></div></main>`;
+  const body = `<main class="search-results-page" data-results-ui="facets-sorting-badges-v1" data-search-intent="${intentApplied?"parsed-v1":"plain"}" data-analytics-page="search" data-analytics-query="${esc(displayQuery)}" data-analytics-result-count="${pagination.total}"><section class="search-results-hero"><p class="eyebrow">${esc(marketName(selectedMarket.code,req.language).toUpperCase())} · ${esc(t(req.language,"search.results").toUpperCase())}</p><h1>${displayQuery?`${esc(t(req.language,"search.resultsFor"))} “${esc(displayQuery)}”`:esc(t(req.language,"search.allProducts"))}</h1><form class="results-page-search" action="${searchPath}" method="get" role="search"><input name="q" type="search" value="${esc(displayQuery)}" placeholder="${esc(t(req.language,"search.placeholder"))}" aria-label="${esc(t(req.language,"search.short"))}">${preserveLanguage?hidden("lang",req.language):""}<button type="submit">${esc(t(req.language,"search.short"))}</button></form><p class="search-badge-explanation">${esc(t(req.language,"search.badgeExplanation"))}</p></section>${activeFilterBar}<div class="search-results-toolbar"><p>${esc(resultSummary)}</p>${sortForm}</div><div class="search-results-layout">${filterPanel}<section class="search-results-list" aria-live="polite">${results}</section></div></main>`;
   const canonicalPath = marketPath(selectedMarket.code, "/search");
-  res.send(shell(`${query ? `${query} Deals in ${selectedMarket.name}` : `Search ${selectedMarket.name} Deals`} | OneDailyDrop`, `Search OneDailyDrop deals in ${selectedMarket.name}${query ? ` for ${query}` : ""}.`, `${SITE}${canonicalPath}${query ? `?q=${encodeURIComponent(query)}` : ""}`, body, null, "", "noindex,follow", selectedMarket.code, marketCodes, req));
+  res.send(shell(`${displayQuery ? `${displayQuery} Deals in ${selectedMarket.name}` : `Search ${selectedMarket.name} Deals`} | OneDailyDrop`, `Search OneDailyDrop deals in ${selectedMarket.name}${displayQuery ? ` for ${displayQuery}` : ""}.`, `${SITE}${canonicalPath}${displayQuery ? `?q=${encodeURIComponent(displayQuery)}` : ""}`, body, null, "", "noindex,follow", selectedMarket.code, marketCodes, req));
 });
 
 app.get("/archive", (req, res) => {

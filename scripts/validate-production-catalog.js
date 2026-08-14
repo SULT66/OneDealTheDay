@@ -66,7 +66,7 @@ if (homepage.includes('content="noindex')) {
 if (!homepageTemplate.includes('<meta name="robots" content="index,follow,max-image-preview:large">')) {
   throw new Error("Country homepages are missing the required indexable robots directive");
 }
-for (const required of ['<link rel="canonical" href="${canonical}">', 'property="og:site_name"', 'name="twitter:title"', '"@type": "WebPage"', '"@type": "SearchAction"']) {
+for (const required of ['<link rel="canonical" href="${esc(canonical)}">', 'property="og:site_name"', 'name="twitter:title"', '"@type": "WebPage"', '"@type": "SearchAction"']) {
   if (!homepage.includes(required) && !homepageTemplate.includes(required)) throw new Error(`Homepage SEO metadata is missing: ${required}`);
 }
 if (homepage.includes("shortTitle")) throw new Error("Homepage titles are still truncated");
@@ -324,8 +324,8 @@ if (markets.codes.join(",") !== "us,ca,uk,fr,de") {
 const accountScript = fs.readFileSync(path.join(root, "public/account.js"), "utf8");
 if (!accountScript.includes("form.reset()")) throw new Error("Auth fields are not cleared when switching modes");
 if (!accountScript.includes("updatePasswordRules")) throw new Error("Password requirements UI is missing");
-for (const required of ["Check here", "MAKE IT YOUR DAILY CHECK", "THE ONEDAILYDROP SCORE", "PAST DAILY PICKS"]) {
-  if (!homepage.includes(required)) throw new Error(`Habit-building homepage content is missing: ${required}`);
+for (const required of ["home.searchTitle", "home.makeHabit", "home.scoreEyebrow", "home.pastEyebrow"]) {
+  if (!homepageTemplate.includes(required)) throw new Error(`Localized homepage content is missing: ${required}`);
 }
 
 const trustPages = [

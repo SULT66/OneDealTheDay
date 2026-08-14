@@ -28,18 +28,24 @@ jobs:
               .liveProducts > 0
             ' <<<"${status_payload}" >/dev/null 2>&1; then
               search_payload="$(curl --fail --silent --show-error --max-time 20 \
-                'https://www.onedailydrop.com/api/search?market=us&sort=best_match&page=1&limit=1' || true)"
+                'https://www.onedailydrop.com/api/search?market=us&q=under%20500%20at%20eBay&sort=best_match&page=1&limit=1' || true)"
               if jq -e '
                 .ranking_model == "ranking-v1" and
                 .market == "us" and
                 .sort == "best_match" and
+                .parsed_intent.merchant == "eBay" and
+                .parsed_intent.max_price == 500 and
+                .filters.merchants == ["eBay"] and
+                .filters.max_price == 500 and
                 .pagination.total > 0 and
                 (.products | length) == 1
               ' <<<"${search_payload}" >/dev/null 2>&1; then
                 homepage_payload="$(curl --fail --silent --show-error --max-time 20 \
                   'https://www.onedailydrop.com/us' || true)"
                 if grep -q 'data-homepage-mode="search-first-v1"' <<<"${homepage_payload}" && \
+                   grep -q 'data-search-experience="unified-intent-v1"' <<<"${homepage_payload}" && \
                    grep -q 'id="homepageSearchForm"' <<<"${homepage_payload}" && \
+                   grep -q '/us/search?merchant=eBay' <<<"${homepage_payload}" && \
                    grep -q 'class="top-picks-disclosure"' <<<"${homepage_payload}"; then
                   results_payload="$(curl --fail --silent --show-error --max-time 40 \
                     'https://www.onedailydrop.com/us/search?q=office' || true)"
@@ -55,7 +61,7 @@ jobs:
                     if [[ -n "${product_path}" ]] && \
                        grep -q 'data-product-offer-ui="reliable-entity-v1"' <<<"${product_payload}" && \
                        grep -q 'class="product-offer-summary"' <<<"${product_payload}"; then
-                      echo "Azure is serving the expected release, Search API, Results UI and Day 11 product/offer UI."
+                      echo "Azure is serving the expected release, Day 12 intent parser, unified Search UI and strict product/offer UI."
                       jq '{releaseId,taxonomyVersion,market,liveProducts,provider}' <<<"${status_payload}"
                       jq '{ranking_model,sort,pagination,returned:(.products | length)}' <<<"${search_payload}"
                       exit 0

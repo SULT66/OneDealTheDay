@@ -223,6 +223,10 @@ const PHONE_ACCESSORY_REQUEST_PATTERN =
   /\b(?:accessor(?:y|ies)|adapter|cable|case|charger|charging|cover|dock|holder|mount|protector|stand|stylus)\b|(?:аксессуар\p{L}*|чехол|кабель|зарядк\p{L}*|держател\p{L}*|стекло|пл[её]нк\p{L}*)/iu;
 const SOFA_ACCESSORY_PATTERN =
   /\b(?:sofa|couch)\s+(?:(?:bedside|end|side|console|entryway|accent|coffee)\s+)?(?:table|cover|slipcover|protector|tray|legs?|feet|cushions?|pillows?)\b|\b(?:bedside|end|side|console|entryway|accent|coffee)\s+table\b|\btv\s+stand\b|(?:чехол|накидк\p{L}*|подушк\p{L}*|ножк\p{L}*)\s+(?:для\s+)?диван/iu;
+const SHOE_NON_PRODUCT_PATTERN =
+  /\b(?:shoe\s*(?:cabinet|rack|storage|organizer|shelf|shelves|bench|box|boxes|bag|bags|horn|horns|tree|trees|cover|covers|protector|protectors|charm|charms)|socks?|stockings?|shoelaces?|shoe\s*laces?|insoles?|heel\s*pads?|horse\s*shoes?)\b|(?:шкаф|полк\p{L}*|стеллаж|органайзер|носк\p{L}*|шнурк\p{L}*|стельк\p{L}*)\s+(?:для\s+)?(?:обуви|кроссовок)/iu;
+const SHOE_PRODUCT_PATTERN =
+  /\b(?:(?:men'?s|women'?s|boys?|girls?|kids?|children'?s)\s+shoes?|sneakers?|running\s+shoes?|walking\s+shoes?|athletic\s+shoes?|casual\s+shoes?|training\s+shoes?|trainers?|boots?|loafers?|sandals?|slippers?|cleats?)\b|(?:кроссовк\p{L}*|ботинк\p{L}*|туфл\p{L}*|сандал\p{L}*)/iu;
 const UNDERWEAR_BOXER_PATTERN =
   /(?:\bboxer(?:\s*brief)?s?\b|\bboxerbriefs?\b|боксер(?:ы|ки|ок|ов)?)/iu;
 const UNDERWEAR_TRUNK_PATTERN = /(?:\btrunks?\b|транк(?:и|ов)?)/iu;
@@ -608,6 +612,14 @@ function matchesRequestedCategory(candidate, category, tokens) {
   const identity = clean(
     `${candidate?.title || ""} ${candidate?.brand || ""} ${candidate?.model_number || ""}`,
   );
+  if (category === "shoes") {
+    const categoryIdentity = clean(candidate?.category).toLowerCase();
+    return (
+      !SHOE_NON_PRODUCT_PATTERN.test(identity) &&
+      (SHOE_PRODUCT_PATTERN.test(identity) ||
+        /\b(?:footwear|shoes?|sneakers?|boots?)\b/i.test(categoryIdentity))
+    );
+  }
   if (category === "headphone") {
     return (
       !HEADPHONE_ACCESSORY_PATTERN.test(identity) &&

@@ -19,6 +19,7 @@ const { TAXONOMY_VERSION } = require("./src/catalogTaxonomy");
 const { RELEASE_ID } = require("./src/release");
 const { deduplicationKeys } = require("./src/ranker");
 const { parseSearchOptions, searchCatalogProducts } = require("./src/catalogSearch");
+const { applySearchIntent } = require("./src/searchIntent");
 const createExpressApp = express;
 const CANONICAL_HOST = "www.onedailydrop.com";
 const AZURE_PRODUCTION_HOST = "onedealtheday-g3dme0aghzerc3a2.centralus-01.azurewebsites.net";
@@ -159,27 +160,36 @@ function expressWithHomepage(...args) {
   app.get("/api/search", (req, res) => {
     const selectedMarket = normalizeMarket(req.query.market) || marketFromIp(req).code;
     const language = resolveLanguage(req, res, selectedMarket);
+    const rows = searchRowsForMarket(selectedMarket);
+    const interpreted = applySearchIntent(req.query, rows);
     let options;
     try {
-      options = parseSearchOptions(req.query);
+      options = parseSearchOptions(interpreted.query);
     } catch (error) {
       res.set("X-Robots-Tag", "noindex, nofollow");
       return res.status(400).json({error:error.message});
     }
-    const cacheKey = `search:${selectedMarket}:${language}:${JSON.stringify(options)}`;
+    const cacheKey = `search:${selectedMarket}:${language}:${JSON.stringify({options, originalQuery:interpreted.intent.originalQuery})}`;
     const cached = cachedValue(cacheKey);
     if (cached) {
       res.set("X-Robots-Tag", "noindex, nofollow");
       res.set("Cache-Control", "private, max-age=30, stale-while-revalidate=120");
       return res.set("X-ODD-Cache", "HIT").json(cached);
     }
-    const rows = searchRowsForMarket(selectedMarket);
     const result = searchCatalogProducts(rows, options);
     const products = result.products.map(product => presentProduct(localizeProduct(product, language), language));
     res.set("X-Robots-Tag", "noindex, nofollow");
     res.set("Cache-Control", "private, max-age=30, stale-while-revalidate=120");
     const payload = cacheValue(cacheKey, {
-      query:options.query,
+      query:interpreted.intent.originalQuery || options.query,
+      search_query:options.query,
+      parsed_intent:{
+        inferred:interpreted.intent.inferred,
+        category:interpreted.intent.category || null,
+        merchant:interpreted.intent.merchant || null,
+        min_price:interpreted.intent.minimumPrice,
+        max_price:interpreted.intent.maximumPrice
+      },
       market:selectedMarket,
       filters:{
         categories:options.categories,
