@@ -234,6 +234,9 @@ for (const required of ["searchAll", "source_refresh_runs", "distribution_queue"
   if (!refresh.includes(required) && !database.includes(required)) throw new Error(`Full automation component is missing: ${required}`);
 }
 const server = fs.readFileSync(path.join(root, "src/server.js"), "utf8");
+if (!server.includes('app.get("/api/admin/ranking-validation"') || !server.includes("rankingValidationReport")) {
+  throw new Error("Day 7 ranking validation endpoint is missing");
+}
 if (!server.includes('app.post("/api/subscribe"')) throw new Error("Subscriber API is missing");
 if (!server.includes("passwordError(password)")) throw new Error("Strong server-side password validation is missing");
 if (!server.includes("passwordResetEmail")) throw new Error("Password recovery email delivery is missing");

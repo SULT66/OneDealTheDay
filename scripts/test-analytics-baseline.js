@@ -154,6 +154,14 @@ async function run() {
   assert(Number(report.rates.outbound_ctr) === 1, "Outbound CTR is incorrect");
   assert(report.queries[0]?.query_text === "test product", "Search query breakdown is missing");
   assert(report.merchants[0]?.retailer_name === "eBay", "Merchant outbound breakdown is missing");
+
+  const rankingResponse = await fetch(`${base}/api/admin/ranking-validation`, {
+    headers:{"x-admin-key":"test-admin-key"}
+  });
+  const ranking = await rankingResponse.json();
+  assert(rankingResponse.status === 200, "Day 7 ranking validation report is unavailable");
+  assert(ranking.model === "ranking-validation-v1", "Day 7 ranking validation model is incorrect");
+  assert(ranking.markets.some(market => market.market === "us" && market.products === 1), "US ranking slice is missing");
   console.log("Day 5 analytics baseline test passed");
 }
 

@@ -17,6 +17,7 @@ const { enabledProviders, searchForAssistant } = require("./providers/registry")
 const { coverage: retailerCoverage } = require("./retailerCatalog");
 const { presentProduct } = require("./productPresentation");
 const { deduplicationKeys, isDailyPickEligible, scoreOffers, selectUniqueProducts } = require("./ranker");
+const { rankingValidationReport } = require("./rankingValidation");
 const { methodology, methodologyMain } = require("./methodology");
 const { createEditorialBrief } = require("./editorialBrief");
 const {
@@ -1299,6 +1300,14 @@ app.get("/api/admin/analytics-baseline", admin, (req, res) => {
     queries,
     merchants
   });
+});
+app.get("/api/admin/ranking-validation", admin, (req, res) => {
+  const products = db.prepare(`
+    SELECT * FROM products
+    WHERE status='published' AND ${sourceSql()}
+    ORDER BY market,COALESCE(ranking_score,score) DESC,updated_at DESC
+  `).all();
+  res.json(rankingValidationReport(products, {topK:req.query.top}));
 });
 app.get("/api/products", (req, res) => {
   const selectedMarket = normalizeMarket(req.query.market) || requestMarket(req).code;
