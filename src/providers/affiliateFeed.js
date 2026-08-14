@@ -23,7 +23,9 @@ const FIELD_ALIASES = Object.freeze({
   currency:["currency", "currency_code", "price_currency"],
   image_url:["image_url", "image", "image_link", "merchant_image_url", "merchant_thumb_url", "aw_thumb_url", "large_image", "large_image_url", "alternate_image", "additional_image_link", "product_image"],
   affiliate_url:["affiliate_url", "aw_deep_link", "deeplink", "deep_link", "tracking_url", "click_url", "link", "product_url", "url"],
-  retailer_shop_url:["retailer_shop_url", "merchant_url", "store_url", "shop_url"],
+  retailer_shop_url:["retailer_shop_url", "merchant_deep_link", "link", "product_url", "merchant_url", "store_url", "shop_url", "url"],
+  source_group_id:["item_group_id", "parent_product_id", "source_parent_id", "group_id"],
+  source_variant_id:["variant_id", "variantid", "source_variant_id"],
   seller_name:["seller_name", "seller", "merchant_name", "advertiser_name"],
   shipping:["shipping_summary", "shipping", "delivery", "delivery_message", "delivery_cost"],
   returns:["return_summary", "returns", "return_policy"],
@@ -287,6 +289,7 @@ function normalize(record, definition, market, index, map) {
   const source = `feed-${definition.retailerId}`;
   const title = compactText(field(record, map, "title"));
   const affiliateUrl = httpUrl(field(record, map, "affiliate_url"));
+  const retailerShopUrl = httpUrl(field(record, map, "retailer_shop_url"));
   const imageUrl = httpUrl(field(record, map, "image_url"));
   const currentPrice = numberValue(field(record, map, "price"));
   const originalPrice = numberValue(field(record, map, "original_price"));
@@ -327,7 +330,9 @@ function normalize(record, definition, market, index, map) {
     badge:compactText(field(record, map, "badge")),
     image_url:imageUrl,
     affiliate_url:affiliateUrl,
-    retailer_shop_url:httpUrl(field(record, map, "retailer_shop_url")),
+    retailer_shop_url:retailerShopUrl,
+    source_group_id:compactText(field(record, map, "source_group_id")),
+    source_variant_id:compactText(field(record, map, "source_variant_id")),
     retailer_name:definition.retailerName,
     seller_name:compactText(field(record, map, "seller_name")) || definition.retailerName,
     shipping_summary:compactText(field(record, map, "shipping")),

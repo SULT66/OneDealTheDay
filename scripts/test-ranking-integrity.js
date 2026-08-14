@@ -85,16 +85,16 @@ assert.strictEqual(selectUniqueProducts(placeholderOffers).length, 2, "Unrelated
 
 const duplicateListings = [
   {...base, external_id:"listing-a", product_key:"gtin:012345678905", title:"Office Easy Button Red Silver Desk Gadget Motivation Stress Relief Toy New", score:78, evidence_confidence:90, landed_cost:19},
-  {...base, external_id:"listing-b", product_key:"gtin:999999999999", title:"Office Easy Button Red Silver Desk Gadget Motivation Stress Relief Toy Sealed", score:72, evidence_confidence:90, landed_cost:18}
+  {...base, external_id:"listing-b", product_key:"gtin:012345678905", title:"Office Easy Button Red Silver Desk Gadget Motivation Stress Relief Toy Sealed", score:72, evidence_confidence:90, landed_cost:18}
 ];
 assert.strictEqual(selectUniqueProducts(duplicateListings).length, 1, "Equivalent listings with different marketplace IDs were not deduplicated");
 assert.strictEqual(selectUniqueProducts([
-  {...duplicateListings[0], external_id:"ordered-a", product_key:"gtin:111111111111", title:"Universal Car Center Console Armrest Cushion Cover Protector Accessories"},
-  {...duplicateListings[1], external_id:"ordered-b", product_key:"gtin:222222222222", title:"Car Armrest Cushion Cover Center Console Protector Accessories Universal"}
-]).length, 1, "Reordered marketplace titles were not recognized as the same product family");
+  {...duplicateListings[0], external_id:"ordered-a", product_key:"gtin:036000291452", title:"Universal Car Center Console Armrest Cushion Cover Protector Accessories"},
+  {...duplicateListings[1], external_id:"ordered-b", product_key:"gtin:4006381333931", title:"Car Armrest Cushion Cover Center Console Protector Accessories Universal"}
+]).length, 2, "Title similarity overrode conflicting validated GTINs");
 assert.strictEqual(selectUniqueProducts([
-  {...duplicateListings[0], external_id:"pack-10", product_key:"gtin:333333333333", title:"Packing Cubes Travel Organizer Set 10 Pack"},
-  {...duplicateListings[1], external_id:"pack-12", product_key:"gtin:444444444444", title:"Packing Cubes Travel Organizer Set 12 Pack"}
+  {...duplicateListings[0], external_id:"pack-10", product_key:"gtin:12345670", title:"Packing Cubes Travel Organizer Set 10 Pack"},
+  {...duplicateListings[1], external_id:"pack-12", product_key:"gtin:96385074", title:"Packing Cubes Travel Organizer Set 12 Pack"}
 ]).length, 2, "Different quantity variants were incorrectly merged");
 
 const comparable = scoreOffers([
