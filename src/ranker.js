@@ -2,7 +2,7 @@ function clamp(value, min = 0, max = 1) {
   return Math.max(min, Math.min(max, value));
 }
 
-const { normalizeProductIdentity } = require("./productIdentity");
+const { brandPart, normalizeProductIdentity, variantPart } = require("./productIdentity");
 
 function number(value, fallback = 0) {
   const parsed = Number(value);
@@ -45,14 +45,26 @@ function exactMatchKey(product) {
 }
 
 function deduplicationKeys(product) {
+  const normalized = normalizeProductIdentity(product);
   const keys = [];
-  const exact = exactMatchKey(product);
-  const title = normalizedTitle(product?.canonical_title || product?.title);
-  const fingerprint = titleFingerprint(product?.canonical_title || product?.title);
+  const exact = normalized.product_key || "";
+  const sourceGroup = String(normalized.source_group_key || "").trim();
+  const source = String(normalized.source_catalog_id || normalized.source || normalized.provider || "source").toLowerCase();
+  const market = String(normalized.market || "global").toLowerCase();
+  const offerId = String(normalized.provider_external_id || normalized.external_id || "").trim();
   if (exact) keys.push(`product:${exact}`);
-  if (title.length >= 16) keys.push(`title:${title}`);
-  if (fingerprint.length >= 16) keys.push(`family:${fingerprint}`);
+  if (sourceGroup) keys.push(`source-group:${sourceGroup}`);
+  if (offerId) keys.push(`offer:${source}:${market}:${offerId}`);
   return [...new Set(keys)];
+}
+
+function deduplicationCandidateKeys(product) {
+  const brand = brandPart(product);
+  const fingerprint = titleFingerprint(product?.canonical_title || product?.title);
+  if (!brand || fingerprint.length < 16) return [];
+  const category = normalizedTitle(product?.normalized_category || product?.category);
+  const variant = variantPart(product);
+  return [`title-candidate:${brand}:${category || "uncategorized"}:${fingerprint}${variant ? `:${variant}` : ""}`];
 }
 
 const SCORE_MODEL = "current-offer-v6";
@@ -390,6 +402,7 @@ exports.scoreProduct = scoreProduct;
 exports.isEligible = isEligible;
 exports.isDailyPickEligible = isDailyPickEligible;
 exports.evidenceConfidence = evidenceConfidence;
+exports.deduplicationCandidateKeys = deduplicationCandidateKeys;
 exports.deduplicationKeys = deduplicationKeys;
 exports.exactMatchKey = exactMatchKey;
 exports.landedCost = landedCost;
