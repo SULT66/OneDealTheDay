@@ -18,6 +18,7 @@ const { recalculateCatalog } = require("./src/catalogRecalculation");
 const { TAXONOMY_VERSION } = require("./src/catalogTaxonomy");
 const { RELEASE_ID } = require("./src/release");
 const { deduplicationKeys } = require("./src/ranker");
+const { parseSearchOptions, searchCatalogProducts } = require("./src/catalogSearch");
 const createExpressApp = express;
 const CANONICAL_HOST = "www.onedailydrop.com";
 const AZURE_PRODUCTION_HOST = "onedealtheday-g3dme0aghzerc3a2.centralus-01.azurewebsites.net";
@@ -121,6 +122,45 @@ function expressWithHomepage(...args) {
     const marketCode = normalizeMarket(req.query.market) || marketFromIp(req).code;
     res.set("X-Robots-Tag", "noindex, nofollow");
     res.json(catalogStatus(marketCode));
+  });
+
+  app.get("/api/search", (req, res) => {
+    const selectedMarket = normalizeMarket(req.query.market) || marketFromIp(req).code;
+    const language = resolveLanguage(req, res, selectedMarket);
+    let options;
+    try {
+      options = parseSearchOptions(req.query);
+    } catch (error) {
+      res.set("X-Robots-Tag", "noindex, nofollow");
+      return res.status(400).json({error:error.message});
+    }
+    const rows = db.prepare(`
+      SELECT * FROM products
+      WHERE market=? AND status='published' AND ${sourceSql()}
+    `).all(selectedMarket);
+    const result = searchCatalogProducts(rows, options);
+    const products = result.products.map(product => presentProduct(localizeProduct(product, language), language));
+    res.set("X-Robots-Tag", "noindex, nofollow");
+    res.set("Cache-Control", "private, max-age=0, must-revalidate");
+    return res.json({
+      query:options.query,
+      market:selectedMarket,
+      filters:{
+        categories:options.categories,
+        merchants:options.merchants,
+        availability:options.availability,
+        min_price:options.minimumPrice,
+        max_price:options.maximumPrice,
+        min_match:options.minimumMatch,
+        min_quality:options.minimumQuality,
+        updated_after:options.updatedAfter
+      },
+      sort:options.sort,
+      ranking_model:"ranking-v1",
+      pagination:result.pagination,
+      facets:result.facets,
+      products
+    });
   });
 
   app.get("/api/products", (req, res, next) => {
