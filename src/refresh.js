@@ -123,6 +123,8 @@ function selectDailyProducts(ranked, marketCode, timezone, preserveDailySelectio
 
 function sortByCurrentScore(products) {
   return [...(products || [])].sort((left, right) => {
+    const rankDifference = numberValue(right.ranking_score, 0) - numberValue(left.ranking_score, 0);
+    if (rankDifference) return rankDifference;
     const scoreDifference = numberValue(right.score, 0) - numberValue(left.score, 0);
     if (scoreDifference) return scoreDifference;
     return numberValue(left.current_price, Number.MAX_SAFE_INTEGER) - numberValue(right.current_price, Number.MAX_SAFE_INTEGER);
@@ -223,13 +225,15 @@ async function refreshMarket(config, marketCode, options = {}) {
         INSERT INTO products(
           external_id,provider_external_id,market,product_key,upc,gtin,model_number,brand,brand_slug,manufacturer,mpn,ean,
           title,category,description,image_url,affiliate_url,retailer_shop_url,retailer_name,seller_name,seller_rating,seller_feedback_count,shipping_summary,return_summary,
-          shipping_cost,landed_cost,availability,checked_at,rating,review_count,current_price,original_price,currency,badge,score,evidence_confidence,score_breakdown,
+          shipping_cost,landed_cost,availability,checked_at,rating,review_count,current_price,original_price,currency,badge,
+          score,relevance_score,commerce_quality,ranking_score,evidence_confidence,score_breakdown,
           selection_reason,source,status,updated_at,first_seen_at,last_seen_at
         )
         VALUES(
           @external_id,@provider_external_id,@market,@product_key,@upc,@gtin,@model_number,@brand,@brand_slug,@manufacturer,@mpn,@ean,
           @title,@category,@description,@image_url,@affiliate_url,@retailer_shop_url,@retailer_name,@seller_name,@seller_rating,@seller_feedback_count,@shipping_summary,@return_summary,
-          @shipping_cost,@landed_cost,@availability,@checked_at,@rating,@review_count,@current_price,@original_price,@currency,@badge,@score,@evidence_confidence,@score_breakdown,
+          @shipping_cost,@landed_cost,@availability,@checked_at,@rating,@review_count,@current_price,@original_price,@currency,@badge,
+          @score,@relevance_score,@commerce_quality,@ranking_score,@evidence_confidence,@score_breakdown,
           @selection_reason,@source,'published',@updated_at,@first_seen_at,@last_seen_at
         )
         ON CONFLICT(external_id) DO UPDATE SET
@@ -243,7 +247,9 @@ async function refreshMarket(config, marketCode, options = {}) {
           shipping_cost=excluded.shipping_cost,landed_cost=excluded.landed_cost,
           availability=excluded.availability,checked_at=excluded.checked_at,rating=excluded.rating,
           review_count=excluded.review_count,current_price=excluded.current_price,original_price=excluded.original_price,
-          currency=excluded.currency,badge=excluded.badge,score=excluded.score,evidence_confidence=excluded.evidence_confidence,score_breakdown=excluded.score_breakdown,
+          currency=excluded.currency,badge=excluded.badge,score=excluded.score,
+          relevance_score=excluded.relevance_score,commerce_quality=excluded.commerce_quality,ranking_score=excluded.ranking_score,
+          evidence_confidence=excluded.evidence_confidence,score_breakdown=excluded.score_breakdown,
           selection_reason=excluded.selection_reason,source=excluded.source,status='published',
           updated_at=excluded.updated_at,last_seen_at=excluded.last_seen_at
       `);
@@ -289,6 +295,9 @@ async function refreshMarket(config, marketCode, options = {}) {
           currency: textValue(product.currency || selectedMarket.currency).toUpperCase(),
           badge: textValue(product.badge),
           score: numberValue(product.score, 0),
+          relevance_score: numberValue(product.relevance_score, 0),
+          commerce_quality: numberValue(product.commerce_quality, 0),
+          ranking_score: numberValue(product.ranking_score, 0),
           evidence_confidence: numberValue(product.evidence_confidence, 0),
           score_breakdown: JSON.stringify(product.score_breakdown || {}),
           selection_reason: textValue(product.selection_reason),

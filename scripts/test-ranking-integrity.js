@@ -1,10 +1,13 @@
 const assert = require("assert");
 const {
   SCORE_MODEL,
+  RANKING_MODEL,
+  commerceQuality,
   isDailyPickEligible,
   isEligible,
   landedCost,
   paidShippingCost,
+  rankingLayers,
   scoreOffers,
   scoreProduct,
   selectUniqueProducts
@@ -15,7 +18,8 @@ const {
   normalizeTradeItemId
 } = require("../src/productIdentity");
 
-assert.strictEqual(SCORE_MODEL, "current-offer-v6");
+assert.strictEqual(SCORE_MODEL, "current-offer-v7");
+assert.strictEqual(RANKING_MODEL, "ranking-v1");
 for (const placeholder of ["Does not apply", "Does Not Apply", "Non applicable", "Nicht zutreffend", "Ne s'applique pas", "不适用", "N/A"]) {
   assert.strictEqual(normalizeTradeItemId(placeholder), "", `Placeholder GTIN was accepted: ${placeholder}`);
 }
@@ -106,4 +110,74 @@ const second = comparable.find(product => product.external_id === "lower-total")
 assert(first.landed_cost > second.landed_cost, "Landed cost was not calculated");
 assert(first.score < second.score, "Ranking preferred item price over lower landed cost");
 
-console.log("Ranking integrity, identity normalization, landed cost and evidence confidence passed.");
+const sourceNeutral = {
+  ...base,
+  title:"Acme Queen Medium Firm Mattress for Side Sleepers",
+  category:"Mattresses",
+  description:"Queen mattress with medium-firm support",
+  current_price:599,
+  original_price:799,
+  shipping_summary:"Free shipping",
+  return_summary:"30 day returns",
+  rating:0,
+  review_count:0,
+  seller_name:"",
+  seller_rating:0,
+  seller_feedback_count:0
+};
+const ebayNeutral = rankingLayers({...sourceNeutral, source:"ebay", retailer_name:"eBay"}, {query:"queen medium firm mattress under 700"});
+const awinNeutral = rankingLayers({...sourceNeutral, source:"feed-king-koil", retailer_name:"King Koil"}, {query:"queen medium firm mattress under 700"});
+assert.strictEqual(ebayNeutral.relevance, awinNeutral.relevance, "Merchant source changed relevance");
+assert.strictEqual(ebayNeutral.commerce_quality, awinNeutral.commerce_quality, "Merchant source changed commerce quality");
+assert.strictEqual(ebayNeutral.final_rank, awinNeutral.final_rank, "Merchant source changed the organic rank");
+for (const [market, currency] of [["us","USD"], ["ca","CAD"], ["uk","GBP"], ["fr","EUR"], ["de","EUR"]]) {
+  const ebay = rankingLayers({...sourceNeutral, market, currency, source:"ebay", retailer_name:"eBay"}, {query:"queen medium firm mattress under 700"});
+  const awin = rankingLayers({...sourceNeutral, market, currency, source:"feed-king-koil", retailer_name:"King Koil"}, {query:"queen medium firm mattress under 700"});
+  assert.strictEqual(ebay.final_rank, awin.final_rank, `${market.toUpperCase()} ranking changed because of merchant source`);
+}
+
+const sparseQuality = commerceQuality(sourceNeutral);
+assert(sparseQuality >= 0.45, "Missing reviews or seller fields were treated as zero commerce quality");
+assert(rankingLayers(sourceNeutral, {query:"queen mattress"}).data_confidence < 80, "Missing fields did not reduce data confidence");
+
+const multiSourceResults = scoreOffers([
+  {
+    ...sourceNeutral,
+    external_id:"awin-exact",
+    source:"feed-king-koil",
+    retailer_name:"King Koil",
+    title:"Acme Queen Medium Firm Mattress for Side Sleepers",
+    current_price:549,
+    original_price:799
+  },
+  {
+    ...base,
+    external_id:"ebay-weak-match",
+    source:"ebay",
+    retailer_name:"eBay",
+    title:"Acme Twin Extra Firm Guest Room Mattress",
+    category:"Mattresses",
+    description:"Twin mattress for a guest room",
+    current_price:399,
+    original_price:499,
+    shipping_summary:"Free shipping"
+  }
+], {
+  query:"queen medium firm mattress for side sleepers under 700",
+  minimumScore:0,
+  minimumEvidenceConfidence:0
+});
+assert.strictEqual(multiSourceResults[0].external_id, "awin-exact", "eBay data richness overrode a stronger cross-store relevance match");
+assert.strictEqual(multiSourceResults[0].score_breakdown.ranking.model, RANKING_MODEL, "Ranking layers were not persisted in the score breakdown");
+assert.deepStrictEqual(multiSourceResults[0].score_breakdown.ranking.weights, {
+  relevance:0.60,
+  commerce_quality:0.25,
+  data_confidence:0.15
+});
+const budgetResults = scoreOffers([
+  {...sourceNeutral, external_id:"within-budget", source:"feed-king-koil", current_price:699},
+  {...sourceNeutral, external_id:"over-budget", source:"ebay", current_price:900, rating:5, review_count:100000}
+], {query:"queen mattress under 700", minimumEvidenceConfidence:0});
+assert.deepStrictEqual(budgetResults.map(product => product.external_id), ["within-budget"], "A hard budget constraint was compensated by reviews or quality");
+
+console.log("Ranking v1, source neutrality, identity normalization, landed cost and evidence confidence passed.");

@@ -20,6 +20,8 @@ function needsRecalculation(db) {
     WHERE status='published' AND (
       COALESCE(score_breakdown,'') NOT LIKE ?
       OR evidence_confidence IS NULL
+      OR commerce_quality IS NULL
+      OR ranking_score IS NULL
       OR landed_cost IS NULL
       OR LOWER(COALESCE(product_key,'')) LIKE 'gtin:%does%apply%'
       OR LOWER(COALESCE(product_key,'')) LIKE 'gtin:%not%applicable%'
@@ -57,7 +59,8 @@ function recalculateCatalog(db, marketCodes = ["us", "ca", "uk", "fr", "de"], op
   db.transaction(() => {
     const updateProduct = db.prepare(`
       UPDATE products
-      SET product_key=?,gtin=?,upc=?,ean=?,shipping_cost=?,landed_cost=?,score=?,evidence_confidence=?,
+      SET product_key=?,gtin=?,upc=?,ean=?,shipping_cost=?,landed_cost=?,score=?,relevance_score=?,
+          commerce_quality=?,ranking_score=?,evidence_confidence=?,
           score_breakdown=?,selection_reason=?,status=?,updated_at=?
       WHERE id=?
     `);
@@ -74,6 +77,9 @@ function recalculateCatalog(db, marketCodes = ["us", "ca", "uk", "fr", "de"], op
         scored?.shipping_cost ?? null,
         scored?.landed_cost ?? null,
         scored?.score ?? 0,
+        scored?.relevance_score ?? 0,
+        scored?.commerce_quality ?? 0,
+        scored?.ranking_score ?? 0,
         scored?.evidence_confidence ?? 0,
         JSON.stringify(scored?.score_breakdown || {model:SCORE_MODEL}),
         scored?.selection_reason || "",

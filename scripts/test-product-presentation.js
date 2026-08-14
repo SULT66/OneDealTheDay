@@ -58,11 +58,11 @@ assert(french.display_seller_feedback.includes("12 000") || french.display_sel
 const correctedSnapshot = presentProduct({
   ...fixture,
   drop_score: 77,
-  drop_score_model: "current-offer-v6",
+  drop_score_model: "current-offer-v7",
   drop_price: 44.62,
   evidence_confidence: 70,
   score_breakdown: JSON.stringify({
-    model:"current-offer-v6",
+    model:"current-offer-v7",
     price_quality:20,
     product_quality:0,
     review_confidence:0,

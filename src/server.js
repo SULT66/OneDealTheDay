@@ -16,7 +16,7 @@ const { sourceSql, isPublicSource } = require("./publicCatalog");
 const { enabledProviders, searchForAssistant } = require("./providers/registry");
 const { coverage: retailerCoverage } = require("./retailerCatalog");
 const { presentProduct } = require("./productPresentation");
-const { deduplicationKeys, isDailyPickEligible } = require("./ranker");
+const { deduplicationKeys, isDailyPickEligible, scoreOffers, selectUniqueProducts } = require("./ranker");
 const { methodology, methodologyMain } = require("./methodology");
 const { createEditorialBrief } = require("./editorialBrief");
 const {
@@ -712,7 +712,7 @@ const recordClick = (req, product, {
 const requestMarket = req => req.market ? market(req.market) : marketFromIp(req);
 const isGenericBrand = value => /^(?:unbranded(?:-generic)?|generic|unknown|branded)$/i.test(clean(value));
 const isPubliclyIndexable = product => isDailyPickEligible(product);
-const navCategories = code => uniqueProductsInOrder(db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()} AND category<>'' ORDER BY score DESC,updated_at DESC`).all(code))
+const navCategories = code => uniqueProductsInOrder(db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()} AND category<>'' ORDER BY COALESCE(ranking_score,score) DESC,score DESC,updated_at DESC`).all(code))
   .filter(isPubliclyIndexable)
   .map(product => product.category)
   .filter((category, index, categories) => categories.indexOf(category) === index)
@@ -863,7 +863,7 @@ const alternativesFor = (product, limit = 3) => {
   const words = significantWords(product?.canonical_title || product?.title);
   const price = Number(product?.current_price);
   const currentKeys = new Set(deduplicationKeys(product));
-  const candidates = db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()} AND category=? AND id<>? ORDER BY score DESC,updated_at DESC LIMIT 40`)
+  const candidates = db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()} AND category=? AND id<>? ORDER BY COALESCE(ranking_score,score) DESC,score DESC,updated_at DESC LIMIT 40`)
     .all(product.market, product.category || "Deals", product.id)
     .filter(isPubliclyIndexable)
     .filter(candidate => !deduplicationKeys(candidate).some(key => currentKeys.has(key)))
@@ -918,7 +918,7 @@ app.get("/deal/:slug", (req, res) => {
   const allLow = intelligence.allTime.sufficient ? intelligence.allTime.low : null;
   const alternatives = alternativesFor(p);
   const alternativeIds = new Set(alternatives.map(product => product.id));
-  const related = p.brand_slug ? uniqueProductsInOrder(db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()} AND brand_slug=? AND id<>? ORDER BY score DESC LIMIT 16`).all(p.market, p.brand_slug, p.id).filter(isPubliclyIndexable).filter(product => !alternativeIds.has(product.id))).slice(0, 4) : [];
+  const related = p.brand_slug ? uniqueProductsInOrder(db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()} AND brand_slug=? AND id<>? ORDER BY COALESCE(ranking_score,score) DESC,score DESC LIMIT 16`).all(p.market, p.brand_slug, p.id).filter(isPubliclyIndexable).filter(product => !alternativeIds.has(product.id))).slice(0, 4) : [];
   const offerRows = sameProductOffers(p);
   const brief = createEditorialBrief(p, display, {
     language: req.language,
@@ -968,7 +968,7 @@ app.get("/deal/:slug", (req, res) => {
 app.get("/category/:slug", (req, res) => {
   const selectedMarket = requestMarket(req);
   const localizedMarketName = marketName(selectedMarket.code, req.language);
-  const all = uniqueProductsInOrder(db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()} ORDER BY score DESC,updated_at DESC`).all(selectedMarket.code)).filter(isPubliclyIndexable);
+  const all = uniqueProductsInOrder(db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()} ORDER BY COALESCE(ranking_score,score) DESC,score DESC,updated_at DESC`).all(selectedMarket.code)).filter(isPubliclyIndexable);
   const category = [...new Set(all.map(product => product.category).filter(Boolean))].find(value => slug(value) === req.params.slug);
   if (!category) return sendNotFound(req, res);
   const products = all.filter(product => product.category === category), canonical = SITE + catPath(category, selectedMarket.code);
@@ -990,8 +990,16 @@ app.get("/search", (req, res) => {
   const selectedMarket = requestMarket(req);
   const query = clean(req.query.q).slice(0, 80);
   const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
-  const all = uniqueProductsInOrder(db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()} ORDER BY score DESC,updated_at DESC`).all(selectedMarket.code)).filter(isPubliclyIndexable);
-  const products = query ? all.filter(product => matchesSearch(product, terms)) : [];
+  const all = uniqueProductsInOrder(db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()} ORDER BY COALESCE(ranking_score,score) DESC,score DESC,updated_at DESC`).all(selectedMarket.code)).filter(isPubliclyIndexable);
+  const matches = query ? all.filter(product => matchesSearch(product, terms)) : [];
+  const products = query ? selectUniqueProducts(scoreOffers(matches, {
+    query,
+    currency:selectedMarket.currency,
+    minimumScore:0,
+    minimumCommerceQuality:0,
+    minimumEvidenceConfidence:0,
+    maximumShippingRatio:0.5
+  })) : [];
   const count = t(req.language, "search.found", { count: products.length });
   const empty = query ? t(req.language,"page.searchNoMatch",{query}) : t(req.language,"page.searchPrompt");
   const body = `<main data-analytics-page="search" data-analytics-query="${esc(query)}" data-analytics-result-count="${products.length}"><section class="deals-section"><div class="section-heading"><div><p class="eyebrow">${esc(marketName(selectedMarket.code, req.language).toUpperCase())} · ${esc(t(req.language,"search.results").toUpperCase())}</p><h1>${query ? `${esc(t(req.language,"search.results"))}: “${esc(query)}”` : esc(t(req.language,"search.short"))}</h1></div><p class="result-count">${count}</p></div>${products.length ? `<div class="grid">${products.map((product,index)=>productCard(product,index+1,req.language,"search")).join("")}</div>` : `<div class="empty-state">${esc(empty)}<div class="empty-actions"><a class="primary-cta" href="${marketPath(selectedMarket.code)}">${esc(t(req.language,"page.backToday"))}</a></div></div>`}</section></main>`;
@@ -1037,7 +1045,7 @@ app.get("/archive", (req, res) => {
 
 app.get("/brand/:slug", (req, res) => {
   const selectedMarket = requestMarket(req);
-  const products = uniqueProductsInOrder(db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()} AND brand_slug=? ORDER BY score DESC,updated_at DESC`).all(selectedMarket.code, req.params.slug)).filter(isPubliclyIndexable);
+  const products = uniqueProductsInOrder(db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()} AND brand_slug=? ORDER BY COALESCE(ranking_score,score) DESC,score DESC,updated_at DESC`).all(selectedMarket.code, req.params.slug)).filter(isPubliclyIndexable);
   if (!products.length) return sendNotFound(req, res);
   const brand = products[0].brand, canonical = SITE + brandPath(brand, selectedMarket.code), avgPrice = products.reduce((sum,p)=>sum+Number(p.current_price||0),0)/products.length, avgRating = products.reduce((sum,p)=>sum+Number(p.rating||0),0)/products.length, avgDiscount = products.reduce((sum,p)=>sum+discountPercent(p),0)/products.length;
   const alternateCodes = marketCodes.filter(code => db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()} AND brand_slug=?`).all(code, req.params.slug).some(isPubliclyIndexable));
@@ -1049,7 +1057,7 @@ app.get("/brand/:slug", (req, res) => {
 
 app.get("/brands", (req, res) => {
   const selectedMarket = requestMarket(req);
-  const brands = summarizeBrands(db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()} AND brand_slug<>'' ORDER BY score DESC,updated_at DESC`).all(selectedMarket.code).filter(product => isPubliclyIndexable(product) && !isGenericBrand(product.brand_slug)));
+  const brands = summarizeBrands(db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()} AND brand_slug<>'' ORDER BY COALESCE(ranking_score,score) DESC,score DESC,updated_at DESC`).all(selectedMarket.code).filter(product => isPubliclyIndexable(product) && !isGenericBrand(product.brand_slug)));
   if (!brands.length) {
     res.set("X-Robots-Tag", "noindex, follow");
     return sendNotFound(req, res);
@@ -1066,7 +1074,7 @@ app.get("/robots.txt", (req, res) => res
   .type("text/plain")
   .send(`User-agent: *\nAllow: /\nDisallow: /admin\nDisallow: /api/\nDisallow: /go/\nDisallow: /us/go/\nDisallow: /ca/go/\nDisallow: /uk/go/\nDisallow: /fr/go/\nDisallow: /de/go/\n\nSitemap: ${SITE}/sitemap.xml\n`));
 app.get("/sitemap.xml", (req, res) => {
-  const products = uniqueProductsInOrder(db.prepare(`SELECT * FROM products WHERE status='published' AND ${sourceSql()} ORDER BY market,score DESC,updated_at DESC`).all())
+  const products = uniqueProductsInOrder(db.prepare(`SELECT * FROM products WHERE status='published' AND ${sourceSql()} ORDER BY market,COALESCE(ranking_score,score) DESC,score DESC,updated_at DESC`).all())
     .filter(isPubliclyIndexable);
   const urls = [];
   const localizedAlternates = (pathname, codes = marketCodes) => {
@@ -1304,7 +1312,7 @@ app.get("/api/products", (req, res) => {
     conditions.push("category=?");
     params.push(String(req.query.category));
   }
-  const catalog = uniqueProductsInOrder(db.prepare(`SELECT * FROM products WHERE ${conditions.join(" AND ")} ORDER BY score DESC,updated_at DESC`).all(...params)).filter(isPubliclyIndexable);
+  const catalog = uniqueProductsInOrder(db.prepare(`SELECT * FROM products WHERE ${conditions.join(" AND ")} ORDER BY COALESCE(ranking_score,score) DESC,score DESC,updated_at DESC`).all(...params)).filter(isPubliclyIndexable);
   const daily = db.prepare(`
     SELECT product_id,rank,score AS drop_score,score_model AS drop_score_model,current_price AS drop_price,
       original_price AS drop_original_price,drop_date,selection_reason
@@ -1315,7 +1323,9 @@ app.get("/api/products", (req, res) => {
   const products = [...catalog].sort((left, right) => {
     const leftRank = dailyById.get(left.id)?.rank || Number.MAX_SAFE_INTEGER;
     const rightRank = dailyById.get(right.id)?.rank || Number.MAX_SAFE_INTEGER;
-    return leftRank - rightRank || Number(right.score || 0) - Number(left.score || 0);
+    return leftRank - rightRank ||
+      Number(right.ranking_score ?? right.score ?? 0) - Number(left.ranking_score ?? left.score ?? 0) ||
+      Number(right.score || 0) - Number(left.score || 0);
   });
   res.json(products.map(product => {
     const snapshot = dailyById.get(product.id);
@@ -1337,10 +1347,10 @@ app.get("/api/products", (req, res) => {
 });
 app.get("/api/brands", (req,res) => {
   const selectedMarket = normalizeMarket(req.query.market) || requestMarket(req).code;
-  const brands = summarizeBrands(db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()} AND brand_slug<>'' ORDER BY score DESC,updated_at DESC`).all(selectedMarket).filter(product => isPubliclyIndexable(product) && !isGenericBrand(product.brand_slug)));
+  const brands = summarizeBrands(db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()} AND brand_slug<>'' ORDER BY COALESCE(ranking_score,score) DESC,score DESC,updated_at DESC`).all(selectedMarket).filter(product => isPubliclyIndexable(product) && !isGenericBrand(product.brand_slug)));
   res.json(brands.map(brand => ({...brand,url:brandPath(brand.brand, selectedMarket)})));
 });
-app.get("/api/brands/:slug", (req,res) => { const products = uniqueProductsInOrder(db.prepare(`SELECT * FROM products WHERE status='published' AND ${sourceSql()} AND brand_slug=? ORDER BY score DESC`).all(req.params.slug)).filter(isPubliclyIndexable); if (!products.length) return res.status(404).json({error:"Brand not found"}); const brand = products[0].brand; res.json({brand,slug:req.params.slug,url:brandPath(brand),summary:{products:products.length,average_price:products.reduce((s,p)=>s+Number(p.current_price||0),0)/products.length,average_rating:products.reduce((s,p)=>s+Number(p.rating||0),0)/products.length,average_discount:products.reduce((s,p)=>s+discountPercent(p),0)/products.length,total_clicks:db.prepare(`SELECT COUNT(*) n FROM clicks c JOIN products p ON p.id=c.product_id WHERE c.destination_type='retailer' AND ${sourceSql("p")} AND p.brand_slug=?`).get(req.params.slug).n},products:products.map(p=>({...p,deal_url:dealPath(p)}))}); });
+app.get("/api/brands/:slug", (req,res) => { const products = uniqueProductsInOrder(db.prepare(`SELECT * FROM products WHERE status='published' AND ${sourceSql()} AND brand_slug=? ORDER BY COALESCE(ranking_score,score) DESC,score DESC`).all(req.params.slug)).filter(isPubliclyIndexable); if (!products.length) return res.status(404).json({error:"Brand not found"}); const brand = products[0].brand; res.json({brand,slug:req.params.slug,url:brandPath(brand),summary:{products:products.length,average_price:products.reduce((s,p)=>s+Number(p.current_price||0),0)/products.length,average_rating:products.reduce((s,p)=>s+Number(p.rating||0),0)/products.length,average_discount:products.reduce((s,p)=>s+discountPercent(p),0)/products.length,total_clicks:db.prepare(`SELECT COUNT(*) n FROM clicks c JOIN products p ON p.id=c.product_id WHERE c.destination_type='retailer' AND ${sourceSql("p")} AND p.brand_slug=?`).get(req.params.slug).n},products:products.map(p=>({...p,deal_url:dealPath(p)}))}); });
 app.get("/api/products/:id/price-history", (req,res) => { const product = db.prepare(`SELECT id,title,current_price,currency FROM products WHERE id=? AND status='published' AND ${sourceSql()}`).get(req.params.id); if (!product) return res.status(404).json({error:"Product not found"}); const history = historyFor(product.id); res.json({product,summary:{observations:history.length,lowest_30_days:minSince(history,30),lowest_90_days:minSince(history,90),lowest_ever:history.length?Math.min(...history.map(row=>Number(row.price)).filter(Number.isFinite)):null},history}); });
 app.get("/api/status", (req,res) => {
   const latestRun = db.prepare("SELECT * FROM refresh_runs ORDER BY id DESC LIMIT 1").get() || null;

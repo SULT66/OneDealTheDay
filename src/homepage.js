@@ -208,7 +208,7 @@ module.exports = function homepage(req, res) {
   const products = selectUniqueProducts(
     db
       .prepare(
-        `SELECT * FROM products WHERE market=? AND status='published'${sourceFilter} ORDER BY score DESC, updated_at DESC`,
+        `SELECT * FROM products WHERE market=? AND status='published'${sourceFilter} ORDER BY COALESCE(ranking_score,score) DESC, score DESC, updated_at DESC`,
       )
       .all(selectedMarket.code),
   ).map((product) =>

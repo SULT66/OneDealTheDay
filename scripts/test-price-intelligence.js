@@ -46,7 +46,7 @@ const score = scoreProduct({
   source_rank: 1
 });
 assert(score.total >= 70 && score.total <= 100, `strong real offer should score credibly, received ${score.total}`);
-assert.equal(score.breakdown.model, "current-offer-v5");
+assert.equal(score.breakdown.model, "current-offer-v7");
 
 const newListing = {
   source: "ebay",
