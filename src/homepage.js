@@ -270,6 +270,16 @@ module.exports = function homepage(req, res) {
   const categoryChoices = (
     categories.length ? categories : DEFAULT_INTEREST_CATEGORIES
   ).slice(0, 10);
+  const merchantCounts = new Map();
+  products.forEach((product) => {
+    const merchant = storeName(product);
+    if (!merchant) return;
+    merchantCounts.set(merchant, (merchantCounts.get(merchant) || 0) + 1);
+  });
+  const storeNavigation = [...merchantCounts.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, 10)
+    .map(([merchant]) => merchant);
   const archiveCandidates = db
     .prepare(
       `
@@ -450,6 +460,7 @@ module.exports = function homepage(req, res) {
     featuredHtml,
     updatedText:featured ? statusText(featured) : t(language, "home.preparing"),
     categoryLinks:categories.map(category => `<a href="${categoryPath(category, selectedMarket.code)}">${esc(category)}</a>`).join(""),
+    storeLinks:storeNavigation.map(merchant => `<a href="${marketPath(selectedMarket.code, "/search")}?q=${encodeURIComponent(merchant)}">${esc(merchant)}</a>`).join(""),
     categoryChoices:categoryChoices.map(category => `<label><input type="checkbox" name="categories" value="${esc(category)}"><span>${esc(category)}</span></label>`).join(""),
     moreWorthSeeingHtml:moreWorthSeeing.map((product, index) => mainCard(product, index + 1, language)).join(""),
     moreWorthSeeingCount:moreWorthSeeing.length,

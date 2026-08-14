@@ -298,7 +298,7 @@
   const renderCategoryMenu = () => {
     const categories = [...new Set(products.map(product => product.category).filter(Boolean))];
     const categoryUrl = category => marketPath(`/category/${category.toLowerCase().replace(/&/g, " and ").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`);
-    els.categoryMenu.innerHTML = [`<a href="#top">${esc(tr("nav.more", "9 More Worth Seeing"))}</a>`, ...categories.map(category => `<a href="${esc(categoryUrl(category))}">${esc(displayCategory(products.find(product => product.category === category) || { category }))}</a>`)].join("");
+    els.categoryMenu.innerHTML = [`<a href="#top-picks">${esc(tr("nav.topTen", "Today's Top 10"))}</a>`, ...categories.map(category => `<a href="${esc(categoryUrl(category))}">${esc(displayCategory(products.find(product => product.category === category) || { category }))}</a>`)].join("");
   };
 
   const currentUrl = new URL(window.location.href);
@@ -376,7 +376,7 @@
     if (!target) return false;
     updateAnchorOffset();
     const headerBottom = header ? Math.max(0, header.getBoundingClientRect().bottom) : 0;
-    const targetTop = target.id === "today"
+    const targetTop = target.id === "today" || target.id === "shopping-search"
       ? 0
       : Math.max(0, window.scrollY + target.getBoundingClientRect().top - headerBottom - 18);
     window.scrollTo({ top: targetTop, behavior: "smooth" });

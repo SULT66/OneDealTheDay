@@ -218,6 +218,13 @@ async function run() {
   assert(homepageResponse.headers.has("x-content-type-options"), "Homepage is missing Helmet security headers");
   assert(homepage.includes('<html lang="en-US">'), "US homepage language is incorrect");
   assert(homepage.includes('<link rel="canonical" href="https://www.onedailydrop.com/us">'), "US homepage canonical is missing");
+  assert(homepage.includes('data-homepage-mode="search-first-v1"'), "Day 9 search-first homepage marker is missing");
+  assert(homepage.includes('id="shopping-search"') && homepage.includes('id="homepageSearchForm"'), "Homepage search is not the primary entry point");
+  assert(homepage.includes('id="homepageSearchInput"') && homepage.includes('action="/us/search" method="get"'), "Homepage search form does not use the market search route");
+  assert(homepage.includes('id="category-navigation-title"') && homepage.includes('id="store-navigation-title"'), "Category or store navigation is missing below search");
+  assert(homepage.includes('/us/search?q=eBay'), "Homepage store navigation does not link to a real merchant search");
+  assert(homepage.includes('id="top-picks"') && homepage.includes('class="top-picks-disclosure"'), "Top 10 is not available through its separate control");
+  assert(homepage.indexOf('id="shopping-search"') < homepage.indexOf('id="top-picks"'), "Top 10 appears before the primary homepage search");
   assert(homepage.includes('property="og:site_name" content="OneDailyDrop"'), "Homepage Open Graph metadata is missing");
   assert(homepage.includes("eBay Test Product 1"), "The verified eBay catalog is missing from the US homepage");
   assert(homepage.includes("VIEW DEAL AT eBay"), "The eBay affiliate action is missing from the US homepage");
@@ -228,7 +235,8 @@ async function run() {
   assert(homepage.includes('decoding="async" fetchpriority="high"'), "Homepage LCP image priority is missing");
   assert(homepage.includes('loading="lazy" decoding="async"'), "Below-the-fold homepage images are not deferred");
   assert(homepage.includes('class="description editorial-teaser"'), "Homepage cards do not use the compact Stage 4 editorial teaser");
-  assert(homepage.includes('/styles.css?v=20260808-assistant') && homepage.includes('/app.js?v=20260808-assistant'), "Assistant homepage assets are not cache-busted");
+  assert(homepage.includes('/styles.css?v=20260814-day9-search-first'), `Day 9 homepage stylesheet is not cache-busted: ${homepage.match(/styles\.css[^\"]+/)?.[0] || "missing"}`);
+  assert(homepage.includes('/app.js?v=20260814-day9-search-first'), "Day 9 homepage script is not cache-busted");
   assert(homepage.includes("OneDailyDrop Score") && homepage.includes("Overall deal score"), "The public OneDailyDrop Score is missing from the homepage");
   assert(!homepage.includes("<small>Evidence confidence</small>"), "Internal evidence confidence is still exposed as a public score");
   assert(homepage.includes("AI Shopping Assistant") && homepage.includes("data-shopping-assistant-open"), "The AI Shopping Assistant entry point is missing");
@@ -368,6 +376,8 @@ async function run() {
   assert(!searchPage.includes("eBay Test Product 2"), "Search reintroduced a duplicate GTIN listing");
   assert(searchPage.includes("deal-metrics") && searchPage.includes("OneDailyDrop Score"), "Search results are missing the OneDailyDrop Score");
   assert(searchPage.includes('data-analytics-page="search"') && searchPage.includes('data-analytics-query="product 3"'), "Search analytics context is missing");
+  const merchantSearchPage = await (await get("/us/search?q=eBay")).text();
+  assert(merchantSearchPage.includes("eBay Test Product 1"), "Store navigation query does not find the merchant catalog");
 
   const archivePage = await (await get("/us/archive")).text();
   assert(archivePage.includes("OneDailyDrop Score at selection"), "Past Drops does not preserve the score at selection");

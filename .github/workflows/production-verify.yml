@@ -36,10 +36,16 @@ jobs:
                 .pagination.total > 0 and
                 (.products | length) == 1
               ' <<<"${search_payload}" >/dev/null 2>&1; then
-                echo "Azure is serving the expected OneDailyDrop release and Search API."
-                jq '{releaseId,taxonomyVersion,market,liveProducts,provider}' <<<"${status_payload}"
-                jq '{ranking_model,sort,pagination,returned:(.products | length)}' <<<"${search_payload}"
-                exit 0
+                homepage_payload="$(curl --fail --silent --show-error --max-time 20 \
+                  'https://www.onedailydrop.com/us' || true)"
+                if grep -q 'data-homepage-mode="search-first-v1"' <<<"${homepage_payload}" && \
+                   grep -q 'id="homepageSearchForm"' <<<"${homepage_payload}" && \
+                   grep -q 'class="top-picks-disclosure"' <<<"${homepage_payload}"; then
+                  echo "Azure is serving the expected release, Search API and search-first homepage."
+                  jq '{releaseId,taxonomyVersion,market,liveProducts,provider}' <<<"${status_payload}"
+                  jq '{ranking_model,sort,pagination,returned:(.products | length)}' <<<"${search_payload}"
+                  exit 0
+                fi
               fi
             fi
             echo "Attempt ${attempt}/30: Azure has not switched to the expected release yet."
