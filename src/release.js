@@ -1,3 +1,3 @@
-const RELEASE_ID = "2026-08-14-day9-search-first-homepage-v1";
+const RELEASE_ID = "2026-08-14-day10-results-ui-v1";
 
 module.exports = { RELEASE_ID };

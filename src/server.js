@@ -17,6 +17,7 @@ const { enabledProviders, searchForAssistant } = require("./providers/registry")
 const { coverage: retailerCoverage } = require("./retailerCatalog");
 const { presentProduct } = require("./productPresentation");
 const { deduplicationKeys, isDailyPickEligible, scoreOffers, selectUniqueProducts } = require("./ranker");
+const { parseSearchOptions, searchCatalogProducts } = require("./catalogSearch");
 const { rankingValidationReport } = require("./rankingValidation");
 const { methodology, methodologyMain } = require("./methodology");
 const { createEditorialBrief } = require("./editorialBrief");
@@ -775,7 +776,7 @@ const shell = (title, description, canonical, body, schema = null, image = "", r
   const ogType = suppliedNodes.some(node => node?.["@type"] === "Product") ? "product" : "website";
   const html = `<!doctype html><html lang="${esc(locale)}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0a1020"><title>${esc(title)}</title><meta name="description" content="${esc(description.slice(0,160))}"><meta name="robots" content="${esc(robotsContent)}"><link rel="canonical" href="${esc(canonical)}"><link rel="icon" href="/favicon.svg" type="image/svg+xml">${alternates}${imageConnectionHints(image)}<meta property="og:type" content="${ogType}"><meta property="og:site_name" content="OneDailyDrop"><meta property="og:locale" content="${esc(ogLocale)}"><meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(description.slice(0,180))}"><meta property="og:url" content="${esc(canonical)}">${image ? `<meta property="og:image" content="${esc(image)}"><meta property="og:image:alt" content="${esc(title)}">` : ""}<meta name="twitter:card" content="${image ? "summary_large_image" : "summary"}"><meta name="twitter:title" content="${esc(title)}"><meta name="twitter:description" content="${esc(description.slice(0,180))}">${image ? `<meta name="twitter:image" content="${esc(image)}">` : ""}<link rel="stylesheet" href="/styles.css?v=20260731-brand-lockup"><link rel="stylesheet" href="/brand-theme.css?v=20260731-brand-lockup"><link rel="stylesheet" href="/liquid-glass.css?v=20260731-brand-lockup"><script type="application/ld+json">${JSON.stringify(pageSchema).replace(/</g,"\\u003c")}</script><script>window.__ODD_LANGUAGE__=${JSON.stringify(language)};window.__ODD_LOCALE__=${JSON.stringify(locale)};window.__ODD_TEXT__=${JSON.stringify(clientCopy(language)).replace(/</g, "\\u003c")};</script></head><body>${sharedHeader(code, language, req)}${body}${sharedFooter(code, language)}<script src="/theme.js?v=20260728-i18n2"></script><script src="/site-shell.js?v=20260728-i18n2"></script><script src="/click-tracking.js?v=20260814-day5"></script></body></html>`;
   const versionedHtml = html
-    .replace("/styles.css?v=20260731-brand-lockup", "/styles.css?v=20260808-assistant")
+    .replace("/styles.css?v=20260731-brand-lockup", "/styles.css?v=20260814-day10-results-ui")
     .replace("</head>", '<link rel="stylesheet" href="/i18n.css?v=20260808-assistant"><link rel="stylesheet" href="/shopping-assistant.css?v=20260812-all-markets-v2"></head>')
     .replace("</body>", `${shoppingAssistantPanel(code, language)}<script src="/shopping-assistant.js?v=20260813-provider-first-v1"></script></body>`);
   return localizeHtml(versionedHtml, language);
@@ -800,6 +801,18 @@ const scoreMetrics = (display, language = "en", { atSelection = false } = {}) =>
 const productCard = (product, index = 0, language = "en", sourcePage = "unknown") => {
   const display = presentProduct(localizeProduct(product, language), language);
   return `<article class="card catalog-card"><a class="image-wrap" href="${dealPath(product)}" ${trackingAttributes(product, sourcePage, "catalog_media")}><img src="${esc(product.image_url)}" alt="${esc(shortTitle(display.title))}" loading="lazy" decoding="async"></a><div class="card-content">${index ? `<span class="rank">#${index}</span>` : ""}${product.brand ? `<a class="eyebrow" href="${brandPath(product.brand, product.market)}">${esc(product.brand)}</a>` : ""}<h2 class="card-title"><a href="${dealPath(product)}" ${trackingAttributes(product, sourcePage, "catalog_title")}>${esc(shortTitle(display.title))}</a></h2><p class="description editorial-teaser"><strong>${esc(t(language,"product.why"))}</strong> ${esc(whyPicked(display, language))}</p>${scoreMetrics(display, language)}<span class="price card-price">${money(product.current_price, product.currency, languageTag(product.market, language))}</span><div class="card-actions"><a class="button" href="${dealPath(product)}" ${trackingAttributes(product, sourcePage, "catalog_details")}>${esc(t(language,"page.viewDetails"))}</a>${askDeliaButton(product, language)}</div></div></article>`;
+};
+const searchResultCard = (product, index = 0, language = "en", hasQuery = false) => {
+  const display = presentProduct(localizeProduct(product, language), language);
+  const relevance = Math.max(0, Math.min(100, Math.round(Number(product.relevance_score) || 0)));
+  const quality = Math.max(0, Math.min(100, Math.round(Number(product.commerce_quality) || 0)));
+  const badges = [
+    `<span class="search-badge search-badge-store">${esc(t(language,"search.badgeStore"))}: ${esc(storeName(product))}</span>`,
+    hasQuery && relevance > 0 ? `<span class="search-badge search-badge-match">${esc(t(language,"search.badgeMatch",{score:relevance}))}</span>` : "",
+    quality > 0 ? `<span class="search-badge search-badge-quality">${esc(t(language,"search.badgeQuality",{score:quality}))}</span>` : "",
+    display.display_availability ? `<span class="search-badge search-badge-availability">${esc(display.display_availability)}</span>` : ""
+  ].filter(Boolean).join("");
+  return `<article class="card catalog-card search-result-card"><a class="image-wrap" href="${dealPath(product)}" ${trackingAttributes(product,"search","catalog_media")}><img src="${esc(product.image_url)}" alt="${esc(shortTitle(display.title))}" loading="lazy" decoding="async"></a><div class="card-content">${index ? `<span class="rank">#${index}</span>` : ""}<div class="search-result-badges" aria-label="${esc(t(language,"search.badges"))}">${badges}</div><h2 class="card-title"><a href="${dealPath(product)}" ${trackingAttributes(product,"search","catalog_title")}>${esc(shortTitle(display.title))}</a></h2><p class="description editorial-teaser"><strong>${esc(t(language,"product.why"))}</strong> ${esc(whyPicked(display,language))}</p>${scoreMetrics(display,language)}<span class="price card-price">${money(product.current_price,product.currency,languageTag(product.market,language))}</span><div class="card-actions"><a class="button" href="${dealPath(product)}" ${trackingAttributes(product,"search","catalog_details")}>${esc(t(language,"page.viewDetails"))}</a>${askDeliaButton(product,language)}</div></div></article>`;
 };
 const alternativeCard = (product, language = "en") => {
   const display = presentProduct(localizeProduct(product, language), language);
@@ -989,21 +1002,84 @@ app.get("/category/:slug", (req, res) => {
 
 app.get("/search", (req, res) => {
   const selectedMarket = requestMarket(req);
-  const query = clean(req.query.q).slice(0, 80);
-  const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
-  const all = uniqueProductsInOrder(db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()} ORDER BY COALESCE(ranking_score,score) DESC,score DESC,updated_at DESC`).all(selectedMarket.code)).filter(isPubliclyIndexable);
-  const matches = query ? all.filter(product => matchesSearch(product, terms)) : [];
-  const products = query ? selectUniqueProducts(scoreOffers(matches, {
+  let invalidFilters = false;
+  let options;
+  try {
+    options = parseSearchOptions({...req.query, limit:24});
+  } catch {
+    invalidFilters = true;
+    options = parseSearchOptions({q:req.query.q, limit:24});
+  }
+  const rows = db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()}`).all(selectedMarket.code).filter(isPubliclyIndexable);
+  let result = searchCatalogProducts(rows, options);
+  if (result.pagination.total_pages > 0 && options.page > result.pagination.total_pages) {
+    options = {...options,page:result.pagination.total_pages};
+    result = searchCatalogProducts(rows, options);
+  }
+  const query = options.query;
+  const products = result.products;
+  const pagination = result.pagination;
+  const searchPath = marketPath(selectedMarket.code, "/search");
+  const preserveLanguage = req.language !== defaultLanguages[selectedMarket.code];
+  const state = {
     query,
-    currency:selectedMarket.currency,
-    minimumScore:0,
-    minimumCommerceQuality:0,
-    minimumEvidenceConfidence:0,
-    maximumShippingRatio:0.5
-  })) : [];
-  const count = t(req.language, "search.found", { count: products.length });
+    categories:options.categories,
+    merchants:options.merchants,
+    availability:options.availability,
+    minimumPrice:options.minimumPrice,
+    maximumPrice:options.maximumPrice,
+    sort:options.sort,
+    page:options.page
+  };
+  const searchHref = (overrides = {}) => {
+    const next = {...state,...overrides};
+    const params = new URLSearchParams();
+    if (next.query) params.set("q",next.query);
+    if (next.categories?.length) params.set("category",next.categories.join(","));
+    if (next.merchants?.length) params.set("merchant",next.merchants.join(","));
+    if (next.availability && next.availability !== "available") params.set("availability",next.availability);
+    if (next.minimumPrice != null) params.set("min_price",String(next.minimumPrice));
+    if (next.maximumPrice != null) params.set("max_price",String(next.maximumPrice));
+    if (next.sort && next.sort !== "best_match") params.set("sort",next.sort);
+    if (Number(next.page) > 1) params.set("page",String(next.page));
+    if (preserveLanguage) params.set("lang",req.language);
+    return `${searchPath}${params.size ? `?${params}` : ""}`;
+  };
+  const hidden = (name,value) => value == null || value === "" ? "" : `<input type="hidden" name="${name}" value="${esc(value)}">`;
+  const selectedCategories = new Set(options.categories);
+  const selectedMerchants = new Set(options.merchants);
+  const categoryFacets = [...result.facets.categories];
+  options.categories.forEach(value => {
+    if (!categoryFacets.some(facet => facet.value === value)) categoryFacets.push({value,count:0});
+  });
+  const merchantFacets = [...result.facets.merchants];
+  options.merchants.forEach(value => {
+    if (!merchantFacets.some(facet => facet.value === value)) merchantFacets.push({value,count:0});
+  });
+  const checkbox = (name,facet,selected,label) => `<label class="search-facet-option"><input type="checkbox" name="${name}" value="${esc(facet.value)}" ${selected.has(facet.value)?"checked":""}><span>${esc(label)}</span><small>${Number(facet.count).toLocaleString(languageTag(selectedMarket.code,req.language))}</small></label>`;
+  const activeFilters = [
+    ...options.categories.map(value => ({label:categoryLabel(value,req.language),href:searchHref({categories:options.categories.filter(item=>item!==value),page:1})})),
+    ...options.merchants.map(value => ({label:value,href:searchHref({merchants:options.merchants.filter(item=>item!==value),page:1})})),
+    ...(options.minimumPrice != null ? [{label:`${t(req.language,"search.minPrice")}: ${money(options.minimumPrice,selectedMarket.currency,languageTag(selectedMarket.code,req.language))}`,href:searchHref({minimumPrice:null,page:1})}] : []),
+    ...(options.maximumPrice != null ? [{label:`${t(req.language,"search.maxPrice")}: ${money(options.maximumPrice,selectedMarket.currency,languageTag(selectedMarket.code,req.language))}`,href:searchHref({maximumPrice:null,page:1})}] : []),
+    ...(options.availability !== "available" ? [{label:t(req.language,`search.availability.${options.availability}`),href:searchHref({availability:"available",page:1})}] : [])
+  ];
+  const filterFields = `${hidden("q",query)}${hidden("sort",options.sort)}${preserveLanguage?hidden("lang",req.language):""}`;
+  const filterPanel = `<details class="search-filters" data-results-filters><summary><span>${esc(t(req.language,"search.filters"))}</span><strong>${activeFilters.length||""}</strong></summary><form class="search-filter-body" action="${searchPath}" method="get">${filterFields}${invalidFilters?`<p class="search-filter-error" role="alert">${esc(t(req.language,"search.invalidFilters"))}</p>`:""}<fieldset><legend>${esc(t(req.language,"search.categories"))}</legend><div class="search-facet-list">${categoryFacets.slice(0,16).map(facet=>checkbox("category",facet,selectedCategories,categoryLabel(facet.value,req.language))).join("")}</div></fieldset><fieldset><legend>${esc(t(req.language,"search.stores"))}</legend><div class="search-facet-list">${merchantFacets.slice(0,16).map(facet=>checkbox("merchant",facet,selectedMerchants,facet.value)).join("")}</div></fieldset><fieldset><legend>${esc(t(req.language,"search.price"))}</legend><div class="search-price-fields"><label><span>${esc(t(req.language,"search.minPrice"))}</span><input name="min_price" type="number" min="0" step="0.01" inputmode="decimal" value="${options.minimumPrice??""}"></label><label><span>${esc(t(req.language,"search.maxPrice"))}</span><input name="max_price" type="number" min="0" step="0.01" inputmode="decimal" value="${options.maximumPrice??""}"></label></div></fieldset><fieldset><legend>${esc(t(req.language,"search.availability"))}</legend><select name="availability"><option value="available" ${options.availability==="available"?"selected":""}>${esc(t(req.language,"search.availability.available"))}</option><option value="in_stock" ${options.availability==="in_stock"?"selected":""}>${esc(t(req.language,"search.availability.in_stock"))}</option><option value="known" ${options.availability==="known"?"selected":""}>${esc(t(req.language,"search.availability.known"))}</option></select></fieldset><button class="search-apply-button" type="submit">${esc(t(req.language,"search.applyFilters"))}</button><a class="search-clear-filters" href="${esc(searchHref({categories:[],merchants:[],availability:"available",minimumPrice:null,maximumPrice:null,page:1}))}">${esc(t(req.language,"search.clearFilters"))}</a></form></details>`;
+  const sortHidden = `${hidden("q",query)}${options.categories.length?hidden("category",options.categories.join(",")):""}${options.merchants.length?hidden("merchant",options.merchants.join(",")):""}${options.availability!=="available"?hidden("availability",options.availability):""}${hidden("min_price",options.minimumPrice)}${hidden("max_price",options.maximumPrice)}${preserveLanguage?hidden("lang",req.language):""}`;
+  const sorts = [["best_match","search.sort.bestMatch"],["price_asc","search.sort.priceLow"],["price_desc","search.sort.priceHigh"],["newest","search.sort.newest"],["quality","search.sort.quality"]];
+  const sortForm = `<form class="search-sort" action="${searchPath}" method="get">${sortHidden}<label for="searchSort">${esc(t(req.language,"search.sortBy"))}</label><select id="searchSort" name="sort">${sorts.map(([value,key])=>`<option value="${value}" ${options.sort===value?"selected":""}>${esc(t(req.language,key))}</option>`).join("")}</select><button type="submit">${esc(t(req.language,"search.applySort"))}</button></form>`;
+  const activeFilterBar = activeFilters.length ? `<div class="active-search-filters" aria-label="${esc(t(req.language,"search.activeFilters"))}"><span>${esc(t(req.language,"search.activeFilters"))}</span>${activeFilters.map(filter=>`<a href="${esc(filter.href)}" aria-label="${esc(t(req.language,"search.removeFilter",{filter:filter.label}))}">${esc(filter.label)} ×</a>`).join("")}</div>` : "";
+  const firstResult = pagination.total ? (pagination.page-1)*pagination.limit+1 : 0;
+  const lastResult = Math.min(pagination.total,pagination.page*pagination.limit);
+  const pageNumbers = [];
+  for (let page=Math.max(1,pagination.page-2);page<=Math.min(pagination.total_pages,pagination.page+2);page++) pageNumbers.push(page);
+  const paginationHtml = pagination.total_pages>1 ? `<nav class="search-pagination" aria-label="${esc(t(req.language,"search.pagination"))}">${pagination.has_previous?`<a rel="prev" href="${esc(searchHref({page:pagination.page-1}))}">← ${esc(t(req.language,"search.previous"))}</a>`:`<span aria-disabled="true">← ${esc(t(req.language,"search.previous"))}</span>`}<div>${pageNumbers.map(page=>`<a href="${esc(searchHref({page}))}" ${page===pagination.page?'aria-current="page"':""}>${page}</a>`).join("")}</div>${pagination.has_next?`<a rel="next" href="${esc(searchHref({page:pagination.page+1}))}">${esc(t(req.language,"search.next"))} →</a>`:`<span aria-disabled="true">${esc(t(req.language,"search.next"))} →</span>`}</nav>` : "";
+  const resultSummary = t(req.language,"search.showing",{first:firstResult,last:lastResult,count:pagination.total});
+  const cards = products.map((product,index)=>searchResultCard(product,(pagination.page-1)*pagination.limit+index+1,req.language,Boolean(query))).join("");
   const empty = query ? t(req.language,"page.searchNoMatch",{query}) : t(req.language,"page.searchPrompt");
-  const body = `<main data-analytics-page="search" data-analytics-query="${esc(query)}" data-analytics-result-count="${products.length}"><section class="deals-section"><div class="section-heading"><div><p class="eyebrow">${esc(marketName(selectedMarket.code, req.language).toUpperCase())} · ${esc(t(req.language,"search.results").toUpperCase())}</p><h1>${query ? `${esc(t(req.language,"search.results"))}: “${esc(query)}”` : esc(t(req.language,"search.short"))}</h1></div><p class="result-count">${count}</p></div>${products.length ? `<div class="grid">${products.map((product,index)=>productCard(product,index+1,req.language,"search")).join("")}</div>` : `<div class="empty-state">${esc(empty)}<div class="empty-actions"><a class="primary-cta" href="${marketPath(selectedMarket.code)}">${esc(t(req.language,"page.backToday"))}</a></div></div>`}</section></main>`;
+  const results = products.length ? `<div class="grid search-results-grid">${cards}</div>${paginationHtml}` : `<div class="empty-state">${esc(empty)}<div class="empty-actions"><a class="primary-cta" href="${esc(searchHref({categories:[],merchants:[],availability:"available",minimumPrice:null,maximumPrice:null,page:1}))}">${esc(t(req.language,"search.clearFilters"))}</a></div></div>`;
+  const body = `<main class="search-results-page" data-results-ui="facets-sorting-badges-v1" data-analytics-page="search" data-analytics-query="${esc(query)}" data-analytics-result-count="${pagination.total}"><section class="search-results-hero"><p class="eyebrow">${esc(marketName(selectedMarket.code,req.language).toUpperCase())} · ${esc(t(req.language,"search.results").toUpperCase())}</p><h1>${query?`${esc(t(req.language,"search.resultsFor"))} “${esc(query)}”`:esc(t(req.language,"search.allProducts"))}</h1><form class="results-page-search" action="${searchPath}" method="get" role="search"><input name="q" type="search" value="${esc(query)}" placeholder="${esc(t(req.language,"search.placeholder"))}" aria-label="${esc(t(req.language,"search.short"))}">${preserveLanguage?hidden("lang",req.language):""}<button type="submit">${esc(t(req.language,"search.short"))}</button></form><p class="search-badge-explanation">${esc(t(req.language,"search.badgeExplanation"))}</p></section>${activeFilterBar}<div class="search-results-toolbar"><p>${esc(resultSummary)}</p>${sortForm}</div><div class="search-results-layout">${filterPanel}<section class="search-results-list" aria-live="polite">${results}</section></div></main>`;
   const canonicalPath = marketPath(selectedMarket.code, "/search");
   res.send(shell(`${query ? `${query} Deals in ${selectedMarket.name}` : `Search ${selectedMarket.name} Deals`} | OneDailyDrop`, `Search OneDailyDrop deals in ${selectedMarket.name}${query ? ` for ${query}` : ""}.`, `${SITE}${canonicalPath}${query ? `?q=${encodeURIComponent(query)}` : ""}`, body, null, "", "noindex,follow", selectedMarket.code, marketCodes, req));
 });

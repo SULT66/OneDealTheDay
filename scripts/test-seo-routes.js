@@ -376,8 +376,27 @@ async function run() {
   assert(!searchPage.includes("eBay Test Product 2"), "Search reintroduced a duplicate GTIN listing");
   assert(searchPage.includes("deal-metrics") && searchPage.includes("OneDailyDrop Score"), "Search results are missing the OneDailyDrop Score");
   assert(searchPage.includes('data-analytics-page="search"') && searchPage.includes('data-analytics-query="product 3"'), "Search analytics context is missing");
+  assert(searchPage.includes('data-results-ui="facets-sorting-badges-v1"'), "Day 10 Results UI marker is missing");
+  assert(searchPage.includes('/styles.css?v=20260814-day10-results-ui'), "Day 10 results stylesheet is not cache-busted");
+  assert(searchPage.includes('<meta name="robots" content="noindex,follow">'), "Search results must remain noindex");
+  assert(searchPage.includes("data-results-filters") && searchPage.includes('class="search-sort"'), "Search facets or sorting controls are missing");
+  assert(searchPage.includes("search-badge-match") && searchPage.includes("Paid placement never changes them"), "Transparent result badges or their explanation are missing");
+  assert(searchPage.includes('name="category"') && searchPage.includes('name="merchant"') && searchPage.includes('name="availability"'), "Search filter parameters are incomplete");
+  assert(searchPage.includes('name="sort"') && searchPage.includes('value="price_asc"'), "Search sorting options are incomplete");
+  assert(/Showing 1–\d+ of \d+ products/.test(searchPage), "Search result range does not use API pagination totals");
   const merchantSearchPage = await (await get("/us/search?q=eBay")).text();
   assert(merchantSearchPage.includes("eBay Test Product 1"), "Store navigation query does not find the merchant catalog");
+  const sortedSearchPage = await (await get("/us/search?q=product&merchant=eBay&sort=price_asc")).text();
+  assert(sortedSearchPage.includes('option value="price_asc" selected'), "Selected search sort is not preserved in the UI");
+  assert(sortedSearchPage.includes('name="merchant" value="eBay" checked'), "Selected merchant facet is not preserved in the UI");
+  const spanishSearchPage = await (await get("/us/search?q=product&lang=es")).text();
+  assert(spanishSearchPage.includes("Filtros activos") || spanishSearchPage.includes("Calidad de oferta"), "Day 10 search controls are not localized in Spanish");
+  const germanSearchPage = await (await get("/de/search?q=product")).text();
+  assert(germanSearchPage.includes("Beste Übereinstimmung") && germanSearchPage.includes("Angebotsqualität"), "Day 10 search controls are not localized in German");
+  const invalidFilterSearch = await (await get("/us/search?q=product&min_price=500&max_price=100")).text();
+  assert(invalidFilterSearch.includes("filters were invalid and have been reset"), "Invalid UI filters do not recover safely");
+  const outOfRangeSearch = await (await get("/us/search?q=product&page=999")).text();
+  assert(!/Showing \d+–\d+ of 0 products/.test(outOfRangeSearch) && outOfRangeSearch.includes("search-result-card"), "Out-of-range result page is not clamped safely");
 
   const archivePage = await (await get("/us/archive")).text();
   assert(archivePage.includes("OneDailyDrop Score at selection"), "Past Drops does not preserve the score at selection");

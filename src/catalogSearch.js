@@ -84,6 +84,10 @@ function timestamp(product) {
   return Date.parse(product.updated_at || product.last_seen_at || product.checked_at || "") || 0;
 }
 
+function isUnavailable(product) {
+  return /\b(?:out of stock|unavailable|expired|ended|sold out)\b/i.test(clean(product.availability));
+}
+
 function stableTieBreak(left, right) {
   return fold(left.title).localeCompare(fold(right.title)) || Number(left.id || 0) - Number(right.id || 0);
 }
@@ -123,6 +127,7 @@ function searchCatalogProducts(rows, options) {
   const candidates = (rows || [])
     .filter(product => !categoryFilters.size || categoryFilters.has(fold(product.normalized_category || product.category)))
     .filter(product => !merchantFilters.size || merchantFilters.has(fold(retailer(product))) || merchantFilters.has(fold(product.source)))
+    .filter(product => options.availability !== "available" || !isUnavailable(product))
     .filter(product => options.availability !== "known" || Boolean(clean(product.availability)))
     .filter(product => options.availability !== "in_stock" || /\b(?:in stock|available)\b/i.test(clean(product.availability)))
     .filter(product => updatedAfter == null || timestamp(product) >= updatedAfter);

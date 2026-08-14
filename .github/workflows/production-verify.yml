@@ -41,10 +41,17 @@ jobs:
                 if grep -q 'data-homepage-mode="search-first-v1"' <<<"${homepage_payload}" && \
                    grep -q 'id="homepageSearchForm"' <<<"${homepage_payload}" && \
                    grep -q 'class="top-picks-disclosure"' <<<"${homepage_payload}"; then
-                  echo "Azure is serving the expected release, Search API and search-first homepage."
-                  jq '{releaseId,taxonomyVersion,market,liveProducts,provider}' <<<"${status_payload}"
-                  jq '{ranking_model,sort,pagination,returned:(.products | length)}' <<<"${search_payload}"
-                  exit 0
+                  results_payload="$(curl --fail --silent --show-error --max-time 40 \
+                    'https://www.onedailydrop.com/us/search?q=office' || true)"
+                  if grep -q 'data-results-ui="facets-sorting-badges-v1"' <<<"${results_payload}" && \
+                     grep -q 'data-results-filters' <<<"${results_payload}" && \
+                     grep -q 'class="search-sort"' <<<"${results_payload}" && \
+                     grep -q 'search-badge-match' <<<"${results_payload}"; then
+                    echo "Azure is serving the expected release, Search API, search-first homepage and Day 10 results UI."
+                    jq '{releaseId,taxonomyVersion,market,liveProducts,provider}' <<<"${status_payload}"
+                    jq '{ranking_model,sort,pagination,returned:(.products | length)}' <<<"${search_payload}"
+                    exit 0
+                  fi
                 fi
               fi
             fi
