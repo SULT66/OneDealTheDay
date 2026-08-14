@@ -18,6 +18,7 @@ const { coverage: retailerCoverage } = require("./retailerCatalog");
 const { presentProduct } = require("./productPresentation");
 const { deduplicationKeys, isDailyPickEligible, scoreOffers, selectUniqueProducts } = require("./ranker");
 const { parseSearchOptions, searchCatalogProducts } = require("./catalogSearch");
+const { offerIdentity, offerSummary, sourceKey } = require("./productOffers");
 const { rankingValidationReport } = require("./rankingValidation");
 const { methodology, methodologyMain } = require("./methodology");
 const { createEditorialBrief } = require("./editorialBrief");
@@ -337,7 +338,47 @@ app.use((req, res, next) => {
   const queryIndex = String(req.originalUrl || "").indexOf("?");
   return res.redirect(301, `${destination}${queryIndex >= 0 ? req.originalUrl.slice(queryIndex) : ""}`);
 });
-app.use(express.static(publicDir));
+app.use(express.static(publicDir, {
+  etag:true,
+  setHeaders:(res, filePath) => {
+    if (!/\.(?:css|js|svg|png|jpe?g|webp|gif|woff2?)$/i.test(filePath)) return;
+    const versioned = String(res.req?.originalUrl || "").includes("?");
+    res.set("Cache-Control", versioned
+      ? "public, max-age=31536000, immutable"
+      : "public, max-age=3600, stale-while-revalidate=86400");
+  }
+}));
+
+const publicHtmlCache = new Map();
+app.use((req, res, next) => {
+  if (req.method !== "GET" || !/^\/(?:deal\/[^/]+|category\/[^/]+|search|archive|brand\/[^/]+|brands|about|contact|privacy|terms|affiliate-disclosure|editorial-policy|how-we-select-deals|price-disclaimer)\/?$/.test(req.path)) return next();
+  const cacheKey = `${req.language || "en"}:${req.originalUrl}`;
+  const cached = publicHtmlCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    if (cached.robots) res.set("X-Robots-Tag", cached.robots);
+    return res.set("X-ODD-Cache", "HIT")
+      .set("Cache-Control", cached.cacheControl)
+      .type("html")
+      .send(cached.body);
+  }
+  if (cached) publicHtmlCache.delete(cacheKey);
+  const originalSend = res.send.bind(res);
+  res.send = body => {
+    if (res.statusCode === 200 && typeof body === "string" && body.length < 1000000) {
+      if (publicHtmlCache.size >= 300) publicHtmlCache.delete(publicHtmlCache.keys().next().value);
+      const cacheControl = "private, max-age=45, stale-while-revalidate=180";
+      publicHtmlCache.set(cacheKey, {
+        body,
+        cacheControl,
+        robots:String(res.get("X-Robots-Tag") || ""),
+        expiresAt:Date.now() + 45000
+      });
+      res.set("X-ODD-Cache", "MISS").set("Cache-Control", cacheControl);
+    }
+    return originalSend(body);
+  };
+  return next();
+});
 
 const authAttempts = new Map();
 const authRateLimit = (req, res, next) => {
@@ -714,11 +755,26 @@ const recordClick = (req, product, {
 const requestMarket = req => req.market ? market(req.market) : marketFromIp(req);
 const isGenericBrand = value => /^(?:unbranded(?:-generic)?|generic|unknown|branded)$/i.test(clean(value));
 const isPubliclyIndexable = product => isDailyPickEligible(product);
-const navCategories = code => uniqueProductsInOrder(db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()} AND category<>'' ORDER BY COALESCE(ranking_score,score) DESC,score DESC,updated_at DESC`).all(code))
-  .filter(isPubliclyIndexable)
-  .map(product => product.category)
-  .filter((category, index, categories) => categories.indexOf(category) === index)
-  .sort();
+const navigationCategoryCache = new Map();
+const searchCatalogCache = new Map();
+const navCategories = code => {
+  const cached = navigationCategoryCache.get(code);
+  if (cached && cached.expiresAt > Date.now()) return cached.categories;
+  const categories = uniqueProductsInOrder(db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()} AND category<>'' ORDER BY COALESCE(ranking_score,score) DESC,score DESC,updated_at DESC`).all(code))
+    .filter(isPubliclyIndexable)
+    .map(product => product.category)
+    .filter((category, index, values) => values.indexOf(category) === index)
+    .sort();
+  navigationCategoryCache.set(code, {categories, expiresAt:Date.now() + 5 * 60 * 1000});
+  return categories;
+};
+const searchRowsForMarket = code => {
+  const cached = searchCatalogCache.get(code);
+  if (cached && cached.expiresAt > Date.now()) return cached.rows;
+  const rows = db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()}`).all(code).filter(isPubliclyIndexable);
+  searchCatalogCache.set(code, {rows, expiresAt:Date.now() + 60000});
+  return rows;
+};
 const sharedHeader = (code, language = "en", req = null) => {
   const home = marketPath(code);
   return `<header class="site-header"><div class="header-top"><a class="brand" href="${home}"><span class="brand-mark" aria-hidden="true"><img src="/header-bag.svg?v=20260731-larger-bag" alt=""></span><span class="brand-copy"><strong><span>OneDaily</span><span class="brand-drop">Drop</span></strong><small>${esc(t(language,"brand.seoTagline"))}</small></span></a><form class="header-search" action="${marketPath(code, "/search")}"><span aria-hidden="true">⌕</span><input name="q" type="search" placeholder="${esc(t(language,"search.short"))}" aria-label="${esc(t(language,"search.short"))}"></form><button class="header-ai" type="button" data-shopping-assistant-open><span aria-hidden="true">✦</span><span>${esc(t(language,"assistant.short"))}</span></button><a class="header-subscribe" href="${home}#subscribe">${esc(t(language,"nav.subscribe"))}</a><button id="themeToggle" class="theme-button" type="button" aria-label="${esc(t(language,"theme.toDark"))}" title="${esc(t(language,"theme.dark"))}"><span class="theme-button-icon" aria-hidden="true">☾</span><span class="theme-button-label">${esc(t(language,"theme.dark"))}</span></button>${req ? languageSwitcher(req, code, language) : ""}<button class="mobile-menu-toggle" type="button" aria-expanded="false" aria-controls="mainNavigation" aria-label="${esc(t(language,"menu.open"))}"><span></span><span></span><span></span></button></div><nav id="mainNavigation" class="main-nav" aria-label="${esc(t(language,"nav.primary"))}"><a href="${home}">${esc(t(language,"nav.todayShort"))}</a><div class="category-menu"><button type="button" aria-expanded="false">${esc(t(language,"nav.categories"))} <span>⌄</span></button><div class="mega-menu" hidden>${navCategories(code).map(category => `<a href="${catPath(category, code)}">${esc(categoryLabel(category, language))}</a>`).join("")}</div></div><a href="${home}#top">${esc(t(language,"nav.more"))}</a><a href="${marketPath(code, "/archive")}">${esc(t(language,"nav.archive"))}</a><a href="${marketPath(code, "/about")}">${esc(t(language,"nav.about"))}</a></nav></header>`;
@@ -776,7 +832,8 @@ const shell = (title, description, canonical, body, schema = null, image = "", r
   const ogType = suppliedNodes.some(node => node?.["@type"] === "Product") ? "product" : "website";
   const html = `<!doctype html><html lang="${esc(locale)}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0a1020"><title>${esc(title)}</title><meta name="description" content="${esc(description.slice(0,160))}"><meta name="robots" content="${esc(robotsContent)}"><link rel="canonical" href="${esc(canonical)}"><link rel="icon" href="/favicon.svg" type="image/svg+xml">${alternates}${imageConnectionHints(image)}<meta property="og:type" content="${ogType}"><meta property="og:site_name" content="OneDailyDrop"><meta property="og:locale" content="${esc(ogLocale)}"><meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(description.slice(0,180))}"><meta property="og:url" content="${esc(canonical)}">${image ? `<meta property="og:image" content="${esc(image)}"><meta property="og:image:alt" content="${esc(title)}">` : ""}<meta name="twitter:card" content="${image ? "summary_large_image" : "summary"}"><meta name="twitter:title" content="${esc(title)}"><meta name="twitter:description" content="${esc(description.slice(0,180))}">${image ? `<meta name="twitter:image" content="${esc(image)}">` : ""}<link rel="stylesheet" href="/styles.css?v=20260731-brand-lockup"><link rel="stylesheet" href="/brand-theme.css?v=20260731-brand-lockup"><link rel="stylesheet" href="/liquid-glass.css?v=20260731-brand-lockup"><script type="application/ld+json">${JSON.stringify(pageSchema).replace(/</g,"\\u003c")}</script><script>window.__ODD_LANGUAGE__=${JSON.stringify(language)};window.__ODD_LOCALE__=${JSON.stringify(locale)};window.__ODD_TEXT__=${JSON.stringify(clientCopy(language)).replace(/</g, "\\u003c")};</script></head><body>${sharedHeader(code, language, req)}${body}${sharedFooter(code, language)}<script src="/theme.js?v=20260728-i18n2"></script><script src="/site-shell.js?v=20260728-i18n2"></script><script src="/click-tracking.js?v=20260814-day5"></script></body></html>`;
   const versionedHtml = html
-    .replace("/styles.css?v=20260731-brand-lockup", "/styles.css?v=20260814-day10-results-ui")
+    .replace("/styles.css?v=20260731-brand-lockup", "/styles.css?v=20260814-day11-product-offers")
+    .replace("/site-shell.js?v=20260728-i18n2", "/site-shell.js?v=20260814-day11-prefetch")
     .replace("</head>", '<link rel="stylesheet" href="/i18n.css?v=20260808-assistant"><link rel="stylesheet" href="/shopping-assistant.css?v=20260812-all-markets-v2"></head>')
     .replace("</body>", `${shoppingAssistantPanel(code, language)}<script src="/shopping-assistant.js?v=20260813-provider-first-v1"></script></body>`);
   return localizeHtml(versionedHtml, language);
@@ -825,10 +882,16 @@ const archiveCard = (product, language = "en") => {
 };
 const findProduct = param => { const id = String(param).match(/-(\d+)$/)?.[1] || (/^\d+$/.test(param) ? param : null); return id ? db.prepare(`SELECT * FROM products WHERE id=? AND status='published' AND ${sourceSql()}`).get(id) : null; };
 const sameProductOffers = product => {
-  const productKey = clean(product?.product_key);
-  if (!productKey) return [product];
-  const offers = db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()} AND product_key=? ORDER BY current_price ASC,score DESC`).all(product.market, productKey);
-  return offers.length ? offers : [product];
+  const identity = offerIdentity(product);
+  if (!identity.reliable) return offerSummary(product, [product]);
+  const conditions = ["market=?", "status='published'", sourceSql(), "LOWER(product_key)=?"];
+  const params = [product.market, identity.productKey];
+  if (identity.sourceScoped) {
+    conditions.push("LOWER(COALESCE(source,''))=?");
+    params.push(sourceKey(product));
+  }
+  const candidates = db.prepare(`SELECT * FROM products WHERE ${conditions.join(" AND ")} ORDER BY current_price ASC,score DESC`).all(...params);
+  return offerSummary(product, candidates.length ? candidates : [product]);
 };
 const significantWords = value => new Set(clean(value).toLowerCase().split(/[^a-z0-9]+/).filter(word => word.length > 3 && !new Set([
   "with","from","this","that","pack","new","black","white","blue","red","for","and","the","your","plus","free"
@@ -933,7 +996,8 @@ app.get("/deal/:slug", (req, res) => {
   const alternatives = alternativesFor(p);
   const alternativeIds = new Set(alternatives.map(product => product.id));
   const related = p.brand_slug ? uniqueProductsInOrder(db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()} AND brand_slug=? AND id<>? ORDER BY COALESCE(ranking_score,score) DESC,score DESC LIMIT 16`).all(p.market, p.brand_slug, p.id).filter(isPubliclyIndexable).filter(product => !alternativeIds.has(product.id))).slice(0, 4) : [];
-  const offerRows = sameProductOffers(p);
+  const offerGroup = sameProductOffers(p);
+  const offerRows = offerGroup.offers;
   const brief = createEditorialBrief(p, display, {
     language: req.language,
     store,
@@ -956,6 +1020,15 @@ app.get("/deal/:slug", (req, res) => {
   const checkedLabel = checkedAt && !Number.isNaN(new Date(checkedAt).getTime())
     ? new Date(checkedAt).toLocaleString(pageLocale)
     : t(req.language,"page.recently");
+  const offerMatchLabels = {
+    gtin:t(req.language,"product.offerMatchGtin"),
+    "brand-model-variant":t(req.language,"product.offerMatchModel"),
+    "provider-product":t(req.language,"product.offerMatchProvider")
+  };
+  const offerCountLabel = offerGroup.offerCount === 1
+    ? t(req.language,"product.offerCountOne")
+    : t(req.language,"product.offerCountMany",{count:offerGroup.offerCount});
+  const offerSummaryBlock = `<aside class="product-offer-summary" data-offer-match="${esc(offerGroup.identity.matchType)}"><div><strong>${esc(offerCountLabel)}</strong>${offerGroup.identity.reliable ? `<span>${esc(offerMatchLabels[offerGroup.identity.matchType] || t(req.language,"product.offerMatchSafe"))}</span>` : ""}</div><p>${esc(t(req.language,"product.offerMatchSafe"))}</p></aside>`;
   const currentOffer = hasCurrentOffer(p);
   const retailerDetails = liveOffer ? `<div class="detail-grid retailer-detail-grid" aria-label="${esc(t(req.language,"product.offerDetails"))}"><section><h3>${esc(t(req.language,"product.retailer"))}</h3><p>${esc(store)}</p></section><section><h3>${esc(t(req.language,"product.soldBy"))}</h3><p>${esc(clean(p.seller_name) || t(req.language,"product.confirmRetailer"))}</p></section><section><h3>${esc(t(req.language,"product.delivery"))}</h3><p>${esc(display.display_shipping_summary)}</p></section><section><h3>${esc(t(req.language,"product.returns"))}</h3><p>${esc(display.display_return_summary)}</p></section><section><h3>${esc(t(req.language,"page.availability"))}</h3><p>${esc(display.display_availability)}</p></section>${currentOffer ? `<section><h3>${esc(t(req.language,"page.priceChecked"))}</h3><p>${esc(checkedLabel)}</p></section>` : ""}</div>` : "";
   const historyLabel = stats => stats.sufficient ? money(stats.low,p.currency,pageLocale) : t(req.language,"page.notEnoughHistory");
@@ -967,12 +1040,13 @@ app.get("/deal/:slug", (req, res) => {
   const retailerActions = `<div class="card-actions retailer-actions"><a class="featured-button" href="${esc(outboundPath(p, { sourcePage:"product", placement:"product_cta", action:"view_deal" }))}" ${externalAttributes}>${esc(t(req.language,"product.viewDealAt",{store}))} →</a>${shopUrl ? `<a class="price-history-link retailer-shop-link" href="${esc(outboundPath(p, { sourcePage:"product", placement:"shop_all", action:"shop_all" }))}" ${externalAttributes}>${esc(t(req.language,"product.shopAllAt",{store}))} →</a>` : ""}${askDeliaButton(display, req.language)}</div>`;
   const briefBlock = `<section id="buying-brief" class="buying-brief" aria-labelledby="buyingBriefTitle"><header class="buying-brief-header"><div><p class="eyebrow">${esc(brief.eyebrow)}</p><h2 id="buyingBriefTitle">${esc(brief.heading)}</h2></div><p class="verified-editorial-note">✓ ${esc(brief.verifiedNote)}</p></header><div class="quick-verdict"><strong>${esc(brief.copy.quickVerdict)}</strong><p>${esc(brief.verdict)}</p></div><dl class="buying-facts">${brief.facts.map(([label,value]) => `<div><dt>${esc(label)}</dt><dd>${esc(value)}</dd></div>`).join("")}</dl><div class="brief-pros-cons"><section><h3>✓ ${esc(brief.copy.strengths)}</h3><ul>${brief.strengths.map(item => `<li>${esc(item)}</li>`).join("")}</ul></section><section><h3>! ${esc(brief.copy.watchouts)}</h3><ul>${brief.watchouts.map(item => `<li>${esc(item)}</li>`).join("")}</ul></section></div><div class="buying-brief-grid">${brief.sections.map(section => `<section class="buying-brief-section buying-brief-${esc(section.key)}"><h3>${esc(section.title)}</h3>${section.paragraphs.map(paragraph => `<p>${esc(paragraph)}</p>`).join("")}${section.key === "score" ? `<div class="score-component-list">${brief.components.map(component => `<div class="score-component"><span>${esc(component.label)}</span><div aria-hidden="true"><i style="--component:${Math.round(component.points/component.max*100)}%"></i></div><strong>${component.points}/${component.max}</strong></div>`).join("")}</div>` : ""}</section>`).join("")}</div></section>`;
   const comparisonOffers = offerRows.filter(offer => String(offer.source || "").toLowerCase() !== "demo" && /^https?:\/\//i.test(String(offer.affiliate_url || "")) && Number(offer.current_price) > 0);
-  const offerComparisonBlock = comparisonOffers.length > 1 ? `<section class="offer-comparison" aria-labelledby="offerComparisonTitle"><div class="section-heading compact-heading"><div><p class="eyebrow">${esc(brief.copy.compareOffers.toUpperCase())}</p><h2 id="offerComparisonTitle">${esc(brief.compareOffersTitle)}</h2><p>${esc(brief.compareOffersIntro)}</p></div></div><div class="offer-comparison-list">${comparisonOffers.map(offer => { const offerDisplay=presentProduct(localizeProduct(offer,req.language),req.language); const offerStore=storeName(offer); return `<article><div><strong>${esc(offerStore)}</strong><span>${esc(clean(offer.seller_name)||offerStore)}</span></div><div><strong>${money(offer.current_price,offer.currency,pageLocale)}</strong><span>${esc(offerDisplay.display_shipping_summary)} · ${esc(offerDisplay.display_return_summary)}</span></div><a href="${esc(outboundPath(offer,{sourcePage:"product",placement:"offer_comparison",action:"view_deal"}))}" ${externalAttributes}>${esc(brief.copy.viewOffer)} →</a></article>`; }).join("")}</div></section>` : "";
+  const bestOfferId = Number(comparisonOffers[0]?.id || 0);
+  const offerComparisonBlock = offerGroup.identity.reliable && comparisonOffers.length > 1 ? `<section class="offer-comparison" data-offer-comparison="reliable-entity-v1" aria-labelledby="offerComparisonTitle"><div class="section-heading compact-heading"><div><p class="eyebrow">${esc(brief.copy.compareOffers.toUpperCase())}</p><h2 id="offerComparisonTitle">${esc(brief.compareOffersTitle)}</h2><p>${esc(brief.compareOffersIntro)} ${esc(t(req.language,"product.offerMatchSafe"))}</p></div></div><div class="offer-comparison-list">${comparisonOffers.map(offer => { const offerDisplay=presentProduct(localizeProduct(offer,req.language),req.language); const offerStore=storeName(offer); const offerChecked=offer.checked_at||offer.updated_at; const offerCheckedLabel=offerChecked&&!Number.isNaN(new Date(offerChecked).getTime())?new Date(offerChecked).toLocaleString(pageLocale):t(req.language,"page.recently"); return `<article class="verified-offer${Number(offer.id)===bestOfferId?" is-best-offer":""}" data-verified-offer="${Number(offer.id)}">${Number(offer.id)===bestOfferId?`<span class="best-offer-badge">${esc(t(req.language,"product.bestCurrentPrice"))}</span>`:""}<div class="offer-merchant"><strong>${esc(offerStore)}</strong><span>${esc(clean(offer.seller_name)||offerStore)}</span></div><div class="offer-price"><strong>${money(offer.current_price,offer.currency,pageLocale)}</strong><span>${esc(offerDisplay.display_shipping_summary)} · ${esc(offerDisplay.display_return_summary)}</span><small>${esc(t(req.language,"product.offerChecked",{date:offerCheckedLabel}))}</small></div><a href="${esc(outboundPath(offer,{sourcePage:"product",placement:"offer_comparison",action:"view_deal"}))}" ${externalAttributes}>${esc(brief.copy.viewOffer)} →</a></article>`; }).join("")}</div></section>` : "";
   const alternativesBlock = alternatives.length ? `<section class="alternatives-section" aria-labelledby="alternativesTitle"><div class="section-heading compact-heading"><div><p class="eyebrow">${esc(brief.copy.alternatives.toUpperCase())}</p><h2 id="alternativesTitle">${esc(brief.alternativesTitle)}</h2><p>${esc(brief.alternativesIntro)}</p></div></div><div class="alternative-grid">${alternatives.map(product => alternativeCard(product,req.language)).join("")}</div></section>` : "";
   const priceDetails = !currentOffer
     ? `<div class="detail-grid"><section><h3>${esc(t(req.language,"product.currentPrice"))}</h3><p>${esc(t(req.language,"product.checkPrice"))} ${esc(store)}</p></section></div>`
     : `<div class="detail-grid"><section><h3>${esc(t(req.language,"product.currentPrice"))}</h3><p>${money(p.current_price,p.currency,pageLocale)}</p></section>${ratingSummary}<section><h3>${esc(t(req.language,"page.low30"))}</h3><p>${historyLabel(intelligence.day30)}</p></section><section><h3>${esc(t(req.language,"page.low90"))}</h3><p>${historyLabel(intelligence.day90)}</p></section><section><h3>${esc(t(req.language,"page.lowAll"))}</h3><p>${historyLabel(intelligence.allTime)}</p></section></div><section id="price-history" class="editorial-box">${retailerDetails}<h2>${esc(t(req.language,"page.priceHistory"))}</h2>${chartSvg(history,req.language,p.market)}<p>${esc(t(req.language,"page.historySummary",{observations:history.length,days:intelligence.allTime.distinctDays}))}</p></section>`;
-  const body = `<main class="product-page"><nav class="breadcrumb"><a href="${marketPath(p.market)}">${esc(t(req.language,"page.home"))}</a><span>›</span><a href="${catPath(category,p.market)}">${esc(displayCategory)}</a>${p.brand?`<span>›</span><a href="${brandPath(p.brand,p.market)}">${esc(p.brand)}</a>`:""}<span>›</span><span>${esc(title)}</span></nav><article class="product-detail"><div class="product-detail-media"><img src="${esc(p.image_url)}" alt="${esc(hasRetailerImage(p) ? title : `${store} ${t(req.language,"product.editorPick")}`)}" decoding="async" fetchpriority="high"></div><div class="product-detail-content">${brandBlock}<h1>${esc(title)}</h1>${scoreBlock}<p class="product-lead">${esc(brief.verdict)}</p><a class="brief-jump-link" href="#buying-brief">${esc(brief.eyebrow)} ↓</a>${priceDetails}<div class="product-price-box"><span class="product-price">${currentOffer ? money(p.current_price,p.currency,pageLocale) : `${esc(t(req.language,"product.checkPrice"))} ${esc(store)}`}</span>${currentOffer && p.original_price?`<span class="old">${money(p.original_price,p.currency,pageLocale)}</span>`:""}<small>${esc(t(req.language,"page.finalPrice"))}</small></div>${retailerActions}</div></article>${briefBlock}${offerComparisonBlock}${alternativesBlock}${relatedBlock}</main>`;
+  const body = `<main class="product-page" data-product-offer-ui="reliable-entity-v1"><nav class="breadcrumb"><a href="${marketPath(p.market)}">${esc(t(req.language,"page.home"))}</a><span>›</span><a href="${catPath(category,p.market)}">${esc(displayCategory)}</a>${p.brand?`<span>›</span><a href="${brandPath(p.brand,p.market)}">${esc(p.brand)}</a>`:""}<span>›</span><span>${esc(title)}</span></nav><article class="product-detail"><div class="product-detail-media"><img src="${esc(p.image_url)}" alt="${esc(hasRetailerImage(p) ? title : `${store} ${t(req.language,"product.editorPick")}`)}" decoding="async" fetchpriority="high"></div><div class="product-detail-content">${brandBlock}<h1>${esc(title)}</h1>${scoreBlock}<p class="product-lead">${esc(brief.verdict)}</p>${offerSummaryBlock}<a class="brief-jump-link" href="#buying-brief">${esc(brief.eyebrow)} ↓</a>${priceDetails}<div class="product-price-box"><span class="product-price">${currentOffer ? money(p.current_price,p.currency,pageLocale) : `${esc(t(req.language,"product.checkPrice"))} ${esc(store)}`}</span>${currentOffer && p.original_price?`<span class="old">${money(p.original_price,p.currency,pageLocale)}</span>`:""}<small>${esc(t(req.language,"page.finalPrice"))}</small></div>${retailerActions}</div></article>${briefBlock}${offerComparisonBlock}${alternativesBlock}${relatedBlock}</main>`;
   const enrichedBody = currentOffer ? body : body.replace('<div class="product-price-box">', `${retailerDetails}<div class="product-price-box">`);
   const robots = isPubliclyIndexable(p) ? "" : "noindex,follow";
   if (robots) res.set("X-Robots-Tag", "noindex, follow");
@@ -1010,7 +1084,7 @@ app.get("/search", (req, res) => {
     invalidFilters = true;
     options = parseSearchOptions({q:req.query.q, limit:24});
   }
-  const rows = db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()}`).all(selectedMarket.code).filter(isPubliclyIndexable);
+  const rows = searchRowsForMarket(selectedMarket.code);
   let result = searchCatalogProducts(rows, options);
   if (result.pagination.total_pages > 0 && options.page > result.pagination.total_pages) {
     options = {...options,page:result.pagination.total_pages};

@@ -47,10 +47,19 @@ jobs:
                      grep -q 'data-results-filters' <<<"${results_payload}" && \
                      grep -q 'class="search-sort"' <<<"${results_payload}" && \
                      grep -q 'search-badge-match' <<<"${results_payload}"; then
-                    echo "Azure is serving the expected release, Search API, search-first homepage and Day 10 results UI."
-                    jq '{releaseId,taxonomyVersion,market,liveProducts,provider}' <<<"${status_payload}"
-                    jq '{ranking_model,sort,pagination,returned:(.products | length)}' <<<"${search_payload}"
-                    exit 0
+                    compact_catalog="$(curl --fail --silent --show-error --max-time 40 \
+                      'https://www.onedailydrop.com/api/products?market=us&limit=1&compact=1' || true)"
+                    product_path="$(jq -r '.[0].deal_url // empty' <<<"${compact_catalog}" 2>/dev/null)"
+                    product_payload="$(curl --fail --silent --show-error --max-time 40 \
+                      "https://www.onedailydrop.com${product_path}" || true)"
+                    if [[ -n "${product_path}" ]] && \
+                       grep -q 'data-product-offer-ui="reliable-entity-v1"' <<<"${product_payload}" && \
+                       grep -q 'class="product-offer-summary"' <<<"${product_payload}"; then
+                      echo "Azure is serving the expected release, Search API, Results UI and Day 11 product/offer UI."
+                      jq '{releaseId,taxonomyVersion,market,liveProducts,provider}' <<<"${status_payload}"
+                      jq '{ranking_model,sort,pagination,returned:(.products | length)}' <<<"${search_payload}"
+                      exit 0
+                    fi
                   fi
                 fi
               fi

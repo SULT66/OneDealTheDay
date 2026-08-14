@@ -29,6 +29,25 @@
 })();
 
 (() => {
+  const warmed = new Set();
+  const warm = anchor => {
+    if (!anchor || warmed.size >= 4) return;
+    let url;
+    try { url = new URL(anchor.href, window.location.href); } catch { return; }
+    if (url.origin !== window.location.origin || !/^\/(?:us|ca|uk|fr|de)\/deal\//.test(url.pathname) || warmed.has(url.href)) return;
+    warmed.add(url.href);
+    const hint = document.createElement("link");
+    hint.rel = "prefetch";
+    hint.as = "document";
+    hint.href = url.href;
+    document.head.appendChild(hint);
+  };
+  document.addEventListener("pointerover", event => warm(event.target.closest("a[href*='/deal/']")), {passive:true});
+  const idle = window.requestIdleCallback || (callback => setTimeout(callback, 700));
+  idle(() => [...document.querySelectorAll("main a[href*='/deal/']")].slice(0, 2).forEach(warm));
+})();
+
+(() => {
   const toggle = document.querySelector(".mobile-menu-toggle");
   const navigation = document.getElementById("mainNavigation");
   if (!toggle || !navigation) return;

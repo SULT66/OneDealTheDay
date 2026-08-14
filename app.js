@@ -22,6 +22,31 @@ const { parseSearchOptions, searchCatalogProducts } = require("./src/catalogSear
 const createExpressApp = express;
 const CANONICAL_HOST = "www.onedailydrop.com";
 const AZURE_PRODUCTION_HOST = "onedealtheday-g3dme0aghzerc3a2.centralus-01.azurewebsites.net";
+const apiResponseCache = new Map();
+const searchCatalogCache = new Map();
+const cachedValue = key => {
+  const entry = apiResponseCache.get(key);
+  if (!entry || entry.expiresAt <= Date.now()) {
+    if (entry) apiResponseCache.delete(key);
+    return null;
+  }
+  return entry.value;
+};
+const cacheValue = (key, value, ttlMs) => {
+  if (apiResponseCache.size >= 200) apiResponseCache.delete(apiResponseCache.keys().next().value);
+  apiResponseCache.set(key, { value, expiresAt:Date.now() + ttlMs });
+  return value;
+};
+const searchRowsForMarket = marketCode => {
+  const cached = searchCatalogCache.get(marketCode);
+  if (cached && cached.expiresAt > Date.now()) return cached.rows;
+  const rows = db.prepare(`
+    SELECT * FROM products
+    WHERE market=? AND status='published' AND ${sourceSql()}
+  `).all(marketCode);
+  searchCatalogCache.set(marketCode, {rows, expiresAt:Date.now() + 60000});
+  return rows;
+};
 
 if (config.isProduction) {
   const recalculated = recalculateCatalog(db, marketCodes, {selectionMarkets:config.markets});
@@ -120,8 +145,13 @@ function expressWithHomepage(...args) {
 
   app.get("/api/status", (req, res) => {
     const marketCode = normalizeMarket(req.query.market) || marketFromIp(req).code;
+    const cacheKey = `status:${marketCode}`;
+    const cached = cachedValue(cacheKey);
     res.set("X-Robots-Tag", "noindex, nofollow");
-    res.json(catalogStatus(marketCode));
+    res.set("Cache-Control", "public, max-age=10, stale-while-revalidate=30");
+    if (cached) return res.set("X-ODD-Cache", "HIT").json(cached);
+    const status = cacheValue(cacheKey, catalogStatus(marketCode), 10000);
+    return res.set("X-ODD-Cache", "MISS").json(status);
   });
 
   app.get("/api/search", (req, res) => {
@@ -134,15 +164,19 @@ function expressWithHomepage(...args) {
       res.set("X-Robots-Tag", "noindex, nofollow");
       return res.status(400).json({error:error.message});
     }
-    const rows = db.prepare(`
-      SELECT * FROM products
-      WHERE market=? AND status='published' AND ${sourceSql()}
-    `).all(selectedMarket);
+    const cacheKey = `search:${selectedMarket}:${language}:${JSON.stringify(options)}`;
+    const cached = cachedValue(cacheKey);
+    if (cached) {
+      res.set("X-Robots-Tag", "noindex, nofollow");
+      res.set("Cache-Control", "private, max-age=30, stale-while-revalidate=120");
+      return res.set("X-ODD-Cache", "HIT").json(cached);
+    }
+    const rows = searchRowsForMarket(selectedMarket);
     const result = searchCatalogProducts(rows, options);
     const products = result.products.map(product => presentProduct(localizeProduct(product, language), language));
     res.set("X-Robots-Tag", "noindex, nofollow");
-    res.set("Cache-Control", "private, max-age=0, must-revalidate");
-    return res.json({
+    res.set("Cache-Control", "private, max-age=30, stale-while-revalidate=120");
+    const payload = cacheValue(cacheKey, {
       query:options.query,
       market:selectedMarket,
       filters:{
@@ -160,7 +194,8 @@ function expressWithHomepage(...args) {
       pagination:result.pagination,
       facets:result.facets,
       products
-    });
+    }, 30000);
+    return res.set("X-ODD-Cache", "MISS").json(payload);
   });
 
   app.get("/api/products", (req, res, next) => {
@@ -172,6 +207,10 @@ function expressWithHomepage(...args) {
       ? Math.max(10, Math.min(1000, Math.round(requestedLimit)))
       : Number.MAX_SAFE_INTEGER;
     const compactResponse = String(req.query.compact || "") === "1";
+    const cacheKey = `products:${selectedMarket}:${language}:${responseLimit}:${compactResponse ? 1 : 0}`;
+    const cached = cachedValue(cacheKey);
+    res.set("Cache-Control", "private, max-age=60, stale-while-revalidate=300");
+    if (cached) return res.set("X-ODD-Cache", "HIT").json(cached);
     const catalogRowLimit = responseLimit < Number.MAX_SAFE_INTEGER
       ? ` LIMIT ${Math.min(2000, responseLimit * 2)}`
       : "";
@@ -199,26 +238,44 @@ function expressWithHomepage(...args) {
       .map(product => presentProduct(localizeProduct(product, language), language))
       .map(product => {
         if (!compactResponse) return product;
-        const {
-          affiliate_url,
-          retailer_shop_url,
-          score_breakdown,
-          external_id,
-          provider_external_id,
-          upc,
-          gtin,
-          ean,
-          mpn,
-          model_number,
-          manufacturer,
-          ...visible
-        } = product;
         return {
-          ...visible,
-          description:String(product.description || "").slice(0, 500),
+          id:product.id,
+          market:product.market,
+          source:product.source,
+          title:product.title,
+          description:String(product.description || "").slice(0, 180),
+          category:product.category,
+          display_category:product.display_category,
+          brand:product.brand,
+          image_url:product.image_url,
+          retailer_name:product.retailer_name,
+          seller_name:product.seller_name,
+          seller_rating:product.seller_rating,
+          seller_feedback_count:product.seller_feedback_count,
+          current_price:product.current_price,
+          original_price:product.original_price,
+          currency:product.currency,
+          checked_at:product.checked_at,
+          updated_at:product.updated_at,
+          rating:product.rating,
+          review_count:product.review_count,
+          daily_rank:product.daily_rank,
+          deal_url:product.deal_url,
+          display_badge:product.display_badge,
+          display_score:product.display_score,
+          display_selection_reason:product.display_selection_reason,
+          display_product_rating:product.display_product_rating,
+          display_product_rating_label:product.display_product_rating_label,
+          display_seller_rating:product.display_seller_rating,
+          display_seller_rating_label:product.display_seller_rating_label,
+          display_seller_feedback:product.display_seller_feedback,
+          display_shipping_summary:product.display_shipping_summary,
+          display_return_summary:product.display_return_summary,
+          display_availability:product.display_availability
         };
       });
-    return res.json(presented);
+    cacheValue(cacheKey, presented, 60000);
+    return res.set("X-ODD-Cache", "MISS").json(presented);
   });
 
   app.get("/go/:id", (req, res, next) => {

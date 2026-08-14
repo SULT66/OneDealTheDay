@@ -235,8 +235,11 @@ async function run() {
   assert(homepage.includes('decoding="async" fetchpriority="high"'), "Homepage LCP image priority is missing");
   assert(homepage.includes('loading="lazy" decoding="async"'), "Below-the-fold homepage images are not deferred");
   assert(homepage.includes('class="description editorial-teaser"'), "Homepage cards do not use the compact Stage 4 editorial teaser");
-  assert(homepage.includes('/styles.css?v=20260814-day9-search-first'), `Day 9 homepage stylesheet is not cache-busted: ${homepage.match(/styles\.css[^\"]+/)?.[0] || "missing"}`);
-  assert(homepage.includes('/app.js?v=20260814-day9-search-first'), "Day 9 homepage script is not cache-busted");
+  assert(homepage.includes('/styles.css?v=20260814-day11-product-offers'), `Day 11 homepage stylesheet is not cache-busted: ${homepage.match(/styles\.css[^\"]+/)?.[0] || "missing"}`);
+  assert(homepage.includes('/app.js?v=20260814-day11-performance'), "Day 11 homepage script is not cache-busted");
+  const cachedHomepageResponse = await get("/us");
+  assert(cachedHomepageResponse.headers.get("x-odd-cache") === "HIT", "Homepage microcache is not serving repeated navigation");
+  assert(String(cachedHomepageResponse.headers.get("cache-control") || "").includes("max-age=60"), "Homepage browser cache is missing");
   assert(homepage.includes("OneDailyDrop Score") && homepage.includes("Overall deal score"), "The public OneDailyDrop Score is missing from the homepage");
   assert(!homepage.includes("<small>Evidence confidence</small>"), "Internal evidence confidence is still exposed as a public score");
   assert(homepage.includes("AI Shopping Assistant") && homepage.includes("data-shopping-assistant-open"), "The AI Shopping Assistant entry point is missing");
@@ -353,6 +356,14 @@ async function run() {
   assert(products.every(product => product.source === "ebay"), "A non-eBay product source is public");
   assert(products.every(product => product.affiliate_url.includes("campid=5339179772")), "An eBay affiliate link is missing the EPN campaign ID");
   assert(products.every(product => product.current_price > 0 && product.rating > 0), "Verified prices or ratings are missing");
+  const compactResponse = await get("/api/products?market=us&limit=10&compact=1");
+  const compactBody = await compactResponse.text();
+  const compactProducts = JSON.parse(compactBody);
+  assert(compactProducts.length <= 10, "Compact homepage catalog ignored its limit");
+  assert(compactBody.length < 40000, `Compact homepage catalog is still too large: ${compactBody.length} bytes`);
+  assert(!compactBody.includes('affiliate_url') && !compactBody.includes('score_breakdown'), "Compact homepage catalog leaked unused heavy fields");
+  const cachedCompactResponse = await get("/api/products?market=us&limit=10&compact=1");
+  assert(cachedCompactResponse.headers.get("x-odd-cache") === "HIT", "Compact catalog microcache is not active");
   const assistantStatus = await (await get("/api/shopping-assistant/status")).json();
   assert(assistantStatus.available === false, "Assistant status must reflect a missing test API key");
 
@@ -377,7 +388,7 @@ async function run() {
   assert(searchPage.includes("deal-metrics") && searchPage.includes("OneDailyDrop Score"), "Search results are missing the OneDailyDrop Score");
   assert(searchPage.includes('data-analytics-page="search"') && searchPage.includes('data-analytics-query="product 3"'), "Search analytics context is missing");
   assert(searchPage.includes('data-results-ui="facets-sorting-badges-v1"'), "Day 10 Results UI marker is missing");
-  assert(searchPage.includes('/styles.css?v=20260814-day10-results-ui'), "Day 10 results stylesheet is not cache-busted");
+  assert(searchPage.includes('/styles.css?v=20260814-day11-product-offers'), "Day 11 results stylesheet is not cache-busted");
   assert(searchPage.includes('<meta name="robots" content="noindex,follow">'), "Search results must remain noindex");
   assert(searchPage.includes("data-results-filters") && searchPage.includes('class="search-sort"'), "Search facets or sorting controls are missing");
   assert(searchPage.includes("search-badge-match") && searchPage.includes("Paid placement never changes them"), "Transparent result badges or their explanation are missing");
@@ -410,7 +421,10 @@ async function run() {
   assert(productPage.includes("Verified strengths") && productPage.includes("Watch-outs"), "The product page does not separate strengths and limitations");
   assert(productPage.includes("What this listing is") && productPage.includes("Who it may suit") && productPage.includes("What to check before buying"), "The buying brief omits required editorial sections");
   assert(productPage.includes("Alternatives worth comparing") && productPage.includes("alternative-grid"), "Relevant alternatives are missing from the product page");
-  assert(productPage.includes("Compare current offers") && productPage.includes("placement=offer_comparison"), "Matching multi-store offers are not rendered with analytics");
+  assert(productPage.includes('data-product-offer-ui="reliable-entity-v1"') && productPage.includes('class="product-offer-summary"'), "Day 11 product/offer UI marker or summary is missing");
+  assert(productPage.includes('data-offer-match="gtin"') && productPage.includes("Matched by validated GTIN"), "Reliable entity-match evidence is not visible");
+  assert(productPage.includes("Compare current offers") && productPage.includes('data-offer-comparison="reliable-entity-v1"') && productPage.includes("placement=offer_comparison"), "Reliable matching offers are not rendered with analytics");
+  assert(productPage.includes("BEST CURRENT PRICE") && productPage.includes("data-verified-offer"), "Offer list does not identify the strongest current price");
   assert(productPage.includes('"@type":"Offer"'), "Product structured data is missing real Offer nodes");
   const productCanonical = productPage.match(/<link rel="canonical" href="([^"]+)">/)?.[1];
   assert(productCanonical && productPage.includes(`"@type":"Offer","url":"${productCanonical}"`), "Offer structured data does not use the crawlable product canonical");
@@ -423,13 +437,21 @@ async function run() {
   assert(productPage.includes('target="_blank" rel="sponsored noopener noreferrer"'), "Product retailer actions do not preserve OneDailyDrop in the original tab");
   assert(productPage.includes("data-shopping-assistant-open") && productPage.includes("shoppingAssistant"), "The assistant is not available on product pages");
   assert(!productPage.includes("<small>Evidence confidence</small>"), "Product pages still expose internal evidence confidence");
+  const cachedProductResponse = await fetch(`${base}/us/deal/${products[0].id}`);
+  assert(cachedProductResponse.headers.get("x-odd-cache") === "HIT", "Product-page microcache is not active");
+  assert(String(cachedProductResponse.headers.get("cache-control") || "").includes("max-age=45"), "Product-page browser cache is missing");
+
+  const staticAsset = await get("/styles.css?v=20260814-day11-product-offers");
+  assert(String(staticAsset.headers.get("cache-control") || "").includes("immutable"), "Versioned static assets are not cached immutably");
 
   const franceProducts = await (await get("/api/products?market=fr")).json();
   const frenchProductPage = await (await fetch(`${base}/fr/deal/${franceProducts[0].id}`)).text();
   assert(frenchProductPage.includes("GUIDE D’ACHAT ONEDAILYDROP") && frenchProductPage.includes("À vérifier avant l’achat"), "The French buying brief is not localized");
+  assert(frenchProductPage.includes("offres actuelles vérifiées") && frenchProductPage.includes("GTIN validé"), "The French Day 11 offer match is not localized");
   const germanyProducts = await (await get("/api/products?market=de")).json();
   const germanProductPage = await (await fetch(`${base}/de/deal/${germanyProducts[0].id}`)).text();
   assert(germanProductPage.includes("ONEDAILYDROP KAUFÜBERSICHT") && germanProductPage.includes("Vor dem Kauf prüfen"), "The German buying brief is not localized");
+  assert(germanProductPage.includes("geprüfte aktuelle Angebote") && germanProductPage.includes("validierte GTIN"), "The German Day 11 offer match is not localized");
 
   const internalClick = await fetch(`${base}/api/click-events`, {
     method:"POST",

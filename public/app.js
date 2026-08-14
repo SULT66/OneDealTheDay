@@ -535,3 +535,20 @@
       els.updated.textContent = tr("load.failed", "Could not load today's selections");
     });
 })();
+
+(() => {
+  const warmed = new Set();
+  const warm = anchor => {
+    if (!anchor || warmed.size >= 3) return;
+    let url;
+    try { url = new URL(anchor.href, window.location.href); } catch { return; }
+    if (url.origin !== window.location.origin || !/^\/(?:us|ca|uk|fr|de)\/deal\//.test(url.pathname) || warmed.has(url.href)) return;
+    warmed.add(url.href);
+    const hint = document.createElement("link");
+    hint.rel = "prefetch";
+    hint.as = "document";
+    hint.href = url.href;
+    document.head.appendChild(hint);
+  };
+  document.addEventListener("pointerover", event => warm(event.target.closest("a[href*='/deal/']")), {passive:true});
+})();
