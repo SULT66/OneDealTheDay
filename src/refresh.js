@@ -1,7 +1,8 @@
 const db = require("./db");
 const { SCORE_MODEL, deduplicationKeys, isDailyPickEligible, scoreOffers, selectUniqueProducts } = require("./ranker");
 const { detectBrand, normalizeBrand, slugifyBrand } = require("./brandDetector");
-const { priceIntelligence, shouldRecordObservation } = require("./priceIntelligence");
+const { priceIntelligence } = require("./priceIntelligence");
+const { createPriceSnapshotWriter } = require("./priceSnapshots");
 const { searchAll } = require("./providers/registry");
 const activeMarketRefreshes = new Map();
 
@@ -213,12 +214,11 @@ async function refreshMarket(config, marketCode, options = {}) {
         "SELECT * FROM daily_drops WHERE market=? AND drop_date=?"
       ).all(selectedMarket.code, dropDate).map(row => [row.product_id, row]))
       : new Map();
+    const snapshotCounts = {inserted:0, duplicate:0, quarantined:0, duplicateQuarantine:0};
 
     db.transaction(() => {
-      const existing = db.prepare("SELECT id,current_price,currency FROM products WHERE external_id=?");
       const productByExternalId = db.prepare("SELECT id,current_price,original_price,currency,source FROM products WHERE external_id=?");
-      const latestHistory = db.prepare("SELECT price,currency,observed_at FROM price_history WHERE product_id=? ORDER BY observed_at DESC LIMIT 1");
-      const insertHistory = db.prepare("INSERT INTO price_history(product_id,price,original_price,currency,source,observed_at) VALUES(?,?,?,?,?,?)");
+      const snapshotWriter = createPriceSnapshotWriter(db);
       const upsertProduct = db.prepare(`
         INSERT INTO products(
           external_id,provider_external_id,market,product_key,upc,gtin,model_number,brand,brand_slug,manufacturer,mpn,ean,
@@ -297,14 +297,18 @@ async function refreshMarket(config, marketCode, options = {}) {
           first_seen_at: updatedAt,
           last_seen_at: updatedAt
         };
-        const before = existing.get(safe.external_id);
         upsertProduct.run(safe);
         const after = productByExternalId.get(safe.external_id);
         idsByProviderExternalId.set(providerExternalId, after.id);
-        const validPrice = Number.isFinite(Number(after?.current_price)) && Number(after.current_price) > 0;
-        const previousObservation = after ? latestHistory.get(after.id) : null;
-        if (after && validPrice && shouldRecordObservation(previousObservation, after.current_price, after.currency || selectedMarket.currency, updatedAt)) {
-          insertHistory.run(after.id, after.current_price, after.original_price, after.currency || selectedMarket.currency, after.source || "", updatedAt);
+        if (after) {
+          const snapshotResult = snapshotWriter.record({
+            offerId:after.id,
+            ingestionRunId:runId,
+            product:{...product, ...safe, external_id:safe.external_id},
+            observedAt:updatedAt
+          });
+          if (snapshotResult.status === "duplicate_quarantine") snapshotCounts.duplicateQuarantine += 1;
+          else snapshotCounts[snapshotResult.status] += 1;
         }
       }
 
@@ -371,6 +375,7 @@ async function refreshMarket(config, marketCode, options = {}) {
       uniqueProducts: catalogProducts.length,
       qualifiedProducts: ranked.length,
       selected: selected.length,
+      snapshots:snapshotCounts,
       dropDate,
       sources:loaded.reports
     };

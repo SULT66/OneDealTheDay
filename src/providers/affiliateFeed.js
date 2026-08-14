@@ -30,6 +30,7 @@ const FIELD_ALIASES = Object.freeze({
   shipping:["shipping_summary", "shipping", "delivery", "delivery_message", "delivery_cost"],
   returns:["return_summary", "returns", "return_policy"],
   availability:["availability", "stock_status", "in_stock", "stock"],
+  source_updated_at:["source_updated_at", "last_updated", "updated_at", "modified_at"],
   rating:["rating", "average_rating", "customer_rating"],
   review_count:["review_count", "reviews", "rating_count", "ratings_total"],
   badge:["badge", "promotion", "promotional_text", "product_badge", "coupon"]
@@ -338,6 +339,8 @@ function normalize(record, definition, market, index, map) {
     shipping_summary:compactText(field(record, map, "shipping")),
     return_summary:compactText(field(record, map, "returns")),
     availability,
+    source_availability:availabilityValue ? availability : null,
+    source_updated_at:compactText(field(record, map, "source_updated_at")) || null,
     checked_at:new Date().toISOString(),
     market:market.code,
     source,
