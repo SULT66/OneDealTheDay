@@ -1,0 +1,35 @@
+name: Verify production release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify-production:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Wait for Azure and verify the live catalog
+        shell: bash
+        run: |
+          for attempt in {1..30}; do
+            payload="$(curl --fail --silent --show-error --max-time 20 'https://www.onedailydrop.com/api/status?market=us' || true)"
+            if jq -e '
+              .releaseId == "2026-08-14-day7-validation-fix-v1" and
+              .taxonomyVersion == "catalog-taxonomy-v1" and
+              .market == "us" and
+              .liveProducts > 0
+            ' <<<"${payload}" >/dev/null 2>&1; then
+              echo "Azure is serving the expected OneDailyDrop release."
+              jq '{releaseId,taxonomyVersion,market,liveProducts,provider}' <<<"${payload}"
+              exit 0
+            fi
+            echo "Attempt ${attempt}/30: Azure has not switched to the expected release yet."
+            sleep 20
+          done
+
+          echo "Azure did not serve the expected release within 10 minutes."
+          exit 1
