@@ -78,18 +78,17 @@ module.exports = function homepageTemplate({
   ${socialImage ? `<meta name="twitter:image" content="${esc(socialImage)}">` : ""}
   <script type="application/ld+json">${JSON.stringify(schema).replace(/</g, "\\u003c")}</script>
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-0V49XQ3WEG"></script><script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag('js',new Date());gtag('config','G-0V49XQ3WEG');</script>
-  <link rel="stylesheet" href="/styles.css?v=20260814-day9-search-first">
+  <link rel="stylesheet" href="/styles.css?v=20260814-day12-unified-search">
   <link rel="stylesheet" href="/brand-theme.css?v=20260808-assistant">
   <link rel="stylesheet" href="/liquid-glass.css?v=20260808-assistant">
   <link rel="stylesheet" href="/i18n.css?v=20260808-assistant">
   <link rel="stylesheet" href="/shopping-assistant.css?v=20260812-all-markets-v2">
 </head>
-<body data-homepage-mode="search-first-v1">
+<body data-homepage-mode="search-first-v1" data-search-experience="unified-intent-v1">
   <header class="site-header">
     <div class="header-top">
       <a class="brand" href="${homePath}" aria-label="OneDailyDrop home"><span class="brand-mark">D</span><span class="brand-copy"><strong>OneDailyDrop</strong><small>${esc(t(language, "brand.tagline"))}</small></span></a>
-      <form class="header-search" id="searchForm" action="${marketPath(selectedMarket.code, "/search")}"><span aria-hidden="true">⌕</span><input id="searchInput" name="q" type="search" placeholder="${esc(t(language, "search.placeholder"))}" autocomplete="off"><button id="searchClear" class="search-clear" type="button" aria-label="${esc(t(language, "search.clear"))}" hidden>×</button></form>
-      <button class="header-ai" type="button" data-shopping-assistant-open><span aria-hidden="true">✦</span><span>${esc(t(language, "assistant.short"))}</span></button>
+      <a class="header-search-link" href="#shopping-search"><span aria-hidden="true">⌕</span><span>${esc(t(language, "search.short"))}</span></a>
       <a class="header-subscribe" href="#subscribe">${esc(t(language, "nav.subscribe"))}</a>
       <button id="themeToggle" class="theme-button" type="button" aria-label="${esc(t(language, "theme.toDark"))}" title="${esc(t(language, "theme.dark"))}"><span class="theme-button-icon" aria-hidden="true">☾</span><span class="theme-button-label">${esc(t(language, "theme.dark"))}</span></button>
     </div>
@@ -114,6 +113,7 @@ module.exports = function homepageTemplate({
         <input id="homepageSearchInput" name="q" type="search" required autocomplete="off" placeholder="${esc(t(language, "search.placeholder"))}">
         <button type="submit">${esc(t(language, "home.searchButton"))}</button>
       </form>
+      <p class="search-intent-hint"><span aria-hidden="true">✦</span> ${esc(t(language, "home.searchIntentHint"))}</p>
       <div class="shopping-navigation-grid">
         <section class="shopping-navigation-card" aria-labelledby="category-navigation-title">
           <h2 id="category-navigation-title">${esc(t(language, "home.browseCategories"))}</h2>
@@ -161,8 +161,8 @@ module.exports = function homepageTemplate({
   <footer><div class="footer-brand"><b>OneDailyDrop</b><p>${esc(t(language, "brand.tagline"))}</p><div class="footer-links"><a href="${trustPath("/about")}">${esc(t(language, "footer.about"))}</a><a href="${trustPath("/contact")}">${esc(t(language, "footer.contact"))}</a><a href="${trustPath("/privacy")}">${esc(t(language, "footer.privacy"))}</a><a href="${trustPath("/terms")}">${esc(t(language, "footer.terms"))}</a><a href="${trustPath("/affiliate-disclosure")}">${esc(t(language, "footer.affiliate"))}</a><a href="${trustPath("/editorial-policy")}">${esc(t(language, "footer.editorial"))}</a><a href="${methodologyPath}">${esc(t(language, "footer.selection"))}</a><a href="${trustPath("/price-disclaimer")}">${esc(t(language, "footer.price"))}</a></div></div><p class="disclosure">${esc(t(language, "footer.disclosure"))}</p></footer>
   ${renderShoppingAssistantPanel(selectedMarket.code, language)}
   <script src="/theme.js?v=20260808-assistant"></script>
-  <script src="/app.js?v=20260814-day9-search-first"></script>
-  <script src="/shopping-assistant.js?v=20260813-provider-first-v1"></script>
+  <script src="/app.js?v=20260814-day12-unified-search"></script>
+  <script src="/shopping-assistant.js?v=20260814-day12-product-gate"></script>
 </body>
 </html>`;
 };

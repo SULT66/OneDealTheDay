@@ -54,8 +54,7 @@ module.exports = function homepageSeo(req, res) {
     const homePath = marketPath(selectedMarket.code);
     const canonical = SITE + homePath;
     const defaultLanguage = defaultLanguages[selectedMarket.code];
-    const appScript = `<script>window.__ODD_MARKET__=${JSON.stringify(selectedMarket.code)};window.__ODD_MARKET_TIMEZONE__=${JSON.stringify(selectedMarket.timezone)};window.__ODD_LANGUAGE__=${JSON.stringify(language)};window.__ODD_LOCALE__=${JSON.stringify(locale)};window.__ODD_TEXT__=${JSON.stringify(clientCopy(language)).replace(/</g, "\\u003c")};</script><script>(function(){const q=new URLSearchParams(location.search).get("q");if(!q)return;const input=document.getElementById("searchInput");if(input)input.value=q;})();</script><script src="/click-tracking.js?v=20260814-day5"></script><script src="/app.js?v=20260814-day5"></script>`;
-    const day9AppScript = appScript.replace("/app.js?v=20260814-day5", "/app.js?v=20260814-day11-performance");
+    const appScript = `<script>window.__ODD_MARKET__=${JSON.stringify(selectedMarket.code)};window.__ODD_MARKET_TIMEZONE__=${JSON.stringify(selectedMarket.timezone)};window.__ODD_LANGUAGE__=${JSON.stringify(language)};window.__ODD_LOCALE__=${JSON.stringify(locale)};window.__ODD_TEXT__=${JSON.stringify(clientCopy(language)).replace(/</g, "\\u003c")};</script><script src="/click-tracking.js?v=20260814-day5"></script><script src="/app.js?v=20260814-day12-unified-search"></script>`;
     let enhanced = body
       .replace(legacyAnalytics, "")
       .replace(
@@ -69,7 +68,7 @@ module.exports = function homepageSeo(req, res) {
         /<\/button>\s*<\/div>\s*<nav class="main-nav" aria-label="[^"]+">/,
         `</button>${languageSwitcher(req, selectedMarket.code, language)}<button class="mobile-menu-toggle" type="button" aria-expanded="false" aria-controls="mainNavigation" aria-label="${t(language, "menu.open")}"><span></span><span></span><span></span></button></div><nav id="mainNavigation" class="main-nav" aria-label="${t(language, "nav.primary")}">`
       )
-      .replace(/\/styles\.css\?v=[^"]+/, "/styles.css?v=20260814-day11-product-offers")
+      .replace(/\/styles\.css\?v=[^"]+/, "/styles.css?v=20260814-day12-unified-search")
       .replace(/href="\/us\/category\//g, `href="/${selectedMarket.code}/category/`)
       .replace('<a href="#archive">Past Drops</a>', `<a href="${marketPath(selectedMarket.code, "/archive")}">Past Drops</a>`)
       .replace(
@@ -90,7 +89,7 @@ module.exports = function homepageSeo(req, res) {
       .replace('<span style="--weight:25%"><b>25%</b> Product quality</span>', '<span style="--weight:20%"><b>20%</b> Product quality</span>')
       .replace('<span style="--weight:15%"><b>15%</b> Customer feedback</span>', '<span style="--weight:15%"><b>15%</b> Review confidence</span>')
       .replace('<span style="--weight:10%"><b>10%</b> Shipping & returns</span><span style="--weight:5%"><b>5%</b> Freshness</span>', '<span style="--weight:10%"><b>10%</b> Demand & usefulness</span><span style="--weight:10%"><b>10%</b> Shipping & returns</span>')
-      .replace(/<script src="\/app\.js\?v=[^"]+"><\/script>/, day9AppScript);
+      .replace(/<script src="\/app\.js\?v=[^"]+"><\/script>/, appScript);
 
     enhanced = localizeHtml(enhanced, language)
       .replace(/<html lang="[^"]+">/, `<html lang="${locale}">`)

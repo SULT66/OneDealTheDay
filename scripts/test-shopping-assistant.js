@@ -451,6 +451,30 @@ assert(
   "A bookshelf still matches a chair request",
 );
 assert(
+  !matchesShoppingIntent(
+    {title:"Freestanding Shoe Cabinet, 24 Pair Shoe Rack with Side Hooks", category:"Furniture"},
+    "sneakers everyday wear under 200",
+    "sneakers",
+  ),
+  "A shoe cabinet still matches a sneaker request",
+);
+assert(
+  !matchesShoppingIntent(
+    {title:"Funny Boyfriend Gift Custom Socks - Lucky Horse Shoes", category:"Gifts"},
+    "sneakers everyday wear under 200",
+    "sneakers",
+  ),
+  "Socks or a shoe-word gift still match a sneaker request",
+);
+assert(
+  matchesShoppingIntent(
+    {title:"Nike Air Max Dn8 Men's Shoes", category:"Footwear > Sneakers", brand:"Nike"},
+    "sneakers everyday wear under 200",
+    "sneakers",
+  ),
+  "A real sneaker was rejected by the product-type gate",
+);
+assert(
   matchesShoppingIntent(
     {title:"Large modular 5-seat sectional sofa", category:"Furniture > Sofas"},
     "large sectional sofa under 1500",

@@ -9,9 +9,6 @@
   const categoryLabel = category => tr(`category.${category}`, category);
   const marketPath = path => `/${marketCode}${String(path || "").startsWith("/") ? path : `/${path || ""}`}`.replace(/\/$/, "");
   const els = {
-    searchInput: $("searchInput"),
-    searchForm: $("searchForm"),
-    searchClear: $("searchClear"),
     themeToggle: $("themeToggle"),
     mobileMenuToggle: document.querySelector(".mobile-menu-toggle"),
     mainNavigation: $("mainNavigation"),
@@ -146,72 +143,6 @@
 
   let products = [];
   let activeCategory = "More Worth Seeing";
-  const searchAliases = {
-    cat: ["cat", "cats", "pet", "pets"],
-    cats: ["cat", "cats", "pet", "pets"],
-    dog: ["dog", "dogs", "pet", "pets"],
-    dogs: ["dog", "dogs", "pet", "pets"],
-    phone: ["phone", "phones", "smartphone", "smartphones", "mobile"],
-    tv: ["tv", "television", "televisions"],
-    car: ["car", "cars", "automotive", "auto"]
-  };
-  const searchTerms = value => String(value || "").toLowerCase().trim().split(/\s+/).filter(Boolean)
-    .map(term => searchAliases[term] || [term, term.endsWith("s") ? term.slice(0, -1) : `${term}s`]);
-  const normalizeSearchText = value => String(value || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
-  const matchesSearch = (product, query) => {
-    const haystack = normalizeSearchText([
-      product.title,
-      cleanText(product.description),
-      product.category,
-      displayCategory(product),
-      product.brand,
-      storeName(product)
-    ].filter(Boolean).join(" "));
-    return searchTerms(normalizeSearchText(query))
-      .every(alternatives => alternatives.some(term => haystack.includes(normalizeSearchText(term))));
-  };
-
-  const searchSuggestions = document.createElement("div");
-  searchSuggestions.id = "searchSuggestions";
-  searchSuggestions.className = "search-suggestions";
-  searchSuggestions.setAttribute("role", "region");
-  searchSuggestions.setAttribute("aria-label", tr("search.results", "Search results"));
-  searchSuggestions.hidden = true;
-  els.searchForm?.appendChild(searchSuggestions);
-  els.searchInput?.setAttribute("aria-controls", searchSuggestions.id);
-  els.searchInput?.setAttribute("aria-expanded", "false");
-
-  const closeSearchSuggestions = () => {
-    searchSuggestions.hidden = true;
-    els.searchInput?.setAttribute("aria-expanded", "false");
-  };
-
-  const renderSearchSuggestions = () => {
-    const query = els.searchInput?.value.trim() || "";
-    els.searchClear.hidden = !query;
-    if (!query) {
-      closeSearchSuggestions();
-      return;
-    }
-
-    const matches = products.filter(product => matchesSearch(product, query));
-    const resultLabel = tr("search.found", "Found {count} products", { count: matches.length });
-    const searchUrl = `${marketPath("/search")}?q=${encodeURIComponent(query)}`;
-    searchSuggestions.innerHTML = matches.length
-      ? `<div class="search-suggestion-heading">${esc(resultLabel)}</div>
-        <div class="search-suggestion-list">${matches.slice(0, 6).map(product => `
-          <a class="search-suggestion" href="${esc(dealUrl(product))}" ${trackingAttributes(product, "search_suggestion")}>
-            <img src="${esc(product.image_url)}" alt="" loading="lazy" decoding="async">
-            <span><strong>${esc(fullTitle(product.title))}</strong><small>${esc(displayCategory(product))} · ${esc(money(product.current_price, product.currency))}</small></span>
-          </a>`).join("")}</div>
-        <a class="search-view-all" href="${esc(searchUrl)}">${esc(resultLabel)} →</a>`
-      : `<div class="search-no-results">${esc(tr("home.noMatch", "No products match that search."))}</div>`;
-    searchSuggestions.hidden = false;
-    els.searchInput.setAttribute("aria-expanded", "true");
-  };
 
   const renderFeatured = () => {
     const product = products[0];
@@ -266,16 +197,13 @@
       </article>`;
   };
 
-  const visibleProducts = query => {
-    if (query) {
-      return products.filter(product => matchesSearch(product, query));
-    }
+  const visibleProducts = () => {
     if (activeCategory === "More Worth Seeing") return products.slice(1, 10);
     return products.filter(product => product.category === activeCategory);
   };
 
   const renderMain = () => {
-    const visible = visibleProducts("");
+    const visible = visibleProducts();
     els.dealsTitle.textContent = activeCategory === "More Worth Seeing" ? tr("nav.more", "9 More Worth Seeing") : displayCategory({ category: activeCategory });
     els.resultCount.textContent = activeCategory === "More Worth Seeing"
       ? ""
@@ -360,7 +288,6 @@
       els.categoryMenuButton.setAttribute("aria-expanded", "false");
       if (categoryWasOpen) els.categoryMenuButton.focus();
       if (els.mobileMenuToggle?.getAttribute("aria-expanded") === "true") closeMobileMenu(true);
-      closeSearchSuggestions();
     }
   });
 
@@ -403,37 +330,10 @@
     if (!hash || hash === "#") return;
     const menuWasOpen = mobileMenuQuery.matches && els.mobileMenuToggle?.getAttribute("aria-expanded") === "true";
     event.preventDefault();
-    closeSearchSuggestions();
     if (menuWasOpen) closeMobileMenu();
     window.setTimeout(() => scrollToAnchor(hash), menuWasOpen ? 360 : 0);
   });
 
-  els.searchInput.addEventListener("input", () => {
-    activeCategory = "More Worth Seeing";
-    renderSearchSuggestions();
-  });
-  els.searchInput.addEventListener("focus", renderSearchSuggestions);
-  els.searchClear.addEventListener("click", () => {
-    els.searchInput.value = "";
-    els.searchClear.hidden = true;
-    closeSearchSuggestions();
-    els.searchInput.focus();
-  });
-  if (els.searchForm) {
-    els.searchForm.addEventListener("submit", event => {
-      event.preventDefault();
-      const query = els.searchInput.value.trim();
-      if (!query) {
-        closeSearchSuggestions();
-        els.searchInput.focus();
-        return;
-      }
-      window.location.assign(`${marketPath("/search")}?q=${encodeURIComponent(query)}`);
-    });
-  }
-  document.addEventListener("click", event => {
-    if (!event.target.closest(".header-search")) closeSearchSuggestions();
-  });
   const subscribeForm = $("subscribeForm");
   if (subscribeForm) {
     subscribeForm.addEventListener("submit", async event => {
@@ -528,7 +428,6 @@
       renderCategoryMenu();
       renderMain();
       renderCollections();
-      if (els.searchInput.value.trim()) renderSearchSuggestions();
     })
     .catch(error => {
       console.error("OneDailyDrop load error:", error);

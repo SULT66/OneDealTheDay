@@ -222,7 +222,10 @@ async function run() {
   assert(homepage.includes('id="shopping-search"') && homepage.includes('id="homepageSearchForm"'), "Homepage search is not the primary entry point");
   assert(homepage.includes('id="homepageSearchInput"') && homepage.includes('action="/us/search" method="get"'), "Homepage search form does not use the market search route");
   assert(homepage.includes('id="category-navigation-title"') && homepage.includes('id="store-navigation-title"'), "Category or store navigation is missing below search");
-  assert(homepage.includes('/us/search?q=eBay'), "Homepage store navigation does not link to a real merchant search");
+  assert(homepage.includes('/us/search?merchant=eBay'), "Homepage store navigation does not use the merchant filter");
+  assert(homepage.includes('data-search-experience="unified-intent-v1"'), "Day 12 unified search marker is missing");
+  assert((homepage.match(/role="search"/g) || []).length === 1, "Homepage still exposes competing search forms");
+  assert(!homepage.includes('class="header-ai"') && !homepage.includes('id="searchInput"'), "Legacy header search or Delia entry point is still rendered");
   assert(homepage.includes('id="top-picks"') && homepage.includes('class="top-picks-disclosure"'), "Top 10 is not available through its separate control");
   assert(homepage.indexOf('id="shopping-search"') < homepage.indexOf('id="top-picks"'), "Top 10 appears before the primary homepage search");
   assert(homepage.includes('property="og:site_name" content="OneDailyDrop"'), "Homepage Open Graph metadata is missing");
@@ -235,15 +238,15 @@ async function run() {
   assert(homepage.includes('decoding="async" fetchpriority="high"'), "Homepage LCP image priority is missing");
   assert(homepage.includes('loading="lazy" decoding="async"'), "Below-the-fold homepage images are not deferred");
   assert(homepage.includes('class="description editorial-teaser"'), "Homepage cards do not use the compact Stage 4 editorial teaser");
-  assert(homepage.includes('/styles.css?v=20260814-day11-product-offers'), `Day 11 homepage stylesheet is not cache-busted: ${homepage.match(/styles\.css[^\"]+/)?.[0] || "missing"}`);
-  assert(homepage.includes('/app.js?v=20260814-day11-performance'), "Day 11 homepage script is not cache-busted");
+  assert(homepage.includes('/styles.css?v=20260814-day12-unified-search'), `Day 12 homepage stylesheet is not cache-busted: ${homepage.match(/styles\.css[^\"]+/)?.[0] || "missing"}`);
+  assert(homepage.includes('/app.js?v=20260814-day12-unified-search'), "Day 12 homepage script is not cache-busted");
   const cachedHomepageResponse = await get("/us");
   assert(cachedHomepageResponse.headers.get("x-odd-cache") === "HIT", "Homepage microcache is not serving repeated navigation");
   assert(String(cachedHomepageResponse.headers.get("cache-control") || "").includes("max-age=60"), "Homepage browser cache is missing");
   assert(homepage.includes("OneDailyDrop Score") && homepage.includes("Overall deal score"), "The public OneDailyDrop Score is missing from the homepage");
   assert(!homepage.includes("<small>Evidence confidence</small>"), "Internal evidence confidence is still exposed as a public score");
   assert(homepage.includes("AI Shopping Assistant") && homepage.includes("data-shopping-assistant-open"), "The AI Shopping Assistant entry point is missing");
-  assert(homepage.includes('/shopping-assistant.js?v=20260813-provider-first-v1'), "The Delia Shopping Assistant client is missing");
+  assert(homepage.includes('/shopping-assistant.js?v=20260814-day12-product-gate'), "The Delia Shopping Assistant client is missing");
   for (const forbidden of ["Trending Drops", "New Drops", "Yesterday's Drops"]) {
     assert(!homepage.includes(`<h2>${forbidden}</h2>`), `Homepage still exposes a misleading collection: ${forbidden}`);
   }
@@ -389,15 +392,19 @@ async function run() {
   assert(searchPage.includes("deal-metrics") && searchPage.includes("OneDailyDrop Score"), "Search results are missing the OneDailyDrop Score");
   assert(searchPage.includes('data-analytics-page="search"') && searchPage.includes('data-analytics-query="product 3"'), "Search analytics context is missing");
   assert(searchPage.includes('data-results-ui="facets-sorting-badges-v1"'), "Day 10 Results UI marker is missing");
-  assert(searchPage.includes('/styles.css?v=20260814-day11-product-offers'), "Day 11 results stylesheet is not cache-busted");
+  assert(searchPage.includes('/styles.css?v=20260814-day12-unified-search'), "Day 12 results stylesheet is not cache-busted");
   assert(searchPage.includes('<meta name="robots" content="noindex,follow">'), "Search results must remain noindex");
   assert(searchPage.includes("data-results-filters") && searchPage.includes('class="search-sort"'), "Search facets or sorting controls are missing");
   assert(searchPage.includes("search-badge-match") && searchPage.includes("Paid placement never changes them"), "Transparent result badges or their explanation are missing");
   assert(searchPage.includes('name="category"') && searchPage.includes('name="merchant"') && searchPage.includes('name="availability"'), "Search filter parameters are incomplete");
   assert(searchPage.includes('name="sort"') && searchPage.includes('value="price_asc"'), "Search sorting options are incomplete");
   assert(/Showing 1–\d+ of \d+ products/.test(searchPage), "Search result range does not use API pagination totals");
-  const merchantSearchPage = await (await get("/us/search?q=eBay")).text();
-  assert(merchantSearchPage.includes("eBay Test Product 1"), "Store navigation query does not find the merchant catalog");
+  const merchantSearchPage = await (await get("/us/search?merchant=eBay")).text();
+  assert(merchantSearchPage.includes("eBay Test Product 1"), "Store navigation filter does not find the merchant catalog");
+  const intentSearchPage = await (await get("/us/search?q=product%20under%20%24103%20at%20eBay")).text();
+  assert(intentSearchPage.includes('data-search-intent="parsed-v1"'), "Natural-language search was not parsed by Delia");
+  assert(intentSearchPage.includes('class="active-search-filters is-intent-driven"'), "Inferred filters are not visible to the shopper");
+  assert(intentSearchPage.includes("eBay") && intentSearchPage.includes("$103.00"), "Inferred merchant or budget filter is missing");
   const sortedSearchPage = await (await get("/us/search?q=product&merchant=eBay&sort=price_asc")).text();
   assert(sortedSearchPage.includes('option value="price_asc" selected'), "Selected search sort is not preserved in the UI");
   assert(sortedSearchPage.includes('name="merchant" value="eBay" checked'), "Selected merchant facet is not preserved in the UI");
@@ -436,13 +443,13 @@ async function run() {
   assert(productPage.includes("SHOP ALL ON eBay"), "The attributed retailer shop-all action is missing");
   assert(productPage.includes("action=shop_all"), "The shop-all action is not identified for analytics");
   assert(productPage.includes('target="_blank" rel="sponsored noopener noreferrer"'), "Product retailer actions do not preserve OneDailyDrop in the original tab");
-  assert(productPage.includes("data-shopping-assistant-open") && productPage.includes("shoppingAssistant"), "The assistant is not available on product pages");
+  assert(productPage.includes("data-ask-delia") && productPage.includes("/shopping-assistant.js?v=20260814-day12-product-gate"), "The contextual Delia action is not available on product pages");
   assert(!productPage.includes("<small>Evidence confidence</small>"), "Product pages still expose internal evidence confidence");
   const cachedProductResponse = await fetch(`${base}/us/deal/${products[0].id}`);
   assert(cachedProductResponse.headers.get("x-odd-cache") === "HIT", "Product-page microcache is not active");
   assert(String(cachedProductResponse.headers.get("cache-control") || "").includes("max-age=45"), "Product-page browser cache is missing");
 
-  const staticAsset = await get("/styles.css?v=20260814-day11-product-offers");
+  const staticAsset = await get("/styles.css?v=20260814-day12-unified-search");
   assert(String(staticAsset.headers.get("cache-control") || "").includes("immutable"), "Versioned static assets are not cached immutably");
 
   const franceProducts = await (await get("/api/products?market=fr")).json();

@@ -1,3 +1,3 @@
-const RELEASE_ID = "2026-08-14-day11-product-offers-performance-v1";
+const RELEASE_ID = "2026-08-14-day12-delia-parser-v1";
 
 module.exports = { RELEASE_ID };
