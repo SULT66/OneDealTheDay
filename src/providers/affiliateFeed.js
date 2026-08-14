@@ -22,7 +22,7 @@ const FIELD_ALIASES = Object.freeze({
   original_price:["original_price", "old_price", "regular_price", "list_price", "rrp", "rrp_price", "msrp", "price"],
   currency:["currency", "currency_code", "price_currency"],
   image_url:["image_url", "image", "image_link", "merchant_image_url", "merchant_thumb_url", "aw_thumb_url", "large_image", "large_image_url", "alternate_image", "additional_image_link", "product_image"],
-  affiliate_url:["affiliate_url", "aw_deep_link", "deeplink", "deep_link", "tracking_url", "click_url"],
+  affiliate_url:["affiliate_url", "aw_deep_link", "deeplink", "deep_link", "tracking_url", "click_url", "link", "product_url", "url"],
   retailer_shop_url:["retailer_shop_url", "merchant_deep_link", "link", "product_url", "merchant_url", "store_url", "shop_url", "url"],
   source_group_id:["item_group_id", "parent_product_id", "source_parent_id", "group_id"],
   source_variant_id:["variant_id", "variantid", "source_variant_id"],
