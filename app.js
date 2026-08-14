@@ -37,6 +37,8 @@ const cacheValue = (key, value, ttlMs) => {
   apiResponseCache.set(key, { value, expiresAt:Date.now() + ttlMs });
   return value;
 };
+const dealSlug = value => String(value || "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/&/g, " and ").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 90) || "deal";
+const dealPath = product => marketPath(product.market || "us", `/deal/${dealSlug(product.canonical_title || product.title)}-${product.id}`);
 const searchRowsForMarket = marketCode => {
   const cached = searchCatalogCache.get(marketCode);
   if (cached && cached.expiresAt > Date.now()) return cached.rows;
@@ -235,7 +237,10 @@ function expressWithHomepage(...args) {
       selection_reason: product.daily_selection_reason || product.selection_reason
     })), ...catalog]).slice(0, responseLimit);
     const presented = products
-      .map(product => presentProduct(localizeProduct(product, language), language))
+      .map(product => presentProduct(localizeProduct({
+        ...product,
+        deal_url:dealPath(product)
+      }, language), language))
       .map(product => {
         if (!compactResponse) return product;
         return {

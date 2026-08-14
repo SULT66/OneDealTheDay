@@ -362,6 +362,7 @@ async function run() {
   assert(compactProducts.length <= 10, "Compact homepage catalog ignored its limit");
   assert(compactBody.length < 40000, `Compact homepage catalog is still too large: ${compactBody.length} bytes`);
   assert(!compactBody.includes('affiliate_url') && !compactBody.includes('score_breakdown'), "Compact homepage catalog leaked unused heavy fields");
+  assert(compactProducts.every(product => /^\/us\/deal\/.+-\d+$/.test(product.deal_url || "")), "Compact homepage catalog is missing canonical product detail URLs");
   const cachedCompactResponse = await get("/api/products?market=us&limit=10&compact=1");
   assert(cachedCompactResponse.headers.get("x-odd-cache") === "HIT", "Compact catalog microcache is not active");
   const assistantStatus = await (await get("/api/shopping-assistant/status")).json();
