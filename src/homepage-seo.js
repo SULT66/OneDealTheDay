@@ -12,6 +12,7 @@ const {
 } = require("./i18n");
 
 const SITE = "https://www.onedailydrop.com";
+const homepageCache = new Map();
 const anchorOffsetStyle = `<style id="homepage-anchor-offset">
 html{scroll-padding-top:var(--odd-header-offset,132px)}
 #shopping-search,#top-picks,#featuredDeal,#subscribe,#top,#score,#archive,#price-drops,#about{scroll-margin-top:var(--odd-header-offset,132px)}
@@ -37,6 +38,15 @@ module.exports = function homepageSeo(req, res) {
   const language = resolveLanguage(req, res, selectedMarket.code);
   const locale = languageTag(selectedMarket.code, language);
   const localizedMarketName = marketName(selectedMarket.code, language);
+  const cacheKey = `${selectedMarket.code}:${language}:${String(req.query?.q || "").trim().slice(0, 120)}`;
+  const cached = homepageCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    if (language !== defaultLanguages[selectedMarket.code]) res.set("X-Robots-Tag", "noindex, follow");
+    res.set("Cache-Control", language === defaultLanguages[selectedMarket.code]
+      ? "public, max-age=60, stale-while-revalidate=300"
+      : "private, max-age=60, stale-while-revalidate=300");
+    return res.set("X-ODD-Cache", "HIT").type("html").send(cached.html);
+  }
 
   res.send = body => {
     if (typeof body !== "string" || !body.includes("application/ld+json")) return originalSend(body);
@@ -45,7 +55,7 @@ module.exports = function homepageSeo(req, res) {
     const canonical = SITE + homePath;
     const defaultLanguage = defaultLanguages[selectedMarket.code];
     const appScript = `<script>window.__ODD_MARKET__=${JSON.stringify(selectedMarket.code)};window.__ODD_MARKET_TIMEZONE__=${JSON.stringify(selectedMarket.timezone)};window.__ODD_LANGUAGE__=${JSON.stringify(language)};window.__ODD_LOCALE__=${JSON.stringify(locale)};window.__ODD_TEXT__=${JSON.stringify(clientCopy(language)).replace(/</g, "\\u003c")};</script><script>(function(){const q=new URLSearchParams(location.search).get("q");if(!q)return;const input=document.getElementById("searchInput");if(input)input.value=q;})();</script><script src="/click-tracking.js?v=20260814-day5"></script><script src="/app.js?v=20260814-day5"></script>`;
-    const day9AppScript = appScript.replace("/app.js?v=20260814-day5", "/app.js?v=20260814-day9-search-first");
+    const day9AppScript = appScript.replace("/app.js?v=20260814-day5", "/app.js?v=20260814-day11-performance");
     let enhanced = body
       .replace(legacyAnalytics, "")
       .replace(
@@ -59,7 +69,7 @@ module.exports = function homepageSeo(req, res) {
         /<\/button>\s*<\/div>\s*<nav class="main-nav" aria-label="[^"]+">/,
         `</button>${languageSwitcher(req, selectedMarket.code, language)}<button class="mobile-menu-toggle" type="button" aria-expanded="false" aria-controls="mainNavigation" aria-label="${t(language, "menu.open")}"><span></span><span></span><span></span></button></div><nav id="mainNavigation" class="main-nav" aria-label="${t(language, "nav.primary")}">`
       )
-      .replace(/\/styles\.css\?v=[^"]+/, "/styles.css?v=20260814-day9-search-first")
+      .replace(/\/styles\.css\?v=[^"]+/, "/styles.css?v=20260814-day11-product-offers")
       .replace(/href="\/us\/category\//g, `href="/${selectedMarket.code}/category/`)
       .replace('<a href="#archive">Past Drops</a>', `<a href="${marketPath(selectedMarket.code, "/archive")}">Past Drops</a>`)
       .replace(
@@ -94,12 +104,15 @@ module.exports = function homepageSeo(req, res) {
         '<meta name="robots" content="noindex,follow">'
       );
       res.set("X-Robots-Tag", "noindex, follow");
-      res.set("Cache-Control", "private, no-cache");
+      res.set("Cache-Control", "private, max-age=60, stale-while-revalidate=300");
     } else {
-      res.set("Cache-Control", "public, max-age=0, s-maxage=300, stale-while-revalidate=3600");
+      res.set("Cache-Control", "public, max-age=60, s-maxage=300, stale-while-revalidate=3600");
     }
     const socialImage = enhanced.match(/<meta property="og:image" content="([^"]+)">/)?.[1] || "";
     enhanced = enhanced.replace("</head>", `${imageConnectionHints(socialImage)}${anchorOffsetStyle}${consentStyles}</head>`);
+    if (homepageCache.size >= 50) homepageCache.delete(homepageCache.keys().next().value);
+    homepageCache.set(cacheKey, {html:enhanced, expiresAt:Date.now() + 60000});
+    res.set("X-ODD-Cache", "MISS");
     return originalSend(enhanced);
   };
 
