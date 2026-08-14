@@ -1,4 +1,5 @@
 const affiliateFeed = require("./affiliateFeed");
+const { normalizeCatalogProduct } = require("../catalogTaxonomy");
 
 const normalizeTokenText = value => String(value || "")
   .normalize("NFKD")
@@ -106,7 +107,7 @@ async function searchAll(config, market, {providerIds = []} = {}) {
       ? Number(provider.catalogLimit)
       : config.maxProductsPerSource || 500;
     const normalized = (Array.isArray(result.value) ? result.value : [])
-      .map(product => ({...product, source:provider.source}))
+      .map(product => normalizeCatalogProduct({...product, source:provider.source}))
       .slice(0, sourceLimit);
     products.push(...normalized);
     return {id:provider.id, source:provider.source, name:provider.name, status:"success", found:normalized.length, error:""};
@@ -154,9 +155,9 @@ async function searchForAssistant(config, {query, queries, market, signal, perSo
     if (result.status !== "fulfilled") return [];
     const provider = providers[index];
     return (Array.isArray(result.value) ? result.value : [])
-      .map(product => ({...product, source:product.source || provider.source}))
+      .map(product => normalizeCatalogProduct({...product, source:product.source || provider.source}))
       .map(product => {
-        const productTokens = new Set(normalizeTokenText(`${product.title || ""} ${product.brand || ""} ${product.category || ""} ${product.model_number || ""}`)
+        const productTokens = new Set(normalizeTokenText(`${product.title || ""} ${product.brand || ""} ${product.normalized_category || ""} ${product.category || ""} ${product.model_number || ""}`)
           .toLowerCase()
           .match(/[\p{L}\p{N}]+/gu) || []);
         const relevance = [...queryTokens].filter(token => productTokens.has(token)).length;

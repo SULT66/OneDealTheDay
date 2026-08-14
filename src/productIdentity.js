@@ -79,7 +79,7 @@ function sourceGroupKey(product = {}) {
     product.group_id
   ].find(value => !isPlaceholder(value));
   const canonicalUrl = canonicalMerchantProductUrl(
-    product.canonical_product_url || product.retailer_shop_url || product.product_url
+    product.canonical_product_url || product.product_url
   );
   const group = explicit ? `id:${normalizedPart(explicit)}` : canonicalUrl ? `url:${canonicalUrl}` : "";
   return group ? `${scope}:${group}` : "";
@@ -90,7 +90,7 @@ function sourceVariantKey(product = {}) {
   const explicit = [product.source_variant_id, product.variant_id].find(value => !isPlaceholder(value));
   if (explicit) return normalizedPart(explicit);
   try {
-    const url = new URL(text(product.retailer_shop_url || product.product_url));
+    const url = new URL(text(product.product_url));
     for (const key of GROUP_QUERY_PARAMETERS) {
       const value = url.searchParams.get(key);
       if (!isPlaceholder(value)) return normalizedPart(value);
@@ -187,7 +187,7 @@ function normalizeProductIdentity(product = {}) {
   const rawUpc = normalizeTradeItemId(product.upc);
   const rawEan = normalizeTradeItemId(product.ean);
   const canonicalProductUrl = canonicalMerchantProductUrl(
-    product.canonical_product_url || product.retailer_shop_url || product.product_url
+    product.canonical_product_url || product.product_url
   );
   return {
     ...product,

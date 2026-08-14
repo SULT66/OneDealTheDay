@@ -248,10 +248,13 @@ module.exports = function homepage(req, res) {
     (left, right) =>
       Number(right.display_score || 0) - Number(left.display_score || 0),
   );
-  if (!dailyProducts.length)
-    dailyProducts = products
-      .filter((product) => product.display_score != null)
-      .slice(0, 10);
+  // A partial daily snapshot must not collapse the homepage to one card.
+  // Preserve its selected order, then fill the remaining positions from the
+  // current verified catalog without introducing duplicate products.
+  dailyProducts = selectUniqueProducts([
+    ...dailyProducts,
+    ...products.filter((product) => product.display_score != null),
+  ]).slice(0, 10);
   const featured = dailyProducts[0] || null;
   const moreWorthSeeing = dailyProducts.slice(1, 10);
   const demoMode = Boolean(featured && isDemo(featured));

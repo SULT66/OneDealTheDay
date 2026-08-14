@@ -28,6 +28,8 @@ db.exec(`
     ean TEXT,
     title TEXT,
     category TEXT,
+    normalized_category TEXT,
+    taxonomy_version TEXT,
     description TEXT,
     image_url TEXT,
     affiliate_url TEXT,
@@ -343,6 +345,8 @@ for (const column of [
   ,"selection_reason"
   ,"first_seen_at"
   ,"last_seen_at"
+  ,"normalized_category"
+  ,"taxonomy_version"
 ]) {
   if (!productColumns.has(column)) db.exec(`ALTER TABLE products ADD COLUMN ${column} TEXT`);
 }
@@ -393,6 +397,7 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_products_market_status_rank ON products(market, status, ranking_score DESC);
   CREATE INDEX IF NOT EXISTS idx_products_market_provider_id ON products(market, provider_external_id);
   CREATE INDEX IF NOT EXISTS idx_products_category_score ON products(category, score DESC);
+  CREATE INDEX IF NOT EXISTS idx_products_normalized_category_score ON products(normalized_category, ranking_score DESC);
   CREATE INDEX IF NOT EXISTS idx_products_brand_score ON products(brand_slug, score DESC);
   CREATE INDEX IF NOT EXISTS idx_products_brand_name ON products(brand);
   CREATE INDEX IF NOT EXISTS idx_price_history_product_date ON price_history(product_id, observed_at DESC);

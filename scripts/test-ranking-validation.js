@@ -52,6 +52,13 @@ for (const market of report.markets) {
   assert.strictEqual(market.cross_merchant_categories, 2, `${market.market} lacks comparable cross-merchant categories`);
 }
 assert.deepStrictEqual(report.policy, {merchant_exposure_quotas:false, concentration_is_diagnostic_only:true});
+assert(report.markets[0].merchants.every(merchant => merchant.capability_coverage), "Merchant capability coverage is missing");
+
+const singleMerchant = rankingValidationReport(rows.filter(product => product.retailer_name === "eBay"));
+assert.strictEqual(singleMerchant.totals.warnings, 0, "A single-source market was misreported as a ranking defect");
+assert.strictEqual(singleMerchant.totals.coverage_gaps, 5);
+assert(singleMerchant.issues.every(issue => issue.code !== "no_cross_merchant_category"));
+assert(singleMerchant.issues.some(issue => issue.code === "single_merchant_market" && issue.severity === "coverage"));
 
 const skewed = rankingValidationReport([
   ...rows,
