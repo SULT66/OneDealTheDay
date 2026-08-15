@@ -47,8 +47,8 @@ jobs:
                    grep -q 'id="homepageSearchForm"' <<<"${homepage_payload}" && \
                    grep -q '/us/search?merchant=eBay' <<<"${homepage_payload}" && \
                    grep -q 'class="top-picks-disclosure"' <<<"${homepage_payload}"; then
-                  results_payload="$(curl --fail --silent --show-error --max-time 40 \
-                    'https://www.onedailydrop.com/us/search?q=office' || true)"
+                    results_payload="$(curl --fail --silent --show-error --max-time 40 \
+                      'https://www.onedailydrop.com/us/search?q=desk' || true)"
                   if grep -q 'data-results-ui="facets-sorting-badges-v1"' <<<"${results_payload}" && \
                      grep -q 'data-results-filters' <<<"${results_payload}" && \
                      grep -q 'class="search-sort"' <<<"${results_payload}" && \
