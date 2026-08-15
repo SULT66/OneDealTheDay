@@ -366,13 +366,18 @@ app.use((req, res, next) => {
   const originalSend = res.send.bind(res);
   res.send = body => {
     if (res.statusCode === 200 && typeof body === "string" && body.length < 1000000) {
-      if (publicHtmlCache.size >= 300) publicHtmlCache.delete(publicHtmlCache.keys().next().value);
-      const cacheControl = "private, max-age=45, stale-while-revalidate=180";
+      if (publicHtmlCache.size >= 500) publicHtmlCache.delete(publicHtmlCache.keys().next().value);
+      const isProductPage = /^\/deal\/[^/]+\/?$/.test(req.path);
+      const isDefaultLanguage = req.language === defaultLanguages[req.market || marketFromIp(req).code];
+      const cacheControl = isProductPage && isDefaultLanguage
+        ? "public, max-age=120, s-maxage=600, stale-while-revalidate=3600"
+        : "private, max-age=45, stale-while-revalidate=180";
+      const cacheTtlMs = isProductPage ? 10 * 60 * 1000 : 45 * 1000;
       publicHtmlCache.set(cacheKey, {
         body,
         cacheControl,
         robots:String(res.get("X-Robots-Tag") || ""),
-        expiresAt:Date.now() + 45000
+        expiresAt:Date.now() + cacheTtlMs
       });
       res.set("X-ODD-Cache", "MISS").set("Cache-Control", cacheControl);
     }
@@ -761,12 +766,26 @@ const searchCatalogCache = new Map();
 const navCategories = code => {
   const cached = navigationCategoryCache.get(code);
   if (cached && cached.expiresAt > Date.now()) return cached.categories;
-  const categories = uniqueProductsInOrder(db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()} AND category<>'' ORDER BY COALESCE(ranking_score,score) DESC,score DESC,updated_at DESC`).all(code))
-    .filter(isPubliclyIndexable)
-    .map(product => product.category)
-    .filter((category, index, values) => values.indexOf(category) === index)
-    .sort();
-  navigationCategoryCache.set(code, {categories, expiresAt:Date.now() + 5 * 60 * 1000});
+  // The header only needs category names. Loading every product and scoring it
+  // again made each cold product-page request scale with the whole catalog.
+  // Eligibility is already persisted during ingestion, so keep this query on
+  // indexed, precomputed columns and validate only one representative row per
+  // category.
+  const candidates = db.prepare(`
+    SELECT category
+    FROM products
+    WHERE market=? AND status='published' AND ${sourceSql()} AND category<>''
+      AND title<>'' AND image_url<>'' AND affiliate_url LIKE 'http%'
+      AND current_price>0 AND shipping_cost IS NOT NULL
+      AND commerce_quality>=45 AND evidence_confidence>=55
+      AND LOWER(COALESCE(return_summary,'')) NOT LIKE '%no return%'
+      AND LOWER(COALESCE(return_summary,'')) NOT LIKE '%not accepted%'
+      AND LOWER(COALESCE(return_summary,'')) NOT LIKE '%final sale%'
+    GROUP BY category
+    ORDER BY category
+  `).all(code);
+  const categories = candidates.map(row => row.category).filter(Boolean);
+  navigationCategoryCache.set(code, {categories, expiresAt:Date.now() + 15 * 60 * 1000});
   return categories;
 };
 const searchRowsForMarket = code => {

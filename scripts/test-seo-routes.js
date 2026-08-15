@@ -447,7 +447,9 @@ async function run() {
   assert(!productPage.includes("<small>Evidence confidence</small>"), "Product pages still expose internal evidence confidence");
   const cachedProductResponse = await fetch(`${base}/us/deal/${products[0].id}`);
   assert(cachedProductResponse.headers.get("x-odd-cache") === "HIT", "Product-page microcache is not active");
-  assert(String(cachedProductResponse.headers.get("cache-control") || "").includes("max-age=45"), "Product-page browser cache is missing");
+  const productCacheControl = String(cachedProductResponse.headers.get("cache-control") || "");
+  assert(productCacheControl.includes("max-age=120"), "Product-page browser cache is missing");
+  assert(productCacheControl.includes("s-maxage=600"), "Product-page shared cache is missing");
 
   const staticAsset = await get("/styles.css?v=20260814-day12-unified-search");
   assert(String(staticAsset.headers.get("cache-control") || "").includes("immutable"), "Versioned static assets are not cached immutably");

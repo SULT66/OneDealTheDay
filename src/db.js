@@ -396,6 +396,9 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_products_market_status_score ON products(market, status, score DESC);
   CREATE INDEX IF NOT EXISTS idx_products_market_status_rank ON products(market, status, ranking_score DESC);
   CREATE INDEX IF NOT EXISTS idx_products_market_provider_id ON products(market, provider_external_id);
+  CREATE INDEX IF NOT EXISTS idx_products_market_status_product_key ON products(market, status, LOWER(product_key));
+  CREATE INDEX IF NOT EXISTS idx_products_market_status_category_rank ON products(market, status, category, ranking_score DESC);
+  CREATE INDEX IF NOT EXISTS idx_products_market_status_brand_rank ON products(market, status, brand_slug, ranking_score DESC);
   CREATE INDEX IF NOT EXISTS idx_products_category_score ON products(category, score DESC);
   CREATE INDEX IF NOT EXISTS idx_products_normalized_category_score ON products(normalized_category, ranking_score DESC);
   CREATE INDEX IF NOT EXISTS idx_products_brand_score ON products(brand_slug, score DESC);
