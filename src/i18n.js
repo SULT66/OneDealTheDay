@@ -94,8 +94,8 @@ const copy = {
     "home.catalogArchiveEmpty": "The archive will begin with the first real Daily Drop.",
     "home.featured": "TODAY'S #1 PICK",
     "home.makeHabit": "MAKE IT YOUR DAILY CHECK",
-    "home.oneUseful": "One useful drop. In the categories you care about.",
-    "home.chooseInterests": "Choose your interests and get the best new pick without searching through endless sale pages.",
+    "home.oneUseful": "One useful drop. Once a day.",
+    "home.chooseInterests": "Get the daily pick without searching through endless sale pages.",
     "home.shopFor": "What do you shop for?",
     "home.chooseCategory": "Please choose at least one category.",
     "home.email": "Email address",
@@ -457,8 +457,8 @@ const copy = {
     "home.catalogArchiveEmpty": "El archivo comenzará con la primera oferta diaria real.",
     "home.featured": "N.º 1 DE HOY",
     "home.makeHabit": "CONVIÉRTELO EN TU REVISIÓN DIARIA",
-    "home.oneUseful": "Una oferta útil. En las categorías que te interesan.",
-    "home.chooseInterests": "Elige tus intereses y recibe la mejor selección nueva sin revisar interminables páginas de rebajas.",
+    "home.oneUseful": "Una oferta útil. Una vez al día.",
+    "home.chooseInterests": "Recibe la selección diaria sin revisar interminables páginas de rebajas.",
     "home.shopFor": "¿Qué sueles comprar?",
     "home.chooseCategory": "Elige al menos una categoría.",
     "home.email": "Correo electrónico",
@@ -820,8 +820,8 @@ const copy = {
     "home.catalogArchiveEmpty": "L’archive commencera avec la première vraie sélection quotidienne.",
     "home.featured": "N° 1 DU JOUR",
     "home.makeHabit": "VOTRE RENDEZ-VOUS QUOTIDIEN",
-    "home.oneUseful": "Une offre utile. Dans les catégories qui vous intéressent.",
-    "home.chooseInterests": "Choisissez vos centres d’intérêt et recevez la meilleure sélection sans parcourir des pages de promotions.",
+    "home.oneUseful": "Une offre utile. Une fois par jour.",
+    "home.chooseInterests": "Recevez la sélection du jour sans parcourir des pages de promotions.",
     "home.shopFor": "Qu’achetez-vous le plus souvent ?",
     "home.chooseCategory": "Choisissez au moins une catégorie.",
     "home.email": "Adresse e-mail",
@@ -1183,8 +1183,8 @@ const copy = {
     "home.catalogArchiveEmpty": "Das Archiv beginnt mit dem ersten echten Daily Drop.",
     "home.featured": "HEUTE NR. 1",
     "home.makeHabit": "IHR TÄGLICHER CHECK",
-    "home.oneUseful": "Ein nützliches Angebot. In den Kategorien, die Sie interessieren.",
-    "home.chooseInterests": "Wählen Sie Ihre Interessen und erhalten Sie die beste neue Auswahl ohne endlose Angebotsseiten.",
+    "home.oneUseful": "Ein nützliches Angebot. Einmal am Tag.",
+    "home.chooseInterests": "Erhalten Sie die tägliche Auswahl ohne endlose Angebotsseiten.",
     "home.shopFor": "Wonach suchen Sie?",
     "home.chooseCategory": "Bitte wählen Sie mindestens eine Kategorie.",
     "home.email": "E-Mail-Adresse",
@@ -1485,39 +1485,36 @@ const copy = {
 
 const categoryNames = {
   en: {
-    "car accessories": "Car accessories", "pet supplies": "Pet supplies", "smart home": "Smart home",
-    "office gadgets": "Office gadgets", "tools": "Tools", "travel accessories": "Travel accessories",
-    "kitchen gadgets": "Kitchen gadgets"
+    "Electronics": "Electronics", "Home & Kitchen": "Home & Kitchen", "Furniture": "Furniture",
+    "Office": "Office", "Tools & DIY": "Tools & DIY", "Automotive": "Automotive",
+    "Sports & Outdoors": "Sports & Outdoors", "Bikes & Mobility": "Bikes & Mobility",
+    "Health & Beauty": "Health & Beauty", "Fashion": "Fashion", "Pet Supplies": "Pet Supplies",
+    "Toys & Games": "Toys & Games", "Baby & Kids": "Baby & Kids", "Travel": "Travel",
+    "Gifts": "Gifts", "Mattresses & Sleep": "Mattresses & Sleep", "Other Deals": "Other Deals"
   },
   es: {
-    "Beauty": "Belleza", "Electronics": "Electrónica", "Fashion": "Moda", "Home": "Hogar",
-    "Kitchen": "Cocina", "Pets": "Mascotas", "Sports & Outdoors": "Deportes y aire libre",
-    "Automotive": "Automóvil", "Toys": "Juguetes", "Deals": "Ofertas",
-    "Smart Home": "Hogar inteligente", "Tools": "Herramientas", "Travel": "Viajes",
-    "Office": "Oficina", "Fitness": "Fitness", "Wellness": "Bienestar",
-    "car accessories": "Accesorios para coche", "pet supplies": "Productos para mascotas",
-    "smart home": "Hogar inteligente", "office gadgets": "Accesorios de oficina", "tools": "Herramientas",
-    "travel accessories": "Accesorios de viaje", "kitchen gadgets": "Accesorios de cocina"
+    "Electronics": "Electrónica", "Home & Kitchen": "Hogar y cocina", "Furniture": "Muebles",
+    "Office": "Oficina", "Tools & DIY": "Herramientas y bricolaje", "Automotive": "Automóvil",
+    "Sports & Outdoors": "Deportes y aire libre", "Bikes & Mobility": "Bicicletas y movilidad",
+    "Health & Beauty": "Salud y belleza", "Fashion": "Moda", "Pet Supplies": "Productos para mascotas",
+    "Toys & Games": "Juguetes y juegos", "Baby & Kids": "Bebés y niños", "Travel": "Viajes",
+    "Gifts": "Regalos", "Mattresses & Sleep": "Colchones y descanso", "Other Deals": "Otras ofertas"
   },
   fr: {
-    "Beauty": "Beauté", "Electronics": "Électronique", "Fashion": "Mode", "Home": "Maison",
-    "Kitchen": "Cuisine", "Pets": "Animaux", "Sports & Outdoors": "Sports et plein air",
-    "Automotive": "Auto", "Toys": "Jouets", "Deals": "Offres",
-    "Smart Home": "Maison connectée", "Tools": "Outils", "Travel": "Voyage",
-    "Office": "Bureau", "Fitness": "Fitness", "Wellness": "Bien-être",
-    "car accessories": "Accessoires auto", "pet supplies": "Produits pour animaux",
-    "smart home": "Maison connectée", "office gadgets": "Accessoires de bureau", "tools": "Outils",
-    "travel accessories": "Accessoires de voyage", "kitchen gadgets": "Accessoires de cuisine"
+    "Electronics": "Électronique", "Home & Kitchen": "Maison et cuisine", "Furniture": "Meubles",
+    "Office": "Bureau", "Tools & DIY": "Outils et bricolage", "Automotive": "Auto",
+    "Sports & Outdoors": "Sports et plein air", "Bikes & Mobility": "Vélos et mobilité",
+    "Health & Beauty": "Santé et beauté", "Fashion": "Mode", "Pet Supplies": "Produits pour animaux",
+    "Toys & Games": "Jouets et jeux", "Baby & Kids": "Bébé et enfants", "Travel": "Voyage",
+    "Gifts": "Cadeaux", "Mattresses & Sleep": "Matelas et sommeil", "Other Deals": "Autres offres"
   },
   de: {
-    "Beauty": "Beauty", "Electronics": "Elektronik", "Fashion": "Mode", "Home": "Wohnen",
-    "Kitchen": "Küche", "Pets": "Haustiere", "Sports & Outdoors": "Sport und Outdoor",
-    "Automotive": "Auto", "Toys": "Spielzeug", "Deals": "Angebote",
-    "Smart Home": "Smart Home", "Tools": "Werkzeuge", "Travel": "Reisen",
-    "Office": "Büro", "Fitness": "Fitness", "Wellness": "Wohlbefinden",
-    "car accessories": "Autozubehör", "pet supplies": "Tierbedarf",
-    "smart home": "Smart Home", "office gadgets": "Bürozubehör", "tools": "Werkzeuge",
-    "travel accessories": "Reisezubehör", "kitchen gadgets": "Küchenhelfer"
+    "Electronics": "Elektronik", "Home & Kitchen": "Wohnen und Küche", "Furniture": "Möbel",
+    "Office": "Büro", "Tools & DIY": "Werkzeuge und Heimwerken", "Automotive": "Auto",
+    "Sports & Outdoors": "Sport und Outdoor", "Bikes & Mobility": "Fahrräder und Mobilität",
+    "Health & Beauty": "Gesundheit und Beauty", "Fashion": "Mode", "Pet Supplies": "Tierbedarf",
+    "Toys & Games": "Spielzeug und Spiele", "Baby & Kids": "Baby und Kinder", "Travel": "Reisen",
+    "Gifts": "Geschenke", "Mattresses & Sleep": "Matratzen und Schlaf", "Other Deals": "Weitere Angebote"
   }
 };
 

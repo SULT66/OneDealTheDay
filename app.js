@@ -259,7 +259,7 @@ function expressWithHomepage(...args) {
           source:product.source,
           title:product.title,
           description:String(product.description || "").slice(0, 180),
-          category:product.category,
+          public_category:product.public_category,
           display_category:product.display_category,
           brand:product.brand,
           image_url:product.image_url,

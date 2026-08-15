@@ -1,5 +1,6 @@
 const { categoryLabel, languageTag, t } = require("./i18n");
 const { SCORE_MODEL, scoreProduct, isDailyPickEligible } = require("./ranker");
+const { canonicalCategory } = require("./catalogTaxonomy");
 
 const EDITORIAL_SCORE_FLOOR = 60;
 const EDITORIAL_CONFIDENCE_FLOOR = 55;
@@ -205,6 +206,7 @@ function evidenceCount(product) {
 }
 
 function presentProduct(product, language = "en") {
+  const publicCategory = canonicalCategory(product);
   if (!product) return product;
   const count = evidenceCount(product);
   const discount = discountPercent(product);
@@ -240,7 +242,8 @@ function presentProduct(product, language = "en") {
     return_summary: displayReturns,
     availability: displayAvailability,
     selection_reason: displayReason,
-    display_category: categoryLabel(product.category || "Deals", language),
+    public_category: publicCategory,
+    display_category: categoryLabel(publicCategory, language),
     display_shipping_summary: displayShipping,
     display_return_summary: displayReturns,
     display_availability: displayAvailability,

@@ -1,20 +1,27 @@
 const assert = require("assert");
-const { TAXONOMY_VERSION, canonicalCategory, normalizeCatalogProduct } = require("../src/catalogTaxonomy");
+const { TAXONOMY_VERSION, PUBLIC_CATEGORIES, canonicalCategory, normalizeCatalogProduct } = require("../src/catalogTaxonomy");
 const { capabilityCoverage, capabilityProfile } = require("../src/sourceCapabilities");
 
 const cases = [
   [{source:"ebay", category:"gifts under 25", title:"Personalized keepsake"}, "Gifts"],
   [{source:"feed-giftlab", category:"Gifts > Personalized Gifts", title:"Custom photo plaque"}, "Gifts"],
-  [{source:"ebay", category:"office gadgets", title:"Ergonomic desk lamp"}, "Office gadgets"],
-  [{source:"feed-tribesigns", category:"Furniture > Office Furniture", title:"Computer desk with drawers"}, "Office gadgets"],
-  [{source:"feed-tribesigns", category:"Furniture > Shelving > Bookcases", title:"Standing bookcase"}, "Home gadgets"],
-  [{source:"feed-mooncool", category:"Tricycles", title:"Adult trike"}, "Bicycles"],
-  [{source:"feed-king-koil", category:"Mattresses", title:"Queen mattress"}, "Mattresses"],
-  [{source:"ebay", category:"maison connectée", title:"Assistant connecté"}, "Smart home"],
-  [{source:"ebay", category:"küchengadgets", title:"Praktischer Küchenhelfer"}, "Kitchen gadgets"],
-  [{source:"ebay", category:"tierbedarf", title:"Zubehör"}, "Pet supplies"],
-  [{source:"ebay", category:"idées cadeaux", title:"Souvenir"}, "Gifts"]
+  [{source:"ebay", category:"office gadgets", title:"Ergonomic desk lamp"}, "Office"],
+  [{source:"feed-tribesigns", category:"Furniture > Office Furniture", title:"Computer desk with drawers"}, "Office"],
+  [{source:"feed-tribesigns", category:"Furniture > Shelving > Bookcases", title:"Standing bookcase"}, "Furniture"],
+  [{source:"feed-tribesigns", category:"Home & Garden > Household Supplies > Storage", title:"5-tier shoe cabinet"}, "Furniture"],
+  [{source:"feed-mooncool", category:"Tricycles", title:"Adult trike"}, "Bikes & Mobility"],
+  [{source:"feed-king-koil", category:"Mattresses", title:"Queen mattress"}, "Mattresses & Sleep"],
+  [{source:"ebay", category:"maison connectée", title:"Assistant connecté"}, "Electronics"],
+  [{source:"ebay", category:"küchengadgets", title:"Praktischer Küchenhelfer"}, "Home & Kitchen"],
+  [{source:"ebay", category:"tierbedarf", title:"Zubehör"}, "Pet Supplies"],
+  [{source:"ebay", category:"idées cadeaux", title:"Souvenir"}, "Gifts"],
+  [{source:"ebay", category:"Tools", title:"Battery replacement kit for Apple iPhone 12"}, "Electronics"],
+  [{source:"ebay", category:"Unknown feed path", title:"Opaque listing"}, "Other Deals"]
 ];
+
+assert.strictEqual(PUBLIC_CATEGORIES.length, 16, "The shopper taxonomy must stay intentionally small");
+assert.strictEqual(new Set(PUBLIC_CATEGORIES).size, PUBLIC_CATEGORIES.length, "Public categories must be unique");
+assert(!PUBLIC_CATEGORIES.some(category => category.includes(">")), "A raw feed hierarchy escaped into public navigation");
 
 for (const [product, expected] of cases) {
   assert.strictEqual(canonicalCategory(product), expected, `${product.title} was classified incorrectly`);

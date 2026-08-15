@@ -15,21 +15,10 @@ const { presentProduct } = require("./productPresentation");
 const { sourceSql } = require("./publicCatalog");
 const { outboundPath } = require("./retailerLinks");
 const { deduplicationKeys, selectUniqueProducts } = require("./ranker");
+const { PUBLIC_CATEGORIES } = require("./catalogTaxonomy");
 const renderHomepageTemplate = require("./homepageTemplate");
 
 const SITE = "https://www.onedailydrop.com";
-const DEFAULT_INTEREST_CATEGORIES = [
-  "Electronics",
-  "Home",
-  "Kitchen",
-  "Beauty",
-  "Fashion",
-  "Pets",
-  "Sports & Outdoors",
-  "Automotive",
-  "Toys",
-  "Smart Home",
-];
 const esc = (value) =>
   String(value ?? "").replace(
     /[&<>"']/g,
@@ -176,7 +165,7 @@ const mainCard = (product, index, language = "en") => `
     <a class="image-wrap" href="${dealPath(product)}" ${trackingAttributes(product, "daily_card_media")}><img src="${esc(product.image_url)}" alt="${esc(fullTitle(product.title))}" loading="lazy" decoding="async"></a>
     <div class="card-content">
       <div class="card-top"><span class="rank">#${index + 1}</span>${badge(product) ? `<span class="badge">${esc(badge(product))}</span>` : ""}</div>
-      <p class="cat"><a href="${categoryPath(product.category || "Deals", product.market)}">${esc(product.display_category || product.category || "Deals")}</a> · ${esc(storeName(product))}</p>
+      <p class="cat">${esc(storeName(product))}</p>
       <h3><a href="${dealPath(product)}" ${trackingAttributes(product, "daily_card_title")}>${esc(fullTitle(product.title))}</a></h3>
       <p class="description editorial-teaser"><strong>${esc(t(language, "product.why"))}</strong> ${esc(whyPicked(product))}</p>
       ${scoreMetrics(product, language)}
@@ -191,7 +180,7 @@ const miniCard = (product, language = "en", atSelection = false) => `
   <article class="mini-card">
     <a href="${dealPath(product)}" ${trackingAttributes(product, "collection_media")}><img src="${esc(product.image_url)}" alt="${esc(fullTitle(product.title))}" loading="lazy" decoding="async"></a>
     <div class="mini-card-body">
-      <p class="cat"><a href="${categoryPath(product.category || "Deals", product.market)}">${esc(product.display_category || product.category || "Deals")}</a> · ${esc(storeName(product))}</p>
+      <p class="cat">${esc(storeName(product))}</p>
       <h3><a href="${dealPath(product)}" ${trackingAttributes(product, "collection_title")}>${esc(fullTitle(product.title))}</a></h3>
       ${scoreMetrics(product, language, atSelection || (product.drop_score != null && Boolean(product.drop_date)))}
       <div class="mini-price-row"><span class="mini-price-label">${priceLabel(product)}</span><span class="mini-price">${esc(product.display_current_price || money(product.current_price, product.currency))}</span>${product.verified_previous_price ? `<span class="old">${esc(product.display_verified_previous_price || money(product.verified_previous_price, product.currency))}</span><span class="save-pill">${esc(t(language, "product.verifiedDrop", {percent:product.verified_drop_percent}))}</span>` : product.original_price ? `<span class="old">${esc(product.display_original_price || money(product.original_price, product.currency))}</span>` : ""}</div>
@@ -264,12 +253,12 @@ module.exports = function homepage(req, res) {
   [featured, ...moreWorthSeeing].filter(Boolean).forEach(markUsed);
   const isUnused = (product) =>
     !deduplicationKeys(product).some((key) => used.has(key));
-  const categories = [
-    ...new Set(products.map((product) => product.category).filter(Boolean)),
-  ];
-  const categoryChoices = (
-    categories.length ? categories : DEFAULT_INTEREST_CATEGORIES
-  ).slice(0, 10);
+  const availableCategories = new Set(
+    products.map((product) => product.public_category).filter(Boolean),
+  );
+  const categories = PUBLIC_CATEGORIES.filter((category) =>
+    availableCategories.has(category),
+  );
   const merchantCounts = new Map();
   products.forEach((product) => {
     const merchant = storeName(product);
@@ -409,7 +398,7 @@ module.exports = function homepage(req, res) {
       <span class="featured-ribbon">TODAY'S #1 PICK</span>${badge(featured) ? `<span class="featured-badge">${esc(badge(featured))}</span>` : ""}
     </div>
     <div class="featured-body">
-      <p class="cat"><a href="${categoryPath(featured.category || "Deals", selectedMarket.code)}">${esc(featured.display_category || featured.category || "Deals")}</a> · ${esc(storeName(featured))}</p>
+      <p class="cat">${esc(storeName(featured))}</p>
       <h2><a href="${dealPath(featured)}" ${trackingAttributes(featured, "featured_title")}>${esc(fullTitle(featured.title))}</a></h2>
       <p class="description editorial-teaser">${esc(whyPicked(featured))}</p>
       ${scoreMetrics(featured, language)}
@@ -460,7 +449,6 @@ module.exports = function homepage(req, res) {
     updatedText:featured ? statusText(featured) : t(language, "home.preparing"),
     categoryLinks:categories.map(category => `<a href="${categoryPath(category, selectedMarket.code)}">${esc(categoryLabel(category, language))}</a>`).join(""),
     storeLinks:storeNavigation.map(([merchant, count]) => `<a href="${marketPath(selectedMarket.code, "/search")}?merchant=${encodeURIComponent(merchant)}"><span>${esc(merchant)}</span><small>${esc(t(language, "search.products", {count}))}</small></a>`).join(""),
-    categoryChoices:categoryChoices.map(category => `<label><input type="checkbox" name="categories" value="${esc(category)}"><span>${esc(category)}</span></label>`).join(""),
     moreWorthSeeingHtml:moreWorthSeeing.map((product, index) => mainCard(product, index + 1, language)).join(""),
     moreWorthSeeingCount:moreWorthSeeing.length,
     archiveHtml:collection(archive, t(language, "home.catalogArchiveEmpty"), true),

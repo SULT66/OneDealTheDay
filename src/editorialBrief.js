@@ -194,7 +194,7 @@ function createEditorialBrief(product, display, {
   const lang = content[language] ? language : "en";
   const copy = content[lang];
   const title = shorten(display?.title || product?.title, 150);
-  const category = categoryLabel(product?.category || "Deals", lang);
+  const category = categoryLabel(display?.public_category || product?.normalized_category || "Other Deals", lang);
   const score = Math.round(number(display?.display_score ?? product?.score));
   const price = money(product?.current_price, product?.currency, product?.market, lang) || display?.display_current_price || copy.currentPrice;
   const originalPrice = money(product?.original_price, product?.currency, product?.market, lang);

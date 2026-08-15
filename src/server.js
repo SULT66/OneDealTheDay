@@ -16,6 +16,7 @@ const { sourceSql, isPublicSource } = require("./publicCatalog");
 const { enabledProviders, searchForAssistant } = require("./providers/registry");
 const { coverage: retailerCoverage } = require("./retailerCatalog");
 const { presentProduct } = require("./productPresentation");
+const { PUBLIC_CATEGORIES, canonicalCategory, isPublicCategory } = require("./catalogTaxonomy");
 const { deduplicationKeys, isDailyPickEligible, scoreOffers, selectUniqueProducts } = require("./ranker");
 const { parseSearchOptions, searchCatalogProducts } = require("./catalogSearch");
 const { applySearchIntent } = require("./searchIntent");
@@ -714,7 +715,7 @@ const whyPicked = (product, language = "en") => {
 };
 const searchAliases = {cat:["cat","cats","pet","pets"],cats:["cat","cats","pet","pets"],dog:["dog","dogs","pet","pets"],dogs:["dog","dogs","pet","pets"],phone:["phone","phones","smartphone","smartphones","mobile"],tv:["tv","television","televisions"],car:["car","cars","automotive","auto"]};
 const matchesSearch = (product, terms) => {
-  const haystack = `${product.title || ""} ${product.description || ""} ${product.category || ""} ${product.brand || ""} ${product.retailer_name || ""} ${product.source || ""}`.toLowerCase();
+  const haystack = `${product.title || ""} ${product.description || ""} ${product.normalized_category || ""} ${product.category || ""} ${product.brand || ""} ${product.retailer_name || ""} ${product.source || ""}`.toLowerCase();
   return terms.every(term => (searchAliases[term] || [term, term.endsWith("s") ? term.slice(0,-1) : `${term}s`]).some(candidate => haystack.includes(candidate)));
 };
 const trackingAttributes = (product, sourcePage, placement) => `data-track-product="${Number(product.id)}" data-track-source="${normalizeSourcePage(sourcePage)}" data-track-placement="${normalizePlacement(placement)}" data-track-action="view_details"`;
@@ -772,19 +773,19 @@ const navCategories = code => {
   // indexed, precomputed columns and validate only one representative row per
   // category.
   const candidates = db.prepare(`
-    SELECT category
+    SELECT normalized_category
     FROM products
     WHERE market=? AND status='published' AND ${sourceSql()} AND category<>''
-      AND title<>'' AND image_url<>'' AND affiliate_url LIKE 'http%'
+      AND normalized_category<>'' AND title<>'' AND image_url<>'' AND affiliate_url LIKE 'http%'
       AND current_price>0 AND shipping_cost IS NOT NULL
       AND commerce_quality>=45 AND evidence_confidence>=55
       AND LOWER(COALESCE(return_summary,'')) NOT LIKE '%no return%'
       AND LOWER(COALESCE(return_summary,'')) NOT LIKE '%not accepted%'
       AND LOWER(COALESCE(return_summary,'')) NOT LIKE '%final sale%'
-    GROUP BY category
-    ORDER BY category
+    GROUP BY normalized_category
   `).all(code);
-  const categories = candidates.map(row => row.category).filter(Boolean);
+  const available = new Set(candidates.map(row => canonicalCategory({category:row.normalized_category})).filter(isPublicCategory));
+  const categories = PUBLIC_CATEGORIES.filter(category => available.has(category));
   navigationCategoryCache.set(code, {categories, expiresAt:Date.now() + 15 * 60 * 1000});
   return categories;
 };
@@ -863,7 +864,7 @@ const shell = (title, description, canonical, body, schema = null, image = "", r
   const ogType = suppliedNodes.some(node => node?.["@type"] === "Product") ? "product" : "website";
   const html = `<!doctype html><html lang="${esc(locale)}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0a1020"><title>${esc(title)}</title><meta name="description" content="${esc(description.slice(0,160))}"><meta name="robots" content="${esc(robotsContent)}"><link rel="canonical" href="${esc(canonical)}"><link rel="icon" href="/favicon.svg" type="image/svg+xml">${alternates}${imageConnectionHints(image)}<meta property="og:type" content="${ogType}"><meta property="og:site_name" content="OneDailyDrop"><meta property="og:locale" content="${esc(ogLocale)}"><meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(description.slice(0,180))}"><meta property="og:url" content="${esc(canonical)}">${image ? `<meta property="og:image" content="${esc(image)}"><meta property="og:image:alt" content="${esc(title)}">` : ""}<meta name="twitter:card" content="${image ? "summary_large_image" : "summary"}"><meta name="twitter:title" content="${esc(title)}"><meta name="twitter:description" content="${esc(description.slice(0,180))}">${image ? `<meta name="twitter:image" content="${esc(image)}">` : ""}<link rel="stylesheet" href="/styles.css?v=20260731-brand-lockup"><link rel="stylesheet" href="/brand-theme.css?v=20260731-brand-lockup"><link rel="stylesheet" href="/liquid-glass.css?v=20260731-brand-lockup"><script type="application/ld+json">${JSON.stringify(pageSchema).replace(/</g,"\\u003c")}</script><script>window.__ODD_LANGUAGE__=${JSON.stringify(language)};window.__ODD_LOCALE__=${JSON.stringify(locale)};window.__ODD_TEXT__=${JSON.stringify(clientCopy(language)).replace(/</g, "\\u003c")};</script></head><body>${sharedHeader(code, language, req)}${body}${sharedFooter(code, language)}<script src="/theme.js?v=20260728-i18n2"></script><script src="/site-shell.js?v=20260728-i18n2"></script><script src="/click-tracking.js?v=20260814-day5"></script></body></html>`;
   const versionedHtml = html
-    .replace("/styles.css?v=20260731-brand-lockup", "/styles.css?v=20260814-day12-unified-search")
+    .replace("/styles.css?v=20260731-brand-lockup", "/styles.css?v=20260815-public-taxonomy-v2")
     .replace("/site-shell.js?v=20260728-i18n2", "/site-shell.js?v=20260814-day11-prefetch")
     .replace("</head>", '<link rel="stylesheet" href="/i18n.css?v=20260808-assistant"><link rel="stylesheet" href="/shopping-assistant.css?v=20260812-all-markets-v2"></head>')
     .replace("</body>", `${shoppingAssistantPanel(code, language)}<script src="/shopping-assistant.js?v=20260814-day12-product-gate"></script></body>`);
@@ -909,7 +910,7 @@ const alternativeCard = (product, language = "en") => {
 const archiveCard = (product, language = "en") => {
   const display = presentProduct(localizeProduct(product, language), language);
   const locale = languageTag(product.market, language);
-  return `<article class="archive-card"><a class="archive-card-media" href="${dealPath(product)}" ${trackingAttributes(product, "archive", "archive_media")}><img src="${esc(product.image_url)}" alt="${esc(shortTitle(display.title))}" loading="lazy" decoding="async"></a><div class="archive-card-content">${product.category ? `<a class="eyebrow" href="${catPath(product.category, product.market)}">${esc(display.display_category)}</a>` : ""}<h2><a href="${dealPath(product)}" ${trackingAttributes(product, "archive", "archive_title")}>${esc(shortTitle(display.title))}</a></h2><p class="description editorial-teaser">${esc(whyPicked(display, language))}</p>${scoreMetrics(display, language, { atSelection:true })}<div class="archive-prices"><p><span>${esc(t(language,"product.selectionPrice"))}</span><strong>${money(product.drop_price ?? product.current_price, product.drop_currency || product.currency, locale)}</strong></p><p><span>${esc(t(language,"product.currentPrice"))}</span><strong>${money(product.current_price, product.currency, locale)}</strong></p></div><span class="archive-status">${esc(display.display_availability)}</span><div class="card-actions"><a class="button" href="${dealPath(product)}" ${trackingAttributes(product, "archive", "archive_details")}>${esc(t(language,"page.viewDetails"))}</a>${askDeliaButton(product, language)}</div></div></article>`;
+  return `<article class="archive-card"><a class="archive-card-media" href="${dealPath(product)}" ${trackingAttributes(product, "archive", "archive_media")}><img src="${esc(product.image_url)}" alt="${esc(shortTitle(display.title))}" loading="lazy" decoding="async"></a><div class="archive-card-content">${isPublicCategory(display.public_category) ? `<a class="eyebrow" href="${catPath(display.public_category, product.market)}">${esc(display.display_category)}</a>` : ""}<h2><a href="${dealPath(product)}" ${trackingAttributes(product, "archive", "archive_title")}>${esc(shortTitle(display.title))}</a></h2><p class="description editorial-teaser">${esc(whyPicked(display, language))}</p>${scoreMetrics(display, language, { atSelection:true })}<div class="archive-prices"><p><span>${esc(t(language,"product.selectionPrice"))}</span><strong>${money(product.drop_price ?? product.current_price, product.drop_currency || product.currency, locale)}</strong></p><p><span>${esc(t(language,"product.currentPrice"))}</span><strong>${money(product.current_price, product.currency, locale)}</strong></p></div><span class="archive-status">${esc(display.display_availability)}</span><div class="card-actions"><a class="button" href="${dealPath(product)}" ${trackingAttributes(product, "archive", "archive_details")}>${esc(t(language,"page.viewDetails"))}</a>${askDeliaButton(product, language)}</div></div></article>`;
 };
 const findProduct = param => { const id = String(param).match(/-(\d+)$/)?.[1] || (/^\d+$/.test(param) ? param : null); return id ? db.prepare(`SELECT * FROM products WHERE id=? AND status='published' AND ${sourceSql()}`).get(id) : null; };
 const sameProductOffers = product => {
@@ -971,8 +972,9 @@ const alternativesFor = (product, limit = 3) => {
   const words = significantWords(product?.canonical_title || product?.title);
   const price = Number(product?.current_price);
   const currentKeys = new Set(deduplicationKeys(product));
-  const candidates = db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()} AND category=? AND id<>? ORDER BY COALESCE(ranking_score,score) DESC,score DESC,updated_at DESC LIMIT 40`)
-    .all(product.market, product.category || "Deals", product.id)
+  const category = canonicalCategory(product);
+  const candidates = db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()} AND (normalized_category=? OR category=?) AND id<>? ORDER BY COALESCE(ranking_score,score) DESC,score DESC,updated_at DESC LIMIT 40`)
+    .all(product.market, category, category, product.id)
     .filter(isPubliclyIndexable)
     .filter(candidate => !deduplicationKeys(candidate).some(key => currentKeys.has(key)))
     .map(candidate => {
@@ -1017,7 +1019,7 @@ app.get("/deal/:slug", (req, res) => {
   const expectedPath = dealPath(p);
   if (String(req.originalUrl || "").split("?")[0] !== expectedPath) return res.redirect(301, expectedPath);
   const display = presentProduct(localizeProduct(p, req.language), req.language);
-  const canonical = SITE + dealPath(p), title = shortTitle(display.title), store = storeName(p), category = p.category || "Deals";
+  const canonical = SITE + dealPath(p), title = shortTitle(display.title), store = storeName(p), category = display.public_category;
   const displayCategory = categoryLabel(category, req.language);
   const pageLocale = languageTag(p.market, req.language);
   const history = historyFor(p.id), intelligence = priceIntelligence(history);
@@ -1088,10 +1090,12 @@ app.get("/category/:slug", (req, res) => {
   const selectedMarket = requestMarket(req);
   const localizedMarketName = marketName(selectedMarket.code, req.language);
   const all = uniqueProductsInOrder(db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()} ORDER BY COALESCE(ranking_score,score) DESC,score DESC,updated_at DESC`).all(selectedMarket.code)).filter(isPubliclyIndexable);
-  const category = [...new Set(all.map(product => product.category).filter(Boolean))].find(value => slug(value) === req.params.slug);
+  const category = PUBLIC_CATEGORIES.find(value => slug(value) === req.params.slug);
   if (!category) return sendNotFound(req, res);
-  const products = all.filter(product => product.category === category), canonical = SITE + catPath(category, selectedMarket.code);
-  const categoryTitle = categoryLabel(category.toLowerCase() === "pets" ? "Pets" : category, req.language);
+  const products = all.filter(product => canonicalCategory(product) === category);
+  if (!products.length) return sendNotFound(req, res);
+  const canonical = SITE + catPath(category, selectedMarket.code);
+  const categoryTitle = categoryLabel(category, req.language);
   const description = t(req.language, "seo.categoryDescription", { category: categoryTitle, country: localizedMarketName });
   const schema = {"@context":"https://schema.org","@graph":[{"@type":"ItemList",name:t(req.language,"seo.categoryHeading",{category:categoryTitle}),numberOfItems:products.length,itemListElement:products.map((product,index)=>({"@type":"ListItem",position:index+1,url:SITE+dealPath(product),name:shortTitle(localizeProduct(product,req.language).title)}))},{"@type":"BreadcrumbList",itemListElement:[{"@type":"ListItem",position:1,name:t(req.language,"page.home"),item:SITE+marketPath(selectedMarket.code)},{"@type":"ListItem",position:2,name:categoryTitle,item:canonical}]}]};
   const count = t(req.language, "search.products", { count: products.length });
@@ -1101,7 +1105,7 @@ app.get("/category/:slug", (req, res) => {
   const priceRange = prices.length ? `${money(Math.min(...prices), selectedMarket.currency, pageLocale)} – ${money(Math.max(...prices), selectedMarket.currency, pageLocale)}` : t(req.language,"page.checkCurrentOffers");
   const averageRating = ratings.length ? `${(ratings.reduce((sum, value) => sum + value, 0) / ratings.length).toFixed(1)} / 5` : t(req.language,"page.notAvailable");
   const categorySummary = `<div class="detail-grid"><section><h2>Products checked</h2><p>${products.length}</p></section><section><h2>Current price range</h2><p>${esc(priceRange)}</p></section><section><h2>Average rating</h2><p>${esc(averageRating)}</p></section></div><section class="editorial-box"><h2>${esc(t(req.language,"page.howSelectCategory",{category:categoryTitle.toLowerCase()}))}</h2><p>${esc(t(req.language,"page.categoryMethod",{country:localizedMarketName}))}</p></section>`;
-  const alternateCodes = marketCodes.filter(code => db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()} AND category=?`).all(code, category).some(isPubliclyIndexable));
+  const alternateCodes = marketCodes.filter(code => navCategories(code).includes(category));
   res.send(shell(t(req.language,"seo.categoryTitle",{category:categoryTitle,country:localizedMarketName}), description, canonical, `<main><section class="deals-section"><nav class="breadcrumb"><a href="${marketPath(selectedMarket.code)}">${esc(t(req.language,"page.home"))}</a><span>›</span><span>${esc(t(req.language,"seo.categoryHeading",{category:categoryTitle}))}</span></nav><div class="section-heading"><div><p class="eyebrow">${esc(localizedMarketName.toUpperCase())} · ${esc(t(req.language,"nav.categories").toUpperCase())}</p><h1>${esc(t(req.language,"seo.categoryHeading",{category:categoryTitle}))}</h1><p>${esc(description)}</p></div><p class="result-count">${count}</p></div>${categorySummary}<div class="grid">${products.map((product,index)=>productCard(product,index+1,req.language,"category")).join("")}</div></section></main>`, schema, "", "", selectedMarket.code, alternateCodes, req));
 });
 
@@ -1279,9 +1283,12 @@ app.get("/sitemap.xml", (req, res) => {
   const categoryMarkets = new Map();
   const brandMarkets = new Map();
   for (const product of products) {
-    const key = slug(product.category);
-    if (!categoryMarkets.has(key)) categoryMarkets.set(key, new Set());
-    categoryMarkets.get(key).add(product.market);
+    const category = canonicalCategory(product);
+    if (isPublicCategory(category)) {
+      const key = slug(category);
+      if (!categoryMarkets.has(key)) categoryMarkets.set(key, new Set());
+      categoryMarkets.get(key).add(product.market);
+    }
     if (product.brand_slug && !isGenericBrand(product.brand_slug)) {
       if (!brandMarkets.has(product.brand_slug)) brandMarkets.set(product.brand_slug, new Set());
       brandMarkets.get(product.brand_slug).add(product.market);
@@ -1291,7 +1298,7 @@ app.get("/sitemap.xml", (req, res) => {
   const brandsMarkets = new Set(products.filter(product => product.brand_slug).map(product => product.market));
   for (const code of marketCodes) {
     const marketProducts = products.filter(product => product.market === code);
-    const categories = [...new Set(marketProducts.map(product => product.category).filter(Boolean))];
+    const categories = PUBLIC_CATEGORIES.filter(category => marketProducts.some(product => canonicalCategory(product) === category));
     const brands = [...new Map(marketProducts.filter(product => product.brand_slug && !isGenericBrand(product.brand_slug)).map(product => [product.brand_slug, product.brand])).values()];
     const latestUpdate = marketProducts.map(product => validLastmod(product.updated_at)).filter(Boolean).sort().at(-1);
     urls.push({ loc: SITE + marketPath(code), alternates: localizedAlternates("/"), lastmod: latestUpdate });
@@ -1300,7 +1307,7 @@ app.get("/sitemap.xml", (req, res) => {
     categories.forEach(value => urls.push({
       loc: SITE + catPath(value, code),
       alternates: localizedAlternates(`/category/${slug(value)}`, [...(categoryMarkets.get(slug(value)) || [])]),
-      lastmod: marketProducts.filter(product => product.category === value).map(product => validLastmod(product.updated_at)).filter(Boolean).sort().at(-1)
+      lastmod: marketProducts.filter(product => canonicalCategory(product) === value).map(product => validLastmod(product.updated_at)).filter(Boolean).sort().at(-1)
     }));
     brands.forEach(value => urls.push({
       loc: SITE + brandPath(value, code),
@@ -1503,7 +1510,7 @@ app.get("/api/products", (req, res) => {
     params.push(slugifyBrand(req.query.brand));
   }
   if (req.query.category) {
-    conditions.push("category=?");
+    conditions.push("normalized_category=?");
     params.push(String(req.query.category));
   }
   const catalog = uniqueProductsInOrder(db.prepare(`SELECT * FROM products WHERE ${conditions.join(" AND ")} ORDER BY COALESCE(ranking_score,score) DESC,score DESC,updated_at DESC`).all(...params)).filter(isPubliclyIndexable);
@@ -1534,7 +1541,7 @@ app.get("/api/products", (req, res) => {
       selection_reason: snapshot?.selection_reason || product.selection_reason,
       slug: slug(product.title),
       deal_url: dealPath(product),
-      category_url: catPath(product.category || "deals", selectedMarket),
+      category_url: isPublicCategory(canonicalCategory(product)) ? catPath(canonicalCategory(product), selectedMarket) : null,
       brand_url: product.brand ? brandPath(product.brand, selectedMarket) : null
     }, req.language), req.language);
   }));

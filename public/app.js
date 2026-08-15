@@ -49,7 +49,7 @@
     if (!Number.isFinite(rating) || rating <= 0) return null;
     return Math.max(0, Math.min(100, rating <= 5 ? rating * 20 : rating));
   };
-  const displayCategory = product => cleanText(product?.display_category) || categoryLabel(product?.category || "Deals");
+  const displayCategory = product => cleanText(product?.display_category) || categoryLabel(product?.public_category || "Other Deals");
   const money = (value, currency = "USD") => {
     if (value == null || value === "") return tr("product.checkPrice", "Check price");
     const amount = Number(value);
@@ -167,7 +167,7 @@
         <span class="featured-ribbon">${esc(tr("home.featured", "TODAY'S #1 PICK"))}</span>${badgeFor(product) ? `<span class="featured-badge">${esc(badgeFor(product))}</span>` : ""}
       </div>
       <div class="featured-body">
-        <p class="cat">${esc(displayCategory(product))} · ${esc(storeName(product))}</p>
+        <p class="cat">${esc(storeName(product))}</p>
         <h2><a href="${esc(dealUrl(product))}" ${trackingAttributes(product, "featured_title")}>${esc(fullTitle(product.title))}</a></h2>
         <p class="description editorial-teaser">${esc(whyPicked(product))}</p>
         ${scoreMetrics(product)}
@@ -185,7 +185,7 @@
         <a class="image-wrap" href="${esc(dealUrl(product))}" ${trackingAttributes(product, "daily_card_media")}><img src="${esc(product.image_url)}" alt="${esc(fullTitle(product.title))}" loading="lazy" decoding="async"></a>
         <div class="card-content">
           <div class="card-top"><span class="rank">#${rank}</span>${badgeFor(product) ? `<span class="badge">${esc(badgeFor(product))}</span>` : ""}</div>
-          <p class="cat">${esc(displayCategory(product))} · ${esc(storeName(product))}</p>
+          <p class="cat">${esc(storeName(product))}</p>
           <h3><a href="${esc(dealUrl(product))}" ${trackingAttributes(product, "daily_card_title")}>${esc(fullTitle(product.title))}</a></h3>
           <p class="description editorial-teaser"><strong>${esc(tr("product.why", "Why we picked it:"))}</strong> ${esc(whyPicked(product))}</p>
           ${scoreMetrics(product)}
@@ -199,7 +199,7 @@
 
   const visibleProducts = () => {
     if (activeCategory === "More Worth Seeing") return products.slice(1, 10);
-    return products.filter(product => product.category === activeCategory);
+    return products.filter(product => product.public_category === activeCategory);
   };
 
   const renderMain = () => {
@@ -221,12 +221,6 @@
     if (els.archiveProducts && !els.archiveProducts.children.length) {
       els.archiveProducts.innerHTML = emptyCollection(tr("home.catalogArchiveEmpty", "The archive will begin with the first real Daily Drop."));
     }
-  };
-
-  const renderCategoryMenu = () => {
-    const categories = [...new Set(products.map(product => product.category).filter(Boolean))];
-    const categoryUrl = category => marketPath(`/category/${category.toLowerCase().replace(/&/g, " and ").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`);
-    els.categoryMenu.innerHTML = [`<a href="#top-picks">${esc(tr("nav.topTen", "Today's Top 10"))}</a>`, ...categories.map(category => `<a href="${esc(categoryUrl(category))}">${esc(displayCategory(products.find(product => product.category === category) || { category }))}</a>`)].join("");
   };
 
   const currentUrl = new URL(window.location.href);
@@ -341,50 +335,29 @@
       const status = $("subscribeStatus");
       const button = subscribeForm.querySelector("button[type=submit]");
       const email = $("subscribeEmail").value.trim();
-      const categories = [...subscribeForm.querySelectorAll('input[name="categories"]:checked')].map(input => input.value);
-      const interestFieldset = $("interestFieldset");
-      const categoryError = $("categoryError");
       if (!$("subscribeEmail").checkValidity()) {
         $("subscribeEmail").reportValidity();
         status.textContent = tr("form.validEmail", "Enter a valid email address.");
         return;
       }
-      if (!categories.length) {
-        interestFieldset.classList.add("has-error");
-        categoryError.hidden = false;
-        status.textContent = tr("form.chooseCategory", "Choose at least one category before subscribing.");
-        subscribeForm.querySelector('input[name="categories"]').focus();
-        return;
-      }
-      interestFieldset.classList.remove("has-error");
-      categoryError.hidden = true;
       button.disabled = true;
       status.textContent = tr("form.saving", "Saving your preferences…");
       try {
         const response = await fetch(marketPath("/api/subscribe"), {
           method: "POST",
           headers: {"Content-Type": "application/json", Accept: "application/json"},
-          body: JSON.stringify({email, categories})
+          body: JSON.stringify({email, categories:[]})
         });
         const result = await response.json();
         if (!response.ok) throw new Error(result.error || tr("form.failed", "Could not subscribe."));
         subscribeForm.classList.add("is-success");
         status.textContent = result.message;
-        localStorage.setItem("dailyDropInterests", JSON.stringify(categories));
         subscribeForm.reset();
       } catch (error) {
         status.textContent = error.message;
       } finally {
         button.disabled = false;
       }
-    });
-    subscribeForm.querySelectorAll('input[name="categories"]').forEach(input => {
-      input.addEventListener("change", () => {
-        if (!subscribeForm.querySelector('input[name="categories"]:checked')) return;
-        $("interestFieldset").classList.remove("has-error");
-        $("categoryError").hidden = true;
-        $("subscribeStatus").textContent = tr("home.noSpam", "Email alerts are being prepared.");
-      });
     });
   }
 
@@ -425,7 +398,6 @@
       products = [...daily, ...catalog];
       els.updated.textContent = products[0] ? statusText(products[0]) : tr("home.preparing", "Today's selection is being prepared");
       renderFeatured();
-      renderCategoryMenu();
       renderMain();
       renderCollections();
     })
