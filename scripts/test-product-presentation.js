@@ -77,17 +77,17 @@ const legacySnapshot = presentProduct({...fixture, drop_score:31, drop_price:44.
 assert.notStrictEqual(legacySnapshot.display_score, 31, "a legacy archive snapshot must not expose the obsolete low score");
 
 const german = presentProduct({...fixture, market:"de", category:"car accessories"}, "de");
-assert.strictEqual(german.display_category, "Autozubehör");
+assert.strictEqual(german.display_category, "Auto");
 assert(german.display_shipping_summary.startsWith("Kostenlose Lieferung"));
 assert(german.display_return_summary.startsWith("Rückgabe innerhalb von 30 Tagen"));
 assert.strictEqual(german.display_score_at_selection_label, "OneDailyDrop-Score bei Auswahl");
 
 const spanish = presentProduct({...fixture, market:"us", category:"office gadgets"}, "es");
-assert.strictEqual(spanish.display_category, "Accesorios de oficina");
+assert.strictEqual(spanish.display_category, "Oficina");
 assert(spanish.display_shipping_summary.startsWith("Entrega gratuita"));
 assert(spanish.display_selection_reason.includes("eBay no facilitó una valoración del producto"));
 
-assert.strictEqual(categoryLabel("smart home", "fr"), "Maison connectée");
-assert.strictEqual(categoryLabel("kitchen gadgets", "de"), "Küchenhelfer");
+assert.strictEqual(categoryLabel("Electronics", "fr"), "Électronique");
+assert.strictEqual(categoryLabel("Home & Kitchen", "de"), "Wohnen und Küche");
 
 console.log("Localized product presentation and trust messaging passed.");

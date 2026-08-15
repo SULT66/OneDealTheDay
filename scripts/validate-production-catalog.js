@@ -76,8 +76,11 @@ if (!hasLiquidGlass(homepageTemplate)) {
 if (!homepage.includes("const featured = dailyProducts[0] || null;")) {
   throw new Error("Homepage is missing its single Today's Drop selection");
 }
-for (const required of ["catalog-empty-featured", "home.catalogTitle", "DEFAULT_INTEREST_CATEGORIES"]) {
+for (const required of ["catalog-empty-featured", "home.catalogTitle", "PUBLIC_CATEGORIES"]) {
   if (!homepage.includes(required)) throw new Error(`Homepage empty-catalog design is missing: ${required}`);
+}
+if (homepageTemplate.includes('id="category-navigation-title"') || homepageTemplate.includes('id="interestFieldset"')) {
+  throw new Error("Categories must appear only in the top dropdown, not in homepage content or subscription");
 }
 if (!homepage.includes("const moreWorthSeeing = dailyProducts.slice(1, 10);")) {
   throw new Error("Homepage does not exclude Today's Drop from the nine additional products");

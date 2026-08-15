@@ -3,7 +3,7 @@ module.exports = function buildHomepageSchema({ SITE, featured, moreWorthSeeing,
   const schemaDescription = product => {
     const supplied = cleanText(product.description);
     if (supplied) return supplied;
-    const category = cleanText(product.category) || "online shopping";
+    const category = cleanText(product.public_category || product.normalized_category) || "online shopping";
     const rating = Number(product.rating);
     const reviews = Number(product.review_count || 0);
     const signals = [];

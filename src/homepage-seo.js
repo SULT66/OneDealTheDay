@@ -54,7 +54,7 @@ module.exports = function homepageSeo(req, res) {
     const homePath = marketPath(selectedMarket.code);
     const canonical = SITE + homePath;
     const defaultLanguage = defaultLanguages[selectedMarket.code];
-    const appScript = `<script>window.__ODD_MARKET__=${JSON.stringify(selectedMarket.code)};window.__ODD_MARKET_TIMEZONE__=${JSON.stringify(selectedMarket.timezone)};window.__ODD_LANGUAGE__=${JSON.stringify(language)};window.__ODD_LOCALE__=${JSON.stringify(locale)};window.__ODD_TEXT__=${JSON.stringify(clientCopy(language)).replace(/</g, "\\u003c")};</script><script src="/click-tracking.js?v=20260814-day5"></script><script src="/app.js?v=20260814-day12-unified-search"></script>`;
+    const appScript = `<script>window.__ODD_MARKET__=${JSON.stringify(selectedMarket.code)};window.__ODD_MARKET_TIMEZONE__=${JSON.stringify(selectedMarket.timezone)};window.__ODD_LANGUAGE__=${JSON.stringify(language)};window.__ODD_LOCALE__=${JSON.stringify(locale)};window.__ODD_TEXT__=${JSON.stringify(clientCopy(language)).replace(/</g, "\\u003c")};</script><script src="/click-tracking.js?v=20260814-day5"></script><script src="/app.js?v=20260815-public-taxonomy-v2"></script>`;
     let enhanced = body
       .replace(legacyAnalytics, "")
       .replace(
@@ -68,7 +68,7 @@ module.exports = function homepageSeo(req, res) {
         /<\/button>\s*<\/div>\s*<nav class="main-nav" aria-label="[^"]+">/,
         `</button>${languageSwitcher(req, selectedMarket.code, language)}<button class="mobile-menu-toggle" type="button" aria-expanded="false" aria-controls="mainNavigation" aria-label="${t(language, "menu.open")}"><span></span><span></span><span></span></button></div><nav id="mainNavigation" class="main-nav" aria-label="${t(language, "nav.primary")}">`
       )
-      .replace(/\/styles\.css\?v=[^"]+/, "/styles.css?v=20260814-day12-unified-search")
+      .replace(/\/styles\.css\?v=[^"]+/, "/styles.css?v=20260815-public-taxonomy-v2")
       .replace(/href="\/us\/category\//g, `href="/${selectedMarket.code}/category/`)
       .replace('<a href="#archive">Past Drops</a>', `<a href="${marketPath(selectedMarket.code, "/archive")}">Past Drops</a>`)
       .replace(

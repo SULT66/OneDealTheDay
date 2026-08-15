@@ -30,7 +30,6 @@ module.exports = function homepageTemplate({
   updatedText,
   categoryLinks,
   storeLinks,
-  categoryChoices,
   moreWorthSeeingHtml,
   moreWorthSeeingCount,
   archiveHtml,
@@ -78,7 +77,7 @@ module.exports = function homepageTemplate({
   ${socialImage ? `<meta name="twitter:image" content="${esc(socialImage)}">` : ""}
   <script type="application/ld+json">${JSON.stringify(schema).replace(/</g, "\\u003c")}</script>
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-0V49XQ3WEG"></script><script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag('js',new Date());gtag('config','G-0V49XQ3WEG');</script>
-  <link rel="stylesheet" href="/styles.css?v=20260814-day12-unified-search">
+  <link rel="stylesheet" href="/styles.css?v=20260815-public-taxonomy-v2">
   <link rel="stylesheet" href="/brand-theme.css?v=20260808-assistant">
   <link rel="stylesheet" href="/liquid-glass.css?v=20260808-assistant">
   <link rel="stylesheet" href="/i18n.css?v=20260808-assistant">
@@ -114,16 +113,10 @@ module.exports = function homepageTemplate({
         <button type="submit">${esc(t(language, "home.searchButton"))}</button>
       </form>
       <p class="search-intent-hint"><span aria-hidden="true">✦</span> ${esc(t(language, "home.searchIntentHint"))}</p>
-      <div class="shopping-navigation-grid">
-        <section class="shopping-navigation-card" aria-labelledby="category-navigation-title">
-          <h2 id="category-navigation-title">${esc(t(language, "home.browseCategories"))}</h2>
-          <div class="navigation-chips">${categoryLinks}</div>
-        </section>
-        <section class="shopping-navigation-card" aria-labelledby="store-navigation-title">
-          <h2 id="store-navigation-title">${esc(t(language, "home.browseStores"))}</h2>
-          <div class="navigation-chips store-navigation">${storeLinks}</div>
-        </section>
-      </div>
+      <section class="shopping-navigation-card store-navigation-card" aria-labelledby="store-navigation-title">
+        <h2 id="store-navigation-title">${esc(t(language, "home.browseStores"))}</h2>
+        <div class="navigation-chips store-navigation">${storeLinks}</div>
+      </section>
       <div class="search-first-footer">
         <p class="market-note">${esc(t(language, "home.marketNote", { country: localizedMarketName }))}</p>
         <div class="trust-inline"><span>✓ ${esc(t(language, "home.priceSignal"))}</span><span>✓ ${esc(t(language, "home.productQuality"))}</span><span>✓ ${esc(t(language, "home.sellerConfidence"))}</span></div>
@@ -148,7 +141,7 @@ module.exports = function homepageTemplate({
     </section>
     <section id="subscribe" class="habit-section">
       <div class="habit-copy"><p class="eyebrow">${esc(t(language, "home.makeHabit"))}</p><h2>${esc(t(language, "home.oneUseful"))}</h2><p>${esc(t(language, "home.chooseInterests"))}</p></div>
-      <form id="subscribeForm" class="subscribe-card" novalidate><fieldset id="interestFieldset" aria-describedby="categoryError"><legend>${esc(t(language, "home.shopFor"))}</legend><div class="interest-chips">${categoryChoices}</div><p id="categoryError" class="category-error" role="alert" hidden>${esc(t(language, "home.chooseCategory"))}</p></fieldset><label class="email-field"><span>${esc(t(language, "home.email"))}</span><input id="subscribeEmail" name="email" type="email" required autocomplete="email" placeholder="you@example.com"></label><button class="subscribe-button" type="submit">${esc(t(language, "home.subscribe"))}</button><p id="subscribeStatus" class="form-status" aria-live="polite">${esc(t(language, "home.noSpam"))}</p></form>
+      <form id="subscribeForm" class="subscribe-card" novalidate><label class="email-field"><span>${esc(t(language, "home.email"))}</span><input id="subscribeEmail" name="email" type="email" required autocomplete="email" placeholder="you@example.com"></label><button class="subscribe-button" type="submit">${esc(t(language, "home.subscribe"))}</button><p id="subscribeStatus" class="form-status" aria-live="polite">${esc(t(language, "home.noSpam"))}</p></form>
     </section>
     <section id="score" class="score-method">
       <div><p class="eyebrow">${esc(t(language, "home.scoreEyebrow"))}</p><h2>${esc(t(language, "home.scoreTitle"))}</h2><p>${esc(t(language, "home.scoreIntro"))}</p><a href="${methodologyPath}">${esc(t(language, "home.methodology"))}</a></div>
@@ -161,7 +154,7 @@ module.exports = function homepageTemplate({
   <footer><div class="footer-brand"><b>OneDailyDrop</b><p>${esc(t(language, "brand.tagline"))}</p><div class="footer-links"><a href="${trustPath("/about")}">${esc(t(language, "footer.about"))}</a><a href="${trustPath("/contact")}">${esc(t(language, "footer.contact"))}</a><a href="${trustPath("/privacy")}">${esc(t(language, "footer.privacy"))}</a><a href="${trustPath("/terms")}">${esc(t(language, "footer.terms"))}</a><a href="${trustPath("/affiliate-disclosure")}">${esc(t(language, "footer.affiliate"))}</a><a href="${trustPath("/editorial-policy")}">${esc(t(language, "footer.editorial"))}</a><a href="${methodologyPath}">${esc(t(language, "footer.selection"))}</a><a href="${trustPath("/price-disclaimer")}">${esc(t(language, "footer.price"))}</a></div></div><p class="disclosure">${esc(t(language, "footer.disclosure"))}</p></footer>
   ${renderShoppingAssistantPanel(selectedMarket.code, language)}
   <script src="/theme.js?v=20260808-assistant"></script>
-  <script src="/app.js?v=20260814-day12-unified-search"></script>
+  <script src="/app.js?v=20260815-public-taxonomy-v2"></script>
   <script src="/shopping-assistant.js?v=20260814-day12-product-gate"></script>
 </body>
 </html>`;

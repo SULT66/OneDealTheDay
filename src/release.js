@@ -1,3 +1,3 @@
-const RELEASE_ID = "2026-08-15-product-page-performance-v1";
+const RELEASE_ID = "2026-08-15-public-taxonomy-v2";
 
 module.exports = { RELEASE_ID };

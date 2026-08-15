@@ -160,7 +160,7 @@ async function run() {
   const demoFixture = { source: "demo", external_id: "D003", title: "English title", description: "English description" };
   assert(localizeProduct(demoFixture, "fr").title.includes("prises connectées"), "French demo translation is incomplete");
   assert(localizeProduct(demoFixture, "de").title.includes("WLAN-Steckdosen"), "German demo translation is incomplete");
-  assert(categoryLabel("Smart Home", "fr") === "Maison connectée", "French Smart Home category translation is incorrect");
+  assert(categoryLabel("Electronics", "fr") === "Électronique", "French Electronics category translation is incorrect");
   assert(categoryLabel("Office", "de") === "Büro", "German Office category translation is incorrect");
 
   require("../app");
@@ -192,7 +192,7 @@ async function run() {
   assert(azureApi.headers.get("x-robots-tag") === "noindex, nofollow", "Catalog status endpoint must not be indexed");
   const azureStatus = await azureApi.json();
   assert(azureStatus.releaseId === RELEASE_ID, "Production release marker is missing");
-  assert(azureStatus.taxonomyVersion === "catalog-taxonomy-v1", "Production taxonomy marker is missing");
+  assert(azureStatus.taxonomyVersion === "catalog-taxonomy-v2", "Production taxonomy marker is missing");
 
   const searchApi = await fetch(`${base}/api/search?market=us&q=eBay%20Test%20Product&max_price=500&sort=price_asc&page=1&limit=5`);
   assert(searchApi.status === 200, "Search API route is unavailable");
@@ -221,7 +221,11 @@ async function run() {
   assert(homepage.includes('data-homepage-mode="search-first-v1"'), "Day 9 search-first homepage marker is missing");
   assert(homepage.includes('id="shopping-search"') && homepage.includes('id="homepageSearchForm"'), "Homepage search is not the primary entry point");
   assert(homepage.includes('id="homepageSearchInput"') && homepage.includes('action="/us/search" method="get"'), "Homepage search form does not use the market search route");
-  assert(homepage.includes('id="category-navigation-title"') && homepage.includes('id="store-navigation-title"'), "Category or store navigation is missing below search");
+  assert(!homepage.includes('id="category-navigation-title"'), "Categories are still duplicated in the homepage body");
+  assert(homepage.includes('id="store-navigation-title"'), "Store navigation is missing below search");
+  assert(homepage.includes('id="categoryMenu" class="mega-menu" hidden'), "The single top category dropdown is missing");
+  assert(!homepage.includes('id="interestFieldset"') && !homepage.includes('name="categories"'), "Subscription still duplicates category choices");
+  assert(!homepage.includes("Home &amp; Garden &gt;") && !homepage.includes("Furniture &gt;"), "A raw affiliate category hierarchy escaped into the homepage");
   assert(homepage.includes('/us/search?merchant=eBay'), "Homepage store navigation does not use the merchant filter");
   assert(homepage.includes('data-search-experience="unified-intent-v1"'), "Day 12 unified search marker is missing");
   assert((homepage.match(/role="search"/g) || []).length === 1, "Homepage still exposes competing search forms");
@@ -238,8 +242,8 @@ async function run() {
   assert(homepage.includes('decoding="async" fetchpriority="high"'), "Homepage LCP image priority is missing");
   assert(homepage.includes('loading="lazy" decoding="async"'), "Below-the-fold homepage images are not deferred");
   assert(homepage.includes('class="description editorial-teaser"'), "Homepage cards do not use the compact Stage 4 editorial teaser");
-  assert(homepage.includes('/styles.css?v=20260814-day12-unified-search'), `Day 12 homepage stylesheet is not cache-busted: ${homepage.match(/styles\.css[^\"]+/)?.[0] || "missing"}`);
-  assert(homepage.includes('/app.js?v=20260814-day12-unified-search'), "Day 12 homepage script is not cache-busted");
+  assert(homepage.includes('/styles.css?v=20260815-public-taxonomy-v2'), `Public-taxonomy homepage stylesheet is not cache-busted: ${homepage.match(/styles\.css[^\"]+/)?.[0] || "missing"}`);
+  assert(homepage.includes('/app.js?v=20260815-public-taxonomy-v2'), "Public-taxonomy homepage script is not cache-busted");
   const cachedHomepageResponse = await get("/us");
   assert(cachedHomepageResponse.headers.get("x-odd-cache") === "HIT", "Homepage microcache is not serving repeated navigation");
   assert(String(cachedHomepageResponse.headers.get("cache-control") || "").includes("max-age=60"), "Homepage browser cache is missing");
@@ -264,7 +268,7 @@ async function run() {
   const spanishHomepage = await spanishResponse.text();
   assert(spanishHomepage.includes('<html lang="es-US">'), "US Spanish locale is incorrect");
   assert(spanishHomepage.includes("eBay Test Product 1"), "US Spanish catalog is missing the verified products");
-  assert(spanishHomepage.includes("Accesorios de oficina"), "US Spanish live category is not localized");
+  assert(spanishHomepage.includes("Oficina"), "US Spanish live category is not localized");
   assert(spanishHomepage.includes("Entrega gratuita mediante Standard Shipping"), "US Spanish delivery terms are not localized");
   assert(!spanishHomepage.includes("Selected with a technical internal score"), "US Spanish exposes the stored technical selection reason");
   assert(String(spanishResponse.headers.get("set-cookie") || "").includes("odd_lang_us=es"), "US language preference cookie is missing");
@@ -288,7 +292,7 @@ async function run() {
 
   const germanHomepage = await (await get("/de")).text();
   assert(germanHomepage.includes('<html lang="de-DE">'), "Germany must default to German");
-  assert(germanHomepage.includes("Küchenhelfer"), "Germany live category is not localized");
+  assert(germanHomepage.includes("Wohnen und Küche"), "Germany live category is not localized");
   assert(germanHomepage.includes("Kostenlose Lieferung über Standard Shipping"), "Germany delivery terms are not localized");
   assert(germanHomepage.includes("Rückgabe innerhalb von 30 Tagen"), "Germany return terms are not localized");
   assert(germanHomepage.includes("OneDailyDrop-Score") && germanHomepage.includes("Verkäuferbewertung"), "Germany score or seller rating labels are missing");
@@ -297,7 +301,7 @@ async function run() {
   const canadaHomepage = await (await get("/ca")).text();
   assert(canadaHomepage.includes('<html lang="en-CA">'), "Canada must default to English");
   const canadaFrench = await (await get("/ca?lang=fr")).text();
-  assert(canadaFrench.includes("Accessoires auto"), "Canada French live category is not localized");
+  assert(canadaFrench.includes("Auto"), "Canada French live category is not localized");
   assert(canadaFrench.includes("Livraison gratuite via Standard Shipping"), "Canada French delivery terms are not localized");
 
   const ukHomepage = await (await get("/uk")).text();
@@ -392,7 +396,7 @@ async function run() {
   assert(searchPage.includes("deal-metrics") && searchPage.includes("OneDailyDrop Score"), "Search results are missing the OneDailyDrop Score");
   assert(searchPage.includes('data-analytics-page="search"') && searchPage.includes('data-analytics-query="product 3"'), "Search analytics context is missing");
   assert(searchPage.includes('data-results-ui="facets-sorting-badges-v1"'), "Day 10 Results UI marker is missing");
-  assert(searchPage.includes('/styles.css?v=20260814-day12-unified-search'), "Day 12 results stylesheet is not cache-busted");
+  assert(searchPage.includes('/styles.css?v=20260815-public-taxonomy-v2'), "Public-taxonomy results stylesheet is not cache-busted");
   assert(searchPage.includes('<meta name="robots" content="noindex,follow">'), "Search results must remain noindex");
   assert(searchPage.includes("data-results-filters") && searchPage.includes('class="search-sort"'), "Search facets or sorting controls are missing");
   assert(searchPage.includes("search-badge-match") && searchPage.includes("Paid placement never changes them"), "Transparent result badges or their explanation are missing");
@@ -451,7 +455,7 @@ async function run() {
   assert(productCacheControl.includes("max-age=120"), "Product-page browser cache is missing");
   assert(productCacheControl.includes("s-maxage=600"), "Product-page shared cache is missing");
 
-  const staticAsset = await get("/styles.css?v=20260814-day12-unified-search");
+  const staticAsset = await get("/styles.css?v=20260815-public-taxonomy-v2");
   assert(String(staticAsset.headers.get("cache-control") || "").includes("immutable"), "Versioned static assets are not cached immutably");
 
   const franceProducts = await (await get("/api/products?market=fr")).json();
