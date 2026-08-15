@@ -101,6 +101,6 @@ assert(workflowSource.includes("/api/search?market=us"), "Production verificatio
 assert(serverSource.includes("data-results-ui=\"facets-sorting-badges-v1\""), "Day 10 results UI marker is missing");
 assert(serverSource.includes("searchCatalogProducts(rows, options)"), "Results UI does not share the deterministic Search API engine");
 assert(serverSource.includes("data-results-filters") && serverSource.includes("search-badge-match"), "Facets or transparent result badges are missing");
-assert(workflowSource.includes("/us/search?q=office") && workflowSource.includes("facets-sorting-badges-v1"), "Production verification does not exercise the Day 10 results UI");
+assert(workflowSource.includes("/us/search?q=desk") && workflowSource.includes("facets-sorting-badges-v1"), "Production verification does not exercise the Day 10 results UI");
 
 console.log("Day 8 Search API and Day 10 result constraints passed.");
