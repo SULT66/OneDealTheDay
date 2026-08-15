@@ -537,27 +537,33 @@ function scoreOffers(items, options = {}) {
 
 function selectUniqueProducts(scoredOffers) {
   const groups = [];
+  const groupForKey = new Map();
   for (const enriched of scoredOffers || []) {
     const keys = new Set(deduplicationKeys(enriched));
-    const matching = [];
-    groups.forEach((group, index) => {
-      if ([...keys].some(key => group.keys.has(key))) matching.push(index);
-    });
+    const matching = [...new Set([...keys].map(key => groupForKey.get(key)).filter(group => group?.active))]
+      .sort((left, right) => left.order - right.order);
     if (!matching.length) {
-      groups.push({ keys, offer: enriched });
+      const group = { keys, offer: enriched, order:groups.length, active:true };
+      groups.push(group);
+      keys.forEach(key => groupForKey.set(key, group));
       continue;
     }
-    const target = groups[matching[0]];
+    const target = matching[0];
     target.offer = betterOffer(target.offer, enriched);
-    keys.forEach(key => target.keys.add(key));
-    for (let offset = matching.length - 1; offset >= 1; offset -= 1) {
-      const duplicate = groups[matching[offset]];
+    for (const duplicate of matching.slice(1)) {
       target.offer = betterOffer(target.offer, duplicate.offer);
-      duplicate.keys.forEach(key => target.keys.add(key));
-      groups.splice(matching[offset], 1);
+      duplicate.keys.forEach(key => {
+        target.keys.add(key);
+        groupForKey.set(key, target);
+      });
+      duplicate.active = false;
     }
+    keys.forEach(key => {
+      target.keys.add(key);
+      groupForKey.set(key, target);
+    });
   }
-  return groups.map(group => group.offer).sort((left, right) => {
+  return groups.filter(group => group.active).map(group => group.offer).sort((left, right) => {
     if (number(right.ranking_score) !== number(left.ranking_score)) return number(right.ranking_score) - number(left.ranking_score);
     if (number(right.relevance_score) !== number(left.relevance_score)) return number(right.relevance_score) - number(left.relevance_score);
     if (number(right.commerce_quality) !== number(left.commerce_quality)) return number(right.commerce_quality) - number(left.commerce_quality);

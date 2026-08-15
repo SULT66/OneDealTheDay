@@ -138,4 +138,20 @@ const sharedStorefrontProducts = [1, 2].map(index => ({
 assert.strictEqual(selectUniqueProducts(sharedStorefrontProducts).length, 2,
   "A shared retailer storefront incorrectly merged distinct product offers");
 
-console.log("Day 3 dedup rules passed: validated identity, source grouping, variants, candidates and title-only safety.");
+const largeCatalog = Array.from({length:5000}, (_, index) => ({
+  source:"feed-performance",
+  market:"us",
+  retailer_name:"Performance Store",
+  external_id:`performance-${index}`,
+  title:`Independent performance fixture ${index}`,
+  product_url:`https://performance.example/products/${index}`,
+  ranking_score:5000 - index
+}));
+const benchmarkStartedAt = process.hrtime.bigint();
+assert.strictEqual(selectUniqueProducts(largeCatalog).length, largeCatalog.length,
+  "Large independent catalogs lost products during deduplication");
+const benchmarkMilliseconds = Number(process.hrtime.bigint() - benchmarkStartedAt) / 1e6;
+assert(benchmarkMilliseconds < 1500,
+  `Catalog deduplication regressed to a blocking scan (${benchmarkMilliseconds.toFixed(0)}ms)`);
+
+console.log(`Day 3 dedup rules passed: validated identity, source grouping, variants, candidates and a 5,000-item catalog in ${benchmarkMilliseconds.toFixed(0)}ms.`);
