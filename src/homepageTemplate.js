@@ -87,7 +87,6 @@ module.exports = function homepageTemplate({
   <header class="site-header">
     <div class="header-top">
       <a class="brand" href="${homePath}" aria-label="OneDailyDrop home"><span class="brand-mark">D</span><span class="brand-copy"><strong>OneDailyDrop</strong><small>${esc(t(language, "brand.tagline"))}</small></span></a>
-      <a class="header-search-link" href="#shopping-search"><span aria-hidden="true">⌕</span><span>${esc(t(language, "search.short"))}</span></a>
       <a class="header-subscribe" href="#subscribe">${esc(t(language, "nav.subscribe"))}</a>
       <button id="themeToggle" class="theme-button" type="button" aria-label="${esc(t(language, "theme.toDark"))}" title="${esc(t(language, "theme.dark"))}"><span class="theme-button-icon" aria-hidden="true">☾</span><span class="theme-button-label">${esc(t(language, "theme.dark"))}</span></button>
     </div>
