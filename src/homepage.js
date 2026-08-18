@@ -448,7 +448,7 @@ module.exports = function homepage(req, res) {
     featuredHtml,
     updatedText:featured ? statusText(featured) : t(language, "home.preparing"),
     categoryLinks:categories.map(category => `<a href="${categoryPath(category, selectedMarket.code)}">${esc(categoryLabel(category, language))}</a>`).join(""),
-    storeLinks:storeNavigation.map(([merchant, count]) => `<a href="${marketPath(selectedMarket.code, "/search")}?merchant=${encodeURIComponent(merchant)}"><span>${esc(merchant)}</span><small>${esc(t(language, "search.products", {count}))}</small></a>`).join(""),
+    storeLinks:storeNavigation.map(([merchant]) => `<a href="${marketPath(selectedMarket.code, "/search")}?merchant=${encodeURIComponent(merchant)}"><span>${esc(merchant)}</span><small>${esc(t(language, "home.verifiedStore"))}</small></a>`).join(""),
     moreWorthSeeingHtml:moreWorthSeeing.map((product, index) => mainCard(product, index + 1, language)).join(""),
     moreWorthSeeingCount:moreWorthSeeing.length,
     archiveHtml:collection(archive, t(language, "home.catalogArchiveEmpty"), true),

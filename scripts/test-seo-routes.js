@@ -224,6 +224,9 @@ async function run() {
   assert(!homepage.includes('class="header-search-link"'), "Homepage still exposes the duplicate Search deals header link");
   assert(!homepage.includes('id="category-navigation-title"'), "Categories are still duplicated in the homepage body");
   assert(homepage.includes('id="store-navigation-title"'), "Store navigation is missing below search");
+  const storeNavigation = homepage.match(/<section class="shopping-navigation-card store-navigation-card"[\s\S]*?<\/section>/)?.[0] || "";
+  assert(storeNavigation.includes("Verified Store"), "Store navigation is missing its verified-store label");
+  assert(!/\b[\d,.]+\s+products\b/i.test(storeNavigation), "Store navigation still exposes catalog product counts");
   assert(homepage.includes('id="categoryMenu" class="mega-menu" hidden'), "The single top category dropdown is missing");
   assert(!homepage.includes('id="interestFieldset"') && !homepage.includes('name="categories"'), "Subscription still duplicates category choices");
   assert(!homepage.includes("Home &amp; Garden &gt;") && !homepage.includes("Furniture &gt;"), "A raw affiliate category hierarchy escaped into the homepage");
@@ -270,6 +273,7 @@ async function run() {
   assert(spanishHomepage.includes('<html lang="es-US">'), "US Spanish locale is incorrect");
   assert(spanishHomepage.includes("eBay Test Product 1"), "US Spanish catalog is missing the verified products");
   assert(spanishHomepage.includes("Oficina"), "US Spanish live category is not localized");
+  assert(spanishHomepage.includes("Tienda verificada"), "US Spanish verified-store label is not localized");
   assert(spanishHomepage.includes("Entrega gratuita mediante Standard Shipping"), "US Spanish delivery terms are not localized");
   assert(!spanishHomepage.includes("Selected with a technical internal score"), "US Spanish exposes the stored technical selection reason");
   assert(String(spanishResponse.headers.get("set-cookie") || "").includes("odd_lang_us=es"), "US language preference cookie is missing");
@@ -280,6 +284,7 @@ async function run() {
   assert(frenchHomepage.includes('<html lang="fr-FR">'), "France must default to French");
   assert(frenchHomepage.includes("eBay Test Product 1"), "France live catalog is missing");
   assert(frenchHomepage.includes("Produits pour animaux"), "France live category is not localized");
+  assert(frenchHomepage.includes("Enseigne vérifiée"), "France verified-store label is not localized");
   assert(frenchHomepage.includes("Livraison gratuite via Standard Shipping"), "France delivery terms are not localized");
   assert(frenchHomepage.includes("Retours acceptés sous 30 jours"), "France return terms are not localized");
   assert(frenchHomepage.includes("Score OneDailyDrop") && frenchHomepage.includes("Note du vendeur"), "France score or seller rating labels are missing");
@@ -294,6 +299,7 @@ async function run() {
   const germanHomepage = await (await get("/de")).text();
   assert(germanHomepage.includes('<html lang="de-DE">'), "Germany must default to German");
   assert(germanHomepage.includes("Wohnen und Küche"), "Germany live category is not localized");
+  assert(germanHomepage.includes("Geprüfter Shop"), "Germany verified-store label is not localized");
   assert(germanHomepage.includes("Kostenlose Lieferung über Standard Shipping"), "Germany delivery terms are not localized");
   assert(germanHomepage.includes("Rückgabe innerhalb von 30 Tagen"), "Germany return terms are not localized");
   assert(germanHomepage.includes("OneDailyDrop-Score") && germanHomepage.includes("Verkäuferbewertung"), "Germany score or seller rating labels are missing");
