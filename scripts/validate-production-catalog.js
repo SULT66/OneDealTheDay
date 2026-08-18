@@ -56,6 +56,7 @@ if (!app.includes("responseLimit") || !app.includes("catalogRowLimit") || !app.i
 
 const homepage = fs.readFileSync(path.join(root, "src/homepage.js"), "utf8");
 const homepageTemplate = fs.readFileSync(path.join(root, "src/homepageTemplate.js"), "utf8");
+const serverSource = fs.readFileSync(path.join(root, "src/server.js"), "utf8");
 const assistantPanel = fs.readFileSync(path.join(root, "src/shoppingAssistantPanel.js"), "utf8");
 for (const forbidden of ["DEMO PREVIEW", "Sample price", "VIEW PRODUCT PREVIEW", "Development preview", "no API credits are being used"]) {
   if (homepage.includes(forbidden)) throw new Error(`Public homepage still exposes internal catalog wording: ${forbidden}`);
@@ -72,6 +73,9 @@ for (const required of ['<link rel="canonical" href="${esc(canonical)}">', 'prop
 if (homepage.includes("shortTitle")) throw new Error("Homepage titles are still truncated");
 if (!hasLiquidGlass(homepageTemplate)) {
   throw new Error("Server-rendered homepage is missing the Liquid Glass design system");
+}
+if (homepageTemplate.includes('class="header-search-link"') || serverSource.includes('class="header-search-link"')) {
+  throw new Error("The duplicate Search deals link is still present in the site header");
 }
 if (!homepage.includes("const featured = dailyProducts[0] || null;")) {
   throw new Error("Homepage is missing its single Today's Drop selection");

@@ -221,6 +221,7 @@ async function run() {
   assert(homepage.includes('data-homepage-mode="search-first-v1"'), "Day 9 search-first homepage marker is missing");
   assert(homepage.includes('id="shopping-search"') && homepage.includes('id="homepageSearchForm"'), "Homepage search is not the primary entry point");
   assert(homepage.includes('id="homepageSearchInput"') && homepage.includes('action="/us/search" method="get"'), "Homepage search form does not use the market search route");
+  assert(!homepage.includes('class="header-search-link"'), "Homepage still exposes the duplicate Search deals header link");
   assert(!homepage.includes('id="category-navigation-title"'), "Categories are still duplicated in the homepage body");
   assert(homepage.includes('id="store-navigation-title"'), "Store navigation is missing below search");
   assert(homepage.includes('id="categoryMenu" class="mega-menu" hidden'), "The single top category dropdown is missing");

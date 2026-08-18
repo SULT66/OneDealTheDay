@@ -798,11 +798,9 @@ const searchRowsForMarket = code => {
 };
 const sharedHeader = (code, language = "en", req = null) => {
   const home = marketPath(code);
-  const search = marketPath(code, "/search");
   return `<header class="site-header">
     <div class="header-top">
       <a class="brand" href="${home}"><span class="brand-mark" aria-hidden="true"><img src="/header-bag.svg?v=20260731-larger-bag" alt=""></span><span class="brand-copy"><strong><span>OneDaily</span><span class="brand-drop">Drop</span></strong><small>${esc(t(language,"brand.seoTagline"))}</small></span></a>
-      <a class="header-search-link" href="${search}"><span aria-hidden="true">⌕</span><span>${esc(t(language,"search.short"))}</span></a>
       <a class="header-subscribe" href="${home}#subscribe">${esc(t(language,"nav.subscribe"))}</a>
       <button id="themeToggle" class="theme-button" type="button" aria-label="${esc(t(language,"theme.toDark"))}" title="${esc(t(language,"theme.dark"))}"><span class="theme-button-icon" aria-hidden="true">☾</span><span class="theme-button-label">${esc(t(language,"theme.dark"))}</span></button>
       ${req ? languageSwitcher(req, code, language) : ""}
