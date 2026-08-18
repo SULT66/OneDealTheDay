@@ -92,6 +92,9 @@ if (!homepage.includes("const moreWorthSeeing = dailyProducts.slice(1, 10);")) {
 if (!homepageTemplate.includes('home.moreTitle')) {
   throw new Error("Homepage is missing the localized checked-picks section");
 }
+if (!homepage.includes('t(language, "home.verifiedStore")') || homepage.includes('t(language, "search.products", {count})')) {
+  throw new Error("Homepage store navigation must show verification instead of catalog product counts");
+}
 if (!homepage.includes('class="rank">#${index + 1}')) {
   throw new Error("Server-rendered additional picks do not continue with ranks #2-#10");
 }
