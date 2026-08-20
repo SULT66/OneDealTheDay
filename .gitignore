@@ -7,3 +7,6 @@ npm-debug.log*
 /.next/
 next-env.d.ts
 *.tsbuildinfo
+
+# Written by the deploy workflow so /api/status reports the running commit.
+.release-sha

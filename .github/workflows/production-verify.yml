@@ -18,7 +18,10 @@ jobs:
       - name: Wait for Azure and verify the live site
         shell: bash
         run: |
-          expected_release="$(node -p "require('./src/release').RELEASE_ID")"
+          # The deploy stamps the commit it shipped; compare against that
+          # rather than a constant in the repository, which would match no
+          # matter which package Azure ended up serving.
+          expected_release="${GITHUB_SHA}"
           for attempt in {1..30}; do
             status_payload="$(curl --fail --silent --show-error --max-time 20 'https://www.onedailydrop.com/api/status?market=us' || true)"
             if jq -e --arg release "${expected_release}" '
@@ -29,8 +32,12 @@ jobs:
             ' <<<"${status_payload}" >/dev/null 2>&1; then
               homepage_payload="$(curl --fail --silent --show-error --max-time 20 \
                 'https://www.onedailydrop.com/us' || true)"
+              # The homepage leads with the catalog now: the daily drop moved to
+              # /us/daily-drop, so "Today's #1 pick" is deliberately gone and is
+              # no longer something to assert on.
               if grep -q 'OneDailyDrop' <<<"${homepage_payload}" && \
-                 grep -q "Today&#x27;s #1 pick\|Today's #1 pick" <<<"${homepage_payload}" && \
+                 grep -q 'Best right now' <<<"${homepage_payload}" && \
+                 grep -q 'href="/us/daily-drop"' <<<"${homepage_payload}" && \
                  grep -q 'href="/us/deal/' <<<"${homepage_payload}" && \
                  grep -q 'href="/us/search"' <<<"${homepage_payload}"; then
                 results_payload="$(curl --fail --silent --show-error --max-time 40 \
@@ -45,9 +52,12 @@ jobs:
                   if [[ -n "${product_id}" ]]; then
                     product_payload="$(curl --fail --silent --show-error --max-time 40 \
                       "https://www.onedailydrop.com/us/deal/${product_id}" || true)"
+                    drop_payload="$(curl --fail --silent --show-error --max-time 40 \
+                      'https://www.onedailydrop.com/us/daily-drop' || true)"
                     if grep -q 'Why it made the list\|Why we picked it' <<<"${product_payload}" && \
-                       grep -q 'View deal at' <<<"${product_payload}"; then
-                      echo "Azure is serving the expected release with a real catalog, the Next.js homepage, search and deal pages."
+                       grep -q 'View deal at' <<<"${product_payload}" && \
+                       grep -q "Today&#x27;s pick\|Today's pick" <<<"${drop_payload}"; then
+                      echo "Azure is serving the expected commit with a real catalog, the Next.js homepage, search, deal and daily-drop pages."
                       jq '{releaseId,taxonomyVersion,market,liveProducts,provider}' <<<"${status_payload}"
                       exit 0
                     fi
