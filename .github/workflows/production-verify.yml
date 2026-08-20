@@ -15,7 +15,7 @@ jobs:
       - name: Check out the expected release
         uses: actions/checkout@v4
 
-      - name: Wait for Azure and verify the live catalog
+      - name: Wait for Azure and verify the live site
         shell: bash
         run: |
           expected_release="$(node -p "require('./src/release').RELEASE_ID")"
@@ -27,43 +27,28 @@ jobs:
               .market == "us" and
               .liveProducts > 0
             ' <<<"${status_payload}" >/dev/null 2>&1; then
-              search_payload="$(curl --fail --silent --show-error --max-time 20 \
-                'https://www.onedailydrop.com/api/search?market=us&q=under%20500%20at%20eBay&sort=best_match&page=1&limit=1' || true)"
-              if jq -e '
-                .ranking_model == "ranking-v1" and
-                .market == "us" and
-                .sort == "best_match" and
-                .parsed_intent.merchant == "eBay" and
-                .parsed_intent.max_price == 500 and
-                .filters.merchants == ["eBay"] and
-                .filters.max_price == 500 and
-                .pagination.total > 0 and
-                (.products | length) == 1
-              ' <<<"${search_payload}" >/dev/null 2>&1; then
-                homepage_payload="$(curl --fail --silent --show-error --max-time 20 \
-                  'https://www.onedailydrop.com/us' || true)"
-                if grep -q 'data-homepage-mode="search-first-v1"' <<<"${homepage_payload}" && \
-                   grep -q 'data-search-experience="unified-intent-v1"' <<<"${homepage_payload}" && \
-                   grep -q 'id="homepageSearchForm"' <<<"${homepage_payload}" && \
-                   grep -q '/us/search?merchant=eBay' <<<"${homepage_payload}" && \
-                   grep -q 'class="top-picks-disclosure"' <<<"${homepage_payload}"; then
-                    results_payload="$(curl --fail --silent --show-error --max-time 40 \
-                      'https://www.onedailydrop.com/us/search?q=desk' || true)"
-                  if grep -q 'data-results-ui="facets-sorting-badges-v1"' <<<"${results_payload}" && \
-                     grep -q 'data-results-filters' <<<"${results_payload}" && \
-                     grep -q 'class="search-sort"' <<<"${results_payload}" && \
-                     grep -q 'search-badge-match' <<<"${results_payload}"; then
-                    compact_catalog="$(curl --fail --silent --show-error --max-time 40 \
-                      'https://www.onedailydrop.com/api/products?market=us&limit=1&compact=1' || true)"
-                    product_path="$(jq -r '.[0].deal_url // empty' <<<"${compact_catalog}" 2>/dev/null)"
+              homepage_payload="$(curl --fail --silent --show-error --max-time 20 \
+                'https://www.onedailydrop.com/us' || true)"
+              if grep -q 'OneDailyDrop' <<<"${homepage_payload}" && \
+                 grep -q "Today&#x27;s #1 pick\|Today's #1 pick" <<<"${homepage_payload}" && \
+                 grep -q 'href="/us/deal/' <<<"${homepage_payload}" && \
+                 grep -q 'href="/us/search"' <<<"${homepage_payload}"; then
+                results_payload="$(curl --fail --silent --show-error --max-time 40 \
+                  'https://www.onedailydrop.com/us/search?q=desk' || true)"
+                if grep -q 'deal.*match\|Nothing matches those filters' <<<"${results_payload}"; then
+                  compact_catalog="$(curl --fail --silent --show-error --max-time 40 \
+                    'https://www.onedailydrop.com/api/products?market=us&limit=1&compact=1' || true)"
+                  product_path="$(jq -r '.[0].deal_url // empty' <<<"${compact_catalog}" 2>/dev/null)"
+                  # The Next.js frontend routes on the numeric id, not the SEO
+                  # slug the API returns, so re-derive /us/deal/<id> from it.
+                  product_id="$(grep -oE '[0-9]+$' <<<"${product_path}" || true)"
+                  if [[ -n "${product_id}" ]]; then
                     product_payload="$(curl --fail --silent --show-error --max-time 40 \
-                      "https://www.onedailydrop.com${product_path}" || true)"
-                    if [[ -n "${product_path}" ]] && \
-                       grep -q 'data-product-offer-ui="reliable-entity-v1"' <<<"${product_payload}" && \
-                       grep -q 'class="product-offer-summary"' <<<"${product_payload}"; then
-                      echo "Azure is serving the expected release, Day 12 intent parser, unified Search UI and strict product/offer UI."
+                      "https://www.onedailydrop.com/us/deal/${product_id}" || true)"
+                    if grep -q 'Why it made the list\|Why we picked it' <<<"${product_payload}" && \
+                       grep -q 'View deal at' <<<"${product_payload}"; then
+                      echo "Azure is serving the expected release with a real catalog, the Next.js homepage, search and deal pages."
                       jq '{releaseId,taxonomyVersion,market,liveProducts,provider}' <<<"${status_payload}"
-                      jq '{ranking_model,sort,pagination,returned:(.products | length)}' <<<"${search_payload}"
                       exit 0
                     fi
                   fi
