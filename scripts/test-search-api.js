@@ -117,4 +117,30 @@ assert(serverSource.includes("data-results-filters") && serverSource.includes("s
 // the page visitors actually get, /us/search, instead.
 assert(workflowSource.includes("/us/search?q=desk"), "Production verification does not exercise the search results page");
 
+/* Express decides which paths belong to the Next.js app: anything not matching
+   nextOwnedPath has its market prefix stripped and is then looked up among the
+   Express routes, where a Next-only page does not exist. Adding a page under
+   app/[market] without adding it to that list therefore ships a live 404 —
+   which is exactly what /us/daily-drop did between merging it and noticing.
+   This walks the route directory so the next page cannot repeat it. */
+const declaredNextOwned = /const nextOwnedPath = \/(.+)\/;/.exec(serverSource);
+assert(declaredNextOwned, "nextOwnedPath is no longer declared where this test looks for it");
+const nextOwnedPath = new RegExp(declaredNextOwned[1]);
+const marketRoutes = fs
+  .readdirSync(path.join(__dirname, "..", "app", "[market]"), { withFileTypes: true })
+  .filter(entry => entry.isDirectory());
+assert(marketRoutes.length > 0, "No routes found under app/[market]");
+for (const route of marketRoutes) {
+  const children = fs.readdirSync(path.join(__dirname, "..", "app", "[market]", route.name));
+  /* A route with a dynamic child (deal/[id]) is only ever requested with that
+     segment filled in, so probe it the way a visitor would reach it. */
+  const probe = children.some(name => name.startsWith("["))
+    ? `/${route.name}/sample`
+    : `/${route.name}`;
+  assert(
+    nextOwnedPath.test(probe),
+    `Express does not hand ${probe} to the Next.js app, so /us${probe} would 404`
+  );
+}
+
 console.log("Day 8 Search API and Day 10 result constraints passed.");
