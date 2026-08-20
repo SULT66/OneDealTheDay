@@ -1,3 +1,4 @@
+import { cache } from "react";
 import categoriesData from "@/site-content/categories.json";
 import marketsData from "@/site-content/markets.json";
 import type { Category, Deal, DealFilter, Market } from "./types";
@@ -40,24 +41,31 @@ export const BACKEND_URL =
   process.env.BACKEND_API_URL || `http://127.0.0.1:${process.env.PORT || 8088}`;
 
 /**
- * One fetch per market, cached for 5 minutes — every list-shaped query
- * (today's drop, more picks, category/search filtering, related picks,
- * price bounds, active retailers, category counts) reads this same array,
- * exactly like the old local `deals` array did.
+ * One fetch per market — every list-shaped query (today's drop, more picks,
+ * category/search filtering, related picks, price bounds, active retailers,
+ * category counts) reads this same array, exactly like the old local
+ * `deals` array did. Header, Footer and a page body each call one of these
+ * independently, so without memoization a single page view can trigger it
+ * five-plus times.
  *
  * `rank` isn't trusted from the backend (it only assigns one to the daily
  * top 10) — it's synthesized from list position instead, since the backend
  * already returns daily-drop items first, followed by the rest of the
  * catalog sorted by score.
  *
- * Uses `compact=1` (has every field the adapter reads) and no persistent
- * cache: the full catalog is multiple megabytes for a busy market — well
- * over Next's 2MB data-cache entry limit — so this relies on Next's
- * automatic per-request fetch memoization instead (every catalog.ts call
- * within one page render shares this one network request already, since
- * they all resolve the same URL).
+ * Uses `compact=1` (has every field the adapter reads) and `cache: "no-store"`
+ * on the raw fetch: the full catalog is multiple megabytes for a busy
+ * market — well over Next's 2MB data-cache entry limit, so that cache is a
+ * non-starter here. `cache()` from `react` is the fix instead: it memoizes
+ * the whole function (fetch + JSON parse + the adaptProduct/rank mapping
+ * below) per market code for the lifetime of one request, so the work
+ * genuinely runs once no matter how many places on the page ask for it —
+ * this is what was missing before, and is the main reason a market with a
+ * large catalog (US, ~2,600 products, ~3.5MB compact) rendered noticeably
+ * slower than a small one (France, ~120KB): every caller was redoing the
+ * same multi-megabyte parse and 2,600-item map from scratch.
  */
-async function fetchMarketCatalog(marketCode: string): Promise<Deal[]> {
+const fetchMarketCatalog = cache(async (marketCode: string): Promise<Deal[]> => {
   const res = await fetch(
     `${BACKEND_URL}/api/products?market=${encodeURIComponent(marketCode)}&compact=1`,
     { cache: "no-store" },
@@ -70,7 +78,7 @@ async function fetchMarketCatalog(marketCode: string): Promise<Deal[]> {
     ...adaptProduct(product),
     rank: index + 1,
   }));
-}
+});
 
 export function getMarkets(): Market[] {
   return markets;

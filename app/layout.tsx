@@ -43,8 +43,16 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html lang="en" className={`${outfit.variable} h-full antialiased`}>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+        <link rel="stylesheet" href="/cookie-consent.css?v=20260730" />
       </head>
-      <body className="min-h-full flex flex-col bg-bg text-fg">{children}</body>
+      <body className="min-h-full flex flex-col bg-bg text-fg">
+        {children}
+        {/* Same consent-gated Google Analytics loader the rest of the site
+            uses (public/cookie-consent.js) — self-contained, reads the
+            market straight from the URL, shows the EU consent banner only
+            for fr/de. */}
+        <script src="/cookie-consent.js?v=20260730" />
+      </body>
     </html>
   );
 }
