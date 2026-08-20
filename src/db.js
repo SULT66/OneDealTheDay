@@ -10,7 +10,39 @@ fs.mkdirSync(dir, { recursive: true });
 const dbPath = path.join(dir, "site.db");
 const db = new Database(dbPath);
 
-db.pragma("journal_mode = WAL");
+/**
+ * Journal mode is the one setting that decides whether this database survives.
+ *
+ * WAL is the right default on a local disk and the wrong one here. On Azure
+ * App Service the data directory lives under /home, which is an SMB network
+ * share, and SQLite documents plainly that WAL does not work over a network
+ * filesystem: it needs shared memory and byte-range locks that SMB does not
+ * provide. The failure is not a clean error but slow corruption — an integrity
+ * check on 2026-08-20 found 96 damaged index entries while every table's rows
+ * were intact, which is the signature of small scattered index writes being
+ * lost while large sequential ones land.
+ *
+ * So: rollback journal on Azure, WAL everywhere else, and an override for
+ * whoever eventually moves this onto real storage.
+ */
+const JOURNAL_MODES = new Set(["DELETE", "TRUNCATE", "PERSIST", "MEMORY", "WAL", "OFF"]);
+const requestedJournalMode = String(process.env.SQLITE_JOURNAL_MODE || "").trim().toUpperCase();
+const journalMode = JOURNAL_MODES.has(requestedJournalMode)
+  ? requestedJournalMode
+  : (isAzure ? "DELETE" : "WAL");
+db.pragma(`journal_mode = ${journalMode}`);
+
+/* Wait for a contended lock instead of throwing at once: a write over network
+   storage takes far longer than the same write on a local disk. */
+db.pragma("busy_timeout = 10000");
+
+/* On storage this unreliable, durability is worth the throughput. */
+if (isAzure) db.pragma("synchronous = FULL");
+
+console.log(
+  `[db] ${dbPath} journal_mode=${db.pragma("journal_mode", { simple: true })}` +
+  ` synchronous=${db.pragma("synchronous", { simple: true })}`
+);
 db.exec(`
   CREATE TABLE IF NOT EXISTS products(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
