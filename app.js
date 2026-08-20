@@ -1,4 +1,4 @@
-// Bluehost cPanel / Phusion Passenger entry point.
+// Azure App Service entry point (package.json's "start" script).
 // Runtime restart marker: compact homepage catalog payload, August 13, 2026.
 // Register catalog mode safeguards before src/server adds express.static();
 // the market homepage itself is now rendered by the Next.js frontend (see

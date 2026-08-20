@@ -1,5 +1,0 @@
----
-deployment:
-  tasks:
-    - /bin/mkdir -p /home2/uziobymy/repositories/OneDealTheDay/tmp
-    - /usr/bin/touch /home2/uziobymy/repositories/OneDealTheDay/tmp/restart.txt
