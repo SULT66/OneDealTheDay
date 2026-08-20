@@ -1,0 +1,32 @@
+[
+  {
+    "code": "us",
+    "country": "United States",
+    "currency": "USD",
+    "language": "English"
+  },
+  {
+    "code": "ca",
+    "country": "Canada",
+    "currency": "CAD",
+    "language": "English"
+  },
+  {
+    "code": "uk",
+    "country": "United Kingdom",
+    "currency": "GBP",
+    "language": "English"
+  },
+  {
+    "code": "fr",
+    "country": "France",
+    "currency": "EUR",
+    "language": "French"
+  },
+  {
+    "code": "de",
+    "country": "Germany",
+    "currency": "EUR",
+    "language": "German"
+  }
+]

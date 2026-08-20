@@ -2,3 +2,8 @@ node_modules/
 .env
 data/
 npm-debug.log*
+
+# Next.js frontend build output
+/.next/
+next-env.d.ts
+*.tsbuildinfo

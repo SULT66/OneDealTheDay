@@ -59,6 +59,18 @@ const {
 } = require("./i18n");
 
 const app = express();
+/**
+ * The Next.js frontend (app/) runs inside this same process — prepared once
+ * here, awaited before `app.listen` below, and handed unmatched GET/HEAD
+ * requests by the catch-all at the bottom of this file. `dir` points at the
+ * repo root, where next.config.ts/app/ live, since this file sits in src/.
+ * `dev` follows `c.isProduction` (the same Azure-environment check the rest
+ * of this codebase already uses) rather than NODE_ENV, which nothing here
+ * sets explicitly.
+ */
+const next = require("next");
+const nextApp = next({ dev: !c.isProduction, dir: path.join(__dirname, "..") });
+const handleNextRequest = nextApp.getRequestHandler();
 const SHOPPING_ASSISTANT_HARD_TIMEOUT_MS = 32000;
 const assistantRetailerSearch = ({ query, queries, market: selectedMarket, signal }) =>
   searchForAssistant(c, {query, queries, market:selectedMarket, signal});
@@ -292,11 +304,21 @@ app.post("/api/shopping-assistant/feedback", shoppingAssistantRateLimit, (req, r
   );
   return res.status(201).set("Cache-Control", "no-store").json({ok:true});
 });
+/**
+ * Pages the Next.js frontend now renders at their market-prefixed URL
+ * (/us/about, /us/search, /us/deal/123, /us/category/office, ...) — the
+ * market-prefix-stripping middleware right below must leave these alone so
+ * they reach the catch-all at the bottom of this file instead of being
+ * rewritten back onto the old bare-URL Express routes.
+ */
+const nextOwnedPath = /^\/(?:about|how-we-select-deals|search|deal\/[^/]+|category\/[^/]+)\/?$/;
 app.use((req, res, next) => {
   const match = req.url.match(new RegExp(`^/(${marketCodes.join("|")})(?=/|\\?|$)`));
   if (!match || req.url === `/${match[1]}`) return next();
+  const rest = req.url.slice(match[0].length) || "/";
+  if (nextOwnedPath.test(rest.split("?")[0])) return next();
   req.market = normalizeMarket(match[1]);
-  req.url = req.url.slice(match[0].length) || "/";
+  req.url = rest;
   next();
 });
 app.use((req, res, next) => {
@@ -1646,9 +1668,16 @@ app.get("/admin", (req,res) => {
   res.set("X-Robots-Tag", "noindex, nofollow").type("html").send(html);
 });
 
+/**
+ * Anything not matched above falls through to the Next.js frontend — the
+ * market homepage, category, search and deal pages all live there now (see
+ * app/[market]/*). API paths and non-GET requests never reach Next; a
+ * missing /api/ route is a genuine 404, and only GET/HEAD render a page.
+ */
 app.use((req, res) => {
   if (req.path.startsWith("/api/")) return res.status(404).json({error:"Not found"});
-  return sendNotFound(req, res);
+  if (req.method !== "GET" && req.method !== "HEAD") return sendNotFound(req, res);
+  return handleNextRequest(req, res);
 });
 
 function backfillBrands() {
@@ -1675,6 +1704,7 @@ for (const marketCode of c.markets) {
 }
 (async () => {
   backfillBrands();
+  await nextApp.prepare();
   app.listen(c.port, () => {
     console.log(`http://localhost:${c.port}`);
     // Azure production recovery is owned by app.js so only one initial API
