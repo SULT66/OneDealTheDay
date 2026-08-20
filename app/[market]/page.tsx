@@ -4,16 +4,12 @@ import { ArrowRight, ShieldCheck } from "@phosphor-icons/react/ssr";
 import {
   getCategoriesWithCounts,
   getMarket,
-  getMorePicks,
-  getTodaysDrop,
+  getTopPicks,
 } from "@/lib/catalog";
-import { formatDateTime } from "@/lib/format";
 import { CategoryIcon } from "@/components/ui/CategoryIcon";
 import { SectionHeader } from "@/components/site/SectionHeader";
-import { NextDropCountdown } from "@/components/site/NextDropCountdown";
 import { InterestSignup } from "@/components/site/InterestSignup";
 import { DeliaTrigger } from "@/components/delia/DeliaTrigger";
-import { FeaturedDeal } from "@/components/deal/FeaturedDeal";
 import { DealCard } from "@/components/deal/DealCard";
 
 export async function generateMetadata({
@@ -23,8 +19,8 @@ export async function generateMetadata({
   const info = getMarket(market);
   const country = info?.country ?? "your market";
   return {
-    title: `Best daily deals in ${country}`,
-    description: `One genuinely good deal in ${country}, checked daily against price, product rating and seller signals.`,
+    title: `Checked deals in ${country}`,
+    description: `Check here before you buy. We compare price signal, product rating and seller confidence across ${country} retailers, and only list what clears the bar.`,
     alternates: { canonical: `/${market}` },
   };
 }
@@ -32,12 +28,17 @@ export async function generateMetadata({
 export default async function MarketHome({ params }: PageProps<"/[market]">) {
   const { market } = await params;
   const info = getMarket(market);
-  const drop = await getTodaysDrop(market);
 
-  /* Honest empty state rather than a crash — no sample prices or products
-     are invented while the catalog for this market is empty (a fresh source
-     outage, or before the first refresh has ever run). */
-  if (!drop) {
+  /* The homepage is the catalog now, not the daily drop: it leads with search
+     and the best-scoring picks. The drop still runs on its own schedule and
+     lives at /[market]/daily-drop — one feature here, not the whole product. */
+  const picks = await getTopPicks(market, 12);
+  const categories = await getCategoriesWithCounts(market);
+
+  /* Honest empty state rather than a crash — no sample prices or products are
+     invented while the catalog for this market is empty (a source outage, or
+     before the first refresh has ever run). */
+  if (!picks.length) {
     return (
       <div className="mx-auto max-w-2xl px-4 py-24 text-center sm:px-6">
         <p className="text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-fg-subtle">
@@ -47,16 +48,13 @@ export default async function MarketHome({ params }: PageProps<"/[market]">) {
           Checking today&apos;s picks
         </h1>
         <p className="mt-4 text-base leading-relaxed text-fg-muted">
-          We haven&apos;t published a checked deal for this market yet. No
-          sample prices or products are shown while we verify the catalog —
-          check back shortly.
+          We haven&apos;t published checked deals for this market yet. No sample
+          prices or products are shown while we verify the catalog — check back
+          shortly.
         </p>
       </div>
     );
   }
-
-  const picks = await getMorePicks(market, 11);
-  const categories = await getCategoriesWithCounts(market);
 
   return (
     <div className="mx-auto max-w-7xl px-4 pb-24 pt-8 sm:px-6 sm:pt-10">
@@ -67,8 +65,8 @@ export default async function MarketHome({ params }: PageProps<"/[market]">) {
       >
         <div className="rounded-card bg-graphite p-7 text-white sm:p-10 lg:p-12">
           <p className="text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-white/60">
-            One genuinely good deal in {info?.country ?? "your market"}, checked
-            daily
+            Every listing in {info?.country ?? "your market"}, checked before it
+            is shown
           </p>
           <h1
             id="hero-title"
@@ -83,10 +81,10 @@ export default async function MarketHome({ params }: PageProps<"/[market]">) {
 
           <div className="mt-8 flex flex-wrap gap-3">
             <Link
-              href={`/${market}/deal/${drop.id}`}
+              href={`/${market}/search`}
               className="inline-flex h-14 cursor-pointer items-center gap-2 rounded-full bg-lime px-7 text-base font-semibold text-ink transition-opacity hover:opacity-88 active:scale-[0.98]"
             >
-              See today&apos;s drop
+              Browse checked deals
               <ArrowRight size={18} weight="bold" aria-hidden="true" />
             </Link>
             <Link
@@ -118,13 +116,26 @@ export default async function MarketHome({ params }: PageProps<"/[market]">) {
           </div>
         </div>
 
+        {/* The drop keeps a door on the homepage rather than the homepage. */}
         <div className="flex flex-col justify-between gap-8 rounded-card bg-lime p-7 sm:p-10">
           <div>
-            <NextDropCountdown />
-            <p className="mt-4 max-w-xs text-sm leading-relaxed text-ink/75">
-              A new pick lands every day at midnight UTC. Today&apos;s was
-              checked {formatDateTime(drop.checkedAt, market)}.
+            <p className="text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-ink/60">
+              Also here
             </p>
+            <h2 className="mt-3 text-3xl font-bold leading-tight tracking-tight text-ink">
+              Daily Drop
+            </h2>
+            <p className="mt-4 max-w-xs text-sm leading-relaxed text-ink/75">
+              One pick a day, put through the same checks. A new one lands every
+              day at midnight UTC.
+            </p>
+            <Link
+              href={`/${market}/daily-drop`}
+              className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-ink underline-offset-4 hover:underline"
+            >
+              See the Daily Drop
+              <ArrowRight size={16} weight="bold" aria-hidden="true" />
+            </Link>
           </div>
 
           <p className="text-sm font-medium leading-relaxed text-ink/80">
@@ -163,22 +174,12 @@ export default async function MarketHome({ params }: PageProps<"/[market]">) {
         </ul>
       </section>
 
-      {/* --------------------------------------------------------- today's pick */}
-      <section aria-labelledby="drop-title" className="mt-20">
+      {/* ------------------------------------------------------- best right now */}
+      <section aria-labelledby="best-title" className="mt-20">
         <SectionHeader
-          id="drop-title"
-          eyebrow="Checked today"
-          title="Today's #1 pick"
-        />
-        <FeaturedDeal deal={drop} market={market} />
-      </section>
-
-      {/* -------------------------------------------------------------- more */}
-      <section aria-labelledby="more-title" className="mt-20">
-        <SectionHeader
-          id="more-title"
-          eyebrow="More smart picks"
-          title="More checked picks"
+          id="best-title"
+          eyebrow="Highest scoring"
+          title="Best right now"
           action={{ href: `/${market}/search`, label: "See all deals" }}
         />
 

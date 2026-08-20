@@ -47,12 +47,15 @@ export async function Header({ market }: { market: string }) {
           className="mx-auto max-w-7xl px-4 sm:px-6"
         >
           <ul className="flex items-center gap-1 overflow-x-auto py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {/* The drop is one feature now rather than the front door, so this
+                is an ordinary tab instead of the permanently highlighted one it
+                was while the homepage and the drop were the same page. */}
             <li className="shrink-0">
               <Link
-                href={`/${market}`}
-                className="inline-flex h-9 items-center rounded-full bg-lime px-4 text-sm font-semibold text-ink"
+                href={`/${market}/daily-drop`}
+                className="inline-flex h-9 items-center rounded-full px-4 text-sm text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg"
               >
-                Today&apos;s drop
+                Daily Drop
               </Link>
             </li>
             {categories.map((c) => (

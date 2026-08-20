@@ -142,6 +142,41 @@ export async function getTodaysDrop(marketCode: string): Promise<Deal> {
   return deals[0];
 }
 
+/**
+ * The homepage shortlist.
+ *
+ * The homepage no longer leads with the daily drop, so it needs its own list:
+ * the best-scoring offers in the market, capped so a single category or
+ * retailer cannot fill the whole grid. Without the caps the grid fills with
+ * whatever the largest feed happens to score well on — twelve desk gadgets
+ * from one source is a worse homepage than eight varied ones.
+ *
+ * These caps are a front-end stopgap. Diversity belongs in the backend ranker
+ * next to the daily selection; this keeps the page honest until it lives there.
+ * A thin catalog can starve the caps, and a short grid is the right answer —
+ * it is never padded back out with the items the caps just rejected.
+ */
+export async function getTopPicks(
+  marketCode: string,
+  limit = 12,
+  { perCategory = 3, perRetailer = 4 }: { perCategory?: number; perRetailer?: number } = {},
+): Promise<Deal[]> {
+  const deals = await fetchMarketCatalog(marketCode);
+  const picked: Deal[] = [];
+  const categoryCount = new Map<string, number>();
+  const retailerCount = new Map<string, number>();
+
+  for (const deal of deals) {
+    if (picked.length >= limit) break;
+    if ((categoryCount.get(deal.category) ?? 0) >= perCategory) continue;
+    if ((retailerCount.get(deal.retailer) ?? 0) >= perRetailer) continue;
+    picked.push(deal);
+    categoryCount.set(deal.category, (categoryCount.get(deal.category) ?? 0) + 1);
+    retailerCount.set(deal.retailer, (retailerCount.get(deal.retailer) ?? 0) + 1);
+  }
+  return picked;
+}
+
 /** Everything except today's drop, in rank order. */
 export async function getMorePicks(marketCode: string, limit?: number): Promise<Deal[]> {
   const deals = await fetchMarketCatalog(marketCode);
