@@ -18,7 +18,6 @@ const files = [
   "src/shoppingAssistant.js",
   "src/shoppingAssistantPanel.js",
   "src/mailer.js",
-  "public/app.js",
   "public/shopping-assistant.js"
 ];
 
@@ -50,66 +49,15 @@ if (!app.includes("responseLimit") || !app.includes("catalogRowLimit") || !app.i
 
 /**
  * The old server-rendered homepage (src/homepage.js, src/homepageTemplate.js,
- * src/homepage-seo.js) is retired — the Next.js frontend (app/[market]/*)
- * renders the market homepage now, so the wording/markup checks that used to
- * run against those files no longer apply. `public/app.js` and
- * `public/index.html` below are a separate, still-present static fallback
- * and are checked as before.
+ * src/homepage-seo.js) and the static public/index.html + public/app.js
+ * fallback (a Bluehost/cPanel-era artifact, no longer hosted anywhere) are
+ * both retired — the Next.js frontend (app/[market]/*) renders the market
+ * homepage now, so the wording/markup checks that used to run against those
+ * files no longer apply.
  */
-const browserApp = fs.readFileSync(path.join(root, "public/app.js"), "utf8");
-if (browserApp.includes("shortTitle")) throw new Error("Client-side titles are still truncated");
-if (!browserApp.includes("&limit=200&compact=1")) throw new Error("Homepage still downloads the complete product catalog");
-if (!browserApp.includes('searchParams.delete("country")')) throw new Error("Stale country parameter cleanup is missing");
-if (!browserApp.includes("return products.slice(1, 10);")) {
-  throw new Error("Client-side rendering still repeats Today's Drop in the additional list");
-}
-if (!browserApp.includes('activeCategory === "More Worth Seeing" ? 2 : 1')) {
-  throw new Error("Client-side additional picks do not continue with ranks #2-#10");
-}
-if (browserApp.includes("Top 10 Drops Today")) {
-  throw new Error("Client-side rendering still labels the additional products as Top 10");
-}
-if (browserApp.includes("Club $2.99") || browserApp.includes('clubLink.href = "/club"')) {
-  throw new Error("Club is still promoted in the main navigation");
-}
-if (browserApp.includes('return "DAILY PICK"')) {
-  throw new Error("Additional demo cards still use the Daily Pick badge");
-}
-if (!browserApp.includes('activeCategory === "More Worth Seeing"') || !browserApp.includes('? ""')) {
-  throw new Error("The nine-pick section still shows an unnecessary product count");
-}
-if (!browserApp.includes("VIEW DEAL AT") || !browserApp.includes("offer-facts") || !browserApp.includes("PRICE HISTORY")) {
-  throw new Error("Client-side live offer details are incomplete");
-}
-if (browserApp.includes("els.trendingProducts.innerHTML") || browserApp.includes("els.newProducts.innerHTML") || browserApp.includes("els.priceDropProducts.innerHTML")) {
-  throw new Error("Client rendering can still recreate unverified Trending, New or Price Drop collections");
-}
-if (browserApp.includes('tr("product.save"')) {
-  throw new Error("Client cards still present retailer reference prices as verified savings");
-}
-if (!browserApp.includes('classList.toggle("is-open", willOpen)') || !browserApp.includes('willOpen ? tr("menu.close"')) {
-  throw new Error("Homepage hamburger behavior is missing");
-}
-for (const required of ["catalog-empty-featured", "home.catalogSectionEmpty", "home.catalogArchiveEmpty"]) {
-  if (!browserApp.includes(required)) throw new Error(`Client empty-catalog rendering is missing: ${required}`);
-}
-
-const staticHomepage = fs.readFileSync(path.join(root, "public/index.html"), "utf8");
-if (!staticHomepage.includes("9 More Worth Seeing") || staticHomepage.includes("Top 10 Drops Today")) {
-  throw new Error("Static homepage fallback is not aligned with the 1 + 9 product structure");
-}
-if (staticHomepage.includes("Join Club · $2.99")) {
-  throw new Error("Static homepage still promotes the Club price");
-}
-
 const demoEditorial = require(path.join(root, "src", "demoEditorial"));
 if (Object.keys(demoEditorial.reasons).length !== 24 || new Set(Object.values(demoEditorial.reasons)).size !== 24) {
   throw new Error("Demo products do not have 24 unique editorial reasons");
-}
-for (const forbidden of ['if (isDemo(product)) return "DAILY PICK"', "Selected for its practical value and relevance to everyday shoppers."]) {
-  if (browserApp.includes(forbidden)) {
-    throw new Error(`Generic demo-card wording is still present: ${forbidden}`);
-  }
 }
 
 const clubPage = fs.readFileSync(path.join(root, "public", "club.html"), "utf8");
@@ -303,7 +251,7 @@ for (const file of trustPages) {
     if (!html.includes(link)) throw new Error(`Footer link ${link} is missing from ${file}`);
   }
 }
-for (const file of ["index.html", "club.html", "account.html", "admin.html"]) {
+for (const file of ["club.html", "account.html", "admin.html"]) {
   const html = fs.readFileSync(path.join(root, "public", file), "utf8");
   if (!hasLiquidGlass(html)) {
     throw new Error(`Liquid Glass is missing from public/${file}`);
