@@ -97,10 +97,14 @@ assert(appSource.includes('app.get("/api/search"'), "The public Search API route
 assert(appSource.includes("pagination:result.pagination") && appSource.includes("facets:result.facets"), "The Search API contract is missing pagination or facets");
 assert(appSource.includes("X-Robots-Tag") && appSource.includes("noindex, nofollow"), "Search API responses are not protected from indexing");
 assert(workflowSource.includes("require('./src/release').RELEASE_ID"), "Production verification is pinned to a stale release string");
-assert(workflowSource.includes("/api/search?market=us"), "Production verification does not exercise the Search API");
 assert(serverSource.includes("data-results-ui=\"facets-sorting-badges-v1\""), "Day 10 results UI marker is missing");
 assert(serverSource.includes("searchCatalogProducts(rows, options)"), "Results UI does not share the deterministic Search API engine");
 assert(serverSource.includes("data-results-filters") && serverSource.includes("search-badge-match"), "Facets or transparent result badges are missing");
-assert(workflowSource.includes("/us/search?q=desk") && workflowSource.includes("facets-sorting-badges-v1"), "Production verification does not exercise the Day 10 results UI");
+// The Next.js frontend (app/[market]/search) renders results itself from
+// /api/products rather than calling /api/search or the old server-rendered
+// results markup above — those two stay live legacy code (still asserted
+// on serverSource just above) but production-verify.yml now smoke-tests
+// the page visitors actually get, /us/search, instead.
+assert(workflowSource.includes("/us/search?q=desk"), "Production verification does not exercise the search results page");
 
 console.log("Day 8 Search API and Day 10 result constraints passed.");
