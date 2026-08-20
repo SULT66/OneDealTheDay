@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { Outfit } from "next/font/google";
+import { tagFor } from "@/lib/i18n";
 import "./globals.css";
 
 /* Reference brand uses Lufga, which is a commercial licence we cannot ship.
@@ -38,9 +40,23 @@ const themeScript = `
 })();
 `;
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+/**
+ * The market and language for this request are resolved by the Express server
+ * in front of these pages and handed over on request headers (src/server.js).
+ * Reading them here is what puts a truthful `lang` on the document: until now
+ * every page claimed English, including the French and German markets, which
+ * misleads search engines and screen readers alike.
+ *
+ * `next build` renders this with no request behind it, hence the fallback.
+ */
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  const header = await headers();
+  const market = header.get("x-odd-market") || "us";
+  const language = header.get("x-odd-language") || "";
+  const lang = language ? tagFor(market, language) : "en-US";
+
   return (
-    <html lang="en" className={`${outfit.variable} h-full antialiased`}>
+    <html lang={lang} className={`${outfit.variable} h-full antialiased`}>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
         <link rel="stylesheet" href="/cookie-consent.css?v=20260730" />

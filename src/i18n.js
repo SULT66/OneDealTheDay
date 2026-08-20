@@ -1522,6 +1522,14 @@ const categoryNames = {
   }
 };
 
+/* The Next.js frontend's strings live in their own file so that adding a page
+   there does not mean editing this one, but they share this dictionary: one
+   `t()`, one fallback chain, one place to add a language. */
+const { appCopy } = require("./i18n-app");
+for (const language of Object.keys(copy)) {
+  Object.assign(copy[language], appCopy[language] || {});
+}
+
 function normalizeLanguage(value) {
   const code = String(value || "").trim().toLowerCase().split("-")[0];
   return languageDefinitions[code] ? code : "";
@@ -1549,6 +1557,11 @@ function resolveLanguage(req, res, marketCode) {
   const requested = normalizeLanguage(req.query?.lang);
   const cookieName = `odd_lang_${code}`;
   const saved = normalizeLanguage(parseCookies(req)[cookieName]);
+  /* The browser's Accept-Language is deliberately NOT consulted: the market's
+     own language is the default, and a visitor who wants another one picks it.
+     Reading the browser would hand English to every German visitor running an
+     English-language OS, which is the opposite of what a local market page is
+     for. The choice is remembered per market in `odd_lang_<market>`. */
   const language = allowed.includes(requested)
     ? requested
     : allowed.includes(saved)

@@ -6,6 +6,7 @@ import {
   getMarket,
   getTopPicks,
 } from "@/lib/catalog";
+import { countryName, getLanguage, t } from "@/lib/i18n";
 import { CategoryIcon } from "@/components/ui/CategoryIcon";
 import { SectionHeader } from "@/components/site/SectionHeader";
 import { InterestSignup } from "@/components/site/InterestSignup";
@@ -17,10 +18,11 @@ export async function generateMetadata({
 }: PageProps<"/[market]">): Promise<Metadata> {
   const { market } = await params;
   const info = getMarket(market);
-  const country = info?.country ?? "your market";
+  const language = await getLanguage(market);
+  const country = info ? countryName(market, language) : t(language, "app.yourMarket");
   return {
-    title: `Checked deals in ${country}`,
-    description: `Check here before you buy. We compare price signal, product rating and seller confidence across ${country} retailers, and only list what clears the bar.`,
+    title: t(language, "app.home.metaTitle", { country }),
+    description: t(language, "app.home.metaDescription", { country }),
     alternates: { canonical: `/${market}` },
   };
 }
@@ -28,6 +30,8 @@ export async function generateMetadata({
 export default async function MarketHome({ params }: PageProps<"/[market]">) {
   const { market } = await params;
   const info = getMarket(market);
+  const language = await getLanguage(market);
+  const country = info ? countryName(market, language) : t(language, "app.yourMarket");
 
   /* The homepage is the catalog now, not the daily drop: it leads with search
      and the best-scoring picks. The drop still runs on its own schedule and
@@ -42,15 +46,13 @@ export default async function MarketHome({ params }: PageProps<"/[market]">) {
     return (
       <div className="mx-auto max-w-2xl px-4 py-24 text-center sm:px-6">
         <p className="text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-fg-subtle">
-          {info?.country ?? "Your market"}
+          {country}
         </p>
         <h1 className="mt-4 text-3xl font-bold tracking-tight text-fg sm:text-4xl">
-          Checking today&apos;s picks
+          {t(language, "app.home.emptyTitle")}
         </h1>
         <p className="mt-4 text-base leading-relaxed text-fg-muted">
-          We haven&apos;t published checked deals for this market yet. No sample
-          prices or products are shown while we verify the catalog — check back
-          shortly.
+          {t(language, "app.home.emptyText")}
         </p>
       </div>
     );
@@ -65,18 +67,16 @@ export default async function MarketHome({ params }: PageProps<"/[market]">) {
       >
         <div className="rounded-card bg-graphite p-7 text-white sm:p-10 lg:p-12">
           <p className="text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-white/60">
-            Every listing in {info?.country ?? "your market"}, checked before it
-            is shown
+            {t(language, "app.home.eyebrow", { country })}
           </p>
           <h1
             id="hero-title"
             className="mt-4 max-w-lg text-4xl font-bold leading-[1.05] tracking-tight sm:text-5xl lg:text-6xl"
           >
-            Check here before you buy.
+            {t(language, "app.home.title")}
           </h1>
           <p className="mt-5 max-w-md text-base leading-relaxed text-white/75">
-            We compare local prices, product quality and seller signals, so your
-            first stop before buying is a smarter one.
+            {t(language, "app.home.lede")}
           </p>
 
           <div className="mt-8 flex flex-wrap gap-3">
@@ -84,22 +84,22 @@ export default async function MarketHome({ params }: PageProps<"/[market]">) {
               href={`/${market}/search`}
               className="inline-flex h-14 cursor-pointer items-center gap-2 rounded-full bg-lime px-7 text-base font-semibold text-ink transition-opacity hover:opacity-88 active:scale-[0.98]"
             >
-              Browse checked deals
+              {t(language, "app.home.browse")}
               <ArrowRight size={18} weight="bold" aria-hidden="true" />
             </Link>
             <Link
               href={`/${market}/how-we-select-deals`}
               className="inline-flex h-14 cursor-pointer items-center rounded-full border border-white/30 px-7 text-base font-semibold text-white transition-colors hover:bg-white/10"
             >
-              How we select
+              {t(language, "app.home.howWeSelect")}
             </Link>
           </div>
 
           <ul className="mt-9 flex flex-wrap gap-x-6 gap-y-2 text-sm text-white/70">
-            {["Price signal", "Product quality", "Seller confidence"].map((s) => (
-              <li key={s} className="flex items-center gap-1.5">
+            {["app.signal.price", "app.signal.quality", "app.signal.seller"].map((key) => (
+              <li key={key} className="flex items-center gap-1.5">
                 <ShieldCheck size={16} weight="fill" aria-hidden="true" className="text-lime" />
-                {s}
+                {t(language, key)}
               </li>
             ))}
           </ul>
@@ -111,7 +111,7 @@ export default async function MarketHome({ params }: PageProps<"/[market]">) {
           <div className="pointer-events-auto flex flex-col items-center">
             <DeliaTrigger variant="hero" />
             <p className="mt-3 hidden max-w-[13rem] text-center text-xs font-medium text-fg-muted lg:block">
-              Say what you need. Delia searches only the checked picks.
+              {t(language, "app.home.deliaHint")}
             </p>
           </div>
         </div>
@@ -120,27 +120,25 @@ export default async function MarketHome({ params }: PageProps<"/[market]">) {
         <div className="flex flex-col justify-between gap-8 rounded-card bg-lime p-7 sm:p-10">
           <div>
             <p className="text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-ink/60">
-              Also here
+              {t(language, "app.home.alsoHere")}
             </p>
             <h2 className="mt-3 text-3xl font-bold leading-tight tracking-tight text-ink">
-              Daily Drop
+              {t(language, "app.drop.title")}
             </h2>
             <p className="mt-4 max-w-xs text-sm leading-relaxed text-ink/75">
-              One pick a day, put through the same checks. A new one lands every
-              day at midnight UTC.
+              {t(language, "app.home.dropTeaser")}
             </p>
             <Link
               href={`/${market}/daily-drop`}
               className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-ink underline-offset-4 hover:underline"
             >
-              See the Daily Drop
+              {t(language, "app.home.seeDrop")}
               <ArrowRight size={16} weight="bold" aria-hidden="true" />
             </Link>
           </div>
 
           <p className="text-sm font-medium leading-relaxed text-ink/80">
-            OneDailyDrop does not sell products. When you choose a deal, we send
-            you to the local retailer.
+            {t(language, "app.notSeller")}
           </p>
         </div>
       </section>
@@ -149,9 +147,12 @@ export default async function MarketHome({ params }: PageProps<"/[market]">) {
       <section aria-labelledby="categories-title" className="mt-20">
         <SectionHeader
           id="categories-title"
-          eyebrow="Browse"
-          title="Explore categories"
-          action={{ href: `/${market}/search`, label: "See all deals" }}
+          eyebrow={t(language, "app.home.browseEyebrow")}
+          title={t(language, "app.home.exploreCategories")}
+          action={{
+            href: `/${market}/search`,
+            label: t(language, "app.home.seeAllDeals"),
+          }}
         />
 
         <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
@@ -166,7 +167,7 @@ export default async function MarketHome({ params }: PageProps<"/[market]">) {
                   {c.name}
                 </span>
                 <span className="text-xs text-fg-subtle tnum">
-                  {c.count} checked
+                  {t(language, "app.home.checkedCount", { count: c.count })}
                 </span>
               </Link>
             </li>
@@ -178,9 +179,12 @@ export default async function MarketHome({ params }: PageProps<"/[market]">) {
       <section aria-labelledby="best-title" className="mt-20">
         <SectionHeader
           id="best-title"
-          eyebrow="Highest scoring"
-          title="Best right now"
-          action={{ href: `/${market}/search`, label: "See all deals" }}
+          eyebrow={t(language, "app.home.bestEyebrow")}
+          title={t(language, "app.home.bestTitle")}
+          action={{
+            href: `/${market}/search`,
+            label: t(language, "app.home.seeAllDeals"),
+          }}
         />
 
         <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">

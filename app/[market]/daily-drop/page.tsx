@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, ShieldCheck } from "@phosphor-icons/react/ssr";
 import { getMarket, getTodaysDrop } from "@/lib/catalog";
+import { countryName, getLanguage, t } from "@/lib/i18n";
 import { formatDateTime } from "@/lib/format";
 import { NextDropCountdown } from "@/components/site/NextDropCountdown";
 import { SectionHeader } from "@/components/site/SectionHeader";
@@ -25,10 +26,11 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { market } = await params;
   const info = getMarket(market);
-  const country = info?.country ?? "your market";
+  const language = await getLanguage(market);
+  const country = info ? countryName(market, language) : t(language, "app.yourMarket");
   return {
-    title: "Daily Drop",
-    description: `One checked pick a day in ${country}, chosen on price signal, product rating and seller confidence.`,
+    title: t(language, "app.drop.title"),
+    description: t(language, "app.drop.metaDescription", { country }),
     alternates: { canonical: `/${market}/daily-drop` },
   };
 }
@@ -40,6 +42,8 @@ export default async function DailyDropPage({
 }) {
   const { market } = await params;
   const info = getMarket(market);
+  const language = await getLanguage(market);
+  const country = info ? countryName(market, language) : t(language, "app.yourMarket");
   const drop = await getTodaysDrop(market);
 
   /* Honest empty state rather than a crash — no sample prices or products are
@@ -49,20 +53,19 @@ export default async function DailyDropPage({
     return (
       <div className="mx-auto max-w-2xl px-4 py-24 text-center sm:px-6">
         <p className="text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-fg-subtle">
-          {info?.country ?? "Your market"}
+          {country}
         </p>
         <h1 className="mt-4 text-3xl font-bold tracking-tight text-fg sm:text-4xl">
-          No drop published yet
+          {t(language, "app.drop.emptyTitle")}
         </h1>
         <p className="mt-4 text-base leading-relaxed text-fg-muted">
-          We haven&apos;t published a checked pick for this market yet. No
-          sample prices or products are shown while we verify the catalog.
+          {t(language, "app.drop.emptyText")}
         </p>
         <Link
           href={`/${market}/search`}
           className="mt-8 inline-flex h-12 items-center gap-2 rounded-full bg-lime px-6 text-sm font-semibold text-ink transition-opacity hover:opacity-88"
         >
-          Browse checked deals
+          {t(language, "app.home.browse")}
           <ArrowRight size={16} weight="bold" aria-hidden="true" />
         </Link>
       </div>
@@ -77,31 +80,28 @@ export default async function DailyDropPage({
       >
         <div className="rounded-card bg-graphite p-7 text-white sm:p-10 lg:p-12">
           <p className="text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-white/60">
-            One genuinely good deal in {info?.country ?? "your market"}, checked
-            daily
+            {t(language, "app.drop.eyebrow", { country })}
           </p>
           <h1
             id="drop-hero-title"
             className="mt-4 max-w-lg text-4xl font-bold leading-[1.05] tracking-tight sm:text-5xl"
           >
-            Daily Drop
+            {t(language, "app.drop.title")}
           </h1>
           <p className="mt-5 max-w-md text-base leading-relaxed text-white/75">
-            One pick a day, put through the same three checks as everything else
-            in the catalog. If nothing clears the bar, we say so rather than
-            filling the slot.
+            {t(language, "app.drop.lede")}
           </p>
 
           <ul className="mt-9 flex flex-wrap gap-x-6 gap-y-2 text-sm text-white/70">
-            {["Price signal", "Product quality", "Seller confidence"].map((s) => (
-              <li key={s} className="flex items-center gap-1.5">
+            {["app.signal.price", "app.signal.quality", "app.signal.seller"].map((key) => (
+              <li key={key} className="flex items-center gap-1.5">
                 <ShieldCheck
                   size={16}
                   weight="fill"
                   aria-hidden="true"
                   className="text-lime"
                 />
-                {s}
+                {t(language, key)}
               </li>
             ))}
           </ul>
@@ -111,8 +111,9 @@ export default async function DailyDropPage({
           <div>
             <NextDropCountdown />
             <p className="mt-4 max-w-xs text-sm leading-relaxed text-ink/75">
-              A new pick lands every day at midnight UTC. Today&apos;s was
-              checked {formatDateTime(drop.checkedAt, market)}.
+              {t(language, "app.drop.landsDaily", {
+                checkedAt: formatDateTime(drop.checkedAt, market),
+              })}
             </p>
           </div>
 
@@ -120,7 +121,7 @@ export default async function DailyDropPage({
             href={`/${market}/archive`}
             className="inline-flex items-center gap-2 text-sm font-semibold text-ink underline-offset-4 hover:underline"
           >
-            See past drops
+            {t(language, "app.drop.pastDrops")}
             <ArrowRight size={16} weight="bold" aria-hidden="true" />
           </Link>
         </div>
@@ -129,8 +130,8 @@ export default async function DailyDropPage({
       <section aria-labelledby="drop-title" className="mt-20">
         <SectionHeader
           id="drop-title"
-          eyebrow="Checked today"
-          title="Today's pick"
+          eyebrow={t(language, "app.drop.checkedToday")}
+          title={t(language, "app.drop.todaysPick")}
         />
         <FeaturedDeal deal={drop} market={market} />
       </section>

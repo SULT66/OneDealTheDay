@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { getCategoriesWithCounts } from "@/lib/catalog";
+import { getLanguage, t } from "@/lib/i18n";
 import { Logo } from "./Logo";
-import { MarketBar } from "./MarketBar";
 import { SearchBox } from "./SearchBox";
 import { ThemeToggle } from "./ThemeToggle";
 import { DeliaTrigger } from "@/components/delia/DeliaTrigger";
@@ -13,11 +13,10 @@ import { DeliaTrigger } from "@/components/delia/DeliaTrigger";
  */
 export async function Header({ market }: { market: string }) {
   const categories = await getCategoriesWithCounts(market);
+  const language = await getLanguage(market);
 
   return (
     <header className="sticky top-0 z-40 bg-bg/95 backdrop-blur supports-[backdrop-filter]:bg-bg/80">
-      <MarketBar market={market} />
-
       <div className="border-b border-border">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-3 px-4 py-3 sm:flex-nowrap sm:gap-5 sm:px-6">
           <Logo market={market} />
@@ -33,7 +32,7 @@ export async function Header({ market }: { market: string }) {
           <div className="ml-auto flex shrink-0 items-center gap-2 sm:ml-0">
             <DeliaTrigger
               variant="header"
-              label="Ask Delia"
+              label={t(language, "app.header.askDelia")}
               className="hidden md:inline-flex"
             />
             <ThemeToggle />
@@ -43,7 +42,7 @@ export async function Header({ market }: { market: string }) {
 
       <div className="border-b border-border bg-surface">
         <nav
-          aria-label="Categories"
+          aria-label={t(language, "nav.categories")}
           className="mx-auto max-w-7xl px-4 sm:px-6"
         >
           <ul className="flex items-center gap-1 overflow-x-auto py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -55,7 +54,7 @@ export async function Header({ market }: { market: string }) {
                 href={`/${market}/daily-drop`}
                 className="inline-flex h-9 items-center rounded-full px-4 text-sm text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg"
               >
-                Daily Drop
+                {t(language, "app.nav.dailyDrop")}
               </Link>
             </li>
             {categories.map((c) => (

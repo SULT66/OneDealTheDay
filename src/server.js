@@ -314,7 +314,11 @@ app.post("/api/shopping-assistant/feedback", shoppingAssistantRateLimit, (req, r
 const nextOwnedPath = /^\/(?:about|how-we-select-deals|search|deal\/[^/]+|category\/[^/]+)\/?$/;
 app.use((req, res, next) => {
   const match = req.url.match(new RegExp(`^/(${marketCodes.join("|")})(?=/|\\?|$)`));
-  if (!match || req.url === `/${match[1]}`) return next();
+  /* Compare the path alone, not the whole URL: `/de` was left intact for Next
+     to render but `/de?lang=en` was not, so it lost its market segment and
+     fell through to the bare-URL Express route instead. Every link the
+     language switcher produces has that shape. */
+  if (!match || req.url.split("?")[0] === `/${match[1]}`) return next();
   const rest = req.url.slice(match[0].length) || "/";
   if (nextOwnedPath.test(rest.split("?")[0])) return next();
   req.market = normalizeMarket(match[1]);
@@ -322,11 +326,29 @@ app.use((req, res, next) => {
   next();
 });
 app.use((req, res, next) => {
-  const marketCode = req.market || marketFromIp(req).code;
+  /* `req.market` is only set for paths the middleware above rewrote. A bare
+     `/de` (or `/de?lang=en`) is handed to Next untouched, so the market has to
+     be read back off the path here — otherwise the market resolves from the IP
+     address and a German visitor's page is labelled with someone else's
+     language. */
+  const pathMarket = normalizeMarket(
+    (req.url.split("?")[0].match(new RegExp(`^/(${marketCodes.join("|")})$`)) || [])[1] || ""
+  );
+  const marketCode = req.market || pathMarket || marketFromIp(req).code;
   resolveLanguage(req, res, marketCode);
   if ((req.method === "GET" || req.method === "HEAD") && req.language !== defaultLanguages[marketCode]) {
     res.set("X-Robots-Tag", "noindex, follow");
   }
+  /* The Next.js pages are rendered by this same process (see handleNextRequest
+     at the bottom of this file), but a React server component cannot reach
+     `req`. These two request headers are how the resolved market and language
+     cross that boundary — lib/i18n.ts reads them back out via `headers()`. */
+  req.headers["x-odd-market"] = marketCode;
+  req.headers["x-odd-language"] = req.language;
+  /* The language switcher has to send the visitor back to the page they are
+     on, and `req.url` has already had the market prefix stripped by the
+     middleware above, so the original is passed through as well. */
+  req.headers["x-odd-path"] = String(req.originalUrl || "/");
   next();
 });
 app.use((req, res, next) => {
