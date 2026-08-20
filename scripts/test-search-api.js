@@ -93,10 +93,20 @@ assert(!availableOnly.products.some(item => item.id === 7), "Default availabilit
 const appSource = fs.readFileSync(path.join(__dirname, "..", "app.js"), "utf8");
 const serverSource = fs.readFileSync(path.join(__dirname, "..", "src", "server.js"), "utf8");
 const workflowSource = fs.readFileSync(path.join(__dirname, "..", ".github", "workflows", "production-verify.yml"), "utf8");
+const deploySource = fs.readFileSync(path.join(__dirname, "..", ".github", "workflows", "deploy-azure.yml"), "utf8");
+const releaseSource = fs.readFileSync(path.join(__dirname, "..", "src", "release.js"), "utf8");
 assert(appSource.includes('app.get("/api/search"'), "The public Search API route is not registered");
 assert(appSource.includes("pagination:result.pagination") && appSource.includes("facets:result.facets"), "The Search API contract is missing pagination or facets");
 assert(appSource.includes("X-Robots-Tag") && appSource.includes("noindex, nofollow"), "Search API responses are not protected from indexing");
-assert(workflowSource.includes("require('./src/release').RELEASE_ID"), "Production verification is pinned to a stale release string");
+// The point of this assertion is that the verification must compare against
+// the release actually shipped, not a value living in the repository. Reading
+// src/release.js used to satisfy that; it stopped doing so once RELEASE_ID
+// became a hand-edited constant nobody bumped, so the check matched whatever
+// Azure happened to be serving. The deploy now stamps the commit into the
+// package and the verification compares against that commit instead.
+assert(workflowSource.includes('expected_release="${GITHUB_SHA}"'), "Production verification is pinned to a stale release string instead of the deployed commit");
+assert(deploySource.includes('echo "${GITHUB_SHA}" > .release-sha'), "The deploy does not stamp the commit it shipped, so a stale package cannot be detected");
+assert(releaseSource.includes(".release-sha"), "src/release.js ignores the stamp written by the deploy");
 assert(serverSource.includes("data-results-ui=\"facets-sorting-badges-v1\""), "Day 10 results UI marker is missing");
 assert(serverSource.includes("searchCatalogProducts(rows, options)"), "Results UI does not share the deterministic Search API engine");
 assert(serverSource.includes("data-results-filters") && serverSource.includes("search-badge-match"), "Facets or transparent result badges are missing");
