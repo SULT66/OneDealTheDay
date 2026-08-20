@@ -3,6 +3,31 @@
 // Register catalog mode safeguards before src/server adds express.static();
 // the market homepage itself is now rendered by the Next.js frontend (see
 // the bottom of src/server.js), not here.
+/**
+ * A rejected promise nobody catches terminates the process in Node 15 and
+ * later. In Express 4 an async route handler that throws produces exactly
+ * that, which is how a single failing database read took the entire site down
+ * on 2026-08-20: every page answered 500 — including the ones served here and
+ * the static legal pages — until App Service restarted the container.
+ *
+ * One broken request should stay one broken request. The reason is logged so
+ * it still reaches the Azure log stream rather than disappearing quietly.
+ */
+process.on("unhandledRejection", reason => {
+  console.error("[unhandledRejection]", reason instanceof Error ? reason.stack : reason);
+});
+
+/**
+ * An uncaught exception leaves the process in an unknown state, so this one
+ * does exit and lets the platform restart it — the usual advice, and right
+ * here too. Express catches anything a synchronous handler throws, so what
+ * reaches this point happened outside a request and is not safe to ignore.
+ */
+process.on("uncaughtException", error => {
+  console.error("[uncaughtException]", error?.stack || error);
+  process.exit(1);
+});
+
 const express = require("express");
 const helmet = require("helmet");
 const cron = require("node-cron");

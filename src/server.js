@@ -1724,6 +1724,29 @@ for (const marketCode of c.markets) {
     );
   }
 }
+/**
+ * Last in the chain, so anything a route threw synchronously or handed to
+ * next() ends up here instead of Express's default handler, which answers with
+ * the raw stack trace. Registered after every route above, including the
+ * Next.js catch-all.
+ */
+app.use((error, req, res, next) => {
+  console.error(`[request-error] ${req.method} ${req.originalUrl}`, error?.stack || error);
+  if (res.headersSent) return next(error);
+  res.status(500).set("Cache-Control", "no-store");
+  if (req.path.startsWith("/api/")) {
+    return res.json({ error: "Something went wrong on our side. Please try again." });
+  }
+  return res
+    .type("text/html")
+    .send('<!doctype html><meta charset="utf-8"><title>Something went wrong | OneDailyDrop</title>' +
+      '<style>body{font:16px/1.6 system-ui,sans-serif;margin:15vh auto;max-width:32rem;padding:0 1.5rem;color:#1a1a1a}' +
+      'a{color:inherit}</style>' +
+      '<h1>Something went wrong on our side.</h1>' +
+      '<p>This page could not be built just now. Nothing is wrong with your request — please try again in a moment.</p>' +
+      `<p><a href="${marketPath(req.market || "us")}">Back to the deals</a></p>`);
+});
+
 (async () => {
   backfillBrands();
   await nextApp.prepare();

@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node app.js",
     "refresh": "node src/refresh-cli.js",
-    "test": "node scripts/test-ranking-integrity.js && node scripts/test-catalog-taxonomy.js && node scripts/test-ranking-validation.js && node scripts/test-dedup-rules.js && node scripts/test-price-snapshots.js && node scripts/test-analytics-baseline.js && node scripts/test-search-api.js && node scripts/test-search-intent.js && node scripts/test-product-offers.js && node scripts/validate-production-catalog.js && node scripts/test-product-presentation.js && node scripts/test-shopping-assistant.js && node scripts/test-delia-chat.js && node scripts/test-editorial-brief.js && node scripts/test-full-automation.js && node scripts/test-ebay-account-deletion.js && node scripts/test-ebay-browse.js",
+    "test": "node scripts/test-resilience.js && node scripts/test-ranking-integrity.js && node scripts/test-catalog-taxonomy.js && node scripts/test-ranking-validation.js && node scripts/test-dedup-rules.js && node scripts/test-price-snapshots.js && node scripts/test-analytics-baseline.js && node scripts/test-search-api.js && node scripts/test-search-intent.js && node scripts/test-product-offers.js && node scripts/validate-production-catalog.js && node scripts/test-product-presentation.js && node scripts/test-shopping-assistant.js && node scripts/test-delia-chat.js && node scripts/test-editorial-brief.js && node scripts/test-full-automation.js && node scripts/test-ebay-account-deletion.js && node scripts/test-ebay-browse.js",
     "test:ranking": "node scripts/test-ranking-integrity.js",
     "test:ranking-validation": "node scripts/test-ranking-validation.js",
     "test:taxonomy": "node scripts/test-catalog-taxonomy.js",
@@ -23,7 +23,8 @@
     "test:ebay": "node scripts/test-ebay-account-deletion.js && node scripts/test-ebay-browse.js",
     "test:ebay:browse": "node scripts/test-ebay-browse.js",
     "build:frontend": "next build",
-    "dev:frontend": "next dev"
+    "dev:frontend": "next dev",
+    "test:resilience": "node scripts/test-resilience.js"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",
