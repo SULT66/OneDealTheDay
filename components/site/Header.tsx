@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { getCategoriesWithCounts } from "@/lib/catalog";
-import { getLanguage, hasLanguageChoice, t } from "@/lib/i18n";
-import { languageLinks } from "@/lib/switchers";
+import { getLanguage, t } from "@/lib/i18n";
 import { Logo } from "./Logo";
 import { SearchBox } from "./SearchBox";
 import { ThemeToggle } from "./ThemeToggle";
@@ -15,11 +14,6 @@ import { DeliaTrigger } from "@/components/delia/DeliaTrigger";
 export async function Header({ market }: { market: string }) {
   const categories = await getCategoriesWithCounts(market);
   const language = await getLanguage(market);
-  /* The language choice sits in the header rather than only in the footer:
-     a visitor who lands on the wrong language should not have to scroll the
-     whole page to find the way out of it. The country switcher stays in the
-     footer — it is picked once, and usually correctly, from the IP address. */
-  const languages = hasLanguageChoice(market) ? await languageLinks(market, language) : [];
 
   return (
     <header className="sticky top-0 z-40 bg-bg/95 backdrop-blur supports-[backdrop-filter]:bg-bg/80">
@@ -36,29 +30,6 @@ export async function Header({ market }: { market: string }) {
           />
 
           <div className="ml-auto flex shrink-0 items-center gap-2 sm:ml-0">
-            {languages.length > 1 && (
-              <nav aria-label={t(language, "language.label")}>
-                <ul className="flex items-center rounded-full border border-border bg-surface p-0.5">
-                  {languages.map((option) => (
-                    <li key={option.code}>
-                      <Link
-                        href={option.href}
-                        hrefLang={option.code}
-                        aria-current={option.current ? "true" : undefined}
-                        title={option.label}
-                        className={
-                          option.current
-                            ? "inline-flex h-8 items-center rounded-full bg-lime px-3 text-xs font-semibold uppercase tracking-wide text-ink"
-                            : "inline-flex h-8 items-center rounded-full px-3 text-xs font-semibold uppercase tracking-wide text-fg-muted transition-colors hover:text-fg"
-                        }
-                      >
-                        {option.code}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              </nav>
-            )}
             <DeliaTrigger
               variant="header"
               label={t(language, "app.header.askDelia")}
