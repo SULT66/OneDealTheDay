@@ -15,9 +15,6 @@ const files = [
   "src/catalogRecovery.js",
   "src/providers/demo.js",
   "src/providers/ebay.js",
-  "src/homepage.js",
-  "src/homepageTemplate.js",
-  "src/homepage-seo.js",
   "src/shoppingAssistant.js",
   "src/shoppingAssistantPanel.js",
   "src/mailer.js",
@@ -41,9 +38,6 @@ if (app.includes("preview catalog seeded") || app.includes('provider: "demo"')) 
 if (app.includes("function unavailablePage") || app.includes("status.liveProducts === 0")) {
   throw new Error("The empty catalog still replaces the full homepage with a standalone placeholder");
 }
-if (!app.includes("return renderHomepage(req, res);")) {
-  throw new Error("Country routes do not render the full homepage");
-}
 if (!app.includes('forwardedHost === "onedailydrop.com"') || !app.includes("CANONICAL_HOST") || !app.includes("res.redirect(301")) {
   throw new Error("The apex domain is not permanently redirected to the canonical www host");
 }
@@ -54,66 +48,14 @@ if (!app.includes("responseLimit") || !app.includes("catalogRowLimit") || !app.i
   throw new Error("Production products API cannot cap large homepage responses");
 }
 
-const homepage = fs.readFileSync(path.join(root, "src/homepage.js"), "utf8");
-const homepageTemplate = fs.readFileSync(path.join(root, "src/homepageTemplate.js"), "utf8");
-const serverSource = fs.readFileSync(path.join(root, "src/server.js"), "utf8");
-const assistantPanel = fs.readFileSync(path.join(root, "src/shoppingAssistantPanel.js"), "utf8");
-for (const forbidden of ["DEMO PREVIEW", "Sample price", "VIEW PRODUCT PREVIEW", "Development preview", "no API credits are being used"]) {
-  if (homepage.includes(forbidden)) throw new Error(`Public homepage still exposes internal catalog wording: ${forbidden}`);
-}
-if (homepage.includes('content="noindex')) {
-  throw new Error("Country homepages must remain indexable in demo and live modes");
-}
-if (!homepageTemplate.includes('<meta name="robots" content="index,follow,max-image-preview:large">')) {
-  throw new Error("Country homepages are missing the required indexable robots directive");
-}
-for (const required of ['<link rel="canonical" href="${esc(canonical)}">', 'property="og:site_name"', 'name="twitter:title"', '"@type": "WebPage"', '"@type": "SearchAction"']) {
-  if (!homepage.includes(required) && !homepageTemplate.includes(required)) throw new Error(`Homepage SEO metadata is missing: ${required}`);
-}
-if (homepage.includes("shortTitle")) throw new Error("Homepage titles are still truncated");
-if (!hasLiquidGlass(homepageTemplate)) {
-  throw new Error("Server-rendered homepage is missing the Liquid Glass design system");
-}
-if (homepageTemplate.includes('class="header-search-link"') || serverSource.includes('class="header-search-link"')) {
-  throw new Error("The duplicate Search deals link is still present in the site header");
-}
-if (!homepage.includes("const featured = dailyProducts[0] || null;")) {
-  throw new Error("Homepage is missing its single Today's Drop selection");
-}
-for (const required of ["catalog-empty-featured", "home.catalogTitle", "PUBLIC_CATEGORIES"]) {
-  if (!homepage.includes(required)) throw new Error(`Homepage empty-catalog design is missing: ${required}`);
-}
-if (homepageTemplate.includes('id="category-navigation-title"') || homepageTemplate.includes('id="interestFieldset"')) {
-  throw new Error("Categories must appear only in the top dropdown, not in homepage content or subscription");
-}
-if (!homepage.includes("const moreWorthSeeing = dailyProducts.slice(1, 10);")) {
-  throw new Error("Homepage does not exclude Today's Drop from the nine additional products");
-}
-if (!homepageTemplate.includes('home.moreTitle')) {
-  throw new Error("Homepage is missing the localized checked-picks section");
-}
-if (!homepage.includes('t(language, "home.verifiedStore")') || homepage.includes('t(language, "search.products", {count})')) {
-  throw new Error("Homepage store navigation must show verification instead of catalog product counts");
-}
-if (!homepage.includes('class="rank">#${index + 1}')) {
-  throw new Error("Server-rendered additional picks do not continue with ranks #2-#10");
-}
-if ((homepageTemplate.match(/id="subscribeForm"/g) || []).length !== 1) {
-  throw new Error("Homepage must contain exactly one Daily Drop subscription form");
-}
-if (!homepage.includes("VIEW DEAL AT") || homepage.includes("SEE DEAL ON")) {
-  throw new Error("Homepage retailer actions are not using the final View Deal wording");
-}
-if (!homepage.includes("offer-facts") || !homepage.includes("price-history-link")) {
-  throw new Error("Homepage live offer details or price-history links are missing");
-}
-for (const required of ["data-shopping-assistant-open", "shoppingAssistant", "assistant.promptOne", "home.realPriceDrops", "page.pastDrops"]) {
-  if (!homepageTemplate.includes(required) && !assistantPanel.includes(required)) throw new Error(`Homepage redesign is missing: ${required}`);
-}
-for (const forbidden of ["Trending Drops", "New Drops", "Yesterday's Drops", "Evidence confidence"]) {
-  if (homepageTemplate.includes(forbidden)) throw new Error(`Homepage still exposes misleading content: ${forbidden}`);
-}
-
+/**
+ * The old server-rendered homepage (src/homepage.js, src/homepageTemplate.js,
+ * src/homepage-seo.js) is retired — the Next.js frontend (app/[market]/*)
+ * renders the market homepage now, so the wording/markup checks that used to
+ * run against those files no longer apply. `public/app.js` and
+ * `public/index.html` below are a separate, still-present static fallback
+ * and are checked as before.
+ */
 const browserApp = fs.readFileSync(path.join(root, "public/app.js"), "utf8");
 if (browserApp.includes("shortTitle")) throw new Error("Client-side titles are still truncated");
 if (!browserApp.includes("&limit=200&compact=1")) throw new Error("Homepage still downloads the complete product catalog");
@@ -165,7 +107,7 @@ if (Object.keys(demoEditorial.reasons).length !== 24 || new Set(Object.values(de
   throw new Error("Demo products do not have 24 unique editorial reasons");
 }
 for (const forbidden of ['if (isDemo(product)) return "DAILY PICK"', "Selected for its practical value and relevance to everyday shoppers."]) {
-  if (homepage.includes(forbidden) || browserApp.includes(forbidden)) {
+  if (browserApp.includes(forbidden)) {
     throw new Error(`Generic demo-card wording is still present: ${forbidden}`);
   }
 }
@@ -300,19 +242,12 @@ if (!server.includes('aria-controls="mainNavigation"') || !server.includes('id="
 for (const required of ['id="price-history"', "retailer-detail-grid", '"product.viewDealAt"']) {
   if (!server.includes(required)) throw new Error(`Product deal page is missing: ${required}`);
 }
-const homepageSeo = fs.readFileSync(path.join(root, "src/homepage-seo.js"), "utf8");
 const i18n = fs.readFileSync(path.join(root, "src/i18n.js"), "utf8");
 for (const required of ['us: ["en", "es"]', 'ca: ["en", "fr"]', 'fr: ["fr", "en"]', 'de: ["de", "en"]', "resolveLanguage", "languageSwitcher"]) {
   if (!i18n.includes(required)) throw new Error(`Localization behavior is missing: ${required}`);
 }
 if (!i18n.includes("OneDailyDrop does not sell products.")) {
   throw new Error("The homepage does not explain the retailer handoff");
-}
-if (!homepageSeo.includes('/<section class="confidence-section">[\\s\\S]*?<\\/section>/')) {
-  throw new Error("The repeated trust/score explanation is not removed");
-}
-for (const required of ["marketFromRequest", "alternateLinks", "window.__ODD_MARKET__", "noindex,follow", "imageConnectionHints"]) {
-  if (!homepageSeo.includes(required)) throw new Error(`Country homepage SEO behavior is missing: ${required}`);
 }
 if (!i18n.includes("selected automatically from your IP location")) {
   throw new Error("Country homepage location explanation is missing");
@@ -334,9 +269,6 @@ if (markets.codes.join(",") !== "us,ca,uk,fr,de") {
 const accountScript = fs.readFileSync(path.join(root, "public/account.js"), "utf8");
 if (!accountScript.includes("form.reset()")) throw new Error("Auth fields are not cleared when switching modes");
 if (!accountScript.includes("updatePasswordRules")) throw new Error("Password requirements UI is missing");
-for (const required of ["home.searchTitle", "home.makeHabit", "home.scoreEyebrow", "home.pastEyebrow"]) {
-  if (!homepageTemplate.includes(required)) throw new Error(`Localized homepage content is missing: ${required}`);
-}
 
 const trustPages = [
   "about.html",

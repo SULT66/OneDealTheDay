@@ -1,6 +1,8 @@
 // Bluehost cPanel / Phusion Passenger entry point.
 // Runtime restart marker: compact homepage catalog payload, August 13, 2026.
-// Register catalog mode safeguards and the SEO homepage before src/server adds express.static().
+// Register catalog mode safeguards before src/server adds express.static();
+// the market homepage itself is now rendered by the Next.js frontend (see
+// the bottom of src/server.js), not here.
 const express = require("express");
 const helmet = require("helmet");
 const cron = require("node-cron");
@@ -8,8 +10,7 @@ const db = require("./src/db");
 const config = require("./src/config");
 const { localizeProduct } = require("./src/demoTranslations");
 const { presentProduct } = require("./src/productPresentation");
-const renderHomepage = require("./src/homepage-seo");
-const { codes: marketCodes, normalizeMarket, marketFromIp, marketFromRequest, marketPath } = require("./src/markets");
+const { codes: marketCodes, normalizeMarket, marketFromIp, marketPath } = require("./src/markets");
 const { resolveLanguage } = require("./src/i18n");
 const { sourceSql, isPublicProduct } = require("./src/publicCatalog");
 const { enabledProviders } = require("./src/providers/registry");
@@ -315,11 +316,6 @@ function expressWithHomepage(...args) {
   app.get("/", (req, res) => {
     res.set("Cache-Control", "private, no-store");
     res.redirect(302, marketPath(marketFromIp(req).code));
-  });
-
-  app.get(`/:market(${marketCodes.join("|")})`, (req, res) => {
-    req.market = marketFromRequest(req).code;
-    return renderHomepage(req, res);
   });
 
   return app;

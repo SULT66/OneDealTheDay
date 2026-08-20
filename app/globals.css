@@ -1,0 +1,233 @@
+@import "tailwindcss";
+
+/* ============================================================
+   OneDailyDrop design tokens
+   Palette from the brand reference:
+   lime #B8EC44 · ink #010101 · graphite #434343 · mist #F6F6F6
+   Every token gets its light value here on bare :root first,
+   so no color is ever defined for the first time inside a
+   media query or a [data-theme] block.
+   ============================================================ */
+
+:root {
+  --lime: #b8ec44;
+  --lime-deep: #9bd022;
+  --ink: #010101;
+  --graphite: #434343;
+  --mist: #f6f6f6;
+
+  /* semantic surfaces */
+  --bg: var(--mist);
+  --surface: #ffffff;
+  --surface-2: #ffffff;
+  --surface-inverse: var(--ink);
+
+  /* semantic text */
+  --fg: var(--ink);
+  --fg-muted: #5c5c5c;
+  /* Dark enough to clear 4.5:1 on both surfaces it is used over — white cards
+     and the #f6f6f6 page. #7a7a7a looked right but measured 3.97 on the page
+     background, which fails for the eyebrow labels and the footer line. */
+  --fg-subtle: #6b6b6b;
+  --fg-on-inverse: #ffffff;
+  --fg-on-lime: var(--ink);
+
+  --border: #e6e6e6;
+  --border-strong: #d2d2d2;
+
+  --accent: var(--lime);
+  --accent-fg: var(--ink);
+
+  --success: #1f7a3d;
+  --warning: #9a6a00;
+  --danger: #c0331f;
+
+  --ring: var(--ink);
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.04), 0 8px 24px -12px rgb(0 0 0 / 0.12);
+  --shadow-lift: 0 2px 4px rgb(0 0 0 / 0.06), 0 18px 40px -18px rgb(0 0 0 / 0.22);
+
+  /* spacing rhythm — 4/8 scale, "standard" density */
+  --space-section: 5rem;
+  --space-block: 2.5rem;
+
+  --radius-card: 1.5rem;
+  --radius-tile: 1.25rem;
+
+  color-scheme: light;
+}
+
+/* Dark theme: same token names, re-pointed. Guarded so an explicit
+   light choice always wins over the OS preference. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0c0c0c;
+    --surface: #161616;
+    --surface-2: #1e1e1e;
+    --surface-inverse: #ffffff;
+
+    --fg: #f2f2f2;
+    --fg-muted: #b0b0b0;
+    --fg-subtle: #8f8f8f;
+    --fg-on-inverse: var(--ink);
+
+    --border: #2a2a2a;
+    --border-strong: #3a3a3a;
+
+    --success: #64d98a;
+    --warning: #e8b64c;
+    --danger: #ff7a68;
+
+    --ring: var(--lime);
+    --shadow-card: 0 1px 2px rgb(0 0 0 / 0.5), 0 8px 24px -12px rgb(0 0 0 / 0.7);
+    --shadow-lift: 0 2px 4px rgb(0 0 0 / 0.5), 0 18px 40px -18px rgb(0 0 0 / 0.8);
+
+    color-scheme: dark;
+  }
+}
+
+/* Explicit toggle wins in both directions. */
+:root[data-theme="dark"] {
+  --bg: #0c0c0c;
+  --surface: #161616;
+  --surface-2: #1e1e1e;
+  --surface-inverse: #ffffff;
+
+  --fg: #f2f2f2;
+  --fg-muted: #b0b0b0;
+  --fg-subtle: #8f8f8f;
+  --fg-on-inverse: var(--ink);
+
+  --border: #2a2a2a;
+  --border-strong: #3a3a3a;
+
+  --success: #64d98a;
+  --warning: #e8b64c;
+  --danger: #ff7a68;
+
+  --ring: var(--lime);
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.5), 0 8px 24px -12px rgb(0 0 0 / 0.7);
+  --shadow-lift: 0 2px 4px rgb(0 0 0 / 0.5), 0 18px 40px -18px rgb(0 0 0 / 0.8);
+
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-lime: var(--lime);
+  --color-lime-deep: var(--lime-deep);
+  --color-ink: var(--ink);
+  --color-graphite: var(--graphite);
+  --color-mist: var(--mist);
+
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-inverse: var(--surface-inverse);
+
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-subtle: var(--fg-subtle);
+  --color-fg-on-inverse: var(--fg-on-inverse);
+  --color-fg-on-lime: var(--fg-on-lime);
+
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+
+  --color-accent: var(--accent);
+  --color-accent-fg: var(--accent-fg);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+
+  --radius-card: var(--radius-card);
+  --radius-tile: var(--radius-tile);
+
+  --shadow-card: var(--shadow-card);
+  --shadow-lift: var(--shadow-lift);
+
+  --font-sans: var(--font-outfit);
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-outfit), ui-sans-serif, system-ui, sans-serif;
+  /* Prices, scores and the countdown sit in columns — tabular figures
+     keep them from jittering as digits change. */
+  font-variant-numeric: normal;
+}
+
+/* Numbers that live in aligned columns or tick every second. */
+.tnum {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+/* Visible focus everywhere, never removed. */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 3px solid var(--ring);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Long product titles and eBay seller handles must reflow, not overflow. */
+.wrap-anywhere {
+  overflow-wrap: anywhere;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Delia's listening ring. Paused for reduced-motion by the rule above. */
+@keyframes delia-pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  70% {
+    transform: scale(1.55);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1.55);
+    opacity: 0;
+  }
+}
+
+.delia-pulse::before,
+.delia-pulse::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: var(--lime);
+  animation: delia-pulse 2.4s ease-out infinite;
+  z-index: -1;
+}
+
+.delia-pulse::after {
+  animation-delay: 1.2s;
+}
+
+/* Entrance stagger for card grids (Standard motion tier). */
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.rise-in {
+  animation: rise-in 380ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}

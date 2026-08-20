@@ -13,7 +13,6 @@
     "report:ranking-validation": "node scripts/report-ranking-validation.js",
     "test:dedup": "node scripts/test-dedup-rules.js",
     "test:automation": "node scripts/test-full-automation.js",
-    "test:seo": "node scripts/test-seo-routes.js",
     "test:analytics": "node scripts/test-analytics-baseline.js",
     "test:search": "node scripts/test-search-api.js && node scripts/test-search-intent.js",
     "test:offers": "node scripts/test-product-offers.js",
@@ -22,17 +21,31 @@
     "build": "node scripts/validate-production-catalog.js && node scripts/test-editorial-brief.js && node scripts/test-security-readiness.js",
     "test:security": "node scripts/test-security-readiness.js",
     "test:ebay": "node scripts/test-ebay-account-deletion.js && node scripts/test-ebay-browse.js",
-    "test:ebay:browse": "node scripts/test-ebay-browse.js"
+    "test:ebay:browse": "node scripts/test-ebay-browse.js",
+    "build:frontend": "next build",
+    "dev:frontend": "next dev"
   },
   "dependencies": {
+    "@phosphor-icons/react": "^2.1.10",
     "better-sqlite3": "^12.11.1",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "geoip-lite": "^2.0.3",
     "helmet": "^8.0.0",
+    "next": "16.3.1",
     "node-cron": "^3.0.3",
     "openai": "^7.4.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
     "stripe": "^22.3.2"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "tailwindcss": "^4",
+    "typescript": "^5"
   },
   "engines": {
     "node": ">=20"

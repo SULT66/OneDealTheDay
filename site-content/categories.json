@@ -1,0 +1,90 @@
+[
+  {
+    "slug": "office",
+    "name": "Office",
+    "noun": "office pick",
+    "nounPlural": "office picks",
+    "icon": "Desktop",
+    "blurb": "Desk tools, organisers and small electronics for the workspace."
+  },
+  {
+    "slug": "tools-diy",
+    "name": "Tools & DIY",
+    "noun": "tool",
+    "nounPlural": "tools",
+    "icon": "Wrench",
+    "blurb": "Power tools, hand tools, batteries and workshop kit."
+  },
+  {
+    "slug": "home-kitchen",
+    "name": "Home & Kitchen",
+    "noun": "home & kitchen pick",
+    "nounPlural": "home & kitchen picks",
+    "icon": "CookingPot",
+    "blurb": "Cookware, small appliances and the everyday things a home runs on."
+  },
+  {
+    "slug": "electronics",
+    "name": "Electronics",
+    "noun": "electronics deal",
+    "nounPlural": "electronics deals",
+    "icon": "Television",
+    "blurb": "TVs, smart home, audio and everyday consumer tech."
+  },
+  {
+    "slug": "mattresses-sleep",
+    "name": "Mattresses & Sleep",
+    "noun": "mattress",
+    "nounPlural": "mattresses",
+    "icon": "Bed",
+    "blurb": "Mattresses, toppers and bed bases, checked against their real reference price."
+  },
+  {
+    "slug": "furniture",
+    "name": "Furniture",
+    "noun": "furniture deal",
+    "nounPlural": "furniture deals",
+    "icon": "Armchair",
+    "blurb": "Sofas, desks, shelving and storage for every room."
+  },
+  {
+    "slug": "pet-supplies",
+    "name": "Pet Supplies",
+    "noun": "pet supply",
+    "nounPlural": "pet supplies",
+    "icon": "PawPrint",
+    "blurb": "Food, grooming and gear for the other members of the household."
+  },
+  {
+    "slug": "travel",
+    "name": "Travel",
+    "noun": "travel pick",
+    "nounPlural": "travel picks",
+    "icon": "SuitcaseRolling",
+    "blurb": "Luggage, packing and the small things that save a trip."
+  },
+  {
+    "slug": "automotive",
+    "name": "Automotive",
+    "noun": "car accessory",
+    "nounPlural": "car accessories",
+    "icon": "Car",
+    "blurb": "Maintenance, cleaning and in-car gear."
+  },
+  {
+    "slug": "bikes-mobility",
+    "name": "Bikes & Mobility",
+    "noun": "bike & mobility pick",
+    "nounPlural": "bikes & mobility picks",
+    "icon": "Bicycle",
+    "blurb": "E-bikes, trikes and the gear that gets you there."
+  },
+  {
+    "slug": "gifts",
+    "name": "Gifts",
+    "noun": "gift idea",
+    "nounPlural": "gift ideas",
+    "icon": "Gift",
+    "blurb": "Checked picks worth giving, not just buying."
+  }
+]
