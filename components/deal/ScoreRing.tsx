@@ -1,4 +1,5 @@
 import { cn } from "@/lib/cn";
+import { t } from "@/lib/i18n";
 
 /**
  * The OneDailyDrop Score as a ring.
@@ -9,15 +10,16 @@ import { cn } from "@/lib/cn";
  */
 export function ScoreRing({
   score,
+  language,
   size = 88,
   className,
-  label = "OneDailyDrop Score",
 }: {
   score: number;
+  language: string;
   size?: number;
   className?: string;
-  label?: string;
 }) {
+
   const stroke = size >= 80 ? 8 : 6;
   const radius = (size - stroke) / 2;
   const circumference = 2 * Math.PI * radius;
@@ -69,7 +71,7 @@ export function ScoreRing({
       </span>
 
       <span className="sr-only">
-        {label}: {clamped} out of 100
+        {t(language, "app.card.scoreOutOf", { score: clamped })}
       </span>
     </div>
   );

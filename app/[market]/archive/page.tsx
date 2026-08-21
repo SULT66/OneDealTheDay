@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight } from "@phosphor-icons/react/ssr";
 import { getArchive, getMarket } from "@/lib/catalog";
-import { countryName, getLanguage, t } from "@/lib/i18n";
-import { formatPrice, localeForMarket } from "@/lib/format";
+import { countryName, getLanguage, t, tagFor } from "@/lib/i18n";
+import { formatPrice } from "@/lib/format";
 import { SectionHeader } from "@/components/site/SectionHeader";
 import { DealCard } from "@/components/deal/DealCard";
 
@@ -40,13 +40,17 @@ export async function generateMetadata({
   };
 }
 
-function dayLabel(date: string, market: string) {
+function dayLabel(date: string, market: string, language: string) {
   /* Noon UTC, not midnight: a midnight timestamp formatted in a timezone west
      of UTC renders as the previous day, which would date every past drop
-     wrongly for the US markets. */
+     wrongly for the US markets.
+   *
+     The locale comes from the market AND the language — "August 20, 2026"
+     printed under a Spanish heading is the same failure as an untranslated
+     button, just harder to notice. */
   const parsed = new Date(`${date}T12:00:00Z`);
   if (Number.isNaN(parsed.getTime())) return date;
-  return parsed.toLocaleDateString(localeForMarket(market), {
+  return parsed.toLocaleDateString(tagFor(market, language), {
     month: "long",
     day: "numeric",
     year: "numeric",
@@ -111,7 +115,7 @@ export default async function ArchivePage({
                   : "app.archive.dayEyebrow",
                 { count: day.picks.length },
               )}
-              title={dayLabel(day.date, market)}
+              title={dayLabel(day.date, market, language)}
             />
             <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {day.picks.map((pick, index) => (

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowUpRight, Check } from "@phosphor-icons/react/ssr";
 import { getCategory } from "@/lib/catalog";
+import { categoryName, getLanguage, t } from "@/lib/i18n";
 import { formatDateTime, retailerLabel } from "@/lib/format";
 import type { Deal } from "@/lib/types";
 import { ProductImage } from "@/components/ui/ProductImage";
@@ -16,7 +17,7 @@ import { TrustSignals } from "./TrustSignals";
  * the site exists, so it carries the full argument: score, price evidence, why
  * it was picked, and who it ships from.
  */
-export function FeaturedDeal({
+export async function FeaturedDeal({
   deal,
   market,
 }: {
@@ -24,6 +25,7 @@ export function FeaturedDeal({
   market: string;
 }) {
   const category = getCategory(deal.category);
+  const language = await getLanguage(market);
 
   return (
     <article className="overflow-hidden rounded-card border border-border bg-surface shadow-card">
@@ -40,7 +42,7 @@ export function FeaturedDeal({
           <div className="absolute left-5 top-5 flex flex-wrap gap-2">
             <Pill tone="solid">Today&apos;s #1 pick</Pill>
             {deal.seller.positivePct >= 98 && (
-              <Pill tone="accent">Established seller</Pill>
+              <Pill tone="accent">{t(language, "product.establishedSeller")}</Pill>
             )}
           </div>
         </div>
@@ -49,30 +51,31 @@ export function FeaturedDeal({
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
               <p className="text-[0.7rem] font-semibold uppercase tracking-[0.16em] text-fg-subtle">
-                {category?.name ?? deal.category} ·{" "}
+                {category ? categoryName(category.name, language) : deal.category} ·{" "}
                 {retailerLabel(deal.retailer)}
               </p>
               <h3 className="mt-2 text-xl font-bold leading-tight tracking-tight text-fg sm:text-2xl">
                 {deal.title}
               </h3>
             </div>
-            {deal.score !== null && <ScoreRing score={deal.score} size={82} />}
+            {deal.score !== null && <ScoreRing score={deal.score} language={language} size={82} />}
           </div>
 
-          <Rating value={deal.rating} count={deal.reviewCount} />
+          <Rating value={deal.rating} count={deal.reviewCount} language={language} />
 
           <PriceBlock
             price={deal.price}
             referencePrice={deal.referencePrice}
             currency={deal.currency}
             market={market}
+            language={language}
             size="lg"
           />
 
           {deal.whyWePicked.length > 0 && (
             <div>
               <h4 className="text-[0.7rem] font-semibold uppercase tracking-[0.16em] text-fg-subtle">
-                Why we picked it
+                {t(language, "page.whyPicked")}
               </h4>
               <ul className="mt-2.5 space-y-1.5">
                 {deal.whyWePicked.slice(0, 4).map((reason) => (
@@ -90,7 +93,7 @@ export function FeaturedDeal({
             </div>
           )}
 
-          <TrustSignals deal={deal} />
+          <TrustSignals deal={deal} language={language} />
 
           <div className="mt-auto flex flex-col gap-3 pt-2 sm:flex-row">
             <a
@@ -106,7 +109,7 @@ export function FeaturedDeal({
               href={`/${market}/deal/${deal.id}`}
               className="inline-flex h-14 cursor-pointer items-center justify-center rounded-full border border-border-strong px-6 text-base font-semibold text-fg transition-colors hover:bg-surface-2"
             >
-              Full breakdown
+              {t(language, "app.deal.fullBreakdown")}
             </Link>
           </div>
 
@@ -116,7 +119,7 @@ export function FeaturedDeal({
             </p>
             <DeliaTrigger
               variant="inline"
-              label="Ask Delia about this"
+              label={t(language, "app.deal.askAboutThis")}
               seed={`Is ${deal.title} a good price?`}
             />
           </div>

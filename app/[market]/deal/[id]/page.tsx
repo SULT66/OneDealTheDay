@@ -8,6 +8,7 @@ import {
   Warning,
 } from "@phosphor-icons/react/ssr";
 import { getCategory, getDeal, getMarket, getRelated } from "@/lib/catalog";
+import { categoryName, getLanguage, t } from "@/lib/i18n";
 import {
   discountPercent,
   formatDateTime,
@@ -54,6 +55,8 @@ export default async function DealPage({
   if (!deal) notFound();
 
   const category = getCategory(deal.category);
+  const language = await getLanguage(market);
+  const localCategory = category ? categoryName(category.name, language) : deal.category;
   const related = await getRelated(market, deal, 4);
   const off = discountPercent(deal.price, deal.referencePrice);
   const info = getMarket(market);
@@ -97,11 +100,11 @@ export default async function DealPage({
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
 
-      <nav aria-label="Breadcrumb" className="mb-6">
+      <nav aria-label={t(language, "app.list.breadcrumb")} className="mb-6">
         <ol className="flex flex-wrap items-center gap-1.5 text-sm text-fg-muted">
           <li>
             <Link href={`/${market}`} className="hover:text-fg">
-              Home
+              {t(language, "page.home")}
             </Link>
           </li>
           <li aria-hidden="true">
@@ -112,7 +115,7 @@ export default async function DealPage({
               href={`/${market}/category/${deal.category}`}
               className="hover:text-fg"
             >
-              {category?.name ?? deal.category}
+              {localCategory}
             </Link>
           </li>
           <li aria-hidden="true">
@@ -136,7 +139,7 @@ export default async function DealPage({
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <Pill tone="muted">
-                {category?.name ?? deal.category} ·{" "}
+                {localCategory} ·{" "}
                 {retailerLabel(deal.retailer)}
               </Pill>
               {deal.rank === 1 && <Pill tone="solid">Today&apos;s #1 pick</Pill>}
@@ -152,18 +155,18 @@ export default async function DealPage({
           </div>
 
           <div className="flex flex-wrap items-center gap-x-8 gap-y-4 rounded-card border border-border bg-surface p-5">
-            {deal.score !== null && <ScoreRing score={deal.score} size={92} />}
+            {deal.score !== null && <ScoreRing score={deal.score} language={language} size={92} />}
             <div className="space-y-2">
               <div>
                 <p className="text-[0.7rem] font-semibold uppercase tracking-[0.16em] text-fg-subtle">
-                  Product rating
+                  {t(language, "product.productRating")}
                 </p>
-                <Rating value={deal.rating} count={deal.reviewCount} />
+                <Rating value={deal.rating} count={deal.reviewCount} language={language} />
               </div>
               {deal.seller.ratingsCount > 0 && (
                 <div>
                   <p className="text-[0.7rem] font-semibold uppercase tracking-[0.16em] text-fg-subtle">
-                    Seller rating
+                    {t(language, "product.sellerRating")}
                   </p>
                   <p className="text-sm font-semibold text-fg tnum">
                     {deal.seller.positivePct.toFixed(1)}% positive
@@ -178,10 +181,11 @@ export default async function DealPage({
             referencePrice={deal.referencePrice}
             currency={deal.currency}
             market={market}
+            language={language}
             size="lg"
           />
 
-          <TrustSignals deal={deal} />
+          <TrustSignals deal={deal} language={language} />
 
           <div className="flex flex-col gap-3 sm:flex-row">
             <a
@@ -269,7 +273,7 @@ export default async function DealPage({
                     aria-hidden="true"
                     className="text-lime-deep"
                   />
-                  Verified strengths
+                  {t(language, "app.deal.verifiedStrengths")}
                 </h3>
                 <ul className="mt-4 space-y-2.5">
                   {deal.strengths.map((s) => (
@@ -291,7 +295,7 @@ export default async function DealPage({
                     aria-hidden="true"
                     className="text-warning"
                   />
-                  Watch-outs
+                  {t(language, "assistant.drawbacks")}
                 </h3>
                 <ul className="mt-4 space-y-2.5">
                   {deal.watchOuts.map((w) => (
@@ -308,7 +312,7 @@ export default async function DealPage({
 
         {(deal.whyWePicked.length > 0 || deal.score !== null) && (
           <div className="mt-6 rounded-card border border-border bg-surface p-6">
-            <h3 className="text-base font-bold text-fg">Why it made the list</h3>
+            <h3 className="text-base font-bold text-fg">{t(language, "app.deal.whyItMadeTheList")}</h3>
             <ul className="mt-4 space-y-2.5">
               {deal.whyWePicked.map((r) => (
                 <li key={r} className="flex gap-2.5 text-sm text-fg-muted">
@@ -370,7 +374,7 @@ export default async function DealPage({
             title="Related picks"
             action={{
               href: `/${market}/category/${deal.category}`,
-              label: `All ${(category?.name ?? deal.category).toLowerCase()}`,
+              label: `${t(language, "app.list.allDeals")} · ${localCategory}`,
             }}
           />
           <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">

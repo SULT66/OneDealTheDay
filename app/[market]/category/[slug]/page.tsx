@@ -8,6 +8,7 @@ import {
   getMarket,
   getMarkets,
 } from "@/lib/catalog";
+import { categoryName, countryName, getLanguage, t } from "@/lib/i18n";
 import { DealListing } from "@/components/catalog/DealListing";
 
 export function generateStaticParams() {
@@ -24,9 +25,14 @@ export async function generateMetadata({
   if (!category) return {};
 
   const info = getMarket(market);
+  const language = await getLanguage(market);
+  const country = info ? countryName(market, language) : t(language, "app.yourMarket");
   return {
-    title: `${category.name} deals in ${info?.country ?? "your market"}`,
-    description: `${category.blurb} Every pick is checked against price, product rating and seller signals.`,
+    title: t(language, "app.category.metaTitle", {
+      category: categoryName(category.name, language),
+      country,
+    }),
+    description: t(language, "app.category.metaDescription", { blurb: category.blurb }),
     alternates: { canonical: `/${market}/category/${slug}` },
   };
 }
@@ -41,6 +47,8 @@ export default async function CategoryPage({
 
   const filter = { ...filterFromSearchParams(await searchParams), category: slug };
   const deals = await getDeals(market, filter);
+  const language = await getLanguage(market);
+  const name = categoryName(category.name, language);
 
   return (
     <DealListing
@@ -49,9 +57,9 @@ export default async function CategoryPage({
       // The category is fixed by the route, so it is not a removable filter.
       filter={{ ...filter, category: undefined }}
       deals={deals}
-      title={`${category.name} deals`}
+      title={t(language, "app.category.title", { category: name })}
       intro={category.blurb}
-      crumb={category.name}
+      crumb={name}
     />
   );
 }

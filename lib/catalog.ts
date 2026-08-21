@@ -3,6 +3,7 @@ import categoriesData from "@/site-content/categories.json";
 import marketsData from "@/site-content/markets.json";
 import type { Category, Deal, DealFilter, Market } from "./types";
 import { applyFilter, sortDeals } from "./filter";
+import { categoryName } from "./i18n";
 import {
   adaptPriceHistory,
   adaptProduct,
@@ -96,9 +97,18 @@ export function getCategory(slug: string): Category | undefined {
   return categories.find((c) => c.slug === slug);
 }
 
-/** Live category slugs + counts, with local display metadata layered on. */
+/**
+ * Live category slugs + counts, with local display metadata layered on.
+ *
+ * `language` translates the display name. categories.json carries the English
+ * name only — that is display configuration, not copy — while src/i18n.js has
+ * had every category in four languages since the Express pages. Nothing here
+ * used it, so the navigation stayed in English on every translated page and
+ * switching language looked like it did nothing at all.
+ */
 export async function getCategoriesWithCounts(
   marketCode: string,
+  language?: string,
 ): Promise<Array<Category & { count: number }>> {
   const deals = await fetchMarketCatalog(marketCode);
   const counts = new Map<string, number>();
@@ -107,9 +117,10 @@ export async function getCategoriesWithCounts(
   return [...counts.entries()]
     .map(([slug, count]) => {
       const known = getCategory(slug);
-      return known
+      const named = known
         ? { ...known, count }
         : { slug, name: slug, ...FALLBACK_CATEGORY, count };
+      return language ? { ...named, name: categoryName(named.name, language) } : named;
     })
     .sort((a, b) => b.count - a.count);
 }

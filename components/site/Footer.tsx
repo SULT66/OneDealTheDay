@@ -6,8 +6,8 @@ import { countryOptions, languageLinks } from "@/lib/switchers";
 import { Logo } from "./Logo";
 
 export async function Footer({ market }: { market: string }) {
-  const categories = await getCategoriesWithCounts(market);
   const language = await getLanguage(market);
+  const categories = await getCategoriesWithCounts(market, language);
   const countries = countryOptions(market, language);
   const languages = hasLanguageChoice(market)
     ? await languageLinks(market, language)
@@ -107,7 +107,10 @@ export async function Footer({ market }: { market: string }) {
             <ul className="mt-4 space-y-2.5 text-sm">
               {countries.map((option) => (
                 <li key={option.code}>
-                  <Link
+                  {/* Full page load, same reason as the language links below:
+                      the header and footer sit in the layout, and a client-side
+                      navigation would leave them showing the old country. */}
+                  <a
                     href={option.href}
                     aria-current={option.current ? "true" : undefined}
                     className={
@@ -117,7 +120,7 @@ export async function Footer({ market }: { market: string }) {
                     }
                   >
                     {option.country}
-                  </Link>
+                  </a>
                 </li>
               ))}
             </ul>
@@ -130,7 +133,7 @@ export async function Footer({ market }: { market: string }) {
                 <ul className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-sm">
                   {languages.map((option) => (
                     <li key={option.code}>
-                      <Link
+                      <a
                         href={option.href}
                         hrefLang={option.code}
                         aria-current={option.current ? "true" : undefined}
@@ -141,7 +144,7 @@ export async function Footer({ market }: { market: string }) {
                         }
                       >
                         {option.label}
-                      </Link>
+                      </a>
                     </li>
                   ))}
                 </ul>

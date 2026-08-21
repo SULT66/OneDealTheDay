@@ -37,7 +37,7 @@ export default async function MarketHome({ params }: PageProps<"/[market]">) {
      and the best-scoring picks. The drop still runs on its own schedule and
      lives at /[market]/daily-drop — one feature here, not the whole product. */
   const picks = await getTopPicks(market, 12);
-  const categories = await getCategoriesWithCounts(market);
+  const categories = await getCategoriesWithCounts(market, language);
 
   /* Honest empty state rather than a crash — no sample prices or products are
      invented while the catalog for this market is empty (a source outage, or

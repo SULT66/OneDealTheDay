@@ -18,25 +18,51 @@ import type { DealFilter, SortKey } from "@/lib/types";
  * useSearchParams, so this component needs no Suspense boundary.
  */
 
+/* "Any" is filled in from the translated copy bag at render time; the star and
+   number labels are language-neutral already. */
 const RATING_STEPS = [
-  { value: undefined, label: "Any" },
+  { value: undefined, label: "" },
   { value: 4, label: "4★ and up" },
   { value: 4.5, label: "4.5★ and up" },
 ];
 
 const SCORE_STEPS = [
-  { value: undefined, label: "Any" },
+  { value: undefined, label: "" },
   { value: 70, label: "70+" },
   { value: 80, label: "80+" },
 ];
 
-const SORTS: Array<{ value: SortKey; label: string }> = [
-  { value: "score", label: "Best score" },
-  { value: "price-asc", label: "Price: low to high" },
-  { value: "price-desc", label: "Price: high to low" },
-  { value: "rating", label: "Highest rated" },
-  { value: "discount", label: "Biggest saving" },
-];
+/**
+ * Every visible string in this panel arrives pre-translated from the server.
+ *
+ * This is a client component, so it cannot read the request's language itself,
+ * and the labels used to be hard-coded English module constants — a filter
+ * sidebar reading "Best score / Highest rated / Clear all" beside a German
+ * heading was a large part of why switching language looked like it did
+ * nothing.
+ */
+export type FilterCopy = {
+  activeFilters: string;
+  clearAll: string;
+  removeFilter: string;
+  maximumPrice: string;
+  retailer: string;
+  productRating: string;
+  score: string;
+  belowReferenceOnly: string;
+  belowReference: string;
+  sortBy: string;
+  any: string;
+  /* Plain strings, not functions of the count. React refuses to send a function
+     across the server/client boundary, and TypeScript cannot see that — the
+     build passed and every filtered page returned a 500. The server already
+     knows both numbers, so it formats them. */
+  scoreAtLeast: string;
+  matchCount: string;
+  sorts: Record<SortKey, string>;
+};
+
+const sortOrder: SortKey[] = ["score", "price-asc", "price-desc", "rating", "discount"];
 
 export function FilterPanel({
   basePath,
@@ -45,7 +71,7 @@ export function FilterPanel({
   currency,
   retailers,
   bounds,
-  resultCount,
+  copy,
 }: {
   basePath: string;
   filter: DealFilter;
@@ -53,7 +79,7 @@ export function FilterPanel({
   currency: string;
   retailers: string[];
   bounds: { min: number; max: number };
-  resultCount: number;
+  copy: FilterCopy;
 }) {
   const router = useRouter();
 
@@ -84,11 +110,11 @@ export function FilterPanel({
     },
     filter.minScore !== undefined && {
       key: "minScore" as const,
-      label: `Score ${filter.minScore}+`,
+      label: copy.scoreAtLeast,
     },
     filter.discountedOnly && {
       key: "discountedOnly" as const,
-      label: "Below reference",
+      label: copy.belowReference,
     },
     filter.query && { key: "query" as const, label: `“${filter.query}”` },
   ].filter(Boolean) as Array<{ key: keyof DealFilter; label: string }>;
@@ -101,14 +127,14 @@ export function FilterPanel({
         <div>
           <div className="flex items-baseline justify-between gap-3">
             <h3 className="text-[0.7rem] font-semibold uppercase tracking-[0.16em] text-fg-subtle">
-              Active filters
+              {copy.activeFilters}
             </h3>
             <button
               type="button"
               onClick={() => go({ sort: filter.sort, query: filter.query })}
               className="cursor-pointer text-xs font-semibold text-fg-muted underline underline-offset-2 hover:text-fg"
             >
-              Clear all
+              {copy.clearAll}
             </button>
           </div>
           <ul className="mt-3 flex flex-wrap gap-2">
@@ -125,7 +151,7 @@ export function FilterPanel({
                 >
                   {a.label}
                   <X size={13} weight="bold" aria-hidden="true" />
-                  <span className="sr-only">Remove filter</span>
+                  <span className="sr-only">{copy.removeFilter}</span>
                 </button>
               </li>
             ))}
@@ -139,7 +165,7 @@ export function FilterPanel({
           htmlFor="filter-max-price"
           className="text-[0.7rem] font-semibold uppercase tracking-[0.16em] text-fg-subtle"
         >
-          Maximum price
+          {copy.maximumPrice}
         </label>
         <p className="mt-2 text-lg font-bold text-fg tnum">
           {formatPrice(maxValue, currency, market)}
@@ -166,7 +192,7 @@ export function FilterPanel({
       {/* retailer */}
       <fieldset>
         <legend className="text-[0.7rem] font-semibold uppercase tracking-[0.16em] text-fg-subtle">
-          Retailer
+          {copy.retailer}
         </legend>
         <div className="mt-3 flex flex-wrap gap-2">
           <ChoiceButton
@@ -192,16 +218,16 @@ export function FilterPanel({
       {/* rating */}
       <fieldset>
         <legend className="text-[0.7rem] font-semibold uppercase tracking-[0.16em] text-fg-subtle">
-          Product rating
+          {copy.productRating}
         </legend>
         <div className="mt-3 flex flex-wrap gap-2">
           {RATING_STEPS.map((s) => (
             <ChoiceButton
-              key={s.label}
+              key={String(s.value)}
               selected={filter.minRating === s.value}
               onClick={() => update({ minRating: s.value })}
             >
-              {s.label}
+              {s.label || copy.any}
             </ChoiceButton>
           ))}
         </div>
@@ -210,16 +236,16 @@ export function FilterPanel({
       {/* score */}
       <fieldset>
         <legend className="text-[0.7rem] font-semibold uppercase tracking-[0.16em] text-fg-subtle">
-          OneDailyDrop Score
+          {copy.score}
         </legend>
         <div className="mt-3 flex flex-wrap gap-2">
           {SCORE_STEPS.map((s) => (
             <ChoiceButton
-              key={s.label}
+              key={String(s.value)}
               selected={filter.minScore === s.value}
               onClick={() => update({ minScore: s.value })}
             >
-              {s.label}
+              {s.label || copy.any}
             </ChoiceButton>
           ))}
         </div>
@@ -238,7 +264,7 @@ export function FilterPanel({
           />
           <span>
             <span className="block text-sm font-semibold text-fg">
-              Below reference price only
+              {copy.belowReferenceOnly}
             </span>
             <span className="mt-0.5 block text-xs text-fg-subtle">
               Hides listings with no verified reference price to compare against.
@@ -253,7 +279,7 @@ export function FilterPanel({
           htmlFor="filter-sort"
           className="text-[0.7rem] font-semibold uppercase tracking-[0.16em] text-fg-subtle"
         >
-          Sort by
+          {copy.sortBy}
         </label>
         <select
           id="filter-sort"
@@ -261,16 +287,16 @@ export function FilterPanel({
           onChange={(e) => update({ sort: e.target.value as SortKey })}
           className="mt-2 h-12 w-full cursor-pointer rounded-full border border-border bg-surface px-4 text-sm text-fg outline-none transition-colors focus:border-border-strong"
         >
-          {SORTS.map((s) => (
-            <option key={s.value} value={s.value}>
-              {s.label}
+          {sortOrder.map((value) => (
+            <option key={value} value={value}>
+              {copy.sorts[value]}
             </option>
           ))}
         </select>
       </div>
 
       <p className="text-sm text-fg-muted tnum" role="status">
-        {resultCount} deal{resultCount === 1 ? "" : "s"} match
+        {copy.matchCount}
       </p>
     </div>
   );

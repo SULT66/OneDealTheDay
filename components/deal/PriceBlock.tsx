@@ -1,5 +1,6 @@
 import { cn } from "@/lib/cn";
 import { discountPercent, formatPrice } from "@/lib/format";
+import { t } from "@/lib/i18n";
 
 /**
  * Current price, with the reference price and saving shown only when a
@@ -12,6 +13,7 @@ export function PriceBlock({
   referencePrice,
   currency = "USD",
   market,
+  language,
   size = "md",
   className,
 }: {
@@ -19,6 +21,7 @@ export function PriceBlock({
   referencePrice: number | null;
   currency?: string;
   market?: string;
+  language: string;
   size?: "sm" | "md" | "lg";
   className?: string;
 }) {
@@ -42,7 +45,7 @@ export function PriceBlock({
             {formatPrice(referencePrice, currency, market)}
           </span>
           <span className="inline-flex items-center rounded-full bg-lime px-2.5 py-1 text-xs font-bold uppercase tracking-wide text-ink">
-            {off}% below ref.
+            {t(language, "app.card.percentBelowRef", { percent: off })}
           </span>
         </>
       )}

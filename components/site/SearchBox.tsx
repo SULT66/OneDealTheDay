@@ -10,9 +10,17 @@ import { MagnifyingGlass } from "@phosphor-icons/react";
  */
 export function SearchBox({
   market,
+  label,
+  action,
   className,
 }: {
   market: string;
+  /** Both required: this is a client component, so it cannot read the
+      language itself, and hard-coded English here was the most visible half of
+      "switching language changes nothing" — the search box sits at the top of
+      every page. */
+  label: string;
+  action: string;
   className?: string;
 }) {
   const router = useRouter();
@@ -36,14 +44,14 @@ export function SearchBox({
           aria-hidden="true"
         />
         <label htmlFor="site-search" className="sr-only">
-          Search checked deals
+          {label}
         </label>
         <input
           id="site-search"
           type="search"
           value={value}
           onChange={(e) => setValue(e.target.value)}
-          placeholder="Search checked deals"
+          placeholder={label}
           // h-full so the tap target is the whole 48px pill, not the ~23px
           // intrinsic height of the text box.
           className="h-full min-w-0 flex-1 bg-transparent text-[0.95rem] text-fg outline-none placeholder:text-fg-subtle"
@@ -52,7 +60,7 @@ export function SearchBox({
           type="submit"
           className="hidden h-9 cursor-pointer items-center rounded-full bg-surface-inverse px-4 text-sm font-medium text-fg-on-inverse transition-opacity hover:opacity-88 sm:inline-flex"
         >
-          Search
+          {action}
         </button>
       </div>
     </form>

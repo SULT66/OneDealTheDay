@@ -6,28 +6,34 @@ import {
 } from "@phosphor-icons/react/ssr";
 import { formatCount, formatPositive } from "@/lib/format";
 import type { Deal } from "@/lib/types";
+import { t } from "@/lib/i18n";
 
 /**
  * Seller, delivery, returns and stock — the four things the site checks before
  * it will recommend a listing. Each pairs an icon with a written label so the
  * meaning never rests on the glyph.
+ *
+ * `language` is required, not defaulted: these four labels sit directly beside
+ * translated copy, and an English "Sold by" under a Spanish heading is the exact
+ * failure this file had.
  */
-export function TrustSignals({ deal }: { deal: Deal }) {
+export function TrustSignals({ deal, language }: { deal: Deal; language: string }) {
   const rows = [
     {
       icon: Storefront,
-      label: "Sold by",
+      label: t(language, "product.soldBy"),
       value: `${deal.seller.name}${
         deal.seller.ratingsCount > 0
-          ? ` · ${formatPositive(deal.seller.positivePct)} of ${formatCount(
-              deal.seller.ratingsCount,
-            )} ratings`
+          ? ` · ${t(language, "app.card.sellerPositive", {
+              percent: formatPositive(deal.seller.positivePct),
+              count: formatCount(deal.seller.ratingsCount),
+            })}`
           : ""
       }`,
     },
-    { icon: Truck, label: "Delivery", value: deal.delivery },
-    { icon: ArrowUUpLeft, label: "Returns", value: deal.returns },
-    { icon: Package, label: "Availability", value: deal.availability },
+    { icon: Truck, label: t(language, "product.delivery"), value: deal.delivery },
+    { icon: ArrowUUpLeft, label: t(language, "product.returns"), value: deal.returns },
+    { icon: Package, label: t(language, "page.availability"), value: deal.availability },
   ];
 
   return (
