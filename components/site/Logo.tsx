@@ -15,7 +15,7 @@ export function Logo({ market }: { market: string }) {
     >
       <span className="relative inline-flex h-12 w-9 shrink-0 items-center justify-center">
         <Image
-          src="/brand/onedailydrop-tag.png"
+          src="/brand/onedailydrop-tag-v2.png"
           alt=""
           width={384}
           height={512}
