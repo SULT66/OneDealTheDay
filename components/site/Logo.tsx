@@ -1,8 +1,10 @@
+import Image from "next/image";
 import Link from "next/link";
 
 /**
- * Wordmark. The drop glyph is drawn inline rather than loaded as a file so it
- * inherits the theme tokens and never arrives after the text.
+ * Wordmark shared by the header and footer. The tag artwork is the same brand
+ * mark used by the favicon; keeping it here avoids a different identity in the
+ * browser tab and the site chrome.
  */
 export function Logo({ market }: { market: string }) {
   return (
@@ -11,19 +13,15 @@ export function Logo({ market }: { market: string }) {
       className="group inline-flex items-center gap-2.5"
       aria-label="OneDailyDrop — home"
     >
-      <span className="relative inline-flex h-10 w-10 items-center justify-center rounded-full bg-lime">
-        <svg
-          viewBox="0 0 24 24"
-          className="h-5 w-5 text-ink"
-          fill="none"
-          aria-hidden="true"
-        >
-          <path
-            d="M12 2.5c3.6 4.4 6.5 7.9 6.5 11.4a6.5 6.5 0 1 1-13 0C5.5 10.4 8.4 6.9 12 2.5Z"
-            fill="currentColor"
-          />
-          <circle cx="9.6" cy="14.6" r="1.7" fill="var(--lime)" />
-        </svg>
+      <span className="relative inline-flex h-12 w-9 shrink-0 items-center justify-center">
+        <Image
+          src="/brand/onedailydrop-tag.png"
+          alt=""
+          width={384}
+          height={512}
+          sizes="36px"
+          className="h-full w-full object-contain"
+        />
       </span>
       <span className="hidden leading-[1.05] sm:block">
         <span className="block text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-fg-muted">
