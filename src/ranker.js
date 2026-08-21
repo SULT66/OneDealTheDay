@@ -270,6 +270,28 @@ function isDailyPickEligible(product, options = {}) {
   if (shipping == null) return false;
   const rating = number(product.rating);
   if (rating > 0 && rating < number(options.minimumDailyRating, 4.3)) return false;
+  /* A drop candidate must be identifiable: a barcode (GTIN/UPC/EAN) or a
+     manufacturer part number.
+
+     This is the quality floor the evidence score could not provide. That score
+     reaches its 55-point bar on things we generate ourselves — our own price
+     series is 25 points, the merchant's own name 15, "in stock" 5 — so a
+     no-name gift with no rating, no reviews and no barcode scored as
+     "confident" as a 4.9-star item with 3000 seller ratings. It measured how
+     much we had written down, not how much anyone else could vouch for.
+
+     An identifier is the one thing here that points outside our own database:
+     it is what lets a rating, a competing price, or a recall notice be attached
+     to this exact item later. Without it the product cannot be checked, and
+     "check here before you buy" is the promise on the homepage.
+
+     Off by default, and deliberately so. This same function is the editorial
+     floor productPresentation.js uses to decide whether a product page may show
+     a public Deal Score, and only 214 of 2865 catalog products currently carry
+     an identifier — switching it on globally would blank the score on almost
+     every page. The drop has ten slots a day and can afford to be this strict;
+     a product page cannot. src/refresh.js opts in. */
+  if (options.requireProductIdentity === true && !exactMatchKey(product)) return false;
   const source = retailer(product);
   if (source === "ebay" && (number(product.seller_rating) < 4.8 || number(product.seller_feedback_count) < 100)) return false;
   const result = scoreProduct(product);

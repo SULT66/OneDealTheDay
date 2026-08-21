@@ -27,7 +27,19 @@ const FIELD_ALIASES = Object.freeze({
   source_group_id:["item_group_id", "parent_product_id", "source_parent_id", "group_id"],
   source_variant_id:["variant_id", "variantid", "source_variant_id"],
   seller_name:["seller_name", "seller", "merchant_name", "advertiser_name"],
-  shipping:["shipping_summary", "shipping", "delivery", "delivery_message", "delivery_cost"],
+  /* Human-readable delivery copy. `delivery_cost` deliberately does NOT belong
+     here — it is a number, and showing "4.99" as the delivery description told
+     the visitor nothing. It feeds `shipping_cost` below instead. */
+  shipping:["shipping_summary", "shipping", "delivery", "delivery_message"],
+  /* The numeric delivery charge. Without it a product can never become a Daily
+     Drop candidate: isDailyPickEligible refuses anything whose landed cost is
+     unknown, on purpose — "great price, unknown delivery" is not a deal.
+     Until this existed, every Awin feed produced shipping_cost = null for every
+     row, which silently excluded 2486 of 2865 products from the drop. */
+  shipping_cost:[
+    "shipping_cost", "delivery_cost", "delivery_price", "shipping_price",
+    "shipping_charge", "delivery_charge", "postage", "postage_cost"
+  ],
   returns:["return_summary", "returns", "return_policy"],
   availability:["availability", "stock_status", "in_stock", "stock"],
   source_updated_at:["source_updated_at", "last_updated", "updated_at", "modified_at"],
@@ -240,6 +252,53 @@ function productKey({gtin, upc, ean, mpn, model}) {
   return part ? `model:${part}` : "";
 }
 
+/**
+ * What delivery costs, and where that number came from.
+ *
+ * Order of preference:
+ *   1. a numeric delivery column in the feed — the only per-item truth;
+ *   2. the merchant's published shipping terms, configured per feed;
+ *   3. nothing, which keeps the product out of the Daily Drop.
+ *
+ * Case 3 is the default and is not a bug. A missing number must stay missing:
+ * assuming free delivery on a merchant who charges is how a comparison site
+ * starts lying to people. Configure the terms per merchant instead.
+ *
+ * The returned summary always says which of the two it was, so the page can
+ * never present a policy-derived figure as if the merchant had quoted it for
+ * this item.
+ */
+function resolveShipping(record, map, definition, price) {
+  const fromFeed = numberValue(field(record, map, "shipping_cost"));
+  const feedSummary = compactText(field(record, map, "shipping"));
+  if (fromFeed != null && fromFeed >= 0) {
+    return {
+      cost: fromFeed,
+      summary: feedSummary || (fromFeed === 0 ? "Free delivery" : `${fromFeed.toFixed(2)} delivery`),
+    };
+  }
+
+  const policy = definition?.shipping;
+  if (!policy || typeof policy !== "object") return {cost: null, summary: feedSummary};
+
+  const flat = Number(policy.flat);
+  if (!Number.isFinite(flat) || flat < 0) return {cost: null, summary: feedSummary};
+  const freeOver = Number(policy.freeOver);
+  const qualifiesForFree = Number.isFinite(freeOver) && freeOver >= 0 && Number(price) >= freeOver;
+  const cost = qualifiesForFree ? 0 : flat;
+
+  const merchant = definition.retailerName || "the merchant";
+  const described = cost === 0 ? "Free delivery" : `${cost.toFixed(2)} delivery`;
+  return {
+    cost,
+    /* Named provenance, not decoration: a visitor reading "per Tribesigns
+       delivery terms" knows this is the shop's standard policy rather than a
+       quote for this basket. */
+    summary: feedSummary || `${described} — per ${merchant} delivery terms`,
+    fromPolicy: true,
+  };
+}
+
 function allowedByFeedPolicy(product, definition) {
   const policy = definition?.feedPolicy;
   if (!policy) return true;
@@ -302,6 +361,7 @@ function normalize(record, definition, market, index, map) {
   const rawId = compactText(field(record, map, "id")) || crypto.createHash("sha256").update(`${affiliateUrl}|${title}`).digest("hex").slice(0, 24);
   const availabilityValue = compactText(field(record, map, "availability"));
   const availability = /^(?:0|false|no|out[ _-]?of[ _-]?stock|unavailable)$/i.test(availabilityValue) ? "Out of stock" : availabilityValue || "Available";
+  const shipping = resolveShipping(record, map, definition, currentPrice);
   return {
     external_id:rawId,
     product_key:productKey({gtin, upc, ean, mpn, model}),
@@ -336,7 +396,12 @@ function normalize(record, definition, market, index, map) {
     source_variant_id:compactText(field(record, map, "source_variant_id")),
     retailer_name:definition.retailerName,
     seller_name:compactText(field(record, map, "seller_name")) || definition.retailerName,
-    shipping_summary:compactText(field(record, map, "shipping")),
+    shipping_summary:shipping.summary,
+    /* null, not 0. Zero means "delivery is free and we know it"; null means
+       "we do not know", and the ranker treats the two very differently. */
+    shipping_cost:shipping.cost,
+    landed_cost:shipping.cost == null || !(currentPrice > 0) ? null : currentPrice + shipping.cost,
+    shipping_cost_from_policy:Boolean(shipping.fromPolicy),
     return_summary:compactText(field(record, map, "returns")),
     availability,
     source_availability:availabilityValue ? availability : null,
