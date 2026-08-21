@@ -8,11 +8,12 @@ const Stripe = require("stripe");
 const db = require("./db");
 const c = require("./config");
 const { refreshProducts, localDate } = require("./refresh");
+const { runLinkHealthCheck } = require("./linkHealth");
 const { detectBrand, normalizeBrand, slugifyBrand } = require("./brandDetector");
 const { reasonFor } = require("./demoEditorial");
 const { localizeProduct } = require("./demoTranslations");
 const { priceIntelligence } = require("./priceIntelligence");
-const { sourceSql, isPublicSource } = require("./publicCatalog");
+const { sourceSql, isPublicSource, uniqueProductsInOrder } = require("./publicCatalog");
 const { enabledProviders, searchForAssistant } = require("./providers/registry");
 const { coverage: retailerCoverage } = require("./retailerCatalog");
 const { presentProduct } = require("./productPresentation");
@@ -311,7 +312,7 @@ app.post("/api/shopping-assistant/feedback", shoppingAssistantRateLimit, (req, r
  * they reach the catch-all at the bottom of this file instead of being
  * rewritten back onto the old bare-URL Express routes.
  */
-const nextOwnedPath = /^\/(?:about|how-we-select-deals|search|daily-drop|archive|contact|privacy|terms|affiliate-disclosure|editorial-policy|price-disclaimer|deal\/[^/]+|category\/[^/]+)\/?$/;
+const nextOwnedPath = /^\/(?:about|how-we-select-deals|search|daily-drop|archive|contact|privacy|terms|affiliate-disclosure|editorial-policy|for-retailers|price-disclaimer|deal\/[^/]+|category\/[^/]+)\/?$/;
 app.use((req, res, next) => {
   const match = req.url.match(new RegExp(`^/(${marketCodes.join("|")})(?=/|\\?|$)`));
   /* Compare the path alone, not the whole URL: `/de` was left intact for Next
@@ -978,18 +979,6 @@ const sameProductOffers = product => {
 const significantWords = value => new Set(clean(value).toLowerCase().split(/[^a-z0-9]+/).filter(word => word.length > 3 && !new Set([
   "with","from","this","that","pack","new","black","white","blue","red","for","and","the","your","plus","free"
 ]).has(word)));
-const uniqueProductsInOrder = products => {
-  const used = new Set();
-  const unique = [];
-  for (const product of products || []) {
-    const marketPrefix = String(product.market || "").toLowerCase();
-    const keys = deduplicationKeys(product).map(key => `${marketPrefix}:${key}`);
-    if (keys.some(key => used.has(key))) continue;
-    unique.push(product);
-    keys.forEach(key => used.add(key));
-  }
-  return unique;
-};
 const summarizeBrands = products => {
   const groups = new Map();
   for (const product of uniqueProductsInOrder(products)) {
@@ -1078,7 +1067,7 @@ app.get("/deal/:slug", (req, res) => {
   const allLow = intelligence.allTime.sufficient ? intelligence.allTime.low : null;
   const alternatives = alternativesFor(p);
   const alternativeIds = new Set(alternatives.map(product => product.id));
-  const related = p.brand_slug ? uniqueProductsInOrder(db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()} AND brand_slug=? AND id<>? ORDER BY COALESCE(ranking_score,score) DESC,score DESC LIMIT 16`).all(p.market, p.brand_slug, p.id).filter(isPubliclyIndexable).filter(product => !alternativeIds.has(product.id))).slice(0, 4) : [];
+  const related = p.brand_slug && !isGenericBrand(p.brand_slug) ? uniqueProductsInOrder(db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()} AND brand_slug=? AND id<>? ORDER BY COALESCE(ranking_score,score) DESC,score DESC LIMIT 16`).all(p.market, p.brand_slug, p.id).filter(isPubliclyIndexable).filter(product => !alternativeIds.has(product.id))).slice(0, 4) : [];
   const offerGroup = sameProductOffers(p);
   const offerRows = offerGroup.offers;
   const brief = createEditorialBrief(p, display, {
@@ -1096,8 +1085,13 @@ app.get("/deal/:slug", (req, res) => {
     return eligible ? {"@type":"Offer",url:canonical,priceCurrency:String(offer.currency).toUpperCase(),price:Number(offer.current_price),availability:offerState,itemCondition:"https://schema.org/NewCondition",seller:{"@type":"Organization",name:storeName(offer)}} : null;
   }).filter(Boolean);
   if (schemaOffers.length) productNode.offers = schemaOffers.length === 1 ? schemaOffers[0] : schemaOffers;
-  const productSchema = {"@context":"https://schema.org","@graph":[productNode,{"@type":"BreadcrumbList",itemListElement:[{"@type":"ListItem",position:1,name:t(req.language,"page.home"),item:SITE+marketPath(p.market)},{"@type":"ListItem",position:2,name:displayCategory,item:SITE+catPath(category,p.market)},...(p.brand?[{"@type":"ListItem",position:3,name:p.brand,item:SITE+brandPath(p.brand,p.market)}]:[]),{"@type":"ListItem",position:p.brand?4:3,name:title,item:canonical}]}]};
-  const brandBlock = p.brand ? `<p class="eyebrow">${esc(t(req.language,"product.brand"))}: <a href="${brandPath(p.brand, p.market)}">${esc(p.brand)}</a></p>` : `<p class="eyebrow">${esc(store)}</p>`;
+  const productSchema = {"@context":"https://schema.org","@graph":[productNode,{"@type":"BreadcrumbList",itemListElement:[{"@type":"ListItem",position:1,name:t(req.language,"page.home"),item:SITE+marketPath(p.market)},{"@type":"ListItem",position:2,name:displayCategory,item:SITE+catPath(category,p.market)},...(linkableBrand?[{"@type":"ListItem",position:3,name:p.brand,item:SITE+brandPath(p.brand,p.market)}]:[]),{"@type":"ListItem",position:linkableBrand?4:3,name:title,item:canonical}]}]};
+  /* A placeholder brand is shown as plain text at most — never as a link to a
+     page that now refuses to render. */
+  const linkableBrand = p.brand && !isGenericBrand(p.brand_slug || p.brand);
+  const brandBlock = linkableBrand
+    ? `<p class="eyebrow">${esc(t(req.language,"product.brand"))}: <a href="${brandPath(p.brand, p.market)}">${esc(p.brand)}</a></p>`
+    : `<p class="eyebrow">${esc(store)}</p>`;
   const relatedBlock = related.length ? `<section class="deals-section related-drops"><div class="section-heading"><div><p class="eyebrow">${esc(brief.copy.related.toUpperCase())}</p><h2>${esc(t(req.language,"page.moreBrandDeals",{brand:p.brand}))}</h2></div><a href="${brandPath(p.brand, p.market)}">${esc(t(req.language,"page.viewAll"))} →</a></div><div class="grid">${related.map(product => productCard(product, 0, req.language, "related")).join("")}</div></section>` : "";
   const checkedAt = p.checked_at || p.updated_at;
   const checkedLabel = checkedAt && !Number.isNaN(new Date(checkedAt).getTime())
@@ -1129,7 +1123,7 @@ app.get("/deal/:slug", (req, res) => {
   const priceDetails = !currentOffer
     ? `<div class="detail-grid"><section><h3>${esc(t(req.language,"product.currentPrice"))}</h3><p>${esc(t(req.language,"product.checkPrice"))} ${esc(store)}</p></section></div>`
     : `<div class="detail-grid"><section><h3>${esc(t(req.language,"product.currentPrice"))}</h3><p>${money(p.current_price,p.currency,pageLocale)}</p></section>${ratingSummary}<section><h3>${esc(t(req.language,"page.low30"))}</h3><p>${historyLabel(intelligence.day30)}</p></section><section><h3>${esc(t(req.language,"page.low90"))}</h3><p>${historyLabel(intelligence.day90)}</p></section><section><h3>${esc(t(req.language,"page.lowAll"))}</h3><p>${historyLabel(intelligence.allTime)}</p></section></div><section id="price-history" class="editorial-box">${retailerDetails}<h2>${esc(t(req.language,"page.priceHistory"))}</h2>${chartSvg(history,req.language,p.market)}<p>${esc(t(req.language,"page.historySummary",{observations:history.length,days:intelligence.allTime.distinctDays}))}</p></section>`;
-  const body = `<main class="product-page" data-product-offer-ui="reliable-entity-v1"><nav class="breadcrumb"><a href="${marketPath(p.market)}">${esc(t(req.language,"page.home"))}</a><span>›</span><a href="${catPath(category,p.market)}">${esc(displayCategory)}</a>${p.brand?`<span>›</span><a href="${brandPath(p.brand,p.market)}">${esc(p.brand)}</a>`:""}<span>›</span><span>${esc(title)}</span></nav><article class="product-detail"><div class="product-detail-media"><img src="${esc(p.image_url)}" alt="${esc(hasRetailerImage(p) ? title : `${store} ${t(req.language,"product.editorPick")}`)}" decoding="async" fetchpriority="high"></div><div class="product-detail-content">${brandBlock}<h1>${esc(title)}</h1>${scoreBlock}<p class="product-lead">${esc(brief.verdict)}</p>${offerSummaryBlock}<a class="brief-jump-link" href="#buying-brief">${esc(brief.eyebrow)} ↓</a>${priceDetails}<div class="product-price-box"><span class="product-price">${currentOffer ? money(p.current_price,p.currency,pageLocale) : `${esc(t(req.language,"product.checkPrice"))} ${esc(store)}`}</span>${currentOffer && p.original_price?`<span class="old">${money(p.original_price,p.currency,pageLocale)}</span>`:""}<small>${esc(t(req.language,"page.finalPrice"))}</small></div>${retailerActions}</div></article>${briefBlock}${offerComparisonBlock}${alternativesBlock}${relatedBlock}</main>`;
+  const body = `<main class="product-page" data-product-offer-ui="reliable-entity-v1"><nav class="breadcrumb"><a href="${marketPath(p.market)}">${esc(t(req.language,"page.home"))}</a><span>›</span><a href="${catPath(category,p.market)}">${esc(displayCategory)}</a>${linkableBrand?`<span>›</span><a href="${brandPath(p.brand,p.market)}">${esc(p.brand)}</a>`:""}<span>›</span><span>${esc(title)}</span></nav><article class="product-detail"><div class="product-detail-media"><img src="${esc(p.image_url)}" alt="${esc(hasRetailerImage(p) ? title : `${store} ${t(req.language,"product.editorPick")}`)}" decoding="async" fetchpriority="high"></div><div class="product-detail-content">${brandBlock}<h1>${esc(title)}</h1>${scoreBlock}<p class="product-lead">${esc(brief.verdict)}</p>${offerSummaryBlock}<a class="brief-jump-link" href="#buying-brief">${esc(brief.eyebrow)} ↓</a>${priceDetails}<div class="product-price-box"><span class="product-price">${currentOffer ? money(p.current_price,p.currency,pageLocale) : `${esc(t(req.language,"product.checkPrice"))} ${esc(store)}`}</span>${currentOffer && p.original_price?`<span class="old">${money(p.original_price,p.currency,pageLocale)}</span>`:""}<small>${esc(t(req.language,"page.finalPrice"))}</small></div>${retailerActions}</div></article>${briefBlock}${offerComparisonBlock}${alternativesBlock}${relatedBlock}</main>`;
   const enrichedBody = currentOffer ? body : body.replace('<div class="product-price-box">', `${retailerDetails}<div class="product-price-box">`);
   const robots = isPubliclyIndexable(p) ? "" : "noindex,follow";
   if (robots) res.set("X-Robots-Tag", "noindex, follow");
@@ -1285,6 +1279,16 @@ app.get("/archive", (req, res) => {
 
 app.get("/brand/:slug", (req, res) => {
   const selectedMarket = requestMarket(req);
+  /* "Unbranded", "Generic", "Branded", "Unknown" are placeholder values a
+     marketplace puts in the brand column when the seller left it empty. They
+     are not brands, and a page called "More Branded offers" is a thin
+     programmatic page that costs crawl budget and earns nothing. The sitemap
+     and /brands already skip them; this route did not, so they stayed
+     reachable and linkable. */
+  if (isGenericBrand(req.params.slug)) {
+    res.set("X-Robots-Tag", "noindex, nofollow");
+    return sendNotFound(req, res);
+  }
   const products = uniqueProductsInOrder(db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()} AND brand_slug=? ORDER BY COALESCE(ranking_score,score) DESC,score DESC,updated_at DESC`).all(selectedMarket.code, req.params.slug)).filter(isPubliclyIndexable);
   if (!products.length) return sendNotFound(req, res);
   const brand = products[0].brand, canonical = SITE + brandPath(brand, selectedMarket.code), avgPrice = products.reduce((sum,p)=>sum+Number(p.current_price||0),0)/products.length, avgRating = products.reduce((sum,p)=>sum+Number(p.rating||0),0)/products.length, avgDiscount = products.reduce((sum,p)=>sum+discountPercent(p),0)/products.length;
@@ -1371,8 +1375,14 @@ app.get("/sitemap.xml", (req, res) => {
       imageTitle: shortTitle(product.title)
     }));
   }
+  /* Pages the Next.js frontend added that were never listed here. Google had
+     no way to discover /daily-drop, /search or /for-retailers except by
+     following a link, while the old server-rendered pages it *did* know about
+     are the ones now returning 410. Listing the current set is half of getting
+     the index to match the site. */
+  const staticPages = [...Object.keys(trustPages), "/daily-drop", "/search", "/for-retailers"];
   for (const code of marketCodes) {
-    Object.keys(trustPages).forEach(pathname => urls.push({
+    staticPages.forEach(pathname => urls.push({
       loc: SITE + marketPath(code, pathname),
       alternates: localizedAlternates(pathname)
     }));
@@ -1592,7 +1602,9 @@ app.get("/api/products", (req, res) => {
       slug: slug(product.title),
       deal_url: dealPath(product),
       category_url: isPublicCategory(canonicalCategory(product)) ? catPath(canonicalCategory(product), selectedMarket) : null,
-      brand_url: product.brand ? brandPath(product.brand, selectedMarket) : null
+      brand_url: product.brand && !isGenericBrand(product.brand_slug || product.brand)
+        ? brandPath(product.brand, selectedMarket)
+        : null
     }, req.language), req.language);
   }));
 });
@@ -1628,7 +1640,7 @@ app.get("/api/archive", (req, res) => {
     WHERE d.market=? AND d.drop_date<? AND ${sourceSql("p")}
     ORDER BY d.drop_date DESC,d.rank
     LIMIT 400
-  `).all(selectedMarket, today).filter(isPubliclyIndexable);
+  `).all(selectedMarket, today);
 
   const groups = new Map();
   for (const row of rows) {
@@ -1636,8 +1648,15 @@ app.get("/api/archive", (req, res) => {
       if (groups.size >= days) continue;
       groups.set(row.drop_date, []);
     }
+    /* A past pick whose product has since been archived stays in the record but
+       must not be linked: /deal/:id and /go/:id both require status='published',
+       so linking it sends the visitor to a 404. Half of this market's archived
+       days pointed at such products. Dropping the row instead would rewrite
+       history; marking it unavailable keeps the record honest. */
+    const stillLive = row.status === "published" && isPubliclyIndexable(row);
     groups.get(row.drop_date).push(presentProduct(localizeProduct({
       ...row,
+      available: stillLive,
       daily_rank: row.rank,
       drop_price: row.drop_price,
       drop_original_price: row.drop_original_price,
@@ -1645,7 +1664,9 @@ app.get("/api/archive", (req, res) => {
       slug: slug(row.title),
       deal_url: dealPath(row),
       category_url: isPublicCategory(canonicalCategory(row)) ? catPath(canonicalCategory(row), selectedMarket) : null,
-      brand_url: row.brand ? brandPath(row.brand, selectedMarket) : null
+      brand_url: row.brand && !isGenericBrand(row.brand_slug || row.brand)
+        ? brandPath(row.brand, selectedMarket)
+        : null
     }, req.language), req.language));
   }
 
@@ -1786,6 +1807,19 @@ for (const marketCode of c.markets) {
       {timezone:selectedMarket.timezone}
     );
   }
+}
+
+/* One link-health sweep a night, market-independent — it walks the whole
+   published catalog by oldest-checked-first. The methodology page promises a
+   working retailer link as a condition of publication; nothing re-checked that
+   after the day a product was imported, so the promise quietly expired. */
+if (c.liveRefreshEnabled) {
+  cron.schedule(
+    c.linkHealthCron,
+    () => runLinkHealthCheck({limit: c.linkHealthBatch})
+      .catch(error => console.error(`[link-health] ${error.message}`)),
+    {timezone:"UTC"}
+  );
 }
 /**
  * Last in the chain, so anything a route threw synchronously or handed to

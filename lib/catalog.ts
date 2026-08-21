@@ -252,7 +252,13 @@ export { filterFromSearchParams, searchParamsFromFilter } from "./filter";
  */
 export type ArchiveDay = {
   date: string;
-  picks: Array<Deal & { selectedPrice: number | null; status: string }>;
+  picks: Array<Deal & {
+    selectedPrice: number | null;
+    status: string;
+    /** False once the product has been archived: its /deal/ and /go/ routes
+        both 404, so the card must be rendered without a link. */
+    available: boolean;
+  }>;
 };
 
 export async function getArchive(marketCode: string, days = 30): Promise<ArchiveDay[]> {
@@ -269,8 +275,19 @@ export async function getArchive(marketCode: string, days = 30): Promise<Archive
       drop_price?: number | null;
       availability_status?: string | null;
       daily_rank?: number | null;
+      available?: boolean;
     }>;
   }>;
+  /* A pick is only linkable if the deal page can actually find it, and that
+     page reads the same catalog this call returns. Two separate things drop a
+     product out of it: being archived (checked server-side), and being merged
+     away as a duplicate offer — five identical "No Pull Dog Pet Harness"
+     listings collapse to one, and the archive was linking the four that lost.
+     Cross-checking against the catalog covers both without guessing at the
+     rules. `fetchMarketCatalog` is memoized per request, so this is free: the
+     header on the same page has already fetched it. */
+  const catalogIds = new Set((await fetchMarketCatalog(marketCode)).map((d) => d.id));
+
   return raw.map((day) => ({
     date: day.date,
     picks: day.picks.map((pick, index) => ({
@@ -281,6 +298,7 @@ export async function getArchive(marketCode: string, days = 30): Promise<Archive
           ? pick.drop_price
           : null,
       status: pick.availability_status || "",
+      available: pick.available !== false && catalogIds.has(String(pick.id)),
     })),
   }));
 }

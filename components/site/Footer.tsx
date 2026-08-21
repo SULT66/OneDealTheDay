@@ -27,6 +27,12 @@ export async function Footer({ market }: { market: string }) {
       href: `/${market}/affiliate-disclosure`,
       label: t(language, "app.footer.affiliate"),
     },
+    /* An affiliate manager evaluating an application looks for this page before
+       approving. It was reachable only by guessing the URL. */
+    {
+      href: `/${market}/for-retailers`,
+      label: t(language, "app.footer.forRetailers"),
+    },
   ];
 
   return (

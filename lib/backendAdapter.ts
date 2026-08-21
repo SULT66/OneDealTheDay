@@ -59,6 +59,20 @@ function sellerPositivePct(raw: RawProduct): number {
  * daily top 10, so the caller synthesizes it from list position once the full
  * market catalog is fetched (see `fetchMarketCatalog` in lib/catalog.ts).
  */
+/**
+ * "Unbranded", "Generic", "Branded", "Unknown" and friends are what a
+ * marketplace writes into the brand column when the seller left it blank. They
+ * are not brands: printing "Brand: Branded" on a product page reads as a bug,
+ * and the SEO brand page built from one is a thin programmatic page. Treated as
+ * no brand at all, everywhere.
+ */
+const PLACEHOLDER_BRAND = /^(?:unbranded(?:[ -]generic)?|generic|branded|unknown|no ?brand|n\/?a|does not apply)$/i;
+
+function realBrand(value: string | null | undefined): string | null {
+  const brand = String(value ?? "").trim();
+  return brand && !PLACEHOLDER_BRAND.test(brand) ? brand : null;
+}
+
 export function adaptProduct(raw: RawProduct): Omit<Deal, "rank"> {
   const image = raw.image_url || "";
   const reason = raw.display_selection_reason || raw.selection_reason;
@@ -66,7 +80,7 @@ export function adaptProduct(raw: RawProduct): Omit<Deal, "rank"> {
   return {
     id: String(raw.id),
     title: raw.title,
-    brand: raw.brand || null,
+    brand: realBrand(raw.brand),
     category: slugifyCategory(raw.public_category),
     retailer: raw.retailer_name || raw.source,
     image,

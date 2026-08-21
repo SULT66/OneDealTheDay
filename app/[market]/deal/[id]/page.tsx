@@ -150,7 +150,9 @@ export default async function DealPage({
               {deal.title}
             </h1>
             {deal.brand && (
-              <p className="mt-2 text-sm text-fg-muted">Brand: {deal.brand}</p>
+              <p className="mt-2 text-sm text-fg-muted">
+                {t(language, "product.brand")}: {deal.brand}
+              </p>
             )}
           </div>
 

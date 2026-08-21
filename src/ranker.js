@@ -58,6 +58,40 @@ function deduplicationKeys(product) {
   return [...new Set(keys)];
 }
 
+/**
+ * A last-resort key for offers that carry no shared identifier at all.
+ *
+ * Marketplaces let the same item be listed many times over. eBay produced runs
+ * like seven "Kinetic Orbital Gadget" rows and five "No Pull Dog Pet Harness"
+ * rows — different item ids, no GTIN between them, so every identifier-based
+ * rule left them all standing and the catalog showed the same product three
+ * cards in a row.
+ *
+ * The signature is the first ten de-noised title tokens in alphabetical order,
+ * scoped to one retailer and one market. Ten rather than all of them because an
+ * exact token-set match is brittle: two of those seven rows differed only by
+ * the word "toy" and would have survived.
+ *
+ * There is deliberately no price band. The first version had one, and it split
+ * the very rows it was meant to merge — the same trinket ran from $10.96 to
+ * $27.50 across sellers, which is ordinary marketplace spread, not evidence of
+ * a different product. Variants that genuinely differ (a 128GB against a 32GB)
+ * carry that number in the title, and digits sort ahead of letters, so they
+ * land in the signature rather than being cut from it.
+ *
+ * Same-product offers from *different* retailers are untouched: the retailer is
+ * part of the key. Those are the price comparison, not duplicates.
+ */
+function offerRepeatKey(product) {
+  const tokens = titleFingerprint(product?.canonical_title || product?.title);
+  if (!tokens) return "";
+  const source = String(product?.source || "").toLowerCase();
+  if (!source) return "";
+  const market = String(product?.market || "global").toLowerCase();
+  const signature = tokens.split("-").slice(0, 10).join("-");
+  return `repeat:${source}:${market}:${signature}`;
+}
+
 function deduplicationCandidateKeys(product) {
   const brand = brandPart(product);
   const fingerprint = titleFingerprint(product?.canonical_title || product?.title);
@@ -601,6 +635,7 @@ exports.evidenceConfidence = evidenceConfidence;
 exports.commerceQuality = commerceQuality;
 exports.rankingLayers = rankingLayers;
 exports.deduplicationCandidateKeys = deduplicationCandidateKeys;
+exports.offerRepeatKey = offerRepeatKey;
 exports.deduplicationKeys = deduplicationKeys;
 exports.exactMatchKey = exactMatchKey;
 exports.landedCost = landedCost;
