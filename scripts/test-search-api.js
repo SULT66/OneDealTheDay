@@ -143,4 +143,36 @@ for (const route of marketRoutes) {
   );
 }
 
+/* A Next-owned page keeps its market prefix on req.url — the rewriting
+   middleware returns early for those and never sets req.market — so the market
+   has to be recovered from the path before the language is resolved.
+ *
+ * That pattern was anchored with `$` and so matched only a bare `/de`. Every
+ * deeper page on a non-English market (/de/contact, /fr/search, /de/deal/...)
+ * missed it, fell through to the IP lookup and rendered in English with
+ * lang="en-US" on it. Nothing 404'd and nothing threw — the pages were simply
+ * in the wrong language, which is why it survived every round of checking that
+ * only ever opened the market's front page. */
+assert(
+  /const pathMarket[^]*?\$\{marketCodes\.join\("\|"\)\}\)\(\?=\/\|\$\)/.test(serverSource),
+  "The market prefix must be recovered with a `(?=/|$)` lookahead rather than anchored to the " +
+  "end of the path — anchoring renders every page below /<market>/ in the wrong language"
+);
+
+/* Proved against the pattern itself, not only against the source text. */
+const marketPrefix = new RegExp(`^/(${["us", "ca", "uk", "fr", "de"].join("|")})(?=/|$)`);
+for (const [url, expected] of [
+  ["/de", "de"],
+  ["/de/archive", "de"],
+  ["/de/contact", "de"],
+  ["/fr/deal/123", "fr"],
+  ["/de/archive?lang=en", "de"],
+  ["/search", ""],
+  ["/deal/123", ""],
+  ["/design/anything", ""],
+]) {
+  const found = (url.split("?")[0].match(marketPrefix) || [])[1] || "";
+  assert.strictEqual(found, expected, `market recovered from ${url}`);
+}
+
 console.log("Day 8 Search API and Day 10 result constraints passed.");

@@ -311,7 +311,7 @@ app.post("/api/shopping-assistant/feedback", shoppingAssistantRateLimit, (req, r
  * they reach the catch-all at the bottom of this file instead of being
  * rewritten back onto the old bare-URL Express routes.
  */
-const nextOwnedPath = /^\/(?:about|how-we-select-deals|search|daily-drop|contact|privacy|terms|affiliate-disclosure|editorial-policy|price-disclaimer|deal\/[^/]+|category\/[^/]+)\/?$/;
+const nextOwnedPath = /^\/(?:about|how-we-select-deals|search|daily-drop|archive|contact|privacy|terms|affiliate-disclosure|editorial-policy|price-disclaimer|deal\/[^/]+|category\/[^/]+)\/?$/;
 app.use((req, res, next) => {
   const match = req.url.match(new RegExp(`^/(${marketCodes.join("|")})(?=/|\\?|$)`));
   /* Compare the path alone, not the whole URL: `/de` was left intact for Next
@@ -326,13 +326,21 @@ app.use((req, res, next) => {
   next();
 });
 app.use((req, res, next) => {
-  /* `req.market` is only set for paths the middleware above rewrote. A bare
-     `/de` (or `/de?lang=en`) is handed to Next untouched, so the market has to
-     be read back off the path here — otherwise the market resolves from the IP
-     address and a German visitor's page is labelled with someone else's
-     language. */
+  /* `req.market` is only set for paths the middleware above rewrote, and it
+     deliberately leaves every Next-owned page alone — so `/de`, `/de?lang=en`
+     AND `/de/archive` all arrive here with the prefix still on the URL and no
+     `req.market`. The market has to be read back off the path, otherwise it
+     resolves from the IP address and a German visitor's page is labelled with
+     someone else's language.
+   *
+   * The lookahead is the whole point. This pattern used to be anchored with
+   * `$`, so it only ever matched a bare `/de`: every deeper Next page —
+   * /de/archive, /de/contact, /de/daily-drop, /de/search, /de/deal/…,
+   * /de/category/… — fell through to the IP lookup and rendered in English
+   * with `lang="en-US"` on it, on the German and French markets alike. Only
+   * the market's front page was ever in the right language. */
   const pathMarket = normalizeMarket(
-    (req.url.split("?")[0].match(new RegExp(`^/(${marketCodes.join("|")})$`)) || [])[1] || ""
+    (req.url.split("?")[0].match(new RegExp(`^/(${marketCodes.join("|")})(?=/|$)`)) || [])[1] || ""
   );
   const marketCode = req.market || pathMarket || marketFromIp(req).code;
   resolveLanguage(req, res, marketCode);
@@ -1587,6 +1595,61 @@ app.get("/api/products", (req, res) => {
       brand_url: product.brand ? brandPath(product.brand, selectedMarket) : null
     }, req.language), req.language);
   }));
+});
+/**
+ * Past drops, newest day first, grouped by the day they ran.
+ *
+ * Same query the server-rendered /archive page has always used, returned as
+ * JSON so the Next.js archive page can render it in the current design. Both
+ * read from daily_drops, so the two can never disagree about what ran when.
+ *
+ * Each pick carries the price it was chosen at *and* today's price: a past
+ * drop is a record of a decision, and hiding that the price has moved since
+ * would misrepresent it.
+ */
+app.get("/api/archive", (req, res) => {
+  const selectedMarket = normalizeMarket(req.query.market) || requestMarket(req).code;
+  const marketConfig = market(selectedMarket) || requestMarket(req);
+  const today = localDate(marketConfig.timezone);
+  const days = Math.min(120, Math.max(1, Number(req.query.days) || 30));
+
+  const rows = db.prepare(`
+    SELECT p.*,d.drop_date,d.rank,d.score AS drop_score,d.score_model AS drop_score_model,
+      d.current_price AS drop_price,d.original_price AS drop_original_price,
+      d.currency AS drop_currency,d.selection_reason AS daily_selection_reason,
+      CASE
+        WHEN LOWER(COALESCE(p.availability,'')) LIKE '%out of stock%' THEN 'Out of Stock'
+        WHEN LOWER(COALESCE(p.availability,'')) LIKE '%unavailable%' THEN 'Deal Expired'
+        WHEN p.current_price<>d.current_price THEN 'Price Changed'
+        ELSE d.availability_status
+      END AS availability_status
+    FROM daily_drops d
+    JOIN products p ON p.id=d.product_id
+    WHERE d.market=? AND d.drop_date<? AND ${sourceSql("p")}
+    ORDER BY d.drop_date DESC,d.rank
+    LIMIT 400
+  `).all(selectedMarket, today).filter(isPubliclyIndexable);
+
+  const groups = new Map();
+  for (const row of rows) {
+    if (!groups.has(row.drop_date)) {
+      if (groups.size >= days) continue;
+      groups.set(row.drop_date, []);
+    }
+    groups.get(row.drop_date).push(presentProduct(localizeProduct({
+      ...row,
+      daily_rank: row.rank,
+      drop_price: row.drop_price,
+      drop_original_price: row.drop_original_price,
+      selection_reason: row.daily_selection_reason || row.selection_reason,
+      slug: slug(row.title),
+      deal_url: dealPath(row),
+      category_url: isPublicCategory(canonicalCategory(row)) ? catPath(canonicalCategory(row), selectedMarket) : null,
+      brand_url: row.brand ? brandPath(row.brand, selectedMarket) : null
+    }, req.language), req.language));
+  }
+
+  res.json([...groups.entries()].map(([date, picks]) => ({date, picks})));
 });
 app.get("/api/brands", (req,res) => {
   const selectedMarket = normalizeMarket(req.query.market) || requestMarket(req).code;

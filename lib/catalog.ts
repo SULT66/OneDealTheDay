@@ -230,3 +230,46 @@ export { slugifyCategory };
 /* URL <-> filter translation lives in lib/filter.ts so that it stays free of
    any data source. */
 export { filterFromSearchParams, searchParamsFromFilter } from "./filter";
+
+/**
+ * Past drops, newest day first.
+ *
+ * Read from /api/archive rather than the catalog: a past drop is a record of a
+ * decision on a date, and the catalog only knows what is true right now. Each
+ * pick carries the price it was chosen at as well as today's price, so a day
+ * whose deal has since expired reads as history rather than as a live offer.
+ */
+export type ArchiveDay = {
+  date: string;
+  picks: Array<Deal & { selectedPrice: number | null; status: string }>;
+};
+
+export async function getArchive(marketCode: string, days = 30): Promise<ArchiveDay[]> {
+  const res = await fetch(
+    `${BACKEND_URL}/api/archive?market=${encodeURIComponent(marketCode)}&days=${days}`,
+    { cache: "no-store" },
+  );
+  if (!res.ok) {
+    throw new Error(`Failed to load past drops for "${marketCode}" (${res.status}).`);
+  }
+  const raw = (await res.json()) as Array<{
+    date: string;
+    picks: Array<RawProduct & {
+      drop_price?: number | null;
+      availability_status?: string | null;
+      daily_rank?: number | null;
+    }>;
+  }>;
+  return raw.map((day) => ({
+    date: day.date,
+    picks: day.picks.map((pick, index) => ({
+      ...adaptProduct(pick),
+      rank: pick.daily_rank ?? index + 1,
+      selectedPrice:
+        pick.drop_price != null && pick.drop_price !== pick.current_price
+          ? pick.drop_price
+          : null,
+      status: pick.availability_status || "",
+    })),
+  }));
+}
