@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type React from "react";
 import { getCategory } from "@/lib/catalog";
 import { categoryName, getLanguage, t } from "@/lib/i18n";
 import { discountPercent, retailerLabel } from "@/lib/format";
@@ -24,9 +25,14 @@ export async function DealCard({
   market,
   index = 0,
   priority = false,
+  unavailable = false,
 }: {
   deal: Deal;
   market: string;
+  /** Renders the card without a link. Used by the archive for picks whose
+      product has since been archived: /deal/:id and /go/:id both require a
+      published product, so linking one is a guaranteed 404. */
+  unavailable?: boolean;
   /** Position in the grid, used to stagger the entrance. */
   index?: number;
   priority?: boolean;
@@ -34,18 +40,21 @@ export async function DealCard({
   const category = getCategory(deal.category);
   const language = await getLanguage(market);
   const off = discountPercent(deal.price, deal.referencePrice);
+  /* A plain <div> when there is nowhere safe to send the visitor. */
+  const Body = (unavailable ? "div" : Link) as React.ElementType;
 
   return (
     <article
       className="rise-in h-full"
       style={{ animationDelay: `${Math.min(index, 11) * 45}ms` }}
     >
-      <Link
-        href={`/${market}/deal/${deal.id}`}
+      <Body
+        {...(unavailable ? {} : { href: `/${market}/deal/${deal.id}` })}
         className={cn(
           "group flex h-full flex-col overflow-hidden rounded-card border border-border bg-surface",
-          "transition-[transform,box-shadow,border-color] duration-200",
-          "hover:-translate-y-0.5 hover:border-border-strong hover:shadow-lift",
+          unavailable
+            ? "opacity-60"
+            : "transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-0.5 hover:border-border-strong hover:shadow-lift",
         )}
       >
         <div className="relative aspect-[4/3] shrink-0 overflow-hidden bg-white">
@@ -108,7 +117,7 @@ export async function DealCard({
             )}
           </div>
         </div>
-      </Link>
+      </Body>
     </article>
   );
 }

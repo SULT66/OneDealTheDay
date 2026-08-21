@@ -37,13 +37,12 @@ const { localizeProduct } = require("./src/demoTranslations");
 const { presentProduct } = require("./src/productPresentation");
 const { codes: marketCodes, normalizeMarket, marketFromIp, marketPath } = require("./src/markets");
 const { resolveLanguage } = require("./src/i18n");
-const { sourceSql, isPublicProduct } = require("./src/publicCatalog");
+const { sourceSql, isPublicProduct, uniqueProductsInOrder } = require("./src/publicCatalog");
 const { enabledProviders } = require("./src/providers/registry");
 const { coverage: retailerCoverage } = require("./src/retailerCatalog");
 const { recalculateCatalog } = require("./src/catalogRecalculation");
 const { TAXONOMY_VERSION } = require("./src/catalogTaxonomy");
 const { RELEASE_ID } = require("./src/release");
-const { deduplicationKeys } = require("./src/ranker");
 const { parseSearchOptions, searchCatalogProducts } = require("./src/catalogSearch");
 const { applySearchIntent } = require("./src/searchIntent");
 const createExpressApp = express;
@@ -96,19 +95,6 @@ if (config.isProduction && !config.demoMode && config.liveRefreshEnabled) {
 
 function countProducts(where = "1=1", params = []) {
   return Number(db.prepare(`SELECT COUNT(*) n FROM products WHERE status='published' AND ${where}`).get(...params).n || 0);
-}
-
-function uniqueProductsInOrder(products) {
-  const used = new Set();
-  const unique = [];
-  for (const product of products || []) {
-    const marketPrefix = String(product.market || "").toLowerCase();
-    const keys = deduplicationKeys(product).map(key => `${marketPrefix}:${key}`);
-    if (keys.some(key => used.has(key))) continue;
-    unique.push(product);
-    keys.forEach(key => used.add(key));
-  }
-  return unique;
 }
 
 function catalogStatus(marketCode = "") {

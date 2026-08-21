@@ -120,7 +120,22 @@ export default async function ArchivePage({
             <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {day.picks.map((pick, index) => (
                 <li key={`${day.date}-${pick.id}`} className="flex flex-col">
-                  <DealCard deal={pick} market={market} index={index} />
+                  <DealCard
+                    deal={pick}
+                    market={market}
+                    index={index}
+                    unavailable={!pick.available}
+                  />
+                  {/* Half of this market's archived picks point at products
+                      that have since been archived. Their /deal/ and /go/
+                      routes both 404, so the card is shown without a link and
+                      says plainly that the listing is gone — the record of what
+                      ran stays intact, and nobody is sent to a dead page. */}
+                  {!pick.available && (
+                    <p className="mt-2 px-1 text-xs font-medium text-fg-subtle">
+                      {t(language, "app.archive.noLongerListed")}
+                    </p>
+                  )}
                   {/* Only rendered when the price has actually moved since the
                       day this ran — a silent row on every card would be noise,
                       and an absent one where it matters would be a lie. */}

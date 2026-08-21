@@ -131,6 +131,10 @@ module.exports = {
   isProduction: isAzure,
   refreshCron: process.env.REFRESH_CRON || "15 0 * * *",
   offerCheckCron: process.env.OFFER_CHECK_CRON || "45 3,9,15,21 * * *",
+  /* Away from the refresh and the offer checks so the two never contend for
+     the same retailer's rate limit. */
+  linkHealthCron: process.env.LINK_HEALTH_CRON || "20 2 * * *",
+  linkHealthBatch: Math.max(50, Math.min(2000, Number(process.env.LINK_HEALTH_BATCH) || 400)),
   timezone: process.env.TIMEZONE || "America/New_York",
   searchKeywords: configuredKeywords.length ? configuredKeywords : defaultKeywords,
   markets,

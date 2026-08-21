@@ -206,4 +206,29 @@ assert(
   "the refresh must opt into the identity floor for drop candidates",
 );
 
-console.log("Drop selection guards passed: delivery cost, identity floor, no-repeat window.");
+/* ------------------------------- 6. the archive must not link to 404s */
+
+const catalogSource = fs.readFileSync(path.join(__dirname, "..", "lib", "catalog.ts"), "utf8");
+const serverSource = fs.readFileSync(path.join(__dirname, "..", "src", "server.js"), "utf8");
+
+/* A past pick can stop being reachable two ways, and the archive hit both:
+   the product gets archived (/deal/:id and /go/:id require status='published'),
+   or it is merged away as a duplicate offer and disappears from the catalog the
+   deal page reads. Half of one market's archived picks were dead links. */
+assert(
+  /available:\s*stillLive/.test(serverSource),
+  "the archive API must mark picks whose product is no longer published",
+);
+assert(
+  /catalogIds\.has\(String\(pick\.id\)\)/.test(catalogSource),
+  "the archive must cross-check every pick against the catalog the deal page reads, " +
+  "or a deduplicated-away offer is linked to a 404",
+);
+assert(
+  /unavailable=\{!pick\.available\}/.test(
+    fs.readFileSync(path.join(__dirname, "..", "app", "[market]", "archive", "page.tsx"), "utf8"),
+  ),
+  "the archive page must render unreachable picks without a link",
+);
+
+console.log("Drop selection guards passed: delivery cost, identity floor, no-repeat window, archive links.");

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getLanguage, t } from "@/lib/i18n";
 import type { ReactNode } from "react";
 import { CaretRight } from "@phosphor-icons/react/ssr";
 
@@ -6,7 +7,7 @@ import { CaretRight } from "@phosphor-icons/react/ssr";
  * Reading layout for the text pages. Measure is capped near 70 characters —
  * full-width paragraphs on a wide monitor are hard to track line to line.
  */
-export function Prose({
+export async function Prose({
   market,
   crumb,
   title,
@@ -19,9 +20,10 @@ export function Prose({
   lede: string;
   children: ReactNode;
 }) {
+  const language = await getLanguage(market);
   return (
     <div className="mx-auto max-w-3xl px-4 pb-24 pt-8 sm:px-6">
-      <nav aria-label="Breadcrumb" className="mb-6">
+      <nav aria-label={t(language, "app.list.breadcrumb")} className="mb-6">
         <ol className="flex items-center gap-1.5 text-sm text-fg-muted">
           <li>
             <Link href={`/${market}`} className="hover:text-fg">
