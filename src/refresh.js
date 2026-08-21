@@ -88,6 +88,13 @@ function addPriceIntelligence(products, marketCode) {
   });
 }
 
+/* How many picks a full drop holds, and how long a product must sit out before
+   it can come back. 10 x 14 means a market needs 140 distinct candidates to
+   fill every day; markets that cannot reach that publish shorter days rather
+   than repeating themselves — see selectDailyProducts. */
+const DAILY_PICK_TARGET = 10;
+const NO_REPEAT_DAYS = 14;
+
 function selectDailyProducts(ranked, marketCode, timezone, preserveDailySelection) {
   const today = localDate(timezone);
   const productKey = product => qualifiedProviderId(product);
@@ -106,7 +113,7 @@ function selectDailyProducts(ranked, marketCode, timezone, preserveDailySelectio
     const byProviderId = new Map(ranked.map(product => [productKey(product), product]));
     const kept = current.map(id => byProviderId.get(id)).filter(Boolean);
     const used = new Set(kept.map(productKey));
-    return sortByCurrentScore([...kept, ...ranked.filter(product => !used.has(productKey(product)))].slice(0, 10));
+    return sortByCurrentScore([...kept, ...ranked.filter(product => !used.has(productKey(product)))].slice(0, DAILY_PICK_TARGET));
   }
 
   const recent = new Set(db.prepare(`
@@ -114,11 +121,32 @@ function selectDailyProducts(ranked, marketCode, timezone, preserveDailySelectio
     FROM daily_drops d
     JOIN products p ON p.id=d.product_id
     WHERE d.market=? AND d.drop_date>=? AND d.drop_date<?
-  `).all(marketCode, daysAgoDate(timezone, 7), today).flatMap(selectionKeys));
+  `).all(marketCode, daysAgoDate(timezone, NO_REPEAT_DAYS), today).flatMap(selectionKeys));
   const wasRecentlySelected = product => selectionKeys(product).some(key => recent.has(key));
   const fresh = ranked.filter(product => !wasRecentlySelected(product));
-  const fallback = ranked.filter(wasRecentlySelected);
-  return [...fresh, ...fallback].slice(0, 10);
+
+  /* A short day, not a repeated one.
+   *
+   * This used to end with `[...fresh, ...fallback].slice(0, 10)` — when fresh
+   * candidates ran out, the list was topped up from products shown in the last
+   * few days, sorted by score, so the same top scorer returned almost daily.
+   * One eBay item appeared on 15 of 19 days that way, and the no-repeat rule
+   * looked broken when it was in fact being overruled one line later.
+   *
+   * Publishing seven honest picks says something true about the day. Padding
+   * to ten with last week's item says something false, and the visitor is the
+   * one who notices first. If a market is regularly short, the fix is more
+   * eligible supply, and the shortfall in the run log is how we find out.
+   */
+  const selected = fresh.slice(0, DAILY_PICK_TARGET);
+  if (selected.length < DAILY_PICK_TARGET) {
+    console.warn(
+      `[drop] ${marketCode}: ${selected.length}/${DAILY_PICK_TARGET} picks — ` +
+      `${ranked.length} eligible, ${ranked.length - fresh.length} still inside the ` +
+      `${NO_REPEAT_DAYS}-day no-repeat window. Publishing a short day rather than repeating.`,
+    );
+  }
+  return selected;
 }
 
 function sortByCurrentScore(products) {
@@ -199,10 +227,25 @@ async function refreshMarket(config, marketCode, options = {}) {
       maximumShippingRatio: 0.5
     };
     const scoredOffers = scoreOffers(found, eligibility);
-    const catalogProducts = selectUniqueProducts(scoredOffers).slice(0, 60);
-    const ranked = catalogProducts.filter(product =>
-      config.provider === "demo" || isDailyPickEligible(product)
-    );
+    const uniqueProducts = selectUniqueProducts(scoredOffers);
+    /* Reported as the run's catalog size; the whole of scoredOffers is what
+       actually gets written to the products table further down. */
+    const catalogProducts = uniqueProducts.slice(0, 60);
+    /* Filter first, cap second.
+     *
+     * This was `selectUniqueProducts(...).slice(0, 60)` followed by the
+     * eligibility filter, which meant the drop only ever saw the 60
+     * highest-scoring offers — and eligibility is largely uncorrelated with
+     * score, so most qualifying products were discarded before anyone looked at
+     * them. Filtering first costs one pass over a few thousand rows once a day.
+     *
+     * The cap that remains is a guard against an unbounded list, not a
+     * selection step: at 10 picks a day across a 14-day no-repeat window, 400
+     * is well past anything a single day can consume. */
+    const ranked = uniqueProducts
+      .filter(product => config.provider === "demo" ||
+        isDailyPickEligible(product, {requireProductIdentity: true}))
+      .slice(0, 400);
     if (!Array.isArray(found) || found.length < 1 || catalogProducts.length < 1) {
       throw new Error(`${selectedMarket.name} refresh returned no valid catalog products (${found.length} found, ${catalogProducts.length} valid)`);
     }

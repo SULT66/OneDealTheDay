@@ -113,6 +113,21 @@ assert.deepStrictEqual(
   "A preserved daily selection must still put the highest current score first"
 );
 
+/**
+ * A GTIN-13 with a correct check digit.
+ *
+ * The fixture used to invent barcodes by concatenation, which produced strings
+ * that look like barcodes and fail validation. That went unnoticed while
+ * nothing depended on identity; the drop's identity requirement does, so these
+ * now have to be real. Weights alternate 1,3 from the left across the first
+ * twelve digits.
+ */
+function gtin13(body12) {
+  const digits = String(body12).padStart(12, "0").slice(-12).split("").map(Number);
+  const sum = digits.reduce((total, digit, index) => total + digit * (index % 2 === 0 ? 1 : 3), 0);
+  return `${digits.join("")}${(10 - (sum % 10)) % 10}`;
+}
+
 function records(retailer, prefix, duplicateFirst = false) {
   return Array.from({length:6}, (_, index) => ({
     id:`${prefix}-${index + 1}`,
@@ -120,7 +135,9 @@ function records(retailer, prefix, duplicateFirst = false) {
     description:`Verified ${retailer} affiliate product`,
     category:"home gadgets",
     brand:"Acme",
-    gtin:duplicateFirst && index === 0 ? "00012345678905" : `0001234567${prefix === "t" ? "1" : "2"}${String(index).padStart(2, "0")}`,
+    gtin:duplicateFirst && index === 0
+      ? "00012345678905"
+      : gtin13(`0001234567${prefix === "t" ? "1" : "2"}${index}`),
     price:String(20 + index),
     original_price:String(30 + index),
     currency:"USD",

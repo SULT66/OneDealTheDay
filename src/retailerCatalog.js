@@ -77,6 +77,44 @@ function optionalProductLimit(value, fallback = null) {
   return Number.isFinite(parsed) ? Math.max(50, Math.min(10000, Math.round(parsed))) : null;
 }
 
+/**
+ * A merchant's published delivery terms, used only when the feed itself carries
+ * no per-item delivery charge.
+ *
+ *   {"flat": 0}                     delivery is always free
+ *   {"flat": 6.95}                  a flat charge on every order
+ *   {"flat": 6.95, "freeOver": 49}  free from 49 up, 6.95 below it
+ *
+ * Deliberately unset by default. An unconfigured merchant keeps delivery
+ * "unknown", which keeps its products out of the Daily Drop — the safe state.
+ * Guessing here would put invented delivery costs in front of buyers.
+ *
+ * Set per feed and market, e.g.
+ *   AFFILIATE_FEED_TRIBESIGNS_US_SHIPPING_JSON={"flat":0}
+ */
+function optionalShippingTerms(value, label) {
+  const text = String(value == null ? "" : value).trim();
+  if (!text) return null;
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch (error) {
+    throw new Error(`${label} is invalid JSON: ${error.message}`);
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error(`${label} must be an object such as {"flat":0} or {"flat":6.95,"freeOver":49}`);
+  }
+  const flat = Number(parsed.flat);
+  if (!Number.isFinite(flat) || flat < 0) {
+    throw new Error(`${label} needs a "flat" delivery charge of 0 or more`);
+  }
+  const freeOver = Number(parsed.freeOver);
+  return {
+    flat,
+    freeOver: Number.isFinite(freeOver) && freeOver >= 0 ? freeOver : null,
+  };
+}
+
 function feedDefinitions(env = process.env) {
   const definitions = [];
   for (const retailer of RETAILERS) {
@@ -96,7 +134,9 @@ function feedDefinitions(env = process.env) {
         headersJson:String(env[`${prefix}_HEADERS_JSON`] || "").trim(),
         fieldMapJson:String(env[`${prefix}_FIELD_MAP_JSON`] || "").trim(),
         maxProducts:optionalProductLimit(env[`${prefix}_MAX_PRODUCTS`], retailer.maxCatalogProducts),
-        feedPolicy:retailer.feedPolicy || null
+        feedPolicy:retailer.feedPolicy || null,
+        shipping:optionalShippingTerms(env[`${prefix}_SHIPPING_JSON`], `${prefix}_SHIPPING_JSON`)
+          || retailer.shipping || null
       });
     }
   }
@@ -130,7 +170,13 @@ function feedDefinitions(env = process.env) {
         format:String(custom?.format || "auto").trim().toLowerCase(),
         headersJson:custom?.headers && typeof custom.headers === "object" ? JSON.stringify(custom.headers) : String(custom?.headersJson || "").trim(),
         fieldMapJson:custom?.fieldMap && typeof custom.fieldMap === "object" ? JSON.stringify(custom.fieldMap) : String(custom?.fieldMapJson || "").trim(),
-        maxProducts:optionalProductLimit(custom?.maxProducts)
+        maxProducts:optionalProductLimit(custom?.maxProducts),
+        shipping:optionalShippingTerms(
+          custom?.shipping && typeof custom.shipping === "object"
+            ? JSON.stringify(custom.shipping)
+            : custom?.shippingJson,
+          `Affiliate feed ${retailerId} shipping`,
+        )
       });
     }
   }
