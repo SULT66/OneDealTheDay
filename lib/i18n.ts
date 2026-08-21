@@ -7,6 +7,7 @@ import {
   defaultLanguages,
   languageTag,
   normalizeLanguage,
+  categoryLabel as translateCategory,
 } from "@/src/i18n";
 
 /**
@@ -78,4 +79,17 @@ export function countryName(market: string, language: string): string {
 /** A market with more than one language needs a switcher; the UK does not. */
 export function hasLanguageChoice(market: string): boolean {
   return languagesForMarket(market).length > 1;
+}
+
+/**
+ * A category's display name in the visitor's language.
+ *
+ * site-content/categories.json carries the English name only — it is display
+ * configuration (icon, blurb), not translated copy — while src/i18n.js has
+ * carried every category in all four languages since the Express pages were
+ * built. Nothing on the Next.js side used it, which is why a Spanish visitor
+ * still read "Bikes & Mobility" in the navigation.
+ */
+export function categoryName(name: string, language: string): string {
+  return translateCategory(name, language) || name;
 }

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getCategory } from "@/lib/catalog";
+import { categoryName, getLanguage, t } from "@/lib/i18n";
 import { discountPercent, retailerLabel } from "@/lib/format";
 import type { Deal } from "@/lib/types";
 import { cn } from "@/lib/cn";
@@ -11,8 +12,14 @@ import { PriceBlock } from "./PriceBlock";
  * Grid card. The whole card is one link — the score, price and rating are
  * evidence inside it rather than separate controls — which keeps a single tap
  * target per card and avoids nested interactive elements.
+ *
+ * Async so it can resolve the visitor's language itself. Threading it down as a
+ * prop from six call sites is the version where one of them gets forgotten and
+ * a grid of English cards appears under a Spanish heading — which is precisely
+ * what shipped. `headers()` is memoized per request, so reading it once per
+ * card costs nothing.
  */
-export function DealCard({
+export async function DealCard({
   deal,
   market,
   index = 0,
@@ -25,6 +32,7 @@ export function DealCard({
   priority?: boolean;
 }) {
   const category = getCategory(deal.category);
+  const language = await getLanguage(market);
   const off = discountPercent(deal.price, deal.referencePrice);
 
   return (
@@ -56,21 +64,27 @@ export function DealCard({
 
           {off !== null && (
             <span className="absolute right-3 top-3 inline-flex items-center rounded-full bg-lime px-2.5 py-1 text-[0.7rem] font-bold uppercase tracking-wide text-ink tnum">
-              {off}% off
+              {t(language, "app.card.percentOff", { percent: off })}
             </span>
           )}
         </div>
 
         <div className="flex flex-1 flex-col gap-2.5 p-5">
           <p className="text-[0.7rem] font-semibold uppercase tracking-[0.14em] text-fg-subtle">
-            {category?.name ?? deal.category} · {retailerLabel(deal.retailer)}
+            {category ? categoryName(category.name, language) : deal.category} ·{" "}
+            {retailerLabel(deal.retailer)}
           </p>
 
           <h3 className="line-clamp-2 text-[0.95rem] font-semibold leading-snug text-fg">
             {deal.title}
           </h3>
 
-          <Rating value={deal.rating} count={deal.reviewCount} size={14} />
+          <Rating
+            value={deal.rating}
+            count={deal.reviewCount}
+            language={language}
+            size={14}
+          />
 
           <div className="mt-auto flex items-end justify-between gap-3 pt-2">
             <PriceBlock
@@ -78,6 +92,7 @@ export function DealCard({
               referencePrice={deal.referencePrice}
               currency={deal.currency}
               market={market}
+              language={language}
               size="sm"
             />
             {deal.score !== null && (
@@ -87,7 +102,7 @@ export function DealCard({
               >
                 {deal.score}
                 <span className="sr-only">
-                  OneDailyDrop Score {deal.score} out of 100
+                  {t(language, "app.card.scoreOutOf", { score: deal.score })}
                 </span>
               </span>
             )}

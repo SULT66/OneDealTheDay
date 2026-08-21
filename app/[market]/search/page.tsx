@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { filterFromSearchParams, getDeals, getMarket } from "@/lib/catalog";
+import { countryName, getLanguage, t } from "@/lib/i18n";
 import { DealListing } from "@/components/catalog/DealListing";
 
 export async function generateMetadata({
@@ -7,10 +8,11 @@ export async function generateMetadata({
 }: PageProps<"/[market]/search">): Promise<Metadata> {
   const { market } = await params;
   const info = getMarket(market);
+  const language = await getLanguage(market);
+  const country = info ? countryName(market, language) : t(language, "app.yourMarket");
   return {
-    title: `All checked deals in ${info?.country ?? "your market"}`,
-    description:
-      "Every current OneDailyDrop pick, filterable by price, retailer, rating and score.",
+    title: t(language, "app.search.metaTitle", { country }),
+    description: t(language, "app.search.metaDescription"),
     // Filtered permutations are not separate pages worth indexing.
     robots: { index: false, follow: true },
   };
@@ -27,6 +29,7 @@ export default async function SearchPage({
   const { market } = await params;
   const filter = filterFromSearchParams(await searchParams);
   const deals = await getDeals(market, filter);
+  const language = await getLanguage(market);
 
   return (
     <DealListing
@@ -34,13 +37,17 @@ export default async function SearchPage({
       basePath={`/${market}/search`}
       filter={filter}
       deals={deals}
-      title={filter.query ? `Results for “${filter.query}”` : "All checked deals"}
+      title={
+        filter.query
+          ? t(language, "app.search.resultsFor", { query: filter.query })
+          : t(language, "app.list.allCheckedDeals")
+      }
       intro={
         filter.query
-          ? `Matching listings from the current checked picks.`
-          : "Every listing that has cleared our price, product and seller checks."
+          ? t(language, "app.search.matchingIntro")
+          : t(language, "app.search.allIntro")
       }
-      crumb={filter.query ? "Search" : "All deals"}
+      crumb={filter.query ? t(language, "nav.search") : t(language, "app.list.allDeals")}
     />
   );
 }

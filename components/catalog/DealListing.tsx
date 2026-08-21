@@ -3,9 +3,10 @@ import type { ReactNode } from "react";
 import { CaretRight } from "@phosphor-icons/react/ssr";
 import { getActiveRetailers, getMarket, getPriceBounds } from "@/lib/catalog";
 import type { Deal, DealFilter } from "@/lib/types";
+import { getLanguage, t } from "@/lib/i18n";
 import { DealCard } from "@/components/deal/DealCard";
 import { DeliaTrigger } from "@/components/delia/DeliaTrigger";
-import { FilterPanel } from "./FilterPanel";
+import { FilterPanel, type FilterCopy } from "./FilterPanel";
 import { FilterShell } from "./FilterShell";
 
 /**
@@ -30,6 +31,36 @@ export async function DealListing({
   intro?: ReactNode;
   crumb?: string;
 }) {
+  const language = await getLanguage(market);
+  /* Built here rather than inside FilterPanel: that panel is a client component
+     and cannot reach the request's language. */
+  const filterCopy: FilterCopy = {
+    activeFilters: t(language, "search.activeFilters"),
+    clearAll: t(language, "app.filter.clearAll"),
+    removeFilter: t(language, "app.filter.removeFilter"),
+    maximumPrice: t(language, "app.filter.maximumPrice"),
+    retailer: t(language, "product.retailer"),
+    productRating: t(language, "product.productRating"),
+    score: t(language, "product.oneDailyDropScore"),
+    belowReferenceOnly: t(language, "app.filter.belowReferenceOnly"),
+    belowReference: t(language, "product.belowReference"),
+    sortBy: t(language, "search.sortBy"),
+    any: t(language, "app.filter.any"),
+    scoreAtLeast: t(language, "app.filter.scoreAtLeast", {
+      score: Number(filter.minScore ?? 0),
+    }),
+    matchCount:
+      deals.length === 1
+        ? t(language, "app.filter.matchCountOne")
+        : t(language, "app.filter.matchCount", { count: deals.length }),
+    sorts: {
+      score: t(language, "app.filter.bestScore"),
+      "price-asc": t(language, "app.filter.priceAsc"),
+      "price-desc": t(language, "app.filter.priceDesc"),
+      rating: t(language, "app.filter.highestRated"),
+      discount: t(language, "app.filter.biggestSaving"),
+    },
+  };
   const [retailers, bounds] = await Promise.all([
     getActiveRetailers(market),
     getPriceBounds(market),
@@ -38,11 +69,11 @@ export async function DealListing({
 
   return (
     <div className="mx-auto max-w-7xl px-4 pb-24 pt-8 sm:px-6">
-      <nav aria-label="Breadcrumb" className="mb-6">
+      <nav aria-label={t(language, "app.list.breadcrumb")} className="mb-6">
         <ol className="flex flex-wrap items-center gap-1.5 text-sm text-fg-muted">
           <li>
             <Link href={`/${market}`} className="hover:text-fg">
-              Home
+              {t(language, "page.home")}
             </Link>
           </li>
           <li aria-hidden="true">
@@ -75,7 +106,7 @@ export async function DealListing({
               currency={currency}
               retailers={retailers}
               bounds={bounds}
-              resultCount={deals.length}
+              copy={filterCopy}
             />
           </FilterShell>
         </aside>
@@ -84,7 +115,7 @@ export async function DealListing({
           {deals.length === 0 ? (
             <div className="rounded-card border border-border bg-surface p-10 text-center">
               <h2 className="text-lg font-bold text-fg">
-                Nothing matches those filters
+                {t(language, "app.list.noMatches")}
               </h2>
               <p className="mx-auto mt-2 max-w-sm text-sm text-fg-muted">
                 Every listing here has to clear our price, rating and seller
@@ -95,7 +126,7 @@ export async function DealListing({
                 href={basePath}
                 className="mt-6 inline-flex h-12 cursor-pointer items-center rounded-full bg-surface-inverse px-6 text-sm font-semibold text-fg-on-inverse transition-opacity hover:opacity-88"
               >
-                Clear all filters
+                {t(language, "app.list.clearFilters")}
               </Link>
             </div>
           ) : (

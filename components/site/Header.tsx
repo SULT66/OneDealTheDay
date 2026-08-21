@@ -13,8 +13,8 @@ import { DeliaTrigger } from "@/components/delia/DeliaTrigger";
  * screens.
  */
 export async function Header({ market }: { market: string }) {
-  const categories = await getCategoriesWithCounts(market);
   const language = await getLanguage(market);
+  const categories = await getCategoriesWithCounts(market, language);
   /* The language choice sits in the header rather than only in the footer:
      a visitor who lands on the wrong language should not have to scroll the
      whole page to find the way out of it. The country switcher stays in the
@@ -32,6 +32,8 @@ export async function Header({ market }: { market: string }) {
               too narrow to read a query in, let alone tap accurately. */}
           <SearchBox
             market={market}
+            label={t(language, "app.card.searchLabel")}
+            action={t(language, "app.card.searchButton")}
             className="order-last w-full min-w-0 sm:order-none sm:ml-4 sm:w-auto sm:max-w-xl sm:flex-1"
           />
 
@@ -41,7 +43,20 @@ export async function Header({ market }: { market: string }) {
                 <ul className="flex items-center rounded-full border border-border bg-surface p-0.5">
                   {languages.map((option) => (
                     <li key={option.code}>
-                      <Link
+                      {/* A plain <a>, not <Link>, on purpose.
+                      *
+                      * The Header and Footer live in app/[market]/layout.tsx.
+                      * Switching language only changes the query string, so
+                      * <Link> does a client-side navigation and Next reuses the
+                      * cached layout — the page body came back in the new
+                      * language while the header, the category tabs and this
+                      * very switcher stayed in the old one. It read as "the
+                      * toggle does nothing".
+                      *
+                      * A full document request re-renders the layout and lets
+                      * Express set the odd_lang_<market> cookie on the way
+                      * through, which is what makes the choice stick. */}
+                      <a
                         href={option.href}
                         hrefLang={option.code}
                         aria-current={option.current ? "true" : undefined}
@@ -53,7 +68,7 @@ export async function Header({ market }: { market: string }) {
                         }
                       >
                         {option.code}
-                      </Link>
+                      </a>
                     </li>
                   ))}
                 </ul>
