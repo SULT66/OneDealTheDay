@@ -5,7 +5,7 @@ import { Prose } from "@/components/site/Prose";
 export const metadata: Metadata = {
   title: "How we select deals",
   description:
-    "The evidence behind every OneDailyDrop pick: price signal, product quality and seller confidence — and what the Score does not measure.",
+    "The evidence behind every OneDailyDrop pick: price signal, product quality and seller confidence, and what the Score does not measure.",
 };
 
 export default async function HowWeSelectPage({
@@ -25,7 +25,7 @@ export default async function HowWeSelectPage({
       <p>
         We track a listing&apos;s price over time and compare the current figure
         against the retailer&apos;s own reference price. A saving is only shown
-        when that reference has actually been verified — where none exists, the
+        when that reference has actually been verified. Where none exists, the
         page says so instead of inventing a struck-through number.
       </p>
 

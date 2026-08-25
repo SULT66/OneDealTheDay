@@ -209,9 +209,9 @@ function createEditorialBrief(product, display, {
   const selectionReason = clean(reason || display?.display_selection_reason || product?.selection_reason);
   const shortReason = selectionReason || copy.noDescription;
   const seller = clean(product?.seller_name) || store;
-  const delivery = clean(display?.display_shipping_summary || product?.shipping_summary) || "—";
-  const returns = clean(display?.display_return_summary || product?.return_summary) || "—";
-  const availability = clean(display?.display_availability || product?.availability) || "—";
+  const delivery = clean(display?.display_shipping_summary || product?.shipping_summary) || "N/A";
+  const returns = clean(display?.display_return_summary || product?.return_summary) || "N/A";
+  const availability = clean(display?.display_availability || product?.availability) || "N/A";
   const reference = originalPrice && discount > 0
     ? fill(copy.referencePrice, { price: originalPrice, discount })
     : "";

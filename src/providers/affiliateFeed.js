@@ -294,7 +294,7 @@ function resolveShipping(record, map, definition, price) {
     /* Named provenance, not decoration: a visitor reading "per Tribesigns
        delivery terms" knows this is the shop's standard policy rather than a
        quote for this basket. */
-    summary: feedSummary || `${described} — per ${merchant} delivery terms`,
+    summary: feedSummary || `${described}, per ${merchant} delivery terms`,
     fromPolicy: true,
   };
 }

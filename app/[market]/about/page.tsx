@@ -37,8 +37,8 @@ export default async function AboutPage({
         {info?.country ?? "your market"}: {catalogSize} listings across{" "}
         {getCategories().length} categories, each one checked before it is
         published. Delia, the assistant, searches those checked listings and
-        nothing else. Once a day we also publish a Daily Drop — the picks that
-        came out highest that morning — but that is one feature of the site
+        nothing else. Once a day we also publish a Daily Drop, the picks that
+        came out highest that morning, but that is one feature of the site
         rather than the whole of it.
       </p>
 
@@ -61,7 +61,7 @@ export default async function AboutPage({
         <li>We do not accept payment for placement or for a higher score.</li>
         <li>
           We do not invent reference prices. Where no verified previous price
-          exists, no discount is shown — even if the retailer shows one.
+          exists, no discount is shown, even if the retailer shows one.
         </li>
         <li>
           We do not guess specifications. Unknown details are left out rather
