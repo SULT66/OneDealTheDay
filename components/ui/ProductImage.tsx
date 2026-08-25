@@ -42,17 +42,39 @@ export function ProductImage({
   className?: string;
   priority?: boolean;
 }) {
-  const [failed, setFailed] = useState(false);
-  const showPlaceholder = !src || failed;
+  /* Two attempts before giving up.
+   *
+   * "optimized" routes the image through /_next/image, which fetches it from
+   * the retailer's CDN server-side. Plenty of retailers answer that fetch with
+   * a block or a stub while serving the very same URL happily to a browser, so
+   * a failure there says nothing about whether the photo exists. "direct" then
+   * loads the original URL from the visitor's own browser, which is the
+   * request the CDN expects. Only when that fails too is the photo really
+   * unavailable and the branded placeholder correct. */
+  const [stage, setStage] = useState<"optimized" | "direct" | "failed">("optimized");
+  /* next/image does not merely fail on a src it cannot serve, it throws during
+     render, which takes down whatever is drawing the card rather than costing
+     one photo. Product image URLs are copied out of arbitrary retailer pages,
+     so treat anything that is not a plain https URL or a local asset as a
+     missing photo here instead of letting it reach the component. */
+  const usableSrc = /^https:\/\//i.test(src) || src.startsWith("/");
+  const showPlaceholder = !src || !usableSrc || stage === "failed";
+  const giveUpOrRetry = useCallback(
+    () => setStage((current) => (current === "optimized" ? "direct" : "failed")),
+    [],
+  );
 
   /* A cached image can finish loading before React attaches onLoad, so the
      event never fires. Measuring from a ref callback covers both paths: the
      ref runs on mount with `complete` already true for cache hits. */
-  const measure = useCallback((img: HTMLImageElement | null) => {
-    if (img?.complete && img.naturalWidth && img.naturalWidth < MIN_REAL_PX) {
-      setFailed(true);
-    }
-  }, []);
+  const measure = useCallback(
+    (img: HTMLImageElement | null) => {
+      if (img?.complete && img.naturalWidth && img.naturalWidth < MIN_REAL_PX) {
+        giveUpOrRetry();
+      }
+    },
+    [giveUpOrRetry],
+  );
 
   if (showPlaceholder) {
     return (
@@ -79,16 +101,20 @@ export function ProductImage({
 
   return (
     <Image
+      /* Remounts on the retry so the browser re-requests rather than reusing
+         the failed result for what it considers the same element. */
+      key={stage}
       src={src}
       alt={alt}
       {...(fill ? { fill: true } : { width, height })}
       sizes={sizes}
       priority={priority}
+      unoptimized={stage === "direct"}
       ref={measure}
-      onError={() => setFailed(true)}
+      onError={giveUpOrRetry}
       onLoad={(e) => {
         const img = e.currentTarget;
-        if (img.naturalWidth && img.naturalWidth < MIN_REAL_PX) setFailed(true);
+        if (img.naturalWidth && img.naturalWidth < MIN_REAL_PX) giveUpOrRetry();
       }}
       className={cn("object-contain", className)}
     />
