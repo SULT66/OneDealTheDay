@@ -16,6 +16,18 @@ const SCOPE_TIMEOUT_MS = 4500;
 // indicator (see DeliaPanel.tsx), so the extra wait reads as "still working"
 // rather than "stuck".
 const SEARCH_TIMEOUT_MS = 26000;
+/*
+ * The Express route abandons the whole request at 32s
+ * (SHOPPING_ASSISTANT_HARD_TIMEOUT_MS in src/server.js) and answers with a bare
+ * "that took too long" carrying no products at all. Everything below has to
+ * finish inside this smaller budget so the assistant's *own* deadline always
+ * fires first: that path still runs providerFirstResponse, which hands back
+ * whatever the catalog and the retailer APIs did find. Losing the race to the
+ * route means throwing those found products away and showing the shopper
+ * nothing, which is exactly the failure this budget exists to prevent.
+ */
+const TOTAL_RESPONSE_BUDGET_MS = 29000;
+const RESPONSE_ASSEMBLY_RESERVE_MS = 1500;
 const normalizeTokenText = (value) =>
   String(value || "")
     .normalize("NFKD")
@@ -3773,7 +3785,15 @@ function createShoppingAssistant({
   retailerSearch,
   scopeTimeoutMs = SCOPE_TIMEOUT_MS,
   searchTimeoutMs = SEARCH_TIMEOUT_MS,
-  retailerSearchTimeoutMs = 5000,
+  /* The live retailer search (searchForAssistant) runs up to 8 keyword
+     queries at concurrency 3 and then up to 18 item-detail fetches at
+     concurrency 6, so it realistically needs 6-8s against eBay. At 5s it was
+     usually being cancelled just before it produced anything, which left
+     fastProviderFallback empty; that in turn meant the slow web-search path
+     got the full timeout AND had nothing to fall back on when it ran out.
+     Paying a few more seconds here buys the 8s fast path instead of the 26s
+     one. */
+  retailerSearchTimeoutMs = 9000,
   storeDiscoveryEnabled = !client,
   storeDiscoveryTimeoutMs = 12000,
   retailerPageHydrationEnabled = !client,
@@ -3795,6 +3815,7 @@ function createShoppingAssistant({
       language = "en",
       signal,
     }) {
+      const startedAt = Date.now();
       const userMessage = clean(message).slice(0, MAX_MESSAGE_LENGTH);
       const excludedUrls = new Set(
         (Array.isArray(excludedOfferUrls) ? excludedOfferUrls : [])
@@ -4067,9 +4088,21 @@ function createShoppingAssistant({
             allowSingleRetailer: true,
           })
         : null;
-      const liveSearchTimeoutMs = fastProviderFallback
-        ? Math.min(searchTimeoutMs, 8000)
-        : searchTimeoutMs;
+      /* Whatever is left of the budget after the scope call and the retailer
+         APIs, never the full nominal timeout: those earlier steps have already
+         spent real time, and a fixed 26s on top of them overruns the route's
+         own deadline. */
+      const remainingBudgetMs =
+        TOTAL_RESPONSE_BUDGET_MS -
+        (Date.now() - startedAt) -
+        RESPONSE_ASSEMBLY_RESERVE_MS;
+      const liveSearchTimeoutMs = Math.max(
+        6000,
+        Math.min(
+          fastProviderFallback ? 8000 : searchTimeoutMs,
+          remainingBudgetMs,
+        ),
+      );
       const timeoutFallback = () => fastProviderFallback || providerFirstResponse({
         userMessage,
         shopperLanguage,
