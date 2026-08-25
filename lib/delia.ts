@@ -33,6 +33,11 @@ export type DeliaComparisonRow = {
   drawbacks: string[];
 };
 
+export type DeliaClarificationPrompt = {
+  question: string;
+  options: string[];
+};
+
 export type DeliaResult = {
   transcript: string;
   message: string;
@@ -41,6 +46,13 @@ export type DeliaResult = {
   recommendations: DeliaRecommendation[];
   comparisonNotes: string[];
   comparison: DeliaComparisonRow[];
+  /** Set when the backend needs more detail before it can search — the
+   * `message` is only the lead-in sentence ("Let me clarify two things:"),
+   * the actual questions live here. `clarificationPrompts` carries tappable
+   * answer options when the backend has them; `clarifyingQuestions` is the
+   * plain-text fallback. */
+  clarifyingQuestions: string[];
+  clarificationPrompts: DeliaClarificationPrompt[];
 };
 
 export type DeliaTurn = { role: "user" | "assistant"; content: string };
@@ -56,6 +68,8 @@ type AssistantResponse = {
   recommendations?: DeliaRecommendation[];
   comparison_notes?: string[];
   comparison?: DeliaComparisonRow[];
+  clarifying_questions?: string[];
+  clarification_prompts?: DeliaClarificationPrompt[];
 };
 
 export class DeliaError extends Error {}
@@ -91,6 +105,8 @@ export async function askAssistant(
     recommendations: data.recommendations || [],
     comparisonNotes: data.comparison_notes || [],
     comparison: data.comparison || [],
+    clarifyingQuestions: data.clarifying_questions || [],
+    clarificationPrompts: data.clarification_prompts || [],
   };
 }
 
