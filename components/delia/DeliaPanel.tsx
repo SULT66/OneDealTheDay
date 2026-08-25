@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowUpRight,
-  Microphone,
   PaperPlaneRight,
   Sparkle,
   ThumbsDown,
@@ -22,7 +21,6 @@ import {
   type DeliaTurn,
 } from "@/lib/delia";
 import { useDelia } from "./DeliaContext";
-import { stopSpeaking, useSpeech } from "./useSpeech";
 
 const EXAMPLES = [
   "Find me a mattress under six hundred dollars",
@@ -63,9 +61,6 @@ export function DeliaPanel() {
           { role: "assistant", content: next.message },
         ];
         setResult(next);
-        // Voice replies are off for now — the default browser voice read as a
-        // harsh robotic male voice, which read as worse than no voice at all.
-        // The answer is always on screen as text regardless.
       } catch (error) {
         setErrorMsg(
           error instanceof DeliaError
@@ -78,10 +73,6 @@ export function DeliaPanel() {
     },
     [market],
   );
-
-  const { supported, listening, interim, error, start, stop } = useSpeech({
-    onFinal: ask,
-  });
 
   /* Checked once per open, so an unavailable assistant (no OPENAI_API_KEY on
      the backend) shows a clear message instead of a silent failure. */
@@ -126,8 +117,6 @@ export function DeliaPanel() {
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = previousOverflow;
       window.clearTimeout(focusTimer);
-      stop();
-      stopSpeaking();
       restoreFocusRef.current?.focus?.();
       // A closed panel starts the next conversation fresh rather than
       // continuing a stale thread from the visitor's last visit.
@@ -136,7 +125,7 @@ export function DeliaPanel() {
       setErrorMsg(null);
       setFeedbackGiven(false);
     };
-  }, [open, closeDelia, stop]);
+  }, [open, closeDelia]);
 
   function submitTyped(e: React.FormEvent) {
     e.preventDefault();
@@ -216,9 +205,7 @@ export function DeliaPanel() {
                 <Sparkle size={26} weight="fill" aria-hidden="true" />
               </span>
               <p className="max-w-xs text-sm leading-relaxed text-fg-muted">
-                {supported
-                  ? "Tap the microphone and say what you are looking for, or type it."
-                  : "Your browser has no speech recognition, so type your question — the answers are identical."}
+                Type what you are looking for.
               </p>
               <ul className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2">
                 {EXAMPLES.map((e) => (
@@ -234,25 +221,6 @@ export function DeliaPanel() {
                 ))}
               </ul>
             </div>
-          )}
-
-          {listening && (
-            <p className="mt-2 text-sm text-fg-muted" aria-live="polite">
-              <span className="font-semibold text-fg">Listening…</span>{" "}
-              {interim || "say something like “a sofa under five hundred”"}
-            </p>
-          )}
-
-          {error === "denied" && (
-            <p role="alert" className="mt-3 rounded-2xl bg-surface-2 p-4 text-sm text-fg-muted">
-              Microphone access was blocked. Allow it in your browser settings,
-              or type your question below.
-            </p>
-          )}
-          {error === "no-speech" && (
-            <p role="alert" className="mt-3 text-sm text-fg-muted">
-              I did not catch that — try again, a little closer to the mic.
-            </p>
           )}
 
           {loading && (
@@ -293,111 +261,147 @@ export function DeliaPanel() {
               </div>
 
               <div className="space-y-4 pl-[42px]">
-              {result.recommendations.length > 0 && (
-                <ul className="space-y-2">
-                  {result.recommendations.map((rec, i) => {
-                    const href =
-                      rec.source_type === "catalog" && rec.catalog_product_id
-                        ? `/${market}/deal/${rec.catalog_product_id}`
-                        : rec.url;
-                    const external = rec.source_type !== "catalog" || !rec.catalog_product_id;
-                    const price =
-                      rec.price ||
-                      (rec.price_value !== null
-                        ? formatPrice(rec.price_value, rec.currency || "USD", market)
-                        : "");
+                {/* Structured clarifying questions — tappable options answer
+                    them in one tap instead of making the shopper type. */}
+                {result.clarificationPrompts.length > 0 && (
+                  <div className="space-y-3">
+                    {result.clarificationPrompts.map((prompt, i) => (
+                      <div key={i}>
+                        <p className="text-sm font-semibold text-fg">{prompt.question}</p>
+                        <ul className="mt-2 flex flex-wrap gap-2">
+                          {prompt.options.map((option) => (
+                            <li key={option}>
+                              <button
+                                type="button"
+                                onClick={() => ask(option)}
+                                className="cursor-pointer rounded-full border border-border px-3.5 py-2 text-sm text-fg-muted transition-colors hover:border-border-strong hover:bg-surface-2 hover:text-fg"
+                              >
+                                {option}
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                )}
 
-                    const card = (
-                      <>
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm font-semibold text-fg">
-                            {rec.title}
-                          </span>
-                          <span className="block text-xs text-fg-muted">
-                            {rec.retailer}
-                            {rec.badge && ` · ${rec.badge}`}
-                          </span>
-                          {rec.reason && (
-                            <span className="mt-0.5 block text-xs text-fg-subtle">
-                              {rec.reason}
+                {result.clarificationPrompts.length === 0 &&
+                  result.clarifyingQuestions.length > 0 && (
+                    <ul className="space-y-1.5">
+                      {result.clarifyingQuestions.map((question, i) => (
+                        <li key={i} className="text-sm text-fg">
+                          {question}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+
+                {result.recommendations.length > 0 && (
+                  <ul className="space-y-2">
+                    {result.recommendations.map((rec, i) => {
+                      const href =
+                        rec.source_type === "catalog" && rec.catalog_product_id
+                          ? `/${market}/deal/${rec.catalog_product_id}`
+                          : rec.url;
+                      const external = rec.source_type !== "catalog" || !rec.catalog_product_id;
+                      const price =
+                        rec.price ||
+                        (rec.price_value !== null
+                          ? formatPrice(rec.price_value, rec.currency || "USD", market)
+                          : "");
+
+                      const card = (
+                        <>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-semibold text-fg">
+                              {rec.title}
                             </span>
-                          )}
-                        </span>
-                        <span className="flex shrink-0 items-center gap-1 text-sm font-bold text-fg tnum">
-                          {price}
-                          {external && (
-                            <ArrowUpRight size={14} weight="bold" aria-hidden="true" />
-                          )}
-                        </span>
-                      </>
-                    );
+                            <span className="block text-xs text-fg-muted">
+                              {rec.retailer}
+                              {rec.badge && ` · ${rec.badge}`}
+                            </span>
+                            {rec.reason && (
+                              <span className="mt-0.5 block text-xs text-fg-subtle">
+                                {rec.reason}
+                              </span>
+                            )}
+                          </span>
+                          <span className="flex shrink-0 items-center gap-1 text-sm font-bold text-fg tnum">
+                            {price}
+                            {external && (
+                              <ArrowUpRight size={14} weight="bold" aria-hidden="true" />
+                            )}
+                          </span>
+                        </>
+                      );
 
-                    const className =
-                      "flex items-center gap-3 rounded-2xl border border-border p-3 transition-colors hover:border-border-strong hover:bg-surface-2";
+                      const className =
+                        "flex items-center gap-3 rounded-2xl border border-border p-3 transition-colors hover:border-border-strong hover:bg-surface-2";
 
-                    return (
-                      <li key={`${rec.title}-${i}`}>
-                        {external ? (
-                          <a
-                            href={href}
-                            target="_blank"
-                            rel="sponsored noopener noreferrer"
-                            className={className}
-                          >
-                            {card}
-                          </a>
-                        ) : (
-                          <Link href={href} onClick={closeDelia} className={className}>
-                            {card}
-                          </Link>
-                        )}
+                      return (
+                        <li key={`${rec.title}-${i}`}>
+                          {external ? (
+                            <a
+                              href={href}
+                              target="_blank"
+                              rel="sponsored noopener noreferrer"
+                              className={className}
+                            >
+                              {card}
+                            </a>
+                          ) : (
+                            <Link href={href} onClick={closeDelia} className={className}>
+                              {card}
+                            </Link>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+
+                {result.comparisonNotes.length > 0 && (
+                  <ul className="space-y-1.5">
+                    {result.comparisonNotes.map((note, i) => (
+                      <li key={i} className="text-sm text-fg-muted">
+                        {note}
                       </li>
-                    );
-                  })}
-                </ul>
-              )}
+                    ))}
+                  </ul>
+                )}
 
-              {result.comparisonNotes.length > 0 && (
-                <ul className="space-y-1.5">
-                  {result.comparisonNotes.map((note, i) => (
-                    <li key={i} className="text-sm text-fg-muted">
-                      {note}
-                    </li>
-                  ))}
-                </ul>
-              )}
+                {result.followUp && (
+                  <button
+                    type="button"
+                    onClick={() => ask(result.followUp)}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-border px-3.5 py-2 text-sm font-medium text-fg-muted transition-colors hover:border-border-strong hover:text-fg"
+                  >
+                    {result.followUp}
+                  </button>
+                )}
 
-              {result.followUp && (
-                <button
-                  type="button"
-                  onClick={() => ask(result.followUp)}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-border px-3.5 py-2 text-sm font-medium text-fg-muted transition-colors hover:border-border-strong hover:text-fg"
-                >
-                  {result.followUp}
-                </button>
-              )}
-
-              <div className="flex items-center gap-2 border-t border-border pt-4">
-                <span className="text-xs text-fg-subtle">Was this helpful?</span>
-                <button
-                  type="button"
-                  disabled={feedbackGiven}
-                  onClick={() => giveFeedback("helpful")}
-                  aria-label="This was helpful"
-                  className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-full text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg disabled:opacity-40"
-                >
-                  <ThumbsUp size={15} weight="bold" aria-hidden="true" />
-                </button>
-                <button
-                  type="button"
-                  disabled={feedbackGiven}
-                  onClick={() => giveFeedback("not_helpful")}
-                  aria-label="This was not helpful"
-                  className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-full text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg disabled:opacity-40"
-                >
-                  <ThumbsDown size={15} weight="bold" aria-hidden="true" />
-                </button>
-              </div>
+                <div className="flex items-center gap-2 border-t border-border pt-4">
+                  <span className="text-xs text-fg-subtle">Was this helpful?</span>
+                  <button
+                    type="button"
+                    disabled={feedbackGiven}
+                    onClick={() => giveFeedback("helpful")}
+                    aria-label="This was helpful"
+                    className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-full text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg disabled:opacity-40"
+                  >
+                    <ThumbsUp size={15} weight="bold" aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    disabled={feedbackGiven}
+                    onClick={() => giveFeedback("not_helpful")}
+                    aria-label="This was not helpful"
+                    className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-full text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg disabled:opacity-40"
+                  >
+                    <ThumbsDown size={15} weight="bold" aria-hidden="true" />
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -408,25 +412,6 @@ export function DeliaPanel() {
           onSubmit={submitTyped}
           className="flex items-center gap-2 border-t border-border px-5 py-4"
         >
-          {supported && (
-            <button
-              type="button"
-              onClick={listening ? stop : start}
-              disabled={loading}
-              aria-pressed={listening}
-              aria-label={listening ? "Stop listening" : "Start listening"}
-              className={cn(
-                "relative isolate inline-flex h-12 w-12 shrink-0 cursor-pointer items-center justify-center rounded-full",
-                "transition-transform duration-200 active:scale-95 disabled:opacity-50",
-                listening
-                  ? "delia-pulse bg-lime text-ink"
-                  : "bg-surface-inverse text-fg-on-inverse",
-              )}
-            >
-              <Microphone size={22} weight="fill" aria-hidden="true" />
-            </button>
-          )}
-
           <label htmlFor="delia-input" className="sr-only">
             Ask Delia a question
           </label>
@@ -435,7 +420,7 @@ export function DeliaPanel() {
             ref={inputRef}
             value={typed}
             onChange={(e) => setTyped(e.target.value)}
-            placeholder={supported ? "…or type it here" : "Type your question"}
+            placeholder="Type your question"
             className="h-12 min-w-0 flex-1 rounded-full border border-border bg-bg px-4 text-[0.95rem] text-fg outline-none transition-colors placeholder:text-fg-subtle focus:border-border-strong"
           />
 
