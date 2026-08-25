@@ -42,44 +42,52 @@ export const BACKEND_URL =
   process.env.BACKEND_API_URL || `http://127.0.0.1:${process.env.PORT || 8088}`;
 
 /**
- * One fetch per market — every list-shaped query (today's drop, more picks,
- * category/search filtering, related picks, price bounds, active retailers,
- * category counts) reads this same array, exactly like the old local
- * `deals` array did. Header, Footer and a page body each call one of these
- * independently, so without memoization a single page view can trigger it
- * five-plus times.
+ * One fetch per (market, limit, category) — every list-shaped query (today's
+ * drop, more picks, category/search filtering, related picks, price bounds,
+ * active retailers, category counts) used to read one full-catalog array,
+ * exactly like the old local `deals` array did. Header, Footer and a page
+ * body each called one of these independently, so without memoization a
+ * single page view triggered it five-plus times — and the catalog itself is
+ * multiple megabytes for a busy market (US, ~2,600 products, ~3.5MB compact),
+ * dominated by one oversized feed (Gifts, ~2,300 of those), so every one of
+ * those five-plus calls was a multi-megabyte fetch + parse + map from
+ * scratch. `cache()` from `react` fixes the *repeat-call* half of that: it
+ * memoizes this function per argument tuple for the lifetime of one request.
+ *
+ * The other half is `limit`/`category`, both handled server-side now (see
+ * app.js's /api/products) — callers that only need one category (a category
+ * page) or a bounded sample (the homepage's top picks) ask for exactly that
+ * instead of the whole market. Bounded calls are safely under Next's 2MB
+ * data-cache limit, so those also get real cross-request caching
+ * (`next.revalidate`); an unbounded call (no limit, no category — still used
+ * where correctness needs the true full catalog, e.g. price bounds) keeps
+ * `cache: "no-store"` since it can be too large for that cache to hold.
  *
  * `rank` isn't trusted from the backend (it only assigns one to the daily
  * top 10) — it's synthesized from list position instead, since the backend
  * already returns daily-drop items first, followed by the rest of the
  * catalog sorted by score.
- *
- * Uses `compact=1` (has every field the adapter reads) and `cache: "no-store"`
- * on the raw fetch: the full catalog is multiple megabytes for a busy
- * market — well over Next's 2MB data-cache entry limit, so that cache is a
- * non-starter here. `cache()` from `react` is the fix instead: it memoizes
- * the whole function (fetch + JSON parse + the adaptProduct/rank mapping
- * below) per market code for the lifetime of one request, so the work
- * genuinely runs once no matter how many places on the page ask for it —
- * this is what was missing before, and is the main reason a market with a
- * large catalog (US, ~2,600 products, ~3.5MB compact) rendered noticeably
- * slower than a small one (France, ~120KB): every caller was redoing the
- * same multi-megabyte parse and 2,600-item map from scratch.
  */
-const fetchMarketCatalog = cache(async (marketCode: string): Promise<Deal[]> => {
-  const res = await fetch(
-    `${BACKEND_URL}/api/products?market=${encodeURIComponent(marketCode)}&compact=1`,
-    { cache: "no-store" },
-  );
-  if (!res.ok) {
-    throw new Error(`Failed to load the catalog for "${marketCode}" (${res.status}).`);
-  }
-  const raw = (await res.json()) as RawProduct[];
-  return raw.map((product, index) => ({
-    ...adaptProduct(product),
-    rank: index + 1,
-  }));
-});
+const fetchMarketCatalog = cache(
+  async (marketCode: string, limit?: number, category?: string): Promise<Deal[]> => {
+    const params = new URLSearchParams({ market: marketCode, compact: "1" });
+    if (limit) params.set("limit", String(limit));
+    if (category) params.set("category", category);
+    const bounded = Boolean(limit || category);
+
+    const res = await fetch(`${BACKEND_URL}/api/products?${params}`, {
+      ...(bounded ? { next: { revalidate: 300 } } : { cache: "no-store" as const }),
+    });
+    if (!res.ok) {
+      throw new Error(`Failed to load the catalog for "${marketCode}" (${res.status}).`);
+    }
+    const raw = (await res.json()) as RawProduct[];
+    return raw.map((product, index) => ({
+      ...adaptProduct(product),
+      rank: index + 1,
+    }));
+  },
+);
 
 export function getMarkets(): Market[] {
   return markets;
@@ -100,6 +108,12 @@ export function getCategory(slug: string): Category | undefined {
 /**
  * Live category slugs + counts, with local display metadata layered on.
  *
+ * Reads /api/categories — one `GROUP BY` on the backend — rather than
+ * fetching the whole market catalog just to count it. Header and Footer both
+ * call this on every single page, so this was previously the single biggest
+ * source of "switching tabs feels slow": a multi-megabyte fetch on every
+ * navigation just to print a dozen numbers.
+ *
  * `language` translates the display name. categories.json carries the English
  * name only — that is display configuration, not copy — while src/i18n.js has
  * had every category in four languages since the Express pages. Nothing here
@@ -110,16 +124,22 @@ export async function getCategoriesWithCounts(
   marketCode: string,
   language?: string,
 ): Promise<Array<Category & { count: number }>> {
-  const deals = await fetchMarketCatalog(marketCode);
-  const counts = new Map<string, number>();
-  for (const d of deals) counts.set(d.category, (counts.get(d.category) ?? 0) + 1);
+  const res = await fetch(
+    `${BACKEND_URL}/api/categories?market=${encodeURIComponent(marketCode)}`,
+    { next: { revalidate: 300 } },
+  );
+  if (!res.ok) {
+    throw new Error(`Failed to load category counts for "${marketCode}" (${res.status}).`);
+  }
+  const rows = (await res.json()) as Array<{ category: string; count: number }>;
 
-  return [...counts.entries()]
-    .map(([slug, count]) => {
+  return rows
+    .map(({ category, count }) => {
+      const slug = slugifyCategory(category);
       const known = getCategory(slug);
       const named = known
         ? { ...known, count }
-        : { slug, name: slug, ...FALLBACK_CATEGORY, count };
+        : { slug, name: category, ...FALLBACK_CATEGORY, count };
       return language ? { ...named, name: categoryName(named.name, language) } : named;
     })
     .sort((a, b) => b.count - a.count);
@@ -172,7 +192,11 @@ export async function getTopPicks(
   limit = 12,
   { perCategory = 3, perRetailer = 4 }: { perCategory?: number; perRetailer?: number } = {},
 ): Promise<Deal[]> {
-  const deals = await fetchMarketCatalog(marketCode);
+  /* The backend already returns its best-scoring items first, so picking
+     from the top 300 finds the same diverse shortlist a full 2,600-item
+     market would — every category here has well under 300 listings except
+     Gifts, which the caps below only ever take perCategory of anyway. */
+  const deals = await fetchMarketCatalog(marketCode, 300);
   const picked: Deal[] = [];
   const categoryCount = new Map<string, number>();
   const retailerCount = new Map<string, number>();
@@ -198,9 +222,22 @@ export async function getMorePicks(marketCode: string, limit?: number): Promise<
 /**
  * The one query function. The category page calls it with filters parsed from
  * the URL.
+ *
+ * When the filter names a category, that's scoped server-side too — a
+ * category page only ever needed its own slice, not the market's full
+ * catalog. The rest of the filter (retailer, price, rating, score, sort)
+ * still runs client-side over that (already much smaller) slice via
+ * `applyFilter`. The search page passes no category, so it still reads the
+ * full catalog — free-text search across everything doesn't have a
+ * server-side query to scope it to yet.
  */
 export async function getDeals(marketCode: string, filter: DealFilter = {}): Promise<Deal[]> {
-  const deals = await fetchMarketCatalog(marketCode);
+  const backendCategory = filter.category ? getCategory(filter.category)?.name : undefined;
+  const deals = await fetchMarketCatalog(
+    marketCode,
+    backendCategory ? 500 : undefined,
+    backendCategory,
+  );
   return applyFilter(deals, filter);
 }
 
