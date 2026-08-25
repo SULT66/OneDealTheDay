@@ -44,6 +44,14 @@ export type DeliaResult = {
   resultState: "exact_matches" | "closest_alternatives" | "no_match";
   followUp: string;
   recommendations: DeliaRecommendation[];
+  /**
+   * Real product pages the backend found and vouched for, but whose price it
+   * could not confirm in the retailer's own currency. They carry a title, a
+   * retailer, a direct link and a photo, so they are worth showing — flagged
+   * as "check the price at the retailer" rather than hidden, which is what
+   * used to happen and read as "she found nothing".
+   */
+  partialOffers: DeliaRecommendation[];
   comparisonNotes: string[];
   comparison: DeliaComparisonRow[];
   /** Set when the backend needs more detail before it can search — the
@@ -66,6 +74,7 @@ type AssistantResponse = {
   result_state?: DeliaResult["resultState"];
   follow_up?: string;
   recommendations?: DeliaRecommendation[];
+  partial_offers?: DeliaRecommendation[];
   comparison_notes?: string[];
   comparison?: DeliaComparisonRow[];
   clarifying_questions?: string[];
@@ -103,6 +112,7 @@ export async function askAssistant(
     resultState: data.result_state || "no_match",
     followUp: data.follow_up || "",
     recommendations: data.recommendations || [],
+    partialOffers: data.partial_offers || [],
     comparisonNotes: data.comparison_notes || [],
     comparison: data.comparison || [],
     clarifyingQuestions: data.clarifying_questions || [],

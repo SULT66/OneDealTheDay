@@ -18,9 +18,11 @@ import {
   checkAssistantAvailable,
   DeliaError,
   sendFeedback,
+  type DeliaRecommendation,
   type DeliaResult,
   type DeliaTurn,
 } from "@/lib/delia";
+import { ProductImage } from "@/components/ui/ProductImage";
 import { useDelia } from "./DeliaContext";
 
 const EXAMPLES = [
@@ -29,6 +31,75 @@ const EXAMPLES = [
   "What's today's drop?",
   "Compare the cheapest two tools you have",
 ];
+
+/**
+ * One product Delia is putting forward: photo, name, retailer, price.
+ *
+ * `priceUnconfirmed` marks a real product page whose price the backend could
+ * not verify in the market's currency. The card still earns its place (the
+ * shopper asked to see products, and this is one), it just says plainly that
+ * the price has to be read at the retailer instead of inventing a figure.
+ */
+function OfferCard({
+  rec,
+  market,
+  onClose,
+  priceUnconfirmed = false,
+}: {
+  rec: DeliaRecommendation;
+  market: string;
+  onClose: () => void;
+  priceUnconfirmed?: boolean;
+}) {
+  const inCatalog = rec.source_type === "catalog" && Boolean(rec.catalog_product_id);
+  const href = inCatalog ? `/${market}/deal/${rec.catalog_product_id}` : rec.url;
+  const price =
+    rec.price ||
+    (rec.price_value !== null
+      ? formatPrice(rec.price_value, rec.currency || "USD", market)
+      : "");
+
+  const body = (
+    <>
+      <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-surface-2">
+        <ProductImage src={rec.image_url} alt="" categoryIcon="Package" sizes="64px" />
+      </div>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-semibold text-fg">{rec.title}</span>
+        <span className="block truncate text-xs text-fg-muted">
+          {rec.retailer}
+          {rec.badge && ` · ${rec.badge}`}
+        </span>
+        {rec.reason && (
+          <span className="mt-0.5 line-clamp-2 block text-xs text-fg-subtle">
+            {rec.reason}
+          </span>
+        )}
+      </span>
+      <span className="flex shrink-0 items-center gap-1 self-center text-sm font-bold text-fg tnum">
+        {price ? (
+          price
+        ) : priceUnconfirmed ? (
+          <span className="text-xs font-medium text-fg-subtle">Price at retailer</span>
+        ) : null}
+        {!inCatalog && <ArrowUpRight size={14} weight="bold" aria-hidden="true" />}
+      </span>
+    </>
+  );
+
+  const className =
+    "flex items-center gap-3 rounded-2xl border border-border p-3 transition-colors hover:border-border-strong hover:bg-surface-2";
+
+  return inCatalog ? (
+    <Link href={href} onClick={onClose} className={className}>
+      {body}
+    </Link>
+  ) : (
+    <a href={href} target="_blank" rel="sponsored noopener noreferrer" className={className}>
+      {body}
+    </a>
+  );
+}
 
 /** One question-and-answer exchange, rendered as a pair of chat bubbles. */
 function DeliaExchange({
@@ -145,58 +216,22 @@ function DeliaExchange({
           </ul>
         )}
 
-        {result.recommendations.length > 0 && (
+        {(result.recommendations.length > 0 || result.partialOffers.length > 0) && (
           <ul className="space-y-2">
-            {result.recommendations.map((rec, i) => {
-              const href =
-                rec.source_type === "catalog" && rec.catalog_product_id
-                  ? `/${market}/deal/${rec.catalog_product_id}`
-                  : rec.url;
-              const external = rec.source_type !== "catalog" || !rec.catalog_product_id;
-              const price =
-                rec.price ||
-                (rec.price_value !== null
-                  ? formatPrice(rec.price_value, rec.currency || "USD", market)
-                  : "");
-
-              const card = (
-                <>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-semibold text-fg">
-                      {rec.title}
-                    </span>
-                    <span className="block text-xs text-fg-muted">
-                      {rec.retailer}
-                      {rec.badge && ` · ${rec.badge}`}
-                    </span>
-                    {rec.reason && (
-                      <span className="mt-0.5 block text-xs text-fg-subtle">{rec.reason}</span>
-                    )}
-                  </span>
-                  <span className="flex shrink-0 items-center gap-1 text-sm font-bold text-fg tnum">
-                    {price}
-                    {external && <ArrowUpRight size={14} weight="bold" aria-hidden="true" />}
-                  </span>
-                </>
-              );
-
-              const className =
-                "flex items-center gap-3 rounded-2xl border border-border p-3 transition-colors hover:border-border-strong hover:bg-surface-2";
-
-              return (
-                <li key={`${rec.title}-${i}`}>
-                  {external ? (
-                    <a href={href} target="_blank" rel="sponsored noopener noreferrer" className={className}>
-                      {card}
-                    </a>
-                  ) : (
-                    <Link href={href} onClick={onClose} className={className}>
-                      {card}
-                    </Link>
-                  )}
-                </li>
-              );
-            })}
+            {result.recommendations.map((rec, i) => (
+              <li key={`rec-${rec.url}-${i}`}>
+                <OfferCard rec={rec} market={market} onClose={onClose} />
+              </li>
+            ))}
+            {/* Products the backend found and stands behind but could not price
+                in this market's currency. They used to be dropped on the floor
+                here, which is why a search that genuinely found something could
+                still come back as prose with no products under it. */}
+            {result.partialOffers.map((rec, i) => (
+              <li key={`partial-${rec.url}-${i}`}>
+                <OfferCard rec={rec} market={market} onClose={onClose} priceUnconfirmed />
+              </li>
+            ))}
           </ul>
         )}
 
