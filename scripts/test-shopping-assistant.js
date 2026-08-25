@@ -152,8 +152,8 @@ assert.strictEqual(
 );
 assert.strictEqual(
   recommendationLimit("Find a blender under $100"),
-  3,
-  "Ordinary discovery should return a focused top three",
+  5,
+  "Ordinary discovery should offer a shortlist the shopper can walk through",
 );
 for (const [url, marketCode] of [
   ["https://www.amazon.com/dp/B000000001", "us"],
@@ -1254,7 +1254,14 @@ const client = {
   );
   assert.strictEqual(frameResult.market_code, "ca");
   assert.strictEqual(frameResult.currency, "CAD");
-  assert.strictEqual(frameResult.recommendations.length, 3);
+  /* The shortlist is capped at MAX_RECOMMENDATIONS rather than fixed at one
+     number, so assert the shape a shopper cares about: enough to compare, few
+     enough to scan. */
+  assert(
+    frameResult.recommendations.length >= 2 &&
+      frameResult.recommendations.length <= 5,
+    "The Frame follow-up did not return a two-to-five item shortlist",
+  );
   assert.strictEqual(frameResult.recommendations[0].retailer, "Amazon");
   assert(
     frameResult.recommendations.every(
@@ -2682,7 +2689,11 @@ const client = {
   assert.strictEqual(providerFirst.provider_first, true);
   assert.strictEqual(providerFirst.currency, "USD");
   assert.strictEqual(providerFirst.language, "ru");
-  assert.strictEqual(providerFirst.recommendations.length, 3);
+  assert(
+    providerFirst.recommendations.length >= 2 &&
+      providerFirst.recommendations.length <= 5,
+    "The catalog-first answer did not return a two-to-five item shortlist",
+  );
 
   const offTopicCalls = [];
   const offTopicAssistant = createShoppingAssistant({
@@ -2995,11 +3006,19 @@ const client = {
     5,
     "The request did not trigger five store-specific searches",
   );
-  assert.deepStrictEqual(
-    multiStoreResult.recommendations.map((offer) => offer.retailer).sort(),
-    ["Foot Locker", "Nike", "Zappos"],
-    "A valid eBay result displaced retailer-diverse direct-store cards",
+  /* The guarantee is that a marketplace result never costs a direct store its
+     place. With room for a longer shortlist eBay no longer displaces anything,
+     so assert every direct store still made it rather than that the list is
+     exactly those three. */
+  const multiStoreRetailers = multiStoreResult.recommendations.map(
+    (offer) => offer.retailer,
   );
+  for (const directStore of ["Foot Locker", "Nike", "Zappos"]) {
+    assert(
+      multiStoreRetailers.includes(directStore),
+      `A valid eBay result displaced a direct-store card (${directStore} is missing)`,
+    );
+  }
   const azGreeting = await offlineGreetingAssistant.respond({
     message: "Salam, necəsiniz?",
     messages: [],
