@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  ArrowRight,
   ArrowUpRight,
   PaperPlaneRight,
   Sparkle,
@@ -47,6 +48,25 @@ function DeliaExchange({
   onFeedback: (type: "helpful" | "not_helpful") => void;
   disabled: boolean;
 }) {
+  // When there are two questions, answering one used to fire the request
+  // immediately, taking only that answer and leaving the other question
+  // unanswered. Two questions now select, and wait for both before sending
+  // one combined follow-up; a single question still sends on tap, since
+  // there's nothing else to wait for.
+  const [selections, setSelections] = useState<Record<number, string>>({});
+  const multiQuestion = result.clarificationPrompts.length > 1;
+  const allAnswered =
+    multiQuestion &&
+    result.clarificationPrompts.every((_, i) => Boolean(selections[i]));
+
+  function pickOption(promptIndex: number, option: string) {
+    if (!multiQuestion) {
+      onFollowUp(option);
+      return;
+    }
+    setSelections((prev) => ({ ...prev, [promptIndex]: option }));
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
@@ -73,21 +93,45 @@ function DeliaExchange({
               <div key={i}>
                 <p className="text-sm font-semibold text-fg">{prompt.question}</p>
                 <ul className="mt-2 flex flex-wrap gap-2">
-                  {prompt.options.map((option) => (
-                    <li key={option}>
-                      <button
-                        type="button"
-                        disabled={disabled}
-                        onClick={() => onFollowUp(option)}
-                        className="cursor-pointer rounded-full border border-border px-3.5 py-2 text-sm text-fg-muted transition-colors hover:border-border-strong hover:bg-surface-2 hover:text-fg disabled:cursor-default disabled:opacity-40 disabled:hover:border-border disabled:hover:bg-transparent"
-                      >
-                        {option}
-                      </button>
-                    </li>
-                  ))}
+                  {prompt.options.map((option) => {
+                    const selected = selections[i] === option;
+                    return (
+                      <li key={option}>
+                        <button
+                          type="button"
+                          disabled={disabled}
+                          aria-pressed={multiQuestion ? selected : undefined}
+                          onClick={() => pickOption(i, option)}
+                          className={cn(
+                            "cursor-pointer rounded-full border px-3.5 py-2 text-sm transition-colors disabled:cursor-default disabled:opacity-40",
+                            selected
+                              ? "border-transparent bg-lime text-ink hover:opacity-90"
+                              : "border-border text-fg-muted hover:border-border-strong hover:bg-surface-2 hover:text-fg disabled:hover:border-border disabled:hover:bg-transparent",
+                          )}
+                        >
+                          {option}
+                        </button>
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             ))}
+            {multiQuestion && (
+              <button
+                type="button"
+                disabled={disabled || !allAnswered}
+                onClick={() =>
+                  onFollowUp(
+                    result.clarificationPrompts.map((_, i) => selections[i]).join(", "),
+                  )
+                }
+                className="inline-flex items-center gap-1.5 rounded-full bg-lime px-4 py-2 text-sm font-semibold text-ink transition-opacity hover:opacity-88 disabled:cursor-default disabled:opacity-40"
+              >
+                Continue
+                <ArrowRight size={14} weight="bold" aria-hidden="true" />
+              </button>
+            )}
           </div>
         )}
 
