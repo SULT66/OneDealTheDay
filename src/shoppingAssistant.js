@@ -43,6 +43,10 @@ const SEARCH_TIMEOUT_MS = 26000;
  * not the nominal SEARCH_TIMEOUT_MS above.
  */
 const TOTAL_RESPONSE_BUDGET_MS = 34000;
+/* How long the live search waits for the retailer APIs before starting without
+   them. They keep running: this only decides whether their answer is early
+   enough to skip the search entirely. */
+const RETAILER_FAST_PATH_WINDOW_MS = 3000;
 const RESPONSE_ASSEMBLY_RESERVE_MS = 1500;
 const normalizeTokenText = (value) =>
   String(value || "")
@@ -2433,7 +2437,7 @@ Search the live web for the full resolved_shopping_request included with the inp
 
 The response is rendered as a visual shopping interface. Lead with a one- or two-sentence decision summary. Set result_state to exact_matches only when the returned offers satisfy the shopper's material constraints. If no exact offer is found, immediately search for the closest practical alternatives, set result_state to closest_alternatives, and explain which constraint differs. Use no_match only when there is no direct product page worth showing. Never ask the shopper to loosen budget, condition, or trade-in requirements before showing the closest available alternatives. For a comparison request, return exactly the two products the shopper named (or the two closest valid matches), exactly two recommendations, and exactly two comparison rows. For discovery, return between ${MIN_RECOMMENDATIONS} and ${MAX_RECOMMENDATIONS} distinct useful choices, preferring the widest genuinely good spread of price and retailer you confirmed rather than the same product repeated at slightly different prices. Never pad with weak, duplicate or barely-relevant results to reach a count: returning a single confirmed product is correct when that is all that held up. When the shopper asks whether the same product is on a named retailer or cheaper elsewhere, treat it as a price-and-store follow-up: preserve the active model, include the named retailer when available, and include the strongest regional alternative for comparison. Put only decision-relevant tradeoffs in comparison_notes.
 
-Every retailer product page must be intended for market ${marketCode.toUpperCase()} and currency ${currency}. Prefer these regional retailer hosts: ${regionalRetailers}. A foreign-market hostname is not a valid option even when the model name matches. In particular, never substitute amazon.com for amazon.ca, bestbuy.com for bestbuy.ca, or another country's eBay domain. If the requested retailer has no valid regional listing, say that directly and continue with the best regional alternatives instead of stopping.
+Every retailer product page must be intended for market ${marketCode.toUpperCase()} and currency ${currency}. Prefer these regional retailer hosts: ${regionalRetailers}. That list is a preference, not a boundary: any reputable shop that sells the product to this market directly is fair game, including the manufacturer's own store and specialist retailers not named here, and you should go looking at them when the listed ones do not carry what was asked for. What is never acceptable is a page nobody buys from: a search engine, marketplace listing aggregator, price-comparison or coupon site, forum, social post, wiki, or a review and editorial article. A foreign-market hostname is not a valid option even when the model name matches. In particular, never substitute amazon.com for amazon.ca, bestbuy.com for bestbuy.ca, or another country's eBay domain. If the requested retailer has no valid regional listing, say that directly and continue with the best regional alternatives instead of stopping.
 
 For an exact verified_catalog_results product, set source_type to catalog and copy its id into catalog_product_id; the server will replace all card facts with verified catalog data. For a live result outside the catalog, create a recommendation whenever search supplies a specific product name and a directly cited HTTPS product page. Copy a price only when that page supports it. Every visual product card needs a real product image tied to that same direct page: copy image_url only from such an image_result, and never use a category, editorial, logo, or invented placeholder image. Leave missing price or image fields empty; the server will keep incomplete evidence as a source rather than fabricating a visual card. Set source_type to web, catalog_product_id to 0, and copy the exact cited URLs; never invent or reconstruct a URL. Never apply Best value, Best overall, Editorial pick, Verified, or any other recommendation badge to a web result: badge must be empty. Do not put a OneDailyDrop Score, rating, delivery promise, return policy, availability claim, or price history on a web result. Use only catalog facts for those fields.
 
@@ -2666,11 +2670,42 @@ function hostnameMatches(hostname, expected) {
   return hostname === expected || hostname.endsWith(`.${expected}`);
 }
 
+/*
+ * Places that are never where a shopper completes a purchase, however
+ * product-shaped the page looks: search engines, social, forums, wikis, review
+ * and editorial publications, coupon and price-comparison aggregators.
+ *
+ * This is a blocklist rather than an allowlist on purpose. MARKET_RETAILER_HOSTS
+ * used to be the hard gate, which meant a real product page at a real shop was
+ * thrown away for the sole reason that its domain was not one of the couple of
+ * dozen we had written down: a Xiaomi phone on Xiaomi's own store, a laptop at
+ * Newegg, anything at a specialist retailer. The search kept finding products
+ * and we kept discarding them, so the answer came back empty and the model went
+ * on hunting until it ran out of time.
+ */
+const NON_RETAILER_HOSTS = new Set([
+  "google.com", "bing.com", "duckduckgo.com", "yahoo.com", "youtube.com",
+  "facebook.com", "instagram.com", "tiktok.com", "twitter.com", "x.com",
+  "reddit.com", "pinterest.com", "quora.com", "wikipedia.org", "medium.com",
+  "blogspot.com", "wordpress.com", "substack.com", "linkedin.com", "yelp.com",
+  "slickdeals.net", "dealnews.com", "retailmenot.com", "joinhoney.com",
+  "pricerunner.com", "idealo.de", "camelcamelcamel.com", "pcpartpicker.com",
+  "trustpilot.com", "consumerreports.org", "cnet.com", "techradar.com",
+  "tomsguide.com", "theverge.com", "wired.com", "engadget.com", "rtings.com",
+  "nytimes.com", "forbes.com", "businessinsider.com", "alibaba.com",
+]);
+
 function allowedRetailerHost(value, marketCode = "us") {
   const hostname = sourceHostKey(value);
+  if (!hostname) return false;
   if (hostname === "example.com" || hostname.endsWith(".example.com")) return true;
-  const hosts = MARKET_RETAILER_HOSTS[marketCode] || new Set();
-  return [...hosts].some((host) => hostnameMatches(hostname, host));
+  /* The curated list stays, as the shops we would rather see: matching it is
+     an immediate yes. Everything else has to merely not be one of the places
+     nobody buys anything, and still clear the direct-product-page, editorial,
+     region and intent checks that run alongside this one. */
+  const preferred = MARKET_RETAILER_HOSTS[marketCode] || new Set();
+  if ([...preferred].some((host) => hostnameMatches(hostname, host))) return true;
+  return ![...NON_RETAILER_HOSTS].some((host) => hostnameMatches(hostname, host));
 }
 
 function urlMatchesMarket(value, marketCode = "us") {
@@ -3938,13 +3973,13 @@ function createShoppingAssistant({
   retailerSearch,
   scopeTimeoutMs = SCOPE_TIMEOUT_MS,
   searchTimeoutMs = SEARCH_TIMEOUT_MS,
-  /* The live retailer search (searchForAssistant) runs up to 8 keyword queries
-     at concurrency 3 and then up to 18 item-detail fetches at concurrency 6, so
-     5s used to cancel it just before it produced anything. It is also awaited
-     before the live web search starts, so every second here is a second the
-     web search does not get: 9s turned out to be too generous a share of the
-     budget and starved the search it was meant to protect. */
-  retailerSearchTimeoutMs = 6000,
+  /* The live retailer search runs up to 8 keyword queries at concurrency 3 and
+     then up to 18 item-detail fetches at concurrency 6, so it needs real time
+     to produce anything at all. It no longer stands in front of the live search
+     (see RETAILER_FAST_PATH_WINDOW_MS), so it can have that time back: it now
+     runs alongside the search and is read when the search gives up, which is
+     precisely when having its results matters most. */
+  retailerSearchTimeoutMs = 14000,
   storeDiscoveryEnabled = !client,
   storeDiscoveryTimeoutMs = 12000,
   retailerPageHydrationEnabled = !client,
@@ -4205,7 +4240,30 @@ function createShoppingAssistant({
             ),
           )
         : [];
-      const retailerProducts = await retailerResultsPromise;
+      /*
+       * The retailer APIs get a short window to answer before the live search
+       * starts, and keep running in the background either way.
+       *
+       * They used to be awaited in full here, which put their whole timeout in
+       * front of the search and then wasted it: if they were slow the search
+       * lost that time, and if the search later ran out of time the fallback
+       * still had nothing, because the only thing that could have filled it
+       * was the very result we had given up waiting for. A shopper then saw
+       * "the search took too long" with no products at all, which is the worst
+       * of both.
+       *
+       * Now a quick answer still feeds the fast path, a slow one no longer
+       * delays anything, and by the time the search gives up the promise has
+       * had the whole search window to finish -- so the fallback has real
+       * products to show.
+       */
+      const retailerProducts =
+        (await Promise.race([
+          retailerResultsPromise,
+          new Promise((resolve) =>
+            setTimeout(() => resolve(null), RETAILER_FAST_PATH_WINDOW_MS),
+          ),
+        ])) || [];
       const requiresDeepSearch =
         isComparisonRequest(userMessage) ||
         wantsPriceHistory ||
@@ -4254,13 +4312,17 @@ function createShoppingAssistant({
           remainingBudgetMs,
         ),
       );
-      const timeoutFallback = () => fastProviderFallback || providerFirstResponse({
+      /* Async so it can collect the retailer results that were still in flight
+         when the live search began. By the time we get here they have had the
+         whole search window to arrive, and they are the difference between
+         handing back real products and handing back an apology. */
+      const timeoutFallback = async () => fastProviderFallback || providerFirstResponse({
         userMessage,
         shopperLanguage,
         catalogProducts,
         model,
         selectedMarket,
-        retailerProducts,
+        retailerProducts: await retailerResultsPromise.catch(() => retailerProducts),
         resolvedRequest,
         shoppingMission: activeMission,
         excludedUrls,
@@ -4735,6 +4797,7 @@ module.exports = {
   ASSISTANT_RESPONSE_FORMAT,
   SHOPPING_SCOPE_RESPONSE_FORMAT,
   DEFAULT_MODEL,
+  allowedRetailerHost,
   assistantProduct,
   broadDiscoveryQuestions,
   classifyShoppingScope,
