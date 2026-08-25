@@ -4,6 +4,15 @@ on:
   push:
     branches: [main]
 
+# The deploy workflow cancels an in-flight deploy when a newer push lands
+# (see deploy-azure.yml), so a verify run for the cancelled commit would wait
+# out its full retry budget for a release that will never go live. Its own
+# group (not shared with the deploy) drops that stale run in favor of the
+# verify for whichever commit actually deployed.
+concurrency:
+  group: onedailydrop-verify
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
