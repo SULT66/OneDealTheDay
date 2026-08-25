@@ -126,9 +126,17 @@ function DeliaExchange({
   // there's nothing else to wait for.
   const [selections, setSelections] = useState<Record<number, string>>({});
   const multiQuestion = result.clarificationPrompts.length > 1;
+  // Only a question that actually offers options can be answered here, so only
+  // those may hold Continue back. The backend is not supposed to send an
+  // optionless prompt at all, but when one slipped through it left Continue
+  // permanently disabled with no way for the shopper to proceed.
+  const answerableIndexes = result.clarificationPrompts
+    .map((prompt, i) => (prompt.options.length > 0 ? i : -1))
+    .filter((i) => i >= 0);
   const allAnswered =
     multiQuestion &&
-    result.clarificationPrompts.every((_, i) => Boolean(selections[i]));
+    answerableIndexes.length > 0 &&
+    answerableIndexes.every((i) => Boolean(selections[i]));
 
   function pickOption(promptIndex: number, option: string) {
     if (!multiQuestion) {
@@ -194,7 +202,10 @@ function DeliaExchange({
                 disabled={disabled || !allAnswered}
                 onClick={() =>
                   onFollowUp(
-                    result.clarificationPrompts.map((_, i) => selections[i]).join(", "),
+                    answerableIndexes
+                      .map((i) => selections[i])
+                      .filter(Boolean)
+                      .join(", "),
                   )
                 }
                 className="inline-flex items-center gap-1.5 rounded-full bg-lime px-4 py-2 text-sm font-semibold text-ink transition-opacity hover:opacity-88 disabled:cursor-default disabled:opacity-40"
