@@ -235,7 +235,10 @@ export async function getDeals(marketCode: string, filter: DealFilter = {}): Pro
   const backendCategory = filter.category ? getCategory(filter.category)?.name : undefined;
   const deals = await fetchMarketCatalog(
     marketCode,
-    backendCategory ? 500 : undefined,
+    // A normal category tops out around 30-40 items — this only ever bites
+    // an oversized bulk-feed category (e.g. an Awin dump), where rendering
+    // hundreds of cards was real, avoidable page weight.
+    backendCategory ? 100 : undefined,
     backendCategory,
   );
   return applyFilter(deals, filter);
