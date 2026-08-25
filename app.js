@@ -231,7 +231,11 @@ function expressWithHomepage(...args) {
       ? Math.max(10, Math.min(1000, Math.round(requestedLimit)))
       : Number.MAX_SAFE_INTEGER;
     const compactResponse = String(req.query.compact || "") === "1";
-    const cacheKey = `products:${selectedMarket}:${language}:${responseLimit}:${compactResponse ? 1 : 0}`;
+    // Scopes the query to one category server-side — a category page (or the
+    // Gifts feed alone, ~2,300 rows) no longer has to pull the whole market
+    // catalog across the wire just to keep its own slice of it.
+    const categoryFilter = String(req.query.category || "").trim();
+    const cacheKey = `products:${selectedMarket}:${language}:${responseLimit}:${compactResponse ? 1 : 0}:${categoryFilter}`;
     const cached = cachedValue(cacheKey);
     res.set("Cache-Control", "private, max-age=60, stale-while-revalidate=300");
     if (cached) return res.set("X-ODD-Cache", "HIT").json(cached);
@@ -239,70 +243,108 @@ function expressWithHomepage(...args) {
       ? ` LIMIT ${Math.min(2000, responseLimit * 2)}`
       : "";
     const sourceCondition = sourceSql();
-    const daily = db.prepare(`
-      SELECT p.*,d.rank AS daily_rank,d.selection_reason AS daily_selection_reason
-      FROM daily_drops d
-      JOIN products p ON p.id=d.product_id
-      WHERE d.market=? AND d.drop_date=(SELECT MAX(drop_date) FROM daily_drops WHERE market=?)
-        AND ${sourceSql("p")}
-      ORDER BY d.rank
-    `).all(selectedMarket, selectedMarket);
-    const dailyIds = new Set(daily.map(product => product.id));
-    const catalog = db.prepare(`
-      SELECT * FROM products
-      WHERE market=? AND status='published' AND ${sourceCondition}
-      ORDER BY score DESC,updated_at DESC
-      ${catalogRowLimit}
-    `).all(selectedMarket).filter(product => !dailyIds.has(product.id));
-    const products = uniqueProductsInOrder([...daily.map(product => ({
-      ...product,
-      selection_reason: product.daily_selection_reason || product.selection_reason
-    })), ...catalog]).slice(0, responseLimit);
-    const presented = products
-      .map(product => presentProduct(localizeProduct({
+    const present = product => {
+      const shaped = presentProduct(localizeProduct({
         ...product,
         deal_url:dealPath(product)
-      }, language), language))
-      .map(product => {
-        if (!compactResponse) return product;
-        return {
-          id:product.id,
-          market:product.market,
-          source:product.source,
-          title:product.title,
-          description:String(product.description || "").slice(0, 180),
-          public_category:product.public_category,
-          display_category:product.display_category,
-          brand:product.brand,
-          image_url:product.image_url,
-          retailer_name:product.retailer_name,
-          seller_name:product.seller_name,
-          seller_rating:product.seller_rating,
-          seller_feedback_count:product.seller_feedback_count,
-          current_price:product.current_price,
-          original_price:product.original_price,
-          currency:product.currency,
-          checked_at:product.checked_at,
-          updated_at:product.updated_at,
-          rating:product.rating,
-          review_count:product.review_count,
-          daily_rank:product.daily_rank,
-          deal_url:product.deal_url,
-          display_badge:product.display_badge,
-          display_score:product.display_score,
-          display_selection_reason:product.display_selection_reason,
-          display_product_rating:product.display_product_rating,
-          display_product_rating_label:product.display_product_rating_label,
-          display_seller_rating:product.display_seller_rating,
-          display_seller_rating_label:product.display_seller_rating_label,
-          display_seller_feedback:product.display_seller_feedback,
-          display_shipping_summary:product.display_shipping_summary,
-          display_return_summary:product.display_return_summary,
-          display_availability:product.display_availability
-        };
-      });
+      }, language), language);
+      if (!compactResponse) return shaped;
+      return {
+        id:shaped.id,
+        market:shaped.market,
+        source:shaped.source,
+        title:shaped.title,
+        description:String(shaped.description || "").slice(0, 180),
+        public_category:shaped.public_category,
+        display_category:shaped.display_category,
+        brand:shaped.brand,
+        image_url:shaped.image_url,
+        retailer_name:shaped.retailer_name,
+        seller_name:shaped.seller_name,
+        seller_rating:shaped.seller_rating,
+        seller_feedback_count:shaped.seller_feedback_count,
+        current_price:shaped.current_price,
+        original_price:shaped.original_price,
+        currency:shaped.currency,
+        checked_at:shaped.checked_at,
+        updated_at:shaped.updated_at,
+        rating:shaped.rating,
+        review_count:shaped.review_count,
+        daily_rank:shaped.daily_rank,
+        deal_url:shaped.deal_url,
+        display_badge:shaped.display_badge,
+        display_score:shaped.display_score,
+        display_selection_reason:shaped.display_selection_reason,
+        display_product_rating:shaped.display_product_rating,
+        display_product_rating_label:shaped.display_product_rating_label,
+        display_seller_rating:shaped.display_seller_rating,
+        display_seller_rating_label:shaped.display_seller_rating_label,
+        display_seller_feedback:shaped.display_seller_feedback,
+        display_shipping_summary:shaped.display_shipping_summary,
+        display_return_summary:shaped.display_return_summary,
+        display_availability:shaped.display_availability
+      };
+    };
+
+    let presented;
+    if (categoryFilter) {
+      // A category page wants its own slice, ranked by score — the "today's
+      // drop leads" ordering below is a homepage concern that does not apply
+      // once the request is already scoped to one category.
+      const products = uniqueProductsInOrder(db.prepare(`
+        SELECT * FROM products
+        WHERE market=? AND status='published' AND normalized_category=? AND ${sourceCondition}
+        ORDER BY score DESC,updated_at DESC
+        ${catalogRowLimit}
+      `).all(selectedMarket, categoryFilter)).slice(0, responseLimit);
+      presented = products.map(present);
+    } else {
+      const daily = db.prepare(`
+        SELECT p.*,d.rank AS daily_rank,d.selection_reason AS daily_selection_reason
+        FROM daily_drops d
+        JOIN products p ON p.id=d.product_id
+        WHERE d.market=? AND d.drop_date=(SELECT MAX(drop_date) FROM daily_drops WHERE market=?)
+          AND ${sourceSql("p")}
+        ORDER BY d.rank
+      `).all(selectedMarket, selectedMarket);
+      const dailyIds = new Set(daily.map(product => product.id));
+      const catalog = db.prepare(`
+        SELECT * FROM products
+        WHERE market=? AND status='published' AND ${sourceCondition}
+        ORDER BY score DESC,updated_at DESC
+        ${catalogRowLimit}
+      `).all(selectedMarket).filter(product => !dailyIds.has(product.id));
+      const products = uniqueProductsInOrder([...daily.map(product => ({
+        ...product,
+        selection_reason: product.daily_selection_reason || product.selection_reason
+      })), ...catalog]).slice(0, responseLimit);
+      presented = products.map(present);
+    }
+
     cacheValue(cacheKey, presented, 60000);
     return res.set("X-ODD-Cache", "MISS").json(presented);
+  });
+
+  app.get("/api/categories", (req, res) => {
+    if (!config.isProduction) return res.json([]);
+    const selectedMarket = normalizeMarket(req.query.market) || marketFromIp(req).code;
+    const cacheKey = `categories:${selectedMarket}`;
+    const cached = cachedValue(cacheKey);
+    res.set("Cache-Control", "private, max-age=60, stale-while-revalidate=300");
+    if (cached) return res.set("X-ODD-Cache", "HIT").json(cached);
+    /* One aggregate query instead of shipping every product just to count
+       them — this is what the header/footer/homepage category tiles need,
+       and previously the only way to get it was downloading the whole
+       market catalog on every single page. */
+    const rows = db.prepare(`
+      SELECT normalized_category AS category, COUNT(*) AS count
+      FROM products
+      WHERE market=? AND status='published' AND ${sourceSql()}
+      GROUP BY normalized_category
+      ORDER BY count DESC
+    `).all(selectedMarket);
+    cacheValue(cacheKey, rows, 60000);
+    return res.set("X-ODD-Cache", "MISS").json(rows);
   });
 
   app.get("/go/:id", (req, res, next) => {
