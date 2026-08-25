@@ -186,7 +186,11 @@ export default async function MarketHome({ params }: PageProps<"/[market]">) {
       </section>
 
       {/* ------------------------------------------------------------ signup */}
-      <section className="mt-20">
+      {/* scroll-mt clears the sticky header when a visitor arrives via the
+          header's CTA — on this page that's a same-page jump straight to
+          #subscribe, on any other page it's a normal navigation that lands
+          here already scrolled into view. */}
+      <section id="subscribe" className="mt-20 scroll-mt-32">
         <InterestSignup categories={categories} market={market} />
       </section>
 

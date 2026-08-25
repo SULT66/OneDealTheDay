@@ -72,6 +72,12 @@ export async function Header({ market }: { market: string }) {
                 </ul>
               </nav>
             )}
+            <Link
+              href={`/${market}#subscribe`}
+              className="hidden h-11 shrink-0 cursor-pointer items-center rounded-full bg-lime px-5 text-sm font-semibold text-ink transition-opacity hover:opacity-88 sm:inline-flex"
+            >
+              {t(language, "app.header.subscribe")}
+            </Link>
             <DeliaTrigger
               variant="header"
               label={t(language, "app.header.askDelia")}
@@ -92,9 +98,16 @@ export async function Header({ market }: { market: string }) {
               this row is a short, fixed list instead of one tab per category. */}
           <ul className="flex items-center gap-1 overflow-x-auto py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {[
-              { href: `/${market}/daily-drop`, label: t(language, "app.nav.dailyDrop") },
-              { href: `/${market}/about`, label: t(language, "app.footer.about") },
+              {
+                href: `/${market}/daily-drop`,
+                label: t(language, "app.nav.dailyDrop"),
+                // The drop is the one thing on this row worth a visitor's
+                // full attention, so it keeps the brand colour the other
+                // three (browsing/info) tabs don't.
+                accent: true,
+              },
               { href: `/${market}/category`, label: t(language, "nav.categories") },
+              { href: `/${market}/about`, label: t(language, "app.footer.about") },
               {
                 href: `/${market}/how-we-select-deals`,
                 label: t(language, "app.nav.howWeCheckStores"),
@@ -103,7 +116,11 @@ export async function Header({ market }: { market: string }) {
               <li key={item.href} className="shrink-0">
                 <Link
                   href={item.href}
-                  className="inline-flex h-9 items-center rounded-full px-4 text-sm text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg"
+                  className={
+                    item.accent
+                      ? "inline-flex h-9 items-center rounded-full px-4 text-sm font-semibold text-lime-deep transition-colors hover:bg-surface-2"
+                      : "inline-flex h-9 items-center rounded-full px-4 text-sm text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg"
+                  }
                 >
                   {item.label}
                 </Link>
