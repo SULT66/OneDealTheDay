@@ -1773,7 +1773,7 @@ const OUTCOME_COPY = {
     retailerSamePrice: "{retailer} and {alternativeRetailer} are both {retailerPrice} for {market}.",
     retailerMissingAlternatives: "I could not confirm a matching option on {retailer} for {market}. I am showing the strongest regional alternatives in {currency} instead.",
     retailerMissing: "I could not confirm a matching option on {retailer} for {market}. Try the regional stores below or search a nearby model.",
-    noMatch: "These products do exist in {market}. I just could not get a reliable product card from the connected stores this time, so I will not pretend the item is unavailable. Your preferences are saved for the next search.",
+    noMatch: "I could not confirm a direct offer for {market}. Try another regional store or a similar model without starting over.",
     closest: "I could not confirm an exact offer for {market}. These are the {count} closest regional options in {currency}; verify the final price and condition with the retailer.",
   },
   ru: {
@@ -1788,7 +1788,7 @@ const OUTCOME_COPY = {
     retailerSamePrice: "На {retailer} и у {alternativeRetailer} одинаковая цена: {retailerPrice} для региона {market}.",
     retailerMissingAlternatives: "На {retailer} для региона {market} подходящего предложения не найдено. Показываю лучшие доступные альтернативы; цены указаны в {currency}.",
     retailerMissing: "На {retailer} для региона {market} подходящего предложения не найдено. Можно проверить другие местные магазины или ближайшую модель.",
-    noMatch: "В регионе {market} такие товары, конечно, есть. Сейчас мне просто не удалось получить надёжную карточку из подключённых магазинов, поэтому я не буду делать вид, будто товара нет. Твои пожелания сохранены для следующего поиска.",
+    noMatch: "Не удалось подтвердить прямое предложение для региона {market}. Попробуйте другой региональный магазин или похожую модель, не начиная разговор заново.",
     closest: "Точного предложения для региона {market} подтвердить не удалось. Ниже ближайшие варианты: {count}. Цены указаны в {currency}. Проверь итоговую цену и состояние у магазина.",
   },
   az: {
@@ -1803,7 +1803,7 @@ const OUTCOME_COPY = {
     retailerSamePrice: "{retailer} və {alternativeRetailer} mağazalarında qiymət eynidir: {retailerPrice}.",
     retailerMissingAlternatives: "{retailer} mağazasında {market} üçün uyğun təklif təsdiqlənmədi. Əvəzinə {currency} ilə ən yaxşı regional alternativləri göstərirəm.",
     retailerMissing: "{retailer} mağazasında {market} üçün uyğun təklif tapmadım. Digər regional mağazalara və ya yaxın modelə baxa bilərik.",
-    noMatch: "Bu məhsullar {market} regionunda var. Sadəcə bu axtarışda qoşulmuş mağazalardan etibarlı kart ala bilmədim. Məhsul yoxdur kimi göstərməyəcəyəm. Seçimləriniz növbəti axtarış üçün saxlanılıb.",
+    noMatch: "{market} regionu üçün birbaşa təklifi təsdiqləyə bilmədim. Başqa regional mağaza və ya yaxın model sınayın, yenidən başlamağa ehtiyac yoxdur.",
     closest: "{market} üçün tam uyğun təklifi təsdiqləyə bilmədim. Aşağıda {currency} ilə {count} ən yaxın variant var. Son qiyməti və vəziyyəti mağazada yoxlayın.",
   },
   es: {

@@ -1947,7 +1947,7 @@ const client = {
     "Delia asked another question instead of showing the closest Fold offers",
   );
   assert(
-    foldFollowUpResult.message.startsWith("В регионе") &&
+    foldFollowUpResult.message.startsWith("Не удалось подтвердить") &&
       !foldFollowUpResult.message.includes("Хотите"),
     "The impossible-budget Fold response did not lead with a direct localized outcome",
   );
