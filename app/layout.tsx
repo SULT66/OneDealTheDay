@@ -16,7 +16,7 @@ const outfit = Outfit({
 export const metadata: Metadata = {
   metadataBase: new URL("https://www.onedailydrop.com"),
   title: {
-    default: "OneDailyDrop — one genuinely good deal, checked daily",
+    default: "OneDailyDrop: one genuinely good deal, checked daily",
     template: "%s | OneDailyDrop",
   },
   description:

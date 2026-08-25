@@ -11,7 +11,7 @@ export function Logo({ market }: { market: string }) {
     <Link
       href={`/${market}`}
       className="group inline-flex items-center gap-2.5"
-      aria-label="OneDailyDrop — home"
+      aria-label="OneDailyDrop home"
     >
       <span className="relative inline-flex h-12 w-9 shrink-0 items-center justify-center">
         <Image
@@ -23,12 +23,12 @@ export function Logo({ market }: { market: string }) {
           className="h-full w-full object-contain"
         />
       </span>
-      <span className="hidden leading-[1.05] sm:block">
-        <span className="block text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-fg-muted">
-          One
+      <span className="hidden leading-[1.2] sm:block">
+        <span className="inline-block rounded-md bg-logo-badge px-1.5 py-0.5 text-[0.8rem] font-bold uppercase tracking-[0.08em] text-white">
+          One Daily
         </span>
-        <span className="block text-[0.95rem] font-bold uppercase tracking-[0.06em] text-fg">
-          Daily Drop
+        <span className="block px-1.5 text-[0.8rem] font-bold uppercase tracking-[0.62em] text-lime-deep">
+          Drop
         </span>
       </span>
     </Link>

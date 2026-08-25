@@ -209,7 +209,7 @@ export default async function DealPage({
 
           <p className="text-xs text-fg-subtle tnum">
             Price checked {formatDateTime(deal.checkedAt, market)}. Check the current
-            price and availability on the retailer&apos;s website —{" "}
+            price and availability on the retailer&apos;s website.{" "}
             {info?.country ?? "local"} terms apply at checkout.
           </p>
         </div>

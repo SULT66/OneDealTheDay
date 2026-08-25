@@ -238,10 +238,24 @@ export function DeliaPanel() {
           market,
           history: historyRef.current,
         });
+        // The backend's `message` is only the lead-in sentence for a
+        // clarification turn — the actual questions live in separate fields
+        // (rendered in the UI, see DeliaExchange). Leaving them out of history
+        // meant the next turn's classifier saw only a content-free intro line
+        // with no trace of what was actually asked, so a short answer like
+        // "everyday wear" had nothing left to attach to and read as a brand
+        // new, product-less request.
+        const assistantContent = [
+          next.message,
+          ...next.clarificationPrompts.map((prompt) => prompt.question),
+          ...next.clarifyingQuestions,
+        ]
+          .filter(Boolean)
+          .join(" ");
         historyRef.current = [
           ...historyRef.current,
           { role: "user", content: transcript },
-          { role: "assistant", content: next.message },
+          { role: "assistant", content: assistantContent },
         ];
         setTurns((prev) => [...prev, next]);
       } catch (error) {
@@ -366,7 +380,7 @@ export function DeliaPanel() {
                 Delia
               </h2>
               <p className="truncate text-xs text-white/65">
-                Ask for what you want — she searches and compares the checked picks.
+                Ask for what you want. She searches and compares the checked picks.
               </p>
             </div>
             <button

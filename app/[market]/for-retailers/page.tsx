@@ -45,7 +45,7 @@ export default async function ForRetailersPage({
       <p>
         An independent shopping site, run from Brooklyn, New York. Visitors
         search a catalog of listings that have been checked before publication,
-        or ask Delia — our assistant — in plain language. We do not sell
+        or ask Delia, our assistant, in plain language. We do not sell
         anything, hold stock or take payments; every purchase happens on the
         retailer&rsquo;s own site.
       </p>
@@ -66,7 +66,7 @@ export default async function ForRetailersPage({
       <p>
         Placement is not for sale. Commission rate is not an input to any score,
         and no retailer can pay to appear, to rank higher, or to be the Daily
-        Drop. If you ask us to feature a product, the honest answer will be no —
+        Drop. If you ask us to feature a product, the honest answer will be no,
         which is the same answer your competitors get, and the reason a
         recommendation here is worth anything.
       </p>
@@ -74,7 +74,7 @@ export default async function ForRetailersPage({
       <h2>What a retailer gets</h2>
       <ul>
         <li>
-          Buyers arriving with intent — they have read a price comparison and
+          Buyers arriving with intent: they have read a price comparison and
           the reasoning behind a recommendation before they click.
         </li>
         <li>
@@ -95,7 +95,7 @@ export default async function ForRetailersPage({
       <p>
         A standard product feed (CSV, TSV or XML over HTTPS) through your
         affiliate network, or a documented API. We need title, price, currency,
-        image, deep link, availability and — importantly — delivery cost and
+        image, deep link, availability and, importantly, delivery cost and
         returns terms. Without the last two a listing cannot become a Daily Drop
         candidate, because we will not publish a price that is not the price
         someone actually pays.

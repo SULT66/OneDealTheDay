@@ -31,7 +31,7 @@ export function DeliaTrigger({
       <button
         type="button"
         onClick={onClick}
-        aria-label="Ask Delia — search checked deals"
+        aria-label="Ask Delia: search checked deals"
         className={cn(
           "delia-pulse group relative isolate z-10 flex flex-col items-center justify-center",
           "h-28 w-28 cursor-pointer rounded-full bg-ink text-white sm:h-32 sm:w-32",
@@ -53,7 +53,7 @@ export function DeliaTrigger({
       <button
         type="button"
         onClick={onClick}
-        aria-label="Ask Delia — search checked deals"
+        aria-label="Ask Delia: search checked deals"
         className={cn(
           "delia-pulse fixed bottom-5 right-5 z-30 isolate inline-flex h-14 items-center gap-2",
           "cursor-pointer rounded-full bg-ink pl-4 pr-5 text-white ring-4 ring-lime",

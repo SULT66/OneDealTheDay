@@ -42,7 +42,7 @@ const appCopy = {
     "app.home.bestEyebrow": "Highest scoring",
     "app.home.bestTitle": "Best right now",
     "app.home.emptyTitle": "Checking today's picks",
-    "app.home.emptyText": "We haven't published checked deals for this market yet. No sample prices or products are shown while we verify the catalog — check back shortly.",
+    "app.home.emptyText": "We haven't published checked deals for this market yet. No sample prices or products are shown while we verify the catalog. Check back shortly.",
 
     "app.signal.price": "Price signal",
     "app.signal.quality": "Product quality",
@@ -260,7 +260,7 @@ const appCopy = {
     "app.home.bestEyebrow": "Meilleurs scores",
     "app.home.bestTitle": "Le meilleur en ce moment",
     "app.home.emptyTitle": "Vérification des sélections du jour",
-    "app.home.emptyText": "Nous n'avons pas encore publié d'offres vérifiées pour ce marché. Aucun prix ni produit d'exemple n'est affiché pendant que nous vérifions le catalogue — revenez d'ici peu.",
+    "app.home.emptyText": "Nous n'avons pas encore publié d'offres vérifiées pour ce marché. Aucun prix ni produit d'exemple n'est affiché pendant que nous vérifions le catalogue. Revenez d'ici peu.",
 
     "app.signal.price": "Signal de prix",
     "app.signal.quality": "Qualité du produit",
@@ -369,7 +369,7 @@ const appCopy = {
     "app.home.bestEyebrow": "Höchste Bewertung",
     "app.home.bestTitle": "Aktuell am besten",
     "app.home.emptyTitle": "Die heutigen Angebote werden geprüft",
-    "app.home.emptyText": "Für diesen Markt haben wir noch keine geprüften Angebote veröffentlicht. Solange wir den Katalog prüfen, zeigen wir keine Beispielpreise oder -produkte — schauen Sie bald wieder vorbei.",
+    "app.home.emptyText": "Für diesen Markt haben wir noch keine geprüften Angebote veröffentlicht. Solange wir den Katalog prüfen, zeigen wir keine Beispielpreise oder -produkte. Schauen Sie bald wieder vorbei.",
 
     "app.signal.price": "Preissignal",
     "app.signal.quality": "Produktqualität",

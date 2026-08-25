@@ -46,6 +46,12 @@
   --shadow-card: 0 1px 2px rgb(0 0 0 / 0.04), 0 8px 24px -12px rgb(0 0 0 / 0.12);
   --shadow-lift: 0 2px 4px rgb(0 0 0 / 0.06), 0 18px 40px -18px rgb(0 0 0 / 0.22);
 
+  /* The wordmark's "One Daily" line reads as a solid black chip against the
+     light page. Against a dark page that chip would be a black box floating
+     on black — so it drops the fill there and stays plain white text (see
+     the dark blocks below). */
+  --logo-badge-bg: var(--ink);
+
   /* spacing rhythm — 4/8 scale, "standard" density */
   --space-section: 5rem;
   --space-block: 2.5rem;
@@ -81,6 +87,8 @@
     --shadow-card: 0 1px 2px rgb(0 0 0 / 0.5), 0 8px 24px -12px rgb(0 0 0 / 0.7);
     --shadow-lift: 0 2px 4px rgb(0 0 0 / 0.5), 0 18px 40px -18px rgb(0 0 0 / 0.8);
 
+    --logo-badge-bg: transparent;
+
     color-scheme: dark;
   }
 }
@@ -108,6 +116,8 @@
   --shadow-card: 0 1px 2px rgb(0 0 0 / 0.5), 0 8px 24px -12px rgb(0 0 0 / 0.7);
   --shadow-lift: 0 2px 4px rgb(0 0 0 / 0.5), 0 18px 40px -18px rgb(0 0 0 / 0.8);
 
+  --logo-badge-bg: transparent;
+
   color-scheme: dark;
 }
 
@@ -131,6 +141,7 @@
 
   --color-border: var(--border);
   --color-border-strong: var(--border-strong);
+  --color-logo-badge: var(--logo-badge-bg);
 
   --color-accent: var(--accent);
   --color-accent-fg: var(--accent-fg);
