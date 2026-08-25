@@ -22,6 +22,7 @@ const appCopy = {
     "app.drop.metaDescription": "One checked pick a day in {country}, chosen on price signal, product rating and seller confidence.",
 
     "app.nav.dailyDrop": "Daily Drop",
+    "app.nav.howWeCheckStores": "How we check stores",
     "app.header.askDelia": "Ask Delia",
 
     "app.home.eyebrow": "Every listing in {country}, checked before it is shown",
@@ -129,6 +130,7 @@ const appCopy = {
     "app.drop.metaDescription": "Una selección verificada al día en {country}, elegida por señal de precio, valoración del producto y fiabilidad del vendedor.",
 
     "app.nav.dailyDrop": "Oferta del día",
+    "app.nav.howWeCheckStores": "Cómo revisamos las tiendas",
     "app.header.askDelia": "Pregunta a Delia",
 
     "app.home.eyebrow": "Cada anuncio en {country}, verificado antes de mostrarse",
@@ -236,6 +238,7 @@ const appCopy = {
     "app.drop.metaDescription": "Une sélection vérifiée par jour en {country}, choisie sur le signal de prix, la note du produit et la fiabilité du vendeur.",
 
     "app.nav.dailyDrop": "Offre du jour",
+    "app.nav.howWeCheckStores": "Comment nous vérifions les boutiques",
     "app.header.askDelia": "Demander à Delia",
 
     "app.home.eyebrow": "Chaque annonce en {country}, vérifiée avant d'être affichée",
@@ -343,6 +346,7 @@ const appCopy = {
     "app.drop.metaDescription": "Ein geprüftes Angebot pro Tag in {country}, ausgewählt nach Preissignal, Produktbewertung und Verkäuferzuverlässigkeit.",
 
     "app.nav.dailyDrop": "Tagesangebot",
+    "app.nav.howWeCheckStores": "Wie wir Shops prüfen",
     "app.header.askDelia": "Delia fragen",
 
     "app.home.eyebrow": "Jedes Angebot in {country}, geprüft bevor es erscheint",
