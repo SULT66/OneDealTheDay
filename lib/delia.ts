@@ -75,6 +75,15 @@ export type DeliaResult = {
    * plain-text fallback. */
   clarifyingQuestions: string[];
   clarificationPrompts: DeliaClarificationPrompt[];
+  /**
+   * The backend's structured read of what this conversation is shopping for:
+   * product type, brand, budget, size, audience. It hands this back on every
+   * reply and accepts it again on the next request, so the thread keeps its
+   * subject instead of being re-guessed from raw text each turn. Treated as
+   * opaque here on purpose — it is the backend's shape, and the client only
+   * has to carry it faithfully.
+   */
+  shoppingMission: unknown;
 };
 
 export type DeliaTurn = { role: "user" | "assistant"; content: string };
@@ -93,13 +102,20 @@ type AssistantResponse = {
   comparison?: DeliaComparisonRow[];
   clarifying_questions?: string[];
   clarification_prompts?: DeliaClarificationPrompt[];
+  shopping_mission?: unknown;
 };
 
 export class DeliaError extends Error {}
 
 export async function askAssistant(
   transcript: string,
-  opts: { market: string; language?: string; history?: DeliaTurn[] },
+  opts: {
+    market: string;
+    language?: string;
+    history?: DeliaTurn[];
+    /** Carried over from the previous reply. See `DeliaResult.shoppingMission`. */
+    shoppingMission?: unknown;
+  },
 ): Promise<DeliaResult> {
   const res = await fetch("/api/shopping-assistant", {
     method: "POST",
@@ -107,6 +123,7 @@ export async function askAssistant(
     body: JSON.stringify({
       message: transcript,
       messages: opts.history,
+      shopping_mission: opts.shoppingMission ?? undefined,
       market: opts.market,
       language: opts.language,
     }),
@@ -131,6 +148,7 @@ export async function askAssistant(
     comparison: data.comparison || [],
     clarifyingQuestions: data.clarifying_questions || [],
     clarificationPrompts: data.clarification_prompts || [],
+    shoppingMission: data.shopping_mission ?? null,
   };
 }
 
