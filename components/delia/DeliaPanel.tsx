@@ -387,6 +387,11 @@ export function DeliaPanel() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const restoreFocusRef = useRef<HTMLElement | null>(null);
   const historyRef = useRef<DeliaTurn[]>([]);
+  /* The backend's structured read of what this thread is shopping for. It
+     returns one with every reply and accepts it back on the next request, so
+     carrying it keeps the subject of the conversation explicit rather than
+     leaving it to be inferred from the raw words again each turn. */
+  const missionRef = useRef<unknown>(null);
   const conversationIdRef = useRef<string>("");
 
   const ask = useCallback(
@@ -398,7 +403,9 @@ export function DeliaPanel() {
         const next = await askAssistant(transcript, {
           market,
           history: historyRef.current,
+          shoppingMission: missionRef.current,
         });
+        missionRef.current = next.shoppingMission ?? missionRef.current;
         // The backend's `message` is only the lead-in sentence for a
         // clarification turn — the actual questions live in separate fields
         // (rendered in the UI, see DeliaExchange). Leaving them out of history
@@ -485,6 +492,7 @@ export function DeliaPanel() {
       // A closed panel starts the next conversation fresh rather than
       // continuing a stale thread from the visitor's last visit.
       historyRef.current = [];
+      missionRef.current = null;
       setTurns([]);
       setErrorMsg(null);
       setFeedbackGiven({});

@@ -768,15 +768,23 @@ function measurementNumbers(request) {
     // 65", 65 inch, 65cm, 65 дюймов
     /(\d[\d.,]*)\s*(?:"|''|inch(?:es)?\b|cm\b|mm\b|дюйм\p{L}*)/giu,
     // 50 to 65 inches, 50-65", 50 65 inches
-    /(\d[\d.,]*)\s*(?:-|–|—|\bto\b|\bдо\b)?\s*\d[\d.,]*\s*(?:"|''|inch(?:es)?\b|cm\b|mm\b|дюйм\p{L}*)/giu,
+    /(\d[\d.,]*)\s*(?:-|–|—|\bto\b|\bдо\b)?\s*(\d[\d.,]*)\s*(?:"|''|inch(?:es)?\b|cm\b|mm\b|дюйм\p{L}*)/giu,
     // $700, USD 700, 700 USD
     /(?:[$€£¥]|\b(?:usd|cad|gbp|eur)\b)\s*(\d[\d.,]*)/giu,
     /(\d[\d.,]*)\s*(?:\b(?:usd|cad|gbp|eur)\b|[$€£¥])/giu,
+    /* US 10, UK 9, EU 42, size 10. A shoe size is the clearest case of a
+       number that is a constraint and never a model: "US 10" was demanding
+       that a trainer's name contain 10, which threw away every shoe. */
+    /\b(?:us|uk|eu|size|размер)\s*(\d[\d.,]*)/giu,
+    // 1-2 people, 3 people, 4 seats
+    /(\d[\d.,]*)\s*(?:-|–|—|\bto\b)?\s*(\d[\d.,]*)?\s*(?:people\b|person(?:s)?\b|seat(?:s|er)?\b|человек|людей|мест)/giu,
   ];
   for (const pattern of patterns) {
     for (const match of text.matchAll(pattern)) {
-      const value = String(match[1] || "").replace(/[.,]$/, "");
-      if (value) numbers.add(value.toLowerCase());
+      for (const group of match.slice(1)) {
+        const value = String(group || "").replace(/[.,]$/, "");
+        if (value) numbers.add(value.toLowerCase());
+      }
     }
   }
   return numbers;
@@ -1138,7 +1146,12 @@ function missionFromText(value) {
         ? "kids"
         : "";
   const sizeMatch = text.match(/(?:\b(?:size|размер|taille|talla|größe)\s*[:#-]?\s*)([\w.-]{1,8})/iu) ||
-    text.match(/([\d]{1,2}(?:[.,]5)?)\s*(?:размер|size|taille|talla|größe)(?!\p{L})/iu);
+    text.match(/([\d]{1,2}(?:[.,]5)?)\s*(?:размер|size|taille|talla|größe)(?!\p{L})/iu) ||
+    /* "US 10" / "UK 9" / "EU 42", the shoe-size options we offer ourselves.
+       Without this the number never became a size and stayed loose in the
+       query terms, where the intent check read it as a model number and threw
+       away every trainer whose name did not contain a 10. */
+    text.match(/\b(?:us|uk|eu)\s*([\d]{1,2}(?:[.,]5)?)(?!\d)/iu);
   const queryTerms = tokens
     .filter((token) => /^[a-z0-9-]+$/i.test(token))
     .filter((token) => !INTENT_CONSTRAINT_WORDS.has(token))
@@ -1223,17 +1236,38 @@ function mergeShoppingMission(currentValue, modelPatch, latestRequest, startsNew
   const extracted = missionFromText(latestRequest);
   const model = normalizeShoppingMission(modelPatch);
   const latestProductType = extracted.product_type || model.product_type;
-  const reset = startsNewMission || Boolean(
+  /*
+   * A one or two word reply is an answer to a question we asked, not a change
+   * of subject, so it must not be able to redefine the product.
+   *
+   * "Camera" is an option we offer ourselves when a shopper is choosing a
+   * phone. Taken as a product name it switched the whole mission from phone to
+   * camera, and the search then went looking for cameras. The same trap sits
+   * under "Watch", "Console" and any other attribute that is also a category.
+   *
+   * A genuine switch still works: the classifier sets starts_new_mission for
+   * one, and a request phrased as a request ("show me a laptop instead") is
+   * long enough to fall outside this guard.
+   */
+  const latestIsShortAnswer =
+    normalizedIntentTokens(latestRequest, { includeConstraints: true }).length <= 2;
+  const changesFamily = Boolean(
     current.product_type &&
       latestProductType &&
       missionProductFamily(current.product_type) !== missionProductFamily(latestProductType),
   );
+  const reset = startsNewMission || (changesFamily && !latestIsShortAnswer);
   const base = reset
     ? normalizeShoppingMission(null)
     : current;
+  /* Blocking the reset is not enough on its own: the detected type would still
+     overwrite the active one on the very next line. */
+  const keepCurrentProduct = changesFamily && latestIsShortAnswer && !startsNewMission;
   const explicitBrands = extracted.brands.length ? extracted.brands : model.brands;
   return normalizeShoppingMission({
-    product_type: latestProductType || base.product_type,
+    product_type: keepCurrentProduct
+      ? base.product_type
+      : latestProductType || base.product_type,
     brands: explicitBrands.length ? explicitBrands : base.brands,
     use_case: extracted.use_case || model.use_case || base.use_case,
     season: extracted.season || model.season || base.season,
@@ -2467,19 +2501,31 @@ async function withRequestTimeout(task, parentSignal, timeoutMs) {
   }
 }
 
+/* A money amount, matched whole: optional thousands groups, optional decimals,
+   and nothing beyond them. The old `[\d\s,.]*` ran past the end of the number
+   and swallowed whatever followed, so "USD 0-500, 3 people" produced a budget
+   of 500.3 rather than 500. */
+const MONEY_NUMBER = String.raw`\d{1,3}(?:[,.\s]\d{3})*(?:[.,]\d{1,2})?`;
+/* Words that prove a number was never a price. A range reads as a budget only
+   when nothing like this follows it: "50 to 65 inches" is a screen size and
+   "1-2 people" is a seating count, and both used to be read as money and then
+   filtered the entire shortlist away. */
+const NON_PRICE_UNIT = String.raw`"|''|inch(?:es)?\b|in\b|cm\b|mm\b|ft\b|дюйм|people\b|person(?:s)?\b|seat(?:s|er)?\b|человек|людей|мест`;
+
 function catalogSearchArgs(message) {
   const normalized = clean(message);
-  /* The trailing lookahead keeps a measurement from being read as a price.
-     "50 to 65 inches", the answer to our own screen-size question, was being
-     parsed as a budget of 65, and the shortlist was then filtered to items
-     under $65: no television on earth survives that, which is why a TV search
-     could come back with nothing at all. */
   const budgetRange = normalized.match(
-    /(?:\b(?:usd|cad|gbp|eur)\b\s*)?[$€£]?\s*([\d][\d\s,.]*)\s*(?:-|–|—|\bto\b|\bдо\b|\bà\b|\ba\b|\bbis\b)\s*(?:\b(?:usd|cad|gbp|eur)\b\s*)?[$€£]?\s*([\d][\d\s,.]*)(?!\d)(?!\s*(?:"|''|inch|cm\b|mm\b|дюйм))/iu,
+    new RegExp(
+      String.raw`(?:\b(?:usd|cad|gbp|eur)\b\s*)?[$€£]?\s*(${MONEY_NUMBER})\s*(?:-|–|—|\bto\b|\bдо\b|\bà\b|\ba\b|\bbis\b)\s*(?:\b(?:usd|cad|gbp|eur)\b\s*)?[$€£]?\s*(${MONEY_NUMBER})(?!\d)(?!\s*(?:${NON_PRICE_UNIT}))`,
+      "iu",
+    ),
   );
   const budgetMatch = normalized.match(
-    /(?<!\p{L})(?:under|below|less\s+than|up\s+to|max(?:imum)?|budget|до|не\s+дороже|бюджет|moins\s+de|jusqu['’]?à|unter|bis\s+zu)(?!\p{L})\D{0,18}([$€£]?\s*[\d][\d\s,.]*)/iu,
-  ) || normalized.match(/([$€£]\s*[\d][\d\s,.]*)/u);
+    new RegExp(
+      String.raw`(?<!\p{L})(?:under|below|less\s+than|up\s+to|max(?:imum)?|budget|до|не\s+дороже|бюджет|moins\s+de|jusqu['’]?à|unter|bis\s+zu)(?!\p{L})\D{0,18}([$€£]?\s*${MONEY_NUMBER})(?!\d)(?!\s*(?:${NON_PRICE_UNIT}))`,
+      "iu",
+    ),
+  ) || normalized.match(new RegExp(String.raw`([$€£]\s*${MONEY_NUMBER})`, "u"));
   const budgetValue = budgetRange?.[2] || budgetMatch?.[1] || budgetMatch?.[0];
   const maxPrice = budgetValue
     ? number(
