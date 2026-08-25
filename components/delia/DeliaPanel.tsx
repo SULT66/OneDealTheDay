@@ -37,6 +37,7 @@ function DeliaExchange({
   onClose,
   feedbackGiven,
   onFeedback,
+  disabled,
 }: {
   result: DeliaResult;
   market: string;
@@ -44,6 +45,7 @@ function DeliaExchange({
   onClose: () => void;
   feedbackGiven: boolean;
   onFeedback: (type: "helpful" | "not_helpful") => void;
+  disabled: boolean;
 }) {
   return (
     <div className="space-y-4">
@@ -75,8 +77,9 @@ function DeliaExchange({
                     <li key={option}>
                       <button
                         type="button"
+                        disabled={disabled}
                         onClick={() => onFollowUp(option)}
-                        className="cursor-pointer rounded-full border border-border px-3.5 py-2 text-sm text-fg-muted transition-colors hover:border-border-strong hover:bg-surface-2 hover:text-fg"
+                        className="cursor-pointer rounded-full border border-border px-3.5 py-2 text-sm text-fg-muted transition-colors hover:border-border-strong hover:bg-surface-2 hover:text-fg disabled:cursor-default disabled:opacity-40 disabled:hover:border-border disabled:hover:bg-transparent"
                       >
                         {option}
                       </button>
@@ -166,8 +169,9 @@ function DeliaExchange({
         {result.followUp && (
           <button
             type="button"
+            disabled={disabled}
             onClick={() => onFollowUp(result.followUp)}
-            className="inline-flex items-center gap-1.5 rounded-full border border-border px-3.5 py-2 text-sm font-medium text-fg-muted transition-colors hover:border-border-strong hover:text-fg"
+            className="inline-flex items-center gap-1.5 rounded-full border border-border px-3.5 py-2 text-sm font-medium text-fg-muted transition-colors hover:border-border-strong hover:text-fg disabled:cursor-default disabled:opacity-40 disabled:hover:border-border"
           >
             {result.followUp}
           </button>
@@ -207,6 +211,11 @@ export function DeliaPanel() {
   // asking a follow-up no longer erases what Delia already said.
   const [turns, setTurns] = useState<DeliaResult[]>([]);
   const [loading, setLoading] = useState(false);
+  // Shown immediately on submit, before the response arrives — otherwise the
+  // question a shopper just sent had nowhere to render until the (sometimes
+  // multi-second, real web-search-backed) answer landed, and read as "the
+  // message disappeared."
+  const [pendingQuestion, setPendingQuestion] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [typed, setTyped] = useState("");
   // Keyed by turn index — feedback is per-answer, not global to the panel.
@@ -223,6 +232,7 @@ export function DeliaPanel() {
     async (transcript: string) => {
       setLoading(true);
       setErrorMsg(null);
+      setPendingQuestion(transcript);
       try {
         const next = await askAssistant(transcript, {
           market,
@@ -242,6 +252,7 @@ export function DeliaPanel() {
         );
       } finally {
         setLoading(false);
+        setPendingQuestion(null);
       }
     },
     [market],
@@ -390,8 +401,9 @@ export function DeliaPanel() {
                   <li key={e}>
                     <button
                       type="button"
+                      disabled={loading}
                       onClick={() => ask(e)}
-                      className="w-full cursor-pointer rounded-2xl border border-border px-4 py-3 text-left text-sm text-fg-muted transition-[transform,border-color,box-shadow] duration-200 hover:-translate-y-0.5 hover:border-border-strong hover:text-fg hover:shadow-card"
+                      className="w-full cursor-pointer rounded-2xl border border-border px-4 py-3 text-left text-sm text-fg-muted transition-[transform,border-color,box-shadow] duration-200 hover:-translate-y-0.5 hover:border-border-strong hover:text-fg hover:shadow-card disabled:cursor-default disabled:opacity-40 disabled:hover:translate-y-0 disabled:hover:border-border disabled:hover:shadow-none"
                     >
                       {e}
                     </button>
@@ -412,22 +424,30 @@ export function DeliaPanel() {
                   onClose={closeDelia}
                   feedbackGiven={Boolean(feedbackGiven[i])}
                   onFeedback={(type) => giveFeedback(i, type)}
+                  disabled={loading}
                 />
               ))}
             </div>
           )}
 
-          {loading && (
-            <div className={cn("flex items-start gap-2.5", turns.length > 0 && "mt-6")} aria-live="polite">
-              <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-lime text-ink">
-                <Sparkle size={15} weight="fill" aria-hidden="true" />
-              </span>
-              <span className="inline-flex items-center gap-1.5 rounded-2xl rounded-tl-md bg-surface-2 px-4 py-3.5">
-                <span className="sr-only">Delia is thinking…</span>
-                <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-fg-subtle [animation-delay:-0.3s]" />
-                <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-fg-subtle [animation-delay:-0.15s]" />
-                <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-fg-subtle" />
-              </span>
+          {loading && pendingQuestion && (
+            <div className={cn("space-y-4", turns.length > 0 && "mt-6")} aria-live="polite">
+              <div className="flex justify-end">
+                <p className="max-w-[85%] wrap-anywhere rounded-2xl rounded-br-md bg-surface-inverse px-4 py-2.5 text-sm font-medium text-fg-on-inverse">
+                  {pendingQuestion}
+                </p>
+              </div>
+              <div className="flex items-start gap-2.5">
+                <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-lime text-ink">
+                  <Sparkle size={15} weight="fill" aria-hidden="true" />
+                </span>
+                <span className="inline-flex items-center gap-1.5 rounded-2xl rounded-tl-md bg-surface-2 px-4 py-3.5">
+                  <span className="sr-only">Delia is thinking…</span>
+                  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-fg-subtle [animation-delay:-0.3s]" />
+                  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-fg-subtle [animation-delay:-0.15s]" />
+                  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-fg-subtle" />
+                </span>
+              </div>
             </div>
           )}
 
