@@ -105,17 +105,6 @@ export default async function MarketHome({ params }: PageProps<"/[market]">) {
           </ul>
         </div>
 
-        {/* Delia sits on the seam of the two blocks: in flow between them on
-            narrow screens, centred over both from lg up. */}
-        <div className="relative z-20 -my-7 flex justify-center lg:pointer-events-none lg:absolute lg:inset-0 lg:my-0 lg:items-center">
-          <div className="pointer-events-auto flex flex-col items-center">
-            <DeliaTrigger variant="hero" />
-            <p className="mt-3 hidden max-w-[13rem] text-center text-xs font-medium text-fg-muted lg:block">
-              {t(language, "app.home.deliaHint")}
-            </p>
-          </div>
-        </div>
-
         {/* The drop keeps a door on the homepage rather than the homepage. */}
         <div className="flex flex-col justify-between gap-8 rounded-card bg-lime p-7 sm:p-10">
           <div>
@@ -201,8 +190,11 @@ export default async function MarketHome({ params }: PageProps<"/[market]">) {
         <InterestSignup categories={categories} market={market} />
       </section>
 
-      {/* Follows the visitor down the page once the hero button scrolls away. */}
-      <DeliaTrigger variant="floating" className="lg:hidden" />
+      {/* Follows the visitor down every page now — the large hero circle that
+          used to sit on the seam between the two hero cards read as a stray
+          floating button, so desktop leans on this and the header pill
+          instead, same as every other page. */}
+      <DeliaTrigger variant="floating" />
     </div>
   );
 }

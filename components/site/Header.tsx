@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { getCategoriesWithCounts } from "@/lib/catalog";
 import { getLanguage, hasLanguageChoice, t } from "@/lib/i18n";
 import { languageLinks } from "@/lib/switchers";
 import { Logo } from "./Logo";
@@ -14,7 +13,6 @@ import { DeliaTrigger } from "@/components/delia/DeliaTrigger";
  */
 export async function Header({ market }: { market: string }) {
   const language = await getLanguage(market);
-  const categories = await getCategoriesWithCounts(market, language);
   /* The language choice sits in the header rather than only in the footer:
      a visitor who lands on the wrong language should not have to scroll the
      whole page to find the way out of it. The country switcher stays in the
@@ -89,25 +87,25 @@ export async function Header({ market }: { market: string }) {
           aria-label={t(language, "nav.categories")}
           className="mx-auto max-w-7xl px-4 sm:px-6"
         >
+          {/* Every individual category used to be its own tab here; they now
+              live under the "Categories" page (app/[market]/category), so
+              this row is a short, fixed list instead of one tab per category. */}
           <ul className="flex items-center gap-1 overflow-x-auto py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {/* The drop is one feature now rather than the front door, so this
-                is an ordinary tab instead of the permanently highlighted one it
-                was while the homepage and the drop were the same page. */}
-            <li className="shrink-0">
-              <Link
-                href={`/${market}/daily-drop`}
-                className="inline-flex h-9 items-center rounded-full px-4 text-sm text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg"
-              >
-                {t(language, "app.nav.dailyDrop")}
-              </Link>
-            </li>
-            {categories.map((c) => (
-              <li key={c.slug} className="shrink-0">
+            {[
+              { href: `/${market}/daily-drop`, label: t(language, "app.nav.dailyDrop") },
+              { href: `/${market}/about`, label: t(language, "app.footer.about") },
+              { href: `/${market}/category`, label: t(language, "nav.categories") },
+              {
+                href: `/${market}/how-we-select-deals`,
+                label: t(language, "app.nav.howWeCheckStores"),
+              },
+            ].map((item) => (
+              <li key={item.href} className="shrink-0">
                 <Link
-                  href={`/${market}/category/${c.slug}`}
+                  href={item.href}
                   className="inline-flex h-9 items-center rounded-full px-4 text-sm text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg"
                 >
-                  {c.name}
+                  {item.label}
                 </Link>
               </li>
             ))}
