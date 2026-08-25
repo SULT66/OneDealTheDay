@@ -748,6 +748,40 @@ function matchesRequestedSubtype(candidate, request) {
   return true;
 }
 
+/*
+ * Numbers the shopper gave as a size or a price, rather than as part of a
+ * model name.
+ *
+ * The intent check treats any number in the request as a model number the
+ * candidate has to carry, which is right for "Galaxy S26" and badly wrong for
+ * a screen size. Answering our own "50 to 65 inches" question demanded that a
+ * title literally contain 50 or 65, so a 55-inch and a 58-inch television --
+ * both squarely inside the range asked for -- were thrown away, and a TV
+ * search could end up with nothing to show.
+ *
+ * Both ends of a range count, since only the far end carries the unit.
+ */
+function measurementNumbers(request) {
+  const text = clean(request);
+  const numbers = new Set();
+  const patterns = [
+    // 65", 65 inch, 65cm, 65 дюймов
+    /(\d[\d.,]*)\s*(?:"|''|inch(?:es)?\b|cm\b|mm\b|дюйм\p{L}*)/giu,
+    // 50 to 65 inches, 50-65", 50 65 inches
+    /(\d[\d.,]*)\s*(?:-|–|—|\bto\b|\bдо\b)?\s*\d[\d.,]*\s*(?:"|''|inch(?:es)?\b|cm\b|mm\b|дюйм\p{L}*)/giu,
+    // $700, USD 700, 700 USD
+    /(?:[$€£¥]|\b(?:usd|cad|gbp|eur)\b)\s*(\d[\d.,]*)/giu,
+    /(\d[\d.,]*)\s*(?:\b(?:usd|cad|gbp|eur)\b|[$€£¥])/giu,
+  ];
+  for (const pattern of patterns) {
+    for (const match of text.matchAll(pattern)) {
+      const value = String(match[1] || "").replace(/[.,]$/, "");
+      if (value) numbers.add(value.toLowerCase());
+    }
+  }
+  return numbers;
+}
+
 function matchesShoppingIntent(candidate, request, requiredProductType = "") {
   const requestTokens = normalizedIntentTokens(request);
   if (!requestTokens.length) return false;
@@ -793,7 +827,10 @@ function matchesShoppingIntent(candidate, request, requiredProductType = "") {
   ) {
     return false;
   }
-  const requestedModels = requestTokens.filter((token) => /\d/.test(token));
+  const constraintNumbers = measurementNumbers(request);
+  const requestedModels = requestTokens.filter(
+    (token) => /\d/.test(token) && !constraintNumbers.has(token),
+  );
   if (
     requestedModels.length &&
     requestedModels.every((model) => !identityTokens.has(model))
@@ -2432,8 +2469,13 @@ async function withRequestTimeout(task, parentSignal, timeoutMs) {
 
 function catalogSearchArgs(message) {
   const normalized = clean(message);
+  /* The trailing lookahead keeps a measurement from being read as a price.
+     "50 to 65 inches", the answer to our own screen-size question, was being
+     parsed as a budget of 65, and the shortlist was then filtered to items
+     under $65: no television on earth survives that, which is why a TV search
+     could come back with nothing at all. */
   const budgetRange = normalized.match(
-    /(?:\b(?:usd|cad|gbp|eur)\b\s*)?[$€£]?\s*([\d][\d\s,.]*)\s*(?:-|–|—|\bto\b|\bдо\b|\bà\b|\ba\b|\bbis\b)\s*(?:\b(?:usd|cad|gbp|eur)\b\s*)?[$€£]?\s*([\d][\d\s,.]*)/iu,
+    /(?:\b(?:usd|cad|gbp|eur)\b\s*)?[$€£]?\s*([\d][\d\s,.]*)\s*(?:-|–|—|\bto\b|\bдо\b|\bà\b|\ba\b|\bbis\b)\s*(?:\b(?:usd|cad|gbp|eur)\b\s*)?[$€£]?\s*([\d][\d\s,.]*)(?!\d)(?!\s*(?:"|''|inch|cm\b|mm\b|дюйм))/iu,
   );
   const budgetMatch = normalized.match(
     /(?<!\p{L})(?:under|below|less\s+than|up\s+to|max(?:imum)?|budget|до|не\s+дороже|бюджет|moins\s+de|jusqu['’]?à|unter|bis\s+zu)(?!\p{L})\D{0,18}([$€£]?\s*[\d][\d\s,.]*)/iu,
