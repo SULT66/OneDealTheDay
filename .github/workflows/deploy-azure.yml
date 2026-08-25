@@ -7,9 +7,20 @@ on:
   workflow_dispatch:
 
 # Deployment trigger: regional navigation release 2026-07-28
+#
+# Deploys queue, they do not interrupt each other. Cancelling here only stops
+# the GitHub job: Azure carries on with whatever upload was already in flight,
+# and the next run then collides with a release the platform still considers
+# in progress. That is what happened when two pull requests were merged a
+# couple of minutes apart -- the first deploy was cancelled part-way through
+# and the second failed outright at the Azure step, leaving production on the
+# older build even though every test had passed.
+#
+# The cost is that back-to-back merges deploy one after the other instead of
+# only the last one. For a production release that is the right trade.
 concurrency:
   group: onedealtheday-production
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 permissions:
   contents: read
