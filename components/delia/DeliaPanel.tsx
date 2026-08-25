@@ -44,11 +44,14 @@ function OfferCard({
   rec,
   market,
   onClose,
+  position,
   priceUnconfirmed = false,
 }: {
   rec: DeliaRecommendation;
   market: string;
   onClose: () => void;
+  /** 1-based place in the shortlist, so the shopper can refer to "the second one". */
+  position: number;
   priceUnconfirmed?: boolean;
 }) {
   const inCatalog = rec.source_type === "catalog" && Boolean(rec.catalog_product_id);
@@ -58,46 +61,102 @@ function OfferCard({
     (rec.price_value !== null
       ? formatPrice(rec.price_value, rec.currency || "USD", market)
       : "");
-
-  const body = (
-    <>
-      <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-surface-2">
-        <ProductImage src={rec.image_url} alt="" categoryIcon="Package" sizes="64px" />
-      </div>
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-semibold text-fg">{rec.title}</span>
-        <span className="block truncate text-xs text-fg-muted">
-          {rec.retailer}
-          {rec.badge && ` · ${rec.badge}`}
-        </span>
-        {rec.reason && (
-          <span className="mt-0.5 line-clamp-2 block text-xs text-fg-subtle">
-            {rec.reason}
-          </span>
-        )}
-      </span>
-      <span className="flex shrink-0 items-center gap-1 self-center text-sm font-bold text-fg tnum">
-        {price ? (
-          price
-        ) : priceUnconfirmed ? (
-          <span className="text-xs font-medium text-fg-subtle">Price at retailer</span>
-        ) : null}
-        {!inCatalog && <ArrowUpRight size={14} weight="bold" aria-hidden="true" />}
-      </span>
-    </>
+  /* Only worth showing when it is genuinely more than the price itself: a
+     delivery-inclusive figure is the number the shopper actually pays. */
+  const total =
+    rec.total_price != null && rec.price_value != null && rec.total_price > rec.price_value
+      ? formatPrice(rec.total_price, rec.currency || "USD", market)
+      : "";
+  const facts = [rec.delivery, rec.returns, rec.availability].filter(
+    (fact): fact is string => Boolean(fact && fact.trim()),
   );
 
-  const className =
-    "flex items-center gap-3 rounded-2xl border border-border p-3 transition-colors hover:border-border-strong hover:bg-surface-2";
+  return (
+    <article className="overflow-hidden rounded-2xl border border-border bg-surface transition-[border-color,box-shadow] hover:border-border-strong hover:shadow-card">
+      <div className="flex gap-4 p-4">
+        <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-xl bg-surface-2 sm:h-28 sm:w-28">
+          <ProductImage src={rec.image_url} alt="" categoryIcon="Package" sizes="112px" />
+        </div>
 
-  return inCatalog ? (
-    <Link href={href} onClick={onClose} className={className}>
-      {body}
-    </Link>
-  ) : (
-    <a href={href} target="_blank" rel="sponsored noopener noreferrer" className={className}>
-      {body}
-    </a>
+        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+          <div className="flex items-baseline gap-2">
+            <span className="text-xs font-bold text-fg-subtle tnum">{position}</span>
+            <h3 className="line-clamp-2 text-sm font-semibold leading-snug text-fg">
+              {rec.title}
+            </h3>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-fg-muted">
+            <span className="font-medium text-fg">{rec.retailer}</span>
+            {rec.badge && (
+              <span className="rounded-full bg-lime px-2 py-0.5 font-semibold text-ink">
+                {rec.badge}
+              </span>
+            )}
+            {rec.score != null && (
+              <span className="rounded-full bg-surface-2 px-2 py-0.5 font-semibold tnum">
+                Score {rec.score}
+              </span>
+            )}
+            {rec.rating != null && rec.rating > 0 && (
+              <span className="tnum">
+                {rec.rating.toFixed(1)}
+                {rec.reviews ? ` (${rec.reviews})` : ""}
+              </span>
+            )}
+          </div>
+
+          {rec.reason && (
+            <p className="line-clamp-2 text-xs leading-relaxed text-fg-subtle">{rec.reason}</p>
+          )}
+
+          {facts.length > 0 && (
+            <ul className="flex flex-wrap gap-x-3 gap-y-0.5 text-[0.7rem] text-fg-subtle">
+              {facts.map((fact) => (
+                <li key={fact}>{fact}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-4 py-3">
+        <div className="min-w-0">
+          {price ? (
+            <>
+              <span className="text-lg font-bold text-fg tnum">{price}</span>
+              {total && (
+                <span className="ml-2 text-xs text-fg-subtle tnum">{total} with delivery</span>
+              )}
+            </>
+          ) : (
+            <span className="text-sm font-medium text-fg-subtle">
+              {priceUnconfirmed ? "Price shown at the retailer" : "Price not confirmed"}
+            </span>
+          )}
+        </div>
+
+        {inCatalog ? (
+          <Link
+            href={href}
+            onClick={onClose}
+            className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-full bg-lime px-4 text-sm font-semibold text-ink transition-opacity hover:opacity-88"
+          >
+            See the details
+          </Link>
+        ) : (
+          <a
+            href={href}
+            target="_blank"
+            rel="sponsored noopener noreferrer"
+            className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-full bg-lime px-4 text-sm font-semibold text-ink transition-opacity hover:opacity-88"
+          >
+            View at {rec.retailer}
+            <ArrowUpRight size={14} weight="bold" aria-hidden="true" />
+          </a>
+        )}
+      </div>
+    </article>
   );
 }
 
@@ -228,19 +287,31 @@ function DeliaExchange({
         )}
 
         {(result.recommendations.length > 0 || result.partialOffers.length > 0) && (
-          <ul className="space-y-2">
+          <ul className="space-y-3">
             {result.recommendations.map((rec, i) => (
               <li key={`rec-${rec.url}-${i}`}>
-                <OfferCard rec={rec} market={market} onClose={onClose} />
+                <OfferCard
+                  rec={rec}
+                  market={market}
+                  onClose={onClose}
+                  position={i + 1}
+                />
               </li>
             ))}
             {/* Products the backend found and stands behind but could not price
                 in this market's currency. They used to be dropped on the floor
                 here, which is why a search that genuinely found something could
-                still come back as prose with no products under it. */}
+                still come back as prose with no products under it. Numbered on
+                from the priced ones so the shortlist reads as one list. */}
             {result.partialOffers.map((rec, i) => (
               <li key={`partial-${rec.url}-${i}`}>
-                <OfferCard rec={rec} market={market} onClose={onClose} priceUnconfirmed />
+                <OfferCard
+                  rec={rec}
+                  market={market}
+                  onClose={onClose}
+                  position={result.recommendations.length + i + 1}
+                  priceUnconfirmed
+                />
               </li>
             ))}
           </ul>
@@ -455,7 +526,10 @@ export function DeliaPanel() {
         aria-modal="true"
         aria-labelledby="delia-title"
         className={cn(
-          "rise-in relative flex max-h-[92dvh] w-full max-w-2xl flex-col overflow-hidden",
+          /* Wider than a plain chat needs: the shortlist is the point of the
+             panel, and a product card with a photo, price, evidence and a
+             call to action does not read well squeezed into a message column. */
+          "rise-in relative flex max-h-[92dvh] w-full max-w-3xl flex-col overflow-hidden",
           "rounded-t-3xl bg-surface shadow-lift sm:rounded-3xl",
         )}
       >

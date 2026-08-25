@@ -23,6 +23,20 @@ export type DeliaRecommendation = {
   source_type: "catalog" | "web";
   image_url: string;
   catalog_product_id: number | null;
+  /* The backend sends the same evidence it shows on a deal page with every
+     recommendation. None of it was declared here, so the card could not show
+     any of it and a shopper had to open the retailer to learn anything beyond
+     a price. Optional because a live web result carries far less of it than a
+     verified catalog product: score, rating and the delivery terms are only
+     ever populated for the latter. */
+  score?: number | null;
+  rating?: number | null;
+  reviews?: number;
+  delivery?: string;
+  returns?: string;
+  availability?: string;
+  total_price?: number | null;
+  in_catalog?: boolean;
 };
 
 export type DeliaComparisonRow = {
