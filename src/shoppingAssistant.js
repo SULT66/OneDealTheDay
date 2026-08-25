@@ -9,7 +9,13 @@ const MAX_MESSAGE_LENGTH = 1200;
 const MAX_RECOMMENDATIONS = 3;
 const MAX_RECOMMENDATION_CANDIDATES = 8;
 const SCOPE_TIMEOUT_MS = 4500;
-const SEARCH_TIMEOUT_MS = 18000;
+// A broad, unconstrained query (a TV with no brand named, "65 inches or
+// larger") can need the model to check more stores before it has three real
+// product pages, and 18s was cutting that off before it finished. The panel
+// now shows the shopper's question immediately and a visible "thinking"
+// indicator (see DeliaPanel.tsx), so the extra wait reads as "still working"
+// rather than "stuck".
+const SEARCH_TIMEOUT_MS = 26000;
 const normalizeTokenText = (value) =>
   String(value || "")
     .normalize("NFKD")
