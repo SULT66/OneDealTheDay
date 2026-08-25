@@ -29,18 +29,192 @@ const EXAMPLES = [
   "Compare the cheapest two tools you have",
 ];
 
+/** One question-and-answer exchange, rendered as a pair of chat bubbles. */
+function DeliaExchange({
+  result,
+  market,
+  onFollowUp,
+  onClose,
+  feedbackGiven,
+  onFeedback,
+}: {
+  result: DeliaResult;
+  market: string;
+  onFollowUp: (text: string) => void;
+  onClose: () => void;
+  feedbackGiven: boolean;
+  onFeedback: (type: "helpful" | "not_helpful") => void;
+}) {
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-end">
+        <p className="max-w-[85%] wrap-anywhere rounded-2xl rounded-br-md bg-surface-inverse px-4 py-2.5 text-sm font-medium text-fg-on-inverse">
+          {result.transcript}
+        </p>
+      </div>
+
+      <div className="flex items-start gap-2.5">
+        <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-lime text-ink">
+          <Sparkle size={15} weight="fill" aria-hidden="true" />
+        </span>
+        <p className="max-w-[85%] rounded-2xl rounded-tl-md bg-surface-2 px-4 py-3 text-sm leading-relaxed text-fg">
+          {result.message}
+        </p>
+      </div>
+
+      <div className="space-y-4 pl-[42px]">
+        {/* Structured clarifying questions — tappable options answer them in
+            one tap instead of making the shopper type. */}
+        {result.clarificationPrompts.length > 0 && (
+          <div className="space-y-3">
+            {result.clarificationPrompts.map((prompt, i) => (
+              <div key={i}>
+                <p className="text-sm font-semibold text-fg">{prompt.question}</p>
+                <ul className="mt-2 flex flex-wrap gap-2">
+                  {prompt.options.map((option) => (
+                    <li key={option}>
+                      <button
+                        type="button"
+                        onClick={() => onFollowUp(option)}
+                        className="cursor-pointer rounded-full border border-border px-3.5 py-2 text-sm text-fg-muted transition-colors hover:border-border-strong hover:bg-surface-2 hover:text-fg"
+                      >
+                        {option}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {result.clarificationPrompts.length === 0 && result.clarifyingQuestions.length > 0 && (
+          <ul className="space-y-1.5">
+            {result.clarifyingQuestions.map((question, i) => (
+              <li key={i} className="text-sm text-fg">
+                {question}
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {result.recommendations.length > 0 && (
+          <ul className="space-y-2">
+            {result.recommendations.map((rec, i) => {
+              const href =
+                rec.source_type === "catalog" && rec.catalog_product_id
+                  ? `/${market}/deal/${rec.catalog_product_id}`
+                  : rec.url;
+              const external = rec.source_type !== "catalog" || !rec.catalog_product_id;
+              const price =
+                rec.price ||
+                (rec.price_value !== null
+                  ? formatPrice(rec.price_value, rec.currency || "USD", market)
+                  : "");
+
+              const card = (
+                <>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold text-fg">
+                      {rec.title}
+                    </span>
+                    <span className="block text-xs text-fg-muted">
+                      {rec.retailer}
+                      {rec.badge && ` · ${rec.badge}`}
+                    </span>
+                    {rec.reason && (
+                      <span className="mt-0.5 block text-xs text-fg-subtle">{rec.reason}</span>
+                    )}
+                  </span>
+                  <span className="flex shrink-0 items-center gap-1 text-sm font-bold text-fg tnum">
+                    {price}
+                    {external && <ArrowUpRight size={14} weight="bold" aria-hidden="true" />}
+                  </span>
+                </>
+              );
+
+              const className =
+                "flex items-center gap-3 rounded-2xl border border-border p-3 transition-colors hover:border-border-strong hover:bg-surface-2";
+
+              return (
+                <li key={`${rec.title}-${i}`}>
+                  {external ? (
+                    <a href={href} target="_blank" rel="sponsored noopener noreferrer" className={className}>
+                      {card}
+                    </a>
+                  ) : (
+                    <Link href={href} onClick={onClose} className={className}>
+                      {card}
+                    </Link>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+
+        {result.comparisonNotes.length > 0 && (
+          <ul className="space-y-1.5">
+            {result.comparisonNotes.map((note, i) => (
+              <li key={i} className="text-sm text-fg-muted">
+                {note}
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {result.followUp && (
+          <button
+            type="button"
+            onClick={() => onFollowUp(result.followUp)}
+            className="inline-flex items-center gap-1.5 rounded-full border border-border px-3.5 py-2 text-sm font-medium text-fg-muted transition-colors hover:border-border-strong hover:text-fg"
+          >
+            {result.followUp}
+          </button>
+        )}
+
+        <div className="flex items-center gap-2 border-t border-border pt-4">
+          <span className="text-xs text-fg-subtle">Was this helpful?</span>
+          <button
+            type="button"
+            disabled={feedbackGiven}
+            onClick={() => onFeedback("helpful")}
+            aria-label="This was helpful"
+            className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-full text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg disabled:opacity-40"
+          >
+            <ThumbsUp size={15} weight="bold" aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            disabled={feedbackGiven}
+            onClick={() => onFeedback("not_helpful")}
+            aria-label="This was not helpful"
+            className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-full text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg disabled:opacity-40"
+          >
+            <ThumbsDown size={15} weight="bold" aria-hidden="true" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function DeliaPanel() {
   const { open, seed, market, closeDelia } = useDelia();
 
   const [available, setAvailable] = useState<boolean | null>(null);
-  const [result, setResult] = useState<DeliaResult | null>(null);
+  // The whole conversation, in order — not just the latest exchange, so
+  // asking a follow-up no longer erases what Delia already said.
+  const [turns, setTurns] = useState<DeliaResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [typed, setTyped] = useState("");
-  const [feedbackGiven, setFeedbackGiven] = useState(false);
+  // Keyed by turn index — feedback is per-answer, not global to the panel.
+  const [feedbackGiven, setFeedbackGiven] = useState<Record<number, boolean>>({});
 
   const dialogRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
   const restoreFocusRef = useRef<HTMLElement | null>(null);
   const historyRef = useRef<DeliaTurn[]>([]);
   const conversationIdRef = useRef<string>("");
@@ -49,7 +223,6 @@ export function DeliaPanel() {
     async (transcript: string) => {
       setLoading(true);
       setErrorMsg(null);
-      setFeedbackGiven(false);
       try {
         const next = await askAssistant(transcript, {
           market,
@@ -60,7 +233,7 @@ export function DeliaPanel() {
           { role: "user", content: transcript },
           { role: "assistant", content: next.message },
         ];
-        setResult(next);
+        setTurns((prev) => [...prev, next]);
       } catch (error) {
         setErrorMsg(
           error instanceof DeliaError
@@ -94,6 +267,11 @@ export function DeliaPanel() {
     ask(seed);
   }, [open, seed, ask]);
 
+  /* A growing conversation should keep the newest exchange in view. */
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ block: "end" });
+  }, [turns, loading]);
+
   /* Escape closes; focus moves in on open and back out on close; a fresh
      conversation id starts each time the panel opens. */
   useEffect(() => {
@@ -121,9 +299,9 @@ export function DeliaPanel() {
       // A closed panel starts the next conversation fresh rather than
       // continuing a stale thread from the visitor's last visit.
       historyRef.current = [];
-      setResult(null);
+      setTurns([]);
       setErrorMsg(null);
-      setFeedbackGiven(false);
+      setFeedbackGiven({});
     };
   }, [open, closeDelia]);
 
@@ -135,12 +313,12 @@ export function DeliaPanel() {
     ask(q);
   }
 
-  function giveFeedback(type: "helpful" | "not_helpful") {
-    setFeedbackGiven(true);
+  function giveFeedback(turnIndex: number, type: "helpful" | "not_helpful") {
+    setFeedbackGiven((prev) => ({ ...prev, [turnIndex]: true }));
     sendFeedback({
       feedbackType: type,
       conversationId: conversationIdRef.current,
-      messageId: String(historyRef.current.length),
+      messageId: String(turnIndex),
       market,
     });
   }
@@ -199,7 +377,7 @@ export function DeliaPanel() {
             </p>
           )}
 
-          {!result && !loading && available !== false && (
+          {turns.length === 0 && !loading && available !== false && (
             <div className="flex flex-1 flex-col items-center justify-center gap-6 py-6 text-center">
               <span className="inline-flex h-14 w-14 items-center justify-center rounded-full bg-surface-2 text-lime-deep">
                 <Sparkle size={26} weight="fill" aria-hidden="true" />
@@ -223,8 +401,24 @@ export function DeliaPanel() {
             </div>
           )}
 
+          {turns.length > 0 && (
+            <div className="space-y-6" aria-live="polite">
+              {turns.map((result, i) => (
+                <DeliaExchange
+                  key={i}
+                  result={result}
+                  market={market}
+                  onFollowUp={ask}
+                  onClose={closeDelia}
+                  feedbackGiven={Boolean(feedbackGiven[i])}
+                  onFeedback={(type) => giveFeedback(i, type)}
+                />
+              ))}
+            </div>
+          )}
+
           {loading && (
-            <div className="flex items-start gap-2.5" aria-live="polite">
+            <div className={cn("flex items-start gap-2.5", turns.length > 0 && "mt-6")} aria-live="polite">
               <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-lime text-ink">
                 <Sparkle size={15} weight="fill" aria-hidden="true" />
               </span>
@@ -243,168 +437,7 @@ export function DeliaPanel() {
             </p>
           )}
 
-          {result && !loading && (
-            <div aria-live="polite" className="space-y-4">
-              <div className="flex justify-end">
-                <p className="max-w-[85%] wrap-anywhere rounded-2xl rounded-br-md bg-surface-inverse px-4 py-2.5 text-sm font-medium text-fg-on-inverse">
-                  {result.transcript}
-                </p>
-              </div>
-
-              <div className="flex items-start gap-2.5">
-                <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-lime text-ink">
-                  <Sparkle size={15} weight="fill" aria-hidden="true" />
-                </span>
-                <p className="max-w-[85%] rounded-2xl rounded-tl-md bg-surface-2 px-4 py-3 text-sm leading-relaxed text-fg">
-                  {result.message}
-                </p>
-              </div>
-
-              <div className="space-y-4 pl-[42px]">
-                {/* Structured clarifying questions — tappable options answer
-                    them in one tap instead of making the shopper type. */}
-                {result.clarificationPrompts.length > 0 && (
-                  <div className="space-y-3">
-                    {result.clarificationPrompts.map((prompt, i) => (
-                      <div key={i}>
-                        <p className="text-sm font-semibold text-fg">{prompt.question}</p>
-                        <ul className="mt-2 flex flex-wrap gap-2">
-                          {prompt.options.map((option) => (
-                            <li key={option}>
-                              <button
-                                type="button"
-                                onClick={() => ask(option)}
-                                className="cursor-pointer rounded-full border border-border px-3.5 py-2 text-sm text-fg-muted transition-colors hover:border-border-strong hover:bg-surface-2 hover:text-fg"
-                              >
-                                {option}
-                              </button>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {result.clarificationPrompts.length === 0 &&
-                  result.clarifyingQuestions.length > 0 && (
-                    <ul className="space-y-1.5">
-                      {result.clarifyingQuestions.map((question, i) => (
-                        <li key={i} className="text-sm text-fg">
-                          {question}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-
-                {result.recommendations.length > 0 && (
-                  <ul className="space-y-2">
-                    {result.recommendations.map((rec, i) => {
-                      const href =
-                        rec.source_type === "catalog" && rec.catalog_product_id
-                          ? `/${market}/deal/${rec.catalog_product_id}`
-                          : rec.url;
-                      const external = rec.source_type !== "catalog" || !rec.catalog_product_id;
-                      const price =
-                        rec.price ||
-                        (rec.price_value !== null
-                          ? formatPrice(rec.price_value, rec.currency || "USD", market)
-                          : "");
-
-                      const card = (
-                        <>
-                          <span className="min-w-0 flex-1">
-                            <span className="block truncate text-sm font-semibold text-fg">
-                              {rec.title}
-                            </span>
-                            <span className="block text-xs text-fg-muted">
-                              {rec.retailer}
-                              {rec.badge && ` · ${rec.badge}`}
-                            </span>
-                            {rec.reason && (
-                              <span className="mt-0.5 block text-xs text-fg-subtle">
-                                {rec.reason}
-                              </span>
-                            )}
-                          </span>
-                          <span className="flex shrink-0 items-center gap-1 text-sm font-bold text-fg tnum">
-                            {price}
-                            {external && (
-                              <ArrowUpRight size={14} weight="bold" aria-hidden="true" />
-                            )}
-                          </span>
-                        </>
-                      );
-
-                      const className =
-                        "flex items-center gap-3 rounded-2xl border border-border p-3 transition-colors hover:border-border-strong hover:bg-surface-2";
-
-                      return (
-                        <li key={`${rec.title}-${i}`}>
-                          {external ? (
-                            <a
-                              href={href}
-                              target="_blank"
-                              rel="sponsored noopener noreferrer"
-                              className={className}
-                            >
-                              {card}
-                            </a>
-                          ) : (
-                            <Link href={href} onClick={closeDelia} className={className}>
-                              {card}
-                            </Link>
-                          )}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-
-                {result.comparisonNotes.length > 0 && (
-                  <ul className="space-y-1.5">
-                    {result.comparisonNotes.map((note, i) => (
-                      <li key={i} className="text-sm text-fg-muted">
-                        {note}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-
-                {result.followUp && (
-                  <button
-                    type="button"
-                    onClick={() => ask(result.followUp)}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-border px-3.5 py-2 text-sm font-medium text-fg-muted transition-colors hover:border-border-strong hover:text-fg"
-                  >
-                    {result.followUp}
-                  </button>
-                )}
-
-                <div className="flex items-center gap-2 border-t border-border pt-4">
-                  <span className="text-xs text-fg-subtle">Was this helpful?</span>
-                  <button
-                    type="button"
-                    disabled={feedbackGiven}
-                    onClick={() => giveFeedback("helpful")}
-                    aria-label="This was helpful"
-                    className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-full text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg disabled:opacity-40"
-                  >
-                    <ThumbsUp size={15} weight="bold" aria-hidden="true" />
-                  </button>
-                  <button
-                    type="button"
-                    disabled={feedbackGiven}
-                    onClick={() => giveFeedback("not_helpful")}
-                    aria-label="This was not helpful"
-                    className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-full text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg disabled:opacity-40"
-                  >
-                    <ThumbsDown size={15} weight="bold" aria-hidden="true" />
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
+          <div ref={bottomRef} />
         </div>
 
         {/* input row */}
