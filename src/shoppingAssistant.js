@@ -1378,32 +1378,64 @@ const CLARIFICATION_CHOICES = {
 const MARKET_BUDGET_CHOICES = Object.freeze({
   us: {
     default: ["USD 0-100", "USD 100-200", "USD 200+"],
+    electronics: ["USD 0-300", "USD 300-700", "USD 700+"],
     furniture: ["USD 0-500", "USD 500-1,500", "USD 1,500+"],
   },
   ca: {
     default: ["CAD 0-150", "CAD 150-250", "CAD 250+"],
+    electronics: ["CAD 0-400", "CAD 400-950", "CAD 950+"],
     furniture: ["CAD 0-700", "CAD 700-2,000", "CAD 2,000+"],
   },
   uk: {
     default: ["GBP 0-80", "GBP 80-160", "GBP 160+"],
+    electronics: ["GBP 0-250", "GBP 250-600", "GBP 600+"],
     furniture: ["GBP 0-400", "GBP 400-1,200", "GBP 1,200+"],
   },
   fr: {
     default: ["EUR 0-100", "EUR 100-200", "EUR 200+"],
+    electronics: ["EUR 0-300", "EUR 300-700", "EUR 700+"],
     furniture: ["EUR 0-450", "EUR 450-1,300", "EUR 1,300+"],
   },
   de: {
     default: ["EUR 0-100", "EUR 100-200", "EUR 200+"],
+    electronics: ["EUR 0-300", "EUR 300-700", "EUR 700+"],
     furniture: ["EUR 0-450", "EUR 450-1,300", "EUR 1,300+"],
   },
 });
 
+/*
+ * Which band is worth offering for a given family. Offering "USD 0-100" for a
+ * phone or a TV burns the single budget question on a bracket nothing is sold
+ * in. Kept deliberately narrow: only families whose entry price really does
+ * clear the default band are listed, because plenty of categories (headphones,
+ * watches, most gifts) genuinely do start under $100 and are right to keep it.
+ */
+const BUDGET_TIER_BY_FAMILY = Object.freeze({
+  bed: "furniture",
+  mattress: "furniture",
+  sofa: "furniture",
+  camera: "electronics",
+  console: "electronics",
+  laptop: "electronics",
+  monitor: "electronics",
+  phone: "electronics",
+  tablet: "electronics",
+  tv: "electronics",
+});
+
 function marketBudgetChoices(marketCode, productFamily = "") {
   const choices = MARKET_BUDGET_CHOICES[marketCode] || MARKET_BUDGET_CHOICES.us;
-  return [...(choices[productFamily] || choices.default)];
+  const family = clean(productFamily).toLowerCase();
+  const tier = BUDGET_TIER_BY_FAMILY[family] || family;
+  return [...(choices[tier] || choices.default)];
 }
 
-function clarificationPrompts(questions, language, marketCode = "us") {
+function clarificationPrompts(
+  questions,
+  language,
+  marketCode = "us",
+  productFamily = "",
+) {
   const copy = DISCOVERY_QUESTION_COPY[language] || DISCOVERY_QUESTION_COPY.en;
   const choices = { ...(CLARIFICATION_CHOICES[language] || CLARIFICATION_CHOICES.en) };
   const shoeSizes = {
@@ -1413,7 +1445,7 @@ function clarificationPrompts(questions, language, marketCode = "us") {
     fr: ["EU 41", "EU 42", "EU 43"],
     de: ["EU 41", "EU 42", "EU 43"],
   };
-  choices.budget = marketBudgetChoices(marketCode);
+  choices.budget = marketBudgetChoices(marketCode, productFamily);
   choices.size = shoeSizes[marketCode]
     ? [...shoeSizes[marketCode], choices.size[3]]
     : choices.size;
@@ -1443,6 +1475,17 @@ function clarificationPrompts(questions, language, marketCode = "us") {
   }).filter((prompt) => prompt.question);
 }
 
+/*
+ * A prompt the shopper cannot answer is worse than no prompt at all: the panel
+ * renders the question with no buttons under it, and the "Continue" control
+ * waits for an answer that can never be given. A question whose wording the
+ * model rephrased ("Which matters most for your Redmi phone?" rather than the
+ * exact canned line) falls through clarificationPrompts as type "custom" and
+ * comes back with an empty options list, which is how that deadlock happened.
+ */
+const answerablePrompt = (prompt) =>
+  Boolean(prompt?.question) && (prompt.options?.length ?? 0) >= 2;
+
 function coherentClarificationPrompts(
   modelPrompts,
   fallbackQuestions,
@@ -1450,7 +1493,14 @@ function coherentClarificationPrompts(
   missionValue = null,
   marketCode = "us",
 ) {
-  const fallback = clarificationPrompts(fallbackQuestions, language, marketCode);
+  const mission = normalizeShoppingMission(missionValue);
+  const category = missionProductFamily(mission.product_type);
+  const fallback = clarificationPrompts(
+    fallbackQuestions,
+    language,
+    marketCode,
+    category,
+  ).filter(answerablePrompt);
   const candidates = (Array.isArray(modelPrompts) ? modelPrompts : [])
     .map((prompt) => ({
       question: cleanDisplayText(prompt?.question).slice(0, 180),
@@ -1465,8 +1515,6 @@ function coherentClarificationPrompts(
   const genericPriorityPattern = /(?:quality|features?|качество|функци\p{L}*|keyfiyyət|funksiy|calidad|funciones|qualité|fonctions|qualität|funktionen)/iu;
   const knownProductPattern = /(?:what\s+(?:product|type)|which\s+product|что\s+именно|какой\s+товар|nə\s+məhsul|qué\s+producto|quel\s+produit|welches\s+produkt)/iu;
   const useQuestionPattern = /(?:what\s+(?:will|do)\s+you\s+use|main\s+use|which\s+activity|для\s+чего|для\s+какого\s+использования|как\s+будете\s+использовать|nə\s+üçün|para\s+qué|quel\s+usage|wofür)/iu;
-  const mission = normalizeShoppingMission(missionValue);
-  const category = missionProductFamily(mission.product_type);
   const categoryRelevancePatterns = {
     shoes: /(?:run|running|walk|gym|train|trail|hiking|terrain|support|cushion|fit|width|size|бег|ходьб|зал|трениров|трейл|поход|поверхност|поддержк|амортизац|посадк|ширин|размер|course|marche|randonn|lauf|fitness|wandern)/iu,
     furniture: /(?:seat|people|room|space|material|fabric|leather|sleeper|sectional|мест|человек|комнат|размер|материал|ткан|кож|спальн|personnes?|pièce|matière|canapé-lit|personen|zimmer|material|schlafsofa)/iu,
@@ -1508,6 +1556,7 @@ function coherentClarificationPrompts(
       useQuestionPattern.test(prompt.question)
     ) continue;
     if (selected.some((item) => item.question.toLowerCase() === prompt.question.toLowerCase())) continue;
+    if (!answerablePrompt(prompt)) continue;
     selected.push(prompt);
     if (isBudget) selectedBudget = true;
     if (selected.length >= 2) break;
