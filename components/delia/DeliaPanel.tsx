@@ -22,7 +22,7 @@ import {
   type DeliaTurn,
 } from "@/lib/delia";
 import { useDelia } from "./DeliaContext";
-import { speak, stopSpeaking, useSpeech } from "./useSpeech";
+import { stopSpeaking, useSpeech } from "./useSpeech";
 
 const EXAMPLES = [
   "Find me a mattress under six hundred dollars",
@@ -63,7 +63,9 @@ export function DeliaPanel() {
           { role: "assistant", content: next.message },
         ];
         setResult(next);
-        speak(next.message);
+        // Voice replies are off for now — the default browser voice read as a
+        // harsh robotic male voice, which read as worse than no voice at all.
+        // The answer is always on screen as text regardless.
       } catch (error) {
         setErrorMsg(
           error instanceof DeliaError
@@ -162,7 +164,7 @@ export function DeliaPanel() {
         type="button"
         aria-label="Close Delia"
         onClick={closeDelia}
-        className="absolute inset-0 cursor-pointer bg-ink/55 backdrop-blur-sm"
+        className="fade-in absolute inset-0 cursor-pointer bg-ink/55 backdrop-blur-sm"
       />
 
       <div
@@ -171,35 +173,37 @@ export function DeliaPanel() {
         aria-modal="true"
         aria-labelledby="delia-title"
         className={cn(
-          "relative flex max-h-[92dvh] w-full max-w-2xl flex-col overflow-hidden",
+          "rise-in relative flex max-h-[92dvh] w-full max-w-2xl flex-col overflow-hidden",
           "rounded-t-3xl bg-surface shadow-lift sm:rounded-3xl",
         )}
       >
         {/* header */}
-        <div className="flex items-center gap-3 border-b border-border px-5 py-4">
-          <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-lime text-ink">
-            <Sparkle size={20} weight="fill" aria-hidden="true" />
-          </span>
-          <div className="min-w-0 flex-1">
-            <h2 id="delia-title" className="text-lg font-bold leading-tight">
-              Delia
-            </h2>
-            <p className="truncate text-xs text-fg-muted">
-              Ask for what you want — she searches and compares the checked picks.
-            </p>
+        <div className="relative shrink-0 overflow-hidden bg-graphite px-5 py-5 sm:px-6 sm:py-6">
+          <div className="relative flex items-center gap-3.5">
+            <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-lime text-ink ring-4 ring-white/10">
+              <Sparkle size={22} weight="fill" aria-hidden="true" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <h2 id="delia-title" className="text-xl font-bold leading-tight text-white">
+                Delia
+              </h2>
+              <p className="truncate text-xs text-white/65">
+                Ask for what you want — she searches and compares the checked picks.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={closeDelia}
+              aria-label="Close Delia"
+              className="inline-flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-full text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+            >
+              <X size={20} weight="bold" aria-hidden="true" />
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={closeDelia}
-            aria-label="Close Delia"
-            className="inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-full text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg"
-          >
-            <X size={20} weight="bold" aria-hidden="true" />
-          </button>
         </div>
 
         {/* body */}
-        <div className="flex-1 overflow-y-auto px-5 py-5">
+        <div className="flex flex-1 flex-col overflow-y-auto px-5 py-5 sm:min-h-[420px] sm:px-6 sm:py-6">
           {available === false && (
             <p role="alert" className="rounded-2xl bg-surface-2 p-4 text-sm text-fg-muted">
               Delia isn&apos;t connected right now. Try again shortly.
@@ -207,19 +211,22 @@ export function DeliaPanel() {
           )}
 
           {!result && !loading && available !== false && (
-            <div>
-              <p className="text-sm text-fg-muted">
+            <div className="flex flex-1 flex-col items-center justify-center gap-6 py-6 text-center">
+              <span className="inline-flex h-14 w-14 items-center justify-center rounded-full bg-surface-2 text-lime-deep">
+                <Sparkle size={26} weight="fill" aria-hidden="true" />
+              </span>
+              <p className="max-w-xs text-sm leading-relaxed text-fg-muted">
                 {supported
                   ? "Tap the microphone and say what you are looking for, or type it."
                   : "Your browser has no speech recognition, so type your question — the answers are identical."}
               </p>
-              <ul className="mt-4 flex flex-wrap gap-2">
+              <ul className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2">
                 {EXAMPLES.map((e) => (
                   <li key={e}>
                     <button
                       type="button"
                       onClick={() => ask(e)}
-                      className="cursor-pointer rounded-full border border-border px-3.5 py-2 text-sm text-fg-muted transition-colors hover:border-border-strong hover:text-fg"
+                      className="w-full cursor-pointer rounded-2xl border border-border px-4 py-3 text-left text-sm text-fg-muted transition-[transform,border-color,box-shadow] duration-200 hover:-translate-y-0.5 hover:border-border-strong hover:text-fg hover:shadow-card"
                     >
                       {e}
                     </button>
@@ -249,9 +256,17 @@ export function DeliaPanel() {
           )}
 
           {loading && (
-            <p className="mt-2 text-sm text-fg-muted" aria-live="polite">
-              <span className="font-semibold text-fg">Delia is thinking…</span>
-            </p>
+            <div className="flex items-start gap-2.5" aria-live="polite">
+              <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-lime text-ink">
+                <Sparkle size={15} weight="fill" aria-hidden="true" />
+              </span>
+              <span className="inline-flex items-center gap-1.5 rounded-2xl rounded-tl-md bg-surface-2 px-4 py-3.5">
+                <span className="sr-only">Delia is thinking…</span>
+                <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-fg-subtle [animation-delay:-0.3s]" />
+                <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-fg-subtle [animation-delay:-0.15s]" />
+                <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-fg-subtle" />
+              </span>
+            </div>
           )}
 
           {errorMsg && !loading && (
@@ -261,20 +276,25 @@ export function DeliaPanel() {
           )}
 
           {result && !loading && (
-            <div aria-live="polite">
-              <p className="text-xs uppercase tracking-wide text-fg-subtle">
-                You asked
-              </p>
-              <p className="mt-1 wrap-anywhere text-base font-semibold text-fg">
-                “{result.transcript}”
-              </p>
+            <div aria-live="polite" className="space-y-4">
+              <div className="flex justify-end">
+                <p className="max-w-[85%] wrap-anywhere rounded-2xl rounded-br-md bg-surface-inverse px-4 py-2.5 text-sm font-medium text-fg-on-inverse">
+                  {result.transcript}
+                </p>
+              </div>
 
-              <p className="mt-4 rounded-2xl bg-surface-2 p-4 text-sm leading-relaxed text-fg">
-                {result.message}
-              </p>
+              <div className="flex items-start gap-2.5">
+                <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-lime text-ink">
+                  <Sparkle size={15} weight="fill" aria-hidden="true" />
+                </span>
+                <p className="max-w-[85%] rounded-2xl rounded-tl-md bg-surface-2 px-4 py-3 text-sm leading-relaxed text-fg">
+                  {result.message}
+                </p>
+              </div>
 
+              <div className="space-y-4 pl-[42px]">
               {result.recommendations.length > 0 && (
-                <ul className="mt-4 space-y-2">
+                <ul className="space-y-2">
                   {result.recommendations.map((rec, i) => {
                     const href =
                       rec.source_type === "catalog" && rec.catalog_product_id
@@ -338,7 +358,7 @@ export function DeliaPanel() {
               )}
 
               {result.comparisonNotes.length > 0 && (
-                <ul className="mt-4 space-y-1.5">
+                <ul className="space-y-1.5">
                   {result.comparisonNotes.map((note, i) => (
                     <li key={i} className="text-sm text-fg-muted">
                       {note}
@@ -351,13 +371,13 @@ export function DeliaPanel() {
                 <button
                   type="button"
                   onClick={() => ask(result.followUp)}
-                  className="mt-4 inline-flex items-center gap-1.5 rounded-full border border-border px-3.5 py-2 text-sm font-medium text-fg-muted transition-colors hover:border-border-strong hover:text-fg"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-border px-3.5 py-2 text-sm font-medium text-fg-muted transition-colors hover:border-border-strong hover:text-fg"
                 >
                   {result.followUp}
                 </button>
               )}
 
-              <div className="mt-5 flex items-center gap-2 border-t border-border pt-4">
+              <div className="flex items-center gap-2 border-t border-border pt-4">
                 <span className="text-xs text-fg-subtle">Was this helpful?</span>
                 <button
                   type="button"
@@ -377,6 +397,7 @@ export function DeliaPanel() {
                 >
                   <ThumbsDown size={15} weight="bold" aria-hidden="true" />
                 </button>
+              </div>
               </div>
             </div>
           )}
