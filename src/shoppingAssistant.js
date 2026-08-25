@@ -23,7 +23,7 @@ const MARKET_COUNTRIES = {
   de: "DE",
 };
 const INTENT_STOP_WORDS = new Set(
-  `a an and are at be bro but can check could did do does dude find for from give got had has have hey hi how i in is it item items just looking man me my need no of offer offers on only option options or please price prices product products say saying search see show store stores tell than that the their them there these they this to u under up us want what where which with would you your
+  `a an and any are at be bro but can check could did do does dude find for from give got had has have hey hi how i in is it item items just looking man me my need no of offer offers on only option options or please price prices product products say saying search see show some store stores tell than that the their them there these they this to u under up us want what where which with would you your
   а без бро бы в вам вас все где для до есть и из или как ли мне мой на найди не нибудь но ну о от по покажи подобрать пожалуйста привет примерно при уже хочу цвет цвета цвете что это я ок нужны нужен нужна такое такие типа классные классный
   de des du en et la le les moi ou pour prix produit produits recherche trouver un une vous
   das der die ein eine finden für ich im in mit oder preis produkt produkte sie und von zu
