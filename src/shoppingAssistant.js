@@ -1202,6 +1202,8 @@ const EMPTY_SHOPPING_MISSION = Object.freeze({
   market: "",
   preferred_retailer: "",
   budget_max: 0,
+  /* A floor. Zero means the shopper never named one. */
+  budget_min: 0,
   query_terms: [],
 });
 
@@ -1307,6 +1309,7 @@ function missionFromText(value) {
     market: requestedMarketCode(text, ""),
     preferred_retailer: requestedRetailer(text),
     budget_max: catalogSearchArgs(text).max_price || 0,
+    budget_min: catalogSearchArgs(text).min_price || 0,
     query_terms: queryTerms,
   };
 }
@@ -1340,6 +1343,7 @@ function normalizeShoppingMission(value) {
       : "",
     preferred_retailer: clean(value.preferred_retailer).slice(0, 50),
     budget_max: Math.max(0, number(value.budget_max, 0)),
+    budget_min: Math.max(0, number(value.budget_min, 0)),
     query_terms: [...new Set((Array.isArray(value.query_terms) ? value.query_terms : [])
       .map((term) => clean(term).toLowerCase())
       .filter((term) => /^[a-z0-9][a-z0-9 -]*$/i.test(term))
@@ -1405,6 +1409,7 @@ function mergeShoppingMission(currentValue, modelPatch, latestRequest, startsNew
     preferred_retailer:
       extracted.preferred_retailer || model.preferred_retailer || base.preferred_retailer,
     budget_max: extracted.budget_max || model.budget_max || base.budget_max,
+    budget_min: extracted.budget_min || model.budget_min || base.budget_min,
     query_terms: [
       ...base.query_terms,
       ...extracted.query_terms,
@@ -1427,6 +1432,7 @@ function shoppingMissionText(missionValue, fallback = "") {
   if (mission.market) parts.push(`in ${mission.market.toUpperCase()}`);
   if (mission.preferred_retailer) parts.push(`on ${mission.preferred_retailer}`);
   if (mission.budget_max) parts.push(`under ${mission.budget_max}`);
+  if (mission.budget_min) parts.push(`over ${mission.budget_min}`);
   if (mission.query_terms.length) parts.push(mission.query_terms.join(" "));
   return clean(parts.join(" ")) || clean(fallback);
 }
@@ -2427,6 +2433,7 @@ function searchCatalog(db, sourceSql, args, marketCode, language) {
   const query = normalizeSearch(args.query);
   const category = normalizeSearch(args.category);
   const maxPrice = number(args.max_price, 0);
+  const minPrice = number(args.min_price, 0);
   const minimumScore = Math.max(
     82,
     Math.min(95, number(args.minimum_score, 82)),
@@ -2457,6 +2464,10 @@ function searchCatalog(db, sourceSql, args, marketCode, language) {
     .filter(
       (product) =>
         !maxPrice || (product.total_price != null && product.total_price <= maxPrice),
+    )
+    .filter(
+      (product) =>
+        !minPrice || (product.total_price != null && product.total_price >= minPrice),
     )
     .filter(
       (product) =>
@@ -2633,7 +2644,10 @@ async function withRequestTimeout(task, parentSignal, timeoutMs) {
    and nothing beyond them. The old `[\d\s,.]*` ran past the end of the number
    and swallowed whatever followed, so "USD 0-500, 3 people" produced a budget
    of 500.3 rather than 500. */
-const MONEY_NUMBER = String.raw`\d{1,3}(?:[,.\s]\d{3})*(?:[.,]\d{1,2})?`;
+/* Grouped form first ("1,500", "1 500"), then a plain run of digits. Without
+   that second branch the pattern could only ever take three digits at a time,
+   so "under $1500" was read as a budget of 150. */
+const MONEY_NUMBER = String.raw`(?:\d{1,3}(?:[,.\s]\d{3})+(?:[.,]\d{1,2})?|\d+(?:[.,]\d{1,2})?)`;
 /* Words that prove a number was never a price. A range reads as a budget only
    when nothing like this follows it: "50 to 65 inches" is a screen size and
    "1-2 people" is a seating count, and both used to be read as money and then
@@ -2654,20 +2668,38 @@ function catalogSearchArgs(message) {
       "iu",
     ),
   ) || normalized.match(new RegExp(String.raw`([$€£]\s*${MONEY_NUMBER})`, "u"));
+  /*
+   * A floor, which the code had no concept of at all. "USD 700+" is one of our
+   * own budget options and it set no constraint whatsoever, so a phone at $99
+   * was a perfectly good answer to a request for $700 and up. Worse, "at least
+   * $700" matched the ceiling pattern on the word "least" and became a
+   * maximum: the exact opposite of what was asked.
+   */
+  const minimumMatch = normalized.match(
+    new RegExp(
+      String.raw`(?:(?<!\p{L})(?:over|above|at\s+least|from|more\s+than|starting\s+at|от|дороже|больше)(?!\p{L})\D{0,18}([$€£]?\s*${MONEY_NUMBER})|([$€£]?\s*${MONEY_NUMBER})\s*\+)(?!\d)(?!\s*(?:${NON_PRICE_UNIT}))`,
+      "iu",
+    ),
+  );
+  const toAmount = (value) =>
+    value
+      ? number(
+          String(value)
+            .replace(/[^\d.,]/g, "")
+            .replace(/,(?=\d{3}(?:\D|$))/g, "")
+            .replace(/,/g, "."),
+          0,
+        )
+      : 0;
+  const minPrice = toAmount(minimumMatch?.[1] || minimumMatch?.[2]);
   const budgetValue = budgetRange?.[2] || budgetMatch?.[1] || budgetMatch?.[0];
-  const maxPrice = budgetValue
-    ? number(
-        String(budgetValue)
-          .replace(/[^\d.,]/g, "")
-          .replace(/,(?=\d{3}(?:\D|$))/g, "")
-          .replace(/,/g, "."),
-        0,
-      )
-    : 0;
+  const maxPrice = toAmount(budgetValue);
   return {
     query: normalized,
     category: "",
-    max_price: maxPrice,
+    /* A floor alone must never be read as a ceiling. */
+    max_price: minPrice && maxPrice && maxPrice <= minPrice ? 0 : maxPrice,
+    min_price: minPrice,
     minimum_score: 82,
     limit: 8,
   };
@@ -4054,6 +4086,18 @@ function providerFirstResponse({
     verified_retailer: false,
     evidence_level: "verified_catalog",
   }));
+  /* This path answers when the live search cannot, so the budget has to be
+     honoured here too. It was not, and a request for "$700 and up" came back
+     with a $99 phone from the retailer APIs, under a note claiming it matched
+     the budget. */
+  const withinBudget = (recommendation) => {
+    const price = landedPrice(recommendation);
+    if (!(price > 0)) return true;
+    const ceiling = normalizeShoppingMission(shoppingMission).budget_max;
+    const floor = normalizeShoppingMission(shoppingMission).budget_min;
+    if (ceiling && price > ceiling) return false;
+    return !floor || price >= floor;
+  };
   const candidates = selectRetailerDiverseCandidates(
     deduplicateRecommendations([
       ...catalogCandidates,
@@ -4064,7 +4108,7 @@ function providerFirstResponse({
         selectedMarket,
         shoppingMission?.product_type,
       ),
-    ]),
+    ]).filter(withinBudget),
     MAX_RECOMMENDATIONS,
   ).filter((recommendation) =>
       !excludedUrls.has(comparableUrl(recommendation.url)),
@@ -4857,16 +4901,26 @@ function createShoppingAssistant({
         (recommendation) =>
           /^https:\/\//i.test(safeUrl(recommendation.image_url)),
       );
+      /* The budget the shopper actually stated, both ends of it. A ceiling
+         used to be applied only when the request read as "find me something
+         cheaper", and a floor was not applied at all, which is how "USD 700+"
+         came back holding a $99 phone. */
       const lowerPriceBudget = isLowerPriceRequest(resolvedRequest)
         ? catalogSearchArgs(resolvedRequest).max_price
         : 0;
-      const budgetFilteredCandidates = lowerPriceBudget
-        ? displayableCandidates.filter(
-            (recommendation) =>
-              landedPrice(recommendation) > 0 &&
-              landedPrice(recommendation) <= lowerPriceBudget,
-          )
-        : displayableCandidates;
+      const budgetCeiling = lowerPriceBudget || activeMission.budget_max || 0;
+      const budgetFloor = activeMission.budget_min || 0;
+      const budgetFilteredCandidates =
+        budgetCeiling || budgetFloor
+          ? displayableCandidates.filter((recommendation) => {
+              const price = landedPrice(recommendation);
+              /* An unpriced find is not evidence of breaking the budget, and
+                 dropping it would lose a real product over a missing figure. */
+              if (!(price > 0)) return true;
+              if (budgetCeiling && price > budgetCeiling) return false;
+              return !budgetFloor || price >= budgetFloor;
+            })
+          : displayableCandidates;
       const freshCandidates = budgetFilteredCandidates.filter(
         (recommendation) => !excludedUrls.has(comparableUrl(recommendation.url)),
       );
