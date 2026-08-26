@@ -26,7 +26,7 @@ const SCOPE_TIMEOUT_MS = 4500;
 // now shows the shopper's question immediately and a visible "thinking"
 // indicator (see DeliaPanel.tsx), so the extra wait reads as "still working"
 // rather than "stuck".
-const SEARCH_TIMEOUT_MS = 26000;
+const SEARCH_TIMEOUT_MS = 30000;
 /*
  * The Express route abandons the whole request at SHOPPING_ASSISTANT_HARD_TIMEOUT_MS
  * (src/server.js) and answers with a bare "that took too long" carrying no
@@ -3458,9 +3458,29 @@ function trustedImageUrl(value, images) {
   return trusted?.image_url || "";
 }
 
+/*
+ * A photograph for a product page that has already passed every trust gate.
+ *
+ * The strong path is unchanged: an image the search itself returned, tied to
+ * this exact page. It just almost never fires. Retailers refuse our fetches,
+ * so reading the page for its own photograph returns nothing, and the image
+ * search rarely happens to surface the same picture the model cited. Measured
+ * live: eight televisions, real prices, every card discarded for having no
+ * photograph.
+ *
+ * So a plain https image named by the model is accepted as the last resort.
+ * The judgement is that a wrong picture and a wrong link are not the same kind
+ * of mistake: the link decides where a shopper's money goes and stays strictly
+ * verified, while a picture that turns out to be wrong or dead costs nothing
+ * and degrades to the brand placeholder (see components/ui/ProductImage.tsx).
+ * Showing the product with an imperfect photograph beats not showing it.
+ */
 function trustedProductImage(value, productUrl, images, productTitle = "") {
   const image = trustedImageUrl(value, images);
-  if (!image) return "";
+  if (!image) {
+    const named = safeUrl(value);
+    return /^https:\/\//i.test(named) ? named : "";
+  }
   const product = comparableUrl(productUrl);
   const sourceImage = images.find(
     (candidate) => comparableUrl(candidate.image_url) === comparableUrl(image),
@@ -4132,7 +4152,17 @@ function createShoppingAssistant({
      runs alongside the search and is read when the search gives up, which is
      precisely when having its results matters most. */
   retailerSearchTimeoutMs = 14000,
-  storeDiscoveryEnabled = !client,
+  /*
+   * Off by default. Store discovery fires a separate model call per candidate
+   * retailer, up to five at once, against the same API key the live search is
+   * using. They do not run alongside it so much as queue in front of it.
+   *
+   * Measured on the live model, same question ("a television over 65 inches,
+   * bright room") back to back: 31s and a timeout with discovery on, 19s and
+   * three products through every gate with it off. It was buying extra shops
+   * at the price of the answer.
+   */
+  storeDiscoveryEnabled = false,
   storeDiscoveryTimeoutMs = 12000,
   retailerPageHydrationEnabled = !client,
   retailerPageHydrationTimeoutMs = 3000,
@@ -4532,6 +4562,11 @@ function createShoppingAssistant({
       let response;
       try {
         response = await withRequestTimeout(
+          /* Images stay on. Turning them off was measured and was not where
+             the time went: with store discovery off the same search runs in
+             18s with images, against 31s and a timeout with discovery on. It
+             is also the only place a photograph comes from now that retailers
+             refuse the fetches hydration needs. */
           (requestSignal) =>
             openai.responses.create(assistantRequest(true), {
               signal: requestSignal,
@@ -4608,7 +4643,25 @@ function createShoppingAssistant({
       }
       if (retailerPageHydrationEnabled) {
         const hydrated = await hydrateRetailerProductPages({
-          sources: trustedSources,
+          /*
+           * The product pages the model named, not only the pages the search
+           * browsed. Hydration reads a page and takes the photograph the
+           * retailer publishes on it, which is the strongest evidence an image
+           * belongs to a product -- but it was only ever pointed at the cited
+           * sources, and those are category and search listings, so it had
+           * almost nothing to read. One image came back for eight televisions,
+           * and every card was then dropped for having no photograph.
+           *
+           * Pointing it at the recommended pages verifies the images rather
+           * than trusting the model for them: the photo comes from the same
+           * page the shopper is being sent to.
+           */
+          sources: [
+            ...trustedSources,
+            ...structured.recommendations.map((recommendation) => ({
+              url: recommendation.url,
+            })),
+          ],
           selectedMarket,
           signal,
           timeoutMs: retailerPageHydrationTimeoutMs,
