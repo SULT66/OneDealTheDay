@@ -1,0 +1,5 @@
+[config]
+# GitHub Actions already installs, builds, and tests the application. Running
+# Oryx again in App Service repackages the 500+ MB dependency tree into
+# node_modules.tar.gz, then blocks every cold start while extracting it.
+SCM_DO_BUILD_DURING_DEPLOYMENT=false
