@@ -55,6 +55,17 @@ fs.closeSync(descriptor);
 
 db = new Database(dbPath);
 assert(integrityProblems(db).length > 0, "The fixture did not create detectable index corruption");
+const originalExec = db.exec.bind(db);
+let simulatedAzureReindexFailure = true;
+db.exec = (sql) => {
+  if (sql === "REINDEX" && simulatedAzureReindexFailure) {
+    simulatedAzureReindexFailure = false;
+    const error = new Error("database disk image is malformed");
+    error.code = "SQLITE_CORRUPT";
+    throw error;
+  }
+  return originalExec(sql);
+};
 const messages = [];
 const result = repairIndexesIfNeeded(db, dbPath, {
   enabled: true,
@@ -70,6 +81,7 @@ assert.strictEqual(
 );
 assert(fs.existsSync(backupPathFor(dbPath)), "The damaged database was not backed up before repair");
 assert(messages.some((message) => message.includes("integrity_check returned ok")));
+assert(messages.some((message) => message.includes("recreating user indexes from schema")));
 db.close();
 fs.rmSync(directory, { recursive: true, force: true });
 
