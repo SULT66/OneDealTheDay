@@ -794,9 +794,117 @@ function measurementNumbers(request) {
   return numbers;
 }
 
+/* Plausible display sizes in inches. Wide enough for a phone screen through a
+   very large television, narrow enough that a model number, a resolution or a
+   year cannot be mistaken for one. */
+const MIN_DISPLAY_INCHES = 10;
+const MAX_DISPLAY_INCHES = 120;
+/* "in" only counts as inches when it is attached to the number, as in 55in or
+   55-in. Allowing a space made the ordinary English preposition a unit: "under
+   $500 in US" was read as a 500 inch screen, and the size filter then threw
+   away every television. */
+const INCH_UNIT = String.raw`(?:"|''|”|\s*-?\s*inch(?:es)?\b|-in\b|in\b(?<=\d{2,3}in)|\s*дюйм\p{L}*)`;
+
+/*
+ * The screen size the shopper asked for, as a range.
+ *
+ * Answering "Over 65 inches" has to actually mean something. Treating the
+ * number as a model number threw away every set in range; ignoring it instead
+ * returned a 40 inch television to someone who asked for 65 and upwards, under
+ * a note claiming it matched. It is a constraint, so it is read as one.
+ */
+function requestedSizeRange(request) {
+  const text = clean(request).toLowerCase();
+  const inches = (value) => {
+    const size = Number(String(value).replace(",", "."));
+    return Number.isFinite(size) && size >= MIN_DISPLAY_INCHES && size <= MAX_DISPLAY_INCHES
+      ? size
+      : null;
+  };
+  const between = new RegExp(
+    String.raw`(\d{2,3})\s*(?:-|–|—|\bto\b|\bдо\b)\s*(\d{2,3})${INCH_UNIT}`,
+    "iu",
+  ).exec(text);
+  if (between) {
+    const low = inches(between[1]);
+    const high = inches(between[2]);
+    if (low && high) return { min: Math.min(low, high), max: Math.max(low, high) };
+  }
+  const atLeast = new RegExp(
+    String.raw`(?:over|above|at least|bigger than|larger than|от|больше)\s*(\d{2,3})${INCH_UNIT}|(\d{2,3})${INCH_UNIT}\s*(?:or (?:larger|bigger|more|above)|\+|и больше)`,
+    "iu",
+  ).exec(text);
+  if (atLeast) {
+    const low = inches(atLeast[1] || atLeast[2]);
+    if (low) return { min: low, max: Infinity };
+  }
+  const atMost = new RegExp(
+    String.raw`(?:under|below|up to|less than|smaller than|до|меньше)\s*(\d{2,3})${INCH_UNIT}|(\d{2,3})${INCH_UNIT}\s*(?:or (?:smaller|less))`,
+    "iu",
+  ).exec(text);
+  if (atMost) {
+    const high = inches(atMost[1] || atMost[2]);
+    if (high) return { min: 0, max: high };
+  }
+  const exact = new RegExp(String.raw`(\d{2,3})${INCH_UNIT}`, "iu").exec(text);
+  if (exact) {
+    const size = inches(exact[1]);
+    /* A bare "65 inch" is a target, not a hard edge: a 64.5 inch panel is the
+       same television to a shopper. */
+    if (size) return { min: size - 1, max: size + 1 };
+  }
+  return null;
+}
+
+/** The screen-size phrase in a request, kept whole so its bound survives. */
+function displaySizeConstraintPhrase(value) {
+  const text = clean(value);
+  const patterns = [
+    new RegExp(
+      String.raw`(?:over|above|under|below|up to|at least|less than|bigger than|larger than|smaller than)\s*\d{2,3}${INCH_UNIT}`,
+      "iu",
+    ),
+    new RegExp(
+      String.raw`\d{2,3}\s*(?:-|–|—|\bto\b|\bдо\b)\s*\d{2,3}${INCH_UNIT}`,
+      "iu",
+    ),
+    new RegExp(
+      String.raw`\d{2,3}${INCH_UNIT}\s*(?:or (?:larger|bigger|more|above|smaller|less)|\+)`,
+      "iu",
+    ),
+    new RegExp(String.raw`\d{2,3}${INCH_UNIT}`, "iu"),
+  ];
+  for (const pattern of patterns) {
+    const match = pattern.exec(text);
+    if (match) return clean(match[0]).toLowerCase().slice(0, 20);
+  }
+  return "";
+}
+
+/** The size a listing states in its own title, if it states one. */
+function statedDisplaySize(title) {
+  const matches = clean(title)
+    .matchAll(new RegExp(String.raw`(\d{2,3}(?:[.,]\d)?)${INCH_UNIT}`, "giu"));
+  for (const match of matches) {
+    const size = Number(String(match[1]).replace(",", "."));
+    if (size >= MIN_DISPLAY_INCHES && size <= MAX_DISPLAY_INCHES) return size;
+  }
+  return null;
+}
+
 function matchesShoppingIntent(candidate, request, requiredProductType = "") {
   const requestTokens = normalizedIntentTokens(request);
   if (!requestTokens.length) return false;
+  /* Only rejects a listing that states a size and states one outside the
+     range. A listing that never mentions its size is left to the other checks
+     rather than being discarded on a guess. */
+  const sizeRange = requestedSizeRange(request);
+  if (sizeRange) {
+    const stated = statedDisplaySize(candidate?.title);
+    if (stated != null && (stated < sizeRange.min || stated > sizeRange.max)) {
+      return false;
+    }
+  }
   const haystack = [
     candidate?.title,
     candidate?.brand,
@@ -1086,6 +1194,11 @@ const EMPTY_SHOPPING_MISSION = Object.freeze({
   style: "",
   audience: "",
   size: "",
+  /* Screen size, deliberately kept apart from `size`. That one means the size
+     list a clothing listing publishes, and no television has ever carried one:
+     putting a screen size there marked every set unconfirmed. Two different
+     questions answered from two different places, so two fields. */
+  display_size: "",
   market: "",
   preferred_retailer: "",
   budget_max: 0,
@@ -1156,6 +1269,13 @@ function missionFromText(value) {
        query terms, where the intent check read it as a model number and threw
        away every trainer whose name did not contain a 10. */
     text.match(/\b(?:us|uk|eu)\s*([\d]{1,2}(?:[.,]5)?)(?!\d)/iu);
+  /* A screen-size answer is kept as the whole phrase, not just its number.
+     The mission is what survives into the next turn, and the request is
+     rebuilt from it: strip "over" or "to" here and the constraint arrives at
+     the search as a loose number, which is how "Over 65 inches" came back
+     holding a 40 inch television. The phrase is parsed into a real range by
+     requestedSizeRange. */
+  const displaySizePhrase = displaySizeConstraintPhrase(text);
   const queryTerms = tokens
     .filter((token) => /^[a-z0-9-]+$/i.test(token))
     .filter((token) => !INTENT_CONSTRAINT_WORDS.has(token))
@@ -1183,6 +1303,7 @@ function missionFromText(value) {
     style: clean(style).toLowerCase(),
     audience,
     size: clean(sizeMatch?.[1]),
+    display_size: displaySizePhrase,
     market: requestedMarketCode(text, ""),
     preferred_retailer: requestedRetailer(text),
     budget_max: catalogSearchArgs(text).max_price || 0,
@@ -1213,6 +1334,7 @@ function normalizeShoppingMission(value) {
     style: clean(value.style).toLowerCase().slice(0, 60),
     audience: clean(value.audience).toLowerCase().slice(0, 30),
     size: clean(value.size).slice(0, 20),
+    display_size: clean(value.display_size).toLowerCase().slice(0, 20),
     market: MARKET_COUNTRIES[clean(value.market).toLowerCase()]
       ? clean(value.market).toLowerCase()
       : "",
@@ -1278,6 +1400,7 @@ function mergeShoppingMission(currentValue, modelPatch, latestRequest, startsNew
     style: extracted.style || model.style || base.style,
     audience: extracted.audience || model.audience || base.audience,
     size: extracted.size || model.size || base.size,
+    display_size: extracted.display_size || model.display_size || base.display_size,
     market: extracted.market || model.market || base.market,
     preferred_retailer:
       extracted.preferred_retailer || model.preferred_retailer || base.preferred_retailer,
@@ -1300,6 +1423,7 @@ function shoppingMissionText(missionValue, fallback = "") {
   if (mission.style) parts.push(`${mission.style} style`);
   if (mission.use_case) parts.push(`use: ${mission.use_case}`);
   if (mission.size) parts.push(`size ${mission.size}`);
+  if (mission.display_size) parts.push(mission.display_size);
   if (mission.market) parts.push(`in ${mission.market.toUpperCase()}`);
   if (mission.preferred_retailer) parts.push(`on ${mission.preferred_retailer}`);
   if (mission.budget_max) parts.push(`under ${mission.budget_max}`);
@@ -3727,6 +3851,16 @@ function usefulShoppingFollowUp(request, language, offerCount) {
 function offerConfirmsRequestedSize(recommendation, requestedSize) {
   const target = normalizeSearch(requestedSize).replace(/^(?:us|uk|eu)\s*/, "");
   if (!target) return true;
+  /* A screen size and a shoe size are both "size" but are confirmed from
+     different places: one from the size list a clothing listing publishes, the
+     other from the measurement in the product's own name. Running a television
+     through the clothing branch marked every set unconfirmed, because no
+     television has ever carried an available_sizes list. */
+  const wantedRange = requestedSizeRange(requestedSize);
+  if (wantedRange) {
+    const stated = statedDisplaySize(recommendation?.title);
+    return stated != null && stated >= wantedRange.min && stated <= wantedRange.max;
+  }
   const sizes = Array.isArray(recommendation?.available_sizes)
     ? recommendation.available_sizes
     : [];
@@ -4724,9 +4858,13 @@ function createShoppingAssistant({
         .filter((source) => matchesRelatedSource(source, resolvedRequest))
       ).slice(0, 6);
       const visibleOfferCount = recommendations.length + partialOffers.length;
-      const sizeConfirmed = !activeMission.size || recommendations.some(
-        (recommendation) => offerConfirmsRequestedSize(recommendation, activeMission.size),
-      );
+      const confirmsSize = (requested) =>
+        !requested ||
+        recommendations.some((recommendation) =>
+          offerConfirmsRequestedSize(recommendation, requested),
+        );
+      const sizeConfirmed =
+        confirmsSize(activeMission.size) && confirmsSize(activeMission.display_size);
       const resultState = !visibleOfferCount
         ? "no_match"
         : verifiedRetailerCount && sizeConfirmed
