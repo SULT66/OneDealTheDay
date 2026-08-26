@@ -704,7 +704,54 @@ function identityHasToken(tokens, token) {
    the noun the listing leads with, so a "Replacement Turntable Plate" is
    refused while a microwave that merely mentions a turntable is not. */
 const GENERIC_ACCESSORY_PATTERN =
-  /\b(?:case|cover|sleeve|pouch|skin|screen\s*protector|protector|wall\s*mount|mount|bracket|holder|charger|charging\s*(?:cable|dock|pad)|adapter|cable|cord|replacement|refill|spare\s*parts?|accessor(?:y|ies)|strap|lens\s*cap|turntable|liner|filter)\b|\b(?:stand|bag|tray|plate|band|remote)\s+for\b|\b(?:mouse|keyboard|webcam|docking\s+station)\b|\bfor\s+(?:your\s+)?(?:iphone|galaxy|pixel|macbook|playstation|xbox)\b/i;
+  /\b(?:case|cover|sleeve|pouch|skin|screen\s*protector|protector|wall\s*mount|mount|bracket|holder|charger|charging\s*(?:cable|dock|pad)|adapter|cable|cord|replacement|refill|spare\s*parts?|accessor(?:y|ies)|strap|lens\s*cap|turntable|liner|filter)\b|\b(?:stand|bag|tray|plate|band|remote)\s+for\b|\b(?:mouse|keyboard|webcam|docking\s+station)\b|\bfor\s+(?:your\s+)?(?:iphone|galaxy|pixel|macbook|playstation|xbox)\b|\boem\b|\b(?:hinge|gasket|thermostat|heating\s+element|control\s+board|circuit\s+board|impeller|agitator|door\s+bin|water\s+inlet|drain\s+hose|lint\s+screen|drawer\s+housing)\b|\b(?:repair|service)\s+kit\b/i;
+/* Kept deliberately narrow. The obvious additions are traps: a belt is a belt
+   sander, a pump is a bicycle pump or a breast pump, a motor is an outboard
+   motor, a drawer is a chest of them. "OEM" gives a spare part away without
+   ever being the product itself, and it is what catches the LG dispenser
+   drawer housing that reached production. */
+/* Kept deliberately narrow. The obvious additions are traps: a belt is a belt
+   sander, a pump is a bicycle pump, a motor is an outboard motor, a drawer is
+   a chest of them. "OEM" gives a spare part away without ever being the
+   product itself, and it is what catches the LG dispenser drawer housing. */
+/**
+ * Is this the thing itself, or something sold to go with it?
+ *
+ * Pulled out of matchesShoppingIntent so the live web results can be checked
+ * for this and nothing else. That whole function stopped running on them,
+ * because its other half is a word-overlap test that refused a PlayStation 5
+ * for a shopper who typed "PS5", and this guard went out with it. The result
+ * reached production: a search for an LG washing machine came back holding a
+ * "New Genuine OEM LG Washer Dispenser Drawer Housing" at $48.95, sitting in
+ * a list of washers priced from $769 to $929.
+ *
+ * Judged on the noun the listing leads with. Everything after "with" is what
+ * comes in the box, and judging on that rejects a product for including its
+ * own accessories: "AirPods Pro 2 Wireless Earbuds with MagSafe Charging Case"
+ * is a pair of earbuds, not a case.
+ */
+function looksLikeAccessory(candidate, request) {
+  if (GENERIC_ACCESSORY_REQUEST_PATTERN.test(clean(request))) return false;
+  const leadingName = clean(candidate?.title).split(/\bwith\b/i)[0];
+  if (GENERIC_ACCESSORY_PATTERN.test(leadingName)) return true;
+  /* The category guards know their own traps: a wall mount for a television,
+     a case for a phone, ear pads for headphones. They only run when the
+     shopper asked for something we recognise. */
+  const requested = categoryTokens(
+    normalizedIntentTokens(clean(request), { includeConstraints: true }),
+  );
+  const identity = clean(
+    `${candidate?.title || ""} ${candidate?.brand || ""} ${candidate?.model_number || ""}`,
+  );
+  const guards = {
+    tv: TV_ACCESSORY_PATTERN,
+    phone: PHONE_ACCESSORY_PATTERN,
+    headphone: HEADPHONE_ACCESSORY_PATTERN,
+    sofa: SOFA_ACCESSORY_PATTERN,
+  };
+  return requested.some((category) => guards[category]?.test(identity));
+}
+
 /* When the shopper is asking for the accessory, it stops applying. */
 const GENERIC_ACCESSORY_REQUEST_PATTERN =
   /\b(?:case|cover|sleeve|pouch|screen\s*protector|protector|mount|bracket|holder|charger|adapter|cable|cord|strap|accessor(?:y|ies)|replacement|refill|filter|mouse|keyboard|webcam)\b|(?:чехол|кабель|зарядк\p{L}*|держател\p{L}*|аксессуар\p{L}*|стекло|пл[её]нк\p{L}*|крепл\p{L}*)/iu;
@@ -1086,13 +1133,7 @@ function matchesShoppingIntent(candidate, request, requiredProductType = "") {
      the box, and judging on that rejects the product for including its own
      accessories: "AirPods Pro 2 Wireless Earbuds with MagSafe Charging Case"
      is a pair of earbuds, not a case. */
-  const leadingName = clean(candidate?.title).split(/\bwith\b/i)[0];
-  if (
-    !GENERIC_ACCESSORY_REQUEST_PATTERN.test(request) &&
-    GENERIC_ACCESSORY_PATTERN.test(leadingName)
-  ) {
-    return false;
-  }
+  if (looksLikeAccessory(candidate, request)) return false;
   const haystack = [
     candidate?.title,
     candidate?.brand,
@@ -5166,10 +5207,15 @@ function createShoppingAssistant({
             evidence_level: supportedPrice ? "live_complete" : "partial",
           };
         })
-        .filter(Boolean);
+        .filter(Boolean)
+        .filter((recommendation) => {
+          if (!looksLikeAccessory(recommendation, resolvedRequest)) return true;
+          trace("dropped accessory or spare part |", recommendation.title);
+          return false;
+        });
       /*
        * The web search is not second-guessed on whether it found the right
-       * thing.
+       * thing, beyond the accessory guard above.
        *
        * This ran matchesShoppingIntent over the model's own findings, which is
        * a word-overlap test, and word-overlap cannot survive contact with how
@@ -5303,8 +5349,43 @@ function createShoppingAssistant({
       const freshCandidates = budgetFilteredCandidates.filter(
         (recommendation) => !excludedUrls.has(comparableUrl(recommendation.url)),
       );
+      /*
+       * A price far below everything else in the same shortlist is a spare
+       * part, whatever it calls itself.
+       *
+       * No word list catches every one of these: the drawer housing that
+       * reached production was refused only after "drawer" and "housing" were
+       * added, and tomorrow it is a hinge, a filter cap, a manual. But sitting
+       * at $48.95 among washers priced $769 to $929 gives it away without
+       * knowing a thing about washing machines, and the same test works for a
+       * camera lens cap or a phone case.
+       *
+       * Deliberately timid. It wants four priced offers before it believes in
+       * a middle at all, and only refuses what falls under a eighth of it, so
+       * a genuinely cheap option among expensive ones survives: a $20 pair of
+       * earbuds next to $150 headphones is a real choice, not a mistake.
+       */
+      const comparablePrices = freshCandidates
+        .map((candidate) => landedPrice(candidate))
+        .filter((price) => price > 0)
+        .sort((left, right) => left - right);
+      const medianPrice =
+        comparablePrices.length >= 4
+          ? comparablePrices[Math.floor(comparablePrices.length / 2)]
+          : 0;
+      const pricePlausibleCandidates = medianPrice
+        ? freshCandidates.filter((candidate) => {
+            const price = landedPrice(candidate);
+            if (!(price > 0) || price >= medianPrice * 0.125) return true;
+            trace(
+              "dropped price outlier:", price, "against a middle of", medianPrice,
+              "|", candidate.title,
+            );
+            return false;
+          })
+        : freshCandidates;
       const rankedCandidates = rankRecommendationCandidates(
-        freshCandidates,
+        pricePlausibleCandidates,
         resolvedRequest,
       );
       const visibleCandidates = assignRecommendationRoles(
@@ -5556,6 +5637,7 @@ module.exports = {
   coherentClarificationPrompts,
   createShoppingAssistant,
   feedListingMatchesCategory,
+  looksLikeAccessory,
   greetingContext,
   mergeShoppingMission,
   matchesShoppingIntent,
