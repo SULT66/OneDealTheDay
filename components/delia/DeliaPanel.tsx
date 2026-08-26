@@ -22,7 +22,6 @@ import {
   type DeliaResult,
   type DeliaTurn,
 } from "@/lib/delia";
-import { ProductImage } from "@/components/ui/ProductImage";
 import { useDelia } from "./DeliaContext";
 
 const EXAMPLES = [
@@ -33,14 +32,21 @@ const EXAMPLES = [
 ];
 
 /**
- * One product Delia is putting forward: photo, name, retailer, price.
+ * One place the shopper can buy the thing they asked for: product, shop, price,
+ * and a link straight to it.
+ *
+ * Deliberately a row and not a picture card. The decision being made here is
+ * "where do I buy this and what does it cost", and a photo of a television
+ * says nothing about that while pushing the next offer off the screen. Rows
+ * also let the shortlist run to eight without the panel becoming a gallery.
  *
  * `priceUnconfirmed` marks a real product page whose price the backend could
- * not verify in the market's currency. The card still earns its place (the
- * shopper asked to see products, and this is one), it just says plainly that
- * the price has to be read at the retailer instead of inventing a figure.
+ * not verify in the market's currency. The row still earns its place (the
+ * shopper asked where to buy this, and this is a shop that sells it), it just
+ * says plainly that the price has to be read at the retailer instead of
+ * inventing a figure.
  */
-function OfferCard({
+function OfferRow({
   rec,
   market,
   onClose,
@@ -61,102 +67,45 @@ function OfferCard({
     (rec.price_value !== null
       ? formatPrice(rec.price_value, rec.currency || "USD", market)
       : "");
-  /* Only worth showing when it is genuinely more than the price itself: a
-     delivery-inclusive figure is the number the shopper actually pays. */
-  const total =
-    rec.total_price != null && rec.price_value != null && rec.total_price > rec.price_value
-      ? formatPrice(rec.total_price, rec.currency || "USD", market)
-      : "";
-  const facts = [rec.delivery, rec.returns, rec.availability].filter(
-    (fact): fact is string => Boolean(fact && fact.trim()),
+
+  const body = (
+    <>
+      <span className="w-4 shrink-0 pt-0.5 text-xs font-bold text-fg-subtle tnum">
+        {position}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-medium leading-snug text-fg">
+          {rec.title}
+        </span>
+        <span className="block truncate text-xs text-fg-muted">{rec.retailer}</span>
+      </span>
+      <span className="flex shrink-0 items-center gap-1 pt-0.5 text-sm font-bold text-fg tnum">
+        {price || (
+          <span className="text-xs font-medium text-fg-subtle">
+            {priceUnconfirmed ? "Price at the shop" : "No price"}
+          </span>
+        )}
+        {!inCatalog && <ArrowUpRight size={13} weight="bold" aria-hidden="true" />}
+      </span>
+    </>
   );
 
-  return (
-    <article className="overflow-hidden rounded-2xl border border-border bg-surface transition-[border-color,box-shadow] hover:border-border-strong hover:shadow-card">
-      <div className="flex gap-4 p-4">
-        <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-xl bg-surface-2 sm:h-28 sm:w-28">
-          <ProductImage src={rec.image_url} alt="" categoryIcon="Package" sizes="112px" />
-        </div>
+  const className =
+    "flex items-start gap-3 rounded-xl border border-border px-3 py-2.5 transition-colors hover:border-border-strong hover:bg-surface-2";
 
-        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-          <div className="flex items-baseline gap-2">
-            <span className="text-xs font-bold text-fg-subtle tnum">{position}</span>
-            <h3 className="line-clamp-2 text-sm font-semibold leading-snug text-fg">
-              {rec.title}
-            </h3>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-fg-muted">
-            <span className="font-medium text-fg">{rec.retailer}</span>
-            {rec.badge && (
-              <span className="rounded-full bg-lime px-2 py-0.5 font-semibold text-ink">
-                {rec.badge}
-              </span>
-            )}
-            {rec.score != null && (
-              <span className="rounded-full bg-surface-2 px-2 py-0.5 font-semibold tnum">
-                Score {rec.score}
-              </span>
-            )}
-            {rec.rating != null && rec.rating > 0 && (
-              <span className="tnum">
-                {rec.rating.toFixed(1)}
-                {rec.reviews ? ` (${rec.reviews})` : ""}
-              </span>
-            )}
-          </div>
-
-          {rec.reason && (
-            <p className="line-clamp-2 text-xs leading-relaxed text-fg-subtle">{rec.reason}</p>
-          )}
-
-          {facts.length > 0 && (
-            <ul className="flex flex-wrap gap-x-3 gap-y-0.5 text-[0.7rem] text-fg-subtle">
-              {facts.map((fact) => (
-                <li key={fact}>{fact}</li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </div>
-
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-4 py-3">
-        <div className="min-w-0">
-          {price ? (
-            <>
-              <span className="text-lg font-bold text-fg tnum">{price}</span>
-              {total && (
-                <span className="ml-2 text-xs text-fg-subtle tnum">{total} with delivery</span>
-              )}
-            </>
-          ) : (
-            <span className="text-sm font-medium text-fg-subtle">
-              {priceUnconfirmed ? "Price shown at the retailer" : "Price not confirmed"}
-            </span>
-          )}
-        </div>
-
-        {inCatalog ? (
-          <Link
-            href={href}
-            onClick={onClose}
-            className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-full bg-lime px-4 text-sm font-semibold text-ink transition-opacity hover:opacity-88"
-          >
-            See the details
-          </Link>
-        ) : (
-          <a
-            href={href}
-            target="_blank"
-            rel="sponsored noopener noreferrer"
-            className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-full bg-lime px-4 text-sm font-semibold text-ink transition-opacity hover:opacity-88"
-          >
-            View at {rec.retailer}
-            <ArrowUpRight size={14} weight="bold" aria-hidden="true" />
-          </a>
-        )}
-      </div>
-    </article>
+  return inCatalog ? (
+    <Link href={href} onClick={onClose} className={className}>
+      {body}
+    </Link>
+  ) : (
+    <a
+      href={href}
+      target="_blank"
+      rel="sponsored noopener noreferrer"
+      className={className}
+    >
+      {body}
+    </a>
   );
 }
 
@@ -290,7 +239,7 @@ function DeliaExchange({
           <ul className="space-y-3">
             {result.recommendations.map((rec, i) => (
               <li key={`rec-${rec.url}-${i}`}>
-                <OfferCard
+                <OfferRow
                   rec={rec}
                   market={market}
                   onClose={onClose}
@@ -305,7 +254,7 @@ function DeliaExchange({
                 from the priced ones so the shortlist reads as one list. */}
             {result.partialOffers.map((rec, i) => (
               <li key={`partial-${rec.url}-${i}`}>
-                <OfferCard
+                <OfferRow
                   rec={rec}
                   market={market}
                   onClose={onClose}
