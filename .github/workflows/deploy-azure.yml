@@ -86,9 +86,21 @@ jobs:
           package: ${{ runner.temp }}/onedailydrop-release
 
       - name: Verify production health
+        id: verify-health
+        continue-on-error: true
         run: |
           curl --fail --silent --show-error \
             --retry 8 --retry-delay 10 --retry-all-errors \
             --max-time 20 \
             "https://onedealtheday-g3dme0aghzerc3a2.centralus-01.azurewebsites.net/api/status" \
             > /dev/null
+
+      - name: Collect Azure startup logs after failed health check
+        if: steps.verify-health.outcome == 'failure'
+        env:
+          AZURE_WEBAPP_PUBLISH_PROFILE: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+        run: node scripts/fetch-azure-startup-logs.js
+
+      - name: Fail an unhealthy production release
+        if: steps.verify-health.outcome == 'failure'
+        run: exit 1
