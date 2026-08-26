@@ -7,8 +7,15 @@ function isCorruptionError(error) {
 
 function integrityProblems(db, limit = 10) {
   try {
-    return db
-      .pragma(`integrity_check(${limit})`)
+    const pragmaResult = db.pragma(`integrity_check(${limit})`);
+    // better-sqlite3 returns the PRAGMA rows directly. The node:sqlite-backed
+    // adapter used by integration tests executes pragma() without returning
+    // rows, so read them through a prepared PRAGMA in that case.
+    const rows = Array.isArray(pragmaResult)
+      ? pragmaResult
+      : db.prepare(`PRAGMA integrity_check(${limit})`).all();
+
+    return rows
       .map((row) => String(Object.values(row)[0] || ""))
       .filter((message) => message.toLowerCase() !== "ok");
   } catch (error) {
