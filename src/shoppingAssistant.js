@@ -3426,7 +3426,25 @@ function trustedWebUrl(value, sources) {
       .map((source) => [comparableUrl(source.url), source.url])
       .filter(([url]) => url),
   );
-  return trusted.get(candidate) || "";
+  const exact = trusted.get(candidate);
+  if (exact) return exact;
+  /*
+   * The search cites the pages it browsed, which are category listings and
+   * search results; the model names the individual product pages it read on
+   * them. The two lists therefore almost never hold the same URL, and
+   * demanding an exact match discarded nearly every real product the search
+   * found. Measured against the live model on "a television over 65 inches":
+   * eight televisions came back from Samsung, Best Buy, Target and Walmart,
+   * and six were thrown away right here, leaving nothing to show.
+   *
+   * The guard exists to stop an invented URL, so keep it anchored to where the
+   * search actually went: a direct product page on a host the search visited
+   * is accepted, a page on a host that never appeared in the sources is not.
+   */
+  const host = sourceHostKey(value);
+  if (!host || !isDirectProductPage(value)) return "";
+  const visitedHost = sources.some((source) => sourceHostKey(source.url) === host);
+  return visitedHost ? safeUrl(value) : "";
 }
 
 function trustedImageUrl(value, images) {
@@ -4526,7 +4544,25 @@ function createShoppingAssistant({
         if (error.assistantTimeout) {
           return timeoutFallback();
         }
-        if (![400, 422].includes(Number(error?.status || error?.statusCode))) {
+        /*
+         * An account problem is not a slow search, and must never be dressed
+         * up as one. Every non-4xx failure used to fall through to the timeout
+         * copy, so "You have no credits remaining" reached shoppers as "the
+         * live search took too long" -- and reached us as nothing at all. Days
+         * can be spent tuning timeouts that were never the problem. Say so in
+         * the log, loudly, and keep the fallback so the catalog and the
+         * retailer APIs can still answer without the model.
+         */
+        const status = Number(error?.status || error?.statusCode);
+        if ([401, 402, 403, 429].includes(status)) {
+          console.error(
+            `[delia] the shopping model refused the request (HTTP ${status}): ${
+              clean(error?.message).slice(0, 200)
+            }. This is an API key, quota or billing problem, not a slow search.`,
+          );
+          return timeoutFallback();
+        }
+        if (![400, 422].includes(status)) {
           return timeoutFallback();
         }
         try {
