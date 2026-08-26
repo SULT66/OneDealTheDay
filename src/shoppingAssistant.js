@@ -5166,14 +5166,30 @@ function createShoppingAssistant({
             evidence_level: supportedPrice ? "live_complete" : "partial",
           };
         })
-        .filter(Boolean)
-        .filter((recommendation) =>
-          matchesShoppingIntent(
-            recommendation,
-            resolvedRequest,
-            activeMission.product_type,
-          ),
-        );
+        .filter(Boolean);
+      /*
+       * The web search is not second-guessed on whether it found the right
+       * thing.
+       *
+       * This ran matchesShoppingIntent over the model's own findings, which is
+       * a word-overlap test, and word-overlap cannot survive contact with how
+       * people actually ask. Measured: "find me a PS5" returned five real
+       * consoles, from Walmart at $599, Best Buy at $599.99 and $649.99,
+       * Walmart at $649 and GameStop at $899.99, and every one was discarded,
+       * because the listings say "PlayStation 5" and the shopper said "PS5".
+       * The shopper was told no shop in the United States sells it.
+       *
+       * There is no list that fixes that. Tomorrow it is a Russian word, an
+       * abbreviation, a nickname, a translation. The model searched for what
+       * was asked, read the page it is offering, and is a far better judge of
+       * whether that is the product than any vocabulary kept here.
+       *
+       * What still has to hold is that the offer is real, and none of that
+       * moves: a direct product page, on a shop rather than a review site, in
+       * this market, with a price we could stand behind. The affiliate feeds
+       * are still checked properly, because those items are ours and nobody
+       * chose them for this shopper.
+       */
       const retailerRecommendationCandidates = verifiedRetailerRecommendations(
         retailerProducts,
         resolvedRequest,
