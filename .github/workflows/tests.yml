@@ -24,6 +24,12 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v5
 
+      - name: Capture current Azure startup logs
+        continue-on-error: true
+        env:
+          AZURE_WEBAPP_PUBLISH_PROFILE: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+        run: node scripts/fetch-azure-startup-logs.js
+
       - name: Set up Node.js
         uses: actions/setup-node@v5
         with:
