@@ -24,9 +24,18 @@ assert(
   /app\.use\(\(error, req, res, next\)/.test(serverSource),
   "Express has no error handler, so a failing route answers with a raw stack trace"
 );
+/* The rule was never "not WAL on Azure", it was "not WAL on the network
+   share". Azure now runs the live database on the container's own disk, where
+   WAL is both correct and faster, so the check follows the file rather than
+   the platform. Pinned to isAzure it would forbid the very mode that stopped
+   the corruption. */
 assert(
-  /SQLITE_JOURNAL_MODE/.test(dbSource) && /isAzure \? "DELETE"/.test(dbSource),
-  "SQLite must not run in WAL mode on Azure: /home is an SMB share and WAL corrupts there"
+  /SQLITE_JOURNAL_MODE/.test(dbSource) && /onNetworkShare \? "DELETE"/.test(dbSource),
+  "SQLite must not run in WAL mode while the database file sits on the SMB share, where WAL corrupts it"
+);
+assert(
+  /prepareRuntimeDatabase\(/.test(dbSource) && /startSnapshotSchedule\(/.test(dbSource),
+  "The live database is back on the network share that corrupted it twice, with no snapshots to restore from"
 );
 assert(/busy_timeout/.test(dbSource), "Without a busy timeout a contended write throws instead of waiting");
 assert(

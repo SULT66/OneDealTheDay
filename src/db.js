@@ -1,14 +1,45 @@
 const Database = require("better-sqlite3");
 const path = require("path");
 const fs = require("fs");
+const os = require("os");
 const { repairIndexesIfNeeded } = require("./sqliteRecovery");
+const { prepareRuntimeDatabase, startSnapshotSchedule } = require("./dbStorage");
 
 const isAzure = Boolean(process.env.WEBSITE_SITE_NAME || process.env.WEBSITE_INSTANCE_ID);
 const dir = process.env.DATA_DIR || (isAzure ? "/home/data/onedealtheday" : path.join(__dirname, "..", "data"));
 
 fs.mkdirSync(dir, { recursive: true });
 
-const dbPath = path.join(dir, "site.db");
+const sharedDbPath = path.join(dir, "site.db");
+
+/*
+ * On Azure the durable directory is an SMB share, and that is precisely where
+ * SQLite corrupts: production was lost twice in one day, each time with
+ * `disk I/O error` on a write followed minutes later by `database disk image
+ * is malformed`. The live database therefore runs on the container's own disk
+ * and the share holds snapshots instead. Everywhere else the two are the same
+ * directory and nothing changes.
+ *
+ * Only the real Azure share is split in two. DATA_DIR is how the tests and the
+ * refresh CLI say "the database lives exactly here", and quietly running
+ * somewhere else would strand them on a copy of it.
+ */
+const runtimeDir =
+  process.env.RUNTIME_DATA_DIR ||
+  (isAzure && !process.env.DATA_DIR ? path.join(os.tmpdir(), "onedailydrop") : dir);
+const dbPath = path.join(runtimeDir, "site.db");
+const splitFromShare = path.resolve(runtimeDir) !== path.resolve(dir);
+const onNetworkShare = isAzure && !splitFromShare;
+
+if (splitFromShare) {
+  prepareRuntimeDatabase({
+    runtimePath: dbPath,
+    sharedPath: sharedDbPath,
+    sharedDir: dir,
+    openDatabase: (file, options) => new Database(file, options),
+  });
+}
+
 const db = new Database(dbPath);
 
 /**
@@ -23,22 +54,28 @@ const db = new Database(dbPath);
  * were intact, which is the signature of small scattered index writes being
  * lost while large sequential ones land.
  *
- * So: rollback journal on Azure, WAL everywhere else, and an override for
- * whoever eventually moves this onto real storage.
+ * So: rollback journal whenever the file itself sits on the share, WAL
+ * everywhere else, and an override for whoever eventually moves this onto real
+ * storage. Now that Azure runs the live file on the container's own disk, WAL
+ * is the correct mode there too; DELETE remains for anyone who points
+ * RUNTIME_DATA_DIR back at /home.
  */
 const JOURNAL_MODES = new Set(["DELETE", "TRUNCATE", "PERSIST", "MEMORY", "WAL", "OFF"]);
 const requestedJournalMode = String(process.env.SQLITE_JOURNAL_MODE || "").trim().toUpperCase();
 const journalMode = JOURNAL_MODES.has(requestedJournalMode)
   ? requestedJournalMode
-  : (isAzure ? "DELETE" : "WAL");
+  : (onNetworkShare ? "DELETE" : "WAL");
 db.pragma(`journal_mode = ${journalMode}`);
 
 /* Wait for a contended lock instead of throwing at once: a write over network
    storage takes far longer than the same write on a local disk. */
 db.pragma("busy_timeout = 10000");
 
-/* On storage this unreliable, durability is worth the throughput. */
-if (isAzure) db.pragma("synchronous = FULL");
+/* On storage this unreliable, durability is worth the throughput. On the
+   container's own disk it is not: WAL there loses at most the last few
+   transactions to a hard kill and cannot corrupt the file, and the snapshots
+   below are the real safety net. */
+if (onNetworkShare) db.pragma("synchronous = FULL");
 
 console.log(
   `[db] ${dbPath} journal_mode=${db.pragma("journal_mode", { simple: true })}` +
@@ -50,6 +87,19 @@ console.log(
 // the original file, rebuild only the indexes, and verify integrity before any
 // startup migration writes to them.
 repairIndexesIfNeeded(db, dbPath, { enabled: isAzure });
+
+/*
+ * The share stops being the live database and becomes the backup instead.
+ *
+ * Attached to the exported handle rather than exported separately so that the
+ * nightly catalogue refresh, the one job heavy enough to be worth a snapshot
+ * of its own, can call db.snapshots.snapshotNow("before refresh") without
+ * db.js having to know anything about it.
+ */
+db.snapshots =
+  isAzure && !onNetworkShare
+    ? startSnapshotSchedule(db, dir)
+    : { snapshotNow: () => null, stop: () => {} };
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS products(
