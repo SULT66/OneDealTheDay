@@ -4529,43 +4529,35 @@ function createShoppingAssistant({
         userMessage,
         hadActiveMission,
       );
-      if (
+      /*
+       * Questions travel with the answer instead of replacing it.
+       *
+       * This used to return here, with an empty recommendations array. A
+       * shopper who said "a TV between 50 and 65 inches" was handed two
+       * questions about budget and room lighting three seconds later and not
+       * one shop, so every request cost two or three rounds of chat before a
+       * single product appeared, and the search that eventually ran was no
+       * better informed for the delay. Offering to narrow a shortlist is
+       * useful. Refusing to produce one until a form is filled in is not.
+       *
+       * So the search runs, and the questions ride along with the results,
+       * where they are an offer rather than a toll. A search that genuinely
+       * finds nothing still carries them, which is strictly more than the
+       * shopper used to get.
+       */
+      const refinementPrompts =
         discoveryClarification ||
         (classification.needs_clarification &&
           classification.clarifying_questions.length)
-      ) {
-        const fallbackQuestions = discoveryClarification?.questions ||
-          classification.clarifying_questions.slice(0, 2);
-        const prompts = coherentClarificationPrompts(
-          classification.clarification_prompts,
-          fallbackQuestions,
-          shopperLanguage,
-          activeMission,
-          marketCode,
-        );
-        const questions = prompts.map((prompt) => prompt.question);
-        if (prompts.length) return {
-          message: discoveryClarification?.message ||
-            (DISCOVERY_QUESTION_COPY[shopperLanguage] || DISCOVERY_QUESTION_COPY.en).intro,
-          follow_up: "",
-          recommendations: [],
-          partial_offers: [],
-          comparison_notes: [],
-          comparison: [],
-          products: [],
-          sources: [],
-          clarifying_questions: questions,
-          clarification_prompts: prompts,
-          needs_clarification: true,
-          model,
-          scope: "shopping",
-          language: shopperLanguage,
-          conversation_title: "",
-          result_state: "no_match",
-          resolved_request: resolvedRequest,
-          shopping_mission: activeMission,
-        };
-      }
+          ? coherentClarificationPrompts(
+              classification.clarification_prompts,
+              discoveryClarification?.questions ||
+                classification.clarifying_questions.slice(0, 2),
+              shopperLanguage,
+              activeMission,
+              marketCode,
+            )
+          : [];
       const selectedMarket = market(
         requestedMarketCode(resolvedRequest, marketCode),
       );
@@ -5214,10 +5206,15 @@ function createShoppingAssistant({
         comparison,
         products: [...referencedProducts.values()].slice(0, 6),
         sources: remainingSources,
-        clarifying_questions: [],
-        clarification_prompts: finalFollowUp
-          ? clarificationPrompts([finalFollowUp], shopperLanguage, selectedMarket.code)
-          : [],
+        /* The narrowing questions the classifier wanted to ask before it had
+           anything to show. They sit under the shortlist now, so answering
+           them refines a real list instead of unlocking one. */
+        clarifying_questions: refinementPrompts.map((prompt) => prompt.question),
+        clarification_prompts: refinementPrompts.length
+          ? refinementPrompts
+          : finalFollowUp
+            ? clarificationPrompts([finalFollowUp], shopperLanguage, selectedMarket.code)
+            : [],
         needs_clarification: false,
         model,
         scope: "shopping",
