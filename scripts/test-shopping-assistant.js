@@ -16,6 +16,7 @@ const {
   retailerSearchQueries,
   retailerWebSearchQueries,
   matchesShoppingIntent,
+  budgetChoicesFromPrices,
   feedListingMatchesCategory,
   looksLikeAccessory,
   responseLanguage,
@@ -195,6 +196,42 @@ assert.strictEqual(
    number only made this fail whenever the shortlist was legitimately retuned,
    so assert the shape instead: comfortably more than a comparison, and still
    few enough to read in a chat panel. */
+/* Budget bands come from the prices actually found, not from a table written
+   per market and per family. That table gave an LG washing machine "USD 0-100
+   / 100-200 / 200+" while showing washers at $769, $829 and $929: not one of
+   the three answers was possible. Adding washing machines to it would have
+   left syrup, drones and everything nobody has thought of yet just as wrong.
+   The bands have to be plausible at any scale, and the question has to
+   disappear when the prices cannot support one. */
+for (const [label, prices, expectation] of [
+  ["washing machines", [769, 929.99, 829.59, 999], "bands"],
+  ["maple syrup", [4.97, 8.29, 9.39, 14.74, 18.99], "bands"],
+  ["microwaves", [49.99, 59, 89, 129, 249], "bands"],
+  ["one price only", [499], "none"],
+  ["nothing priced", [], "none"],
+  ["all much the same", [99.99, 104, 101], "none"],
+]) {
+  const bands = budgetChoicesFromPrices(prices, "USD");
+  if (expectation === "none") {
+    assert.deepStrictEqual(bands, [], `A budget question was offered for ${label}, where the prices cannot support one`);
+    continue;
+  }
+  assert.strictEqual(bands.length, 3, `${label} did not get three bands`);
+  const boundaries = bands
+    .map((band) => Number(String(band).replace(/[^0-9.]/g, " ").trim().split(/s+/)[0]))
+    .filter(Number.isFinite);
+  const low = Math.min(...prices);
+  const high = Math.max(...prices);
+  assert(
+    boundaries.every((boundary) => boundary > low * 0.5 && boundary < high * 1.5),
+    `${label} got bands nowhere near its own prices: ${bands.join(" | ")}`,
+  );
+  assert(
+    boundaries[0] < boundaries[boundaries.length - 1],
+    `${label} got bands that do not increase: ${bands.join(" | ")}`,
+  );
+}
+
 const discoveryLimit = recommendationLimit("Find a blender under $100");
 assert(
   discoveryLimit > 2 && discoveryLimit <= 10,
@@ -2986,16 +3023,23 @@ const client = {
     false,
     "Narrowing questions must accompany an answer rather than replace it",
   );
-  assert.strictEqual(broadHeadphones.clarifying_questions.length, 2);
-  assert.strictEqual(broadHeadphones.clarification_prompts.length, 2);
-  assert.deepStrictEqual(
-    broadHeadphones.clarification_prompts[0].options,
-    ["USD 0-100", "USD 100-200", "USD 200+"],
+  /* The budget question used to carry a ladder written per market and per
+     family, which is why an LG washing machine was offered "USD 0-100 /
+     100-200 / 200+" beside washers at $769, $829 and $929. The bands are cut
+     from the prices on the screen now, so with no priced offers behind it the
+     question is not worth asking and does not appear. What still has to hold
+     is that the useful question survives. */
+  assert(
+    broadHeadphones.clarifying_questions.some((question) =>
+      /вкладыши|полноразмерные/u.test(question),
+    ),
+    "A broad headphone request stopped asking the one question worth asking",
   );
   assert(
-    broadHeadphones.clarifying_questions.some((question) => /бюджет/u.test(question)) &&
-      broadHeadphones.clarifying_questions.some((question) => /вкладыши|полноразмерные/u.test(question)),
-    "A broad headphone request did not ask the two useful questions",
+    broadHeadphones.clarification_prompts.every(
+      (prompt) => !prompt.options.some((option) => /^[A-Z]{3}\s?\d/.test(option)),
+    ),
+    "A budget question was offered with no prices on the screen to draw the bands from",
   );
   assert.strictEqual(broadHeadphones.shopping_mission.product_type, "headphone");
   const regionalFurniturePrompts = coherentClarificationPrompts(
