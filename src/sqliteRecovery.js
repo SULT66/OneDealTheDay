@@ -41,6 +41,31 @@ function preserveDatabaseFiles(dbPath) {
   return backupPath;
 }
 
+function quoteIdentifier(value) {
+  return `"${String(value).replaceAll('"', '""')}"`;
+}
+
+function rebuildUserIndexes(db) {
+  const indexes = db
+    .prepare("SELECT name, sql FROM sqlite_master WHERE type='index' AND sql IS NOT NULL ORDER BY name")
+    .all()
+    .filter((index) => index.name && index.sql);
+
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    for (const index of indexes) db.exec(`DROP INDEX ${quoteIdentifier(index.name)}`);
+    for (const index of indexes) db.exec(index.sql);
+    db.exec("COMMIT");
+  } catch (error) {
+    try {
+      db.exec("ROLLBACK");
+    } catch {}
+    throw error;
+  }
+
+  return indexes.map((index) => index.name);
+}
+
 function repairIndexesIfNeeded(db, dbPath, { enabled = false, logger = console } = {}) {
   if (!enabled || !fs.existsSync(dbPath)) return { repaired: false, problems: [] };
 
@@ -52,10 +77,22 @@ function repairIndexesIfNeeded(db, dbPath, { enabled = false, logger = console }
     `[db] SQLite integrity check failed; preserving ${path.basename(backupPath)} and rebuilding indexes`,
   );
 
-  db.exec("REINDEX");
-  const remaining = integrityProblems(db);
+  let reindexFailed = false;
+  try {
+    db.exec("REINDEX");
+  } catch (error) {
+    if (!isCorruptionError(error)) throw error;
+    reindexFailed = true;
+  }
+
+  let remaining = integrityProblems(db);
+  if (reindexFailed || remaining.length > 0) {
+    logger.warn("[db] REINDEX could not clear the corruption; recreating user indexes from schema");
+    rebuildUserIndexes(db);
+    remaining = integrityProblems(db);
+  }
   if (remaining.length > 0) {
-    throw new Error(`SQLite remains corrupt after REINDEX: ${remaining.slice(0, 3).join("; ")}`);
+    throw new Error(`SQLite remains corrupt after index rebuild: ${remaining.slice(0, 3).join("; ")}`);
   }
 
   logger.warn("[db] SQLite index repair completed and integrity_check returned ok");
@@ -66,5 +103,6 @@ module.exports = {
   backupPathFor,
   integrityProblems,
   isCorruptionError,
+  rebuildUserIndexes,
   repairIndexesIfNeeded,
 };
