@@ -1887,6 +1887,87 @@ const BUDGET_TIER_BY_FAMILY = Object.freeze({
   tv: "electronics",
 });
 
+/**
+ * A budget question built from the prices this search actually found.
+ *
+ * The ladders below are written per market and per family, so anything not on
+ * that list falls to the cheapest one. Production offered "USD 0-100 /
+ * 100-200 / 200+" for an LG washing machine while showing washers at $769,
+ * $829 and $929: not one of the three answers was possible. The same table
+ * offered "0-300 / 300-700 / 700+" for a Galaxy Fold at $1,899.
+ *
+ * Adding washing machines to the table would fix washing machines and leave
+ * syrup, drones, mattresses and everything else nobody has thought of yet just
+ * as wrong. The prices on the screen already know the answer, so the bands are
+ * cut from those instead, and the question fits whatever was asked for without
+ * anyone maintaining anything.
+ *
+ * Returns nothing when it would be a silly question: fewer than two prices to
+ * reason about, or a spread too narrow for the bands to be different choices.
+ */
+/* A boundary a person would say out loud, at the scale of the thing being
+   bought: 840 rather than 845, 9.60 rather than 9.64. A fifth of the value's
+   own magnitude, so it stays proportionate whether the shortlist is bottles of
+   syrup or washing machines. Rounding harder than this collapsed both
+   boundaries onto the same number and the question vanished. */
+function niceBudgetBoundary(value) {
+  if (!(value > 0)) return 0;
+  const magnitude = 10 ** Math.floor(Math.log10(value));
+  const step = magnitude / 5;
+  const rounded = Math.round(value / step) * step;
+  return Number(rounded.toFixed(value >= 10 ? 0 : 2));
+}
+
+function budgetChoicesFromPrices(prices, currency) {
+  const sorted = [...new Set((Array.isArray(prices) ? prices : []).filter((price) => price > 0))]
+    .sort((left, right) => left - right);
+  if (sorted.length < 2) return [];
+  const low = sorted[0];
+  const high = sorted[sorted.length - 1];
+  /* Everything costs about the same, so asking about budget tells us nothing
+     and asks the shopper to pick between three versions of one number. */
+  if (high < low * 1.2) return [];
+  const first = niceBudgetBoundary(low + (high - low) / 3);
+  const second = niceBudgetBoundary(low + ((high - low) * 2) / 3);
+  if (!(second > first) || !(first > 0)) return [];
+  /* Money reads as money: 9.60 rather than 9.6, and 1,200 rather than 1200. */
+  const amount = (value) =>
+    value.toLocaleString("en-US", {
+      minimumFractionDigits: Number.isInteger(value) ? 0 : 2,
+      maximumFractionDigits: 2,
+    });
+  return [
+    `${currency} ${amount(first)} or less`,
+    `${currency} ${amount(first)} to ${amount(second)}`,
+    `${currency} ${amount(second)}+`,
+  ];
+}
+
+/** Money-shaped options, whatever language the question itself is in. */
+function looksLikeBudgetOptions(options) {
+  const values = Array.isArray(options) ? options : [];
+  return values.length > 0 && values.every((option) => /^[A-Z]{3}\s?\d/.test(clean(option)));
+}
+
+/**
+ * Rewrites the budget question against what is on the screen, or removes it.
+ *
+ * A budget question with no prices behind it is worse than no question: it is
+ * the assistant asking the shopper to narrow a list it has not shown them.
+ */
+function budgetPromptsFromOffers(prompts, offers, currency) {
+  const list = Array.isArray(prompts) ? prompts : [];
+  if (!list.some((prompt) => looksLikeBudgetOptions(prompt?.options))) return list;
+  const prices = (Array.isArray(offers) ? offers : []).map((offer) => landedPrice(offer));
+  const choices = budgetChoicesFromPrices(prices, currency);
+  return list
+    .map((prompt) => {
+      if (!looksLikeBudgetOptions(prompt?.options)) return prompt;
+      return choices.length ? { ...prompt, options: choices } : null;
+    })
+    .filter(Boolean);
+}
+
 function marketBudgetChoices(marketCode, productFamily = "") {
   const choices = MARKET_BUDGET_CHOICES[marketCode] || MARKET_BUDGET_CHOICES.us;
   const family = clean(productFamily).toLowerCase();
@@ -5552,6 +5633,17 @@ function createShoppingAssistant({
         mentionsMissingPick(structured.follow_up)
           ? ""
           : structured.follow_up);
+      /* Cut the budget bands from the prices on the screen, and drop the
+         question altogether when those prices cannot support one. */
+      const shownPrompts = budgetPromptsFromOffers(
+        refinementPrompts.length
+          ? refinementPrompts
+          : finalFollowUp
+            ? clarificationPrompts([finalFollowUp], shopperLanguage, selectedMarket.code)
+            : [],
+        visibleCandidates,
+        selectedMarket.currency,
+      );
       return {
         /*
          * Delia gets to say it in her own words when she has something to show.
@@ -5604,12 +5696,8 @@ function createShoppingAssistant({
         /* The narrowing questions the classifier wanted to ask before it had
            anything to show. They sit under the shortlist now, so answering
            them refines a real list instead of unlocking one. */
-        clarifying_questions: refinementPrompts.map((prompt) => prompt.question),
-        clarification_prompts: refinementPrompts.length
-          ? refinementPrompts
-          : finalFollowUp
-            ? clarificationPrompts([finalFollowUp], shopperLanguage, selectedMarket.code)
-            : [],
+        clarifying_questions: shownPrompts.map((prompt) => prompt.question),
+        clarification_prompts: shownPrompts,
         needs_clarification: false,
         model,
         scope: "shopping",
@@ -5636,6 +5724,7 @@ module.exports = {
   classifyShoppingScope,
   coherentClarificationPrompts,
   createShoppingAssistant,
+  budgetChoicesFromPrices,
   feedListingMatchesCategory,
   looksLikeAccessory,
   greetingContext,
