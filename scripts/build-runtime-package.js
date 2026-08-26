@@ -77,8 +77,13 @@ async function main() {
   copy("node_modules/next/dist/compiled/@babel/runtime");
   copy("node_modules/@next/swc-linux-x64-gnu");
   // A custom Next server checks for this directory even though all routes are
-  // already compiled into .next. Keeping it empty avoids shipping TS sources.
+  // already compiled into .next. A marker keeps the directory in ZIP deploys;
+  // an empty directory can disappear while Azure packages/extracts the app.
   fs.mkdirSync(path.join(target, "app"), { recursive: true });
+  fs.writeFileSync(
+    path.join(target, "app", "runtime-placeholder.txt"),
+    "Compiled Next.js routes are stored in .next.\n",
+  );
   copy("public");
   copy("site-content");
   copy(".deployment");

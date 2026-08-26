@@ -117,6 +117,7 @@ assert(runtimePackageSource.includes('relative === "cache"'), "The runtime packa
 assert(runtimePackageSource.includes('copy("node_modules/next/dist/compiled/webpack")'), "The runtime package omits Next.js runtime-loaded webpack files");
 assert(runtimePackageSource.includes('copy("node_modules/next/dist/compiled/@babel/runtime")'), "The runtime package omits Next.js runtime-loaded Babel files");
 assert(runtimePackageSource.includes('copy("node_modules/@next/swc-linux-x64-gnu")'), "The runtime package omits Azure Linux's native Next.js compiler");
+assert(runtimePackageSource.includes('path.join(target, "app", "runtime-placeholder.txt")'), "The required app directory can disappear from Azure's ZIP package");
 assert(releaseSource.includes(".release-sha"), "src/release.js ignores the stamp written by the deploy");
 assert(serverSource.includes("data-results-ui=\"facets-sorting-badges-v1\""), "Day 10 results UI marker is missing");
 assert(serverSource.includes("searchCatalogProducts(rows, options)"), "Results UI does not share the deterministic Search API engine");
