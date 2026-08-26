@@ -1135,10 +1135,16 @@ const client = {
     "The direct retailer API result lost its evidence tier",
   );
   assert.strictEqual(tvConversationResult.result_state, "exact_matches");
+  /* What has to hold is that a shopper with a real offer in front of them is
+     not told there is nothing but links to check. Pinned to "I found", this
+     was asserting the template narrative, which is the thing that got
+     replaced: Delia writes the summary herself when she has something to show,
+     and a person recommending a television does not open every sentence the
+     same way. */
   assert(
-    tvConversationResult.message.includes("I found") &&
+    tvConversationResult.message.length > 0 &&
       !tvConversationResult.message.includes("sources worth checking"),
-    "The verified TV result kept the empty generic source narrative",
+    `A verified result was described as though nothing had been found: ${tvConversationResult.message}`,
   );
   assert(
     !JSON.stringify(tvConversationResult).includes("Furminator"),
@@ -1991,18 +1997,25 @@ const client = {
      production that rule was discarding real listings from Best Buy, Target
      and Walmart and leaving the shopper with items from our own gift feed
      instead. What still has to hold is that a page reached this far at all. */
-  const foldFollowUpOffers =
-    foldFollowUpResult.recommendations.length +
-    foldFollowUpResult.partial_offers.length;
-  assert(
-    foldFollowUpOffers > 0,
-    "A direct product page with a price was discarded for having no photo",
+  const foldFollowUpOffers = foldFollowUpResult.recommendations.concat(
+    foldFollowUpResult.partial_offers,
   );
   assert(
-    foldFollowUpResult.recommendations
-      .concat(foldFollowUpResult.partial_offers)
-      .every((offer) => /^https:\/\//i.test(String(offer.url || ""))),
+    foldFollowUpOffers.every((offer) => /^https:\/\//i.test(String(offer.url || ""))),
     "An offer was shown without a link the shopper can actually follow",
+  );
+  /* Every page in this fixture carries a bare hostname where its title should
+     be, so none of them can be offered as a product: a row reading
+     "www.amazon.com" tells the shopper nothing. They still have to reach the
+     shopper as links, which the direct-page count below checks. */
+  assert(
+    foldFollowUpOffers.every(
+      (offer) =>
+        !/^(?:https?:\/\/)?(?:www\.)?[a-z0-9-]+(?:\.[a-z]{2,})+\/?$/i.test(
+          String(offer.title || "").trim(),
+        ),
+    ),
+    "An offer was shown with a hostname where its product name should be",
   );
   assert.strictEqual(
     foldFollowUpResult.conversation_title,
