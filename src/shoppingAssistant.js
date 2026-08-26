@@ -4267,6 +4267,29 @@ function retailerDiversityKey(item) {
   );
 }
 
+/**
+ * Cheapest first, because that is the question being asked.
+ *
+ * The shortlist came out in ranking order, which is about how much we trust an
+ * offer, and left the shopper reading $769, then $929.99, then $829.59 down
+ * the page and doing the comparison themselves. They came here to find out
+ * where to buy something and what it costs.
+ *
+ * Ranking still decides which offers make the list; it just stops deciding the
+ * order they are read in. Ties keep their ranked order, since sort is stable,
+ * and an offer whose price we could not confirm goes last rather than pretending
+ * to be free. A comparison is left alone: "compare these two" wants them in the
+ * order they were named, not reordered by price behind the shopper's back.
+ */
+function sortOffersByPrice(items, request = "") {
+  if (isComparisonRequest(request)) return items;
+  return [...items].sort((left, right) => {
+    const leftPrice = landedPrice(left);
+    const rightPrice = landedPrice(right);
+    return (leftPrice > 0 ? leftPrice : Infinity) - (rightPrice > 0 ? rightPrice : Infinity);
+  });
+}
+
 function assignRecommendationRoles(items, request = "") {
   if (!items.length) return [];
   const wantsLowerPrice = isLowerPriceRequest(request);
@@ -5469,9 +5492,15 @@ function createShoppingAssistant({
         pricePlausibleCandidates,
         resolvedRequest,
       );
-      const visibleCandidates = assignRecommendationRoles(
-        selectRetailerDiverseCandidates(rankedCandidates, recommendationCap),
-        resolvedRequest,
+      /* Roles are decided on the ranked order, so "best overall" still means
+         the offer we trust most rather than simply the cheapest. Then the list
+         is put in price order for reading. */
+      const visibleCandidates = sortOffersByPrice(
+        assignRecommendationRoles(
+          selectRetailerDiverseCandidates(rankedCandidates, recommendationCap),
+          resolvedRequest,
+        ),
+        userMessage,
       );
       const recommendations = visibleCandidates.filter(
         (recommendation) => recommendation.evidence_level !== "partial",
