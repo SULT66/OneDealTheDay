@@ -29,5 +29,9 @@ assert(
   "SQLite must not run in WAL mode on Azure: /home is an SMB share and WAL corrupts there"
 );
 assert(/busy_timeout/.test(dbSource), "Without a busy timeout a contended write throws instead of waiting");
+assert(
+  dbSource.includes("repairIndexesIfNeeded(db, dbPath, { enabled: isAzure })"),
+  "Azure startup does not repair known index-only SQLite corruption before migrations",
+);
 
 console.log("Crash resilience and SQLite storage constraints passed.");
