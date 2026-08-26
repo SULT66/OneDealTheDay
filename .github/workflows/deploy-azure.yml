@@ -59,6 +59,23 @@ jobs:
       - name: Stamp the release
         run: echo "${GITHUB_SHA}" > .release-sha
 
+      # Trace the custom server and ship only files it can load in production.
+      # In particular, do not send the Turbopack cache, test suite, repository
+      # history, unused packages or devDependencies.
+      # The .deployment file tells App Service not to run Oryx a second time;
+      # that redundant build created node_modules.tar.gz and left the site on
+      # 503 while every cold start tried to extract more than 500 MB.
+      - name: Prepare lean production package
+        run: |
+          release_dir="${RUNNER_TEMP}/onedailydrop-release"
+          node scripts/build-runtime-package.js "${release_dir}"
+
+          test ! -e "${release_dir}/.next/cache"
+          test ! -e "${release_dir}/scripts"
+          test ! -e "${release_dir}/node_modules.tar.gz"
+          test ! -e "${release_dir}/oryx-manifest.toml"
+          du -sh "${release_dir}"
+
       # v3/OneDeploy can report success while leaving the previous Linux App
       # Service package active. v2 uses the stable zip-deploy path here.
       - name: Deploy to Azure App Service
@@ -66,7 +83,7 @@ jobs:
         with:
           app-name: onedealtheday
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
-          package: .
+          package: ${{ runner.temp }}/onedailydrop-release
 
       - name: Verify production health
         run: |
