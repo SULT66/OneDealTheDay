@@ -26,7 +26,7 @@ const SCOPE_TIMEOUT_MS = 4500;
 // now shows the shopper's question immediately and a visible "thinking"
 // indicator (see DeliaPanel.tsx), so the extra wait reads as "still working"
 // rather than "stuck".
-const SEARCH_TIMEOUT_MS = 26000;
+const SEARCH_TIMEOUT_MS = 30000;
 /*
  * The Express route abandons the whole request at SHOPPING_ASSISTANT_HARD_TIMEOUT_MS
  * (src/server.js) and answers with a bare "that took too long" carrying no
@@ -794,9 +794,117 @@ function measurementNumbers(request) {
   return numbers;
 }
 
+/* Plausible display sizes in inches. Wide enough for a phone screen through a
+   very large television, narrow enough that a model number, a resolution or a
+   year cannot be mistaken for one. */
+const MIN_DISPLAY_INCHES = 10;
+const MAX_DISPLAY_INCHES = 120;
+/* "in" only counts as inches when it is attached to the number, as in 55in or
+   55-in. Allowing a space made the ordinary English preposition a unit: "under
+   $500 in US" was read as a 500 inch screen, and the size filter then threw
+   away every television. */
+const INCH_UNIT = String.raw`(?:"|''|”|\s*-?\s*inch(?:es)?\b|-in\b|in\b(?<=\d{2,3}in)|\s*дюйм\p{L}*)`;
+
+/*
+ * The screen size the shopper asked for, as a range.
+ *
+ * Answering "Over 65 inches" has to actually mean something. Treating the
+ * number as a model number threw away every set in range; ignoring it instead
+ * returned a 40 inch television to someone who asked for 65 and upwards, under
+ * a note claiming it matched. It is a constraint, so it is read as one.
+ */
+function requestedSizeRange(request) {
+  const text = clean(request).toLowerCase();
+  const inches = (value) => {
+    const size = Number(String(value).replace(",", "."));
+    return Number.isFinite(size) && size >= MIN_DISPLAY_INCHES && size <= MAX_DISPLAY_INCHES
+      ? size
+      : null;
+  };
+  const between = new RegExp(
+    String.raw`(\d{2,3})\s*(?:-|–|—|\bto\b|\bдо\b)\s*(\d{2,3})${INCH_UNIT}`,
+    "iu",
+  ).exec(text);
+  if (between) {
+    const low = inches(between[1]);
+    const high = inches(between[2]);
+    if (low && high) return { min: Math.min(low, high), max: Math.max(low, high) };
+  }
+  const atLeast = new RegExp(
+    String.raw`(?:over|above|at least|bigger than|larger than|от|больше)\s*(\d{2,3})${INCH_UNIT}|(\d{2,3})${INCH_UNIT}\s*(?:or (?:larger|bigger|more|above)|\+|и больше)`,
+    "iu",
+  ).exec(text);
+  if (atLeast) {
+    const low = inches(atLeast[1] || atLeast[2]);
+    if (low) return { min: low, max: Infinity };
+  }
+  const atMost = new RegExp(
+    String.raw`(?:under|below|up to|less than|smaller than|до|меньше)\s*(\d{2,3})${INCH_UNIT}|(\d{2,3})${INCH_UNIT}\s*(?:or (?:smaller|less))`,
+    "iu",
+  ).exec(text);
+  if (atMost) {
+    const high = inches(atMost[1] || atMost[2]);
+    if (high) return { min: 0, max: high };
+  }
+  const exact = new RegExp(String.raw`(\d{2,3})${INCH_UNIT}`, "iu").exec(text);
+  if (exact) {
+    const size = inches(exact[1]);
+    /* A bare "65 inch" is a target, not a hard edge: a 64.5 inch panel is the
+       same television to a shopper. */
+    if (size) return { min: size - 1, max: size + 1 };
+  }
+  return null;
+}
+
+/** The screen-size phrase in a request, kept whole so its bound survives. */
+function displaySizeConstraintPhrase(value) {
+  const text = clean(value);
+  const patterns = [
+    new RegExp(
+      String.raw`(?:over|above|under|below|up to|at least|less than|bigger than|larger than|smaller than)\s*\d{2,3}${INCH_UNIT}`,
+      "iu",
+    ),
+    new RegExp(
+      String.raw`\d{2,3}\s*(?:-|–|—|\bto\b|\bдо\b)\s*\d{2,3}${INCH_UNIT}`,
+      "iu",
+    ),
+    new RegExp(
+      String.raw`\d{2,3}${INCH_UNIT}\s*(?:or (?:larger|bigger|more|above|smaller|less)|\+)`,
+      "iu",
+    ),
+    new RegExp(String.raw`\d{2,3}${INCH_UNIT}`, "iu"),
+  ];
+  for (const pattern of patterns) {
+    const match = pattern.exec(text);
+    if (match) return clean(match[0]).toLowerCase().slice(0, 20);
+  }
+  return "";
+}
+
+/** The size a listing states in its own title, if it states one. */
+function statedDisplaySize(title) {
+  const matches = clean(title)
+    .matchAll(new RegExp(String.raw`(\d{2,3}(?:[.,]\d)?)${INCH_UNIT}`, "giu"));
+  for (const match of matches) {
+    const size = Number(String(match[1]).replace(",", "."));
+    if (size >= MIN_DISPLAY_INCHES && size <= MAX_DISPLAY_INCHES) return size;
+  }
+  return null;
+}
+
 function matchesShoppingIntent(candidate, request, requiredProductType = "") {
   const requestTokens = normalizedIntentTokens(request);
   if (!requestTokens.length) return false;
+  /* Only rejects a listing that states a size and states one outside the
+     range. A listing that never mentions its size is left to the other checks
+     rather than being discarded on a guess. */
+  const sizeRange = requestedSizeRange(request);
+  if (sizeRange) {
+    const stated = statedDisplaySize(candidate?.title);
+    if (stated != null && (stated < sizeRange.min || stated > sizeRange.max)) {
+      return false;
+    }
+  }
   const haystack = [
     candidate?.title,
     candidate?.brand,
@@ -1086,6 +1194,11 @@ const EMPTY_SHOPPING_MISSION = Object.freeze({
   style: "",
   audience: "",
   size: "",
+  /* Screen size, deliberately kept apart from `size`. That one means the size
+     list a clothing listing publishes, and no television has ever carried one:
+     putting a screen size there marked every set unconfirmed. Two different
+     questions answered from two different places, so two fields. */
+  display_size: "",
   market: "",
   preferred_retailer: "",
   budget_max: 0,
@@ -1156,6 +1269,13 @@ function missionFromText(value) {
        query terms, where the intent check read it as a model number and threw
        away every trainer whose name did not contain a 10. */
     text.match(/\b(?:us|uk|eu)\s*([\d]{1,2}(?:[.,]5)?)(?!\d)/iu);
+  /* A screen-size answer is kept as the whole phrase, not just its number.
+     The mission is what survives into the next turn, and the request is
+     rebuilt from it: strip "over" or "to" here and the constraint arrives at
+     the search as a loose number, which is how "Over 65 inches" came back
+     holding a 40 inch television. The phrase is parsed into a real range by
+     requestedSizeRange. */
+  const displaySizePhrase = displaySizeConstraintPhrase(text);
   const queryTerms = tokens
     .filter((token) => /^[a-z0-9-]+$/i.test(token))
     .filter((token) => !INTENT_CONSTRAINT_WORDS.has(token))
@@ -1183,6 +1303,7 @@ function missionFromText(value) {
     style: clean(style).toLowerCase(),
     audience,
     size: clean(sizeMatch?.[1]),
+    display_size: displaySizePhrase,
     market: requestedMarketCode(text, ""),
     preferred_retailer: requestedRetailer(text),
     budget_max: catalogSearchArgs(text).max_price || 0,
@@ -1213,6 +1334,7 @@ function normalizeShoppingMission(value) {
     style: clean(value.style).toLowerCase().slice(0, 60),
     audience: clean(value.audience).toLowerCase().slice(0, 30),
     size: clean(value.size).slice(0, 20),
+    display_size: clean(value.display_size).toLowerCase().slice(0, 20),
     market: MARKET_COUNTRIES[clean(value.market).toLowerCase()]
       ? clean(value.market).toLowerCase()
       : "",
@@ -1278,6 +1400,7 @@ function mergeShoppingMission(currentValue, modelPatch, latestRequest, startsNew
     style: extracted.style || model.style || base.style,
     audience: extracted.audience || model.audience || base.audience,
     size: extracted.size || model.size || base.size,
+    display_size: extracted.display_size || model.display_size || base.display_size,
     market: extracted.market || model.market || base.market,
     preferred_retailer:
       extracted.preferred_retailer || model.preferred_retailer || base.preferred_retailer,
@@ -1300,6 +1423,7 @@ function shoppingMissionText(missionValue, fallback = "") {
   if (mission.style) parts.push(`${mission.style} style`);
   if (mission.use_case) parts.push(`use: ${mission.use_case}`);
   if (mission.size) parts.push(`size ${mission.size}`);
+  if (mission.display_size) parts.push(mission.display_size);
   if (mission.market) parts.push(`in ${mission.market.toUpperCase()}`);
   if (mission.preferred_retailer) parts.push(`on ${mission.preferred_retailer}`);
   if (mission.budget_max) parts.push(`under ${mission.budget_max}`);
@@ -3302,7 +3426,25 @@ function trustedWebUrl(value, sources) {
       .map((source) => [comparableUrl(source.url), source.url])
       .filter(([url]) => url),
   );
-  return trusted.get(candidate) || "";
+  const exact = trusted.get(candidate);
+  if (exact) return exact;
+  /*
+   * The search cites the pages it browsed, which are category listings and
+   * search results; the model names the individual product pages it read on
+   * them. The two lists therefore almost never hold the same URL, and
+   * demanding an exact match discarded nearly every real product the search
+   * found. Measured against the live model on "a television over 65 inches":
+   * eight televisions came back from Samsung, Best Buy, Target and Walmart,
+   * and six were thrown away right here, leaving nothing to show.
+   *
+   * The guard exists to stop an invented URL, so keep it anchored to where the
+   * search actually went: a direct product page on a host the search visited
+   * is accepted, a page on a host that never appeared in the sources is not.
+   */
+  const host = sourceHostKey(value);
+  if (!host || !isDirectProductPage(value)) return "";
+  const visitedHost = sources.some((source) => sourceHostKey(source.url) === host);
+  return visitedHost ? safeUrl(value) : "";
 }
 
 function trustedImageUrl(value, images) {
@@ -3316,9 +3458,29 @@ function trustedImageUrl(value, images) {
   return trusted?.image_url || "";
 }
 
+/*
+ * A photograph for a product page that has already passed every trust gate.
+ *
+ * The strong path is unchanged: an image the search itself returned, tied to
+ * this exact page. It just almost never fires. Retailers refuse our fetches,
+ * so reading the page for its own photograph returns nothing, and the image
+ * search rarely happens to surface the same picture the model cited. Measured
+ * live: eight televisions, real prices, every card discarded for having no
+ * photograph.
+ *
+ * So a plain https image named by the model is accepted as the last resort.
+ * The judgement is that a wrong picture and a wrong link are not the same kind
+ * of mistake: the link decides where a shopper's money goes and stays strictly
+ * verified, while a picture that turns out to be wrong or dead costs nothing
+ * and degrades to the brand placeholder (see components/ui/ProductImage.tsx).
+ * Showing the product with an imperfect photograph beats not showing it.
+ */
 function trustedProductImage(value, productUrl, images, productTitle = "") {
   const image = trustedImageUrl(value, images);
-  if (!image) return "";
+  if (!image) {
+    const named = safeUrl(value);
+    return /^https:\/\//i.test(named) ? named : "";
+  }
   const product = comparableUrl(productUrl);
   const sourceImage = images.find(
     (candidate) => comparableUrl(candidate.image_url) === comparableUrl(image),
@@ -3727,6 +3889,16 @@ function usefulShoppingFollowUp(request, language, offerCount) {
 function offerConfirmsRequestedSize(recommendation, requestedSize) {
   const target = normalizeSearch(requestedSize).replace(/^(?:us|uk|eu)\s*/, "");
   if (!target) return true;
+  /* A screen size and a shoe size are both "size" but are confirmed from
+     different places: one from the size list a clothing listing publishes, the
+     other from the measurement in the product's own name. Running a television
+     through the clothing branch marked every set unconfirmed, because no
+     television has ever carried an available_sizes list. */
+  const wantedRange = requestedSizeRange(requestedSize);
+  if (wantedRange) {
+    const stated = statedDisplaySize(recommendation?.title);
+    return stated != null && stated >= wantedRange.min && stated <= wantedRange.max;
+  }
   const sizes = Array.isArray(recommendation?.available_sizes)
     ? recommendation.available_sizes
     : [];
@@ -3980,7 +4152,17 @@ function createShoppingAssistant({
      runs alongside the search and is read when the search gives up, which is
      precisely when having its results matters most. */
   retailerSearchTimeoutMs = 14000,
-  storeDiscoveryEnabled = !client,
+  /*
+   * Off by default. Store discovery fires a separate model call per candidate
+   * retailer, up to five at once, against the same API key the live search is
+   * using. They do not run alongside it so much as queue in front of it.
+   *
+   * Measured on the live model, same question ("a television over 65 inches,
+   * bright room") back to back: 31s and a timeout with discovery on, 19s and
+   * three products through every gate with it off. It was buying extra shops
+   * at the price of the answer.
+   */
+  storeDiscoveryEnabled = false,
   storeDiscoveryTimeoutMs = 12000,
   retailerPageHydrationEnabled = !client,
   retailerPageHydrationTimeoutMs = 3000,
@@ -4380,6 +4562,11 @@ function createShoppingAssistant({
       let response;
       try {
         response = await withRequestTimeout(
+          /* Images stay on. Turning them off was measured and was not where
+             the time went: with store discovery off the same search runs in
+             18s with images, against 31s and a timeout with discovery on. It
+             is also the only place a photograph comes from now that retailers
+             refuse the fetches hydration needs. */
           (requestSignal) =>
             openai.responses.create(assistantRequest(true), {
               signal: requestSignal,
@@ -4392,7 +4579,25 @@ function createShoppingAssistant({
         if (error.assistantTimeout) {
           return timeoutFallback();
         }
-        if (![400, 422].includes(Number(error?.status || error?.statusCode))) {
+        /*
+         * An account problem is not a slow search, and must never be dressed
+         * up as one. Every non-4xx failure used to fall through to the timeout
+         * copy, so "You have no credits remaining" reached shoppers as "the
+         * live search took too long" -- and reached us as nothing at all. Days
+         * can be spent tuning timeouts that were never the problem. Say so in
+         * the log, loudly, and keep the fallback so the catalog and the
+         * retailer APIs can still answer without the model.
+         */
+        const status = Number(error?.status || error?.statusCode);
+        if ([401, 402, 403, 429].includes(status)) {
+          console.error(
+            `[delia] the shopping model refused the request (HTTP ${status}): ${
+              clean(error?.message).slice(0, 200)
+            }. This is an API key, quota or billing problem, not a slow search.`,
+          );
+          return timeoutFallback();
+        }
+        if (![400, 422].includes(status)) {
           return timeoutFallback();
         }
         try {
@@ -4438,7 +4643,25 @@ function createShoppingAssistant({
       }
       if (retailerPageHydrationEnabled) {
         const hydrated = await hydrateRetailerProductPages({
-          sources: trustedSources,
+          /*
+           * The product pages the model named, not only the pages the search
+           * browsed. Hydration reads a page and takes the photograph the
+           * retailer publishes on it, which is the strongest evidence an image
+           * belongs to a product -- but it was only ever pointed at the cited
+           * sources, and those are category and search listings, so it had
+           * almost nothing to read. One image came back for eight televisions,
+           * and every card was then dropped for having no photograph.
+           *
+           * Pointing it at the recommended pages verifies the images rather
+           * than trusting the model for them: the photo comes from the same
+           * page the shopper is being sent to.
+           */
+          sources: [
+            ...trustedSources,
+            ...structured.recommendations.map((recommendation) => ({
+              url: recommendation.url,
+            })),
+          ],
           selectedMarket,
           signal,
           timeoutMs: retailerPageHydrationTimeoutMs,
@@ -4724,9 +4947,13 @@ function createShoppingAssistant({
         .filter((source) => matchesRelatedSource(source, resolvedRequest))
       ).slice(0, 6);
       const visibleOfferCount = recommendations.length + partialOffers.length;
-      const sizeConfirmed = !activeMission.size || recommendations.some(
-        (recommendation) => offerConfirmsRequestedSize(recommendation, activeMission.size),
-      );
+      const confirmsSize = (requested) =>
+        !requested ||
+        recommendations.some((recommendation) =>
+          offerConfirmsRequestedSize(recommendation, requested),
+        );
+      const sizeConfirmed =
+        confirmsSize(activeMission.size) && confirmsSize(activeMission.display_size);
       const resultState = !visibleOfferCount
         ? "no_match"
         : verifiedRetailerCount && sizeConfirmed
