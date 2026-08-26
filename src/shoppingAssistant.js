@@ -15,6 +15,12 @@ const MAX_MESSAGE_LENGTH = 1200;
    (product, shop, price) instead of picture cards: the question a shopper
    actually asks is "where can I buy this and for how much", and eight rows
    answer that better than five cards while taking less room. */
+/* Turn on with DELIA_TRACE=1 to see why an offer the search found never
+   reached the shopper. Silent by default; the gates below are the only place
+   results disappear, and they used to disappear without a word. */
+const DELIA_TRACE = /^(?:1|true|yes)$/i.test(String(process.env.DELIA_TRACE || ""));
+const trace = (...parts) => { if (DELIA_TRACE) console.log("[delia]", ...parts); };
+
 const MIN_RECOMMENDATIONS = 2;
 const MAX_RECOMMENDATIONS = 8;
 /* Answering from a single retailer is fine once there are this many results.
@@ -4207,7 +4213,27 @@ function providerFirstResponse({
   allowSingleRetailer = false,
 }) {
   const copy = responseCopy(userMessage, shopperLanguage);
-  const catalogCandidates = catalogProducts.map((product, index) => ({
+  /* Our own listings have to be the thing that was asked for, exactly like
+     everyone else's. They used to arrive unfiltered, straight from the
+     catalogue search, which is how "help me with a monitor for PC" was
+     answered with a Father's Day blanket from the gift feed. */
+  const requestedProductType = normalizeShoppingMission(shoppingMission).product_type;
+  const catalogCandidates = catalogProducts
+    .filter((product) => {
+      const candidate = {
+        title: product.title,
+        brand: product.brand || "",
+        model_number: product.model_number || "",
+        category: "",
+        retailer: product.retailer,
+        url: product.url,
+      };
+      return (
+        matchesShoppingIntent(candidate, resolvedRequest, requestedProductType) &&
+        feedListingMatchesCategory(candidate, resolvedRequest, requestedProductType)
+      );
+    })
+    .map((product, index) => ({
     title: product.title,
     retailer: product.retailer,
     price: "",
@@ -4638,20 +4664,24 @@ function createShoppingAssistant({
         wantsPriceHistory ||
         excludedUrls.size > 0 ||
         isRetailerOrPriceFollowUp(userMessage);
-      if (!requiresDeepSearch) {
-        const providerResult = providerFirstResponse({
-          userMessage,
-          shopperLanguage,
-          catalogProducts,
-          model,
-          selectedMarket,
-          retailerProducts,
-          resolvedRequest,
-          shoppingMission: activeMission,
-          excludedUrls,
-        });
-        if (providerResult) return providerResult;
-      }
+      /*
+       * The web search always runs now.
+       *
+       * An ordinary request used to stop here: ask our own catalogue and
+       * affiliate feeds, and if anything at all came back, return it and never
+       * search the web. So a shopper asking for a PC monitor was answered from
+       * our own shelf, and when that shelf held nothing suitable it answered
+       * anyway. Measured on production, "help me with a monitor for PC"
+       * returned a Father's Day blanket from our gift feed, while the live
+       * search, when finally allowed to run, found a Dell at Best Buy for
+       * $139.99, a Z-EDGE at Target for $149.99 and a Samsung Odyssey at
+       * $699.99.
+       *
+       * Delia is meant to tell a shopper where to buy the thing they asked
+       * for, wherever that is. Our own listings still compete for a place in
+       * the shortlist, on the same footing as everyone else, they just no
+       * longer decide the answer before the question has been researched.
+       */
       const fastProviderFallback = !requiresDeepSearch
         ? providerFirstResponse({
             userMessage,
@@ -4874,6 +4904,7 @@ function createShoppingAssistant({
           reason: copy.sourceOfferReason,
         })));
       }
+      trace("model handed back", structured.recommendations.length, "recommendations");
       const structuredRecommendationCandidates = structured.recommendations
         .map((recommendation, index) => {
           const product = referencedProducts.get(
@@ -4918,15 +4949,20 @@ function createShoppingAssistant({
             webImages,
             recommendation.title,
           );
-          if (
-            !url ||
-            !recommendation.retailer ||
-            !isDirectProductPage(url) ||
-            !allowedRetailerHost(url, selectedMarket.code) ||
-            !urlMatchesMarket(url, selectedMarket.code) ||
-            isEditorialProductSource(recommendation.title, url) ||
-            !hasSpecificProductIdentity(recommendation.title)
-          ) {
+          /* One condition at a time, so a discarded offer says why. This was a
+             single boolean, and a search that found four real monitors and
+             showed the shopper none of them left nothing behind to explain
+             which rule had eaten them. Set DELIA_TRACE=1 to watch. */
+          const rejection =
+            (!url && "url is not one the search actually visited") ||
+            (!recommendation.retailer && "no retailer named") ||
+            (!isDirectProductPage(url) && "not a direct product page") ||
+            (!allowedRetailerHost(url, selectedMarket.code) && "host not allowed for this market") ||
+            (!urlMatchesMarket(url, selectedMarket.code) && "url belongs to another market") ||
+            (isEditorialProductSource(recommendation.title, url) && "reads as an article, not a listing") ||
+            (!hasSpecificProductIdentity(recommendation.title) && "title names no specific product");
+          if (rejection) {
+            trace("dropped", rejection, "|", recommendation.url, "|", recommendation.title);
             return null;
           }
           const supportedPrice = priceMatchesMarket(
@@ -4938,6 +4974,9 @@ function createShoppingAssistant({
           const supportedPriceValue = supportedPrice
             ? number(recommendation.price_value, null) ?? priceValueFromDisplay(supportedPrice)
             : null;
+          if (!supportedPrice) {
+            trace("price unconfirmed:", recommendation.price || "(none given)", "|", url);
+          }
           return {
             ...recommendation,
             _recommendation_index: index + 1,
@@ -5049,10 +5088,19 @@ function createShoppingAssistant({
         recommendationCandidates,
       );
       const recommendationCap = recommendationLimit(userMessage);
-      const displayableCandidates = deduplicatedCandidates.filter(
-        (recommendation) =>
-          /^https:\/\//i.test(safeUrl(recommendation.image_url)),
-      );
+      /*
+       * A missing photo is not a reason to hide a shop.
+       *
+       * This used to require an https image_url on every candidate, which made
+       * sense when offers were picture cards. They are rows now: product,
+       * shop, price, link. Measured against production, the model found a Dell
+       * at Best Buy for $139.99, a Z-EDGE at Target for $149.99 and a Samsung
+       * Odyssey at $699.99 for "a monitor for PC", and the shopper was shown
+       * none of them and a blanket from our own gift feed instead, because no
+       * image result happened to be attached. The price and the link are the
+       * answer; the picture never was.
+       */
+      const displayableCandidates = deduplicatedCandidates;
       /* The budget the shopper actually stated, both ends of it. A ceiling
          used to be applied only when the request read as "find me something
          cheaper", and a floor was not applied at all, which is how "USD 700+"
