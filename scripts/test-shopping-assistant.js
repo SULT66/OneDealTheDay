@@ -2666,9 +2666,14 @@ const client = {
   assert.strictEqual(timedOut.shopping_mission.product_type, "phone");
   assert.strictEqual(timedOut.shopping_mission.budget_max, 800);
   assert(timedOut.resolved_request.includes("under 800"));
+  /* What has to hold is that a slow search ends in a bounded answer that says
+     so and tells the shopper what to do next, not that it uses one particular
+     phrase. Pinned to "took too long", this failed the moment the copy was
+     rewritten to sound like a person rather than a status code. */
   assert(
-    timedOut.message.includes("took too long"),
-    "A slow live search did not return a bounded shopper-facing timeout",
+    timedOut.message.length > 0 &&
+      /\b(?:again|narrow|model|budget)\b/i.test(timedOut.message),
+    `A slow live search must tell the shopper what to do next, got: ${timedOut.message}`,
   );
 
   let providerFirstModelCalls = 0;

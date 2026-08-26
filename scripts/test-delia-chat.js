@@ -49,7 +49,7 @@ for (const required of [
   "toggleSaved",
   "sendFeedback",
   "AbortController",
-  "REQUEST_TIMEOUT_MS = 40000",
+
   "normalizeResponseBody",
   "localGreetingResponse",
   "recoverEmbeddedAnswer",
@@ -232,10 +232,22 @@ const hardTimeoutMs = Number(
 assert(
   Number.isFinite(hardTimeoutMs) &&
     hardTimeoutMs > 0 &&
-    hardTimeoutMs <= 45000 &&
+    /* A minute. A hard search, measured, needs up to 46s of live searching on
+       top of classification, and cutting it shorter does not make the answer
+       arrive sooner, it replaces the answer with an apology. */
+    hardTimeoutMs <= 60000 &&
     server.includes("Promise.race([assistantTask, hardTimeoutTask])") &&
     server.includes("timeoutResponse("),
-  "The server can still leave a Delia request open beyond the browser deadline",
+  `The server can still leave a Delia request open beyond the browser deadline, got ${hardTimeoutMs}ms`,
+);
+/* The browser must not abandon a request the server is still working on. */
+const clientRequestTimeoutMs = Number(
+  /REQUEST_TIMEOUT_MS = (\d+)/.exec(client)?.[1],
+);
+assert(
+  Number.isFinite(clientRequestTimeoutMs) &&
+    clientRequestTimeoutMs > hardTimeoutMs,
+  `The browser gives up before the server does: client ${clientRequestTimeoutMs}ms vs server ${hardTimeoutMs}ms`,
 );
 assert(
   db.includes("shopping_assistant_feedback"),
