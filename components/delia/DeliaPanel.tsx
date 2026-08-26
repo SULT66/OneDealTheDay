@@ -32,6 +32,39 @@ const EXAMPLES = [
 ];
 
 /**
+ * What Delia is doing, while she does it.
+ *
+ * A real search over several shops takes twenty to forty seconds. Three
+ * bouncing dots for that long reads as a hung page, and the shopper closes the
+ * panel before the answer arrives. Naming the step turns the same wait into
+ * visible work. The timings match what the search actually does: classify,
+ * search the shops, then read prices off the pages it found.
+ */
+function SearchProgress() {
+  const [seconds, setSeconds] = useState(0);
+
+  useEffect(() => {
+    const timer = setInterval(() => setSeconds((value) => value + 1), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const label =
+    seconds < 4
+      ? "Working out what you need"
+      : seconds < 14
+        ? "Searching the shops"
+        : seconds < 26
+          ? "Checking prices and stock"
+          : "Comparing the best of them";
+
+  return (
+    <span className="text-xs text-fg-subtle" aria-live="polite">
+      {label}
+    </span>
+  );
+}
+
+/**
  * One place the shopper can buy the thing they asked for: product, shop, price,
  * and a link straight to it.
  *
@@ -576,11 +609,13 @@ export function DeliaPanel() {
                 <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-lime text-ink">
                   <Sparkle size={15} weight="fill" aria-hidden="true" />
                 </span>
-                <span className="inline-flex items-center gap-1.5 rounded-2xl rounded-tl-md bg-surface-2 px-4 py-3.5">
-                  <span className="sr-only">Delia is thinking…</span>
-                  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-fg-subtle [animation-delay:-0.3s]" />
-                  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-fg-subtle [animation-delay:-0.15s]" />
-                  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-fg-subtle" />
+                <span className="inline-flex items-center gap-2.5 rounded-2xl rounded-tl-md bg-surface-2 px-4 py-3">
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-fg-subtle [animation-delay:-0.3s]" />
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-fg-subtle [animation-delay:-0.15s]" />
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-fg-subtle" />
+                  </span>
+                  <SearchProgress />
                 </span>
               </div>
             </div>
