@@ -110,7 +110,23 @@ function OfferRow({
         <span className="block truncate text-sm font-medium leading-snug text-fg">
           {rec.title}
         </span>
-        <span className="block truncate text-xs text-fg-muted">{rec.retailer}</span>
+        <span className="flex min-w-0 items-center gap-1.5">
+          <span className="truncate text-xs text-fg-muted">{rec.retailer}</span>
+          {/* The list is in price order, so "cheapest" mostly confirms what the
+              eye already sees. The pick is the one worth pointing at: it is not
+              always the cheapest, and without this the shopper has to read the
+              summary to find out which row Delia meant. */}
+          {rec.position_role === "best_overall" && (
+            <span className="shrink-0 rounded-full bg-lime px-1.5 py-px text-[0.65rem] font-semibold text-ink">
+              Delia&rsquo;s pick
+            </span>
+          )}
+          {rec.position_role === "lowest_price" && (
+            <span className="shrink-0 rounded-full bg-surface-2 px-1.5 py-px text-[0.65rem] font-semibold text-fg-muted">
+              Cheapest
+            </span>
+          )}
+        </span>
       </span>
       <span className="flex shrink-0 items-center gap-1 pt-0.5 text-sm font-bold text-fg tnum">
         {price || (

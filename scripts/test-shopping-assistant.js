@@ -1393,7 +1393,16 @@ const client = {
       frameResult.recommendations.length <= 5,
     "The Frame follow-up did not return a two-to-five item shortlist",
   );
-  assert.strictEqual(frameResult.recommendations[0].retailer, "Amazon");
+  /* This asserted that Amazon came first, which was ranking order: how much we
+     trust an offer, not what the shopper is comparing. The shortlist reads
+     cheapest first now, so assert the rule rather than one shop's name. */
+  const framePrices = frameResult.recommendations
+    .map((offer) => offer.total_price ?? offer.price_value)
+    .filter((price) => typeof price === "number" && price > 0);
+  assert(
+    framePrices.every((price, index) => index === 0 || framePrices[index - 1] <= price),
+    `The shortlist is not in price order: ${framePrices.join(", ")}`,
+  );
   assert(
     frameResult.recommendations.every(
       (offer) =>

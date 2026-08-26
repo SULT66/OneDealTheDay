@@ -37,6 +37,10 @@ export type DeliaRecommendation = {
   availability?: string;
   total_price?: number | null;
   in_catalog?: boolean;
+  /* Which offer this is within the shortlist. The backend has worked this out
+     all along and nothing was reading it, so a shopper scanning six shops had
+     no idea which one Delia would take or which one was simply cheapest. */
+  position_role?: "best_overall" | "lowest_price" | "alternative";
 };
 
 export type DeliaComparisonRow = {
