@@ -1,6 +1,7 @@
 const Database = require("better-sqlite3");
 const path = require("path");
 const fs = require("fs");
+const { repairIndexesIfNeeded } = require("./sqliteRecovery");
 
 const isAzure = Boolean(process.env.WEBSITE_SITE_NAME || process.env.WEBSITE_INSTANCE_ID);
 const dir = process.env.DATA_DIR || (isAzure ? "/home/data/onedealtheday" : path.join(__dirname, "..", "data"));
@@ -43,6 +44,13 @@ console.log(
   `[db] ${dbPath} journal_mode=${db.pragma("journal_mode", { simple: true })}` +
   ` synchronous=${db.pragma("synchronous", { simple: true })}`
 );
+
+// Azure's /home directory is a network share. Older WAL-based deployments
+// damaged index pages while leaving the underlying table rows intact. Preserve
+// the original file, rebuild only the indexes, and verify integrity before any
+// startup migration writes to them.
+repairIndexesIfNeeded(db, dbPath, { enabled: isAzure });
+
 db.exec(`
   CREATE TABLE IF NOT EXISTS products(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
