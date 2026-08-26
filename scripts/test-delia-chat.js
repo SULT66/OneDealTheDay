@@ -225,17 +225,14 @@ assert(
 /* The guard that matters is that the request is bounded at all and still
    inside what a browser tab will sit through. Pinning the exact millisecond
    value only made this fail whenever the search budget was legitimately
-   retuned, so assert the bound instead of the number.
-   The ceiling sits at a minute because the live search was measured at 18 to
-   40 seconds for a broad request: cutting it shorter does not make the answer
-   arrive sooner, it replaces the answer with an apology. */
+   retuned, so assert the bound instead of the number. */
 const hardTimeoutMs = Number(
   /SHOPPING_ASSISTANT_HARD_TIMEOUT_MS = (\d+)/.exec(server)?.[1],
 );
 assert(
   Number.isFinite(hardTimeoutMs) &&
     hardTimeoutMs > 0 &&
-    hardTimeoutMs <= 60000 &&
+    hardTimeoutMs <= 45000 &&
     server.includes("Promise.race([assistantTask, hardTimeoutTask])") &&
     server.includes("timeoutResponse("),
   "The server can still leave a Delia request open beyond the browser deadline",

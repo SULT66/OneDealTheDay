@@ -1933,24 +1933,16 @@ const client = {
     language: "en",
   });
   assert.strictEqual(foldFollowUpCalls, 2);
-  /* No confirmed price, so nothing earns a full recommendation. */
   assert.strictEqual(foldFollowUpResult.recommendations.length, 0);
-  /* A photo-less product page is shown now rather than hidden: the name, the
-     shop and the link are what a shopper acts on, and withholding a real offer
-     over a missing picture helped nobody. What must never appear is a "product"
-     that is only a hostname, which is what the photograph filter used to be
-     quietly covering up. */
-  for (const offer of foldFollowUpResult.partial_offers) {
-    assert(
-      offer.title &&
-        !/^(?:www\.)?[a-z0-9-]+(?:\.[a-z]{2,})+$/i.test(offer.title.trim()),
-      `A bare hostname was offered as a product: ${offer.title}`,
-    );
-  }
+  assert.strictEqual(
+    foldFollowUpResult.partial_offers.length,
+    0,
+    "Photo-less direct product pages were rendered as broken offer cards",
+  );
   assert.strictEqual(
     foldFollowUpResult.result_state,
-    "closest_alternatives",
-    "A photo-less but real product page was not counted as a visible offer",
+    "no_match",
+    "Photo-less sources incorrectly counted as visible product offers",
   );
   assert.strictEqual(
     foldFollowUpResult.conversation_title,
@@ -1961,25 +1953,16 @@ const client = {
     "",
     "Delia asked another question instead of showing the closest Fold offers",
   );
-  /* The outcome wording follows the result state, which is now "closest
-     alternatives" rather than "no match", so assert what the sentence has to
-     be -- the shopper's own language and a statement rather than another
-     question -- instead of pinning its opening words. */
   assert(
-    /[Ѐ-ӿ]/u.test(foldFollowUpResult.message) &&
+    foldFollowUpResult.message.startsWith("В регионе") &&
       !foldFollowUpResult.message.includes("Хотите"),
     "The impossible-budget Fold response did not lead with a direct localized outcome",
   );
-  /* Photo-less product pages used to be demoted to this list because they had
-     no picture. They are shown as offers now, so the same pages are counted
-     wherever they ended up: what matters is that none of them was thrown
-     away. */
-  const isDirectFoldPage = (url) => /\/(?:buy|dp|product)\//.test(url || "");
   assert(
-    foldFollowUpResult.sources.filter((source) => isDirectFoldPage(source.url)).length +
-      foldFollowUpResult.partial_offers.filter((offer) => isDirectFoldPage(offer.url)).length +
-      foldFollowUpResult.recommendations.filter((offer) => isDirectFoldPage(offer.url)).length >= 3,
-    "Photo-less direct product pages were dropped instead of being offered or kept as sources",
+    foldFollowUpResult.sources.filter((source) =>
+      /\/(?:buy|dp|product)\//.test(source.url),
+    ).length >= 3,
+    "Photo-less direct pages were not preserved as compact sources",
   );
   assert(
     foldFollowUpResult.sources.some(
