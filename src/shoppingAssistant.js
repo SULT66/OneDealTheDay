@@ -26,7 +26,7 @@ const SCOPE_TIMEOUT_MS = 4500;
 // now shows the shopper's question immediately and a visible "thinking"
 // indicator (see DeliaPanel.tsx), so the extra wait reads as "still working"
 // rather than "stuck".
-const SEARCH_TIMEOUT_MS = 30000;
+const SEARCH_TIMEOUT_MS = 42000;
 /*
  * The Express route abandons the whole request at SHOPPING_ASSISTANT_HARD_TIMEOUT_MS
  * (src/server.js) and answers with a bare "that took too long" carrying no
@@ -42,7 +42,7 @@ const SEARCH_TIMEOUT_MS = 30000;
  * every single attempt. The window it actually gets is the number that matters,
  * not the nominal SEARCH_TIMEOUT_MS above.
  */
-const TOTAL_RESPONSE_BUDGET_MS = 34000;
+const TOTAL_RESPONSE_BUDGET_MS = 48000;
 /* How long the live search waits for the retailer APIs before starting without
    them. They keep running: this only decides whether their answer is early
    enough to skip the search entirely. */
@@ -838,6 +838,10 @@ function measurementNumbers(request) {
     // $700, USD 700, 700 USD
     /(?:[$€£¥]|\b(?:usd|cad|gbp|eur)\b)\s*(\d[\d.,]*)/giu,
     /(\d[\d.,]*)\s*(?:\b(?:usd|cad|gbp|eur)\b|[$€£¥])/giu,
+    /* over 700, under 500, at least 300. A number introduced by a threshold
+       word is a price the shopper set, not part of a model name, even when no
+       currency is written next to it. */
+    /\b(?:over|under|above|below|at\s+least|up\s+to|less\s+than|more\s+than|from|starting\s+at|от|до|больше|меньше|дороже|дешевле)\s*(\d[\d.,]*)/giu,
     /* US 10, UK 9, EU 42, size 10. A shoe size is the clearest case of a
        number that is a constraint and never a model: "US 10" was demanding
        that a trainer's name contain 10, which threw away every shoe. */
@@ -1013,7 +1017,20 @@ function matchesShoppingIntent(candidate, request, requiredProductType = "") {
   );
   if (!matchesRequiredProductType(candidate, requiredProductType)) return false;
   if (!matchesRequestedSubtype(candidate, request)) return false;
-  const requestedCategories = categoryTokens(requestTokens);
+  /*
+   * Once the product being shopped for is known, that is the only category to
+   * enforce. Every other category word in the request is describing it, not
+   * adding a second thing the listing has to be.
+   *
+   * "Best camera" is one of our own answers to "which matters most for your
+   * phone". It put "camera" in the request, this loop read it as a category,
+   * and a Google Pixel was then refused for the crime of being a phone rather
+   * than a camera. The whole shortlist went with it.
+   */
+  const requiredFamily = missionProductFamily(requiredProductType);
+  const requestedCategories = requiredFamily
+    ? categoryTokens(requestTokens).filter((category) => category === requiredFamily)
+    : categoryTokens(requestTokens);
   if (
     requestedCategories.some(
       (category) => !matchesRequestedCategory(candidate, category, identityTokens),
@@ -1464,32 +1481,38 @@ function mergeShoppingMission(currentValue, modelPatch, latestRequest, startsNew
   const model = normalizeShoppingMission(modelPatch);
   const latestProductType = extracted.product_type || model.product_type;
   /*
-   * A one or two word reply is an answer to a question we asked, not a change
-   * of subject, so it must not be able to redefine the product.
+   * Changing what is being shopped for is something a shopper asks for, not
+   * something a stray word does.
    *
-   * "Camera" is an option we offer ourselves when a shopper is choosing a
-   * phone. Taken as a product name it switched the whole mission from phone to
-   * camera, and the search then went looking for cameras. The same trap sits
-   * under "Watch", "Console" and any other attribute that is also a category.
+   * "Best camera" is an option we offer ourselves when someone is choosing a
+   * phone, and taken as a product name it switched the mission from phone to
+   * camera: the search then went looking for cameras, with "camera usd 700"
+   * as its query. The same trap sits under "Compact size", "Watch" and any
+   * other attribute that is also a category.
    *
-   * A genuine switch still works: the classifier sets starts_new_mission for
-   * one, and a request phrased as a request ("show me a laptop instead") is
-   * long enough to fall outside this guard.
+   * Counting words was the first attempt at a guard and it was the wrong
+   * measure: "USD 700+, Best camera", which is our own two answers joined by
+   * the Continue button, is long enough to slip through it. What actually
+   * separates a new subject from an answer is that a new subject is phrased as
+   * a request. So a family change needs either the classifier's explicit
+   * starts_new_mission, or a request that asks for something.
    */
-  const latestIsShortAnswer =
-    normalizedIntentTokens(latestRequest, { includeConstraints: true }).length <= 2;
+  const latestAsksForSomething =
+    /\b(?:find|show|get|buy|need|want|looking\s+for|search|instead)\b|(?:найд|покажи|хочу|нужен|нужна|нужно|ищу|вместо)/iu.test(
+      clean(latestRequest),
+    );
   const changesFamily = Boolean(
     current.product_type &&
       latestProductType &&
       missionProductFamily(current.product_type) !== missionProductFamily(latestProductType),
   );
-  const reset = startsNewMission || (changesFamily && !latestIsShortAnswer);
+  const reset = startsNewMission || (changesFamily && latestAsksForSomething);
   const base = reset
     ? normalizeShoppingMission(null)
     : current;
   /* Blocking the reset is not enough on its own: the detected type would still
      overwrite the active one on the very next line. */
-  const keepCurrentProduct = changesFamily && latestIsShortAnswer && !startsNewMission;
+  const keepCurrentProduct = changesFamily && !latestAsksForSomething && !startsNewMission;
   const explicitBrands = extracted.brands.length ? extracted.brands : model.brands;
   return normalizeShoppingMission({
     product_type: keepCurrentProduct
@@ -1909,10 +1932,16 @@ function retailerSearchQueries(missionValue, fallbackRequest = "") {
 function retailerWebSearchQueries(missionValue, fallbackRequest = "", marketCode = "us") {
   const baseQueries = retailerSearchQueries(missionValue, fallbackRequest);
   const primary = baseQueries[0] || retailerSearchQuery(fallbackRequest) || "product";
+  /* Three shops and one open search, not six queries. Every entry here is a
+     web search the model actually runs before it can answer, and the whole
+     reply has to land inside roughly half a minute: the size of this plan was
+     the largest thing standing between a shopper and their products. Three
+     named shops still satisfies the "check at least three distinct retailers"
+     rule, and the open query is what reaches the specialist ones. */
   const siteQueries = (MARKET_SEARCH_RETAILERS[marketCode] || [])
-    .slice(0, 4)
+    .slice(0, 3)
     .map((host) => `${primary} site:${host}`);
-  return [...new Set([...siteQueries, ...baseQueries])].slice(0, 10);
+  return [...new Set([...siteQueries, primary])].slice(0, 4);
 }
 
 function retailerDiscoveryHosts(missionValue, marketCode = "us") {
