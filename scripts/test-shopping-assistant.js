@@ -17,6 +17,7 @@ const {
   retailerWebSearchQueries,
   matchesShoppingIntent,
   feedListingMatchesCategory,
+  looksLikeAccessory,
   responseLanguage,
   selectRetailerDiverseCandidates,
   searchCatalog,
@@ -146,6 +147,41 @@ db.prepare("INSERT INTO price_history VALUES (?,?,?,?)").run(
 );
 
 const sourceSql = () => "source='ebay'";
+
+/* Measured on production: a search for an LG washing machine came back holding
+   a "New Genuine OEM LG Washer Dispenser Drawer Housing" at $48.95, among
+   washers priced $769 to $929. The guard that would have caught it went out
+   with the word-overlap test it was living inside, so it stands on its own now
+   and is checked on its own. It has to keep stepping aside when the accessory
+   is the thing being asked for. */
+for (const [title, request, isAccessory] of [
+  ["New Genuine OEM LG Washer Washing Machine Dispenser Drawer Housing 4925ER1001B", "i need LG washing machine", true],
+  ["LG WM3400CW 4.5 Cu. Ft. Stackable Front Load Washer", "i need LG washing machine", false],
+  ["Galaxy Z Fold 6 Silicone Case Black", "find me the smartphone samsung fold", true],
+  ["Samsung Galaxy Z Fold8 256GB Unlocked", "find me the smartphone samsung fold", false],
+  ["Universal TV Wall Mount Bracket 32-70 inch", "i want a 65 inch tv", true],
+  ["Microwave Turntable Glass Plate Replacement", "send me microwaves", true],
+  ["Hamilton Beach 0.9 Cu. Ft. Countertop Microwave, 900W", "send me microwaves", false],
+  ["AirPods Pro 2 Wireless Earbuds with MagSafe Charging Case", "wireless headphones under 200", false],
+  ["Phone Case for iPhone 16 Pro", "i need a phone case", false],
+  /* The obvious way to catch a spare part is a list of part nouns, and every
+     one of them is also a product: a belt is a belt sander, a pump is a bike
+     pump or a breast pump, a motor is an outboard motor, a drawer is a chest
+     of them. These are here so the next person to widen that list finds out
+     immediately. */
+  ["BLACK+DECKER 20V MAX Belt Sander", "i need a belt sander", false],
+  ["Bike Floor Pump with Pressure Gauge", "i need a bike pump", false],
+  ["Medela Pump In Style Breast Pump", "breast pump", false],
+  ["6-Drawer Dresser White Wood", "i need a dresser", false],
+  ["Yamaha 9.9 HP Outboard Motor", "outboard motor", false],
+  ["Whirlpool Dryer Heating Element", "i need a dryer", true],
+]) {
+  assert.strictEqual(
+    looksLikeAccessory({ title, brand: "", model_number: "" }, request),
+    isAccessory,
+    `"${title}" should read as ${isAccessory ? "an accessory" : "the product itself"} for "${request}"`,
+  );
+}
 /* The shortlist ceiling the assistant is configured with, read rather than
    copied: pinning the number here is what made every retune of it fail. */
 const MAX_SHORTLIST = recommendationLimit("Find a blender under $100");
