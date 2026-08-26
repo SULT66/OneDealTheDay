@@ -2818,15 +2818,25 @@ const client = {
     marketCode: "us",
     language: "en",
   });
-  assert.strictEqual(
-    clarificationCalls.length,
-    1,
-    "A broad request searched before Delia clarified the shopper's needs",
+  /* A narrowing question is an offer, not a toll. This used to assert the
+     opposite: exactly one model call, because the classifier's questions ended
+     the turn and the shopper was handed a form instead of a shortlist. The
+     search now runs regardless, so the model is called twice, once to classify
+     and once to search, and the questions travel with whatever it found. */
+  assert(
+    clarificationCalls.length > 1,
+    "A request the classifier wanted to narrow was answered without searching at all",
   );
-  assert.strictEqual(clarification.needs_clarification, true);
-  assert.deepStrictEqual(clarification.clarifying_questions, [
-    "Which refrigerator model is this filter for?",
-  ]);
+  assert.strictEqual(
+    clarification.needs_clarification,
+    false,
+    "Narrowing questions must accompany an answer rather than replace it",
+  );
+  assert.deepStrictEqual(
+    clarification.clarifying_questions,
+    ["Which refrigerator model is this filter for?"],
+    "The narrowing question stopped reaching the shopper",
+  );
   assert.deepStrictEqual(clarification.clarification_prompts, [
     {
       question: "Which refrigerator model is this filter for?",
@@ -2878,9 +2888,20 @@ const client = {
     marketCode: "us",
     language: "en",
   });
-  assert.strictEqual(broadHeadphoneCalls.length, 1);
+  /* Broad, but still worth searching. "Some headphones as a gift" narrows
+     nicely with a budget question, and the shopper gets that question next to
+     a real shortlist now instead of in place of one, so the search runs and
+     the model is called twice. */
+  assert(
+    broadHeadphoneCalls.length > 1,
+    "A broad gift request was answered with questions and no search at all",
+  );
   assert.strictEqual(broadHeadphones.language, "ru");
-  assert.strictEqual(broadHeadphones.needs_clarification, true);
+  assert.strictEqual(
+    broadHeadphones.needs_clarification,
+    false,
+    "Narrowing questions must accompany an answer rather than replace it",
+  );
   assert.strictEqual(broadHeadphones.clarifying_questions.length, 2);
   assert.strictEqual(broadHeadphones.clarification_prompts.length, 2);
   assert.deepStrictEqual(
