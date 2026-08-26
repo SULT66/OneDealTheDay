@@ -94,6 +94,8 @@ const appSource = fs.readFileSync(path.join(__dirname, "..", "app.js"), "utf8");
 const serverSource = fs.readFileSync(path.join(__dirname, "..", "src", "server.js"), "utf8");
 const workflowSource = fs.readFileSync(path.join(__dirname, "..", ".github", "workflows", "production-verify.yml"), "utf8");
 const deploySource = fs.readFileSync(path.join(__dirname, "..", ".github", "workflows", "deploy-azure.yml"), "utf8");
+const deploymentSource = fs.readFileSync(path.join(__dirname, "..", ".deployment"), "utf8");
+const runtimePackageSource = fs.readFileSync(path.join(__dirname, "build-runtime-package.js"), "utf8");
 const releaseSource = fs.readFileSync(path.join(__dirname, "..", "src", "release.js"), "utf8");
 assert(appSource.includes('app.get("/api/search"'), "The public Search API route is not registered");
 assert(appSource.includes("pagination:result.pagination") && appSource.includes("facets:result.facets"), "The Search API contract is missing pagination or facets");
@@ -106,6 +108,15 @@ assert(appSource.includes("X-Robots-Tag") && appSource.includes("noindex, nofoll
 // package and the verification compares against that commit instead.
 assert(workflowSource.includes('expected_release="${GITHUB_SHA}"'), "Production verification is pinned to a stale release string instead of the deployed commit");
 assert(deploySource.includes('echo "${GITHUB_SHA}" > .release-sha'), "The deploy does not stamp the commit it shipped, so a stale package cannot be detected");
+assert(deploySource.includes("build-runtime-package.js"), "The deployment does not create a traced runtime-only package");
+assert(deploySource.includes("onedailydrop-release"), "The deployment still publishes the entire repository instead of a runtime-only package");
+assert(!deploySource.includes("package: .\n"), "The deployment still publishes the entire GitHub workspace");
+assert(deploymentSource.includes("SCM_DO_BUILD_DURING_DEPLOYMENT=false"), "Azure can still rebuild and archive node_modules after GitHub already built it");
+assert(runtimePackageSource.includes('nodeFileTrace(["app.js"]'), "The runtime package does not trace the custom server dependencies");
+assert(runtimePackageSource.includes('relative === "cache"'), "The runtime package still contains the Next.js build cache");
+assert(runtimePackageSource.includes('copy("node_modules/next/dist/compiled/webpack")'), "The runtime package omits Next.js runtime-loaded webpack files");
+assert(runtimePackageSource.includes('copy("node_modules/next/dist/compiled/@babel/runtime")'), "The runtime package omits Next.js runtime-loaded Babel files");
+assert(runtimePackageSource.includes('copy("node_modules/@next/swc-linux-x64-gnu")'), "The runtime package omits Azure Linux's native Next.js compiler");
 assert(releaseSource.includes(".release-sha"), "src/release.js ignores the stamp written by the deploy");
 assert(serverSource.includes("data-results-ui=\"facets-sorting-badges-v1\""), "Day 10 results UI marker is missing");
 assert(serverSource.includes("searchCatalogProducts(rows, options)"), "Results UI does not share the deterministic Search API engine");
