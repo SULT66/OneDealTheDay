@@ -4953,8 +4953,11 @@ function createShoppingAssistant({
             pack_count: extractPackCount(recommendation.title),
             checked_at: "",
             in_catalog: false,
-            evidence_level:
-              supportedPrice && imageUrl ? "live_complete" : "partial",
+            /* The price is the evidence. A photograph is presentation: an
+               offer with a confirmed price and no picture is still a confirmed
+               offer, and marking it "partial" told the shopper to go and check
+               a price we already had. */
+            evidence_level: supportedPrice ? "live_complete" : "partial",
           };
         })
         .filter(Boolean)
@@ -4991,6 +4994,11 @@ function createShoppingAssistant({
             urlMatchesMarket(source.url, selectedMarket.code) &&
             !isEditorialProductSource(source.inferred_title, source.url) &&
             hasSpecificProductIdentity(source.inferred_title) &&
+            /* When a title cannot be read out of the URL, what is left is the
+               hostname, and "www.amazon.com" is not a product. It used to be
+               hidden by the photograph filter; without that, it reaches the
+               shortlist and takes a place from a real offer. */
+            !/^(?:www\.)?[a-z0-9-]+(?:\.[a-z]{2,})+$/i.test(clean(source.inferred_title)) &&
             matchesShoppingIntent(
               {
                 title: source.inferred_title,
@@ -5036,10 +5044,23 @@ function createShoppingAssistant({
         recommendationCandidates,
       );
       const recommendationCap = recommendationLimit(userMessage);
-      const displayableCandidates = deduplicatedCandidates.filter(
-        (recommendation) =>
-          /^https:\/\//i.test(safeUrl(recommendation.image_url)),
-      );
+      /*
+       * A missing photograph no longer costs the shopper the product.
+       *
+       * This was the last big filter, and the most expensive one: measured
+       * live, a search returned eight televisions with real prices from
+       * Samsung, Best Buy, Target and Walmart, and every card was thrown away
+       * here because the photographs could not be tied to them. The retailers
+       * that would settle it block the fetches that would read their pages, so
+       * this filter was mostly measuring whether an image search happened to
+       * surface the same picture, not whether the product was real.
+       *
+       * The name, the shop, the price and the link are what a shopper needs to
+       * act. A card without its photograph shows the brand placeholder and is
+       * still a genuine offer; a product withheld because of a missing picture
+       * helps nobody.
+       */
+      const displayableCandidates = deduplicatedCandidates;
       /* The budget the shopper actually stated, both ends of it. A ceiling
          used to be applied only when the request read as "find me something
          cheaper", and a floor was not applied at all, which is how "USD 700+"
