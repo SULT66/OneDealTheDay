@@ -7,7 +7,7 @@
   const SAVED_KEY = "odd_delia_saved_products_v1";
   const MAX_CHATS = 20;
   const MAX_MESSAGES_PER_CHAT = 80;
-  const REQUEST_TIMEOUT_MS = 40000;
+  const REQUEST_TIMEOUT_MS = 62000;
   const backdrop = document.getElementById("shoppingAssistantBackdrop");
   const closeButton = panel.querySelector("[data-shopping-assistant-close]");
   const form = panel.querySelector("form");
