@@ -1036,6 +1036,27 @@ const alternativesFor = (product, limit = 3) => {
   return uniqueProductsInOrder(candidates).slice(0, limit);
 };
 const historyFor = id => db.prepare("SELECT price,original_price,currency,source,observed_at FROM price_history WHERE product_id=? ORDER BY observed_at ASC").all(id);
+/*
+ * Lowest observed price within the last `days`, or null when nothing was
+ * observed in that window.
+ *
+ * /api/products/:id/price-history has called this ever since the demo catalog
+ * was removed, and it has never existed: every request to that route threw
+ * "minSince is not defined" and answered 500. It stayed invisible because the
+ * route is only reached from a deal page, where a price history that fails to
+ * load looks exactly like a product that has not been tracked yet.
+ */
+const minSince = (history, days) => {
+  const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+  const prices = (Array.isArray(history) ? history : [])
+    .filter(row => {
+      const observedAt = Date.parse(row?.observed_at);
+      return Number.isFinite(observedAt) && observedAt >= cutoff;
+    })
+    .map(row => Number(row?.price))
+    .filter(Number.isFinite);
+  return prices.length ? Math.min(...prices) : null;
+};
 const chartSvg = (rows, language = "en", marketCode = "us") => { if (rows.length < 2) return `<p>${esc(t(language,"page.trackingStarted"))}</p>`; const values = rows.map(row => Number(row.price)).filter(Number.isFinite); const min = Math.min(...values), max = Math.max(...values), range = Math.max(max - min, 1); const points = values.map((value, index) => `${20 + (index / (values.length - 1)) * 560},${180 - ((value - min) / range) * 140}`).join(" "); const locale = languageTag(marketCode, language); return `<svg viewBox="0 0 600 210" role="img" aria-label="${esc(t(language,"page.priceChart"))}" style="width:100%;max-width:760px"><line x1="20" y1="180" x2="580" y2="180" stroke="currentColor" opacity=".25"/><polyline points="${points}" fill="none" stroke="currentColor" stroke-width="4"/><text x="20" y="202" font-size="14">${esc(money(min, rows[0]?.currency, locale))}</text><text x="500" y="24" font-size="14">${esc(money(max, rows[0]?.currency, locale))}</text></svg>`; };
 const offerAvailability = value => {
   const text = String(value || "").toLowerCase();
