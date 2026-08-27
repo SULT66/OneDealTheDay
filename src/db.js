@@ -314,6 +314,38 @@ db.exec(`
     used_at TEXT,
     FOREIGN KEY(user_id) REFERENCES users(id)
   );
+  /*
+   * Products a shopper put aside to come back to.
+   *
+   * The offer is copied in rather than referenced, because most of what Delia
+   * finds is a live listing at some shop and not a row in our catalogue: there
+   * is nothing to point at. A saved offer therefore has to keep enough of
+   * itself to be shown again months later, when the search that found it is
+   * long gone. catalog_product_id is filled in only when the offer really was
+   * one of ours, so those keep linking to the deal page.
+   *
+   * The price is what it cost on the day it was saved. It is deliberately not
+   * refreshed: shown next to today's price it is the useful half of "has this
+   * gone down since I looked".
+   */
+  CREATE TABLE IF NOT EXISTS saved_offers(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    url TEXT NOT NULL,
+    title TEXT NOT NULL,
+    retailer TEXT NOT NULL DEFAULT '',
+    price_value REAL,
+    currency TEXT NOT NULL DEFAULT '',
+    image_url TEXT NOT NULL DEFAULT '',
+    catalog_product_id INTEGER NOT NULL DEFAULT 0,
+    market TEXT NOT NULL DEFAULT 'us',
+    saved_at TEXT NOT NULL,
+    FOREIGN KEY(user_id) REFERENCES users(id)
+  );
+  /* Saving the same thing twice is a shopper tapping the heart again, not a
+     second product, so the database refuses it rather than the route
+     remembering to check. */
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_saved_offers_user_url ON saved_offers(user_id, url);
   CREATE TABLE IF NOT EXISTS price_alerts(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,

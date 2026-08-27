@@ -200,8 +200,14 @@ export function AccountPanel({ market }: { market: string }) {
 
           <div className="mt-6 grid gap-2.5">
             <Link
-              href={`/${market}`}
+              href={`/${market}/saved`}
               className="flex h-12 items-center justify-center rounded-full bg-lime text-sm font-semibold text-ink transition-opacity hover:opacity-88"
+            >
+              Saved products
+            </Link>
+            <Link
+              href={`/${market}`}
+              className="flex h-12 items-center justify-center rounded-full border border-border text-sm font-semibold text-fg transition-colors hover:bg-surface-2"
             >
               Back to today&rsquo;s drop
             </Link>
