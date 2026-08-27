@@ -114,4 +114,37 @@
 
   const logout = async () => { await fetch("/api/auth/logout", {method:"POST"}); location.href="/"; };
   document.getElementById("profileLogout").onclick = logout;
+
+  /* The Google button appears only once the server confirms a client is
+     configured. Shipping it before the keys are in place would send people to
+     a broken sign-in at the one moment they were willing to sign up. */
+  const googleButton = document.getElementById("googleButton");
+  const orDivider = document.getElementById("orDivider");
+  if (googleButton) {
+    fetch("/api/auth/providers")
+      .then((response) => response.json())
+      .then((providers) => {
+        if (!providers || !providers.google) return;
+        googleButton.hidden = false;
+        if (orDivider) orDivider.hidden = false;
+      })
+      .catch(() => {});
+  }
+
+  /* Something failed inside Google's redirect and the shopper is back here
+     with no idea why. Say what to do next in one sentence, and never show the
+     underlying reason: it means nothing to them, and it helps anyone probing
+     the flow work out which step they got past. */
+  const googleFailures = {
+    google_unavailable: "Google sign-in is not set up yet. Use your email and password for now.",
+    google_state: "That sign-in link expired. Tap Continue with Google to try again.",
+    google_cancelled: "Google sign-in was cancelled. Nothing has changed.",
+    google_identity: "Google did not confirm that email address, so we could not sign you in.",
+    google: "Google sign-in did not go through. Please try again."
+  };
+  const failure = googleFailures[new URLSearchParams(location.search).get("error")];
+  if (failure) {
+    status.textContent = failure;
+    status.classList.add("is-error");
+  }
 })();

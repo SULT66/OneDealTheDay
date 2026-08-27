@@ -360,9 +360,15 @@ db.exec(`
 `);
 
 const userColumns = new Set(db.prepare("PRAGMA table_info(users)").all().map(column => column.name));
-for (const column of ["stripe_customer_id", "stripe_subscription_id", "stripe_subscription_status", "market"]) {
+for (const column of ["stripe_customer_id", "stripe_subscription_id", "stripe_subscription_status", "market", "google_sub"]) {
   if (!userColumns.has(column)) db.exec(`ALTER TABLE users ADD COLUMN ${column} TEXT`);
 }
+/* Google's subject id, which is stable for an account even when the person
+   changes their email address, so it is the thing worth keying on. Partial,
+   because every account created before Google sign-in existed has none, and a
+   plain unique index would treat all those nulls as one value in some engines
+   and refuse the second one. */
+db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_google_sub ON users(google_sub) WHERE google_sub IS NOT NULL");
 
 const subscriberColumns = new Set(db.prepare("PRAGMA table_info(subscribers)").all().map(column => column.name));
 if (!subscriberColumns.has("market")) db.exec("ALTER TABLE subscribers ADD COLUMN market TEXT NOT NULL DEFAULT 'us'");
