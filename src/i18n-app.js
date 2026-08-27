@@ -25,6 +25,7 @@ const appCopy = {
     "app.nav.howWeCheckStores": "How we check stores",
     "app.header.askDelia": "Ask Delia",
     "app.header.subscribe": "Get my Daily Drop",
+    "app.header.account": "Account",
 
     "app.home.eyebrow": "Every listing in {country}, checked before it is shown",
     "app.home.title": "Check here before you buy.",
@@ -134,6 +135,7 @@ const appCopy = {
     "app.nav.howWeCheckStores": "Cómo revisamos las tiendas",
     "app.header.askDelia": "Pregunta a Delia",
     "app.header.subscribe": "Recibir mi oferta diaria",
+    "app.header.account": "Cuenta",
 
     "app.home.eyebrow": "Cada anuncio en {country}, verificado antes de mostrarse",
     "app.home.title": "Consúltanos antes de comprar.",
@@ -243,6 +245,7 @@ const appCopy = {
     "app.nav.howWeCheckStores": "Comment nous vérifions les boutiques",
     "app.header.askDelia": "Demander à Delia",
     "app.header.subscribe": "Recevoir mon offre du jour",
+    "app.header.account": "Compte",
 
     "app.home.eyebrow": "Chaque annonce en {country}, vérifiée avant d'être affichée",
     "app.home.title": "Vérifiez ici avant d'acheter.",
@@ -352,6 +355,7 @@ const appCopy = {
     "app.nav.howWeCheckStores": "Wie wir Shops prüfen",
     "app.header.askDelia": "Delia fragen",
     "app.header.subscribe": "Mein Tagesangebot erhalten",
+    "app.header.account": "Konto",
 
     "app.home.eyebrow": "Jedes Angebot in {country}, geprüft bevor es erscheint",
     "app.home.title": "Prüfen Sie hier, bevor Sie kaufen.",
