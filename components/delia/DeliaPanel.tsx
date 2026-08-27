@@ -485,6 +485,7 @@ export function DeliaPanel() {
           history: historyRef.current,
           shoppingMission: missionRef.current,
           skipClarification,
+          conversationId: conversationIdRef.current,
         });
         missionRef.current = next.shoppingMission ?? missionRef.current;
         // The backend's `message` is only the lead-in sentence for a

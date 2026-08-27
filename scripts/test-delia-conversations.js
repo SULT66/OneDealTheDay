@@ -96,4 +96,30 @@ assert(
   "conversations are no longer snapshotted straight after being written",
 );
 
-console.log("Delia conversations: one per session, ownership and durability guarantees passed.");
+/*
+ * The whole chain, not just the ends.
+ *
+ * Conversations shipped stored, listed and reopenable, and not one was ever
+ * written, because the id stayed in the panel and never reached the request:
+ * the backend had nothing to append to and dropped every exchange in silence.
+ * Both halves are asserted here, since either alone looks finished.
+ */
+const clientSource = fs.readFileSync(path.join(__dirname, "..", "lib", "delia.ts"), "utf8");
+const panelSource = fs.readFileSync(
+  path.join(__dirname, "..", "components", "delia", "DeliaPanel.tsx"),
+  "utf8",
+);
+assert(
+  /conversation_id: opts\.conversationId/.test(clientSource),
+  "askAssistant stopped sending the conversation id, so nothing can be saved",
+);
+assert(
+  /conversationId: conversationIdRef\.current/.test(panelSource),
+  "the panel stopped handing its conversation id to askAssistant, so nothing can be saved",
+);
+assert(
+  /req\.body\?\.conversation_id/.test(serverSource),
+  "the server stopped reading the conversation id off the request",
+);
+
+console.log("Delia conversations: one per session, ownership, durability and the id round trip passed.");

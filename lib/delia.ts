@@ -126,6 +126,15 @@ export async function askAssistant(
     /** Sent by the "just show me options" button, so a broad request can be
      *  searched without answering anything first. */
     skipClarification?: boolean;
+    /**
+     * Which conversation this question belongs to.
+     *
+     * Without it the backend has nothing to append the exchange to and drops
+     * it, which is exactly what happened: conversations were stored, listed
+     * and reopenable, and not one was ever written, because the id stayed in
+     * the panel and never reached the request.
+     */
+    conversationId?: string;
   },
 ): Promise<DeliaResult> {
   const res = await fetch("/api/shopping-assistant", {
@@ -138,6 +147,7 @@ export async function askAssistant(
       market: opts.market,
       language: opts.language,
       skip_clarification: opts.skipClarification || undefined,
+      conversation_id: opts.conversationId || undefined,
     }),
   });
 
