@@ -72,6 +72,9 @@ export type DeliaResult = {
   partialOffers: DeliaRecommendation[];
   comparisonNotes: string[];
   comparison: DeliaComparisonRow[];
+  /** True when Delia asked something before searching, so the panel can offer
+   *  a way past it. */
+  canSkipClarification?: boolean;
   /** Set when the backend needs more detail before it can search — the
    * `message` is only the lead-in sentence ("Let me clarify two things:"),
    * the actual questions live here. `clarificationPrompts` carries tappable
@@ -106,6 +109,7 @@ type AssistantResponse = {
   comparison?: DeliaComparisonRow[];
   clarifying_questions?: string[];
   clarification_prompts?: DeliaClarificationPrompt[];
+  can_skip_clarification?: boolean;
   shopping_mission?: unknown;
 };
 
@@ -119,6 +123,9 @@ export async function askAssistant(
     history?: DeliaTurn[];
     /** Carried over from the previous reply. See `DeliaResult.shoppingMission`. */
     shoppingMission?: unknown;
+    /** Sent by the "just show me options" button, so a broad request can be
+     *  searched without answering anything first. */
+    skipClarification?: boolean;
   },
 ): Promise<DeliaResult> {
   const res = await fetch("/api/shopping-assistant", {
@@ -130,6 +137,7 @@ export async function askAssistant(
       shopping_mission: opts.shoppingMission ?? undefined,
       market: opts.market,
       language: opts.language,
+      skip_clarification: opts.skipClarification || undefined,
     }),
   });
 
@@ -152,6 +160,9 @@ export async function askAssistant(
     comparison: data.comparison || [],
     clarifyingQuestions: data.clarifying_questions || [],
     clarificationPrompts: data.clarification_prompts || [],
+    /* Set when Delia asked before searching. The panel turns this into a way
+       past the question, so a broad request is never a wall. */
+    canSkipClarification: Boolean(data.can_skip_clarification),
     shoppingMission: data.shopping_mission ?? null,
   };
 }

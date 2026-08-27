@@ -2953,14 +2953,30 @@ const client = {
      the turn and the shopper was handed a form instead of a shortlist. The
      search now runs regardless, so the model is called twice, once to classify
      and once to search, and the questions travel with whatever it found. */
-  assert(
-    clarificationCalls.length > 1,
-    "A request the classifier wanted to narrow was answered without searching at all",
+  /*
+   * A water filter without a fridge model is not a shopping request, it is a
+   * guess. Searching first here produces a list the shopper has to throw away,
+   * so the one question that decides the answer is asked before the search.
+   *
+   * This asserted the opposite for a while, and both readings were honest. The
+   * rule that settles it: ask first only when the shopper has named nothing
+   * specific, and always with a way past the question. A request carrying a
+   * model, a size, a budget or a brand goes straight to the search.
+   */
+  assert.strictEqual(
+    clarificationCalls.length,
+    1,
+    "A filter was searched for before asking which fridge it has to fit",
   );
   assert.strictEqual(
     clarification.needs_clarification,
-    false,
-    "Narrowing questions must accompany an answer rather than replace it",
+    true,
+    "A question asked before searching must say so",
+  );
+  assert.strictEqual(
+    clarification.can_skip_clarification,
+    true,
+    "A question asked before searching must come with a way past it",
   );
   assert.deepStrictEqual(
     clarification.clarifying_questions,
@@ -3018,19 +3034,37 @@ const client = {
     marketCode: "us",
     language: "en",
   });
-  /* Broad, but still worth searching. "Some headphones as a gift" narrows
-     nicely with a budget question, and the shopper gets that question next to
-     a real shortlist now instead of in place of one, so the search runs and
-     the model is called twice. */
-  assert(
-    broadHeadphoneCalls.length > 1,
-    "A broad gift request was answered with questions and no search at all",
+  /*
+   * Broad enough to be worth one question first.
+   *
+   * This asserted the opposite for a while, and both positions were reached
+   * honestly. Attaching questions to results fixed a real problem: every
+   * request used to cost three rounds of chat before a single shop appeared.
+   * But measured on production, "find me a good camera" then came back with a
+   * screen-free novelty camera at $41.99 and a Canon EOS R50 at $799 in one
+   * shortlist. Both are good cameras; the list is useless, because nothing in
+   * the request said which of those two worlds the shopper is in.
+   *
+   * So one question comes first when the request is that broad, and only when
+   * there is something real to tap. It is never a wall: can_skip_clarification
+   * is what the "just show me options" button uses, and a specific request
+   * ("Samsung Galaxy Z Fold") still goes straight to the search.
+   */
+  assert.strictEqual(
+    broadHeadphoneCalls.length,
+    1,
+    "A broad gift request was searched before asking the one question that decides the answer",
   );
   assert.strictEqual(broadHeadphones.language, "ru");
   assert.strictEqual(
     broadHeadphones.needs_clarification,
-    false,
-    "Narrowing questions must accompany an answer rather than replace it",
+    true,
+    "A broad request that asks first must say so",
+  );
+  assert.strictEqual(
+    broadHeadphones.can_skip_clarification,
+    true,
+    "A question asked before searching must come with a way past it",
   );
   /* The budget question used to carry a ladder written per market and per
      family, which is why an LG washing machine was offered "USD 0-100 /

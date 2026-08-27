@@ -311,6 +311,7 @@ app.post("/api/shopping-assistant", shoppingAssistantRateLimit, async (req, res)
       shoppingContext:req.body?.shopping_context,
       shoppingMission:req.body?.shopping_mission,
       excludedOfferUrls:req.body?.excluded_offer_urls,
+      skipClarification:Boolean(req.body?.skip_clarification),
       marketCode:selectedMarket.code,
       language,
       signal:requestController.signal

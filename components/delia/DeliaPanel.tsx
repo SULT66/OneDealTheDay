@@ -212,6 +212,7 @@ function DeliaExchange({
   result,
   market,
   onFollowUp,
+  onSkipClarification,
   onClose,
   feedbackGiven,
   onFeedback,
@@ -220,6 +221,7 @@ function DeliaExchange({
   result: DeliaResult;
   market: string;
   onFollowUp: (text: string) => void;
+  onSkipClarification: () => void;
   onClose: () => void;
   feedbackGiven: boolean;
   onFeedback: (type: "helpful" | "not_helpful") => void;
@@ -318,6 +320,24 @@ function DeliaExchange({
               >
                 Continue
                 <ArrowRight size={14} weight="bold" aria-hidden="true" />
+              </button>
+            )}
+
+            {/* A way past the question.
+              *
+              * Asking before searching is right when the request is broad
+              * enough that the answer would otherwise span a $42 novelty
+              * camera and an $800 Canon. It is wrong to make it compulsory:
+              * somebody in a hurry, or somebody who does not know the answer
+              * yet, has to be able to see something. */}
+            {result.canSkipClarification && (
+              <button
+                type="button"
+                disabled={disabled}
+                onClick={onSkipClarification}
+                className="text-sm font-semibold text-fg-muted underline underline-offset-4 transition-colors hover:text-fg disabled:cursor-default disabled:opacity-40"
+              >
+                Just show me options
               </button>
             )}
           </div>
@@ -442,7 +462,7 @@ export function DeliaPanel() {
   const conversationIdRef = useRef<string>("");
 
   const ask = useCallback(
-    async (transcript: string) => {
+    async (transcript: string, skipClarification = false) => {
       setLoading(true);
       setErrorMsg(null);
       setPendingQuestion(transcript);
@@ -451,6 +471,7 @@ export function DeliaPanel() {
           market,
           history: historyRef.current,
           shoppingMission: missionRef.current,
+          skipClarification,
         });
         missionRef.current = next.shoppingMission ?? missionRef.current;
         // The backend's `message` is only the lead-in sentence for a
@@ -655,6 +676,7 @@ export function DeliaPanel() {
                   result={result}
                   market={market}
                   onFollowUp={ask}
+                  onSkipClarification={() => ask(result.transcript, true)}
                   onClose={closeDelia}
                   feedbackGiven={Boolean(feedbackGiven[i])}
                   onFeedback={(type) => giveFeedback(i, type)}
