@@ -228,6 +228,71 @@ app.get("/api/shopping-assistant/status", (req, res) => {
   res.set("Cache-Control", "no-store").json({available:shoppingAssistant.configured});
 });
 
+/** How many conversations one shopper keeps. Older ones fall off the end. */
+const KEPT_CONVERSATIONS = 40;
+/* A whole answer, offers and all, is a few kilobytes. This is far above that
+   and far below anything that would bloat the database if a response ever came
+   back malformed and enormous. */
+const MAX_STORED_PAYLOAD = 60_000;
+
+/**
+ * Writes one question and one answer into the shopper's history.
+ *
+ * Only for somebody signed in: there is nowhere to keep a conversation that
+ * belongs to no account, and quietly storing one against an IP address would
+ * be a worse answer than not storing it.
+ *
+ * Deliberately never throws into the request. A history that fails to save is
+ * a disappointment; an answer that fails to arrive because the history failed
+ * to save is a broken product.
+ */
+const rememberExchange = (req, marketCode, result) => {
+  try {
+    const user = currentUser(req);
+    if (!user) return;
+    const key = String(req.body?.conversation_id || "").trim().slice(0, 80);
+    const question = savedText(req.body?.message).slice(0, 2000);
+    if (!key || !question) return;
+
+    const now = new Date().toISOString();
+    const title = savedText(result?.conversation_title).slice(0, 120) || question.slice(0, 80);
+
+    db.prepare(`INSERT INTO delia_conversations(user_id,conversation_key,market,title,created_at,updated_at)
+      VALUES(?,?,?,?,?,?)
+      ON CONFLICT(user_id,conversation_key) DO UPDATE SET
+        updated_at=excluded.updated_at,
+        /* The title follows the conversation: asking about mattresses and then
+           about a kettle should not leave the old heading on it. */
+        title=excluded.title`).run(user.id, key, marketCode, title, now, now);
+
+    const conversation = db.prepare("SELECT id FROM delia_conversations WHERE user_id=? AND conversation_key=?")
+      .get(user.id, key);
+    if (!conversation) return;
+
+    const payload = JSON.stringify(result);
+    const insert = db.prepare("INSERT INTO delia_messages(conversation_id,role,content,payload,created_at) VALUES(?,?,?,?,?)");
+    insert.run(conversation.id, "user", question, "", now);
+    insert.run(
+      conversation.id,
+      "assistant",
+      savedText(result?.message).slice(0, 4000),
+      payload.length <= MAX_STORED_PAYLOAD ? payload : "",
+      now,
+    );
+
+    /* Keep the list a list. Without this it becomes an archive nobody scrolls
+       and a table nobody prunes. */
+    const stale = db.prepare(`SELECT id FROM delia_conversations WHERE user_id=?
+      ORDER BY updated_at DESC, id DESC LIMIT -1 OFFSET ?`).all(user.id, KEPT_CONVERSATIONS);
+    for (const row of stale) {
+      db.prepare("DELETE FROM delia_messages WHERE conversation_id=?").run(row.id);
+      db.prepare("DELETE FROM delia_conversations WHERE id=?").run(row.id);
+    }
+  } catch (error) {
+    console.error(`[delia] could not save the conversation: ${error.message}`);
+  }
+};
+
 app.post("/api/shopping-assistant", shoppingAssistantRateLimit, async (req, res) => {
   const requestedMarket = normalizeMarket(req.body?.market);
   const selectedMarket = market(requestedMarket || req.market || marketFromIp(req).code);
@@ -272,6 +337,7 @@ app.post("/api/shopping-assistant", shoppingAssistantRateLimit, async (req, res)
     });
     const result = await Promise.race([assistantTask, hardTimeoutTask]);
     clearTimeout(hardTimeoutTimer);
+    rememberExchange(req, selectedMarket.code, result);
     return res.set("Cache-Control", "no-store").json(result);
   } catch (error) {
     clearTimeout(hardTimeoutTimer);
@@ -789,6 +855,60 @@ app.delete("/api/saved/:id", requireUser, (req, res) => {
      nothing rather than somebody else's list. */
   const result = db.prepare("DELETE FROM saved_offers WHERE id=? AND user_id=?").run(id, req.user.id);
   res.json({removed: result.changes > 0});
+});
+
+/**
+ * Past conversations with Delia.
+ *
+ * The list carries titles and dates only. A conversation with eight offers in
+ * it is a few kilobytes, and sending forty of those to draw a sidebar would be
+ * most of a megabyte to show a list of headings.
+ */
+app.get("/api/delia/conversations", requireUser, (req, res) => {
+  const rows = db.prepare(`SELECT c.id, c.conversation_key, c.title, c.market, c.updated_at,
+      (SELECT COUNT(*) FROM delia_messages m WHERE m.conversation_id=c.id AND m.role='user') AS questions
+    FROM delia_conversations c
+    WHERE c.user_id=? ORDER BY c.updated_at DESC, c.id DESC LIMIT ?`).all(req.user.id, KEPT_CONVERSATIONS);
+  res.json({conversations: rows});
+});
+
+app.get("/api/delia/conversations/:id", requireUser, (req, res) => {
+  const id = Math.max(0, Math.round(Number(req.params.id) || 0));
+  const conversation = db.prepare("SELECT * FROM delia_conversations WHERE id=? AND user_id=?")
+    .get(id, req.user.id);
+  if (!conversation) return res.status(404).json({error:"That conversation is not here any more."});
+  const messages = db.prepare("SELECT role, content, payload, created_at FROM delia_messages WHERE conversation_id=? ORDER BY id")
+    .all(id);
+  res.json({
+    conversation: {
+      id: conversation.id,
+      conversation_key: conversation.conversation_key,
+      title: conversation.title,
+      market: conversation.market,
+      updated_at: conversation.updated_at
+    },
+    messages: messages.map(message => ({
+      role: message.role,
+      content: message.content,
+      /* Parsed here rather than in the browser: a row that somehow holds
+         something unparseable should cost this one message, not the whole
+         conversation the shopper was trying to reopen. */
+      answer: message.payload ? (() => { try { return JSON.parse(message.payload); } catch { return null; } })() : null,
+      created_at: message.created_at
+    }))
+  });
+});
+
+app.delete("/api/delia/conversations/:id", requireUser, (req, res) => {
+  const id = Math.max(0, Math.round(Number(req.params.id) || 0));
+  /* Scoped to the signed-in shopper, so an id from somewhere else deletes
+     nothing rather than somebody else's history. */
+  const conversation = db.prepare("SELECT id FROM delia_conversations WHERE id=? AND user_id=?")
+    .get(id, req.user.id);
+  if (!conversation) return res.json({removed:false});
+  db.prepare("DELETE FROM delia_messages WHERE conversation_id=?").run(id);
+  db.prepare("DELETE FROM delia_conversations WHERE id=? AND user_id=?").run(id, req.user.id);
+  res.json({removed:true});
 });
 
 app.post("/api/auth/logout", (req, res) => {

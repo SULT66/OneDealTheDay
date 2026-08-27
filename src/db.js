@@ -346,6 +346,40 @@ db.exec(`
      second product, so the database refuses it rather than the route
      remembering to check. */
   CREATE UNIQUE INDEX IF NOT EXISTS idx_saved_offers_user_url ON saved_offers(user_id, url);
+  /*
+   * Conversations with Delia, so they are still there tomorrow.
+   *
+   * Keyed by the id the browser generates when the panel opens, not by a
+   * database id, because the browser has to be able to say "keep appending to
+   * the one I am in" without waiting for a round trip first.
+   *
+   * A message keeps the whole answer as JSON rather than just its prose. Half
+   * of what Delia says is the shops she found, and a conversation you can
+   * reopen but not act on is a transcript, not a conversation.
+   */
+  CREATE TABLE IF NOT EXISTS delia_conversations(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    conversation_key TEXT NOT NULL,
+    market TEXT NOT NULL DEFAULT 'us',
+    title TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY(user_id) REFERENCES users(id)
+  );
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_delia_conversations_user_key
+    ON delia_conversations(user_id, conversation_key);
+  CREATE TABLE IF NOT EXISTS delia_messages(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    conversation_id INTEGER NOT NULL,
+    role TEXT NOT NULL,
+    content TEXT NOT NULL DEFAULT '',
+    payload TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    FOREIGN KEY(conversation_id) REFERENCES delia_conversations(id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_delia_messages_conversation
+    ON delia_messages(conversation_id, id);
   CREATE TABLE IF NOT EXISTS price_alerts(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,

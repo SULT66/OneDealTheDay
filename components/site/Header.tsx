@@ -123,6 +123,11 @@ export async function Header({ market }: { market: string }) {
                 href: `/${market}/how-we-select-deals`,
                 label: t(language, "app.nav.howWeCheckStores"),
               },
+              /* Saving something and then not being able to find it again is
+                 worse than not being able to save it. The account button in the
+                 row above turns into Log out once somebody is signed in, so
+                 this row is the only way back to the list. */
+              { href: `/${market}/saved`, label: t(language, "app.nav.saved") },
             ].map((item) => (
               <li key={item.href} className="shrink-0">
                 <Link
