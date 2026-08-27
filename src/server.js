@@ -325,7 +325,7 @@ app.post("/api/shopping-assistant/feedback", shoppingAssistantRateLimit, (req, r
  * they reach the catch-all at the bottom of this file instead of being
  * rewritten back onto the old bare-URL Express routes.
  */
-const nextOwnedPath = /^\/(?:about|account|how-we-select-deals|search|daily-drop|archive|contact|privacy|terms|affiliate-disclosure|editorial-policy|for-retailers|price-disclaimer|category|deal\/[^/]+|category\/[^/]+)\/?$/;
+const nextOwnedPath = /^\/(?:about|account|saved|how-we-select-deals|search|daily-drop|archive|contact|privacy|terms|affiliate-disclosure|editorial-policy|for-retailers|price-disclaimer|category|deal\/[^/]+|category\/[^/]+)\/?$/;
 app.use((req, res, next) => {
   const match = req.url.match(new RegExp(`^/(${marketCodes.join("|")})(?=/|\\?|$)`));
   /* Compare the path alone, not the whole URL: `/de` was left intact for Next
@@ -715,6 +715,80 @@ app.get("/api/auth/google/callback", authRateLimit, async (req, res) => {
     console.error(`[auth] Google sign-in failed: ${error.message}`);
     return res.redirect("/account?error=google");
   }
+});
+
+/**
+ * Products a shopper put aside.
+ *
+ * requireUser rather than a silent no-op: saving something and finding it gone
+ * later because nobody was signed in is worse than being asked to sign in
+ * first. The 401 carries a sentence the panel can show as it is.
+ */
+/* Only an https link is worth keeping: anything else is either unusable by the
+   time the shopper comes back, or a javascript: URL waiting to be clicked. */
+const savedUrl = (value) => {
+  const raw = String(value || "").trim().slice(0, 2048);
+  return /^https:\/\//i.test(raw) ? raw : "";
+};
+const savedText = (value) => String(value || "").replace(/\s+/g, " ").trim();
+
+const savedOfferRow = (row) => ({
+  id: row.id,
+  url: row.url,
+  title: row.title,
+  retailer: row.retailer,
+  price_value: row.price_value,
+  currency: row.currency,
+  image_url: row.image_url,
+  catalog_product_id: row.catalog_product_id || 0,
+  market: row.market,
+  saved_at: row.saved_at
+});
+
+app.get("/api/saved", requireUser, (req, res) => {
+  const rows = db.prepare("SELECT * FROM saved_offers WHERE user_id=? ORDER BY saved_at DESC, id DESC LIMIT 200").all(req.user.id);
+  res.json({offers: rows.map(savedOfferRow)});
+});
+
+app.post("/api/saved", requireUser, (req, res) => {
+  const url = savedUrl(req.body?.url);
+  const title = savedText(req.body?.title).slice(0, 200);
+  if (!/^https:\/\//i.test(url)) return res.status(400).json({error:"That offer has no link to save."});
+  if (!title) return res.status(400).json({error:"That offer has no name to save."});
+  const price = Number(req.body?.price_value);
+  const row = {
+    user_id: req.user.id,
+    url,
+    title,
+    retailer: savedText(req.body?.retailer).slice(0, 80),
+    price_value: Number.isFinite(price) && price > 0 ? price : null,
+    currency: String(req.body?.currency || "").trim().toUpperCase().slice(0, 3),
+    image_url: savedUrl(req.body?.image_url),
+    catalog_product_id: Math.max(0, Math.round(Number(req.body?.catalog_product_id) || 0)),
+    market: String(req.body?.market || "us").trim().toLowerCase().slice(0, 2),
+    saved_at: new Date().toISOString()
+  };
+  try {
+    const result = db.prepare(`INSERT INTO saved_offers(user_id,url,title,retailer,price_value,currency,image_url,catalog_product_id,market,saved_at)
+      VALUES(@user_id,@url,@title,@retailer,@price_value,@currency,@image_url,@catalog_product_id,@market,@saved_at)`).run(row);
+    return res.status(201).json({offer: savedOfferRow({...row, id: result.lastInsertRowid})});
+  } catch (error) {
+    /* Tapping the heart twice is one product, not two. Answer as though the
+       first tap had just happened, since that is what the shopper meant. */
+    if (String(error.message).includes("UNIQUE")) {
+      const existing = db.prepare("SELECT * FROM saved_offers WHERE user_id=? AND url=?").get(req.user.id, url);
+      return res.json({offer: savedOfferRow(existing)});
+    }
+    throw error;
+  }
+});
+
+app.delete("/api/saved/:id", requireUser, (req, res) => {
+  const id = Math.max(0, Math.round(Number(req.params.id) || 0));
+  /* Scoped to the signed-in shopper, so an id from somewhere else deletes
+     nothing rather than somebody else's list. */
+  const result = db.prepare("DELETE FROM saved_offers WHERE id=? AND user_id=?").run(id, req.user.id);
+  res.json({removed: result.changes > 0});
 });
 
 app.post("/api/auth/logout", (req, res) => {

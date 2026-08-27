@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowRight,
   ArrowUpRight,
+  Heart,
   PaperPlaneRight,
   Sparkle,
   ThumbsDown,
@@ -22,6 +23,10 @@ import {
   type DeliaResult,
   type DeliaTurn,
 } from "@/lib/delia";
+import {
+  SavedOffersProvider,
+  useSavedOffers,
+} from "@/components/account/SavedOffers";
 import { useDelia } from "./DeliaContext";
 
 const EXAMPLES = [
@@ -139,22 +144,66 @@ function OfferRow({
     </>
   );
 
-  const className =
-    "flex items-start gap-3 rounded-xl border border-border px-3 py-2.5 transition-colors hover:border-border-strong hover:bg-surface-2";
+  const linkClass = "flex min-w-0 flex-1 items-start gap-3";
 
-  return inCatalog ? (
-    <Link href={href} onClick={onClose} className={className}>
-      {body}
-    </Link>
-  ) : (
-    <a
-      href={href}
-      target="_blank"
-      rel="sponsored noopener noreferrer"
-      className={className}
+  /* The heart is a sibling of the link, not inside it. A button nested in an
+     anchor is invalid, and worse, tapping it would follow the link to the shop
+     as well as saving. */
+  return (
+    <div className="flex items-start gap-2 rounded-xl border border-border py-2.5 pl-3 pr-2 transition-colors hover:border-border-strong hover:bg-surface-2">
+      {inCatalog ? (
+        <Link href={href} onClick={onClose} className={linkClass}>
+          {body}
+        </Link>
+      ) : (
+        <a href={href} target="_blank" rel="sponsored noopener noreferrer" className={linkClass}>
+          {body}
+        </a>
+      )}
+      <SaveOfferButton rec={rec} price={price} />
+    </div>
+  );
+}
+
+/**
+ * Put this one aside.
+ *
+ * Rendered for everyone, including visitors with no account: the tap is what
+ * makes signing up worth doing, so hiding it until they have signed up gets
+ * the order backwards. An unsigned tap raises the prompt instead.
+ */
+function SaveOfferButton({ rec, price }: { rec: DeliaRecommendation; price: string }) {
+  const saved = useSavedOffers();
+  if (!saved) return null;
+  const isSaved = saved.isSaved(rec.url);
+
+  return (
+    <button
+      type="button"
+      onClick={() =>
+        saved.toggle({
+          url: rec.url,
+          title: rec.title,
+          retailer: rec.retailer,
+          price_value: rec.price_value ?? null,
+          currency: rec.currency || "",
+          image_url: rec.image_url || "",
+          catalog_product_id: rec.catalog_product_id ?? 0,
+        })
+      }
+      aria-pressed={isSaved}
+      aria-label={isSaved ? `Remove ${rec.title} from saved` : `Save ${rec.title}`}
+      title={isSaved ? "Saved" : "Save for later"}
+      className={cn(
+        "mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-colors",
+        isSaved ? "text-lime-deep" : "text-fg-subtle hover:bg-surface hover:text-fg",
+      )}
     >
-      {body}
-    </a>
+      <Heart size={16} weight={isSaved ? "fill" : "regular"} aria-hidden="true" />
+      {/* Screen readers get the price alongside the product name, so the
+          button is not just "save" repeated down the list. */}
+      <span className="sr-only">{price}</span>
+    </button>
   );
 }
 
@@ -518,6 +567,7 @@ export function DeliaPanel() {
   if (!open) return null;
 
   return (
+    <SavedOffersProvider market={market}>
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
       <button
         type="button"
@@ -672,6 +722,50 @@ export function DeliaPanel() {
             <PaperPlaneRight size={20} weight="fill" aria-hidden="true" />
           </button>
         </form>
+      </div>
+
+      <SaveNeedsAccount />
+    </div>
+    </SavedOffersProvider>
+  );
+}
+
+/**
+ * The moment somebody wants to keep something is the moment an account is
+ * worth having, so this is where the asking happens rather than at the door.
+ *
+ * Deliberately not a wall: the shopper keeps their results and their
+ * conversation, and can dismiss this and carry on. Nothing they have done is
+ * taken away for not signing up.
+ */
+function SaveNeedsAccount() {
+  const saved = useSavedOffers();
+  if (!saved?.promptToSignIn) return null;
+
+  return (
+    <div
+      role="status"
+      className="fade-in absolute inset-x-4 bottom-4 z-10 mx-auto max-w-md rounded-2xl border border-border bg-surface p-4 shadow-card sm:inset-x-auto"
+    >
+      <p className="text-sm font-semibold text-fg">Sign in to keep this</p>
+      <p className="mt-1 text-sm leading-relaxed text-fg-muted">
+        Saved products stay with your account, so they are still here on your phone
+        tomorrow.
+      </p>
+      <div className="mt-3 flex items-center gap-2">
+        <Link
+          href={`/${saved.market}/account`}
+          className="inline-flex h-10 items-center rounded-full bg-lime px-4 text-sm font-semibold text-ink transition-opacity hover:opacity-88"
+        >
+          Create a free account
+        </Link>
+        <button
+          type="button"
+          onClick={saved.dismissPrompt}
+          className="inline-flex h-10 items-center rounded-full px-3 text-sm font-semibold text-fg-muted transition-colors hover:text-fg"
+        >
+          Not now
+        </button>
       </div>
     </div>
   );
