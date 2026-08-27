@@ -9,6 +9,14 @@ const db = require("./db");
 const c = require("./config");
 const { refreshProducts, localDate } = require("./refresh");
 const { runLinkHealthCheck } = require("./linkHealth");
+const {
+  authorizationUrl,
+  createState,
+  exchangeCodeForTokens,
+  googleConfig,
+  statesMatch,
+  verifiedGoogleProfile,
+} = require("./googleAuth");
 const { detectBrand, normalizeBrand, slugifyBrand } = require("./brandDetector");
 const { reasonFor } = require("./demoEditorial");
 const { localizeProduct } = require("./demoTranslations");
@@ -618,6 +626,82 @@ app.post("/api/auth/login", authRateLimit, (req, res) => {
   startSession(res, user.id);
   res.json({user:{id:user.id,email:user.email,name:user.name,membership:user.membership}});
 });
+/**
+ * Sign in with Google.
+ *
+ * Two routes: one that sends the shopper to Google carrying a state we made
+ * up, and one that catches them coming back and checks the state is the same
+ * one. That check is the whole security of the flow, so it is compared in
+ * constant time and the cookie holding it is cleared whatever happens next.
+ *
+ * Every failure ends at the same place with a short reason in the query
+ * string. A shopper who gets stuck here cannot fix a stack trace, and telling
+ * an attacker which step failed only helps the attacker.
+ */
+const GOOGLE_STATE_COOKIE = "odd_oauth_state";
+const googleAuth = googleConfig();
+
+/**
+ * The account behind a verified Google profile, creating one if this is a
+ * first visit.
+ *
+ * Linking by email is safe only because verifiedGoogleProfile refuses a
+ * profile whose address Google has not confirmed. Without that, anyone could
+ * put someone else's address on a Google profile and walk into their account.
+ *
+ * A Google-only account stores an empty password hash. passwordMatches splits
+ * the stored value on a colon and fails when either half is missing, so an
+ * empty hash can never match any password, including an empty one. The
+ * alternative was rebuilding the users table to drop a NOT NULL, on a database
+ * that has been through two corruptions this week.
+ */
+const googleUserId = (profile, marketCode) => {
+  const existing = db.prepare("SELECT id FROM users WHERE google_sub=?").get(profile.subject);
+  if (existing) return existing.id;
+  const byEmail = db.prepare("SELECT id FROM users WHERE email=?").get(profile.email);
+  if (byEmail) {
+    db.prepare("UPDATE users SET google_sub=? WHERE id=?").run(profile.subject, byEmail.id);
+    return byEmail.id;
+  }
+  return db.prepare("INSERT INTO users(email,name,password_hash,membership,market,created_at,google_sub) VALUES(?,?,?,?,?,?,?)")
+    .run(profile.email, profile.name, "", "free", marketCode, new Date().toISOString(), profile.subject)
+    .lastInsertRowid;
+};
+
+app.get("/api/auth/providers", (req, res) => res.json({google: googleAuth.configured}));
+
+app.get("/api/auth/google", authRateLimit, (req, res) => {
+  if (!googleAuth.configured) return res.redirect("/account?error=google_unavailable");
+  const state = createState();
+  res.cookie(GOOGLE_STATE_COOKIE, state, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    maxAge: 10 * 60 * 1000
+  });
+  res.redirect(authorizationUrl(googleAuth, state));
+});
+
+app.get("/api/auth/google/callback", authRateLimit, async (req, res) => {
+  if (!googleAuth.configured) return res.redirect("/account?error=google_unavailable");
+  const expectedState = parseCookies(req)[GOOGLE_STATE_COOKIE];
+  res.clearCookie(GOOGLE_STATE_COOKIE);
+  if (!statesMatch(req.query?.state, expectedState)) return res.redirect("/account?error=google_state");
+  if (!req.query?.code) return res.redirect("/account?error=google_cancelled");
+  try {
+    const tokens = await exchangeCodeForTokens(googleAuth, req.query.code);
+    const profile = verifiedGoogleProfile(tokens?.id_token, googleAuth.clientId);
+    if (!profile) return res.redirect("/account?error=google_identity");
+    startSession(res, googleUserId(profile, marketFromIp(req).code));
+    return res.redirect("/account?signed_in=google");
+  } catch (error) {
+    /* Loudly, because a broken sign-in is invisible from the outside: the
+       shopper simply gives up, and nothing in the logs says why. */
+    console.error(`[auth] Google sign-in failed: ${error.message}`);
+    return res.redirect("/account?error=google");
+  }
+});
+
 app.post("/api/auth/logout", (req, res) => {
   const token = parseCookies(req).odd_session;
   if (token) db.prepare("DELETE FROM user_sessions WHERE token_hash=?").run(tokenHash(token));
