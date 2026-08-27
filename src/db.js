@@ -3,7 +3,11 @@ const path = require("path");
 const fs = require("fs");
 const os = require("os");
 const { repairIndexesIfNeeded } = require("./sqliteRecovery");
-const { prepareRuntimeDatabase, startSnapshotSchedule } = require("./dbStorage");
+const {
+  prepareRuntimeDatabase,
+  snapshotOnPersonalWrites,
+  startSnapshotSchedule,
+} = require("./dbStorage");
 
 const isAzure = Boolean(process.env.WEBSITE_SITE_NAME || process.env.WEBSITE_INSTANCE_ID);
 const dir = process.env.DATA_DIR || (isAzure ? "/home/data/onedealtheday" : path.join(__dirname, "..", "data"));
@@ -99,7 +103,17 @@ repairIndexesIfNeeded(db, dbPath, { enabled: isAzure });
 db.snapshots =
   isAzure && !onNetworkShare
     ? startSnapshotSchedule(db, dir)
-    : { snapshotNow: () => null, stop: () => {} };
+    : { snapshotNow: () => null, requestSnapshot: () => {}, stop: () => {} };
+
+/*
+ * Accounts, saved products and conversations are snapshotted the moment they
+ * change instead of waiting for the ten minute timer.
+ *
+ * Nothing can put them back. The catalogue rebuilds itself from the feeds
+ * every night; somebody coming back for the product they set aside, and
+ * finding it gone, is a different kind of loss.
+ */
+snapshotOnPersonalWrites(db, db.snapshots);
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS products(

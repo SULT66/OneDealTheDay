@@ -186,10 +186,18 @@ function writeSnapshot(db, sharedDir, { keep = DEFAULT_SNAPSHOT_KEEP, logger = c
  * taking the site down over it would defeat the point. `unref` keeps the timer
  * from holding the process open on shutdown.
  */
+/** Long enough to batch a burst of writes, short enough to lose nothing. */
+const PERSONAL_WRITE_SNAPSHOT_DELAY_MS = 5000;
+
 function startSnapshotSchedule(
   db,
   sharedDir,
-  { intervalMs = DEFAULT_SNAPSHOT_INTERVAL_MS, keep = DEFAULT_SNAPSHOT_KEEP, logger = console } = {},
+  {
+    intervalMs = DEFAULT_SNAPSHOT_INTERVAL_MS,
+    keep = DEFAULT_SNAPSHOT_KEEP,
+    logger = console,
+    personalWriteDelayMs = PERSONAL_WRITE_SNAPSHOT_DELAY_MS,
+  } = {},
 ) {
   const take = (reason) => {
     try {
@@ -205,6 +213,28 @@ function startSnapshotSchedule(
   const timer = setInterval(() => take("scheduled"), intervalMs);
   timer.unref?.();
 
+  /*
+   * A snapshot straight after anything a person would notice losing.
+   *
+   * Ten minutes is the right interval for the catalogue, which is rebuilt from
+   * the feeds every night anyway. It is the wrong one for an account, a saved
+   * product or a conversation: someone comes back for the thing they put
+   * aside, finds it gone, and never trusts the site with anything again. So
+   * those writes get their own snapshot within seconds.
+   *
+   * Debounced, because signing in writes a user and a session back to back and
+   * that is one moment, not two. The timer is not unref'd: a snapshot that was
+   * asked for should finish even if the process is on its way out.
+   */
+  let personalTimer = null;
+  const requestSnapshot = () => {
+    if (personalTimer) return;
+    personalTimer = setTimeout(() => {
+      personalTimer = null;
+      take("after a personal write");
+    }, personalWriteDelayMs);
+  };
+
   /* Best effort only. Azure allows a few seconds to shut down and copying to
      the share can outlast that, which is precisely why the timer above, and
      not this, is the guarantee. */
@@ -212,11 +242,60 @@ function startSnapshotSchedule(
   process.once("SIGTERM", onExit);
   process.once("SIGINT", onExit);
 
-  return { snapshotNow: (reason = "manual") => take(reason), stop: () => clearInterval(timer) };
+  return {
+    snapshotNow: (reason = "manual") => take(reason),
+    requestSnapshot,
+    stop: () => {
+      clearInterval(timer);
+      if (personalTimer) clearTimeout(personalTimer);
+      personalTimer = null;
+    },
+  };
+}
+
+/**
+ * Tables whose loss a person would feel, rather than a job would rebuild.
+ *
+ * Everything else in the database comes back from the feeds on the next
+ * refresh. These do not: there is no way to recreate somebody's account, the
+ * product they saved, or what they asked Delia last week.
+ */
+const PERSONAL_TABLES =
+  /\b(?:users|user_sessions|password_reset_tokens|subscribers|price_alerts|saved_offers|delia_conversations|delia_messages)\b/i;
+
+const WRITE_STATEMENT = /^\s*(?:insert|update|delete|replace)\b/i;
+
+/**
+ * Makes every write to those tables ask for a snapshot, without anyone having
+ * to remember to.
+ *
+ * The alternative was a call at each write site, which works until the next
+ * feature adds one and forgets. This wraps prepare() once and covers whatever
+ * gets written next year. Reads are handed back untouched, so the ordinary
+ * path pays nothing.
+ */
+function snapshotOnPersonalWrites(db, snapshots) {
+  if (!snapshots?.requestSnapshot || db.__personalWriteSnapshots) return db;
+  const prepare = db.prepare.bind(db);
+  db.prepare = (sql) => {
+    const statement = prepare(sql);
+    if (!WRITE_STATEMENT.test(sql) || !PERSONAL_TABLES.test(sql)) return statement;
+    const run = statement.run.bind(statement);
+    statement.run = (...args) => {
+      const result = run(...args);
+      snapshots.requestSnapshot();
+      return result;
+    };
+    return statement;
+  };
+  db.__personalWriteSnapshots = true;
+  return db;
 }
 
 module.exports = {
   DEFAULT_SNAPSHOT_INTERVAL_MS,
+  PERSONAL_TABLES,
+  snapshotOnPersonalWrites,
   DEFAULT_SNAPSHOT_KEEP,
   bestAvailableCopy,
   isHealthyDatabase,
