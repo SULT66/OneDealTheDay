@@ -325,7 +325,7 @@ app.post("/api/shopping-assistant/feedback", shoppingAssistantRateLimit, (req, r
  * they reach the catch-all at the bottom of this file instead of being
  * rewritten back onto the old bare-URL Express routes.
  */
-const nextOwnedPath = /^\/(?:about|how-we-select-deals|search|daily-drop|archive|contact|privacy|terms|affiliate-disclosure|editorial-policy|for-retailers|price-disclaimer|category|deal\/[^/]+|category\/[^/]+)\/?$/;
+const nextOwnedPath = /^\/(?:about|account|how-we-select-deals|search|daily-drop|archive|contact|privacy|terms|affiliate-disclosure|editorial-policy|for-retailers|price-disclaimer|category|deal\/[^/]+|category\/[^/]+)\/?$/;
 app.use((req, res, next) => {
   const match = req.url.match(new RegExp(`^/(${marketCodes.join("|")})(?=/|\\?|$)`));
   /* Compare the path alone, not the whole URL: `/de` was left intact for Next
@@ -597,8 +597,23 @@ Object.entries(trustPages).forEach(([route, file]) => app.get(route, (req, res) 
   ).type("html").send(html);
 }));
 app.get("/club", (req, res) => res.sendFile(path.join(publicDir, "club.html")));
-app.get("/account", (req, res) => res.set("X-Robots-Tag", "noindex, nofollow").sendFile(path.join(publicDir, "account.html")));
-app.get("/reset-password", (req, res) => res.set("X-Robots-Tag", "noindex, nofollow").sendFile(path.join(publicDir, "account.html")));
+/*
+ * The account page now lives on the site's own design at /:market/account.
+ *
+ * Both of these addresses are already in the wild: password reset emails point
+ * at /reset-password, and anyone who signed in before has /account bookmarked.
+ * They redirect rather than serve a second copy, because two account pages
+ * wearing different clothes is exactly the problem being fixed. The reset
+ * token is carried across, or the link in the email stops working.
+ */
+app.get("/account", (req, res) =>
+  res.set("X-Robots-Tag", "noindex, nofollow").redirect(`${marketPath(marketFromIp(req).code)}/account`));
+app.get("/reset-password", (req, res) => {
+  const token = String(req.query?.token || "");
+  const target = `${marketPath(marketFromIp(req).code)}/account`;
+  res.set("X-Robots-Tag", "noindex, nofollow")
+    .redirect(token ? `${target}?token=${encodeURIComponent(token)}` : target);
+});
 
 app.post("/api/auth/register", authRateLimit, (req, res) => {
   const name = String(req.body?.name || "").trim().slice(0, 80);

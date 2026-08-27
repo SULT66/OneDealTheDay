@@ -72,6 +72,17 @@ export async function Header({ market }: { market: string }) {
                 </ul>
               </nav>
             )}
+            {/* There was no way into the account from anywhere on the site: it
+                could only be reached by typing the address. Quiet rather than
+                loud, because subscribing is still the thing worth a shopper's
+                attention here, and an account is only useful once they have
+                something to save. */}
+            <Link
+              href={`/${market}/account`}
+              className="hidden h-11 shrink-0 items-center rounded-full border border-border px-4 text-sm font-semibold text-fg transition-colors hover:bg-surface-2 sm:inline-flex"
+            >
+              {t(language, "app.header.account")}
+            </Link>
             <Link
               href={`/${market}#subscribe`}
               className="hidden h-11 shrink-0 cursor-pointer items-center rounded-full bg-lime px-5 text-sm font-semibold text-ink transition-opacity hover:opacity-88 sm:inline-flex"
