@@ -9,6 +9,8 @@ const {
   isHealthyDatabase,
   listSnapshots,
   prepareRuntimeDatabase,
+  snapshotOnPersonalWrites,
+  startSnapshotSchedule,
   snapshotDir,
   writeSnapshot,
 } = require("../src/dbStorage");
@@ -156,7 +158,71 @@ const emptyResult = prepareRuntimeDatabase({
 });
 assert.strictEqual(emptyResult.restoredFrom, null, "the first boot must start empty rather than throw");
 
-fs.rmSync(workspace, { recursive: true, force: true });
-fs.rmSync(emptyWorkspace, { recursive: true, force: true });
+/*
+ * Anything a person would notice losing gets a snapshot within seconds, not on
+ * the ten minute timer. The catalogue does not: it is rebuilt from the feeds
+ * every night, so snapshotting on every product write would be constant churn
+ * over the network share for nothing.
+ */
+const hookedWorkspace = fs.mkdtempSync(path.join(os.tmpdir(), "onedailydrop-hook-"));
+const hookedShared = path.join(hookedWorkspace, "shared");
+const hooked = new Database(path.join(hookedWorkspace, "site.db"));
+hooked.exec(`
+  CREATE TABLE users(id INTEGER PRIMARY KEY, email TEXT);
+  CREATE TABLE saved_offers(id INTEGER PRIMARY KEY, user_id INTEGER, url TEXT);
+  CREATE TABLE products(id INTEGER PRIMARY KEY, title TEXT);
+`);
 
-console.log("Runtime database placement, snapshots, pruning and corrupt-copy fallback passed.");
+const requests = [];
+snapshotOnPersonalWrites(hooked, { requestSnapshot: () => requests.push(Date.now()) });
+
+hooked.prepare("INSERT INTO products(title) VALUES (?)").run("a television");
+hooked.prepare("UPDATE products SET title = ? WHERE id = 1").run("a better television");
+assert.strictEqual(
+  requests.length,
+  0,
+  "A catalogue write asked for a snapshot, which would churn the share for data the nightly refresh rebuilds anyway",
+);
+
+hooked.prepare("INSERT INTO users(email) VALUES (?)").run("shopper@example.com");
+hooked.prepare("INSERT INTO saved_offers(user_id, url) VALUES (?, ?)").run(1, "https://example.com/p/1");
+assert.strictEqual(
+  requests.length,
+  2,
+  "An account or a saved product was written without asking for a snapshot",
+);
+assert.strictEqual(
+  hooked.prepare("SELECT COUNT(*) AS total FROM users").get().total,
+  1,
+  "Wrapping prepare() broke ordinary reads",
+);
+
+/* Signing in writes a user and a session back to back. That is one moment, and
+   it should cost one snapshot rather than one per statement. */
+const debounced = startSnapshotSchedule(hooked, hookedShared, {
+  intervalMs: 60_000,
+  personalWriteDelayMs: 30,
+  logger: quiet,
+});
+debounced.requestSnapshot();
+debounced.requestSnapshot();
+debounced.requestSnapshot();
+
+setTimeout(() => {
+  debounced.stop();
+  assert.strictEqual(
+    listSnapshots(hookedShared).length,
+    1,
+    "A burst of personal writes produced more than one snapshot",
+  );
+  hooked.close();
+
+  fs.rmSync(workspace, { recursive: true, force: true });
+  fs.rmSync(emptyWorkspace, { recursive: true, force: true });
+  fs.rmSync(hookedWorkspace, { recursive: true, force: true });
+
+  console.log(
+    "Runtime database placement, snapshots, pruning, corrupt-copy fallback and personal-write snapshots passed.",
+  );
+}, 120);
+
