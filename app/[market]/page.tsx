@@ -21,7 +21,18 @@ export async function generateMetadata({
   const language = await getLanguage(market);
   const country = info ? countryName(market, language) : t(language, "app.yourMarket");
   return {
-    title: t(language, "app.home.metaTitle", { country }),
+    /*
+     * The brand comes first on the home page, and only here.
+     *
+     * The site-wide template puts it last, which is right for an inner page:
+     * "Saved products | OneDailyDrop" leads with the useful half. On the page
+     * people actually pin, a narrow tab showed "Checked d..." and nothing that
+     * said whose site it was. `absolute` skips the template, so the name is
+     * not repeated at both ends.
+     */
+    title: {
+      absolute: `OneDailyDrop: ${t(language, "app.home.metaTitle", { country })}`,
+    },
     description: t(language, "app.home.metaDescription", { country }),
     alternates: { canonical: `/${market}` },
   };
