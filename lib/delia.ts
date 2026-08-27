@@ -149,6 +149,18 @@ export async function askAssistant(
     throw new DeliaError(data.error || "Delia could not answer that. Try again.");
   }
 
+  return toResult(transcript, data);
+}
+
+/**
+ * One backend answer, in the shape the panel renders.
+ *
+ * Shared with the history loader on purpose: a conversation reopened from the
+ * sidebar has to look and behave exactly like one that has just happened,
+ * offers and clarification chips included. Two mappings would drift, and the
+ * one nobody looks at would be the stored one.
+ */
+function toResult(transcript: string, data: AssistantResponse): DeliaResult {
   return {
     transcript,
     message: data.message || "",
@@ -165,6 +177,71 @@ export async function askAssistant(
     canSkipClarification: Boolean(data.can_skip_clarification),
     shoppingMission: data.shopping_mission ?? null,
   };
+}
+
+/** One past conversation, as the sidebar lists it. */
+export type DeliaConversationSummary = {
+  id: number;
+  conversation_key: string;
+  title: string;
+  market: string;
+  updated_at: string;
+  questions: number;
+};
+
+/**
+ * The shopper's past conversations, newest first.
+ *
+ * Returns nothing for a visitor with no account rather than throwing: not
+ * being signed in is the ordinary case, not a failure, and the sidebar simply
+ * has nothing to show.
+ */
+export async function listConversations(): Promise<DeliaConversationSummary[]> {
+  const res = await fetch("/api/delia/conversations").catch(() => null);
+  if (!res || !res.ok) return [];
+  const data = (await res.json().catch(() => ({}))) as {
+    conversations?: DeliaConversationSummary[];
+  };
+  return data.conversations || [];
+}
+
+/**
+ * Reopens a conversation as a list of turns.
+ *
+ * Messages are stored one per row, alternating question and answer. They are
+ * paired back up here: a question with no answer after it is dropped, since a
+ * turn the shopper cannot see the reply to is worse than a shorter history.
+ */
+export async function loadConversation(
+  id: number,
+): Promise<{ key: string; turns: DeliaResult[] } | null> {
+  const res = await fetch(`/api/delia/conversations/${id}`).catch(() => null);
+  if (!res || !res.ok) return null;
+  const data = (await res.json().catch(() => ({}))) as {
+    conversation?: { conversation_key?: string };
+    messages?: { role: string; content: string; answer: AssistantResponse | null }[];
+  };
+  const messages = data.messages || [];
+  const turns: DeliaResult[] = [];
+  for (let index = 0; index < messages.length; index += 1) {
+    const message = messages[index];
+    if (message.role !== "user") continue;
+    const reply = messages[index + 1];
+    if (!reply || reply.role !== "assistant") continue;
+    turns.push(
+      reply.answer
+        ? toResult(message.content, reply.answer)
+        : /* The answer was too large to keep whole. Its prose survived, so the
+             conversation still reads; the offers in it did not. */
+          toResult(message.content, { message: reply.content }),
+    );
+  }
+  return { key: data.conversation?.conversation_key || "", turns };
+}
+
+export async function deleteConversation(id: number): Promise<boolean> {
+  const res = await fetch(`/api/delia/conversations/${id}`, { method: "DELETE" }).catch(() => null);
+  return Boolean(res && res.ok);
 }
 
 export async function checkAssistantAvailable(): Promise<boolean> {
