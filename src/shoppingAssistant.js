@@ -4683,6 +4683,9 @@ function createShoppingAssistant({
       excludedOfferUrls = [],
       marketCode,
       language = "en",
+      /* Set by the "just show me options" button, so a broad request can be
+         searched without answering anything first. */
+      skipClarification = false,
       signal,
     }) {
       const startedAt = Date.now();
@@ -4865,6 +4868,77 @@ function createShoppingAssistant({
               marketCode,
             )
           : [];
+
+      /*
+       * One question before searching, when the request is too broad for the
+       * answer to mean anything.
+       *
+       * Measured on production: "find me a good camera" came back with a
+       * screen-free novelty camera at $41.99 and a Canon EOS R50 at $799 in
+       * the same shortlist. Both are good cameras. Neither is an answer,
+       * because nothing in the request said which of those two worlds the
+       * shopper lives in, and a list spanning both is a list they have to
+       * throw away.
+       *
+       * Only where there is something real to tap. Budget is deliberately not
+       * asked here: with no prices on the screen the bands would have to be
+       * invented, and invented bands are what offered an LG washing machine
+       * "USD 0-100". It is asked after the search instead, cut from the prices
+       * actually found.
+       *
+       * Never a wall. `skipClarification` is what the "just show me options"
+       * button sends, and a shopper in a hurry gets the same search they would
+       * have got before.
+       */
+      /* A model number, a size, a budget: any one of these and the shopper has
+         already answered the question we were going to ask. "Samsung Galaxy Z
+         Fold" is not a broad request however few words it took, and neither is
+         "headphones under 200". */
+      const namedSomethingSpecific =
+        /\d/.test(userMessage) ||
+        Boolean(activeMission.budget_max || activeMission.budget_min || activeMission.size) ||
+        /* Naming the maker is already a decision. "Samsung Galaxy Z Fold" wants
+           prices, not a questionnaire about what matters most. */
+        activeMission.brands.length > 0 ||
+        activeMission.query_terms.some((term) => /\d/.test(term));
+      const askFirstPrompts =
+        !hadActiveMission && !namedSomethingSpecific && !skipClarification
+          ? refinementPrompts.filter(
+              (prompt) => prompt.options.length > 0 && !looksLikeBudgetOptions(prompt.options),
+            )
+          : [];
+      if (askFirstPrompts.length) {
+        return {
+          /* The classifier can raise these questions without the broad-request
+             path having produced an intro line of its own, so fall back to the
+             shared one rather than opening with nothing. */
+          message:
+            discoveryClarification?.message ||
+            (DISCOVERY_QUESTION_COPY[shopperLanguage] || DISCOVERY_QUESTION_COPY.en).intro,
+          follow_up: "",
+          recommendations: [],
+          partial_offers: [],
+          comparison_notes: [],
+          comparison: [],
+          products: [],
+          sources: [],
+          clarifying_questions: askFirstPrompts.map((prompt) => prompt.question),
+          clarification_prompts: askFirstPrompts,
+          needs_clarification: true,
+          /* The panel turns this into a way past the question. Without it this
+             is the old behaviour that made every request cost three rounds of
+             chat before a single shop appeared. */
+          can_skip_clarification: true,
+          model,
+          scope: "shopping",
+          language: shopperLanguage,
+          conversation_title: "",
+          result_state: "no_match",
+          resolved_request: resolvedRequest,
+          shopping_mission: activeMission,
+        };
+      }
+
       const selectedMarket = market(
         requestedMarketCode(resolvedRequest, marketCode),
       );
