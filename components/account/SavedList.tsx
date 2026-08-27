@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { ArrowUpRight, Heart } from "@phosphor-icons/react";
 import { formatPrice } from "@/lib/format";
+import { DeliaTrigger } from "@/components/delia/DeliaTrigger";
 import {
   SavedOffersProvider,
   useSavedOffers,
@@ -57,18 +58,28 @@ function SavedListInner({ market }: { market: string }) {
           Nothing saved yet. Tap the heart on any offer, in a deal or in a conversation
           with Delia, and it will be waiting here.
         </p>
-        <Link
-          href={`/${market}`}
-          className="mt-5 inline-flex h-12 items-center rounded-full bg-lime px-5 text-sm font-semibold text-ink transition-opacity hover:opacity-88"
-        >
-          See today&rsquo;s drop
-        </Link>
+        {/* Both ways to find something worth saving. The drop is one deal a
+            day; Delia is for when the shopper already knows what they want,
+            and an empty list is exactly the moment to offer her. */}
+        <div className="mt-5 flex flex-wrap items-center gap-2.5">
+          <Link
+            href={`/${market}`}
+            className="inline-flex h-12 items-center rounded-full bg-lime px-5 text-sm font-semibold text-ink transition-opacity hover:opacity-88"
+          >
+            See today&rsquo;s drop
+          </Link>
+          <DeliaTrigger
+            variant="header"
+            label="Ask Delia"
+            className="h-12 px-5"
+          />
+        </div>
       </Shell>
     );
   }
 
   return (
-    <Shell market={market}>
+    <Shell market={market} summary={<SavedTotal offers={saved.offers} market={market} />}>
       <ul className="space-y-3">
         {saved.offers.map((offer) => (
           <li key={offer.id}>
@@ -80,7 +91,67 @@ function SavedListInner({ market }: { market: string }) {
   );
 }
 
-function Shell({ market, children }: { market: string; children: React.ReactNode }) {
+/**
+ * What the whole list comes to.
+ *
+ * Totalled per currency rather than across them: adding dollars to pounds
+ * produces a number that is wrong in a way nobody notices, and a shopper
+ * saving from two markets would be shown one.
+ *
+ * Labelled as the prices when they were saved, because that is what they are.
+ * The point of a saved list is partly to watch things come down, and a total
+ * that silently refreshed itself would quietly erase the comparison while
+ * looking more helpful.
+ */
+function SavedTotal({ offers, market }: { offers: SavedOffer[]; market: string }) {
+  const totals = new Map<string, number>();
+  let unpriced = 0;
+  for (const offer of offers) {
+    if (!(offer.price_value != null && offer.price_value > 0)) {
+      unpriced += 1;
+      continue;
+    }
+    const currency = offer.currency || "USD";
+    totals.set(currency, (totals.get(currency) || 0) + offer.price_value);
+  }
+
+  const sums = [...totals.entries()].map(([currency, total]) =>
+    formatPrice(total, currency, market),
+  );
+
+  return (
+    <div className="mt-4 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 rounded-2xl bg-surface-2 px-4 py-3">
+      <span className="text-sm text-fg-muted">
+        {offers.length} {offers.length === 1 ? "product" : "products"} saved
+        {unpriced > 0 && (
+          <span className="text-fg-subtle">
+            {" "}
+            ({unpriced} with no confirmed price)
+          </span>
+        )}
+      </span>
+      {sums.length > 0 && (
+        <span className="text-lg font-bold text-fg tnum">
+          {sums.join(" · ")}
+          <span className="ml-2 text-xs font-medium text-fg-subtle">
+            when you saved them
+          </span>
+        </span>
+      )}
+    </div>
+  );
+}
+
+function Shell({
+  market,
+  summary,
+  children,
+}: {
+  market: string;
+  /** The running total, when there is a list to total. */
+  summary?: React.ReactNode;
+  children: React.ReactNode;
+}) {
   return (
     <section className="mx-auto w-full max-w-2xl px-4 py-10 sm:py-14">
       <nav className="text-xs text-fg-subtle">
@@ -91,6 +162,7 @@ function Shell({ market, children }: { market: string; children: React.ReactNode
         <span className="text-fg-muted">Saved</span>
       </nav>
       <h1 className="mt-3 text-2xl font-bold text-fg sm:text-3xl">Saved products</h1>
+      {summary}
       <div className="mt-6">{children}</div>
     </section>
   );
@@ -105,25 +177,21 @@ function SavedRow({ offer, market }: { offer: SavedOffer; market: string }) {
       ? formatPrice(offer.price_value, offer.currency || "USD", market)
       : "";
 
+  /* The price sits in its own column on the right, bold, the way it does in
+     Delia's shortlist. Tucked into the grey line under the retailer it was
+     the least visible thing on a page whose whole subject is prices. */
   const body = (
     <>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-medium leading-snug text-fg">
           {offer.title}
         </span>
-        <span className="block truncate text-xs text-fg-muted">
-          {offer.retailer}
-          {price && (
-            <>
-              {" · "}
-              <span className="tnum">{price}</span> when you saved it
-            </>
-          )}
-        </span>
+        <span className="block truncate text-xs text-fg-muted">{offer.retailer}</span>
       </span>
-      {!inCatalog && (
-        <ArrowUpRight size={13} weight="bold" className="mt-1 shrink-0 text-fg-subtle" aria-hidden="true" />
-      )}
+      <span className="flex shrink-0 items-center gap-1 pt-0.5 text-sm font-bold text-fg tnum">
+        {price || <span className="text-xs font-medium text-fg-subtle">Price at the shop</span>}
+        {!inCatalog && <ArrowUpRight size={13} weight="bold" aria-hidden="true" />}
+      </span>
     </>
   );
 
