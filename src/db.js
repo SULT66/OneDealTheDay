@@ -388,6 +388,70 @@ db.exec(`
     created_at TEXT NOT NULL,
     FOREIGN KEY(user_id) REFERENCES users(id)
   );
+  /*
+   * A Live Drop: one product, one price, one ten minute window.
+   *
+   * Deliberately not derived from the catalogue. A Live Drop is a negotiated
+   * event with a retailer, at a price that exists only for those ten minutes
+   * and a quantity that is theirs to honour, so it is entered as its own thing
+   * with the terms written down. Tying it to a catalogue row would mean the
+   * nightly refresh could move the price out from under a live event.
+   *
+   * The state is not stored. It is derived from start_at, end_at and what is
+   * left of the stock, because a status column and a clock disagree the moment
+   * a process is not running: the drop would sit at "upcoming" past its own
+   * start until something remembered to write to it. sold_out is the one thing
+   * a clock cannot tell you, so it comes from quantity_remaining instead.
+   *
+   * Every number here has to be true. Scarcity a shopper suspects of being
+   * invented is worse for the brand than no scarcity at all, so quantity_total
+   * is what the retailer actually committed and retail_price is a figure whose
+   * source we can point at.
+   */
+  CREATE TABLE IF NOT EXISTS live_drops(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    drop_key TEXT NOT NULL UNIQUE,
+    market TEXT NOT NULL DEFAULT 'us',
+    title TEXT NOT NULL,
+    brand TEXT NOT NULL DEFAULT '',
+    retailer_name TEXT NOT NULL DEFAULT '',
+    image_url TEXT NOT NULL DEFAULT '',
+    retail_price REAL,
+    drop_price REAL,
+    currency TEXT NOT NULL DEFAULT 'USD',
+    quantity_total INTEGER NOT NULL DEFAULT 0,
+    quantity_remaining INTEGER NOT NULL DEFAULT 0,
+    /* ISO 8601 with an offset, never a local wall-clock string: the same drop
+       is watched from five markets and "20:00" means five different moments. */
+    start_at TEXT NOT NULL,
+    end_at TEXT NOT NULL,
+    /* How long before the start a Drop Pass member may enter. Zero until the
+       subscription exists, so the lane can be built before it is sold. */
+    member_early_access_seconds INTEGER NOT NULL DEFAULT 0,
+    affiliate_url TEXT NOT NULL DEFAULT '',
+    terms TEXT NOT NULL DEFAULT '',
+    /* Kept out of the public API. A drop being written is not a drop being
+       advertised, and there is no admin console yet. */
+    published INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_live_drops_schedule ON live_drops(market, published, start_at);
+
+  /* Who asked to be reminded. A row per person per drop, so a second tap is
+     not a second email. */
+  CREATE TABLE IF NOT EXISTS live_drop_reminders(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    drop_id INTEGER NOT NULL,
+    user_id INTEGER,
+    email TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    reminded_at TEXT,
+    FOREIGN KEY(drop_id) REFERENCES live_drops(id)
+  );
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_live_drop_reminders_unique
+    ON live_drop_reminders(drop_id, email);
+
   CREATE TABLE IF NOT EXISTS daily_drops(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     market TEXT NOT NULL,

@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node app.js",
     "refresh": "node src/refresh-cli.js",
-    "test": "node scripts/test-resilience.js && node scripts/test-sqlite-recovery.js && node scripts/test-db-storage.js && node scripts/test-google-auth.js && node scripts/test-saved-offers.js && node scripts/test-delia-conversations.js && node scripts/test-drop-selection.js && node scripts/test-link-health.js && node scripts/test-ranking-integrity.js && node scripts/test-catalog-taxonomy.js && node scripts/test-ranking-validation.js && node scripts/test-dedup-rules.js && node scripts/test-price-snapshots.js && node scripts/test-analytics-baseline.js && node scripts/test-search-api.js && node scripts/test-search-intent.js && node scripts/test-product-offers.js && node scripts/validate-production-catalog.js && node scripts/test-product-presentation.js && node scripts/test-shopping-assistant.js && node scripts/test-delia-chat.js && node scripts/test-editorial-brief.js && node scripts/test-full-automation.js && node scripts/test-ebay-account-deletion.js && node scripts/test-ebay-browse.js",
+    "test": "node scripts/test-resilience.js && node scripts/test-sqlite-recovery.js && node scripts/test-db-storage.js && node scripts/test-google-auth.js && node scripts/test-saved-offers.js && node scripts/test-delia-conversations.js && node scripts/test-live-drop.js && node scripts/test-drop-selection.js && node scripts/test-link-health.js && node scripts/test-ranking-integrity.js && node scripts/test-catalog-taxonomy.js && node scripts/test-ranking-validation.js && node scripts/test-dedup-rules.js && node scripts/test-price-snapshots.js && node scripts/test-analytics-baseline.js && node scripts/test-search-api.js && node scripts/test-search-intent.js && node scripts/test-product-offers.js && node scripts/validate-production-catalog.js && node scripts/test-product-presentation.js && node scripts/test-shopping-assistant.js && node scripts/test-delia-chat.js && node scripts/test-editorial-brief.js && node scripts/test-full-automation.js && node scripts/test-ebay-account-deletion.js && node scripts/test-ebay-browse.js",
     "test:links": "node scripts/test-link-health.js",
     "test:drop": "node scripts/test-drop-selection.js",
     "measure": "node scripts/measure-phase0.js",
@@ -31,7 +31,9 @@
     "test:storage": "node scripts/test-db-storage.js",
     "test:google": "node scripts/test-google-auth.js",
     "test:saved": "node scripts/test-saved-offers.js",
-    "test:conversations": "node scripts/test-delia-conversations.js"
+    "test:conversations": "node scripts/test-delia-conversations.js",
+    "test:live": "node scripts/test-live-drop.js",
+    "live:drop": "node scripts/create-live-drop.js"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",
