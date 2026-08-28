@@ -9,6 +9,7 @@ const db = require("./db");
 const c = require("./config");
 const { refreshProducts, localDate } = require("./refresh");
 const { runLinkHealthCheck } = require("./linkHealth");
+const { presentDrop } = require("./liveDrop");
 const {
   authorizationUrl,
   createState,
@@ -910,6 +911,76 @@ app.delete("/api/delia/conversations/:id", requireUser, (req, res) => {
   db.prepare("DELETE FROM delia_messages WHERE conversation_id=?").run(id);
   db.prepare("DELETE FROM delia_conversations WHERE id=? AND user_id=?").run(id, req.user.id);
   res.json({removed:true});
+});
+
+/**
+ * The Live Drop a visitor should be looking at.
+ *
+ * One query answers every state the page has: the drop that is running now if
+ * there is one, otherwise the next one scheduled. The page does not decide
+ * which drop is current, because a browser with a wrong clock would decide
+ * wrongly, and for a ten minute event that is the whole event.
+ */
+const currentLiveDrop = (marketCode) => {
+  const now = new Date().toISOString();
+  /* Still open: it started and has not ended. Ordered by start so an overlap
+     shows the one that began most recently rather than an arbitrary row. */
+  const running = db.prepare(`SELECT * FROM live_drops
+    WHERE market=? AND published=1 AND start_at<=? AND end_at>?
+    ORDER BY start_at DESC LIMIT 1`).get(marketCode, now, now);
+  if (running) return running;
+
+  const next = db.prepare(`SELECT * FROM live_drops
+    WHERE market=? AND published=1 AND start_at>?
+    ORDER BY start_at ASC LIMIT 1`).get(marketCode, now);
+  if (next) return next;
+
+  /* Nothing ahead, so show the one that just finished rather than an empty
+     page: "that drop ended, here is what it went for" is a better landing than
+     a blank, and it is where the next-drop signup belongs. */
+  return db.prepare(`SELECT * FROM live_drops
+    WHERE market=? AND published=1 AND end_at<=?
+    ORDER BY end_at DESC LIMIT 1`).get(marketCode, now) || null;
+};
+
+app.get("/api/live/current", (req, res) => {
+  const selectedMarket = market(normalizeMarket(req.query?.market) || req.market || marketFromIp(req).code);
+  const drop = currentLiveDrop(selectedMarket.code);
+  /* Early access is a Drop Pass benefit. Nobody has one yet, so this is zero
+     for everybody: the lane exists in the state machine and is not sold. */
+  const earlyAccessSeconds = 0;
+  res.set("Cache-Control", "no-store").json({
+    drop: presentDrop(drop, Date.now(), { earlyAccessSeconds }),
+    server_now: new Date().toISOString(),
+  });
+});
+
+/**
+ * Remind me when it starts.
+ *
+ * Takes an email rather than requiring an account, because the reminder is the
+ * thing that brings somebody back and asking them to register first loses the
+ * ones who were only half interested. A signed-in shopper is linked to their
+ * account so the same person asking twice is one reminder.
+ */
+app.post("/api/live/remind", authRateLimit, (req, res) => {
+  const user = currentUser(req);
+  const email = String(req.body?.email || user?.email || "").trim().toLowerCase().slice(0, 160);
+  const dropKey = String(req.body?.drop_key || "").trim().slice(0, 80);
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i.test(email)) {
+    return res.status(400).json({error:"Enter a valid email address."});
+  }
+  const drop = db.prepare("SELECT id, start_at FROM live_drops WHERE drop_key=? AND published=1").get(dropKey);
+  if (!drop) return res.status(404).json({error:"That drop is not open for reminders."});
+  try {
+    db.prepare("INSERT INTO live_drop_reminders(drop_id,user_id,email,created_at) VALUES(?,?,?,?)")
+      .run(drop.id, user?.id || null, email, new Date().toISOString());
+  } catch (error) {
+    /* Asking twice is one person wanting one reminder, not an error worth
+       showing them. */
+    if (!String(error.message).includes("UNIQUE")) throw error;
+  }
+  res.status(201).json({ok:true, message:"We will email you when it opens."});
 });
 
 app.post("/api/auth/logout", (req, res) => {
