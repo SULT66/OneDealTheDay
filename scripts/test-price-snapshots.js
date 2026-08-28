@@ -190,4 +190,60 @@ assert.strictEqual(migrated.reference_price_minor, 2995, "Legacy reference price
 assert.strictEqual(migrated.our_observed_at, "2026-08-01T10:00:00Z", "Legacy observation time was not preserved");
 assert.strictEqual(migrated.ingestion_run_id, null, "A synthetic ingestion run was invented for legacy history");
 
-console.log("Price snapshot contract validation passed.");
+/* --------------------------------------------- the price history endpoint */
+
+/*
+ * /api/products/:id/price-history answered 500 for months.
+ *
+ * It calls minSince to work out the 30 and 90 day lows, and that function had
+ * been deleted along with the demo catalogue. Nothing surfaced it because the
+ * route is only reached from a deal page, where a price history that fails to
+ * load looks exactly like a product nobody has tracked yet: the section simply
+ * does not appear.
+ *
+ * So the guard is not only "does minSince behave" but "does it exist at all",
+ * checked against the shipped source rather than an import, because the route
+ * and the helper both live inside server.js and neither is exported.
+ */
+const serverSource = fs.readFileSync(path.join(__dirname, "..", "src", "server.js"), "utf8");
+
+const priceHistoryRoute = /app\.get\("\/api\/products\/:id\/price-history"[\s\S]*?\n\}\);/.exec(serverSource);
+assert(priceHistoryRoute, "the price history route moved out of server.js");
+
+/* Every helper the route leans on has to be defined somewhere in the file. */
+for (const helper of ["historyFor", "minSince", "sourceSql"]) {
+  assert(
+    priceHistoryRoute[0].includes(helper),
+    `the price history route no longer calls ${helper}; this test needs rewriting`,
+  );
+  /* Declared here, or destructured out of a require at the top: both count as
+     defined, and neither being present is exactly the bug. */
+  assert(
+    new RegExp(`(?:const|function|let)\\s+(?:${helper}\\b|\\{[^}]*\\b${helper}\\b[^}]*\\})`).test(serverSource),
+    `${helper} is called by the price history route but defined nowhere, so it answers 500`,
+  );
+}
+
+const minSinceSource = /const minSince = ([\s\S]*?\n\};)/.exec(serverSource);
+assert(minSinceSource, "minSince is no longer written where this test can reach it");
+const minSince = eval(`(${minSinceSource[1].replace(/;$/, "")})`);
+
+const daysAgo = (days) => new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+const observations = [
+  { price: 199, observed_at: daysAgo(5) },
+  { price: 179, observed_at: daysAgo(60) },
+  { price: 149, observed_at: daysAgo(200) },
+  /* A row the feed could not parse must be ignored, not turned into NaN and
+     dragged through Math.min, which would poison every window it touches. */
+  { price: "not-a-number", observed_at: daysAgo(2) },
+  { price: 1, observed_at: "not-a-date" },
+];
+
+assert.strictEqual(minSince(observations, 30), 199, "the 30 day low is wrong");
+assert.strictEqual(minSince(observations, 90), 179, "the 90 day low reaches outside its window");
+assert.strictEqual(minSince(observations, 365), 149, "the yearly low is wrong");
+/* Nothing seen in the window is not the same as a price of zero. */
+assert.strictEqual(minSince([], 30), null, "an empty history returns a number instead of nothing");
+assert.strictEqual(minSince(undefined, 30), null, "a missing history throws instead of returning nothing");
+
+console.log("Price snapshot contract and price history window validation passed.");
