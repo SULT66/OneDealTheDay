@@ -452,6 +452,33 @@ db.exec(`
   CREATE UNIQUE INDEX IF NOT EXISTS idx_live_drop_reminders_unique
     ON live_drop_reminders(drop_id, email);
 
+  /* Live Drop funnel, kept apart from analytics_events on purpose.
+   *
+   * That table validates every impression against a published catalogue
+   * product, and a drop is not one: it has no product row, and forcing one in
+   * would either weaken that check for everybody or invent catalogue entries
+   * that nothing else can use. The questions here are also different — how
+   * many waited, how many saw the reveal, how many bought, how fast it sold
+   * out — so they get their own, narrower table.
+   *
+   * The session id is the same anonymous browser-generated token the search
+   * and impression events use. No email, no account id: a funnel count does
+   * not need to know who anybody is. */
+  CREATE TABLE IF NOT EXISTS live_drop_events(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    drop_id INTEGER NOT NULL,
+    market TEXT NOT NULL DEFAULT 'us',
+    /* waiting_room, reveal, buy_click or remind. */
+    event_type TEXT NOT NULL,
+    session_id TEXT NOT NULL DEFAULT '',
+    occurred_at TEXT NOT NULL,
+    FOREIGN KEY(drop_id) REFERENCES live_drops(id)
+  );
+  /* One row per session per event, so a page left open through a ten minute
+     drop counts as one person waiting rather than a hundred and twenty. */
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_live_drop_events_unique
+    ON live_drop_events(drop_id, event_type, session_id);
+
   CREATE TABLE IF NOT EXISTS daily_drops(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     market TEXT NOT NULL,
@@ -499,6 +526,14 @@ for (const column of ["stripe_customer_id", "stripe_subscription_id", "stripe_su
    plain unique index would treat all those nulls as one value in some engines
    and refuse the second one. */
 db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_google_sub ON users(google_sub) WHERE google_sub IS NOT NULL");
+
+/* The video slot, added after the table existed. A drop can carry nothing (the
+   mechanic works without a broadcast), a pre-recorded file, or an embed URL for
+   a stream hosted somewhere that already solved streaming. */
+const liveDropColumns = new Set(db.prepare("PRAGMA table_info(live_drops)").all().map(column => column.name));
+for (const column of ["video_url", "stream_embed_url"]) {
+  if (!liveDropColumns.has(column)) db.exec(`ALTER TABLE live_drops ADD COLUMN ${column} TEXT NOT NULL DEFAULT ""`);
+}
 
 const subscriberColumns = new Set(db.prepare("PRAGMA table_info(subscribers)").all().map(column => column.name));
 if (!subscriberColumns.has("market")) db.exec("ALTER TABLE subscribers ADD COLUMN market TEXT NOT NULL DEFAULT 'us'");

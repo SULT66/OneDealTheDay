@@ -6,6 +6,7 @@ import { AccountButton } from "./AccountButton";
 import { SearchBox } from "./SearchBox";
 import { ThemeToggle } from "./ThemeToggle";
 import { DeliaTrigger } from "@/components/delia/DeliaTrigger";
+import { LiveNavLink } from "@/components/live/LiveNavLink";
 
 /**
  * Site chrome. Navigation sits in the same place on every page and the category
@@ -117,6 +118,10 @@ export async function Header({ market }: { market: string }) {
                 // three (browsing/info) tabs don't.
                 accent: true,
               },
+              /* Second, behind the daily drop. It is grey and quiet on the
+                 days nothing is running, and grows a pulsing dot only while a
+                 drop is open or about to be. */
+              { href: `/${market}/live`, label: t(language, "app.nav.live"), live: true },
               { href: `/${market}/category`, label: t(language, "nav.categories") },
               { href: `/${market}/about`, label: t(language, "app.footer.about") },
               {
@@ -130,16 +135,20 @@ export async function Header({ market }: { market: string }) {
               { href: `/${market}/saved`, label: t(language, "app.nav.saved") },
             ].map((item) => (
               <li key={item.href} className="shrink-0">
-                <Link
-                  href={item.href}
-                  className={
-                    item.accent
-                      ? "inline-flex h-9 items-center rounded-full px-4 text-sm font-semibold text-lime-deep transition-colors hover:bg-surface-2"
-                      : "inline-flex h-9 items-center rounded-full px-4 text-sm text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg"
-                  }
-                >
-                  {item.label}
-                </Link>
+                {item.live ? (
+                  <LiveNavLink market={market} label={item.label} />
+                ) : (
+                  <Link
+                    href={item.href}
+                    className={
+                      item.accent
+                        ? "inline-flex h-9 items-center rounded-full px-4 text-sm font-semibold text-lime-deep transition-colors hover:bg-surface-2"
+                        : "inline-flex h-9 items-center rounded-full px-4 text-sm text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg"
+                    }
+                  >
+                    {item.label}
+                  </Link>
+                )}
               </li>
             ))}
           </ul>

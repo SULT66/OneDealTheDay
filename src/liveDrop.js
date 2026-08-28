@@ -113,14 +113,85 @@ function presentDrop(drop, now = Date.now(), { earlyAccessSeconds = 0 } = {}) {
     /* Only once it can actually be used: a live link before the start is an
        invitation to buy at the ordinary price and blame us for the difference. */
     affiliate_url: state === "live" ? drop.affiliate_url || "" : "",
+    /* A drop can run with no broadcast at all: the event is the time and the
+       limit, not the picture. The slot takes a recorded file or an embed when
+       there is one. */
+    video_url: drop.video_url || "",
+    stream_embed_url: drop.stream_embed_url || "",
     terms: drop.terms || "",
     server_now: new Date(now).toISOString(),
   };
 }
 
+/**
+ * Sends the reminders people asked for, shortly before a drop opens.
+ *
+ * Lives here rather than in the server so it can be tested against a fixed
+ * clock and a fake mailer. A ten minute event that happens once cannot be
+ * debugged while it is running, and an email that arrives after it closed is
+ * worse than no email at all.
+ *
+ * Ten minutes of lead by default: the waiting room opens at T-05:00, so this
+ * gives somebody time to read the message and still arrive before the room
+ * does.
+ *
+ * The window has a floor as well as a ceiling. Without one, a drop that ran
+ * while the mailer was down would have its reminders sent hours later, to
+ * people who would arrive at an empty page.
+ *
+ * reminded_at is stamped only after a send succeeds, so an outage leaves the
+ * row for the next sweep instead of silently consuming it, and one bad address
+ * never stops the rest of the queue.
+ */
+const REMINDER_LEAD_MINUTES = 10;
+
+async function sendDueReminders({
+  db,
+  sendReminder,
+  now = Date.now(),
+  leadMinutes = REMINDER_LEAD_MINUTES,
+  batch = 200,
+  logger = console,
+}) {
+  const due = db.prepare(`
+    SELECT r.id, r.email, d.title, d.market, d.start_at
+    FROM live_drop_reminders r
+    JOIN live_drops d ON d.id = r.drop_id
+    WHERE r.reminded_at IS NULL AND d.published = 1
+      AND d.start_at > ? AND d.start_at <= ?
+    ORDER BY d.start_at
+    LIMIT ?
+  `).all(
+    new Date(now).toISOString(),
+    new Date(now + leadMinutes * 60000).toISOString(),
+    batch,
+  );
+
+  const stamp = db.prepare("UPDATE live_drop_reminders SET reminded_at=? WHERE id=?");
+  let sent = 0;
+  for (const reminder of due) {
+    const minutes = Math.max(1, Math.round((Date.parse(reminder.start_at) - now) / 60000));
+    try {
+      await sendReminder({
+        email: reminder.email,
+        title: reminder.title,
+        market: reminder.market,
+        minutes,
+      });
+      stamp.run(new Date(now).toISOString(), reminder.id);
+      sent += 1;
+    } catch (error) {
+      logger.error(`[live-drop] reminder to ${reminder.email} failed: ${error.message}`);
+    }
+  }
+  return sent;
+}
+
 module.exports = {
+  REMINDER_LEAD_MINUTES,
   WAITING_ROOM_SECONDS,
   dropSaving,
   dropState,
   presentDrop,
+  sendDueReminders,
 };
