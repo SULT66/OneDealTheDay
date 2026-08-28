@@ -9,7 +9,7 @@ const db = require("./db");
 const c = require("./config");
 const { refreshProducts, localDate } = require("./refresh");
 const { runLinkHealthCheck } = require("./linkHealth");
-const { presentDrop, sendDueReminders } = require("./liveDrop");
+const { dropState, presentDrop, sendDueReminders } = require("./liveDrop");
 const {
   authorizationUrl,
   createState,
@@ -2170,10 +2170,161 @@ app.get("/go/:id", (req,res) => {
   });
   res.redirect(302, destinationUrl.toString());
 });
-app.get("/admin", (req,res) => {
-  const html = fs.readFileSync(path.join(publicDir, "admin.html"), "utf8")
-    .replace("<title>Admin</title>", "<title>Admin | OneDailyDrop</title>");
-  res.set("X-Robots-Tag", "noindex, nofollow").type("html").send(html);
+/*
+ * Scheduling a Live Drop from a browser instead of an SSH session.
+ *
+ * The mechanic only works if the drop can be put on the calendar at the right
+ * moment by the person running it, and until now that meant a command line on
+ * the production host. Everything here sits behind the same admin key as the
+ * refresh endpoints.
+ *
+ * Two rules are enforced by the server rather than by the form, because both
+ * rewrite history rather than merely being untidy:
+ *
+ *   - Nothing about a drop that has already opened may be edited except the
+ *     remaining stock. Changing the price or the clock afterwards would mean
+ *     the page no longer says what people were actually shown.
+ *   - Only a draft can be deleted. Once a drop has run, the row is the record
+ *     of what was offered and at what price, and that record is the answer to
+ *     any later question about it.
+ */
+const liveDropInput = (body) => {
+  const text = (value, max) => String(value ?? "").trim().slice(0, max);
+  const money = (value) => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed > 0 ? Math.round(parsed * 100) / 100 : null;
+  };
+  const startAt = Date.parse(String(body?.start_at || ""));
+  const minutes = Number(body?.duration_minutes);
+  const quantity = Number(body?.quantity_total);
+  const url = text(body?.affiliate_url, 1000);
+
+  const errors = [];
+  if (!text(body?.title, 200)) errors.push("A drop needs a title.");
+  if (!Number.isFinite(startAt)) errors.push("The start time is not a valid date.");
+  if (!Number.isFinite(minutes) || minutes < 1 || minutes > 240) errors.push("Length must be between 1 and 240 minutes.");
+  if (!Number.isInteger(quantity) || quantity < 0 || quantity > 100000) errors.push("Stock must be a whole number.");
+  if (url && !/^https?:\/\//i.test(url)) errors.push("The buy link must start with http:// or https://.");
+  if (!normalizeMarket(body?.market)) errors.push("Unknown market.");
+  if (errors.length) return { errors };
+
+  return {
+    drop: {
+      market: normalizeMarket(body.market),
+      title: text(body.title, 200),
+      brand: text(body.brand, 120),
+      retailer_name: text(body.retailer_name, 120),
+      image_url: text(body.image_url, 1000),
+      retail_price: money(body.retail_price),
+      drop_price: money(body.drop_price),
+      currency: text(body.currency, 3).toUpperCase() || "USD",
+      quantity_total: quantity,
+      quantity_remaining: quantity,
+      start_at: new Date(startAt).toISOString(),
+      end_at: new Date(startAt + minutes * 60000).toISOString(),
+      member_early_access_seconds: Math.max(0, Math.min(3600, Math.round(Number(body.member_early_access_seconds) || 0))),
+      affiliate_url: url,
+      video_url: text(body.video_url, 1000),
+      stream_embed_url: text(body.stream_embed_url, 1000),
+      terms: text(body.terms, 2000),
+    },
+  };
+};
+
+app.get("/api/admin/live-drops", admin, (req, res) => {
+  const now = Date.now();
+  const rows = db.prepare("SELECT * FROM live_drops ORDER BY start_at DESC LIMIT 50").all();
+  /* The funnel alongside each drop, because "did it work" is the only question
+     worth asking afterwards and it should not need a second screen. */
+  const funnel = db.prepare("SELECT event_type, COUNT(*) AS total FROM live_drop_events WHERE drop_id=? GROUP BY event_type");
+  const reminders = db.prepare("SELECT COUNT(*) AS total FROM live_drop_reminders WHERE drop_id=?");
+
+  res.json({
+    /* The market list comes from the server so the form cannot offer one that
+       does not exist. */
+    markets: c.markets,
+    server_now: new Date(now).toISOString(),
+    drops: rows.map((row) => ({
+      ...presentDrop(row, now),
+      /* The admin sees the price before the reveal: they set it. */
+      drop_price: row.drop_price,
+      affiliate_url: row.affiliate_url,
+      published: Boolean(row.published),
+      reminders: reminders.get(row.id).total,
+      funnel: Object.fromEntries(funnel.all(row.id).map((entry) => [entry.event_type, entry.total])),
+    })),
+  });
+});
+
+app.post("/api/admin/live-drops", admin, (req, res) => {
+  const { errors, drop } = liveDropInput(req.body);
+  if (errors) return res.status(400).json({error:errors.join(" ")});
+
+  const nowIso = new Date().toISOString();
+  const dropKey = `drop_${nowIso.slice(0, 10).replace(/-/g, "_")}_${crypto.randomBytes(3).toString("hex")}`;
+  db.prepare(`INSERT INTO live_drops(
+    drop_key,market,title,brand,retailer_name,image_url,retail_price,drop_price,currency,
+    quantity_total,quantity_remaining,start_at,end_at,member_early_access_seconds,
+    affiliate_url,video_url,stream_embed_url,terms,published,created_at,updated_at
+  ) VALUES(
+    @drop_key,@market,@title,@brand,@retailer_name,@image_url,@retail_price,@drop_price,@currency,
+    @quantity_total,@quantity_remaining,@start_at,@end_at,@member_early_access_seconds,
+    @affiliate_url,@video_url,@stream_embed_url,@terms,0,@created_at,@updated_at
+  )`).run({...drop, drop_key:dropKey, created_at:nowIso, updated_at:nowIso});
+
+  /* Drafted, not announced. Writing a drop and advertising it are separate
+     decisions, and the difference matters when the writing happens on the
+     live site. */
+  res.status(201).json({ok:true, drop_key:dropKey, published:false});
+});
+
+app.post("/api/admin/live-drops/:key/publish", admin, (req, res) => {
+  const drop = db.prepare("SELECT * FROM live_drops WHERE drop_key=?").get(String(req.params.key || ""));
+  if (!drop) return res.status(404).json({error:"No such drop."});
+  const published = req.body?.published === false ? 0 : 1;
+  /* Pulling a drop that is already open would leave anybody on the page with a
+     countdown to something that no longer exists. */
+  if (!published && dropState(drop, Date.now()) === "live") {
+    return res.status(409).json({error:"That drop is open. Let it close rather than pulling it from under whoever is watching."});
+  }
+  db.prepare("UPDATE live_drops SET published=?, updated_at=? WHERE id=?")
+    .run(published, new Date().toISOString(), drop.id);
+  res.json({ok:true, published:Boolean(published)});
+});
+
+app.post("/api/admin/live-drops/:key/stock", admin, (req, res) => {
+  const drop = db.prepare("SELECT * FROM live_drops WHERE drop_key=?").get(String(req.params.key || ""));
+  if (!drop) return res.status(404).json({error:"No such drop."});
+  const remaining = Number(req.body?.quantity_remaining);
+  if (!Number.isInteger(remaining) || remaining < 0 || remaining > drop.quantity_total) {
+    return res.status(400).json({error:`Remaining stock must be a whole number between 0 and ${drop.quantity_total}.`});
+  }
+  /* The one thing that may change mid-drop: what the partner actually has left
+     is the only honest source for it, and it moves. */
+  db.prepare("UPDATE live_drops SET quantity_remaining=?, updated_at=? WHERE id=?")
+    .run(remaining, new Date().toISOString(), drop.id);
+  res.json({ok:true, quantity_remaining:remaining});
+});
+
+app.delete("/api/admin/live-drops/:key", admin, (req, res) => {
+  const drop = db.prepare("SELECT * FROM live_drops WHERE drop_key=?").get(String(req.params.key || ""));
+  if (!drop) return res.status(404).json({error:"No such drop."});
+  if (drop.published || Date.now() >= Date.parse(drop.start_at)) {
+    return res.status(409).json({error:"Only an unannounced draft can be deleted. A drop that ran is the record of what was offered."});
+  }
+  db.prepare("DELETE FROM live_drop_reminders WHERE drop_id=?").run(drop.id);
+  db.prepare("DELETE FROM live_drop_events WHERE drop_id=?").run(drop.id);
+  db.prepare("DELETE FROM live_drops WHERE id=?").run(drop.id);
+  res.json({ok:true});
+});
+
+/* The console is a Next page now (app/admin), so it wears the same design as
+   the rest of the site instead of the old static template. Express only has
+   to keep search engines off it: the page itself sets noindex, and this
+   covers the response before Next ever renders. */
+app.get("/admin", (req, res, next) => {
+  res.set("X-Robots-Tag", "noindex, nofollow");
+  next();
 });
 
 /**
