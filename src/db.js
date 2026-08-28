@@ -479,6 +479,17 @@ db.exec(`
   CREATE UNIQUE INDEX IF NOT EXISTS idx_live_drop_events_unique
     ON live_drop_events(drop_id, event_type, session_id);
 
+  /* Retailer favicons, fetched by us so the browser never has to ask the shop
+     itself and tell it who is looking. A row with no bytes is a remembered
+     "we looked and there was not one", which is worth keeping: without it
+     every search naming that shop would try again. */
+  CREATE TABLE IF NOT EXISTS retailer_icons(
+    host TEXT PRIMARY KEY,
+    content_type TEXT NOT NULL DEFAULT '',
+    bytes BLOB,
+    checked_at TEXT NOT NULL
+  );
+
   CREATE TABLE IF NOT EXISTS daily_drops(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     market TEXT NOT NULL,

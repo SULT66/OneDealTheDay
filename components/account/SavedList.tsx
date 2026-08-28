@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { ArrowUpRight, Heart } from "@phosphor-icons/react";
 import { formatPrice } from "@/lib/format";
+import { RetailerIcon } from "@/components/ui/RetailerIcon";
 import { DeliaTrigger } from "@/components/delia/DeliaTrigger";
 import {
   SavedOffersProvider,
@@ -186,7 +187,12 @@ function SavedRow({ offer, market }: { offer: SavedOffer; market: string }) {
         <span className="block truncate text-sm font-medium leading-snug text-fg">
           {offer.title}
         </span>
-        <span className="block truncate text-xs text-fg-muted">{offer.retailer}</span>
+        {/* The same shop icon the shortlist used, so a saved row is
+            recognisable as the one that was set aside. */}
+        <span className="flex min-w-0 items-center gap-1.5">
+          <RetailerIcon retailer={offer.retailer} url={offer.url} />
+          <span className="truncate text-xs text-fg-muted">{offer.retailer}</span>
+        </span>
       </span>
       <span className="flex shrink-0 items-center gap-1 pt-0.5 text-sm font-bold text-fg tnum">
         {price || <span className="text-xs font-medium text-fg-subtle">Price at the shop</span>}

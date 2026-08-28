@@ -11,6 +11,12 @@ const { refreshProducts, localDate } = require("./refresh");
 const { runLinkHealthCheck } = require("./linkHealth");
 const { dropState, presentDrop, sendDueReminders } = require("./liveDrop");
 const {
+  fetchRetailerIcon,
+  normalizeIconHost,
+  readCachedIcon,
+  writeCachedIcon,
+} = require("./retailerIcons");
+const {
   authorizationUrl,
   createState,
   exchangeCodeForTokens,
@@ -963,6 +969,77 @@ app.get("/api/live/current", (req, res) => {
  * ones who were only half interested. A signed-in shopper is linked to their
  * account so the same person asking twice is one reminder.
  */
+/*
+ * A retailer favicon, served from our own address.
+ *
+ * Pointing the browser at the shop, or at one of the public favicon services,
+ * would tell somebody else which shops each shopper is looking at, and Delia
+ * puts five or six shops in front of a person at a time. So we fetch it once,
+ * keep it, and serve it ourselves.
+ *
+ * A miss is answered 404 rather than with a placeholder image: the interface
+ * draws a lettered circle instead, which needs no round trip at all and looks
+ * deliberate rather than broken.
+ */
+const iconFetchesInFlight = new Map();
+const iconFetchAttempts = new Map();
+
+/* Only cache misses are limited. A cached icon is a row read and a buffer, so
+   limiting those would throttle an ordinary search for no reason; a miss is an
+   outbound request to somebody else, which is the thing worth rationing. */
+const allowIconFetch = (req) => {
+  const now = Date.now();
+  const recent = (iconFetchAttempts.get(req.ip) || []).filter((time) => now - time < 15 * 60 * 1000);
+  if (recent.length >= 40) return false;
+  recent.push(now);
+  iconFetchAttempts.set(req.ip, recent);
+  return true;
+};
+
+const sendIcon = (res, icon) =>
+  res
+    .set("Content-Type", icon.contentType)
+    /* A month, and immutable: a shop changes its icon about never, and this
+       request happens once per shop per shopper otherwise. */
+    .set("Cache-Control", "public, max-age=2592000, immutable")
+    /* The bytes came from somebody else. Never let the browser decide they are
+       something more interesting than a picture, and give an SVG nothing it
+       could reach even if it tried. */
+    .set("X-Content-Type-Options", "nosniff")
+    .set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; sandbox")
+    .send(icon.bytes);
+
+app.get("/api/retailer-icon", async (req, res) => {
+  const host = normalizeIconHost(req.query.host);
+  if (!host) return res.sendStatus(404);
+
+  const cached = readCachedIcon(db, host);
+  if (cached?.bytes) return sendIcon(res, cached);
+  if (cached?.missing) return res.sendStatus(404);
+  if (!allowIconFetch(req)) return res.sendStatus(429);
+
+  /* One fetch per host at a time. A results list naming the same shop twice,
+     or two shoppers searching at once, would otherwise each start their own. */
+  let pending = iconFetchesInFlight.get(host);
+  if (!pending) {
+    pending = fetchRetailerIcon(host)
+      .catch((error) => {
+        console.error(`[retailer-icon] ${host}: ${error.message}`);
+        return null;
+      })
+      .then((icon) => {
+        writeCachedIcon(db, host, icon);
+        return icon;
+      })
+      .finally(() => iconFetchesInFlight.delete(host));
+    iconFetchesInFlight.set(host, pending);
+  }
+
+  const icon = await pending;
+  if (!icon) return res.sendStatus(404);
+  return sendIcon(res, icon);
+});
+
 app.post("/api/live/remind", authRateLimit, (req, res) => {
   const user = currentUser(req);
   const email = String(req.body?.email || user?.email || "").trim().toLowerCase().slice(0, 160);

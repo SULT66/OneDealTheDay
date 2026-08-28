@@ -17,6 +17,7 @@ import {
 } from "@phosphor-icons/react";
 import { cn } from "@/lib/cn";
 import { formatPrice } from "@/lib/format";
+import { RetailerIcon } from "@/components/ui/RetailerIcon";
 import {
   askAssistant,
   checkAssistantAvailable,
@@ -123,6 +124,9 @@ function OfferRow({
           {rec.title}
         </span>
         <span className="flex min-w-0 items-center gap-1.5">
+          {/* The shop icon, ahead of its name. A list of six shops is read
+              by logo long before it is read by word. */}
+          <RetailerIcon retailer={rec.retailer} url={rec.url} />
           <span className="truncate text-xs text-fg-muted">{rec.retailer}</span>
           {/* The list is in price order, so "cheapest" mostly confirms what the
               eye already sees. The pick is the one worth pointing at: it is not
