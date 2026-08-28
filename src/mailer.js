@@ -80,4 +80,29 @@ const clubWaitlistEmail = ({email}) => sendEmail({
     </div>`
 });
 
-module.exports = { passwordResetEmail, subscriptionEmail, clubWaitlistEmail };
+/*
+ * The reminder somebody asked for when they could not stay on the page.
+ *
+ * The price is not in it, and is not available to the sender either: the drop
+ * price is withheld until the drop opens. An email that gave it away would
+ * remove the only reason to arrive on time.
+ *
+ * Sent ahead of the start rather than at it, so there is time to open it. The
+ * link goes to the market the reminder was asked for from — a shopper in
+ * Germany sent to the American page would see the wrong currency for a product
+ * they cannot buy.
+ */
+const liveDropReminderEmail = ({ email, title, market, minutes }) => sendEmail({
+  to: email,
+  subject: `Your Live Drop opens in ${minutes} minutes`,
+  html: `
+    <div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;color:#17191d">
+      <h1 style="font-size:24px">It opens in ${minutes} minutes</h1>
+      <p><strong>${escapeHtml(title)}</strong></p>
+      <p>Limited stock, ten minutes, one price. The price is revealed the moment it opens.</p>
+      <p style="margin:28px 0"><a href="${SITE}/${encodeURIComponent(market)}/live" style="background:#ff6b00;color:#fff;text-decoration:none;padding:13px 20px;border-radius:10px;font-weight:bold">Open the drop</a></p>
+      <p>You asked us for this one reminder. There is nothing else to unsubscribe from.</p>
+    </div>`
+});
+
+module.exports = { passwordResetEmail, subscriptionEmail, clubWaitlistEmail, liveDropReminderEmail };

@@ -110,3 +110,171 @@ assert.strictEqual(dropSaving({ retail_price: 400, drop_price: 449 }), null);
 assert.deepStrictEqual(dropSaving({ retail_price: 100, drop_price: 75 }), { amount: 25, percent: 25 });
 
 console.log("Live Drop states, early access, price reveal and saving checks passed.");
+
+/* ------------------------------------------------------------------ funnel */
+
+const fs = require("fs");
+const path = require("path");
+const Database = require("better-sqlite3");
+
+const dbSource = fs.readFileSync(path.join(__dirname, "..", "src", "db.js"), "utf8");
+const serverSource = fs.readFileSync(path.join(__dirname, "..", "src", "server.js"), "utf8");
+const panelSource = fs.readFileSync(
+  path.join(__dirname, "..", "components", "live", "LiveDropPanel.tsx"),
+  "utf8",
+);
+
+/* The schema is lifted from db.js rather than retyped, so a change there that
+   breaks these guarantees fails here instead of during a drop. */
+const eventsTable = /CREATE TABLE IF NOT EXISTS live_drop_events\([\s\S]*?\n  \);/.exec(dbSource);
+assert(eventsTable, "live_drop_events is no longer declared where this test looks for it");
+const eventsIndex = /CREATE UNIQUE INDEX IF NOT EXISTS idx_live_drop_events_unique[^;]*;/.exec(dbSource);
+assert(eventsIndex, "the unique index is gone, so one open tab can count as hundreds of viewers");
+
+const memory = new Database(":memory:");
+memory.exec(`CREATE TABLE live_drops(id INTEGER PRIMARY KEY, drop_key TEXT);
+  ${eventsTable[0]}
+  ${eventsIndex[0]}`);
+memory.prepare("INSERT INTO live_drops(id,drop_key) VALUES(1,'drop_test')").run();
+
+const record = (session, type) =>
+  memory
+    .prepare("INSERT INTO live_drop_events(drop_id,market,event_type,session_id,occurred_at) VALUES(1,'us',?,?,?)")
+    .run(type, session, new Date().toISOString());
+
+record("session-aaaaaaaaaaaaaaaa", "waiting_room");
+/* A page left open for the whole drop polls every five seconds. Counting each
+   poll would report a hundred and twenty people where there is one. */
+assert.throws(
+  () => record("session-aaaaaaaaaaaaaaaa", "waiting_room"),
+  /UNIQUE/,
+  "the same session was counted twice in the same stage",
+);
+/* Moving through the funnel is not a duplicate: the same person waits, then
+   sees the reveal, then buys. */
+record("session-aaaaaaaaaaaaaaaa", "reveal");
+record("session-bbbbbbbbbbbbbbbb", "waiting_room");
+assert.strictEqual(
+  memory.prepare("SELECT COUNT(*) AS total FROM live_drop_events WHERE event_type='waiting_room'").get().total,
+  2,
+  "two people in the waiting room were not counted as two",
+);
+
+/* Only the four stages, and nothing that identifies anybody. A funnel count
+   does not need to know who was there. */
+const allowed = /const LIVE_DROP_EVENTS = new Set\(\[([^\]]*)\]\)/.exec(serverSource);
+assert(allowed, "the allowed Live Drop events are no longer declared in server.js");
+assert.deepStrictEqual(
+  allowed[1].match(/"[a-z_]+"/g),
+  ['"waiting_room"', '"reveal"', '"buy_click"', '"remind"'],
+  "the Live Drop funnel stages changed",
+);
+assert(
+  !/live_drop_events[\s\S]{0,400}?(email|user_id)/.test(dbSource.slice(dbSource.indexOf("live_drop_events"))),
+  "the funnel table now carries something that identifies a person",
+);
+
+/* The buy click has to survive the navigation to the retailer, which is the
+   one event most worth keeping. */
+assert(
+  /keepalive: true/.test(fs.readFileSync(path.join(__dirname, "..", "lib", "analyticsSession.ts"), "utf8")),
+  "buy clicks are reported without keepalive, so they are lost on navigation",
+);
+assert(
+  /recordLiveDropEvent\(drop\.drop_key, "buy_click"\)/.test(panelSource),
+  "the buy button no longer reports a click",
+);
+
+/* The price must not reach the browser before the reveal, and the panel must
+   not be able to work the state out for itself. */
+assert(
+  !/dropState|Date\.now\(\)/.test(panelSource.replace(/\/\*[\s\S]*?\*\//g, "")),
+  "the panel decides the drop state locally, so a wrong browser clock opens it early",
+);
+
+console.log("Live Drop funnel, one-row-per-session and reveal-safety checks passed.");
+
+async function main() {
+  /* --------------------------------------------------------------- reminders */
+
+  const { REMINDER_LEAD_MINUTES, sendDueReminders } = require("../src/liveDrop");
+
+  const dropsTable = /CREATE TABLE IF NOT EXISTS live_drops\([\s\S]*?\n  \);/.exec(dbSource);
+  const remindersTable = /CREATE TABLE IF NOT EXISTS live_drop_reminders\([\s\S]*?\n  \);/.exec(dbSource);
+  assert(dropsTable && remindersTable, "the Live Drop tables moved out of db.js");
+
+  const mail = new Database(":memory:");
+  mail.exec(`${dropsTable[0]}\n${remindersTable[0]}`);
+
+  const sweepNow = Date.parse("2026-09-10T19:52:00Z");
+  const scheduleDrop = (id, key, startsInMinutes, published = 1) =>
+    mail.prepare(`INSERT INTO live_drops(id,drop_key,market,title,start_at,end_at,published,created_at,updated_at)
+      VALUES(?,?,'us','iPhone 17 128GB',?,?,?,'','')`).run(
+      id,
+      key,
+      new Date(sweepNow + startsInMinutes * 60000).toISOString(),
+      new Date(sweepNow + (startsInMinutes + 10) * 60000).toISOString(),
+      published,
+    );
+  const wants = (dropId, email) =>
+    mail.prepare("INSERT INTO live_drop_reminders(drop_id,email,created_at) VALUES(?,?,'')").run(dropId, email);
+
+  scheduleDrop(1, "opens_soon", 8);          // inside the lead window
+  scheduleDrop(2, "opens_much_later", 240);  // hours away
+  scheduleDrop(3, "already_started", -30);   // over and done with
+  scheduleDrop(4, "unpublished", 8, 0);      // scheduled but not announced
+
+  wants(1, "soon@example.com");
+  wants(2, "later@example.com");
+  wants(3, "missed@example.com");
+  wants(4, "draft@example.com");
+
+  const sentTo = [];
+  const collect = async (message) => { sentTo.push(message); };
+
+  let sent = await (sendDueReminders({ db: mail, sendReminder: collect, now: sweepNow }));
+
+  /* Only the drop that is actually about to open. A reminder for a drop four
+     hours out is spam; one for a drop that ended half an hour ago sends somebody
+     to an empty page; one for a drop nobody has been told about leaks it. */
+  assert.strictEqual(sent, 1, "the wrong number of reminders went out");
+  assert.deepStrictEqual(sentTo.map((message) => message.email), ["soon@example.com"]);
+  assert.strictEqual(sentTo[0].minutes, 8, "the email would state the wrong number of minutes");
+  assert.strictEqual(sentTo[0].market, "us", "the reminder links to the wrong market");
+
+  /* Sweeping again a second later must not email the same person twice. */
+  sent = await (sendDueReminders({ db: mail, sendReminder: collect, now: sweepNow + 1000 }));
+  assert.strictEqual(sent, 0, "the same reminder was sent twice");
+
+  /* A mailer outage leaves the row for the next sweep rather than consuming it,
+     and one bad address does not stop the queue behind it. */
+  scheduleDrop(5, "outage", 9);
+  wants(5, "broken@example.com");
+  wants(5, "fine@example.com");
+  const refuseFirst = async (message) => {
+    if (message.email === "broken@example.com") throw new Error("mailer down");
+    sentTo.push(message);
+  };
+  sent = await (sendDueReminders({
+    db: mail,
+    sendReminder: refuseFirst,
+    now: sweepNow,
+    logger: { error() {} },
+  }));
+  assert.strictEqual(sent, 1, "a failed send stopped the rest of the queue");
+  assert.strictEqual(
+    mail.prepare("SELECT reminded_at FROM live_drop_reminders WHERE email='broken@example.com'").get().reminded_at,
+    null,
+    "a reminder that was never sent is marked as sent, so it will never be retried",
+  );
+
+  assert.strictEqual(REMINDER_LEAD_MINUTES, 10, "the lead time changed; the waiting room opens at T-05:00");
+
+  console.log("Live Drop reminder window, retry and one-send-per-person checks passed.");
+
+}
+
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

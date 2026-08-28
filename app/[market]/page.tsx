@@ -12,6 +12,7 @@ import { SectionHeader } from "@/components/site/SectionHeader";
 import { InterestSignup } from "@/components/site/InterestSignup";
 import { DeliaTrigger } from "@/components/delia/DeliaTrigger";
 import { DealCard } from "@/components/deal/DealCard";
+import { NextLiveDrop } from "@/components/live/NextLiveDrop";
 
 export async function generateMetadata({
   params,
@@ -65,6 +66,11 @@ export default async function MarketHome({ params }: PageProps<"/[market]">) {
         <p className="mt-4 text-base leading-relaxed text-fg-muted">
           {t(language, "app.home.emptyText")}
         </p>
+        {/* A scheduled drop does not depend on the catalog. If a refresh has
+            failed, the drop is the one thing still worth arriving for, so it
+            survives the empty state instead of disappearing with everything
+            else. */}
+        <NextLiveDrop market={market} />
       </div>
     );
   }
@@ -142,6 +148,10 @@ export default async function MarketHome({ params }: PageProps<"/[market]">) {
           </p>
         </div>
       </section>
+
+      {/* Directly under the hero, and only when a drop is actually scheduled:
+          it renders nothing the rest of the time. */}
+      <NextLiveDrop market={market} />
 
       {/* ---------------------------------------------------------- categories */}
       <section aria-labelledby="categories-title" className="mt-20">

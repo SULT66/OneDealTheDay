@@ -96,6 +96,11 @@ const drop = {
   end_at: new Date(now + startsIn + lastsFor).toISOString(),
   member_early_access_seconds: Math.max(0, Math.round(Number(flag("early-access", "0")) || 0)),
   affiliate_url: flag("url", ""),
+  /* Optional. A drop runs perfectly well with no broadcast: the event is the
+     price, the clock and the limit. --video takes a recorded file, --embed the
+     player URL of a stream hosted somewhere that already solved streaming. */
+  video_url: flag("video", ""),
+  stream_embed_url: flag("embed", ""),
   terms: flag("terms", ""),
   published: has("publish") ? 1 : 0,
   created_at: nowIso,
@@ -105,11 +110,11 @@ const drop = {
 db.prepare(`INSERT INTO live_drops(
   drop_key,market,title,brand,retailer_name,image_url,retail_price,drop_price,currency,
   quantity_total,quantity_remaining,start_at,end_at,member_early_access_seconds,
-  affiliate_url,terms,published,created_at,updated_at
+  affiliate_url,video_url,stream_embed_url,terms,published,created_at,updated_at
 ) VALUES(
   @drop_key,@market,@title,@brand,@retailer_name,@image_url,@retail_price,@drop_price,@currency,
   @quantity_total,@quantity_remaining,@start_at,@end_at,@member_early_access_seconds,
-  @affiliate_url,@terms,@published,@created_at,@updated_at
+  @affiliate_url,@video_url,@stream_embed_url,@terms,@published,@created_at,@updated_at
 )`).run(drop);
 
 console.log(`${drop.published ? "Published" : "Drafted"} ${drop.drop_key}`);

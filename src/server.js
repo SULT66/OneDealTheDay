@@ -9,7 +9,7 @@ const db = require("./db");
 const c = require("./config");
 const { refreshProducts, localDate } = require("./refresh");
 const { runLinkHealthCheck } = require("./linkHealth");
-const { presentDrop } = require("./liveDrop");
+const { presentDrop, sendDueReminders } = require("./liveDrop");
 const {
   authorizationUrl,
   createState,
@@ -41,7 +41,7 @@ const {
   timeoutResponse,
 } = require("./shoppingAssistant");
 const renderShoppingAssistantPanel = require("./shoppingAssistantPanel");
-const { passwordResetEmail, subscriptionEmail, clubWaitlistEmail } = require("./mailer");
+const { passwordResetEmail, subscriptionEmail, clubWaitlistEmail, liveDropReminderEmail } = require("./mailer");
 const {
   normalizeAction,
   normalizePlacement,
@@ -393,7 +393,7 @@ app.post("/api/shopping-assistant/feedback", shoppingAssistantRateLimit, (req, r
  * they reach the catch-all at the bottom of this file instead of being
  * rewritten back onto the old bare-URL Express routes.
  */
-const nextOwnedPath = /^\/(?:about|account|saved|how-we-select-deals|search|daily-drop|archive|contact|privacy|terms|affiliate-disclosure|editorial-policy|for-retailers|price-disclaimer|category|deal\/[^/]+|category\/[^/]+)\/?$/;
+const nextOwnedPath = /^\/(?:about|account|saved|live|how-we-select-deals|search|daily-drop|archive|contact|privacy|terms|affiliate-disclosure|editorial-policy|for-retailers|price-disclaimer|category|deal\/[^/]+|category\/[^/]+)\/?$/;
 app.use((req, res, next) => {
   const match = req.url.match(new RegExp(`^/(${marketCodes.join("|")})(?=/|\\?|$)`));
   /* Compare the path alone, not the whole URL: `/de` was left intact for Next
@@ -981,6 +981,38 @@ app.post("/api/live/remind", authRateLimit, (req, res) => {
     if (!String(error.message).includes("UNIQUE")) throw error;
   }
   res.status(201).json({ok:true, message:"We will email you when it opens."});
+});
+
+/*
+ * The Live Drop funnel.
+ *
+ * Four counts, no more: how many waited, how many were there for the reveal,
+ * how many clicked through to buy, how many asked to be reminded. That is
+ * enough to know whether a drop worked, and stopping there means this endpoint
+ * never becomes a way to follow one person around.
+ *
+ * A repeat is not an error. A page left open for the whole drop, or a reload
+ * on a phone with a bad connection, is the same person arriving once, so the
+ * unique index absorbs it and the response is the same either way.
+ */
+const LIVE_DROP_EVENTS = new Set(["waiting_room", "reveal", "buy_click", "remind"]);
+app.post("/api/live/events", (req, res) => {
+  const dropKey = String(req.body?.drop_key || "").trim().slice(0, 80);
+  const eventType = String(req.body?.event_type || "").trim().toLowerCase();
+  const sessionId = analyticsToken(req.body?.session_id);
+  if (!LIVE_DROP_EVENTS.has(eventType)) return res.status(400).json({error:"Unknown event."});
+  if (!sessionId) return res.status(400).json({error:"Missing session."});
+
+  const drop = db.prepare("SELECT id, market FROM live_drops WHERE drop_key=? AND published=1").get(dropKey);
+  if (!drop) return res.sendStatus(204);
+
+  try {
+    db.prepare("INSERT INTO live_drop_events(drop_id,market,event_type,session_id,occurred_at) VALUES(?,?,?,?,?)")
+      .run(drop.id, drop.market, eventType, sessionId, new Date().toISOString());
+  } catch (error) {
+    if (!String(error.message).includes("UNIQUE")) throw error;
+  }
+  res.sendStatus(204);
 });
 
 app.post("/api/auth/logout", (req, res) => {
@@ -2191,6 +2223,33 @@ if (c.liveRefreshEnabled) {
     {timezone:"UTC"}
   );
 }
+
+/*
+ * Every minute. A drop is a ten minute event on a fixed clock, and a sweep on
+ * the hour would miss most of them entirely.
+ *
+ * The guard is not belt and braces: a slow mailer can make one sweep outlast
+ * the minute, and two overlapping sweeps would read the same unstamped rows
+ * and email everybody twice.
+ */
+let reminderSweepRunning = false;
+cron.schedule(
+  "* * * * *",
+  async () => {
+    if (reminderSweepRunning) return;
+    reminderSweepRunning = true;
+    try {
+      const sent = await sendDueReminders({db, sendReminder: liveDropReminderEmail});
+      if (sent) console.log(`[live-drop] sent ${sent} reminder${sent === 1 ? "" : "s"}`);
+    } catch (error) {
+      console.error(`[live-drop] ${error.message}`);
+    } finally {
+      reminderSweepRunning = false;
+    }
+  },
+  {timezone:"UTC"}
+);
+
 /**
  * Last in the chain, so anything a route threw synchronously or handed to
  * next() ends up here instead of Express's default handler, which answers with
