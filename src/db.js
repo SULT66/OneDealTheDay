@@ -479,6 +479,20 @@ db.exec(`
   CREATE UNIQUE INDEX IF NOT EXISTS idx_live_drop_events_unique
     ON live_drop_events(drop_id, event_type, session_id);
 
+  /* Retailer favicons, fetched by us so the browser never has to ask the shop
+     itself and tell it who is looking. A row with no bytes is a remembered
+     "we looked and there was not one", which is worth keeping: without it
+     every search naming that shop would try again. */
+  CREATE TABLE IF NOT EXISTS retailer_icons(
+    host TEXT PRIMARY KEY,
+    content_type TEXT NOT NULL DEFAULT '',
+    bytes BLOB,
+    checked_at TEXT NOT NULL
+  );
+  /* A pinned icon was chosen by hand in the admin console, for a shop that
+     refuses our fetcher. It is never replaced by a refresh and never expires:
+     the whole reason it exists is that asking the shop does not work. */
+
   CREATE TABLE IF NOT EXISTS daily_drops(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     market TEXT NOT NULL,
@@ -534,6 +548,9 @@ const liveDropColumns = new Set(db.prepare("PRAGMA table_info(live_drops)").all(
 for (const column of ["video_url", "stream_embed_url"]) {
   if (!liveDropColumns.has(column)) db.exec(`ALTER TABLE live_drops ADD COLUMN ${column} TEXT NOT NULL DEFAULT ""`);
 }
+
+const retailerIconColumns = new Set(db.prepare("PRAGMA table_info(retailer_icons)").all().map(column => column.name));
+if (!retailerIconColumns.has("pinned")) db.exec("ALTER TABLE retailer_icons ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0");
 
 const subscriberColumns = new Set(db.prepare("PRAGMA table_info(subscribers)").all().map(column => column.name));
 if (!subscriberColumns.has("market")) db.exec("ALTER TABLE subscribers ADD COLUMN market TEXT NOT NULL DEFAULT 'us'");

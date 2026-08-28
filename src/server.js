@@ -11,6 +11,13 @@ const { refreshProducts, localDate } = require("./refresh");
 const { runLinkHealthCheck } = require("./linkHealth");
 const { dropState, presentDrop, sendDueReminders } = require("./liveDrop");
 const {
+  fetchRetailerIcon,
+  normalizeIconHost,
+  readCachedIcon,
+  pinRetailerIcon,
+  writeCachedIcon,
+} = require("./retailerIcons");
+const {
   authorizationUrl,
   createState,
   exchangeCodeForTokens,
@@ -963,6 +970,77 @@ app.get("/api/live/current", (req, res) => {
  * ones who were only half interested. A signed-in shopper is linked to their
  * account so the same person asking twice is one reminder.
  */
+/*
+ * A retailer favicon, served from our own address.
+ *
+ * Pointing the browser at the shop, or at one of the public favicon services,
+ * would tell somebody else which shops each shopper is looking at, and Delia
+ * puts five or six shops in front of a person at a time. So we fetch it once,
+ * keep it, and serve it ourselves.
+ *
+ * A miss is answered 404 rather than with a placeholder image: the interface
+ * draws a lettered circle instead, which needs no round trip at all and looks
+ * deliberate rather than broken.
+ */
+const iconFetchesInFlight = new Map();
+const iconFetchAttempts = new Map();
+
+/* Only cache misses are limited. A cached icon is a row read and a buffer, so
+   limiting those would throttle an ordinary search for no reason; a miss is an
+   outbound request to somebody else, which is the thing worth rationing. */
+const allowIconFetch = (req) => {
+  const now = Date.now();
+  const recent = (iconFetchAttempts.get(req.ip) || []).filter((time) => now - time < 15 * 60 * 1000);
+  if (recent.length >= 40) return false;
+  recent.push(now);
+  iconFetchAttempts.set(req.ip, recent);
+  return true;
+};
+
+const sendIcon = (res, icon) =>
+  res
+    .set("Content-Type", icon.contentType)
+    /* A month, and immutable: a shop changes its icon about never, and this
+       request happens once per shop per shopper otherwise. */
+    .set("Cache-Control", "public, max-age=2592000, immutable")
+    /* The bytes came from somebody else. Never let the browser decide they are
+       something more interesting than a picture, and give an SVG nothing it
+       could reach even if it tried. */
+    .set("X-Content-Type-Options", "nosniff")
+    .set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; sandbox")
+    .send(icon.bytes);
+
+app.get("/api/retailer-icon", async (req, res) => {
+  const host = normalizeIconHost(req.query.host);
+  if (!host) return res.sendStatus(404);
+
+  const cached = readCachedIcon(db, host);
+  if (cached?.bytes) return sendIcon(res, cached);
+  if (cached?.missing) return res.sendStatus(404);
+  if (!allowIconFetch(req)) return res.sendStatus(429);
+
+  /* One fetch per host at a time. A results list naming the same shop twice,
+     or two shoppers searching at once, would otherwise each start their own. */
+  let pending = iconFetchesInFlight.get(host);
+  if (!pending) {
+    pending = fetchRetailerIcon(host)
+      .catch((error) => {
+        console.error(`[retailer-icon] ${host}: ${error.message}`);
+        return null;
+      })
+      .then((icon) => {
+        writeCachedIcon(db, host, icon);
+        return icon;
+      })
+      .finally(() => iconFetchesInFlight.delete(host));
+    iconFetchesInFlight.set(host, pending);
+  }
+
+  const icon = await pending;
+  if (!icon) return res.sendStatus(404);
+  return sendIcon(res, icon);
+});
+
 app.post("/api/live/remind", authRateLimit, (req, res) => {
   const user = currentUser(req);
   const email = String(req.body?.email || user?.email || "").trim().toLowerCase().slice(0, 160);
@@ -2343,6 +2421,51 @@ app.delete("/api/admin/live-drops/:key", admin, (req, res) => {
    the rest of the site instead of the old static template. Express only has
    to keep search engines off it: the page itself sets noindex, and this
    covers the response before Next ever renders. */
+/*
+ * Setting a shop icon by hand.
+ *
+ * Some shops refuse an automated request: Kroger and Costco never answer, B&H
+ * answers 403. That is their call, and disguising the fetcher as a browser to
+ * get past it is not something worth doing. Instead somebody can point us at
+ * the image once, and a pinned icon is never replaced by a later fetch.
+ *
+ * The URL still goes through every guard: a person typing an address into an
+ * admin form is not a reason to let the server reach one it would refuse.
+ */
+app.get("/api/admin/retailer-icons", admin, (req, res) => {
+  const rows = db.prepare(`SELECT host, content_type, pinned, checked_at,
+      LENGTH(bytes) AS size FROM retailer_icons ORDER BY pinned DESC, host`).all();
+  res.json({
+    icons: rows.map((row) => ({
+      host: row.host,
+      content_type: row.content_type,
+      /* A row with no bytes is a shop we asked about and got nothing from,
+         which is the useful thing to see here: those are the candidates for
+         being set by hand. */
+      size: row.size || 0,
+      pinned: Boolean(row.pinned),
+      checked_at: row.checked_at,
+    })),
+  });
+});
+
+app.post("/api/admin/retailer-icons", admin, async (req, res) => {
+  const result = await pinRetailerIcon(db, req.body?.host, req.body?.icon_url).catch((error) => ({
+    error: error.message,
+  }));
+  if (result.error) return res.status(400).json({error:result.error});
+  res.status(201).json({ok:true, ...result});
+});
+
+app.delete("/api/admin/retailer-icons/:host", admin, (req, res) => {
+  const host = normalizeIconHost(req.params.host);
+  if (!host) return res.status(400).json({error:"That is not a shop address."});
+  /* Deleting rather than blanking, so the next shopper who sees that shop
+     causes a fresh attempt instead of inheriting a remembered failure. */
+  db.prepare("DELETE FROM retailer_icons WHERE host=?").run(host);
+  res.json({ok:true});
+});
+
 app.get("/admin", (req, res, next) => {
   res.set("X-Robots-Tag", "noindex, nofollow");
   next();
