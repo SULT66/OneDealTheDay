@@ -272,6 +272,48 @@ async function main() {
 
   console.log("Live Drop reminder window, retry and one-send-per-person checks passed.");
 
+  /* ------------------------------------------------------------------ admin */
+
+  /* Every admin route sits behind the key, the read included. The list hands
+     back the drop price before the reveal, which is right for the person who
+     set it and would be a leak on any unguarded route. */
+  const adminRoutes = serverSource.match(/app\.(?:get|post|delete)\("\/api\/admin\/live-drops[^"]*", *[a-z]+/g) || [];
+  assert.strictEqual(adminRoutes.length, 5, "the set of admin Live Drop routes changed");
+  for (const route of adminRoutes) {
+    assert(/, *admin$/.test(route), `an admin Live Drop route is not behind the key: ${route}`);
+  }
+
+  /* Two guards that exist because both rewrite history rather than merely being
+     untidy: a drop cannot be pulled out from under whoever is watching it, and
+     a drop that ran is the record of what was offered. */
+  assert(
+    /dropState\(drop, Date\.now\(\)\) === "live"/.test(serverSource),
+    "an open drop can now be unpublished from under whoever is watching it",
+  );
+  assert(
+    /drop\.published \|\| Date\.now\(\) >= Date\.parse\(drop\.start_at\)/.test(serverSource),
+    "a drop that has run can now be deleted, so the record of what was offered can vanish",
+  );
+
+  /* The buy link is the one field that sends a shopper off our site. */
+  assert(
+    /\^https\?:/.test(serverSource),
+    "the buy link is no longer checked for an http scheme",
+  );
+
+  /* The admin page builds every row with textContent. It is the one page that
+     holds the key, and product titles are typed by hand. */
+  const adminPage = fs.readFileSync(path.join(__dirname, "..", "public", "admin.html"), "utf8");
+  assert(
+    !/\.innerHTML\s*=/.test(adminPage),
+    "the admin page writes HTML out of values it was handed",
+  );
+  assert(
+    /id="dropFields" disabled/.test(adminPage),
+    "the drop form can be submitted before the server has said which markets exist",
+  );
+
+  console.log("Live Drop admin guards and console checks passed.");
 }
 
 main().catch((error) => {
