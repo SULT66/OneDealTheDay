@@ -301,16 +301,27 @@ async function main() {
     "the buy link is no longer checked for an http scheme",
   );
 
-  /* The admin page builds every row with textContent. It is the one page that
-     holds the key, and product titles are typed by hand. */
-  const adminPage = fs.readFileSync(path.join(__dirname, "..", "public", "admin.html"), "utf8");
-  assert(
-    !/\.innerHTML\s*=/.test(adminPage),
-    "the admin page writes HTML out of values it was handed",
+  /* The console renders every value as text. It is the one page that holds the
+     key, and product titles are typed by hand. */
+  const adminPage = fs.readFileSync(
+    path.join(__dirname, "..", "components", "admin", "AdminConsole.tsx"),
+    "utf8",
   );
   assert(
-    /id="dropFields" disabled/.test(adminPage),
+    !/dangerouslySetInnerHTML/.test(adminPage),
+    "the admin console writes HTML out of values it was handed",
+  );
+  /* Until the key has been accepted there is no market list, and a submission
+     without one is answered with a complaint about the market rather than
+     about the missing key. */
+  assert(
+    /<fieldset disabled=\{!unlocked/.test(adminPage),
     "the drop form can be submitted before the server has said which markets exist",
+  );
+  /* The key lives in component state and nowhere that outlives the tab. */
+  assert(
+    !/localStorage\.|sessionStorage\.|document\.cookie/.test(adminPage),
+    "the admin key is now kept in storage, where it outlives whoever typed it",
   );
 
   console.log("Live Drop admin guards and console checks passed.");

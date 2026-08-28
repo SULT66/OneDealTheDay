@@ -251,7 +251,9 @@ for (const file of trustPages) {
     if (!html.includes(link)) throw new Error(`Footer link ${link} is missing from ${file}`);
   }
 }
-for (const file of ["club.html", "account.html", "admin.html"]) {
+/* admin.html is gone: the console is a Next page (app/admin) in the current
+   design, so there is no static template left to check Liquid Glass against. */
+for (const file of ["club.html", "account.html"]) {
   const html = fs.readFileSync(path.join(root, "public", file), "utf8");
   if (!hasLiquidGlass(html)) {
     throw new Error(`Liquid Glass is missing from public/${file}`);

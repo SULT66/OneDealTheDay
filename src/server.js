@@ -2318,10 +2318,13 @@ app.delete("/api/admin/live-drops/:key", admin, (req, res) => {
   res.json({ok:true});
 });
 
-app.get("/admin", (req,res) => {
-  const html = fs.readFileSync(path.join(publicDir, "admin.html"), "utf8")
-    .replace("<title>Admin</title>", "<title>Admin | OneDailyDrop</title>");
-  res.set("X-Robots-Tag", "noindex, nofollow").type("html").send(html);
+/* The console is a Next page now (app/admin), so it wears the same design as
+   the rest of the site instead of the old static template. Express only has
+   to keep search engines off it: the page itself sets noindex, and this
+   covers the response before Next ever renders. */
+app.get("/admin", (req, res, next) => {
+  res.set("X-Robots-Tag", "noindex, nofollow");
+  next();
 });
 
 /**
