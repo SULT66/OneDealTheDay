@@ -14,6 +14,7 @@ const {
   fetchRetailerIcon,
   normalizeIconHost,
   readCachedIcon,
+  pinRetailerIcon,
   writeCachedIcon,
 } = require("./retailerIcons");
 const {
@@ -2399,6 +2400,51 @@ app.delete("/api/admin/live-drops/:key", admin, (req, res) => {
    the rest of the site instead of the old static template. Express only has
    to keep search engines off it: the page itself sets noindex, and this
    covers the response before Next ever renders. */
+/*
+ * Setting a shop icon by hand.
+ *
+ * Some shops refuse an automated request: Kroger and Costco never answer, B&H
+ * answers 403. That is their call, and disguising the fetcher as a browser to
+ * get past it is not something worth doing. Instead somebody can point us at
+ * the image once, and a pinned icon is never replaced by a later fetch.
+ *
+ * The URL still goes through every guard: a person typing an address into an
+ * admin form is not a reason to let the server reach one it would refuse.
+ */
+app.get("/api/admin/retailer-icons", admin, (req, res) => {
+  const rows = db.prepare(`SELECT host, content_type, pinned, checked_at,
+      LENGTH(bytes) AS size FROM retailer_icons ORDER BY pinned DESC, host`).all();
+  res.json({
+    icons: rows.map((row) => ({
+      host: row.host,
+      content_type: row.content_type,
+      /* A row with no bytes is a shop we asked about and got nothing from,
+         which is the useful thing to see here: those are the candidates for
+         being set by hand. */
+      size: row.size || 0,
+      pinned: Boolean(row.pinned),
+      checked_at: row.checked_at,
+    })),
+  });
+});
+
+app.post("/api/admin/retailer-icons", admin, async (req, res) => {
+  const result = await pinRetailerIcon(db, req.body?.host, req.body?.icon_url).catch((error) => ({
+    error: error.message,
+  }));
+  if (result.error) return res.status(400).json({error:result.error});
+  res.status(201).json({ok:true, ...result});
+});
+
+app.delete("/api/admin/retailer-icons/:host", admin, (req, res) => {
+  const host = normalizeIconHost(req.params.host);
+  if (!host) return res.status(400).json({error:"That is not a shop address."});
+  /* Deleting rather than blanking, so the next shopper who sees that shop
+     causes a fresh attempt instead of inheriting a remembered failure. */
+  db.prepare("DELETE FROM retailer_icons WHERE host=?").run(host);
+  res.json({ok:true});
+});
+
 app.get("/admin", (req, res, next) => {
   res.set("X-Robots-Tag", "noindex, nofollow");
   next();

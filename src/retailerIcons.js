@@ -277,6 +277,10 @@ async function fetchRetailerIcon(host, options = {}) {
 function readCachedIcon(db, host, now = Date.now()) {
   const row = db.prepare("SELECT * FROM retailer_icons WHERE host=?").get(host);
   if (!row) return null;
+  /* A pinned icon was chosen by hand for a shop that refuses our fetcher.
+     Letting it expire would send us back to ask a shop we already know says
+     no, and lose the icon somebody deliberately set. */
+  if (row.pinned && row.bytes) return { contentType: row.content_type, bytes: row.bytes };
   const age = now - Date.parse(row.checked_at || 0);
   if (row.bytes) return age < SUCCESS_TTL_MS ? { contentType: row.content_type, bytes: row.bytes } : null;
   /* A remembered failure. Held for a week so a shop with no icon is not
@@ -284,12 +288,43 @@ function readCachedIcon(db, host, now = Date.now()) {
   return age < FAILURE_TTL_MS ? { missing: true } : null;
 }
 
-function writeCachedIcon(db, host, icon, now = Date.now()) {
-  db.prepare(`INSERT INTO retailer_icons(host,content_type,bytes,checked_at)
-    VALUES(?,?,?,?)
+/**
+ * Stores what we found, or the fact that we found nothing.
+ *
+ * `pinned` marks an icon chosen by hand. An ordinary fetch never overwrites a
+ * pinned row: the reason somebody pinned one is that fetching does not work
+ * for that shop, so letting a later fetch replace it with a failure would
+ * undo the fix on its own.
+ */
+function writeCachedIcon(db, host, icon, now = Date.now(), { pinned = false } = {}) {
+  db.prepare(`INSERT INTO retailer_icons(host,content_type,bytes,checked_at,pinned)
+    VALUES(?,?,?,?,?)
     ON CONFLICT(host) DO UPDATE SET content_type=excluded.content_type,
-      bytes=excluded.bytes, checked_at=excluded.checked_at`)
-    .run(host, icon?.contentType || "", icon?.bytes || null, new Date(now).toISOString());
+      bytes=excluded.bytes, checked_at=excluded.checked_at, pinned=excluded.pinned
+    WHERE excluded.pinned=1 OR retailer_icons.pinned=0`)
+    .run(host, icon?.contentType || "", icon?.bytes || null, new Date(now).toISOString(), pinned ? 1 : 0);
+}
+
+/**
+ * Takes one specific image, chosen by hand, as a shop's icon.
+ *
+ * The URL still goes through every guard an automatic fetch does. Somebody
+ * typing an address into an admin form is not a reason to let the server
+ * reach an address it would otherwise refuse.
+ */
+async function pinRetailerIcon(db, host, iconUrl, options = {}) {
+  const safeHost = normalizeIconHost(host);
+  if (!safeHost) return { error: "That is not a shop address." };
+
+  const result = await safeFetch(String(iconUrl || ""), { ...options, accept: "image/*" });
+  if (!result) return { error: "That image could not be fetched." };
+  const contentType = cleanType(result.response.headers.get("content-type"));
+  if (!ALLOWED_TYPES.has(contentType)) return { error: `That link answered with ${contentType || "no image type"}.` };
+  const bytes = await readCapped(result.response).catch(() => null);
+  if (!bytes) return { error: `An icon has to be an image under ${Math.round(MAX_ICON_BYTES / 1024)}KB.` };
+
+  writeCachedIcon(db, safeHost, { contentType, bytes }, options.now ?? Date.now(), { pinned: true });
+  return { host: safeHost, contentType, bytes: bytes.length };
 }
 
 module.exports = {
@@ -300,6 +335,7 @@ module.exports = {
   isPrivateAddress,
   normalizeIconHost,
   parseIconLinks,
+  pinRetailerIcon,
   readCachedIcon,
   resolvesToPublicAddress,
   safeFetch,

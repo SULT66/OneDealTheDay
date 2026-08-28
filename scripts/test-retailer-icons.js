@@ -9,6 +9,7 @@ const {
   isPrivateAddress,
   normalizeIconHost,
   parseIconLinks,
+  pinRetailerIcon,
   readCachedIcon,
   safeFetch,
   writeCachedIcon,
@@ -203,7 +204,8 @@ async function main() {
     host TEXT PRIMARY KEY,
     content_type TEXT NOT NULL DEFAULT '',
     bytes BLOB,
-    checked_at TEXT NOT NULL
+    checked_at TEXT NOT NULL,
+    pinned INTEGER NOT NULL DEFAULT 0
   )`);
 
   const now = Date.parse("2026-09-01T12:00:00Z");
@@ -226,7 +228,47 @@ async function main() {
   );
   assert.strictEqual(readCachedIcon(db, "never-seen.test-shop.com", now), null);
 
-  console.log("Retailer icon host, address, redirect, fetch and cache checks passed.");
+  /* ----------------------------------------------------------- pinned icons */
+
+  /*
+   * A pinned icon was chosen by hand for a shop that refuses our fetcher, so
+   * it has to survive the two things that would otherwise undo it: the monthly
+   * expiry, and the next automatic lookup writing a failure over it.
+   */
+  const pinned = await pinRetailerIcon(db, "blocked.test-shop.com", "https://cdn.test-shop.com/logo.png", {
+    lookup: publicLookup,
+    fetchImpl: async () => response(200, { "content-type": "image/png" }, "pinnedbytes"),
+    now,
+  });
+  assert.strictEqual(pinned.host, "blocked.test-shop.com");
+  assert.strictEqual(readCachedIcon(db, "blocked.test-shop.com", now).contentType, "image/png");
+  assert.strictEqual(
+    readCachedIcon(db, "blocked.test-shop.com", now + SUCCESS_TTL_MS * 12).contentType,
+    "image/png",
+    "a hand-picked icon expired, sending us back to a shop we know refuses us",
+  );
+
+  writeCachedIcon(db, "blocked.test-shop.com", null, now + 1000);
+  assert.strictEqual(
+    readCachedIcon(db, "blocked.test-shop.com", now + 2000)?.contentType,
+    "image/png",
+    "an automatic lookup wrote a failure over an icon somebody set by hand",
+  );
+
+  /* The guards do not relax because a person typed the address. */
+  const pinnedLoopback = await pinRetailerIcon(db, "blocked.test-shop.com", "http://127.0.0.1/logo.png", {
+    lookup: privateLookup,
+    fetchImpl: async () => response(200, { "content-type": "image/png" }, "x"),
+  });
+  assert(pinnedLoopback.error, "an admin was allowed to point the server at a loopback address");
+
+  const pinnedHtml = await pinRetailerIcon(db, "another.test-shop.com", "https://cdn.test-shop.com/page", {
+    lookup: publicLookup,
+    fetchImpl: async () => response(200, { "content-type": "text/html" }, "<html></html>"),
+  });
+  assert(pinnedHtml.error, "a web page was accepted as a hand-picked icon");
+
+  console.log("Retailer icon host, address, redirect, fetch, cache and pinning checks passed.");
 }
 
 main().catch((error) => {

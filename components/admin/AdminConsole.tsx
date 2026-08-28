@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
+import { ShopIcons } from "./ShopIcons";
 
 /**
  * The admin console: scheduling a Live Drop, and the catalogue refresh.
@@ -244,6 +245,18 @@ export function AdminConsole() {
             <DropRow key={drop.drop_key} drop={drop} busy={busy} act={act} />
           ))}
         </div>
+      </Card>
+
+      <Card className="mt-6">
+        <Legend>Shop icons</Legend>
+        <p className="mt-1 max-w-prose text-sm leading-relaxed text-fg-muted">
+          Most shops hand over their logo when asked. A few refuse an automated
+          request, and dressing our fetcher up as a browser to get around that is
+          not worth doing, so point us at the image once instead. An icon set here
+          is never replaced by a later lookup. A row reading no icon is a shop that
+          gave us nothing, which is the one worth setting.
+        </p>
+        <ShopIcons adminKey={adminKey} />
       </Card>
 
       <Card className="mt-6">

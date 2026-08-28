@@ -489,6 +489,9 @@ db.exec(`
     bytes BLOB,
     checked_at TEXT NOT NULL
   );
+  /* A pinned icon was chosen by hand in the admin console, for a shop that
+     refuses our fetcher. It is never replaced by a refresh and never expires:
+     the whole reason it exists is that asking the shop does not work. */
 
   CREATE TABLE IF NOT EXISTS daily_drops(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -545,6 +548,9 @@ const liveDropColumns = new Set(db.prepare("PRAGMA table_info(live_drops)").all(
 for (const column of ["video_url", "stream_embed_url"]) {
   if (!liveDropColumns.has(column)) db.exec(`ALTER TABLE live_drops ADD COLUMN ${column} TEXT NOT NULL DEFAULT ""`);
 }
+
+const retailerIconColumns = new Set(db.prepare("PRAGMA table_info(retailer_icons)").all().map(column => column.name));
+if (!retailerIconColumns.has("pinned")) db.exec("ALTER TABLE retailer_icons ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0");
 
 const subscriberColumns = new Set(db.prepare("PRAGMA table_info(subscribers)").all().map(column => column.name));
 if (!subscriberColumns.has("market")) db.exec("ALTER TABLE subscribers ADD COLUMN market TEXT NOT NULL DEFAULT 'us'");
