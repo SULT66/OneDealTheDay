@@ -32,7 +32,7 @@
     "test:google": "node scripts/test-google-auth.js",
     "test:saved": "node scripts/test-saved-offers.js",
     "test:conversations": "node scripts/test-delia-conversations.js",
-    "test:live": "node scripts/test-live-drop.js",
+    "test:live": "node scripts/test-live-drop.js && node scripts/test-tavus-product-tool.js",
     "live:drop": "node scripts/create-live-drop.js",
     "test:icons": "node scripts/test-retailer-icons.js"
   },
