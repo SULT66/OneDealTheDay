@@ -104,6 +104,12 @@ market (`us`, `ca`, `uk`, `fr` or `de`) and an optional published `drop_key`.
 The response withholds the deal price, scarcity and buy URL until the server's
 Live Drop state is actually live, and it omits facts the database cannot verify.
 
+To embed Chloe on `/:market/live`, set the server-only `TAVUS_API_KEY` and the
+Chloe `TAVUS_PAL_ID` in Azure App Settings. The browser calls the OneDailyDrop
+backend, the backend creates a Tavus conversation, and only Tavus's short-lived
+`conversation_url` is returned to the iframe. A conversation starts only after
+the shopper presses **Talk to Chloe** and is ended when they leave the page.
+
 Before public launch, use HTTPS, protect `.env`, add Privacy/Terms/Contact pages, and comply with Amazon Associates and product-data provider rules. Do not scrape Amazon directly.
 
 ## eBay account-deletion compliance

@@ -42,6 +42,7 @@ export type LiveDropView = {
   affiliate_url: string;
   video_url: string;
   stream_embed_url: string;
+  tavus_available: boolean;
   terms: string;
   server_now: string;
 };
@@ -175,7 +176,7 @@ export function LiveDropPanel({ market }: { market: string }) {
         </span>
       </div>
 
-      <BroadcastStage drop={drop} />
+      <BroadcastStage market={market} drop={drop} />
 
       <div
         className={cn(
@@ -405,7 +406,7 @@ function RemindMe({ dropKey }: { dropKey: string }) {
  * hosted by somebody who already solved streaming, which is what the roadmap
  * says to do instead of building it.
  */
-function BroadcastStage({ drop }: { drop: LiveDropView }) {
+function BroadcastStage({ market, drop }: { market: string; drop: LiveDropView }) {
   const showable = drop.state === "waiting" || drop.state === "live";
   if (!showable) return null;
 
@@ -416,7 +417,7 @@ function BroadcastStage({ drop }: { drop: LiveDropView }) {
     <div
       className={cn(
         "mt-4 grid overflow-hidden rounded-2xl border border-white/10 bg-[#061224] shadow-2xl",
-        hasHost && hasDemo && "lg:grid-cols-[1.35fr_0.85fr]",
+        (hasHost || drop.tavus_available) && hasDemo && "lg:grid-cols-[1.35fr_0.85fr]",
       )}
     >
       <div className="relative min-h-[360px] overflow-hidden bg-[radial-gradient(circle_at_50%_20%,#123b69_0%,#07172b_48%,#030914_100%)] sm:min-h-[460px]">
@@ -429,6 +430,8 @@ function BroadcastStage({ drop }: { drop: LiveDropView }) {
             allowFullScreen
             className="absolute inset-0 h-full w-full border-0"
           />
+        ) : drop.tavus_available ? (
+          <TavusHost market={market} drop={drop} />
         ) : (
           <div className="flex h-full min-h-[360px] flex-col items-center justify-center px-8 text-center sm:min-h-[460px]">
             {drop.image_url ? (
@@ -464,6 +467,105 @@ function BroadcastStage({ drop }: { drop: LiveDropView }) {
           />
         </div>
       )}
+    </div>
+  );
+}
+
+type TavusConversation = {
+  conversation_id: string;
+  conversation_url: string;
+};
+
+function TavusHost({ market, drop }: { market: string; drop: LiveDropView }) {
+  const [conversation, setConversation] = useState<TavusConversation | null>(null);
+  const [starting, setStarting] = useState(false);
+  const [error, setError] = useState("");
+  const conversationRef = useRef<TavusConversation | null>(null);
+
+  const end = useCallback(async () => {
+    const active = conversationRef.current;
+    if (!active) return;
+    conversationRef.current = null;
+    setConversation(null);
+    await fetch(`/api/integrations/tavus/conversations/${encodeURIComponent(active.conversation_id)}/end`, {
+      method:"POST",
+      keepalive:true,
+    }).catch(() => null);
+  }, []);
+
+  useEffect(() => () => {
+    const active = conversationRef.current;
+    if (!active) return;
+    conversationRef.current = null;
+    fetch(`/api/integrations/tavus/conversations/${encodeURIComponent(active.conversation_id)}/end`, {
+      method:"POST",
+      keepalive:true,
+    }).catch(() => null);
+  }, []);
+
+  const start = async () => {
+    if (starting || conversationRef.current) return;
+    setStarting(true);
+    setError("");
+    const response = await fetch("/api/integrations/tavus/conversations", {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({market, drop_key:drop.drop_key}),
+    }).catch(() => null);
+    const body = await response?.json().catch(() => ({}));
+    setStarting(false);
+    if (!response?.ok || !body?.conversation_url) {
+      setError(body?.error || "Chloe could not join. Please try again.");
+      return;
+    }
+    const next = body as TavusConversation;
+    conversationRef.current = next;
+    setConversation(next);
+    recordLiveDropEvent(drop.drop_key, "host_started");
+  };
+
+  if (conversation) {
+    return (
+      <>
+        <iframe
+          src={conversation.conversation_url}
+          title="Talk live with Chloe, OneDailyDrop AI host"
+          allow="camera; microphone; autoplay; fullscreen; display-capture; picture-in-picture"
+          allowFullScreen
+          className="absolute inset-0 h-full w-full border-0"
+        />
+        <button
+          type="button"
+          onClick={end}
+          className="absolute right-3 top-3 z-20 rounded-full border border-white/20 bg-black/70 px-3 py-1.5 text-xs font-bold text-white backdrop-blur hover:bg-black"
+        >
+          End conversation
+        </button>
+      </>
+    );
+  }
+
+  return (
+    <div className="flex h-full min-h-[360px] flex-col items-center justify-center px-8 text-center sm:min-h-[460px]">
+      {drop.image_url ? (
+        <div className="relative mb-5 h-32 w-32 overflow-hidden rounded-full border border-white/15 bg-white/95 p-3 shadow-2xl">
+          <Image src={drop.image_url} alt="" fill sizes="128px" className="object-contain p-3" unoptimized />
+        </div>
+      ) : null}
+      <p className="text-xl font-black text-white">Chloe is ready</p>
+      <p className="mt-2 max-w-sm text-sm leading-relaxed text-white/65">
+        Start a live video conversation with the OneDailyDrop AI shopping host.
+      </p>
+      <button
+        type="button"
+        onClick={start}
+        disabled={starting}
+        className="relative z-20 mt-5 rounded-full bg-accent px-6 py-3 text-sm font-black text-white shadow-lg transition hover:brightness-110 disabled:cursor-wait disabled:opacity-60"
+      >
+        {starting ? "Connecting Chloe..." : "Talk to Chloe"}
+      </button>
+      {error ? <p className="relative z-20 mt-3 text-xs font-semibold text-red-300">{error}</p> : null}
+      <p className="mt-3 text-[11px] text-white/45">AI host · Camera and microphone are optional</p>
     </div>
   );
 }

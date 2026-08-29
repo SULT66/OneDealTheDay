@@ -65,5 +65,22 @@ assert(
   /published=1/.test(serverSource.slice(serverSource.indexOf("/api/integrations/tavus/get-product-details"))),
   "Chloe can read an unpublished draft",
 );
+assert(
+  /\/api\/integrations\/tavus\/conversations/.test(serverSource),
+  "the server-side Tavus conversation endpoint is missing",
+);
+assert(
+  /"x-api-key":c\.tavusApiKey/.test(serverSource),
+  "Tavus conversations are not authenticated server-side",
+);
+assert(
+  !fs.readFileSync(path.join(__dirname, "..", "components", "live", "LiveDropPanel.tsx"), "utf8")
+    .includes("TAVUS_API_KEY"),
+  "the Tavus API key name entered the browser component",
+);
+assert(
+  /endTavusConversation/.test(serverSource),
+  "live Tavus conversations are not cleaned up",
+);
 
 console.log("Tavus product disclosure, expiry and endpoint security checks passed.");

@@ -164,13 +164,13 @@ assert.strictEqual(
   "two people in the waiting room were not counted as two",
 );
 
-/* Only the four stages, and nothing that identifies anybody. A funnel count
+/* Only the five stages, and nothing that identifies anybody. A funnel count
    does not need to know who was there. */
 const allowed = /const LIVE_DROP_EVENTS = new Set\(\[([^\]]*)\]\)/.exec(serverSource);
 assert(allowed, "the allowed Live Drop events are no longer declared in server.js");
 assert.deepStrictEqual(
   allowed[1].match(/"[a-z_]+"/g),
-  ['"waiting_room"', '"reveal"', '"buy_click"', '"remind"'],
+  ['"waiting_room"', '"reveal"', '"host_started"', '"buy_click"', '"remind"'],
   "the Live Drop funnel stages changed",
 );
 assert(
