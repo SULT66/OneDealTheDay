@@ -123,6 +123,10 @@ const panelSource = fs.readFileSync(
   path.join(__dirname, "..", "components", "live", "LiveDropPanel.tsx"),
   "utf8",
 );
+const adminSource = fs.readFileSync(
+  path.join(__dirname, "..", "components", "admin", "AdminConsole.tsx"),
+  "utf8",
+);
 
 /* The schema is lifted from db.js rather than retyped, so a change there that
    breaks these guarantees fails here instead of during a drop. */
@@ -190,6 +194,23 @@ assert(
 assert(
   !/dropState|Date\.now\(\)/.test(panelSource.replace(/\/\*[\s\S]*?\*\//g, "")),
   "the panel decides the drop state locally, so a wrong browser clock opens it early",
+);
+
+/* The two-week TV MVP must keep the AI presenter and the physical product
+   demonstration as separate media surfaces. That is what lets a real product
+   appear in human hands without asking a generated avatar to fake the grip. */
+assert(
+  /function BroadcastStage/.test(panelSource) && /AI host/.test(panelSource) && /Product demo/.test(panelSource),
+  "the live page no longer composes the AI host and product demonstration",
+);
+assert(
+  /src=\{drop\.stream_embed_url\}/.test(panelSource) && /src=\{drop\.video_url\}/.test(panelSource),
+  "one of the two broadcast media inputs is no longer rendered",
+);
+assert(
+  /AI host embed URL \(optional\)/.test(adminSource) &&
+    /Product demo video URL \(optional\)/.test(adminSource),
+  "the operator console no longer explains which live media belongs in each field",
 );
 
 console.log("Live Drop funnel, one-row-per-session and reveal-safety checks passed.");

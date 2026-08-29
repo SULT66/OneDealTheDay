@@ -15,9 +15,9 @@ import { LiveDropPanel } from "@/components/live/LiveDropPanel";
  * brand-new route compiles on a clean checkout.
  */
 export const metadata: Metadata = {
-  title: "Live Drop",
+  title: "OneDailyDrop Live",
   description:
-    "One product, one price, ten minutes, limited stock. See what is dropping next.",
+    "Watch OneDailyDrop Live, see the product demonstration and shop the current limited-time offer.",
 };
 
 export default async function LivePage({

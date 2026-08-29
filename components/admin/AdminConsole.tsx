@@ -205,10 +205,12 @@ export function AdminConsole() {
               <Field label="Member head start (seconds)" type="number" value={form.member_early_access_seconds} onChange={(v) => setForm({ ...form, member_early_access_seconds: v })} />
               <Field label="Image URL" type="url" value={form.image_url} onChange={(v) => setForm({ ...form, image_url: v })} />
               <Field label="Buy link" type="url" value={form.affiliate_url} onChange={(v) => setForm({ ...form, affiliate_url: v })} />
-              {/* A drop runs perfectly well with no broadcast: the event is the
-                  price, the clock and the limit. */}
-              <Field label="Video file URL (optional)" type="url" value={form.video_url} onChange={(v) => setForm({ ...form, video_url: v })} />
-              <Field label="Stream embed URL (optional)" type="url" value={form.stream_embed_url} onChange={(v) => setForm({ ...form, stream_embed_url: v })} />
+              {/* The first OneDailyDrop Live MVP composes two existing media
+                  inputs: the avatar stream is the host, and the video file is
+                  the separate close-up product demonstration. Either input
+                  may still run on its own. */}
+              <Field label="Product demo video URL (optional)" type="url" value={form.video_url} onChange={(v) => setForm({ ...form, video_url: v })} />
+              <Field label="AI host embed URL (optional)" type="url" value={form.stream_embed_url} onChange={(v) => setForm({ ...form, stream_embed_url: v })} />
             </div>
 
             <label className="mt-2 block py-2">
