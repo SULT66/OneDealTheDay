@@ -82,5 +82,21 @@ assert(
   /endTavusConversation/.test(serverSource),
   "live Tavus conversations are not cleaned up",
 );
+const livePanelSource = fs.readFileSync(
+  path.join(__dirname, "..", "components", "live", "LiveDropPanel.tsx"),
+  "utf8",
+);
+assert(
+  /audioSource:false/.test(livePanelSource) && /videoSource:false/.test(livePanelSource),
+  "the Chloe viewer can request a shopper camera or microphone track",
+);
+assert(
+  /conversation\.respond/.test(livePanelSource) && /Text chat only/.test(livePanelSource),
+  "the receive-only Chloe view no longer provides text interaction",
+);
+assert(
+  !/allow="[^"]*(?:camera|microphone)/.test(livePanelSource),
+  "the Chloe embed still asks the browser for camera or microphone permission",
+);
 
 console.log("Tavus product disclosure, expiry and endpoint security checks passed.");
