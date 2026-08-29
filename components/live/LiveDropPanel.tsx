@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import DailyIframe from "@daily-co/daily-js";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { formatPrice } from "@/lib/format";
@@ -476,11 +477,25 @@ type TavusConversation = {
   conversation_url: string;
 };
 
+type HostChatMessage = {
+  id: string;
+  role: "viewer" | "chloe";
+  text: string;
+};
+
 function TavusHost({ market, drop }: { market: string; drop: LiveDropView }) {
   const [conversation, setConversation] = useState<TavusConversation | null>(null);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState("");
+  const [joined, setJoined] = useState(false);
+  const [needsPlay, setNeedsPlay] = useState(false);
+  const [question, setQuestion] = useState("");
+  const [messages, setMessages] = useState<HostChatMessage[]>([]);
   const conversationRef = useRef<TavusConversation | null>(null);
+  const callRef = useRef<ReturnType<typeof DailyIframe.createCallObject> | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const seenEventsRef = useRef(new Set<string>());
+  const messageCounterRef = useRef(0);
 
   const end = useCallback(async () => {
     const active = conversationRef.current;
@@ -503,6 +518,81 @@ function TavusHost({ market, drop }: { market: string; drop: LiveDropView }) {
     }).catch(() => null);
   }, []);
 
+  /*
+   * Receive-only CVI: the viewer never publishes a camera or microphone track.
+   * Typed questions go over Daily's data channel as Tavus
+   * conversation.respond interactions, while Chloe's remote audio/video is the
+   * only media rendered. This is the live-shopping shape: watch and type, not
+   * a two-way video call.
+   */
+  useEffect(() => {
+    if (!conversation) return;
+
+    setJoined(false);
+    setNeedsPlay(false);
+    seenEventsRef.current.clear();
+    const call = DailyIframe.createCallObject({
+      audioSource:false,
+      videoSource:false,
+    });
+    callRef.current = call;
+
+    const syncRemoteMedia = () => {
+      const remote = Object.values(call.participants()).find((participant) => !participant.local);
+      const videoTrack = remote?.tracks.video?.persistentTrack;
+      const audioTrack = remote?.tracks.audio?.persistentTrack;
+      const tracks = [videoTrack, audioTrack].filter(
+        (track): track is MediaStreamTrack => Boolean(track),
+      );
+      const element = videoRef.current;
+      if (!element || !tracks.length) return;
+      const currentIds = new Set(
+        element.srcObject instanceof MediaStream
+          ? element.srcObject.getTracks().map((track) => track.id)
+          : [],
+      );
+      if (tracks.every((track) => currentIds.has(track.id))) return;
+      element.srcObject = new MediaStream(tracks);
+      void element.play().then(() => setNeedsPlay(false)).catch(() => setNeedsPlay(true));
+    };
+
+    const receiveMessage = (event: { data?: unknown }) => {
+      const payload = event.data as {
+        event_type?: string;
+        seq?: number | string;
+        properties?: { role?: string; speech?: string; text?: string };
+      } | null;
+      if (!payload || payload.event_type !== "conversation.utterance") return;
+      const role = String(payload.properties?.role || "").toLowerCase();
+      const text = String(payload.properties?.speech || payload.properties?.text || "").trim();
+      if (!text || !["pal", "replica"].includes(role)) return;
+      const id = String(payload.seq ?? `${role}:${text}`);
+      if (seenEventsRef.current.has(id)) return;
+      seenEventsRef.current.add(id);
+      setMessages((current) => [...current.slice(-7), {id, role:"chloe", text}]);
+    };
+
+    call.on("joined-meeting", () => {
+      setJoined(true);
+      syncRemoteMedia();
+    });
+    call.on("participant-joined", syncRemoteMedia);
+    call.on("participant-updated", syncRemoteMedia);
+    call.on("app-message", receiveMessage);
+    call.on("error", () => setError("Chloe's video connection was interrupted."));
+    void call.join({
+      url:conversation.conversation_url,
+      startAudioOff:true,
+      startVideoOff:true,
+      userName:"OneDailyDrop viewer",
+    }).catch(() => setError("Chloe's video connection was interrupted."));
+
+    return () => {
+      callRef.current = null;
+      void call.leave().catch(() => undefined).finally(() => call.destroy());
+    };
+  }, [conversation]);
+
   const start = async () => {
     if (starting || conversationRef.current) return;
     setStarting(true);
@@ -524,24 +614,91 @@ function TavusHost({ market, drop }: { market: string; drop: LiveDropView }) {
     recordLiveDropEvent(drop.drop_key, "host_started");
   };
 
+  const sendQuestion = (event: React.FormEvent) => {
+    event.preventDefault();
+    const text = question.trim().slice(0, 500);
+    const call = callRef.current;
+    const active = conversationRef.current;
+    if (!text || !call || !active || !joined) return;
+    call.sendAppMessage({
+      message_type:"conversation",
+      event_type:"conversation.respond",
+      conversation_id:active.conversation_id,
+      properties:{text},
+    }, "*");
+    const id = `viewer-${++messageCounterRef.current}`;
+    setMessages((current) => [...current.slice(-7), {id, role:"viewer", text}]);
+    setQuestion("");
+  };
+
   if (conversation) {
     return (
-      <>
-        <iframe
-          src={conversation.conversation_url}
-          title="Talk live with Chloe, OneDailyDrop AI host"
-          allow="camera; microphone; autoplay; fullscreen; display-capture; picture-in-picture"
-          allowFullScreen
-          className="absolute inset-0 h-full w-full border-0"
-        />
+      <div className="absolute inset-0 grid grid-rows-[minmax(0,1fr)_auto] bg-[#07172b]">
+        <div className="relative min-h-0 overflow-hidden">
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            className="h-full w-full object-cover"
+            aria-label="Chloe, OneDailyDrop AI shopping host"
+          />
+          {!joined ? (
+            <div className="absolute inset-0 flex items-center justify-center bg-[#07172b] text-sm font-bold text-white/75">
+              Connecting Chloe...
+            </div>
+          ) : null}
+          {needsPlay ? (
+            <button
+              type="button"
+              onClick={() => {
+                void videoRef.current?.play().then(() => setNeedsPlay(false));
+              }}
+              className="absolute inset-0 z-10 m-auto h-12 w-fit rounded-full bg-accent px-6 text-sm font-black text-white"
+            >
+              Play Chloe
+            </button>
+          ) : null}
+        </div>
         <button
           type="button"
           onClick={end}
           className="absolute right-3 top-3 z-20 rounded-full border border-white/20 bg-black/70 px-3 py-1.5 text-xs font-bold text-white backdrop-blur hover:bg-black"
         >
-          End conversation
+          End
         </button>
-      </>
+        <div className="relative z-20 border-t border-white/10 bg-[#07101e]/95 p-3 backdrop-blur">
+          <div className="mb-2 max-h-24 space-y-1.5 overflow-y-auto" aria-live="polite">
+            {messages.length ? messages.map((message) => (
+              <p key={message.id} className="text-xs leading-relaxed text-white/80">
+                <span className="font-black text-white">{message.role === "chloe" ? "Chloe" : "You"}:</span>{" "}
+                {message.text}
+              </p>
+            )) : (
+              <p className="text-xs text-white/50">Type a question about today's live deal.</p>
+            )}
+          </div>
+          <form onSubmit={sendQuestion} className="flex gap-2">
+            <input
+              type="text"
+              value={question}
+              onChange={(event) => setQuestion(event.target.value)}
+              maxLength={500}
+              disabled={!joined}
+              placeholder={joined ? "Ask Chloe about this deal..." : "Connecting..."}
+              aria-label="Question for Chloe"
+              className="h-10 min-w-0 flex-1 rounded-full border border-white/15 bg-white/10 px-4 text-sm text-white outline-none placeholder:text-white/40 focus:border-white/35 disabled:opacity-50"
+            />
+            <button
+              type="submit"
+              disabled={!joined || !question.trim()}
+              className="h-10 rounded-full bg-accent px-4 text-xs font-black text-white disabled:opacity-40"
+            >
+              Send
+            </button>
+          </form>
+          <p className="mt-1.5 text-[10px] text-white/40">Text chat only · Your camera and microphone stay off</p>
+        </div>
+      </div>
     );
   }
 
@@ -554,7 +711,7 @@ function TavusHost({ market, drop }: { market: string; drop: LiveDropView }) {
       ) : null}
       <p className="text-xl font-black text-white">Chloe is ready</p>
       <p className="mt-2 max-w-sm text-sm leading-relaxed text-white/65">
-        Start a live video conversation with the OneDailyDrop AI shopping host.
+        Watch the OneDailyDrop AI host and ask questions by text chat.
       </p>
       <button
         type="button"
@@ -562,10 +719,10 @@ function TavusHost({ market, drop }: { market: string; drop: LiveDropView }) {
         disabled={starting}
         className="relative z-20 mt-5 rounded-full bg-accent px-6 py-3 text-sm font-black text-white shadow-lg transition hover:brightness-110 disabled:cursor-wait disabled:opacity-60"
       >
-        {starting ? "Connecting Chloe..." : "Talk to Chloe"}
+        {starting ? "Connecting Chloe..." : "Watch & chat with Chloe"}
       </button>
       {error ? <p className="relative z-20 mt-3 text-xs font-semibold text-red-300">{error}</p> : null}
-      <p className="mt-3 text-[11px] text-white/45">AI host · Camera and microphone are optional</p>
+      <p className="mt-3 text-[11px] text-white/45">Text chat only · No camera or microphone access</p>
     </div>
   );
 }

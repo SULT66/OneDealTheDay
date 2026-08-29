@@ -107,8 +107,10 @@ Live Drop state is actually live, and it omits facts the database cannot verify.
 To embed Chloe on `/:market/live`, set the server-only `TAVUS_API_KEY` and the
 Chloe `TAVUS_PAL_ID` in Azure App Settings. The browser calls the OneDailyDrop
 backend, the backend creates a Tavus conversation, and only Tavus's short-lived
-`conversation_url` is returned to the iframe. A conversation starts only after
-the shopper presses **Talk to Chloe** and is ended when they leave the page.
+`conversation_url` is returned to the receive-only media client. A conversation starts only after
+the shopper presses **Watch & chat with Chloe** and is ended when they leave
+the page. The browser joins receive-only: it publishes no camera or microphone
+tracks, and typed questions are sent as Tavus `conversation.respond` events.
 
 Before public launch, use HTTPS, protect `.env`, add Privacy/Terms/Contact pages, and comply with Amazon Associates and product-data provider rules. Do not scrape Amazon directly.
 

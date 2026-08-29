@@ -1049,7 +1049,11 @@ app.post("/api/integrations/tavus/conversations", authRateLimit, async (req, res
     });
     const data = await tavusResponse.json().catch(() => ({}));
     if (!tavusResponse.ok) {
-      console.error("Tavus conversation creation failed:", tavusResponse.status, data?.message || data?.error || "Unknown error");
+      const tavusMessage = String(data?.message || data?.error || "Unknown error");
+      console.error("Tavus conversation creation failed:", tavusResponse.status, tavusMessage);
+      if (tavusResponse.status === 429 || /concurr|active.+conversation|limit/i.test(tavusMessage)) {
+        return res.status(409).json({error:"Another Chloe session is still active. End it in Tavus Conversations, then try again."});
+      }
       return res.status(tavusResponse.status >= 400 && tavusResponse.status < 500 ? 502 : 503)
         .json({error:"Chloe could not join. Please try again."});
     }

@@ -37,6 +37,7 @@
     "test:icons": "node scripts/test-retailer-icons.js"
   },
   "dependencies": {
+    "@daily-co/daily-js": "^0.92.2",
     "@phosphor-icons/react": "^2.1.10",
     "better-sqlite3": "^12.11.1",
     "dotenv": "^16.4.7",
