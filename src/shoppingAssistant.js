@@ -4243,7 +4243,38 @@ function rankRecommendationCandidates(items, request) {
     .map(({ item }) => item);
 }
 
-function selectRetailerDiverseCandidates(items, limit) {
+/**
+ * The shortlist: every shop once, then the best of the rest to fill it out.
+ *
+ * The first pass takes one offer per shop, in ranked order. That is what stops
+ * a shortlist becoming five links to the same retailer, and it is why the top
+ * of the list is always a spread of places to buy.
+ *
+ * It used to stop there, which quietly made the shopper's list as short as the
+ * number of shops we happened to find. Asking for a 65 inch television and
+ * getting three rows is the visible version of that: there were more
+ * televisions, they were simply at shops already used. The second pass fills
+ * the remaining slots from the same ranked order.
+ *
+ * The order is the whole argument. Variety comes first and filling second, so
+ * a fourth shop always beats a second offer from the first, and a shop is only
+ * repeated once there is genuinely nowhere else to go. Duplicate listings of
+ * the same product were removed upstream, so a second offer from a shop is a
+ * different product rather than the same one twice.
+ *
+ * `canFill` is the bar for the second pass, and the two passes are held to
+ * deliberately different standards. The first pass trusts the search: the
+ * model looked at the page and is a better judge of whether a listing is the
+ * product than any word comparison here, which is why "find me a PS5" can
+ * return listings that say PlayStation 5. But that trust is only earned by
+ * being the best thing that shop had. Filling has no such backing, so it asks
+ * for positive evidence that the offer really is what was asked for.
+ *
+ * That distinction is not theoretical: without it, a dog grooming brush filled
+ * the second slot on a request for a Samsung television. Nothing upstream had
+ * rejected it, and only the shortage of room had been hiding it.
+ */
+function selectRetailerDiverseCandidates(items, limit, { canFill = () => true } = {}) {
   const candidates = Array.isArray(items) ? items : [];
   const selected = [];
   const selectedItems = new Set();
@@ -4255,6 +4286,18 @@ function selectRetailerDiverseCandidates(items, limit) {
     selectedItems.add(item);
     retailers.add(retailer);
     if (selected.length >= limit) return selected;
+  }
+  for (const item of candidates) {
+    if (selected.length >= limit) break;
+    /* An offer with no recognisable shop was skipped above and stays skipped:
+       a row that cannot say where to buy does not deserve a slot. */
+    if (selectedItems.has(item) || !retailerDiversityKey(item)) continue;
+    if (!canFill(item)) {
+      trace("not used to fill the shortlist |", item?.title);
+      continue;
+    }
+    selected.push(item);
+    selectedItems.add(item);
   }
   return selected;
 }
@@ -5571,7 +5614,15 @@ function createShoppingAssistant({
          is put in price order for reading. */
       const visibleCandidates = sortOffersByPrice(
         assignRecommendationRoles(
-          selectRetailerDiverseCandidates(rankedCandidates, recommendationCap),
+          selectRetailerDiverseCandidates(rankedCandidates, recommendationCap, {
+            /* The word comparison, used here as a bar for extras rather than
+               as a gate on everything. It is too strict to decide what the
+               search may return, which is why "find me a PS5" is allowed to
+               come back with listings that say PlayStation 5. It is exactly
+               strict enough to decide what may be added merely to lengthen a
+               list. */
+            canFill: (item) => matchesShoppingIntent(item, resolvedRequest, activeMission.product_type),
+          }),
           resolvedRequest,
         ),
         userMessage,

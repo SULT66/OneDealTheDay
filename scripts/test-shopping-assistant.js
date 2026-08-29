@@ -2409,26 +2409,78 @@ const client = {
     "Delia collapsed a multi-store result back to one retailer",
   );
 
+  /*
+   * Every shop once, then the best of the rest to fill the list.
+   *
+   * This test used to assert the opposite: that four offers across two shops
+   * produced exactly two rows, on the grounds that padding a list with
+   * repeated retailers was worse than a short list. The short list turned out
+   * to be worse. Asking for a 65 inch television returned three rows because
+   * only three shops were found, while more televisions sat unused behind
+   * shops already taken, and a shopper reading three rows has no way to know
+   * that.
+   *
+   * The rule that mattered is kept and now stated precisely: a shop new to the
+   * list always outranks a second offer from a shop already on it. Nike C
+   * comes second for that reason, ahead of the eBay listing that was next in
+   * ranked order, and only then does the list start repeating.
+   */
+  const filled = selectRetailerDiverseCandidates(
+    [
+      { title: "Nike A", retailer: "eBay" },
+      { title: "Nike B", retailer: "eBay" },
+      {
+        title: "Nike C",
+        retailer: "Nike",
+        url: "https://www.nike.com/t/nike-c",
+      },
+      {
+        title: "Nike D",
+        retailer: "Nike US",
+        url: "https://nike.com/t/nike-d",
+      },
+    ],
+    3,
+  );
+  assert.deepStrictEqual(
+    filled.map((item) => item.title),
+    ["Nike A", "Nike C", "Nike B"],
+    "Delia stopped at one offer per shop and handed back a shorter list than it had room for",
+  );
+
+  /* Filling never invents rows: with nothing left to add, the list is as long
+     as what was actually found. */
   assert.strictEqual(
+    selectRetailerDiverseCandidates([{ title: "Only one", retailer: "eBay" }], 5).length,
+    1,
+    "Delia repeated an offer to reach the requested length",
+  );
+
+  /*
+   * Filling asks for positive evidence that an offer really is the thing
+   * requested, where the first pass does not.
+   *
+   * The two passes are deliberately held to different standards. The first
+   * trusts the search, which is why "find me a PS5" may return listings that
+   * say PlayStation 5; that trust is earned by being the best thing a given
+   * shop had. An extra added only to lengthen the list has earned nothing, so
+   * it has to look like the right product.
+   *
+   * Without this bar, a dog grooming brush filled the second slot on a request
+   * for a Samsung television. Nothing upstream had rejected it, and only the
+   * shortage of room had been hiding it.
+   */
+  assert.deepStrictEqual(
     selectRetailerDiverseCandidates(
       [
-        { title: "Nike A", retailer: "eBay" },
-        { title: "Nike B", retailer: "eBay" },
-        {
-          title: "Nike C",
-          retailer: "Nike",
-          url: "https://www.nike.com/t/nike-c",
-        },
-        {
-          title: "Nike D",
-          retailer: "Nike US",
-          url: "https://nike.com/t/nike-d",
-        },
+        { title: "Samsung 55-inch Crystal UHD 4K Smart TV", retailer: "eBay" },
+        { title: "Furminator 2-in-1 Undercoat Tool For Dogs", retailer: "eBay" },
       ],
-      3,
-    ).length,
-    2,
-    "Delia padded three result slots with repeated listings from one retailer",
+      4,
+      { canFill: (item) => /\btv\b|television/i.test(item.title) },
+    ).map((item) => item.title),
+    ["Samsung 55-inch Crystal UHD 4K Smart TV"],
+    "an unrelated product was used to pad the shortlist out",
   );
 
   const cheaperNikeAssistant = createShoppingAssistant({
