@@ -15,6 +15,7 @@ const {
   normalizeIconHost,
   readCachedIcon,
   pinRetailerIcon,
+  storeUploadedIcon,
   writeCachedIcon,
 } = require("./retailerIcons");
 const {
@@ -2449,10 +2450,19 @@ app.get("/api/admin/retailer-icons", admin, (req, res) => {
   });
 });
 
-app.post("/api/admin/retailer-icons", admin, async (req, res) => {
-  const result = await pinRetailerIcon(db, req.body?.host, req.body?.icon_url).catch((error) => ({
-    error: error.message,
-  }));
+/* A larger body than the site allows elsewhere, because an uploaded icon
+   arrives base64 encoded and that is a third bigger than the file. Only on
+   this one route, and only behind the admin key. */
+app.post("/api/admin/retailer-icons", admin, express.json({limit:"256kb"}), async (req, res) => {
+  /* An uploaded file wins over a pasted link. Pasting a link turns out to be
+     the hard way round: the addresses people have to hand are pages showing a
+     logo rather than the logo, and several icon sites refuse to serve their
+     images to anybody else at all. */
+  const result = req.body?.icon_data
+    ? storeUploadedIcon(db, req.body.host, Buffer.from(String(req.body.icon_data), "base64"))
+    : await pinRetailerIcon(db, req.body?.host, req.body?.icon_url).catch((error) => ({
+        error: error.message,
+      }));
   if (result.error) return res.status(400).json({error:result.error});
   res.status(201).json({ok:true, ...result});
 });

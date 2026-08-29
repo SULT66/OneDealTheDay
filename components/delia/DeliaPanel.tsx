@@ -37,12 +37,57 @@ import {
 } from "@/components/account/SavedOffers";
 import { useDelia } from "./DeliaContext";
 
-const EXAMPLES = [
-  "Find me a mattress under six hundred dollars",
-  "Show well rated headphones on Amazon",
-  "What's today's drop?",
-  "Compare the cheapest two tools you have",
+/**
+ * The four openers on the empty panel, grouped by the kind of question rather
+ * than kept in one flat list.
+ *
+ * One is drawn from each group, so the four on screen are always four
+ * different shapes of ask: a budget, a comparison, a hunt for the best price,
+ * and something about this site or about buying in general. Drawing four at
+ * random from a single pool would regularly show four budget questions, which
+ * teaches a first-time visitor that budgets are all Delia does.
+ *
+ * They change on every open, and again on every new conversation. Somebody who
+ * did not recognise themselves in the first four gets a different four next
+ * time, and the set as a whole is the plainest statement of what she can be
+ * asked for.
+ */
+const EXAMPLE_GROUPS = [
+  [
+    "Find me a mattress under six hundred dollars",
+    "A coffee machine under two hundred, worth the money",
+    "Headphones under a hundred that are actually good",
+    "A washing machine under eight hundred that lasts",
+    "An air fryer for a small kitchen, under eighty",
+  ],
+  [
+    "Compare the two cheapest robot vacuums",
+    "Air fryer or mini oven, which is better value?",
+    "Compare prices for a PlayStation 5 across shops",
+    "Is the expensive electric toothbrush worth it?",
+    "Compare two 65 inch TVs around a thousand",
+  ],
+  [
+    "Where is the cheapest 65 inch TV right now?",
+    "Who has AirPods Pro cheapest today?",
+    "Find maple syrup, 32 oz, at the best price",
+    "Cheapest place for a decent office chair",
+    "Find a 1TB SSD, cheapest shop that ships",
+  ],
+  [
+    "What is today's drop?",
+    "What should I look for in a laptop?",
+    "A birthday gift for someone who cooks, under fifty",
+    "Is now a good time to buy a TV?",
+    "Something useful for a new flat, under eighty",
+  ],
 ];
+
+/* The first paint has to be identical on the server and in the browser, so it
+   takes the first of each group; the shuffle happens once the panel is up. */
+const FIRST_EXAMPLES = EXAMPLE_GROUPS.map((group) => group[0]);
+const pickExamples = () =>
+  EXAMPLE_GROUPS.map((group) => group[Math.floor(Math.random() * group.length)]);
 
 /**
  * What Delia is doing, while she does it.
@@ -462,6 +507,11 @@ export function DeliaPanel() {
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
   const [conversations, setConversations] = useState<DeliaConversationSummary[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [examples, setExamples] = useState<string[]>(FIRST_EXAMPLES);
+
+  /* Shuffled once the panel exists rather than during render, so the server
+     and the browser agree on the first paint. */
+  useEffect(() => setExamples(pickExamples()), []);
   const [typed, setTyped] = useState("");
   // Keyed by turn index — feedback is per-answer, not global to the panel.
   const [feedbackGiven, setFeedbackGiven] = useState<Record<number, boolean>>({});
@@ -544,6 +594,9 @@ export function DeliaPanel() {
     setErrorMsg(null);
     setPendingQuestion(null);
     setHistoryOpen(false);
+    /* A fresh conversation gets fresh openers: the four that were ignored last
+       time are the four least worth showing again. */
+    setExamples(pickExamples());
   }, []);
 
   /**
@@ -812,7 +865,7 @@ export function DeliaPanel() {
                 Type what you are looking for.
               </p>
               <ul className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2">
-                {EXAMPLES.map((e) => (
+                {examples.map((e) => (
                   <li key={e}>
                     <button
                       type="button"
