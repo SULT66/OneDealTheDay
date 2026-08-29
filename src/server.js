@@ -958,10 +958,129 @@ app.get("/api/live/current", (req, res) => {
   /* Early access is a Drop Pass benefit. Nobody has one yet, so this is zero
      for everybody: the lane exists in the state machine and is not sold. */
   const earlyAccessSeconds = 0;
+  const presented = presentDrop(drop, Date.now(), { earlyAccessSeconds });
   res.set("Cache-Control", "no-store").json({
-    drop: presentDrop(drop, Date.now(), { earlyAccessSeconds }),
+    drop: presented ? {
+      ...presented,
+      /* Chloe's tool is currently grounded to the US market in Tavus. Do not
+         offer her in another market until that tool receives a market input. */
+      tavus_available:Boolean(c.tavusApiKey && c.tavusPalId && selectedMarket.code === "us"),
+    } : null,
     server_now: new Date().toISOString(),
   });
+});
+
+/*
+ * A Tavus conversation is created server-side so the API key never reaches a
+ * shopper's browser. The returned Daily room URL is short-lived and is the
+ * only Tavus value the page needs in order to embed Chloe.
+ *
+ * Sessions are deliberately opt-in instead of starting on page load: Tavus
+ * bills live conversations, browsers block surprise microphone access, and a
+ * crawler or an abandoned tab must not consume a live slot. One active room
+ * per IP and a small global ceiling also keep a public endpoint from becoming
+ * an unbounded spend path during the MVP.
+ */
+const tavusConversations = new Map();
+const endTavusConversation = async conversationId => {
+  if (!c.tavusApiKey || !/^c[a-zA-Z0-9_-]{4,100}$/.test(conversationId)) return false;
+  const response = await fetch(`https://tavusapi.com/v2/conversations/${conversationId}/end`, {
+    method:"POST",
+    headers:{"x-api-key":c.tavusApiKey},
+    signal:AbortSignal.timeout(10000),
+  });
+  return response.ok || response.status === 204 || response.status === 404;
+};
+
+app.post("/api/integrations/tavus/conversations", authRateLimit, async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  if (!req.is("application/json")) {
+    return res.status(415).json({error:"A JSON request is required."});
+  }
+  if (!c.tavusApiKey || !c.tavusPalId) {
+    return res.status(503).json({error:"Chloe is not connected yet."});
+  }
+
+  const selectedMarket = normalizeMarket(req.body?.market) || "us";
+  if (selectedMarket !== "us") {
+    return res.status(409).json({error:"Chloe is currently available for the US Live Drop."});
+  }
+  const drop = currentLiveDrop(selectedMarket);
+  const view = presentDrop(drop, Date.now());
+  if (!view || !["waiting", "live"].includes(view.state)) {
+    return res.status(409).json({error:"Chloe is available when the Live Drop waiting room opens."});
+  }
+  const requestedDropKey = String(req.body?.drop_key || "").trim();
+  if (requestedDropKey && requestedDropKey !== view.drop_key) {
+    return res.status(409).json({error:"The Live Drop changed. Refresh the page and try again."});
+  }
+
+  const ipKey = String(req.ip || "unknown");
+  const now = Date.now();
+  for (const [id, session] of tavusConversations) {
+    if (now - session.startedAt > 15 * 60 * 1000) {
+      tavusConversations.delete(id);
+      void endTavusConversation(id).catch(error => console.error("Stale Tavus conversation cleanup failed:", error.message));
+    }
+  }
+  if ([...tavusConversations.values()].some(session => session.ipKey === ipKey)) {
+    return res.status(409).json({error:"A Chloe session is already active in this browser."});
+  }
+  if (tavusConversations.size >= 10) {
+    return res.status(503).json({error:"Chloe is helping other shoppers. Please try again shortly."});
+  }
+
+  try {
+    const tavusResponse = await fetch("https://tavusapi.com/v2/conversations", {
+      method:"POST",
+      headers:{"Content-Type":"application/json", "x-api-key":c.tavusApiKey},
+      body:JSON.stringify({
+        pal_id:c.tavusPalId,
+        conversation_name:`OneDailyDrop Live · ${view.drop_key}`,
+        conversational_context:[
+          `This session is the OneDailyDrop Live event for market ${selectedMarket.toUpperCase()}.`,
+          `The current published drop key is ${view.drop_key}.`,
+          "Use get_product_details before stating any product, price, discount, stock or purchase fact.",
+          "Never ask the shopper for a product ID. Keep answers brief and suitable for a live shopping broadcast.",
+        ].join(" "),
+        custom_greeting:"Welcome to OneDailyDrop Live! I'm Chloe, your AI shopping host. Ask me about today's verified live deal.",
+      }),
+      signal:AbortSignal.timeout(15000),
+    });
+    const data = await tavusResponse.json().catch(() => ({}));
+    if (!tavusResponse.ok) {
+      console.error("Tavus conversation creation failed:", tavusResponse.status, data?.message || data?.error || "Unknown error");
+      return res.status(tavusResponse.status >= 400 && tavusResponse.status < 500 ? 502 : 503)
+        .json({error:"Chloe could not join. Please try again."});
+    }
+    const conversationId = String(data.conversation_id || "");
+    const conversationUrl = String(data.conversation_url || "");
+    if (!/^c[a-zA-Z0-9_-]{4,100}$/.test(conversationId) || !/^https:\/\/[^/]+\.daily\.co\//i.test(conversationUrl)) {
+      return res.status(502).json({error:"Tavus returned an invalid conversation."});
+    }
+    tavusConversations.set(conversationId, {ipKey, startedAt:now, dropKey:view.drop_key});
+    return res.status(201).json({conversation_id:conversationId, conversation_url:conversationUrl});
+  } catch (error) {
+    console.error("Tavus conversation request failed:", error.message);
+    return res.status(503).json({error:"Chloe could not join. Please try again."});
+  }
+});
+
+app.post("/api/integrations/tavus/conversations/:id/end", async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  const conversationId = String(req.params.id || "");
+  const session = tavusConversations.get(conversationId);
+  if (!session || session.ipKey !== String(req.ip || "unknown")) {
+    return res.status(404).json({ended:false});
+  }
+  tavusConversations.delete(conversationId);
+  try {
+    const ended = await endTavusConversation(conversationId);
+    return res.json({ended});
+  } catch (error) {
+    console.error("Tavus conversation cleanup failed:", error.message);
+    return res.status(502).json({ended:false});
+  }
 });
 
 /**
@@ -1108,7 +1227,7 @@ app.post("/api/live/remind", authRateLimit, (req, res) => {
  * on a phone with a bad connection, is the same person arriving once, so the
  * unique index absorbs it and the response is the same either way.
  */
-const LIVE_DROP_EVENTS = new Set(["waiting_room", "reveal", "buy_click", "remind"]);
+const LIVE_DROP_EVENTS = new Set(["waiting_room", "reveal", "host_started", "buy_click", "remind"]);
 app.post("/api/live/events", (req, res) => {
   const dropKey = String(req.body?.drop_key || "").trim().slice(0, 80);
   const eventType = String(req.body?.event_type || "").trim().toLowerCase();

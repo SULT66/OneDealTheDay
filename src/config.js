@@ -11,6 +11,8 @@ const ebayClientId = String(process.env.EBAY_CLIENT_ID || "").trim();
 const ebayClientSecret = String(process.env.EBAY_CLIENT_SECRET || "").trim();
 const ebayCampaignId = String(process.env.EBAY_CAMPAIGN_ID || "").trim();
 const tavusToolSecret = String(process.env.TAVUS_TOOL_SECRET || "").trim();
+const tavusApiKey = String(process.env.TAVUS_API_KEY || "").trim();
+const tavusPalId = String(process.env.TAVUS_PAL_ID || "p5362d6973ab").trim();
 const demoMode = false;
 
 function boundedNumber(value, fallback, minimum, maximum = Number.MAX_SAFE_INTEGER) {
@@ -117,6 +119,8 @@ module.exports = {
   ebayClientSecret,
   ebayCampaignId,
   tavusToolSecret,
+  tavusApiKey,
+  tavusPalId,
   ebayEnvironment: String(process.env.EBAY_ENVIRONMENT || "production").trim().toLowerCase(),
   affiliateTag: String(process.env.AFFILIATE_TAG || "").trim(),
   affiliateTagConfigured: markets.some(code => Boolean(affiliateTagForMarket(code))),
