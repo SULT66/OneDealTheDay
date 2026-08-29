@@ -306,6 +306,59 @@ function writeCachedIcon(db, host, icon, now = Date.now(), { pinned = false } = 
 }
 
 /**
+ * What an image actually is, read from its first bytes.
+ *
+ * A browser uploading a file tells us the type, and a caller can say anything.
+ * Reading the signature costs nothing and means a stored icon is served as
+ * what it really is rather than as what it claimed to be.
+ */
+function sniffImageType(buffer) {
+  const bytes = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer || []);
+  if (bytes.length < 4) return null;
+  if (bytes[0] === 0x89 && bytes.toString("latin1", 1, 4) === "PNG") return "image/png";
+  if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return "image/jpeg";
+  if (bytes.toString("latin1", 0, 3) === "GIF") return "image/gif";
+  /* An .ico is a zero word, then a type of 1 (icon) or 2 (cursor). */
+  if (bytes[0] === 0 && bytes[1] === 0 && (bytes[2] === 1 || bytes[2] === 2) && bytes[3] === 0) {
+    return "image/x-icon";
+  }
+  if (bytes.toString("latin1", 0, 4) === "RIFF" && bytes.toString("latin1", 8, 12) === "WEBP") {
+    return "image/webp";
+  }
+  /* SVG is text, so it is recognised rather than sniffed: look for an svg tag
+     near the start, past any XML declaration or comment. */
+  const head = bytes.toString("utf8", 0, Math.min(bytes.length, 1024)).trimStart();
+  if (head.startsWith("<") && /<svg[\s>]/i.test(head)) return "image/svg+xml";
+  return null;
+}
+
+/**
+ * Stores a file somebody uploaded as a shop's icon.
+ *
+ * Pasting a link turns out to be the hard way round: the addresses people have
+ * to hand are pages showing a logo, not the logo itself, and several icon
+ * sites refuse to serve their images to anyone else anyway. Uploading the file
+ * they already downloaded skips all of it.
+ *
+ * The type is read from the bytes, not from what the browser said it was.
+ */
+function storeUploadedIcon(db, host, buffer, { now = Date.now() } = {}) {
+  const safeHost = normalizeIconHost(host);
+  if (!safeHost) return { error: "That is not a shop address." };
+
+  const bytes = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer || []);
+  if (!bytes.length) return { error: "That file was empty." };
+  if (bytes.length > MAX_ICON_BYTES) {
+    return { error: `An icon has to be under ${Math.round(MAX_ICON_BYTES / 1024)}KB. That one is ${Math.round(bytes.length / 1024)}KB.` };
+  }
+  const contentType = sniffImageType(bytes);
+  if (!contentType) return { error: "That file is not a PNG, JPEG, GIF, WEBP, SVG or ICO image." };
+
+  writeCachedIcon(db, safeHost, { contentType, bytes }, now, { pinned: true });
+  return { host: safeHost, contentType, bytes: bytes.length };
+}
+
+/**
  * Takes one specific image, chosen by hand, as a shop's icon.
  *
  * The URL still goes through every guard an automatic fetch does. Somebody
@@ -317,9 +370,24 @@ async function pinRetailerIcon(db, host, iconUrl, options = {}) {
   if (!safeHost) return { error: "That is not a shop address." };
 
   const result = await safeFetch(String(iconUrl || ""), { ...options, accept: "image/*" });
-  if (!result) return { error: "That image could not be fetched." };
+  if (!result) {
+    return {
+      error:
+        "That link could not be fetched. It has to be a public https address that points straight at the image.",
+    };
+  }
   const contentType = cleanType(result.response.headers.get("content-type"));
-  if (!ALLOWED_TYPES.has(contentType)) return { error: `That link answered with ${contentType || "no image type"}.` };
+  if (!ALLOWED_TYPES.has(contentType)) {
+    /* Nearly every time, this is somebody pasting the address bar of a search
+       results page. Naming the content type is no use on its own: the message
+       has to say what to do instead. */
+    return {
+      error:
+        contentType === "text/html"
+          ? "That is a web page, not an image. Open the logo on its own and copy the image address: right click the picture and choose Copy image address. It usually ends in .png, .svg or .ico."
+          : `That link answered with ${contentType || "no type at all"}, which is not an image.`,
+    };
+  }
   const bytes = await readCapped(result.response).catch(() => null);
   if (!bytes) return { error: `An icon has to be an image under ${Math.round(MAX_ICON_BYTES / 1024)}KB.` };
 
@@ -339,5 +407,7 @@ module.exports = {
   readCachedIcon,
   resolvesToPublicAddress,
   safeFetch,
+  sniffImageType,
+  storeUploadedIcon,
   writeCachedIcon,
 };

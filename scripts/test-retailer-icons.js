@@ -12,6 +12,8 @@ const {
   pinRetailerIcon,
   readCachedIcon,
   safeFetch,
+  sniffImageType,
+  storeUploadedIcon,
   writeCachedIcon,
 } = require("../src/retailerIcons");
 
@@ -268,7 +270,57 @@ async function main() {
   });
   assert(pinnedHtml.error, "a web page was accepted as a hand-picked icon");
 
-  console.log("Retailer icon host, address, redirect, fetch, cache and pinning checks passed.");
+  /* --------------------------------------------------------- uploaded icons */
+
+  /*
+   * Pasting a link turned out to be the hard way round: the addresses people
+   * have to hand are pages showing a logo, and several icon sites will not
+   * serve their images to anybody else at all. Uploading the downloaded file
+   * skips all of that, so it has to be as careful as the fetch was.
+   *
+   * The type is read from the first bytes, never from what the uploader said.
+   * A browser reports image/png for anything somebody renamed, and these bytes
+   * are served back to every visitor.
+   */
+  const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  assert.strictEqual(sniffImageType(png), "image/png");
+  assert.strictEqual(sniffImageType(Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0, 0, 0])), "image/jpeg");
+  assert.strictEqual(sniffImageType(Buffer.from([0, 0, 1, 0, 1, 0, 16, 16])), "image/x-icon");
+  assert.strictEqual(sniffImageType(Buffer.from("GIF89a and then some")), "image/gif");
+  assert.strictEqual(
+    sniffImageType(Buffer.concat([Buffer.from("RIFF"), Buffer.alloc(4), Buffer.from("WEBPVP8 ")])),
+    "image/webp",
+  );
+  assert.strictEqual(
+    sniffImageType(Buffer.from('<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg"></svg>')),
+    "image/svg+xml",
+  );
+  /* The two worth naming: a saved web page, and anything executable. */
+  assert.strictEqual(sniffImageType(Buffer.from("<!doctype html><html></html>")), null);
+  assert.strictEqual(sniffImageType(Buffer.from([0x4d, 0x5a, 0x90, 0x00, 1, 2, 3, 4])), null);
+  assert.strictEqual(sniffImageType(Buffer.alloc(0)), null);
+
+  const uploaded = storeUploadedIcon(db, "samsung-shop.test-shop.com", png, { now });
+  assert.strictEqual(uploaded.contentType, "image/png");
+  assert.strictEqual(
+    readCachedIcon(db, "samsung-shop.test-shop.com", now + SUCCESS_TTL_MS * 12).contentType,
+    "image/png",
+    "an uploaded icon expired, though it was set by hand for a shop that refuses us",
+  );
+
+  assert(
+    storeUploadedIcon(db, "samsung-shop.test-shop.com", Buffer.from("<!doctype html>"), { now }).error,
+    "a web page was accepted as an uploaded icon",
+  );
+  assert(
+    storeUploadedIcon(db, "samsung-shop.test-shop.com", Buffer.alloc(MAX_ICON_BYTES + 1), { now }).error,
+    "an oversized upload was accepted",
+  );
+  assert(storeUploadedIcon(db, "localhost", png, { now }).error, "an upload bypassed the host check");
+
+  console.log(
+    "Retailer icon host, address, redirect, fetch, cache, pinning and upload checks passed.",
+  );
 }
 
 main().catch((error) => {

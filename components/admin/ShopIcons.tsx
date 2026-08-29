@@ -15,6 +15,17 @@ import { useCallback, useEffect, useState } from "react";
  * about and got nothing from, which is exactly the row worth pinning.
  */
 
+/* FileReader hands back a data URL; the part after the comma is the base64
+   the server wants. Reading it in the browser keeps the upload as ordinary
+   JSON rather than adding multipart handling to the server for one field. */
+const asBase64 = (file: File) =>
+  new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(",")[1] || "");
+    reader.onerror = () => reject(new Error("That file could not be read."));
+    reader.readAsDataURL(file);
+  });
+
 type ShopIcon = {
   host: string;
   content_type: string;
@@ -27,6 +38,7 @@ export function ShopIcons({ adminKey }: { adminKey: string }) {
   const [icons, setIcons] = useState<ShopIcon[] | null>(null);
   const [host, setHost] = useState("");
   const [iconUrl, setIconUrl] = useState("");
+  const [file, setFile] = useState<File | null>(null);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -51,7 +63,12 @@ export function ShopIcons({ adminKey }: { adminKey: string }) {
     const response = await fetch("/api/admin/retailer-icons", {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-Admin-Key": adminKey },
-      body: JSON.stringify({ host, icon_url: iconUrl }),
+      body: JSON.stringify(
+        /* An uploaded file wins over a pasted link. Most logo pages will not
+           give you a link to the image at all, and the file is already on the
+           machine by the time somebody has looked. */
+        file ? { host, icon_data: await asBase64(file) } : { host, icon_url: iconUrl },
+      ),
     }).catch(() => null);
     const result = await response?.json().catch(() => ({}));
     setBusy(false);
@@ -59,6 +76,7 @@ export function ShopIcons({ adminKey }: { adminKey: string }) {
       setMessage(`Set for ${result.host}.`);
       setHost("");
       setIconUrl("");
+      setFile(null);
     } else {
       setMessage(result?.error || "That did not go through.");
     }
@@ -97,13 +115,36 @@ export function ShopIcons({ adminKey }: { adminKey: string }) {
             </label>
             <label className="block py-2">
               <span className="text-xs font-semibold uppercase tracking-[0.1em] text-fg-subtle">
+                Logo file
+              </span>
+              <span className="mt-0.5 block text-xs font-normal normal-case tracking-normal text-fg-subtle">
+                Download the logo, then pick it here. PNG, SVG or ICO, under 64KB.
+              </span>
+              <input
+                type="file"
+                accept="image/png,image/svg+xml,image/x-icon,image/vnd.microsoft.icon,image/jpeg,image/webp,image/gif,.ico"
+                onChange={(event) => setFile(event.target.files?.[0] || null)}
+                className="mt-1.5 w-full text-sm text-fg-muted file:mr-3 file:cursor-pointer file:rounded-full file:border file:border-border file:bg-surface-2 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-fg"
+              />
+            </label>
+
+            <label className="block py-2">
+              <span className="text-xs font-semibold uppercase tracking-[0.1em] text-fg-subtle">
                 Link to the logo
+              </span>
+              {/* The usual mistake is pasting the address bar of a search
+                  results page, so the field says what is wanted before the
+                  server has to explain what went wrong. */}
+              <span className="mt-0.5 block text-xs font-normal normal-case tracking-normal text-fg-subtle">
+                Or paste a direct link to the image file. A link to a page showing
+                the logo will not work.
               </span>
               <input
                 type="url"
                 value={iconUrl}
                 onChange={(event) => setIconUrl(event.target.value)}
                 placeholder="https://.../logo.png"
+                title="A link straight to the image file, not to a page showing it"
                 required
                 className="mt-1.5 h-11 w-full rounded-xl border border-border bg-surface-2 px-3 text-sm text-fg outline-none focus:border-border-strong"
               />
@@ -113,7 +154,7 @@ export function ShopIcons({ adminKey }: { adminKey: string }) {
             type="submit"
             className="mt-3 inline-flex h-11 cursor-pointer items-center rounded-full border border-border px-6 text-sm font-semibold text-fg transition-colors hover:bg-surface-2 disabled:opacity-55"
           >
-            Set icon
+            {file ? "Upload icon" : "Set icon"}
           </button>
         </fieldset>
       </form>
