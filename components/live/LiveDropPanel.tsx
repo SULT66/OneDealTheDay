@@ -163,18 +163,33 @@ export function LiveDropPanel({ market }: { market: string }) {
 
   return (
     <Frame>
-      <StateBadge state={drop.state} />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <p className="text-lg font-black tracking-tight text-fg sm:text-xl">
+            OneDailyDrop <span className="text-accent">LIVE</span>
+          </p>
+          <StateBadge state={drop.state} />
+        </div>
+        <span className="rounded-full border border-border bg-surface-2 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-fg-muted">
+          AI host
+        </span>
+      </div>
 
-      <VideoSlot drop={drop} />
+      <BroadcastStage drop={drop} />
 
-      <div className="mt-5 grid gap-6 sm:grid-cols-[220px_minmax(0,1fr)]">
+      <div
+        className={cn(
+          "mt-5 grid gap-5 rounded-2xl border border-border bg-surface-2 p-4 sm:p-5",
+          drop.image_url && "sm:grid-cols-[180px_minmax(0,1fr)]",
+        )}
+      >
         {drop.image_url ? (
-          <div className="relative aspect-square w-full overflow-hidden rounded-2xl bg-surface-2 sm:w-[220px]">
+          <div className="relative aspect-square w-full overflow-hidden rounded-xl bg-surface sm:w-[180px]">
             <Image
               src={drop.image_url}
               alt=""
               fill
-              sizes="220px"
+              sizes="180px"
               className="object-contain"
               unoptimized
             />
@@ -196,7 +211,7 @@ export function LiveDropPanel({ market }: { market: string }) {
 
           {/* Before it opens the price is not merely hidden on screen: the
               server has not sent it. There is nothing here to find. */}
-          <div className="mt-5 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <div className="mt-4 flex flex-wrap items-baseline gap-x-3 gap-y-1">
             {price ? (
               <span className="text-3xl font-black text-fg tnum">{price}</span>
             ) : (
@@ -216,37 +231,33 @@ export function LiveDropPanel({ market }: { market: string }) {
             )}
           </div>
 
-          {drop.quantity_total > 0 && (
-            <p className="mt-3 text-sm text-fg-muted">
-              <span className="font-semibold text-fg tnum">{drop.quantity_total}</span> in total
-              {isLive && (
-                <>
-                  {" · "}
-                  <span className="font-semibold text-fg tnum">{drop.quantity_remaining}</span> left
-                </>
-              )}
-            </p>
-          )}
+          <div className="mt-4 grid grid-cols-2 gap-3 sm:flex sm:flex-wrap">
+            <Countdown state={drop.state} untilStart={untilStart} untilEnd={untilEnd} />
+            {drop.quantity_total > 0 && (
+              <Metric label="Stock">
+                <span className="tnum">{isLive ? drop.quantity_remaining : drop.quantity_total}</span>{" "}
+                {isLive ? "left" : "available"}
+              </Metric>
+            )}
+          </div>
 
-          <Countdown state={drop.state} untilStart={untilStart} untilEnd={untilEnd} />
-
-          <div className="mt-6 flex flex-wrap items-center gap-2.5">
+          <div className="mt-5 flex flex-wrap items-center gap-2.5">
             {isLive && drop.affiliate_url && (
               <a
                 href={drop.affiliate_url}
                 target="_blank"
                 rel="sponsored noopener noreferrer"
                 onClick={() => recordLiveDropEvent(drop.drop_key, "buy_click")}
-                className="inline-flex h-12 items-center rounded-full bg-lime px-6 text-sm font-bold text-ink transition-opacity hover:opacity-88"
+                className="inline-flex h-12 flex-1 items-center justify-center rounded-xl bg-accent px-6 text-sm font-bold text-white transition-opacity hover:opacity-88 sm:flex-none"
               >
                 Buy now
               </a>
             )}
             <DeliaTrigger
               variant="header"
-              label="Ask Delia"
-              seed={`Is the ${drop.title} a good deal at ${price || "the drop price"}?`}
-              className="h-12 px-5"
+              label="Ask a live question"
+              seed={`I am watching OneDailyDrop Live. Is the ${drop.title} a good deal at ${price || "the drop price"}?`}
+              className="h-12 flex-1 justify-center rounded-xl px-5 sm:flex-none"
             />
             {!finished && drop.state !== "live" && <RemindMe dropKey={drop.drop_key} />}
           </div>
@@ -260,8 +271,8 @@ export function LiveDropPanel({ market }: { market: string }) {
 
 function Frame({ children }: { children: React.ReactNode }) {
   return (
-    <section className="mx-auto w-full max-w-4xl px-4 py-10 sm:py-14">
-      <div className="rounded-3xl border border-border bg-surface p-6 sm:p-8">{children}</div>
+    <section className="mx-auto w-full max-w-6xl px-3 py-6 sm:px-6 sm:py-10">
+      <div className="rounded-3xl border border-border bg-surface p-4 shadow-sm sm:p-6">{children}</div>
     </section>
   );
 }
@@ -302,13 +313,15 @@ function Countdown({
   const seconds = live ? untilEnd : untilStart;
   if (seconds == null) return null;
 
+  return <Metric label={live ? "Closes in" : "Opens in"}>{clock(seconds)}</Metric>;
+}
+
+function Metric({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="mt-5">
-      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-fg-subtle">
-        {live ? "Closes in" : "Opens in"}
-      </p>
-      <p className="mt-1 text-4xl font-black text-fg tnum" aria-live="off">
-        {clock(seconds)}
+    <div className="min-w-0 rounded-xl border border-border bg-surface px-3 py-2.5 sm:min-w-32">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-fg-subtle">{label}</p>
+      <p className="mt-0.5 truncate text-lg font-black text-fg tnum" aria-live="off">
+        {children}
       </p>
     </div>
   );
@@ -392,38 +405,73 @@ function RemindMe({ dropKey }: { dropKey: string }) {
  * hosted by somebody who already solved streaming, which is what the roadmap
  * says to do instead of building it.
  */
-function VideoSlot({ drop }: { drop: LiveDropView }) {
+function BroadcastStage({ drop }: { drop: LiveDropView }) {
   const showable = drop.state === "waiting" || drop.state === "live";
   if (!showable) return null;
 
-  if (drop.stream_embed_url) {
-    return (
-      <div className="mt-5 aspect-video w-full overflow-hidden rounded-2xl bg-ink">
-        <iframe
-          src={drop.stream_embed_url}
-          title={`${drop.title} live drop`}
-          allow="autoplay; encrypted-media; picture-in-picture"
-          allowFullScreen
-          className="h-full w-full border-0"
-        />
-      </div>
-    );
-  }
+  const hasHost = Boolean(drop.stream_embed_url);
+  const hasDemo = Boolean(drop.video_url);
 
-  if (drop.video_url) {
-    return (
-      <div className="mt-5 aspect-video w-full overflow-hidden rounded-2xl bg-ink">
-        <video
-          src={drop.video_url}
-          controls
-          autoPlay
-          muted
-          playsInline
-          className="h-full w-full object-contain"
-        />
+  return (
+    <div
+      className={cn(
+        "mt-4 grid overflow-hidden rounded-2xl border border-white/10 bg-[#061224] shadow-2xl",
+        hasHost && hasDemo && "lg:grid-cols-[1.35fr_0.85fr]",
+      )}
+    >
+      <div className="relative min-h-[360px] overflow-hidden bg-[radial-gradient(circle_at_50%_20%,#123b69_0%,#07172b_48%,#030914_100%)] sm:min-h-[460px]">
+        <StageLabel>AI host</StageLabel>
+        {hasHost ? (
+          <iframe
+            src={drop.stream_embed_url}
+            title={`${drop.title} AI host stream`}
+            allow="autoplay; encrypted-media; picture-in-picture"
+            allowFullScreen
+            className="absolute inset-0 h-full w-full border-0"
+          />
+        ) : (
+          <div className="flex h-full min-h-[360px] flex-col items-center justify-center px-8 text-center sm:min-h-[460px]">
+            {drop.image_url ? (
+              <div className="relative mb-5 h-32 w-32 overflow-hidden rounded-full border border-white/15 bg-white/95 p-3 shadow-2xl">
+                <Image src={drop.image_url} alt="" fill sizes="128px" className="object-contain p-3" unoptimized />
+              </div>
+            ) : null}
+            <p className="text-xl font-black text-white">OneDailyDrop Live</p>
+            <p className="mt-2 max-w-sm text-sm leading-relaxed text-white/65">
+              {drop.state === "waiting"
+                ? "The AI host joins when the show begins."
+                : "The offer is live. Product details and checkout remain available below."}
+            </p>
+          </div>
+        )}
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-4 pb-4 pt-16">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/60">Now presenting</p>
+          <p className="mt-1 line-clamp-2 text-lg font-bold text-white">{drop.title}</p>
+        </div>
       </div>
-    );
-  }
 
-  return null;
+      {hasDemo && (
+        <div className="relative min-h-[260px] border-t border-white/10 bg-black lg:min-h-0 lg:border-l lg:border-t-0">
+          <StageLabel>Product demo</StageLabel>
+          <video
+            src={drop.video_url}
+            controls
+            autoPlay
+            muted
+            loop
+            playsInline
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StageLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="absolute left-3 top-3 z-10 rounded-full border border-white/15 bg-black/65 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-white backdrop-blur">
+      {children}
+    </span>
+  );
 }

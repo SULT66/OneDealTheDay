@@ -91,6 +91,19 @@ Set these values only in the hosting provider's encrypted app settings:
 
 Without `OPENAI_API_KEY`, the site remains usable and the assistant endpoint reports that the connection is pending.
 
+## OneDailyDrop Live AI host
+
+The Tavus `get_product_details` tool calls:
+
+`POST https://www.onedailydrop.com/api/integrations/tavus/get-product-details`
+
+Configure Tavus API delivery with bearer authentication. Store the same strong
+random value as `TAVUS_TOOL_SECRET` in Azure App Settings and in the Tavus tool
+authentication field; never reuse `ADMIN_KEY`. The request body may contain a
+market (`us`, `ca`, `uk`, `fr` or `de`) and an optional published `drop_key`.
+The response withholds the deal price, scarcity and buy URL until the server's
+Live Drop state is actually live, and it omits facts the database cannot verify.
+
 Before public launch, use HTTPS, protect `.env`, add Privacy/Terms/Contact pages, and comply with Amazon Associates and product-data provider rules. Do not scrape Amazon directly.
 
 ## eBay account-deletion compliance

@@ -10,6 +10,7 @@ const c = require("./config");
 const { refreshProducts, localDate } = require("./refresh");
 const { runLinkHealthCheck } = require("./linkHealth");
 const { dropState, presentDrop, sendDueReminders } = require("./liveDrop");
+const { tavusProductDetails } = require("./tavusProductTool");
 const {
   fetchRetailerIcon,
   normalizeIconHost,
@@ -961,6 +962,39 @@ app.get("/api/live/current", (req, res) => {
     drop: presentDrop(drop, Date.now(), { earlyAccessSeconds }),
     server_now: new Date().toISOString(),
   });
+});
+
+/**
+ * Verified product context for Chloe, the OneDailyDrop Live PAL.
+ *
+ * Tavus calls this server-to-server through its get_product_details tool. The
+ * shared bearer secret is separate from ADMIN_KEY: a presentation tool may
+ * read one published offer, but it must never inherit permission to publish,
+ * edit stock or run a catalogue refresh.
+ *
+ * presentDrop remains the disclosure boundary. Before a drop opens it removes
+ * the drop price and buy URL, so connecting an LLM cannot accidentally undo
+ * the timed reveal already enforced for browsers.
+ */
+app.post("/api/integrations/tavus/get-product-details", (req, res) => {
+  res.set("Cache-Control", "no-store");
+  if (!c.tavusToolSecret) {
+    return res.status(503).json({error:"The Tavus product tool is not configured."});
+  }
+
+  const authorization = String(req.get("authorization") || "");
+  const bearer = /^Bearer\s+(.+)$/i.exec(authorization)?.[1] || "";
+  if (!secretMatches(bearer, c.tavusToolSecret)) {
+    return res.status(401).json({error:"Unauthorized"});
+  }
+
+  const selectedMarket = normalizeMarket(req.body?.market) || "us";
+  const dropKey = String(req.body?.drop_key || "").trim().slice(0, 80);
+  const drop = dropKey
+    ? db.prepare("SELECT * FROM live_drops WHERE drop_key=? AND market=? AND published=1").get(dropKey, selectedMarket)
+    : currentLiveDrop(selectedMarket);
+
+  return res.json(tavusProductDetails(drop, Date.now()));
 });
 
 /**
