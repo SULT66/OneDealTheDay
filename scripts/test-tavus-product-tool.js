@@ -98,5 +98,9 @@ assert(
   !/allow="[^"]*(?:camera|microphone)/.test(livePanelSource),
   "the Chloe embed still asks the browser for camera or microphone permission",
 );
+assert(
+  /aspect-\[4\/3\]/.test(livePanelSource) && /className="h-full w-full object-contain"/.test(livePanelSource),
+  "the Chloe video is no longer a responsive, uncropped 4:3 stage",
+);
 
 console.log("Tavus product disclosure, expiry and endpoint security checks passed.");
