@@ -421,20 +421,22 @@ function BroadcastStage({ market, drop }: { market: string; drop: LiveDropView }
         (hasHost || drop.tavus_available) && hasDemo && "lg:grid-cols-[1.35fr_0.85fr]",
       )}
     >
-      <div className="relative min-h-[360px] overflow-hidden bg-[radial-gradient(circle_at_50%_20%,#123b69_0%,#07172b_48%,#030914_100%)] sm:min-h-[460px]">
+      <div className="relative min-w-0 overflow-hidden bg-[radial-gradient(circle_at_50%_20%,#123b69_0%,#07172b_48%,#030914_100%)]">
         <StageLabel>AI host</StageLabel>
         {hasHost ? (
-          <iframe
-            src={drop.stream_embed_url}
-            title={`${drop.title} AI host stream`}
-            allow="autoplay; encrypted-media; picture-in-picture"
-            allowFullScreen
-            className="absolute inset-0 h-full w-full border-0"
-          />
+          <div className="relative aspect-[4/3] w-full">
+            <iframe
+              src={drop.stream_embed_url}
+              title={`${drop.title} AI host stream`}
+              allow="autoplay; encrypted-media; picture-in-picture"
+              allowFullScreen
+              className="absolute inset-0 h-full w-full border-0"
+            />
+          </div>
         ) : drop.tavus_available ? (
           <TavusHost market={market} drop={drop} />
         ) : (
-          <div className="flex h-full min-h-[360px] flex-col items-center justify-center px-8 text-center sm:min-h-[460px]">
+          <div className="flex aspect-[4/3] w-full flex-col items-center justify-center px-8 text-center">
             {drop.image_url ? (
               <div className="relative mb-5 h-32 w-32 overflow-hidden rounded-full border border-white/15 bg-white/95 p-3 shadow-2xl">
                 <Image src={drop.image_url} alt="" fill sizes="128px" className="object-contain p-3" unoptimized />
@@ -448,10 +450,12 @@ function BroadcastStage({ market, drop }: { market: string; drop: LiveDropView }
             </p>
           </div>
         )}
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-4 pb-4 pt-16">
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/60">Now presenting</p>
-          <p className="mt-1 line-clamp-2 text-lg font-bold text-white">{drop.title}</p>
-        </div>
+        {!drop.tavus_available ? (
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-4 pb-4 pt-16">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/60">Now presenting</p>
+            <p className="mt-1 line-clamp-2 text-lg font-bold text-white">{drop.title}</p>
+          </div>
+        ) : null}
       </div>
 
       {hasDemo && (
@@ -633,13 +637,13 @@ function TavusHost({ market, drop }: { market: string; drop: LiveDropView }) {
 
   if (conversation) {
     return (
-      <div className="absolute inset-0 grid grid-rows-[minmax(0,1fr)_auto] bg-[#07172b]">
-        <div className="relative min-h-0 overflow-hidden">
+      <div className="relative flex w-full min-w-0 flex-col bg-[#07172b]">
+        <div className="relative aspect-[4/3] w-full overflow-hidden bg-black">
           <video
             ref={videoRef}
             autoPlay
             playsInline
-            className="h-full w-full object-cover"
+            className="h-full w-full object-contain"
             aria-label="Chloe, OneDailyDrop AI shopping host"
           />
           {!joined ? (
@@ -658,6 +662,10 @@ function TavusHost({ market, drop }: { market: string; drop: LiveDropView }) {
               Play Chloe
             </button>
           ) : null}
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-4 pb-4 pt-16">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/60">Now presenting</p>
+            <p className="mt-1 line-clamp-2 text-lg font-bold text-white">{drop.title}</p>
+          </div>
         </div>
         <button
           type="button"
@@ -703,7 +711,7 @@ function TavusHost({ market, drop }: { market: string; drop: LiveDropView }) {
   }
 
   return (
-    <div className="flex h-full min-h-[360px] flex-col items-center justify-center px-8 text-center sm:min-h-[460px]">
+    <div className="flex aspect-[4/3] w-full flex-col items-center justify-center px-8 text-center">
       {drop.image_url ? (
         <div className="relative mb-5 h-32 w-32 overflow-hidden rounded-full border border-white/15 bg-white/95 p-3 shadow-2xl">
           <Image src={drop.image_url} alt="" fill sizes="128px" className="object-contain p-3" unoptimized />
