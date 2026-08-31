@@ -10,6 +10,7 @@ const c = require("./config");
 const { refreshProducts, localDate } = require("./refresh");
 const { runLinkHealthCheck } = require("./linkHealth");
 const { dropState, presentDrop, sendDueReminders } = require("./liveDrop");
+const { cacheKey, readCachedAnswer, writeCachedAnswer } = require("./deliaCache");
 const { tavusProductDetails } = require("./tavusProductTool");
 const {
   fetchRetailerIcon,
@@ -313,6 +314,27 @@ app.post("/api/shopping-assistant", shoppingAssistantRateLimit, async (req, res)
   res.once("close", () => {
     if (!res.writableEnded) requestController.abort();
   });
+  /*
+   * An answer we have already worked out, if this question is one that can be
+   * shared. A live search is thirty to forty seconds and a model call; two
+   * people asking for headphones under a hundred on the same evening should
+   * not each pay for it. deliaCache decides what may be shared and what is
+   * too personal or too stale to reuse.
+   */
+  const key = cacheKey({
+    message: req.body?.message,
+    messages: req.body?.messages,
+    shoppingMission: req.body?.shopping_mission,
+    excludedOfferUrls: req.body?.excluded_offer_urls,
+    marketCode: selectedMarket.code,
+    language,
+  });
+  const cached = key ? readCachedAnswer(db, key) : null;
+  if (cached) {
+    rememberExchange(req, selectedMarket.code, cached);
+    return res.set("Cache-Control", "no-store").json(cached);
+  }
+
   let hardTimeoutTimer;
   try {
     const assistantTask = shoppingAssistant.respond({
@@ -348,6 +370,15 @@ app.post("/api/shopping-assistant", shoppingAssistantRateLimit, async (req, res)
     });
     const result = await Promise.race([assistantTask, hardTimeoutTask]);
     clearTimeout(hardTimeoutTimer);
+    /* Kept only if it is worth keeping: a search that found nothing is the
+       answer that most deserves another try. */
+    if (key) {
+      try {
+        writeCachedAnswer(db, key, result);
+      } catch (error) {
+        console.error(`[delia] could not remember the answer: ${error.message}`);
+      }
+    }
     rememberExchange(req, selectedMarket.code, result);
     return res.set("Cache-Control", "no-store").json(result);
   } catch (error) {

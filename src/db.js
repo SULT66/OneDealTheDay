@@ -380,6 +380,16 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_delia_messages_conversation
     ON delia_messages(conversation_id, id);
+  /* Answers Delia has already worked out, so the second shopper asking the
+     same thing this evening does not wait thirty seconds for work that is
+     already done. Rows expire on read; see src/deliaCache.js for what is
+     worth keeping and why a failed search never is. */
+  CREATE TABLE IF NOT EXISTS delia_answers(
+    cache_key TEXT PRIMARY KEY,
+    payload TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  );
+
   CREATE TABLE IF NOT EXISTS price_alerts(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,

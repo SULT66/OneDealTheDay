@@ -17,7 +17,9 @@ const {
   retailerWebSearchQueries,
   matchesShoppingIntent,
   budgetChoicesFromPrices,
+  deduplicateRecommendations,
   feedListingMatchesCategory,
+  isDirectProductPage,
   looksLikeAccessory,
   responseLanguage,
   selectRetailerDiverseCandidates,
@@ -3288,6 +3290,66 @@ const client = {
   console.log(
     "Delia structured output, live-source fallback, timeout, and privacy checks passed.",
   );
+  /* ------------------------------------------- which links count as products */
+
+  /*
+   * The rule was a closed list of URL shapes, and a closed list only ever
+   * knows the shops it was written for. Traced on "iPhone 17 Pro 256gb": the
+   * search came back with seven offers and the shopper saw two, because the
+   * carriers spell their product pages their own way.
+   */
+  for (const url of [
+    "https://www.verizon.com/smartphones/apple-iphone-17-pro/",
+    "https://www.t-mobile.com/cell-phone/apple-iphone-17-pro",
+    "https://www.walmart.com/ip/Something/12345",
+    "https://www.bestbuy.com/site/thing/12345.p",
+  ]) {
+    assert(isDirectProductPage(url), `a real product page was refused: ${url}`);
+  }
+  /* What must stay refused: a section of a shop, however deep, and anything
+     written to be read rather than bought. */
+  for (const url of [
+    "https://www.verizon.com/smartphones/",
+    "https://www.target.com/c/televisions",
+    "https://www.walmart.com/search?q=tv",
+    "https://shop.example.com/collections/headphones",
+    "https://shop.example.com/store/deals",
+    "https://shop.example.com/help/returns",
+    "https://shop.example.com/blog/best-tvs-2026",
+    "https://shop.example.com/tv",
+    "https://www.example.com/",
+  ]) {
+    assert(!isDirectProductPage(url), `a page that is not a product was accepted: ${url}`);
+  }
+
+  /* ------------------------------------------------- the same product twice */
+
+  /*
+   * Shops are not consistent about printing a model number. Seen live: one
+   * vacuum listed twice, as "Shark Rocket Pro Corded Stick Vacuum HV371" and
+   * "Shark Rocket Pro Corded Stick Vacuum", at the same price.
+   */
+  const vacuums = deduplicateRecommendations([
+    { title: "Shark Rocket Pro Corded Stick Vacuum HV371", retailer: "Shark", url: "https://a.example.com/p/rocket-pro-hv371", price_value: 199.99 },
+    { title: "Shark Rocket Pro Corded Stick Vacuum", retailer: "Sharkninja", url: "https://b.example.com/p/rocket-pro", price_value: 199.99 },
+    { title: "Dyson V8 Cyclone Cordless Stick Vacuum", retailer: "Target", url: "https://c.example.com/p/dyson-v8", price_value: 299.99 },
+  ]);
+  assert.strictEqual(vacuums.length, 2, "the same vacuum was shown as two offers");
+
+  /*
+   * And the mistake in the other direction, which the first attempt at this
+   * made: two listings that each name a model, and name different ones, are
+   * two different products. Stripping the model off both left "samsung the
+   * frame" twice and collapsed a shortlist of televisions into one row.
+   */
+  const frames = deduplicateRecommendations([
+    { title: "Samsung 55 inch The Frame QN55LS03D", retailer: "Amazon", url: "https://a.example.com/p/frame-55", price_value: 997 },
+    { title: "Samsung 65 inch The Frame QN65LS03D", retailer: "Best Buy", url: "https://b.example.com/p/frame-65", price_value: 1497 },
+    { title: "Samsung 75 inch The Frame QN75LS03D", retailer: "Walmart", url: "https://c.example.com/p/frame-75", price_value: 1997 },
+  ]);
+  assert.strictEqual(frames.length, 3, "three different television sizes were merged into one");
+
+  console.log("Product page recognition and duplicate listing checks passed.");
 })().catch((error) => {
   console.error(error);
   process.exitCode = 1;

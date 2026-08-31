@@ -4027,7 +4027,50 @@ function isDirectProductPage(value) {
     ) {
       return true;
     }
-    return false;
+    /*
+     * Everything above is a shape somebody recognised on a shop we had in
+     * front of us, and a closed list of shapes only ever knows the shops it
+     * was written for. Traced on "iPhone 17 Pro 256gb": the search came back
+     * with seven offers and the shopper saw two, because
+     * verizon.com/smartphones/apple-iphone-17-pro and
+     * t-mobile.com/cell-phone/apple-iphone-17-pro are real product pages that
+     * match none of them.
+     *
+     * So the last word is a question about the URL rather than a lookup: does
+     * this path name one product, or a section of a shop? A product page says
+     * apple-iphone-17-pro; a listing says smartphones, deals, or tv. Several
+     * hyphenated words, or words with a number among them, is what naming one
+     * specific thing looks like, and a section name almost never does it.
+     *
+     * The listing, editorial, market and intent checks all still run, and this
+     * only ever fires for a path that survived them.
+     */
+    const segments = path.split("/").filter(Boolean);
+    if (segments.length < 2) return false;
+    /* Reading matter, wherever it sits in the path. "best-tvs-2026" is three
+       hyphenated words with a number in them and looks exactly like a product
+       name; /blog/ in front of it is what gives it away. */
+    if (
+      segments.some((segment) =>
+        /^(?:article|articles|blog|blogs|guide|guides|news|press|review|reviews|stories|story)$/i.test(
+          segment,
+        ),
+      )
+    ) {
+      return false;
+    }
+    const last = segments[segments.length - 1].replace(/\.html?$/i, "");
+    /* Sections of a shop that are not products, however specific they look. */
+    if (
+      /^(?:about|account|cart|checkout|contact|deals|faq|gift-cards?|help|locations?|offers|orders?|returns|sale|shipping|store-locator|stores?|support|terms)$/i
+        .test(last)
+    ) {
+      return false;
+    }
+    const words = last.split("-").filter(Boolean);
+    /* Three or more words, or two with a number in them: the shape of a
+       product name, not of a department. */
+    return words.length >= 3 || (words.length === 2 && /\d/.test(last));
   } catch {
     return false;
   }
@@ -4143,12 +4186,49 @@ function recommendationIdentity(recommendation) {
     );
   if (model) return `model:${brand}:${model.toLowerCase()}`;
   if (recommendation.product_key) return `key:${recommendation.product_key}`;
-  return title
+  return recommendationTitleKey(title);
+}
+
+/** The title alone, stripped to the words that name the product. */
+function recommendationTitleKey(title) {
+  return clean(title)
     .toLowerCase()
     .replace(/\b(new|renewed|refurbished|open box|with warranty)\b/g, " ")
     .replace(/[^a-z0-9]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+/**
+ * The names one offer answers to, and the names it may be found by.
+ *
+ * A model number is the strongest identity there is, but shops are not
+ * consistent about printing one. Seen live: "Shark Rocket Pro Corded Stick
+ * Vacuum HV371" and "Shark® Rocket® Pro Corded Stick Vacuum" are the same
+ * vacuum at the same price, and were shown as two offers, because one key was
+ * model:shark:hv371 and the other was the bare title.
+ *
+ * The asymmetry between the two lists is the whole point, and the first
+ * attempt at this got it wrong. Every offer *registers* its title with the
+ * model stripped out, so a later listing printing no model can find it. But an
+ * offer that does print a model is only ever *looked up* by that model,
+ * because two listings that each name a model and name different ones are two
+ * different products. Without that rule a 55 inch and a 65 inch Samsung Frame
+ * both reduced to "samsung the frame" and a shortlist of several televisions
+ * collapsed into one.
+ */
+function recommendationIdentities(recommendation) {
+  const primary = recommendationIdentity(recommendation);
+  if (!primary) return { lookup: [], register: [] };
+  const model = primary.startsWith("model:") ? primary.split(":")[2] : "";
+  /* The model token is only letters, digits and hyphens, so a plain
+     case-insensitive split is enough and needs no escaping. */
+  const withoutModel = model
+    ? clean(recommendation.title).split(new RegExp(model, "i")).join(" ")
+    : recommendation.title;
+  const titleKey = recommendationTitleKey(withoutModel);
+  const register = [...new Set([primary, titleKey].filter(Boolean))];
+  return { lookup: model ? [primary] : register, register };
 }
 
 function deduplicateRecommendations(items) {
@@ -4176,13 +4256,21 @@ function deduplicateRecommendations(items) {
   const unique = [];
   const positions = new Map();
   for (const item of items) {
-    const identity = recommendationIdentity(item);
-    if (!identity) continue;
-    const existingIndex = positions.get(identity);
+    const { lookup, register } = recommendationIdentities(item);
+    if (!register.length) continue;
+    const existingIndex = lookup
+      .map((identity) => positions.get(identity))
+      .find((index) => index != null);
     if (existingIndex == null) {
-      positions.set(identity, unique.length);
+      for (const identity of register) positions.set(identity, unique.length);
       unique.push(item);
       continue;
+    }
+    /* The offer that arrived second answers to names the first one did not,
+       so record those too: a third listing matching either is the same
+       product again. */
+    for (const identity of register) {
+      if (!positions.has(identity)) positions.set(identity, existingIndex);
     }
     if (!unique[existingIndex].in_catalog && item.in_catalog) {
       addOffer(item, unique[existingIndex]);
@@ -5822,6 +5910,8 @@ module.exports = {
   SHOPPING_SCOPE_RESPONSE_FORMAT,
   DEFAULT_MODEL,
   allowedRetailerHost,
+  deduplicateRecommendations,
+  isDirectProductPage,
   assistantProduct,
   broadDiscoveryQuestions,
   classifyShoppingScope,
