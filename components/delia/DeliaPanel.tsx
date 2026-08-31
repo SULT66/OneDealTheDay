@@ -153,11 +153,14 @@ function OfferRow({
 }) {
   const inCatalog = rec.source_type === "catalog" && Boolean(rec.catalog_product_id);
   const href = inCatalog ? `/${market}/deal/${rec.catalog_product_id}` : rec.url;
+  /* Our own formatting wins whenever there is a number to format. The model
+     writes the price as prose and is not consistent about it: one live answer
+     listed the same vacuum twice, once as "$199.99" and once as "USD 199.99".
+     The model's string is kept only for offers that arrived without a number. */
   const price =
-    rec.price ||
-    (rec.price_value !== null
+    rec.price_value !== null
       ? formatPrice(rec.price_value, rec.currency || "USD", market)
-      : "");
+      : rec.price || "";
 
   const body = (
     <>
@@ -407,6 +410,16 @@ function DeliaExchange({
               </li>
             ))}
           </ul>
+        )}
+
+        {/* Delia already works out whether these are what was asked for, and
+            said so in result_state, but the shopper was never told. Somebody
+            who asked for 32oz maple syrup and got a 33.8oz bottle deserves to
+            know that before they click, not after it arrives. */}
+        {result.resultState === "closest_alternatives" && result.recommendations.length > 0 && (
+          <p className="text-xs font-medium text-fg-muted">
+            Nothing matched exactly, so these are the closest I found.
+          </p>
         )}
 
         {(result.recommendations.length > 0 || result.partialOffers.length > 0) && (
