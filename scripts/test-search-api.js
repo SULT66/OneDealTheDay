@@ -106,7 +106,29 @@ assert(appSource.includes("X-Robots-Tag") && appSource.includes("noindex, nofoll
 // became a hand-edited constant nobody bumped, so the check matched whatever
 // Azure happened to be serving. The deploy now stamps the commit into the
 // package and the verification compares against that commit instead.
-assert(workflowSource.includes('expected_release="${GITHUB_SHA}"'), "Production verification is pinned to a stale release string instead of the deployed commit");
+// It looked for the literal expected_release="${GITHUB_SHA}", which stopped
+// being the right shape when the verification moved to running after the
+// deploy instead of racing it. Under workflow_run, GITHUB_SHA is whatever main
+// points at by then, and the commit that actually shipped is
+// workflow_run.head_sha. What has to hold is unchanged, so it is now asserted
+// directly: the expected release is read from the event, never from the
+// repository.
+assert(
+  /expected_release="\$\{(?:GITHUB_SHA|EXPECTED_RELEASE)\}"/.test(workflowSource),
+  "Production verification is pinned to a stale release string instead of the deployed commit",
+);
+assert(
+  /github\.event\.workflow_run\.head_sha/.test(workflowSource) ||
+    workflowSource.includes('expected_release="${GITHUB_SHA}"'),
+  "The expected release no longer comes from the commit the deploy shipped",
+);
+// Racing the deploy is what made this check fail against a healthy site: it
+// spent the first four minutes of a ten minute budget polling for a package
+// that had not been uploaded yet.
+assert(
+  /workflows: \["Deploy OneDailyDrop to Azure"\]/.test(workflowSource),
+  "Production verification runs alongside the deploy again instead of after it",
+);
 assert(deploySource.includes('echo "${GITHUB_SHA}" > .release-sha'), "The deploy does not stamp the commit it shipped, so a stale package cannot be detected");
 assert(deploySource.includes("build-runtime-package.js"), "The deployment does not create a traced runtime-only package");
 assert(deploySource.includes("onedailydrop-release"), "The deployment still publishes the entire repository instead of a runtime-only package");
