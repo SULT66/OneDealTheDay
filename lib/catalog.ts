@@ -120,10 +120,18 @@ export function getCategory(slug: string): Category | undefined {
  * used it, so the navigation stayed in English on every translated page and
  * switching language looked like it did nothing at all.
  */
-export async function getCategoriesWithCounts(
+/**
+ * The backend's own count per category, and the only place any page counts
+ * the catalogue.
+ *
+ * There used to be two answers. The category tiles totalled 2,631 from here,
+ * while About and For retailers said 2,548 because they measured the length of
+ * /api/products, which lists fewer items than the catalogue holds. A reviewer
+ * put the three numbers side by side and asked which one was true.
+ */
+async function fetchCategoryCounts(
   marketCode: string,
-  language?: string,
-): Promise<Array<Category & { count: number }>> {
+): Promise<Array<{ category: string; count: number }>> {
   const res = await fetch(
     `${BACKEND_URL}/api/categories?market=${encodeURIComponent(marketCode)}`,
     { next: { revalidate: 300 } },
@@ -131,7 +139,14 @@ export async function getCategoriesWithCounts(
   if (!res.ok) {
     throw new Error(`Failed to load category counts for "${marketCode}" (${res.status}).`);
   }
-  const rows = (await res.json()) as Array<{ category: string; count: number }>;
+  return (await res.json()) as Array<{ category: string; count: number }>;
+}
+
+export async function getCategoriesWithCounts(
+  marketCode: string,
+  language?: string,
+): Promise<Array<Category & { count: number }>> {
+  const rows = await fetchCategoryCounts(marketCode);
 
   return rows
     .map(({ category, count }) => {
@@ -209,7 +224,19 @@ export async function getTopPicks(
     categoryCount.set(deal.category, (categoryCount.get(deal.category) ?? 0) + 1);
     retailerCount.set(deal.retailer, (retailerCount.get(deal.retailer) ?? 0) + 1);
   }
-  return picked;
+  /*
+   * Best first, because the section calls itself "Best right now".
+   *
+   * The caps above pick a spread across categories and shops, which is what
+   * makes the grid worth reading, but they walk the catalogue in its own order
+   * and the result came out 88, 88, 90, 90, 89, 89. A section promising the
+   * highest scoring that lists a 90 below an 88 reads as a broken ranking, and
+   * a reviewer read it exactly that way.
+   *
+   * Only the order changes; the same items are chosen. An item the backend has
+   * not scored sorts last rather than counting as a zero.
+   */
+  return picked.sort((left, right) => (right.score ?? -1) - (left.score ?? -1));
 }
 
 /** Everything except today's drop, in rank order. */
@@ -268,9 +295,18 @@ export async function getActiveRetailers(marketCode: string): Promise<string[]> 
 }
 
 /** Total checked listings for a market — used by the About page's copy. */
+/**
+ * How many listings this market holds, counted once.
+ *
+ * Read from the same per-category figures the category tiles show, so the
+ * number on About, the number on For retailers and the tiles a visitor can
+ * add up all agree. It used to be the length of the /api/products response,
+ * which lists fewer items than the catalogue holds: 2,548 against 2,631, and
+ * a partner reviewing the site found all three numbers and trusted none.
+ */
 export async function getCatalogSize(marketCode: string): Promise<number> {
-  const deals = await fetchMarketCatalog(marketCode);
-  return deals.length;
+  const rows = await fetchCategoryCounts(marketCode);
+  return rows.reduce((total, row) => total + (Number(row.count) || 0), 0);
 }
 
 export { slugifyCategory };
