@@ -1,9 +1,16 @@
-const DEFAULT_DETAIL_LIMIT = 320;
+const DEFAULT_DETAIL_LIMIT = 220;
 /* The code caps this at 60 a few lines down, so 40 was leaving a third of
    each run unused. More keywords now need more room to land. */
-const DEFAULT_TARGET_ELIGIBLE = 200;
+/* Two hundred was too many for one night. With 49 search terms and details
+   fetched six at a time it pushed a run past 57 minutes, and the workflow
+   watching it gave up at 25. Newegg now carries the computer aisle that eBay
+   was being asked to cover, so eBay can be lighter and still leave the
+   categories fuller than they were. */
+const DEFAULT_TARGET_ELIGIBLE = 120;
 const SEARCH_CONCURRENCY = 3;
-const DETAIL_CONCURRENCY = 6;
+/* Ten rather than six: the same coverage in less wall time, which is the
+   scarce thing in a nightly run. */
+const DETAIL_CONCURRENCY = 10;
 const { normalizeTradeItemId } = require("../productIdentity");
 
 function text(value) {
@@ -283,13 +290,13 @@ async function searchProducts({
   if (!candidates.size) throw new Error(`eBay returned no commissionable new fixed-price items. ${failures.join(" | ")}`.trim());
 
   const queue = [...candidates.values()].sort((left, right) => right.candidateScore - left.candidateScore);
-  const maximumDetails = Math.min(queue.length, positiveInteger(detailLimit, DEFAULT_DETAIL_LIMIT), 400);
+  const maximumDetails = Math.min(queue.length, positiveInteger(detailLimit, DEFAULT_DETAIL_LIMIT), 260);
   /* Sixty was the real limit on how many products this site could hold from
      eBay, and nothing said so. A run refreshes what it can, anything it does
      not touch ages out after 48 hours, so the catalogue settles at roughly
      one run of eligible items. Sixty across every category is why Electronics
      sat at ten while Gifts sat at two thousand. */
-  const eligibleTarget = Math.min(220, positiveInteger(targetEligible, DEFAULT_TARGET_ELIGIBLE));
+  const eligibleTarget = Math.min(140, positiveInteger(targetEligible, DEFAULT_TARGET_ELIGIBLE));
   const products = [];
 
   for (let offset = 0; offset < maximumDetails && products.length < eligibleTarget; offset += DETAIL_CONCURRENCY) {

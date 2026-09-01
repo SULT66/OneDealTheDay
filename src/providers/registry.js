@@ -1,4 +1,9 @@
 const affiliateFeed = require("./affiliateFeed");
+
+/* How long any one source may hold up a catalogue refresh. Eight minutes is
+   comfortably more than a healthy source needs and far less than the hour a
+   run took when nothing was watching. */
+const PROVIDER_DEADLINE_MS = Number(process.env.SOURCE_REFRESH_DEADLINE_MS || 8 * 60 * 1000);
 const { normalizeCatalogProduct } = require("../catalogTaxonomy");
 
 const normalizeTokenText = value => String(value || "")
@@ -112,7 +117,28 @@ async function searchAll(config, market, {providerIds = []} = {}) {
     !selectedIds.size || selectedIds.has(provider.id)
   );
   if (!providers.length) throw new Error(`No approved retailer API or affiliate feed is configured for ${market.name}`);
-  const settled = await Promise.allSettled(providers.map(provider => provider.search({market})));
+  /*
+   * A deadline per source, because one slow source must not cost the run.
+   *
+   * There was no bound anywhere: a nightly refresh ran for 57 minutes while
+   * the workflow watching it gave up at 25 and reported a failure against a
+   * catalogue that was still being written. Every individual HTTP call has a
+   * timeout; what was missing was a limit on how many of them one source may
+   * make us wait for.
+   *
+   * A source that runs over is reported as failed and the others still land.
+   * Half a catalogue refreshed on time is worth more than all of it at some
+   * unknown hour, and the report says plainly which source ran out.
+   */
+  const settled = await Promise.allSettled(providers.map(provider =>
+    Promise.race([
+      provider.search({market}),
+      new Promise((_, reject) => setTimeout(
+        () => reject(new Error(`${provider.name} did not finish within ${Math.round(PROVIDER_DEADLINE_MS / 60000)} minutes`)),
+        PROVIDER_DEADLINE_MS,
+      ).unref?.()),
+    ])
+  ));
   const products = [];
   const reports = settled.map((result, index) => {
     const provider = providers[index];
