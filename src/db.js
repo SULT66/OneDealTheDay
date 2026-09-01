@@ -758,5 +758,30 @@ db.exec(`
     AND NOT EXISTS (SELECT 1 FROM price_history h WHERE h.product_id=p.id);
 `);
 
+/*
+ * A refresh that was interrupted is over, whatever its row says.
+ *
+ * Nothing ever closed these. The process that owned a run was the only thing
+ * that could mark it finished, so a container restart mid-refresh left the row
+ * reading "running" for ever and /api/status went on reporting a refresh in
+ * progress. One sat like that for four hours across a restart while the
+ * catalogue quietly went stale, and every check said work was under way.
+ *
+ * Anything still marked running when this process starts belonged to a process
+ * that no longer exists. Saying so is the difference between a system that
+ * looks busy and one you can see is stuck.
+ */
+const orphanedRuns = db.prepare(
+  "UPDATE refresh_runs SET status='failed', finished_at=?, message=? WHERE status='running'"
+).run(
+  new Date().toISOString(),
+  "Interrupted: the process running this refresh stopped before it finished.",
+);
+if (orphanedRuns.changes) {
+  console.warn(
+    `[refresh] ${orphanedRuns.changes} refresh run(s) were still marked running from a previous process and have been closed as failed`
+  );
+}
+
 console.log(`Database: ${dbPath}`);
 module.exports = db;

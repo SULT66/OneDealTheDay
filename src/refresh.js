@@ -212,6 +212,25 @@ async function refreshMarket(config, marketCode, options = {}) {
     "INSERT INTO refresh_runs(provider,market,started_at,status,message) VALUES(?,?,?,'running','')"
   ).run(config.provider, selectedMarket.code, started).lastInsertRowid);
 
+  /*
+   * What this run is searching for, and where that list came from.
+   *
+   * SEARCH_KEYWORDS in the environment silently replaces the list in
+   * config.js, and it was set to a copy of the old defaults. A change to those
+   * defaults shipped, deployed, and could never have had any effect, with
+   * nothing anywhere saying so. One line at the start of a run is the
+   * difference between seeing that and not.
+   */
+  const marketOverride = `SEARCH_KEYWORDS_${selectedMarket.code.toUpperCase()}`;
+  const keywordSource = String(process.env[marketOverride] || "").trim()
+    ? marketOverride
+    : String(process.env.SEARCH_KEYWORDS || "").trim()
+      ? "SEARCH_KEYWORDS"
+      : "the defaults in src/config.js";
+  console.log(
+    `[refresh] ${selectedMarket.code}: ${selectedMarket.searchKeywords.length} search terms from ${keywordSource} — ${selectedMarket.searchKeywords.join(", ")}`
+  );
+
   try {
     const loaded = await loadProducts(config, selectedMarket, options);
     recordSourceReports(runId, selectedMarket.code, started, loaded.reports);
