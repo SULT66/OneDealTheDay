@@ -21,6 +21,7 @@ The site does not load demo products. Until verified products are added, visitor
 Public products must use an explicitly approved source:
 
 - `ebay` for Browse API product data and EPN-tracked links;
+- `newegg` for Rakuten Product Search data and Rakuten-tracked Newegg links;
 - `amazon-creators-api` or `amazon-pa-api` after official Amazon API access;
 - `bestbuy-products-api` after official Best Buy API access.
 
@@ -32,7 +33,7 @@ OneDailyDrop runs every configured source at the same time. A failed store is
 isolated, so successful stores still refresh. All valid offers are retained for
 cross-store comparisons, while the daily Top 10 contains unique products.
 
-Native adapters cover eBay, Amazon and Walmart. Approved affiliate feeds cover
+Native adapters cover eBay, Amazon, Walmart and Newegg through Rakuten. Approved affiliate feeds cover
 Walmart, Target, Best Buy, Home Depot, Lowe's, Wayfair, AliExpress, Currys,
 Tribesigns, Mooncool, AO.com, Fnac, Cdiscount, Darty, MediaMarkt, Saturn, OTTO, ALTERNATE and Samsung
 across the US, Canada, UK, France and Germany. Feeds may be JSON, CSV, TSV, XML
@@ -145,3 +146,15 @@ with EPN commission links and current offer data. Product-review evidence is use
 when eBay provides it; otherwise the item must come from an established seller
 with strong feedback, and the site does not invent or relabel a product rating.
 The daily selection refreshes nightly and checks offers every six hours.
+
+## Newegg through Rakuten Advertising
+
+After the Newegg US partnership is accepted, configure `RAKUTEN_CLIENT_ID`,
+`RAKUTEN_CLIENT_SECRET` and `RAKUTEN_PUBLISHER_SID` in encrypted hosting app
+settings. `RAKUTEN_NEWEGG_MID` defaults to `44583`. The server obtains and
+caches short-lived OAuth access tokens itself, so a manually generated access
+token is not stored. Product Search results are restricted to Newegg and
+post-filtered against the requested product title and category before import.
+Rakuten's product response does not supply item-level delivery or return terms;
+OneDailyDrop leaves those fields unknown instead of inventing them, so those
+offers cannot become the Daily Drop until the missing buying terms are verified.

@@ -56,6 +56,22 @@ function nativeProviders(config) {
       })
     });
   }
+  if (config.rakutenClientId && config.rakutenClientSecret && config.rakutenPublisherSid) {
+    providers.push({
+      id:"newegg",
+      source:"newegg",
+      name:"Newegg via Rakuten Product Search",
+      markets:["us"],
+      search:({market, keywords = config.rakutenNeweggKeywords}) => require("./rakutenNewegg").searchProducts({
+        clientId:config.rakutenClientId,
+        clientSecret:config.rakutenClientSecret,
+        publisherSid:config.rakutenPublisherSid,
+        mid:config.rakutenNeweggMid,
+        keywords,
+        market
+      })
+    });
+  }
   return providers;
 }
 

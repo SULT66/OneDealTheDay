@@ -2533,13 +2533,61 @@ app.post("/api/subscribe", async (req,res) => {
     emailSent
   });
 });
-app.post("/api/admin/refresh", admin, async (req,res) => {
-  try {
-    const requestedMarket = normalizeMarket(req.query.market);
-    res.json(await refreshProducts(c, requestedMarket ? {market:requestedMarket} : {}));
-  } catch (error) {
-    res.status(500).json({error:error.message});
+let adminRefreshJob = null;
+
+function refreshJobResponse(job) {
+  if (!job) return null;
+  return {
+    jobId:job.jobId,
+    status:job.status,
+    market:job.market,
+    startedAt:job.startedAt,
+    finishedAt:job.finishedAt || null,
+    result:job.result || null,
+    error:job.error || ""
+  };
+}
+
+app.post("/api/admin/refresh", admin, (req,res) => {
+  const requestedMarket = normalizeMarket(req.query.market);
+  if (adminRefreshJob?.status === "running") {
+    return res.status(202).json({accepted:false, alreadyRunning:true, ...refreshJobResponse(adminRefreshJob)});
   }
+
+  const job = {
+    jobId:crypto.randomUUID(),
+    status:"running",
+    market:requestedMarket || "all",
+    startedAt:new Date().toISOString(),
+    finishedAt:null,
+    result:null,
+    error:""
+  };
+  adminRefreshJob = job;
+
+  // Azure's public HTTP gateway can end a request before a complete
+  // multi-market refresh finishes. Return immediately and let the caller poll
+  // the authenticated status endpoint while the existing refresh lock keeps
+  // duplicate runs from starting for the same market.
+  setImmediate(async () => {
+    try {
+      job.result = await refreshProducts(c, requestedMarket ? {market:requestedMarket} : {});
+      job.status = "success";
+    } catch (error) {
+      job.status = "failed";
+      job.error = error?.message || "Catalog refresh failed";
+      console.error(`Background catalog refresh failed: ${job.error}`);
+    } finally {
+      job.finishedAt = new Date().toISOString();
+    }
+  });
+
+  return res.status(202).json({accepted:true, ...refreshJobResponse(job)});
+});
+
+app.get("/api/admin/refresh-status", admin, (req,res) => {
+  if (!adminRefreshJob) return res.status(404).json({error:"No refresh job has been started in this application instance"});
+  return res.json(refreshJobResponse(adminRefreshJob));
 });
 app.get("/api/admin/automation-status", admin, (req,res) => {
   const sourceRuns = db.prepare("SELECT * FROM source_refresh_runs ORDER BY id DESC LIMIT 100").all();

@@ -14,7 +14,7 @@ concurrency:
 jobs:
   refresh:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
 
     steps:
       - name: Validate admin secret
@@ -39,12 +39,34 @@ jobs:
         run: |
           set -euo pipefail
           response=$(curl --fail-with-body --silent --show-error \
-            --retry 4 --retry-delay 20 --retry-all-errors \
-            --max-time 900 \
+            --retry 3 --retry-delay 10 --retry-all-errors \
+            --max-time 60 \
             -X POST \
             -H "x-admin-key: ${ADMIN_KEY}" \
             "https://onedealtheday-g3dme0aghzerc3a2.centralus-01.azurewebsites.net/api/admin/refresh")
           echo "Refresh response: ${response}"
+
+          for attempt in $(seq 1 50); do
+            status=$(curl --fail-with-body --silent --show-error \
+              --retry 3 --retry-delay 10 --retry-all-errors \
+              --max-time 60 \
+              -H "x-admin-key: ${ADMIN_KEY}" \
+              "https://onedealtheday-g3dme0aghzerc3a2.centralus-01.azurewebsites.net/api/admin/refresh-status")
+            state=$(STATUS_JSON="${status}" node -e 'const value=JSON.parse(process.env.STATUS_JSON); process.stdout.write(String(value.status || ""))')
+            echo "Refresh status (${attempt}/50): ${state}"
+            if [ "${state}" = "success" ]; then
+              echo "Refresh completed: ${status}"
+              exit 0
+            fi
+            if [ "${state}" = "failed" ]; then
+              echo "Refresh failed: ${status}"
+              exit 1
+            fi
+            sleep 30
+          done
+
+          echo "Refresh did not finish within 25 minutes"
+          exit 1
 
       - name: Verify refreshed products
         run: |

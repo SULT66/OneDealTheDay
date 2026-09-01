@@ -10,6 +10,14 @@ const ebayVerificationToken = String(process.env.EBAY_VERIFICATION_TOKEN || "").
 const ebayClientId = String(process.env.EBAY_CLIENT_ID || "").trim();
 const ebayClientSecret = String(process.env.EBAY_CLIENT_SECRET || "").trim();
 const ebayCampaignId = String(process.env.EBAY_CAMPAIGN_ID || "").trim();
+const rakutenClientId = String(process.env.RAKUTEN_CLIENT_ID || "").trim();
+const rakutenClientSecret = String(process.env.RAKUTEN_CLIENT_SECRET || "").trim();
+const rakutenPublisherSid = String(process.env.RAKUTEN_PUBLISHER_SID || "").trim();
+const rakutenNeweggMid = String(process.env.RAKUTEN_NEWEGG_MID || "44583").trim();
+const rakutenNeweggKeywords = String(process.env.RAKUTEN_NEWEGG_KEYWORDS || "graphics card,gaming laptop,mechanical keyboard,router,ssd,external hard drive,gaming headset,computer monitor,laser printer")
+  .split(",")
+  .map(value => value.trim())
+  .filter(Boolean);
 const tavusToolSecret = String(process.env.TAVUS_TOOL_SECRET || "").trim();
 const tavusApiKey = String(process.env.TAVUS_API_KEY || "").trim();
 const tavusPalId = String(process.env.TAVUS_PAL_ID || "p5362d6973ab").trim();
@@ -166,6 +174,7 @@ const enabledSourceIds = [];
 if (ebayClientId && ebayClientSecret && /^\d{10}$/.test(ebayCampaignId)) enabledSourceIds.push("ebay");
 if (rainforestApiKey && markets.some(code => affiliateTagForMarket(code))) enabledSourceIds.push("amazon");
 if (bluecartApiKey && markets.some(code => walmartAffiliateTemplateForMarket(code))) enabledSourceIds.push("walmart");
+if (rakutenClientId && rakutenClientSecret && rakutenPublisherSid && markets.includes("us")) enabledSourceIds.push("newegg");
 for (const feed of affiliateFeeds) enabledSourceIds.push(feed.source);
 const uniqueSourceIds = [...new Set(enabledSourceIds)];
 const provider = uniqueSourceIds.length > 1 ? "multi" : uniqueSourceIds[0] || "unconfigured";
@@ -181,6 +190,11 @@ module.exports = {
   ebayClientId,
   ebayClientSecret,
   ebayCampaignId,
+  rakutenClientId,
+  rakutenClientSecret,
+  rakutenPublisherSid,
+  rakutenNeweggMid,
+  rakutenNeweggKeywords,
   tavusToolSecret,
   tavusApiKey,
   tavusPalId,

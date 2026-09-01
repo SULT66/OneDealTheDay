@@ -2,6 +2,7 @@ const RETAILERS = Object.freeze([
   {id:"amazon", name:"Amazon", network:"Amazon Associates", markets:["us", "ca", "uk", "fr", "de"], nativeProvider:"amazon"},
   {id:"ebay", name:"eBay", network:"eBay Partner Network", markets:["us", "ca", "uk", "fr", "de"], nativeProvider:"ebay"},
   {id:"walmart", name:"Walmart", network:"Impact / Rakuten", markets:["us", "ca"]},
+  {id:"newegg", name:"Newegg", network:"Rakuten Advertising", markets:["us"], nativeProvider:"newegg"},
   {id:"target", name:"Target", network:"Impact", markets:["us"]},
   {id:"best-buy", name:"Best Buy", network:"Best Buy / Impact", markets:["us", "ca"]},
   {id:"home-depot", name:"Home Depot", network:"Impact", markets:["us", "ca"]},
