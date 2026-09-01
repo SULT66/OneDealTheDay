@@ -7,6 +7,41 @@ import type { Deal, PricePoint } from "./types";
  * fields degrade to an empty array / null rather than being invented.
  */
 
+/**
+ * Misspellings a merchant sent us, corrected on the way to the page.
+ *
+ * "Persoanlized Picture Car Air Fresheners" is the seller's own typo, and on
+ * their listing that is their problem. On OneDailyDrop it reads as ours, and a
+ * partner reviewing the site said exactly that.
+ *
+ * Every entry has been seen in the live feed and counted: five listings say
+ * Persoanlized, one says Protecter. Nothing is here on suspicion, because a
+ * guess would eventually "correct" a real product name. Klein Tools really
+ * does write ImpactRated, and that stays.
+ *
+ * Whole words only, and the original capitalisation is kept, so PERSOANLIZED
+ * in a shouty title stays shouty.
+ */
+const FEED_TITLE_TYPOS: Record<string, string> = {
+  persoanlized: "personalized",
+  protecter: "protector",
+};
+
+const matchCase = (source: string, corrected: string) => {
+  if (source === source.toUpperCase()) return corrected.toUpperCase();
+  if (source[0] === source[0]?.toUpperCase()) {
+    return corrected[0].toUpperCase() + corrected.slice(1);
+  }
+  return corrected;
+};
+
+export function correctFeedTitle(title: string): string {
+  return String(title || "").replace(/[a-zA-Z]+/g, (word) => {
+    const corrected = FEED_TITLE_TYPOS[word.toLowerCase()];
+    return corrected ? matchCase(word, corrected) : word;
+  });
+}
+
 export type RawProduct = {
   id: number | string;
   title: string;
@@ -79,7 +114,7 @@ export function adaptProduct(raw: RawProduct): Omit<Deal, "rank"> {
 
   return {
     id: String(raw.id),
-    title: raw.title,
+    title: correctFeedTitle(raw.title),
     brand: realBrand(raw.brand),
     category: slugifyCategory(raw.public_category),
     retailer: raw.retailer_name || raw.source,

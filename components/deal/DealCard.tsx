@@ -67,8 +67,16 @@ export async function DealCard({
             className="p-4 transition-transform duration-300 group-hover:scale-[1.04]"
           />
 
+          {/* The position in the list being read, not the item's place in the
+              whole catalogue.
+
+              It used to show deal.rank, a catalogue position, and on a curated
+              grid that produced #1, #2, #3, #4, #125, #126 … #137. A reviewer
+              seeing that reasonably concluded the ranking was broken. A number
+              beside the fifth card can only sensibly mean "the fifth of
+              these". */}
           <span className="absolute left-3 top-3 inline-flex items-center rounded-full bg-ink/85 px-2.5 py-1 text-[0.7rem] font-bold uppercase tracking-wide text-white tnum">
-            #{deal.rank}
+            #{index + 1}
           </span>
 
           {off !== null && (
