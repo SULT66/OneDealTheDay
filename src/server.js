@@ -304,6 +304,126 @@ const rememberExchange = (req, marketCode, result) => {
   }
 };
 
+/*
+ * The same answer, with the working-out sent as it happens.
+ *
+ * A search takes thirty seconds. The panel used to fill that with labels on a
+ * timer: "Searching the shops" at four seconds whether or not anything had
+ * been searched, "Comparing the best of them" at twenty six whether or not
+ * anything had been found. It is decoration, and a shopper who waits half a
+ * minute in front of decoration leaves.
+ *
+ * This route sends the real milestones instead, one JSON object per line, and
+ * the finished answer last. Newline-delimited rather than server-sent events
+ * because the browser has to POST the question, and EventSource cannot.
+ *
+ * It is the same work as the plain route, called the same way, so anything
+ * that cannot stream keeps using that one and loses nothing but the
+ * commentary.
+ */
+app.post("/api/shopping-assistant/stream", shoppingAssistantRateLimit, async (req, res) => {
+  const requestedMarket = normalizeMarket(req.body?.market);
+  const selectedMarket = market(requestedMarket || req.market || marketFromIp(req).code);
+  const requestedLanguage = String(req.body?.language || req.language || "en").trim().toLowerCase().split("-")[0];
+  const language = ["en", "ru", "az", "es", "fr", "de"].includes(requestedLanguage) ? requestedLanguage : "en";
+
+  const requestController = new AbortController();
+  req.once("aborted", () => requestController.abort());
+  res.once("close", () => {
+    if (!res.writableEnded) requestController.abort();
+  });
+
+  res.set({
+    "Content-Type": "application/x-ndjson; charset=utf-8",
+    "Cache-Control": "no-store",
+    /* Nginx and friends will otherwise hold the lines until the response ends,
+       which is exactly the thirty seconds this is here to fill. */
+    "X-Accel-Buffering": "no",
+  });
+  const send = (payload) => {
+    if (res.writableEnded) return;
+    res.write(`${JSON.stringify(payload)}\n`);
+  };
+
+  const key = cacheKey({
+    message: req.body?.message,
+    messages: req.body?.messages,
+    shoppingMission: req.body?.shopping_mission,
+    excludedOfferUrls: req.body?.excluded_offer_urls,
+    marketCode: selectedMarket.code,
+    language,
+  });
+  const cached = key ? readCachedAnswer(db, key) : null;
+  if (cached) {
+    rememberExchange(req, selectedMarket.code, cached);
+    send({ type: "result", result: cached });
+    return res.end();
+  }
+
+  let hardTimeoutTimer;
+  try {
+    const assistantTask = shoppingAssistant.respond({
+      message: req.body?.message,
+      messages: req.body?.messages,
+      shoppingContext: req.body?.shopping_context,
+      shoppingMission: req.body?.shopping_mission,
+      excludedOfferUrls: req.body?.excluded_offer_urls,
+      skipClarification: Boolean(req.body?.skip_clarification),
+      marketCode: selectedMarket.code,
+      language,
+      signal: requestController.signal,
+      onProgress: (event) => send({ type: "progress", ...event }),
+    });
+    const hardTimeoutTask = new Promise(resolve => {
+      hardTimeoutTimer = setTimeout(() => {
+        const timeoutMission = mergeShoppingMission(
+          req.body?.shopping_mission,
+          {},
+          req.body?.message,
+          false,
+        );
+        resolve(timeoutResponse(
+          req.body?.message,
+          language,
+          [],
+          shoppingAssistant.model,
+          selectedMarket,
+          timeoutMission,
+          shoppingMissionText(timeoutMission, req.body?.message),
+        ));
+        requestController.abort();
+      }, SHOPPING_ASSISTANT_HARD_TIMEOUT_MS);
+    });
+    const result = await Promise.race([assistantTask, hardTimeoutTask]);
+    clearTimeout(hardTimeoutTimer);
+    if (key) {
+      try {
+        writeCachedAnswer(db, key, result);
+      } catch (error) {
+        console.error(`[delia] could not remember the answer: ${error.message}`);
+      }
+    }
+    rememberExchange(req, selectedMarket.code, result);
+    send({ type: "result", result });
+    return res.end();
+  } catch (error) {
+    clearTimeout(hardTimeoutTimer);
+    const status = Number(error.statusCode) || 502;
+    if (status >= 500) console.error("Shopping assistant stream failed:", error.message);
+    /* The status line has already gone out with a 200, so the failure has to
+       travel in the body like everything else. */
+    send({
+      type: "error",
+      error: status === 503
+        ? "The AI Shopping Assistant is being connected. Please try again shortly."
+        : status === 400
+          ? error.message
+          : "Delia could not answer that. Try again.",
+    });
+    return res.end();
+  }
+});
+
 app.post("/api/shopping-assistant", shoppingAssistantRateLimit, async (req, res) => {
   const requestedMarket = normalizeMarket(req.body?.market);
   const selectedMarket = market(requestedMarket || req.market || marketFromIp(req).code);

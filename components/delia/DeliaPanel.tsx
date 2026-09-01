@@ -29,6 +29,7 @@ import {
   type DeliaConversationSummary,
   type DeliaRecommendation,
   type DeliaResult,
+  type DeliaProgress,
   type DeliaTurn,
 } from "@/lib/delia";
 import {
@@ -92,13 +93,18 @@ const pickExamples = () =>
 /**
  * What Delia is doing, while she does it.
  *
- * A real search over several shops takes twenty to forty seconds. Three
- * bouncing dots for that long reads as a hung page, and the shopper closes the
- * panel before the answer arrives. Naming the step turns the same wait into
- * visible work. The timings match what the search actually does: classify,
- * search the shops, then read prices off the pages it found.
+ * This used to run on a clock alone: "Searching the shops" at four seconds and
+ * "Comparing the best of them" at twenty six, whether or not anything had been
+ * searched or found. It filled the wait, which was the point, but it was
+ * decoration, and it said the same confident thing whether the search was
+ * flying or stuck.
+ *
+ * The server now reports each milestone as it reaches it, so the line says
+ * what is true: what it understood, and how many offers came back to check.
+ * The clock stays underneath as the fallback, for the stretch between
+ * milestones and for a browser that could not read the stream.
  */
-function SearchProgress() {
+function SearchProgress({ progress }: { progress: DeliaProgress | null }) {
   const [seconds, setSeconds] = useState(0);
 
   useEffect(() => {
@@ -106,7 +112,7 @@ function SearchProgress() {
     return () => clearInterval(timer);
   }, []);
 
-  const label =
+  const fromClock =
     seconds < 4
       ? "Working out what you need"
       : seconds < 14
@@ -114,6 +120,36 @@ function SearchProgress() {
         : seconds < 26
           ? "Checking prices and stock"
           : "Comparing the best of them";
+
+  const label = (() => {
+    if (!progress) return fromClock;
+    if (progress.stage === "understood") {
+      const product = progress.product?.trim();
+      /* Repeating the request back is the strongest signal that anything is
+         happening at all, and it catches a misread early: somebody who asked
+         for a monitor and reads "looking for a mirror" can stop right there. */
+      if (product) {
+        return progress.budget_max
+          ? `Looking for a ${product} under ${progress.budget_max}`
+          : `Looking for a ${product}`;
+      }
+      return "Working out what you need";
+    }
+    if (progress.stage === "catalog") {
+      return progress.found ? `Found ${progress.found} of our own picks` : "Searching the shops";
+    }
+    /* A plan with no named shops is an open search, and "looking in 0 shops"
+       would be worse than saying nothing about the number. */
+    if (progress.stage === "searching") {
+      return progress.shops ? `Searching ${progress.shops} shops` : "Searching the shops";
+    }
+    if (progress.stage === "checking") {
+      return progress.found
+        ? `Found ${progress.found}, checking prices and stock`
+        : "Checking prices and stock";
+    }
+    return fromClock;
+  })();
 
   return (
     <span className="text-xs text-fg-subtle" aria-live="polite">
@@ -520,6 +556,8 @@ export function DeliaPanel() {
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
   const [conversations, setConversations] = useState<DeliaConversationSummary[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
+  /* What the search has actually reached, as it reaches it. */
+  const [progress, setProgress] = useState<DeliaProgress | null>(null);
   const [examples, setExamples] = useState<string[]>(FIRST_EXAMPLES);
 
   /* Shuffled once the panel exists rather than during render, so the server
@@ -547,13 +585,18 @@ export function DeliaPanel() {
       setErrorMsg(null);
       setPendingQuestion(transcript);
       try {
-        const next = await askAssistant(transcript, {
-          market,
-          history: historyRef.current,
-          shoppingMission: missionRef.current,
-          skipClarification,
-          conversationId: conversationIdRef.current,
-        });
+        const next = await askAssistant(
+          transcript,
+          {
+            market,
+            history: historyRef.current,
+            shoppingMission: missionRef.current,
+            skipClarification,
+            conversationId: conversationIdRef.current,
+          },
+          setProgress,
+        );
+        setProgress(null);
         missionRef.current = next.shoppingMission ?? missionRef.current;
         // The backend's `message` is only the lead-in sentence for a
         // clarification turn — the actual questions live in separate fields
@@ -929,7 +972,7 @@ export function DeliaPanel() {
                     <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-fg-subtle [animation-delay:-0.15s]" />
                     <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-fg-subtle" />
                   </span>
-                  <SearchProgress />
+                  <SearchProgress progress={progress} />
                 </span>
               </div>
             </div>

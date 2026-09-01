@@ -96,6 +96,24 @@ export type DeliaResult = {
 export type DeliaTurn = { role: "user" | "assistant"; content: string };
 
 /**
+ * A milestone the search has actually reached.
+ *
+ * The panel used to fill a thirty second wait with labels on a timer:
+ * "Searching the shops" at four seconds whether or not anything had been
+ * searched. These come from the server as they happen, so the wait shows what
+ * is true rather than what the clock guessed.
+ */
+export type DeliaProgress = {
+  stage: "understood" | "catalog" | "searching" | "checking";
+  at: number;
+  product?: string;
+  budget_max?: number | null;
+  currency?: string;
+  found?: number;
+  shops?: number;
+};
+
+/**
  * The reply text field is `message`, not `answer` — confirmed against the
  * live backend rather than assumed from source, since the two disagreed.
  */
@@ -136,7 +154,17 @@ export async function askAssistant(
      */
     conversationId?: string;
   },
+  /*
+   * Called as the search reaches each milestone. Optional, and the request
+   * still works without it: a browser that cannot read a response as it
+   * arrives gets the same answer, just with nothing to show during the wait.
+   */
+  onProgress?: (event: DeliaProgress) => void,
 ): Promise<DeliaResult> {
+  if (onProgress) {
+    const streamed = await askAssistantStreaming(transcript, opts, onProgress);
+    if (streamed) return streamed;
+  }
   const res = await fetch("/api/shopping-assistant", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -160,6 +188,77 @@ export async function askAssistant(
   }
 
   return toResult(transcript, data);
+}
+
+/**
+ * The same question, over a connection that reports the working-out.
+ *
+ * Returns null rather than throwing when streaming is not available, so the
+ * caller falls back to the plain request and the shopper still gets an answer.
+ * A failure to narrate is not a failure to shop.
+ *
+ * Newline-delimited JSON because the question has to be POSTed, and
+ * EventSource cannot post.
+ */
+async function askAssistantStreaming(
+  transcript: string,
+  opts: Parameters<typeof askAssistant>[1],
+  onProgress: (event: DeliaProgress) => void,
+): Promise<DeliaResult | null> {
+  let response: Response;
+  try {
+    response = await fetch("/api/shopping-assistant/stream", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: transcript,
+        messages: opts.history,
+        shopping_mission: opts.shoppingMission ?? undefined,
+        market: opts.market,
+        language: opts.language,
+        skip_clarification: opts.skipClarification || undefined,
+        conversation_id: opts.conversationId || undefined,
+      }),
+    });
+  } catch {
+    return null;
+  }
+  if (!response.ok || !response.body) return null;
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let result: DeliaResult | null = null;
+  let failure = "";
+
+  /* Lines can be split across chunks, so only whole ones are parsed and the
+     remainder waits for the next read. */
+  const consume = (line: string) => {
+    const trimmed = line.trim();
+    if (!trimmed) return;
+    let event: { type?: string; result?: AssistantResponse; error?: string } & DeliaProgress;
+    try {
+      event = JSON.parse(trimmed);
+    } catch {
+      return;
+    }
+    if (event.type === "progress") onProgress(event);
+    if (event.type === "result" && event.result) result = toResult(transcript, event.result);
+    if (event.type === "error") failure = event.error || "Delia could not answer that. Try again.";
+  };
+
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+    for (const line of lines) consume(line);
+  }
+  consume(buffer);
+
+  if (failure) throw new DeliaError(failure);
+  return result;
 }
 
 /**
