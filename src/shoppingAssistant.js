@@ -2168,6 +2168,93 @@ function retailerWebSearchQueries(missionValue, fallbackRequest = "", marketCode
   return [...new Set([...siteQueries, ...baseQueries])].slice(0, 14);
 }
 
+/**
+ * The live search, run so that the panel can see it happening.
+ *
+ * The interesting part of a thirty second wait is the middle of it. Milestones
+ * around the model call gave "searching" at three seconds and "found 4" at
+ * forty seven, with forty four seconds of silence between them, which is the
+ * silence a shopper leaves during.
+ *
+ * Streaming the call turns each search the model runs into an event, so the
+ * count of shops actually visited can climb while it works. The reply is
+ * identical either way: the completed response arrives on the last event and
+ * is handed back exactly as the non-streaming call would have returned it.
+ *
+ * Falls back to the plain call if streaming is refused. A search that works is
+ * worth more than a search that narrates.
+ */
+async function runSearch(openai, request, signal, progress) {
+  const plain = () => openai.responses.create(request, { signal });
+  /*
+   * Off, and the measurement is why.
+   *
+   * Streaming the search would let the count of shops visited climb during the
+   * forty seconds a shopper waits, which is the part of the wait with nothing
+   * in it. But the same question, same wording, run three times each way:
+   * without streaming 4, 4 and 4 offers; with it 0, 1 and 0. Half of that was
+   * a bug of mine — the completed event carries no output_text, so the answer
+   * parsed as empty, and rebuilding it from the output items moved the results
+   * to 4, 0 and 2. Still short of 4, 4, 4, and I do not know why.
+   *
+   * A shortlist that loses two shops in three tries is a worse product than a
+   * quiet progress bar, so the commentary loses. The switch stays because the
+   * cause is worth finding later, and the numbers to beat are written here.
+   */
+  if (!/^(?:1|true|yes)$/i.test(String(process.env.DELIA_STREAM_SEARCH || ""))) return plain();
+  if (typeof progress !== "function") return plain();
+
+  let stream;
+  try {
+    stream = await openai.responses.create({ ...request, stream: true }, { signal });
+  } catch (error) {
+    if (signal?.aborted) throw error;
+    return plain();
+  }
+
+  let searches = 0;
+  let completed = null;
+  for await (const event of stream) {
+    /* One line per search the model finishes, which is the only honest
+       measure of progress available while it works. */
+    if (event?.type === "response.web_search_call.completed") {
+      searches += 1;
+      progress("searched", { searches });
+    }
+    if (event?.type === "response.completed" && event.response) completed = event.response;
+    if (event?.type === "response.failed" || event?.type === "error") {
+      const message = event.response?.error?.message || event.message || "the search failed";
+      throw new Error(message);
+    }
+  }
+  if (!completed) throw new Error("the search ended without a response");
+  /*
+   * output_text is a convenience the SDK adds to a response it assembled
+   * itself, and the object arriving on the completed event does not carry it.
+   * Everything downstream reads that one field, so without this the answer
+   * parses as empty: measured at 0, 1 and 0 offers against 4, 4 and 4 for the
+   * same question without streaming, with the trace reading "model handed back
+   * 0 recommendations" while the search had plainly worked.
+   */
+  if (!clean(completed.output_text)) {
+    completed.output_text = (completed.output || [])
+      .flatMap((item) => item?.content || [])
+      .map((part) => part?.text || "")
+      .join("");
+  }
+  return completed;
+}
+
+/* How many shops the plan names by hand, for the line that tells a shopper
+   where the search is going. A plan with no site: queries is an open search,
+   and saying "looking in 0 shops" would be worse than saying nothing. */
+function namedShopCount(queries) {
+  const hosts = (Array.isArray(queries) ? queries : [])
+    .map((query) => /site:([^s]+)/i.exec(String(query || ""))?.[1])
+    .filter(Boolean);
+  return new Set(hosts).size;
+}
+
 function retailerDiscoveryHosts(missionValue, marketCode = "us") {
   const mission = normalizeShoppingMission(missionValue);
   const family = missionProductFamily(mission.product_type);
@@ -4775,8 +4862,28 @@ function createShoppingAssistant({
          searched without answering anything first. */
       skipClarification = false,
       signal,
+      /*
+       * Called as each real milestone is reached, so the panel can say what is
+       * happening instead of guessing on a timer. The labels it replaced were
+       * pure clockwork: "Searching the shops" at four seconds whether or not
+       * anything had been searched, "Comparing the best of them" at twenty six
+       * whether or not anything had been found.
+       *
+       * Never allowed to break a search. A shopper who has closed the panel is
+       * the usual reason a write fails, and losing the answer because nobody
+       * was listening to the commentary would be absurd.
+       */
+      onProgress = null,
     }) {
       const startedAt = Date.now();
+      const progress = (stage, detail = {}) => {
+        if (!onProgress) return;
+        try {
+          onProgress({ stage, at: Date.now() - startedAt, ...detail });
+        } catch {
+          /* The commentary is not worth the answer. */
+        }
+      };
       const userMessage = clean(message).slice(0, MAX_MESSAGE_LENGTH);
       const excludedUrls = new Set(
         (Array.isArray(excludedOfferUrls) ? excludedOfferUrls : [])
@@ -5052,6 +5159,15 @@ function createShoppingAssistant({
             ).catch(() => [])
           : Promise.resolve([]);
       trace("stage: classified at", Date.now() - startedAt, "ms");
+      /* What was understood, in the two facts a shopper would recognise.
+         shoppingMissionText is written for the model and reads like it:
+         "dishwasher use: quiet operation in US under 700 quiet dishwasher
+         dollars quiet dishwasher" is not a thing to show anybody. */
+      progress("understood", {
+        product: clean(activeMission.product_type).slice(0, 60),
+        budget_max: activeMission.budget_max || null,
+        currency: selectedMarket.currency,
+      });
       const catalogSearchStartedAt = Date.now();
       const catalogProducts = searchCatalog(
         db,
@@ -5064,6 +5180,7 @@ function createShoppingAssistant({
         language,
       );
       trace("stage: catalog searched in", Date.now() - catalogSearchStartedAt, "ms ->", catalogProducts.length, "rows; total", Date.now() - startedAt, "ms");
+      progress("catalog", { found: catalogProducts.length });
       const referencedProducts = new Map(
         catalogProducts.map((product) => [product.id, product]),
       );
@@ -5242,6 +5359,7 @@ function createShoppingAssistant({
           }).catch(() => ({ offers: [], sources: [], images: [] }))
         : Promise.resolve({ offers: [], sources: [], images: [] });
       trace("stage: live search starts at", Date.now() - startedAt, "ms | window", liveSearchTimeoutMs, "| searchTimeoutMs", searchTimeoutMs, "| remaining", remainingBudgetMs);
+      progress("searching", { shops: namedShopCount(webRetailerQueries) });
       let response;
       try {
         response = await withRequestTimeout(
@@ -5251,9 +5369,7 @@ function createShoppingAssistant({
              is also the only place a photograph comes from now that retailers
              refuse the fetches hydration needs. */
           (requestSignal) =>
-            openai.responses.create(assistantRequest(true), {
-              signal: requestSignal,
-            }),
+            runSearch(openai, assistantRequest(true), requestSignal, progress),
           signal,
           liveSearchTimeoutMs,
         );
@@ -5362,6 +5478,7 @@ function createShoppingAssistant({
         })));
       }
       trace("model handed back", structured.recommendations.length, "recommendations");
+      progress("checking", { found: structured.recommendations.length });
       const structuredRecommendationCandidates = structured.recommendations
         .map((recommendation, index) => {
           const product = referencedProducts.get(
