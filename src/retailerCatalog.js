@@ -32,10 +32,26 @@ const RETAILERS = Object.freeze([
     name:"Giftlab",
     network:"Awin",
     markets:["us"],
-    // Giftlab's current US feed is small enough to keep in full after the
-    // safety policy below. Recommendation diversity is enforced separately,
-    // so catalog ingestion does not need to discard most of the assortment.
-    maxCatalogProducts:3000,
+    /*
+     * Capped, because keeping this feed in full made it the site.
+     *
+     * It stood at 3,000 on the reasoning that the feed was small enough to
+     * keep whole and that diversity was enforced further down. Diversity in
+     * the shortlist was; the shape of the catalogue was not. It grew to 2,356
+     * of 2,548 listings, ninety two percent from one gift supplier, leaving 19
+     * in Electronics and 7 in Home & Kitchen. A partner review reached the
+     * obvious conclusion, which was that a site courting Newegg and Home Depot
+     * is a gift shop.
+     *
+     * Four hundred keeps Giftlab a real supplier and the largest single one,
+     * which is honest, without it being the whole assortment. The cut is by
+     * feed order rather than by quality: ranking chooses what surfaces, and it
+     * chooses from four hundred rather than from two thousand.
+     *
+     * AFFILIATE_FEED_GIFTLAB_US_MAX_PRODUCTS overrides this without a deploy,
+     * so the number can be tuned against what the other categories reach.
+     */
+    maxCatalogProducts:400,
     feedPolicy:{
       excludeCategoryLeaves:["Lingerie"],
       excludeTitleTerms:[

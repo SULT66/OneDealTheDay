@@ -86,7 +86,24 @@ assert.strictEqual(
   "King Koil accessories were not excluded from the mattress feed",
 );
 const giftlabDefinition = definitions.find(item => item.id === "giftlab-us");
-assert.strictEqual(giftlabDefinition.maxProducts, 3000, "Giftlab cannot retain its complete safe catalog");
+/*
+ * This asserted 3,000, on the reasoning that the feed was small enough to keep
+ * whole. Keeping it whole is what made it the site: 2,356 of 2,548 listings,
+ * ninety two percent from one gift supplier, with 19 left in Electronics and 7
+ * in Home & Kitchen. A partner review read that as a gift shop wearing a deals
+ * site's clothes, and was right.
+ *
+ * What has to hold now is the opposite: no single feed may be large enough to
+ * be the catalogue on its own.
+ */
+assert(
+  giftlabDefinition.maxProducts <= 600,
+  "One feed is allowed to fill the catalogue again",
+);
+assert(
+  giftlabDefinition.maxProducts >= 100,
+  "Giftlab is capped so low it is no longer a real supplier",
+);
 assert.strictEqual(
   allowedByFeedPolicy({title:"Custom Sexy Apron", category:"Gifts"}, giftlabDefinition),
   false,
@@ -259,7 +276,19 @@ const config = {
       market:{code:"us", currency:"USD"},
       fetchImpl:async () => new Response(tribesignsFeed, {status:200, headers:{"content-type":"text/csv"}})
     });
-    assert.strictEqual(expandedGiftlabProducts.length, 2101, "Giftlab was still truncated at the old 2,000-product feed ceiling");
+    /*
+     * This asserted 2,101 — every row of the fixture — to prove a hidden
+     * 2,000-row default was not silently truncating the feed. The point was
+     * never the number: it was that the feed's own configured cap decides,
+     * rather than some ceiling nobody set. Now that Giftlab is deliberately
+     * capped, asserting the fixture's full length would assert the very thing
+     * that made the site a gift shop.
+     */
+    assert.strictEqual(
+      expandedGiftlabProducts.length,
+      giftlabDefinition.maxProducts,
+      "The feed returned something other than its own configured limit, so a ceiling nobody set is deciding",
+    );
 
     const sourceLimited = await searchAll({
       ...config,
