@@ -20,17 +20,47 @@ function boundedNumber(value, fallback, minimum, maximum = Number.MAX_SAFE_INTEG
   return Number.isFinite(parsed) ? Math.max(minimum, Math.min(maximum, parsed)) : fallback;
 }
 
+/*
+ * What the live search asks eBay for.
+ *
+ * These were vague — "home gadgets", "tools", "office gadgets" — and a vague
+ * term returns whatever a marketplace feels like returning. A partner review
+ * counted the result: 19 listings in Electronics, 20 in Tools & DIY, 7 in
+ * Home & Kitchen, against 2,356 from a single gift feed, and asked why a site
+ * courting Newegg and Home Depot had nothing in their aisles.
+ *
+ * Named product types instead of category words, because that is what people
+ * search and what a marketplace can answer precisely: "cordless drill"
+ * returns drills, "tools" returns a shrug. The four categories a partner looks
+ * at first get real coverage; the categories that were never thin keep one
+ * term each rather than losing their supply.
+ */
 const defaultKeywords = [
-  "home gadgets",
-  "kitchen gadgets",
+  // Electronics
+  "wireless earbuds",
+  "bluetooth speaker",
+  "portable ssd",
+  "usb c hub",
+  "power bank",
+  // Home & Kitchen
+  "air fryer",
+  "cookware set",
+  "knife set",
+  "robot vacuum",
+  // Tools & DIY
+  "cordless drill",
+  "screwdriver set",
+  "tape measure",
+  "tool bag",
+  // Office
+  "paper shredder",
+  "label maker",
+  "desk organizer",
+  // Already healthy, one term each.
   "car accessories",
-  "smart home",
   "pet supplies",
-  "tools",
   "travel accessories",
-  "office gadgets",
-  "fitness accessories",
-  "gifts under 25"
+  "fitness accessories"
 ];
 const localizedDefaultKeywords = {
   fr: [
