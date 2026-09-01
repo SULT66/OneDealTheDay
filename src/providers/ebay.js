@@ -1,5 +1,7 @@
 const DEFAULT_DETAIL_LIMIT = 80;
-const DEFAULT_TARGET_ELIGIBLE = 40;
+/* The code caps this at 60 a few lines down, so 40 was leaving a third of
+   each run unused. More keywords now need more room to land. */
+const DEFAULT_TARGET_ELIGIBLE = 60;
 const SEARCH_CONCURRENCY = 3;
 const DETAIL_CONCURRENCY = 6;
 const { normalizeTradeItemId } = require("../productIdentity");

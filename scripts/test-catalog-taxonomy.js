@@ -16,7 +16,31 @@ const cases = [
   [{source:"ebay", category:"tierbedarf", title:"Zubehör"}, "Pet Supplies"],
   [{source:"ebay", category:"idées cadeaux", title:"Souvenir"}, "Gifts"],
   [{source:"ebay", category:"Tools", title:"Battery replacement kit for Apple iPhone 12"}, "Electronics"],
-  [{source:"ebay", category:"Unknown feed path", title:"Opaque listing"}, "Other Deals"]
+  [{source:"ebay", category:"Unknown feed path", title:"Opaque listing"}, "Other Deals"],
+
+  /*
+   * The words these products are actually sold under. A partner review found
+   * Electronics holding 19 listings and Home & Kitchen 7 while every one of
+   * these sat in Other Deals, because the rules asked for phrases like "power
+   * drill" that no real listing writes.
+   */
+  [{source:"ebay", category:"", title:"DEWALT 20V MAX Cordless Drill Driver Kit"}, "Tools & DIY"],
+  [{source:"ebay", category:"", title:"Stanley 25ft Tape Measure"}, "Tools & DIY"],
+  [{source:"ebay", category:"", title:"Samsung 1TB 990 EVO NVMe M.2 Internal SSD"}, "Electronics"],
+  [{source:"ebay", category:"", title:"Logitech MX Master 3S Wireless Mouse"}, "Electronics"],
+  [{source:"ebay", category:"", title:"Anker 10000mAh Power Bank"}, "Electronics"],
+  [{source:"ebay", category:"", title:"OXO Good Grips 3-Piece Mixing Bowl Set"}, "Home & Kitchen"],
+  [{source:"ebay", category:"", title:"Shark Navigator Vacuum Cleaner"}, "Home & Kitchen"],
+  [{source:"ebay", category:"", title:"HP OfficeJet Pro 9015e All-in-One Printer"}, "Office"],
+  [{source:"ebay", category:"", title:"Fellowes Powershred Paper Shredder"}, "Office"],
+
+  /*
+   * And the two the widening could easily have broken. A bare "mouse" would
+   * file a cat toy under Electronics and a bare "monitor" would do the same to
+   * a baby monitor, which is why both are written narrowly.
+   */
+  [{source:"ebay", category:"", title:"Cat Toy Mouse with Feathers"}, "Pet Supplies"],
+  [{source:"ebay", category:"", title:"Infant Optics Baby Monitor"}, "Baby & Kids"]
 ];
 
 assert.strictEqual(PUBLIC_CATEGORIES.length, 16, "The shopper taxonomy must stay intentionally small");

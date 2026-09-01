@@ -57,7 +57,7 @@ jobs:
             status_payload="$(curl --fail --silent --show-error --max-time 20 'https://www.onedailydrop.com/api/status?market=us' || true)"
             if jq -e --arg release "${expected_release}" '
               .releaseId == $release and
-              .taxonomyVersion == "catalog-taxonomy-v2" and
+              .taxonomyVersion == "catalog-taxonomy-v3" and
               .market == "us" and
               .liveProducts > 0
             ' <<<"${status_payload}" >/dev/null 2>&1; then
