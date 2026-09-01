@@ -1,7 +1,7 @@
-const DEFAULT_DETAIL_LIMIT = 80;
+const DEFAULT_DETAIL_LIMIT = 320;
 /* The code caps this at 60 a few lines down, so 40 was leaving a third of
    each run unused. More keywords now need more room to land. */
-const DEFAULT_TARGET_ELIGIBLE = 60;
+const DEFAULT_TARGET_ELIGIBLE = 200;
 const SEARCH_CONCURRENCY = 3;
 const DETAIL_CONCURRENCY = 6;
 const { normalizeTradeItemId } = require("../productIdentity");
@@ -283,8 +283,13 @@ async function searchProducts({
   if (!candidates.size) throw new Error(`eBay returned no commissionable new fixed-price items. ${failures.join(" | ")}`.trim());
 
   const queue = [...candidates.values()].sort((left, right) => right.candidateScore - left.candidateScore);
-  const maximumDetails = Math.min(queue.length, positiveInteger(detailLimit, DEFAULT_DETAIL_LIMIT), 100);
-  const eligibleTarget = Math.min(60, positiveInteger(targetEligible, DEFAULT_TARGET_ELIGIBLE));
+  const maximumDetails = Math.min(queue.length, positiveInteger(detailLimit, DEFAULT_DETAIL_LIMIT), 400);
+  /* Sixty was the real limit on how many products this site could hold from
+     eBay, and nothing said so. A run refreshes what it can, anything it does
+     not touch ages out after 48 hours, so the catalogue settles at roughly
+     one run of eligible items. Sixty across every category is why Electronics
+     sat at ten while Gifts sat at two thousand. */
+  const eligibleTarget = Math.min(220, positiveInteger(targetEligible, DEFAULT_TARGET_ELIGIBLE));
   const products = [];
 
   for (let offset = 0; offset < maximumDetails && products.length < eligibleTarget; offset += DETAIL_CONCURRENCY) {

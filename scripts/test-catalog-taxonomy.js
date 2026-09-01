@@ -39,6 +39,18 @@ const cases = [
    * file a cat toy under Electronics and a bare "monitor" would do the same to
    * a baby monitor, which is why both are written narrowly.
    */
+  /* The aisles the shops we are courting would look at first. */
+  [{source:"ebay", category:"", title:"MSI GeForce RTX 4060 Graphics Card"}, "Electronics"],
+  [{source:"ebay", category:"", title:"HyperX Cloud II Gaming Headset"}, "Electronics"],
+  [{source:"ebay", category:"", title:"Google Nest Learning Smart Thermostat"}, "Electronics"],
+  [{source:"ebay", category:"", title:"HP LaserJet Pro Laser Printer"}, "Office"],
+  [{source:"ebay", category:"", title:"Lorell 4-Drawer Filing Cabinet"}, "Office"],
+  [{source:"ebay", category:"", title:"Milwaukee LED Work Light 2000 Lumen"}, "Tools & DIY"],
+  [{source:"ebay", category:"", title:"Werner 6ft Step Ladder"}, "Tools & DIY"],
+  [{source:"ebay", category:"", title:"KitchenAid Artisan Stand Mixer 5Qt"}, "Home & Kitchen"],
+  [{source:"ebay", category:"", title:"IKEA BILLY Bookshelf"}, "Furniture"],
+  [{source:"ebay", category:"", title:"Walker Edison Coffee Table"}, "Furniture"],
+
   [{source:"ebay", category:"", title:"Cat Toy Mouse with Feathers"}, "Pet Supplies"],
   [{source:"ebay", category:"", title:"Infant Optics Baby Monitor"}, "Baby & Kids"]
 ];

@@ -104,12 +104,12 @@ const RAW_RULES = [
  */
 const TITLE_RULES = [
   // Device repair parts belong with the device, not with general tools.
-  ["Electronics", /\b(iphone|ipad|android|smartphone|cell phone|mobile phone|phone battery|battery replacement|screen replacement|charger|charging|usb|headphones?|earbuds?|laptop|computer|tablet|camera|smart watch|smartwatch|bluetooth|wi-?fi|ssd|nvme|hard drive|external drive|flash drive|memory card|micro ?sd|power bank|hdmi|webcam|router|soundbar|graphics card|motherboard|processor|gaming mouse|wireless mouse|computer mouse|mechanical keyboard|wireless keyboard|gaming monitor|computer monitor|portable speaker|bluetooth speaker)\b/i],
+  ["Electronics", /\b(iphone|ipad|android|smartphone|cell phone|mobile phone|phone battery|battery replacement|screen replacement|charger|charging|usb|headphones?|earbuds?|laptop|computer|tablet|camera|smart watch|smartwatch|bluetooth|wi-?fi|ssd|nvme|hard drive|external drive|flash drive|memory card|micro ?sd|power bank|hdmi|webcam|router|soundbar|graphics card|motherboard|processor|gaming mouse|wireless mouse|computer mouse|mechanical keyboard|wireless keyboard|gaming monitor|computer monitor|portable speaker|bluetooth speaker|headset|smart thermostat|smart plug|smart bulb|security camera|video doorbell|streaming stick)\b/i],
   ["Mattresses & Sleep", /\b(mattress|mattresses|bed pillow|sleep topper|bed frame)\b/i],
   ["Bikes & Mobility", /\b(bicycle|bike|tricycle|e-?bike|scooter|mobility)\b/i],
   ["Office", /\b(office desk|computer desk|writing desk|standing desk|workstation|filing cabinet|office chair|printer|ink cartridge|toner|paper shredder|laminator|stapler|whiteboard|label maker|desk organizer|desk lamp|monitor stand|copy paper|file folders?)\b/i],
   ["Furniture", /\b(bookcase|bookshelf|shelving unit|nightstand|dresser|wardrobe|sideboard|console table|coffee table|dining table|sofa|accent chair|shoe cabinet)\b/i],
-  ["Tools & DIY", /\b(drill|impact driver|socket set|wrench|screwdriver|tool kit|tool set|toolbox|tool bag|saw blade|circular saw|miter saw|jigsaw|hacksaw|reciprocating saw|workbench|pliers|hammer|tape measure|stud finder|multimeter|utility knife|drill bit|hex key|sander|angle grinder|step ladder)\b/i],
+  ["Tools & DIY", /\b(drill|impact driver|socket set|wrench|screwdriver|tool kit|tool set|toolbox|tool bag|saw blade|circular saw|miter saw|jigsaw|hacksaw|reciprocating saw|workbench|pliers|hammer|tape measure|stud finder|multimeter|utility knife|drill bit|hex key|sander|angle grinder|step ladder|work light|power tool|socket wrench|caulk gun|paint roller)\b/i],
   ["Automotive", /\b(car|vehicle|truck|automotive|motorcycle)\b/i],
   ["Sports & Outdoors", /\b(fitness|exercise|workout|gym|yoga|camping|hiking|sports?)\b/i],
   ["Health & Beauty", /\b(skincare|skin care|makeup|cosmetic|hair dryer|hair care|massager|wellness|toothbrush)\b/i],
@@ -117,7 +117,7 @@ const TITLE_RULES = [
   ["Toys & Games", /\b(toy|game|puzzle|playset|collectible)\b/i],
   ["Baby & Kids", /\b(baby|toddler|kids?|children|stroller|nursery)\b/i],
   ["Travel", /\b(luggage|suitcase|travel bag|passport|weekender)\b/i],
-  ["Home & Kitchen", /\b(kitchen|cookware|bakeware|dinnerware|air fryer|coffee maker|espresso machine|blender|toaster|microwave|slow cooker|pressure cooker|mixing bowls?|cutting board|knife set|utensils?|frying pan|saucepan|stock pot|dutch oven|spatula|food storage|dish rack|vacuum cleaner|robot vacuum|mop|broom|bedding|comforter|duvet|towel set|shower curtain|storage organizer|home decor|lamp|lighting|garden|bathroom)\b/i],
+  ["Home & Kitchen", /\b(kitchen|cookware|bakeware|dinnerware|air fryer|coffee maker|espresso machine|blender|toaster|microwave|slow cooker|pressure cooker|stand mixer|hand mixer|food processor|electric kettle|mixing bowls?|cutting board|knife set|utensils?|frying pan|saucepan|stock pot|dutch oven|spatula|food storage|dish rack|vacuum cleaner|robot vacuum|mop|broom|bedding|comforter|duvet|towel set|shower curtain|storage organizer|home decor|lamp|lighting|garden|bathroom)\b/i],
   ["Fashion", /\b(dress|shirt|jacket|shoes?|sneakers?|handbag|necklace|bracelet|earrings?|watch)\b/i],
   ["Gifts", /\b(gift|personalized|custom|keepsake|souvenir)\b/i]
 ];

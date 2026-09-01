@@ -14,7 +14,7 @@ concurrency:
 jobs:
   refresh:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 25
 
     steps:
       - name: Validate admin secret
@@ -40,7 +40,7 @@ jobs:
           set -euo pipefail
           response=$(curl --fail-with-body --silent --show-error \
             --retry 4 --retry-delay 20 --retry-all-errors \
-            --max-time 300 \
+            --max-time 900 \
             -X POST \
             -H "x-admin-key: ${ADMIN_KEY}" \
             "https://onedealtheday-g3dme0aghzerc3a2.centralus-01.azurewebsites.net/api/admin/refresh")
