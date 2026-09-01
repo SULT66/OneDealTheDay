@@ -43,15 +43,16 @@ const RETAILERS = Object.freeze([
      * obvious conclusion, which was that a site courting Newegg and Home Depot
      * is a gift shop.
      *
-     * Four hundred keeps Giftlab a real supplier and the largest single one,
-     * which is honest, without it being the whole assortment. The cut is by
+     * A hundred and fifty. Four hundred was the first cut, and it still left
+     * Gifts several times larger than any other category: the goal is a shop
+     * with a gift section, not a gift shop with a hardware shelf. The cut is by
      * feed order rather than by quality: ranking chooses what surfaces, and it
      * chooses from four hundred rather than from two thousand.
      *
      * AFFILIATE_FEED_GIFTLAB_US_MAX_PRODUCTS overrides this without a deploy,
      * so the number can be tuned against what the other categories reach.
      */
-    maxCatalogProducts:400,
+    maxCatalogProducts:150,
     feedPolicy:{
       excludeCategoryLeaves:["Lingerie"],
       excludeTitleTerms:[
