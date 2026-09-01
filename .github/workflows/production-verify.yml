@@ -1,8 +1,18 @@
 name: Verify production release
 
+# After the deploy, never alongside it.
+#
+# Both workflows used to trigger on the same push, so this one started polling
+# for a release that had not been uploaded yet. The deploy alone took 4m21s,
+# leaving Azure the rest of a ten minute retry budget to restart and warm up,
+# and on 2026-09-01 it did not make it: the run failed at 11m51s against a
+# site that was healthy minutes later. Waiting for the deploy to finish gives
+# the whole budget to the thing actually being waited for.
 on:
-  push:
-    branches: [main]
+  workflow_run:
+    workflows: ["Deploy OneDailyDrop to Azure"]
+    types: [completed]
+  workflow_dispatch:
 
 # The deploy workflow cancels an in-flight deploy when a newer push lands
 # (see deploy-azure.yml), so a verify run for the cancelled commit would wait
@@ -18,19 +28,31 @@ permissions:
 
 jobs:
   verify-production:
+    # A deploy that failed or was cancelled has no release to verify, and
+    # failing here as well would report one problem twice.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - name: Check out the expected release
         uses: actions/checkout@v4
+        with:
+          # The commit the deploy actually shipped. Under workflow_run the
+          # default checkout is whatever main points at now, which is a
+          # different commit the moment two merges land close together.
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Wait for Azure and verify the live site
         shell: bash
+        env:
+          EXPECTED_RELEASE: ${{ github.event.workflow_run.head_sha || github.sha }}
         run: |
           # The deploy stamps the commit it shipped; compare against that
           # rather than a constant in the repository, which would match no
           # matter which package Azure ended up serving.
-          expected_release="${GITHUB_SHA}"
+          expected_release="${EXPECTED_RELEASE}"
           for attempt in {1..30}; do
             status_payload="$(curl --fail --silent --show-error --max-time 20 'https://www.onedailydrop.com/api/status?market=us' || true)"
             if jq -e --arg release "${expected_release}" '
