@@ -51,6 +51,20 @@ const cases = [
   [{source:"ebay", category:"", title:"IKEA BILLY Bookshelf"}, "Furniture"],
   [{source:"ebay", category:"", title:"Walker Edison Coffee Table"}, "Furniture"],
 
+  /* The categories that emptied out when the search budget moved. A category
+     word cannot compete with a named product for a marketplace attention, and
+     these are what the named products come back as. */
+  [{source:"ebay", category:"", title:"Furhaven Orthopedic Dog Bed Large"}, "Pet Supplies"],
+  [{source:"ebay", category:"", title:"PetSafe Automatic Pet Feeder 6 Meal"}, "Pet Supplies"],
+  [{source:"ebay", category:"", title:"Bagail Packing Cubes 6 Set"}, "Travel"],
+  [{source:"ebay", category:"", title:"Osprey Farpoint 40 Travel Backpack"}, "Travel"],
+  [{source:"ebay", category:"", title:"Garmin Dash Cam 57"}, "Automotive"],
+  [{source:"ebay", category:"", title:"Bowflex SelectTech Dumbbell Set"}, "Sports & Outdoors"],
+  [{source:"ebay", category:"", title:"Coleman Sundome 4-Person Camping Tent"}, "Sports & Outdoors"],
+  /* A television was never Electronics: the rules had no word for one. */
+  [{source:"ebay", category:"", title:"LG C4 65-inch OLED evo Smart TV"}, "Electronics"],
+  [{source:"ebay", category:"", title:"TCL 75-inch QLED 4K Television"}, "Electronics"],
+
   [{source:"ebay", category:"", title:"Cat Toy Mouse with Feathers"}, "Pet Supplies"],
   [{source:"ebay", category:"", title:"Infant Optics Baby Monitor"}, "Baby & Kids"]
 ];

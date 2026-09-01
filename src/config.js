@@ -44,17 +44,17 @@ function boundedNumber(value, fallback, minimum, maximum = Number.MAX_SAFE_INTEG
  * term each rather than losing their supply.
  */
 const defaultKeywords = [
-  // Electronics
+  /*
+   * Consumer electronics only. Newegg searches graphics cards, gaming
+   * laptops, mechanical keyboards, routers, SSDs, external drives, gaming
+   * headsets, monitors and laser printers under its own list, and it brought
+   * back 787 listings on its first night. Asking eBay for the same aisle
+   * spends a budget that has somewhere better to go.
+   */
   "wireless earbuds",
   "bluetooth speaker",
-  "portable ssd",
-  "usb c hub",
   "power bank",
-  "wireless keyboard",
-  "computer monitor",
-  "webcam",
-  "gaming headset",
-  "external hard drive",
+  "usb c hub",
   // Home & Kitchen
   "air fryer",
   "cookware set",
@@ -70,13 +70,7 @@ const defaultKeywords = [
   "storage cabinet",
   "accent chair",
   "coffee table",
-  // Computer parts — the aisle Newegg would look at first.
-  "graphics card",
-  "gaming laptop",
-  "mechanical keyboard",
-  "wifi router",
-  // Printing — HP's aisle.
-  "laser printer",
+  // Printing — HP's aisle. Newegg lists printers but not the consumables.
   "printer ink cartridge",
   // Tools & DIY
   "cordless drill",
@@ -97,11 +91,31 @@ const defaultKeywords = [
   "office chair",
   "printer paper",
   "filing cabinet",
-  // Already healthy, one term each.
-  "car accessories",
-  "pet supplies",
-  "travel accessories",
-  "fitness accessories"
+  /*
+   * These four were one vague word each — "pet supplies", "travel
+   * accessories" — and they emptied out the moment the budget went elsewhere:
+   * Pet Supplies fell from 23 listings to 2 and Travel from 17 to 3 in a
+   * single night. A category word cannot compete with a named product for a
+   * marketplace's attention, which is the same lesson the thin categories
+   * taught, arriving from the other direction.
+   */
+  // Pet Supplies
+  "dog bed",
+  "cat tree",
+  "dog harness",
+  "automatic pet feeder",
+  // Travel
+  "carry on luggage",
+  "packing cubes",
+  "travel backpack",
+  // Automotive
+  "car floor mats",
+  "dash cam",
+  "car phone mount",
+  // Sports & Outdoors
+  "yoga mat",
+  "dumbbell set",
+  "camping tent"
 ];
 const localizedDefaultKeywords = {
   fr: [
