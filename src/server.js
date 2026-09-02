@@ -1603,7 +1603,10 @@ const recordClick = (req, product, {
 
 const requestMarket = req => req.market ? market(req.market) : marketFromIp(req);
 const isGenericBrand = value => /^(?:unbranded(?:-generic)?|generic|unknown|branded)$/i.test(clean(value));
-const isPubliclyIndexable = product => isDailyPickEligible(product);
+/* A page worth showing a shopper is worth indexing. Tying this to the drop's
+   own bar put noindex on 1,727 of 1,741 product pages, purely because their
+   shop publishes no per-listing delivery charge. */
+const isPubliclyIndexable = product => isDailyPickEligible(product, {requireKnownFulfillment:false});
 const navigationCategoryCache = new Map();
 const searchCatalogCache = new Map();
 const navCategories = code => {

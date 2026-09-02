@@ -13,6 +13,10 @@ const fixture = {
   image_url: "https://example.com/pet-tool.jpg",
   affiliate_url: "https://example.com/pet-tool",
   source: "ebay",
+  /* Every product a provider stores carries this; the fixture did not, which
+     is why the sentence below could say "eBay" for years without anyone
+     noticing it said so on Newegg pages too. */
+  retailer_name: "eBay",
   market: "fr",
   category: "pet supplies",
   current_price: 47.62,
@@ -44,6 +48,18 @@ assert.strictEqual(french.display_return_summary, "Retours acceptés sous 30 jou
 assert.strictEqual(french.display_availability, "En stock");
 assert.strictEqual(french.display_badge, "VENDEUR ÉTABLI");
 assert(french.display_selection_reason.includes("eBay n’a fourni aucune note produit"));
+/* The same listing sold by another shop must not credit eBay for the missing
+   rating. Newegg's feed carries no ratings at all, so this sentence appears on
+   over half the catalogue. */
+const newegg = presentProduct({...fixture, source: "newegg", retailer_name: "Newegg"}, "en");
+assert(
+  newegg.display_selection_reason.includes("Newegg did not provide a product rating"),
+  `A Newegg listing still credits the wrong shop: ${newegg.display_selection_reason}`,
+);
+assert(
+  !newegg.display_selection_reason.includes("eBay"),
+  "eBay is still named on a listing that did not come from eBay",
+);
 assert(!french.display_selection_reason.includes("31/100"));
 assert(!french.display_selection_reason.includes("Selected with"));
 assert(!french.display_selection_reason.includes("sit3203"));
