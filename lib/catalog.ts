@@ -260,9 +260,19 @@ export async function getMorePicks(marketCode: string, limit?: number): Promise<
  */
 export async function getDeals(marketCode: string, filter: DealFilter = {}): Promise<Deal[]> {
   const backendCategory = filter.category ? getCategory(filter.category)?.name : undefined;
+  /*
+   * The whole category, not the first 500 of it.
+   *
+   * That cap was the only thing standing between a shopper and 334 of the 834
+   * listings in Electronics: on no page, reachable by no filter, simply
+   * absent. It existed because the listing rendered everything it was handed,
+   * and five hundred cards was already a 2.9MB document that took 22 seconds
+   * to open. The listing pages one screen at a time now, so the cap has
+   * nothing left to protect.
+   */
   const deals = await fetchMarketCatalog(
     marketCode,
-    backendCategory ? 500 : undefined,
+    backendCategory ? 2000 : undefined,
     backendCategory,
   );
   return applyFilter(deals, filter);

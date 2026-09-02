@@ -8,6 +8,12 @@ import { DealCard } from "@/components/deal/DealCard";
 import { DeliaTrigger } from "@/components/delia/DeliaTrigger";
 import { FilterPanel, type FilterCopy } from "./FilterPanel";
 import { FilterShell } from "./FilterShell";
+import { Pagination } from "./Pagination";
+
+/* Two dozen fits three rows on a laptop and reaches the bottom on a phone
+   without the page becoming a scroll marathon. The whole matching set is still
+   counted, filtered and sorted; only this many are rendered. */
+const PER_PAGE = 24;
 
 /**
  * Shared listing shell for the category pages and search results — one layout,
@@ -21,6 +27,8 @@ export async function DealListing({
   title,
   intro,
   crumb,
+  page = 1,
+  searchParams = {},
 }: {
   market: string;
   /** Path without a query string; the filter panel appends its own. */
@@ -30,7 +38,27 @@ export async function DealListing({
   title: string;
   intro?: ReactNode;
   crumb?: string;
+  /** 1-based, from ?page= in the URL. */
+  page?: number;
+  /** Everything else in the query string, so paging keeps the filters. */
+  searchParams?: Record<string, string | string[] | undefined>;
 }) {
+  const totalPages = Math.max(1, Math.ceil(deals.length / PER_PAGE));
+  const currentPage = Math.min(Math.max(1, page), totalPages);
+  const visible = deals.slice((currentPage - 1) * PER_PAGE, currentPage * PER_PAGE);
+
+  /* Paging must not drop the filters the shopper set, so every other parameter
+     is carried across and only page is replaced. */
+  const hrefForPage = (target: number) => {
+    const query = new URLSearchParams();
+    for (const [key, value] of Object.entries(searchParams)) {
+      if (key === "page" || value == null) continue;
+      for (const item of Array.isArray(value) ? value : [value]) query.append(key, item);
+    }
+    if (target > 1) query.set("page", String(target));
+    const search = query.toString();
+    return search ? `${basePath}?${search}` : basePath;
+  };
   const language = await getLanguage(market);
   /* Built here rather than inside FilterPanel: that panel is a client component
      and cannot reach the request's language. */
@@ -131,7 +159,7 @@ export async function DealListing({
             </div>
           ) : (
             <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              {deals.map((deal, i) => (
+              {visible.map((deal, i) => (
                 <li key={deal.id}>
                   <DealCard
                     deal={deal}
@@ -142,6 +170,17 @@ export async function DealListing({
                 </li>
               ))}
             </ul>
+          )}
+
+          {deals.length > 0 && (
+            <Pagination
+              page={currentPage}
+              totalPages={totalPages}
+              hrefForPage={hrefForPage}
+              label={t(language, "app.list.pagination")}
+              previousLabel={t(language, "app.list.previousPage")}
+              nextLabel={t(language, "app.list.nextPage")}
+            />
           )}
         </div>
       </div>
