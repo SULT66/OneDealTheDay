@@ -336,13 +336,30 @@ function expressWithHomepage(...args) {
        them — this is what the header/footer/homepage category tiles need,
        and previously the only way to get it was downloading the whole
        market catalog on every single page. */
-    const rows = db.prepare(`
-      SELECT normalized_category AS category, COUNT(*) AS count
-      FROM products
+    /* Count what a shopper can actually reach.
+     *
+     * COUNT(*) over the table answered in one query instead of shipping every
+     * product just to count them. But every list on this site removes repeat
+     * listings on the way out and this count did not, so the tiles promised
+     * 1,845 where the pages behind them held 1,742. Asked which number was
+     * true, the answer is the smaller one: 104 of the promised listings were
+     * the same products counted twice.
+     *
+     * Deduplicating needs the rows, so this reads them — once a minute behind
+     * the cache below, not once a page, which is what the aggregate was there
+     * to avoid.
+     */
+    const counts = new Map();
+    for (const product of uniqueProductsInOrder(db.prepare(`
+      SELECT * FROM products
       WHERE market=? AND status='published' AND ${sourceSql()}
-      GROUP BY normalized_category
-      ORDER BY count DESC
-    `).all(selectedMarket);
+      ORDER BY COALESCE(ranking_score,score) DESC,score DESC,updated_at DESC
+    `).all(selectedMarket))) {
+      counts.set(product.normalized_category, (counts.get(product.normalized_category) || 0) + 1);
+    }
+    const rows = [...counts.entries()]
+      .map(([category, count]) => ({category, count}))
+      .sort((left, right) => right.count - left.count);
     cacheValue(cacheKey, rows, 60000);
     return res.set("X-ODD-Cache", "MISS").json(rows);
   });

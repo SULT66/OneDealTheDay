@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { getCatalogSize, getCategories, getMarket } from "@/lib/catalog";
+import { getCatalogSize, getCategoriesWithCounts, getMarket } from "@/lib/catalog";
 import { Prose } from "@/components/site/Prose";
 
 export const metadata: Metadata = {
@@ -23,7 +23,11 @@ export default async function AboutPage({
 }: PageProps<"/[market]/about">) {
   const { market } = await params;
   const info = getMarket(market);
+  /* Both halves of this sentence must come from the same place. The size was
+     live while the category count was the length of the local display file,
+     so the page said "across 11 categories" while the catalogue held 13. */
   const catalogSize = await getCatalogSize(market);
+  const categoryCount = (await getCategoriesWithCounts(market)).length;
 
   return (
     <Prose
@@ -35,19 +39,28 @@ export default async function AboutPage({
       <p>
         OneDailyDrop is a search-and-compare site for{" "}
         {info?.country ?? "your market"}: {catalogSize} listings across{" "}
-        {getCategories().length} categories, each one checked before it is
-        published. Delia, the assistant, searches those checked listings and
-        nothing else. Once a day we also publish a Daily Drop, the picks that
-        came out highest that morning, but that is one feature of the site
-        rather than the whole of it.
+        {categoryCount} categories, each one checked before it is published.
+        Delia, the assistant, searches those checked listings first, and will
+        also look beyond them and say so when it does — the shops we have
+        agreements with cannot cover every question yet. Once a day we also
+        publish a Daily Drop, the picks that came out highest that morning, but
+        that is one feature of the site rather than the whole of it.
       </p>
 
       <h2>What checked actually means</h2>
       <p>
         Before a listing appears here it has to have a working retailer link, a
-        current price, a known delivery cost, a stated returns policy and stock.
-        We re-check those links every night, and a listing whose link has died
-        leaves the catalog rather than sitting there looking valid.
+        current price and stock. We re-check those links every night, and a
+        listing whose link has died leaves the catalog rather than sitting
+        there looking valid.
+      </p>
+      <p>
+        Delivery cost and returns are a different matter, and this page used to
+        promise more than the catalog delivers. Some shops publish them per
+        listing and some do not: eBay gives us both, while Newegg and our
+        affiliate feeds give neither. Where a shop does not publish them the
+        page says &ldquo;confirm at retailer&rdquo; rather than inventing a
+        figure, and the listing carries a lower evidence rating for it.
       </p>
       <p>
         On top of that we compare the price against verified reference figures,
