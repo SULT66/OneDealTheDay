@@ -1,17 +1,59 @@
-const DEFAULT_DETAIL_LIMIT = 220;
-/* The code caps this at 60 a few lines down, so 40 was leaving a third of
-   each run unused. More keywords now need more room to land. */
-/* Two hundred was too many for one night. With 49 search terms and details
-   fetched six at a time it pushed a run past 57 minutes, and the workflow
-   watching it gave up at 25. Newegg now carries the computer aisle that eBay
-   was being asked to cover, so eBay can be lighter and still leave the
-   categories fuller than they were. */
-const DEFAULT_TARGET_ELIGIBLE = 120;
+/*
+ * eBay's Browse API sells us a fixed number of calls a day, and a run spends
+ * one per search term plus one per item it looks at in detail. Asking for 48
+ * terms and 220 detail lookups in every market meant a single sweep of the
+ * five markets cost well over a thousand calls; with a sweep also firing after
+ * every deploy, the day's allowance was gone by half past midnight and every
+ * market went dark with "The request limit has been reached for the resource."
+ *
+ * The budget below is what one run may spend. Coverage does not come from
+ * spending more in one run: a product stays in the catalogue for 48 hours
+ * after it was last seen, so runs accumulate. Asking for all 48 terms every
+ * time also bought less than it looked like — the same high-scoring listings
+ * won the detail budget each run, which is why eBay sat at 265 products no
+ * matter how high the ceiling went.
+ */
+const DEFAULT_DETAIL_LIMIT = 90;
+const DEFAULT_TARGET_ELIGIBLE = 60;
 const SEARCH_CONCURRENCY = 3;
 /* Ten rather than six: the same coverage in less wall time, which is the
    scarce thing in a nightly run. */
 const DETAIL_CONCURRENCY = 10;
+
+/* A slice of the keyword list per run, a different slice every three hours.
+   Every term still gets its turn within a morning, and the categories that
+   used to lose the detail budget to louder ones now get a run to themselves. */
+const KEYWORDS_PER_RUN = 16;
+const ROTATION_PERIOD_MS = 3 * 60 * 60 * 1000;
+
 const { normalizeTradeItemId } = require("../productIdentity");
+
+/*
+ * Which slice of a long keyword list this run takes.
+ *
+ * Only the broad scheduled list rotates. A shopper's own query is never
+ * shortened — searchProducts rotates solely when the caller asked it to, and
+ * the assistant never does.
+ */
+function keywordsForRun(terms, perRun = KEYWORDS_PER_RUN, now = Date.now()) {
+  if (!Array.isArray(terms) || terms.length <= perRun) return terms;
+  const windows = Math.ceil(terms.length / perRun);
+  const offset = (Math.floor(now / ROTATION_PERIOD_MS) % windows) * perRun;
+  return [...terms.slice(offset), ...terms.slice(0, offset)].slice(0, perRun);
+}
+
+/*
+ * eBay reports an exhausted allowance per call, so a run that keeps going
+ * after the first one asks another 250 questions it already knows the answer
+ * to — and reports the refusal 48 times over. Recognising it lets the run stop
+ * and say the one thing that is true.
+ */
+function isQuotaError(reason) {
+  if (reason?.status === 429) return true;
+  return /request limit|rate limit|call limit|too many requests|exceeded the number/i.test(
+    String(reason?.message || ""),
+  );
+}
 
 function text(value) {
   return String(value == null ? "" : value)
@@ -53,11 +95,17 @@ async function mapLimit(items, concurrency, worker) {
   return results;
 }
 
-function createEbayClient({clientId, clientSecret, campaignId, environment = "production", fetchImpl = global.fetch}) {
+function createEbayClient({clientId, clientSecret, campaignId, environment = "production", fetchImpl = global.fetch, signal}) {
   const production = String(environment).toLowerCase() !== "sandbox";
   const apiOrigin = production ? "https://api.ebay.com" : "https://api.sandbox.ebay.com";
   let accessToken = "";
   let tokenExpiresAt = 0;
+
+  /* Each call keeps its own ten second timeout, and also gives up the moment
+     the refresh that asked for it has stopped waiting. Without this a source
+     that missed its deadline carried on calling eBay in the background, on an
+     allowance the next run still needed. */
+  const deadline = (ms) => (signal ? AbortSignal.any([signal, AbortSignal.timeout(ms)]) : AbortSignal.timeout(ms));
 
   async function token() {
     if (accessToken && Date.now() < tokenExpiresAt) return accessToken;
@@ -71,10 +119,14 @@ function createEbayClient({clientId, clientSecret, campaignId, environment = "pr
         grant_type:"client_credentials",
         scope:"https://api.ebay.com/oauth/api_scope"
       }),
-      signal:AbortSignal.timeout(10000)
+      signal:deadline(10000)
     });
     const body = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(`eBay OAuth failed: ${apiMessage(body, response.status)}`);
+    if (!response.ok) {
+      const error = new Error(`eBay OAuth failed: ${apiMessage(body, response.status)}`);
+      error.status = response.status;
+      throw error;
+    }
     accessToken = text(body.access_token);
     if (!accessToken) throw new Error("eBay OAuth response did not include an access token");
     tokenExpiresAt = Date.now() + Math.max(1, number(body.expires_in, 7200) - 60) * 1000;
@@ -93,10 +145,14 @@ function createEbayClient({clientId, clientSecret, campaignId, environment = "pr
         "X-EBAY-C-MARKETPLACE-ID":market.ebayMarketplaceId,
         "X-EBAY-C-ENDUSERCTX":`affiliateCampaignId=${campaignId},affiliateReferenceId=odd-${market.code}`
       },
-      signal:AbortSignal.timeout(10000)
+      signal:deadline(10000)
     });
     const body = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(`eBay Browse API failed: ${apiMessage(body, response.status)}`);
+    if (!response.ok) {
+      const error = new Error(`eBay Browse API failed: ${apiMessage(body, response.status)}`);
+      error.status = response.status;
+      throw error;
+    }
     return body;
   }
 
@@ -255,16 +311,35 @@ async function searchProducts({
   client,
   fetchImpl = global.fetch,
   detailLimit = DEFAULT_DETAIL_LIMIT,
-  targetEligible = DEFAULT_TARGET_ELIGIBLE
+  targetEligible = DEFAULT_TARGET_ELIGIBLE,
+  rotate = false,
+  signal
 }) {
   if (!clientId || !clientSecret) throw new Error("eBay Production credentials are missing");
   if (!/^\d{10}$/.test(String(campaignId || ""))) throw new Error("EBAY_CAMPAIGN_ID must contain exactly 10 digits");
   if (!market?.ebayMarketplaceId) throw new Error(`Unsupported eBay market: ${market?.code || "unknown"}`);
-  const searchTerms = [...new Set((keywords || []).map(text).filter(Boolean))];
-  if (!searchTerms.length) throw new Error("eBay search keywords are missing");
+  const allTerms = [...new Set((keywords || []).map(text).filter(Boolean))];
+  if (!allTerms.length) throw new Error("eBay search keywords are missing");
+  const searchTerms = rotate ? keywordsForRun(allTerms) : allTerms;
 
-  const ebayClient = client || createEbayClient({clientId, clientSecret, campaignId, environment, fetchImpl});
-  const searches = await mapLimit(searchTerms, SEARCH_CONCURRENCY, (keyword) => ebayClient.search(keyword, market));
+  const ebayClient = client || createEbayClient({clientId, clientSecret, campaignId, environment, fetchImpl, signal});
+
+  let quotaExhausted = null;
+  const searches = await mapLimit(searchTerms, SEARCH_CONCURRENCY, async (keyword) => {
+    if (quotaExhausted) throw quotaExhausted;
+    try {
+      return await ebayClient.search(keyword, market);
+    } catch (reason) {
+      if (isQuotaError(reason)) quotaExhausted = reason;
+      throw reason;
+    }
+  });
+  if (quotaExhausted) {
+    throw new Error(
+      `eBay has no calls left in its daily allowance (${quotaExhausted.message}) ` +
+      "Listings already in the catalogue stay until the allowance resets.",
+    );
+  }
   const candidates = new Map();
   const failures = [];
   searches.forEach((result, keywordIndex) => {
@@ -300,10 +375,14 @@ async function searchProducts({
   const products = [];
 
   for (let offset = 0; offset < maximumDetails && products.length < eligibleTarget; offset += DETAIL_CONCURRENCY) {
+    if (signal?.aborted) break;
     const batch = queue.slice(offset, Math.min(offset + DETAIL_CONCURRENCY, maximumDetails));
     const details = await mapLimit(batch, DETAIL_CONCURRENCY, candidate => ebayClient.getItem(candidate.item.itemId, market));
     details.forEach((result, index) => {
-      if (result.status !== "fulfilled") return;
+      if (result.status !== "fulfilled") {
+        if (isQuotaError(result.reason)) quotaExhausted = result.reason;
+        return;
+      }
       const candidate = batch[index];
       const merged = {
         ...candidate.item,
@@ -315,9 +394,21 @@ async function searchProducts({
         products.push(product);
       }
     });
+    /* Once the allowance is gone every further lookup is a refusal. Keep what
+       this run already gathered rather than spending the next run's calls on
+       questions eBay will not answer. */
+    if (quotaExhausted) break;
   }
 
-  if (!products.length) throw new Error("eBay returned no products with sufficient product-review or established-seller evidence");
+  if (!products.length) {
+    if (quotaExhausted) {
+      throw new Error(
+        `eBay has no calls left in its daily allowance (${quotaExhausted.message}) ` +
+        "Listings already in the catalogue stay until the allowance resets.",
+      );
+    }
+    throw new Error("eBay returned no products with sufficient product-review or established-seller evidence");
+  }
   return products;
 }
 
@@ -325,6 +416,8 @@ module.exports = {
   candidateIsUsable,
   createEbayClient,
   hasTrustEvidence,
+  isQuotaError,
+  keywordsForRun,
   normalizeItem,
   searchProducts
 };
