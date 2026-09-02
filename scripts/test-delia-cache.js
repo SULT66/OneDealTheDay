@@ -148,4 +148,56 @@ assert(
   "the newest row was evicted instead of the oldest",
 );
 
-console.log("Delia answer cache key, sharing, freshness and eviction checks passed.");
+/*
+ * A question asked from a product page belongs to that product.
+ *
+ * "Is this a good price?" is the same sentence on every listing on the site,
+ * so without the product in the key one listing's answer would be handed to
+ * every other one.
+ */
+const base = { message: "Is this a good price?", marketCode: "us", language: "en" };
+const first = cacheKey({ ...base, productId: 218308 });
+const second = cacheKey({ ...base, productId: 999001 });
+assert(first && second, "a product question is no longer cacheable at all");
+assert.notStrictEqual(first, second, "two different products share one cached answer");
+assert.notStrictEqual(
+  first,
+  cacheKey(base),
+  "a question about a product shares a key with the same words asked about nothing",
+);
+assert.strictEqual(
+  cacheKey({ ...base, productId: 0 }),
+  cacheKey(base),
+  "an absent product id changed the key, so old cached answers are all missed",
+);
+
+/*
+ * And the assistant has to be given the product rather than sent hunting for
+ * it. Asked from a listing scoring 93, with its full retailer title pasted
+ * into the question, Delia answered "I could not find a shop in the United
+ * States selling that right now" — measured against production, as was the
+ * same product coming back first when asked for in ordinary words.
+ */
+const assistant = fs.readFileSync(path.join(__dirname, "..", "src", "shoppingAssistant.js"), "utf8");
+assert(
+  /function catalogProductById\(/.test(assistant),
+  "the assistant can no longer look a product up by id, only search for it",
+);
+assert(
+  /const focusProduct = catalogProductById\(/.test(assistant),
+  "the product the shopper is asking about is no longer put among the candidates",
+);
+const dealPage = fs.readFileSync(
+  path.join(__dirname, "..", "app", "[market]", "deal", "[id]", "page.tsx"),
+  "utf8",
+);
+assert(
+  !/seed=\{`Is \$\{deal\.title\} a good price\?`\}/.test(dealPage),
+  "the deal page seeds the full retailer title again, which is what made the question unanswerable",
+);
+assert(
+  /productId=\{deal\.id\}/.test(dealPage),
+  "the deal page no longer tells Delia which product it is",
+);
+
+console.log("Delia answer cache and product-page questions passed.");

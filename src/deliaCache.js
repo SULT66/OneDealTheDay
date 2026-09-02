@@ -40,13 +40,19 @@ function normalizeQuestion(message) {
  * or a carried mission is the shopper telling us this run is not like the last
  * one.
  */
-function cacheKey({ message, messages, shoppingMission, excludedOfferUrls, marketCode, language }) {
+function cacheKey({ message, messages, shoppingMission, excludedOfferUrls, marketCode, language, productId }) {
   const question = normalizeQuestion(message);
   if (question.length < 3) return null;
   if (Array.isArray(messages) && messages.length) return null;
   if (shoppingMission) return null;
   if (Array.isArray(excludedOfferUrls) && excludedOfferUrls.length) return null;
-  return `${marketCode}:${language}:${question}`;
+  /* A question asked from a product's page is about that product. "Is this a
+     good price?" is the same sentence on every listing on the site, so without
+     the product in the key one listing's answer would be served for all of
+     them. */
+  const product = Number(productId);
+  const focus = Number.isInteger(product) && product > 0 ? `p${product}:` : "";
+  return `${marketCode}:${language}:${focus}${question}`;
 }
 
 /**

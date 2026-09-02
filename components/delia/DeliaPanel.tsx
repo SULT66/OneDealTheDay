@@ -537,7 +537,7 @@ function DeliaExchange({
 }
 
 export function DeliaPanel() {
-  const { open, seed, market, closeDelia } = useDelia();
+  const { open, seed, seedProductId, market, closeDelia } = useDelia();
 
   const [available, setAvailable] = useState<boolean | null>(null);
   // The whole conversation, in order — not just the latest exchange, so
@@ -593,6 +593,9 @@ export function DeliaPanel() {
             shoppingMission: missionRef.current,
             skipClarification,
             conversationId: conversationIdRef.current,
+            /* Stays for the whole conversation: "does it charge wirelessly?"
+               is still about the product the shopper opened Delia from. */
+            productId: seedProductId ?? undefined,
           },
           setProgress,
         );

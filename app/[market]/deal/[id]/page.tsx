@@ -202,7 +202,14 @@ export default async function DealPage({
             <DeliaTrigger
               variant="inline"
               label="Ask Delia about this"
-              seed={`Is ${deal.title} a good price?`}
+              /* The product travels as an id, not inside the sentence. Seeding
+                 the full retailer title made the question unanswerable: as a
+                 search query, "Power Bank 20000mAh 45W Charging Portable
+                 External Battery Backup For Cell Phone" matches nothing, and
+                 Delia answered that no shop sold it — from that product's own
+                 page. */
+              seed="Is this a good price?"
+              productId={deal.id}
               className="h-14 px-6 text-base"
             />
           </div>

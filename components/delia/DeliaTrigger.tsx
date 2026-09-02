@@ -16,15 +16,19 @@ export function DeliaTrigger({
   variant = "header",
   label = "Ask Delia",
   seed,
+  productId,
   className,
 }: {
   variant?: "hero" | "floating" | "header" | "inline";
   label?: string;
   seed?: string;
+  /* The catalogue product this trigger sits on, when it sits on one. Delia
+     then looks that product up instead of searching for it by name. */
+  productId?: string;
   className?: string;
 }) {
   const { openDelia } = useDelia();
-  const onClick = () => openDelia(seed);
+  const onClick = () => openDelia(seed, productId);
 
   if (variant === "hero") {
     return (

@@ -120,7 +120,10 @@ export async function FeaturedDeal({
             <DeliaTrigger
               variant="inline"
               label={t(language, "app.deal.askAboutThis")}
-              seed={`Is ${deal.title} a good price?`}
+              /* By id rather than by title: see the deal page for what the
+                 full retailer title did to the search. */
+              seed="Is this a good price?"
+              productId={deal.id}
             />
           </div>
         </div>
