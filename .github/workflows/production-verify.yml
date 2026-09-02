@@ -53,11 +53,20 @@ jobs:
           # rather than a constant in the repository, which would match no
           # matter which package Azure ended up serving.
           expected_release="${EXPECTED_RELEASE}"
+          # The same rule as the release id, and for the same reason: compare
+          # the live site against the code this deploy shipped, never against a
+          # literal written here. A hardcoded "catalog-taxonomy-v3" turned a
+          # deliberate bump to v4 — which is how a taxonomy fix reaches
+          # listings already stored — into ten minutes of polling and a red
+          # build, on a site that was serving the new release correctly all
+          # along.
+          expected_taxonomy="$(node -e 'process.stdout.write(require("./src/catalogTaxonomy").TAXONOMY_VERSION)')"
+          echo "Expecting release ${expected_release} with taxonomy ${expected_taxonomy}."
           for attempt in {1..30}; do
             status_payload="$(curl --fail --silent --show-error --max-time 20 'https://www.onedailydrop.com/api/status?market=us' || true)"
-            if jq -e --arg release "${expected_release}" '
+            if jq -e --arg release "${expected_release}" --arg taxonomy "${expected_taxonomy}" '
               .releaseId == $release and
-              .taxonomyVersion == "catalog-taxonomy-v3" and
+              .taxonomyVersion == $taxonomy and
               .market == "us" and
               .liveProducts > 0
             ' <<<"${status_payload}" >/dev/null 2>&1; then

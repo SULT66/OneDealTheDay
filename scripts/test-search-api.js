@@ -122,6 +122,23 @@ assert(
     workflowSource.includes('expected_release="${GITHUB_SHA}"'),
   "The expected release no longer comes from the commit the deploy shipped",
 );
+/*
+ * The taxonomy version falls under the same rule, and learned it the same way.
+ * Bumping it is how a corrected filing rule reaches listings already stored,
+ * so it is meant to change; the verification had "catalog-taxonomy-v3" written
+ * into it, so a deliberate bump to v4 spent ten minutes polling for a version
+ * the deploy had replaced on purpose, then failed a site that was serving the
+ * new release correctly throughout.
+ */
+assert(
+  !/taxonomyVersion == "catalog-taxonomy-v\d+"/.test(workflowSource),
+  "Production verification pins a literal taxonomy version, so the next bump fails a healthy deploy",
+);
+assert(
+  /expected_taxonomy=.*catalogTaxonomy/.test(workflowSource) &&
+    /\.taxonomyVersion == \$taxonomy/.test(workflowSource),
+  "The expected taxonomy version no longer comes from the code the deploy shipped",
+);
 // Racing the deploy is what made this check fail against a healthy site: it
 // spent the first four minutes of a ten minute budget polling for a package
 // that had not been uploaded yet.
