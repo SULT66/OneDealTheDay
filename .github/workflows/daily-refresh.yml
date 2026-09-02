@@ -7,11 +7,23 @@ name: Daily product refresh
 # Shipping code does not change what eBay is selling, so a deploy no longer
 # triggers one. Run it by hand from the Actions tab when a change is meant to
 # reach the catalogue before the next scheduled run.
+#
+# Twice a day, twelve hours apart. What one sweep costs eBay is roughly 106
+# calls per market, 530 for all five. Each market also refreshes on its own
+# schedule around its drop time — about sixteen of those a day, some 1,700
+# calls — so two sweeps put the day near 2,760 against an allowance of 5,000,
+# leaving room for a run started by hand. A third sweep would not fit
+# comfortably once a busy day of manual runs is added on top.
+#
+# Twelve hours apart also suits the keyword rotation: a slice changes every
+# three hours and there are three slices, so consecutive runs never repeat one
+# and all three are covered within a day and a half.
 on:
   schedule:
-    # GitHub Actions cron uses UTC. This runs daily at 12:15 UTC
-    # (8:15 AM New York during daylight saving time, 7:15 AM in winter).
+    # GitHub Actions cron uses UTC. 8:15 AM and 8:15 PM in New York during
+    # daylight saving time, an hour earlier in winter.
     - cron: "15 12 * * *"
+    - cron: "15 0 * * *"
   workflow_dispatch:
 
 concurrency:
