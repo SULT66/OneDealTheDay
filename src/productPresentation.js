@@ -1,9 +1,12 @@
 const { categoryLabel, languageTag, t } = require("./i18n");
-const { SCORE_MODEL, scoreProduct, isDailyPickEligible } = require("./ranker");
+const { SCORE_MODEL, scoreProduct, isDailyPickEligible, commerceQuality } = require("./ranker");
 const { canonicalCategory } = require("./catalogTaxonomy");
 
 const EDITORIAL_SCORE_FLOOR = 60;
 const EDITORIAL_CONFIDENCE_FLOOR = 55;
+/* Commerce quality averages only over the signals a listing actually has, so
+   this is the same bar the drop already applies to it in isDailyPickEligible. */
+const EDITORIAL_QUALITY_FLOOR = 0.45;
 const PUBLIC_SCORE_FLOOR = 82;
 const PUBLIC_SCORE_CEILING = 95;
 
@@ -57,18 +60,48 @@ function oneDailyDropEvidenceConfidence(product) {
   }).evidenceConfidence;
 }
 
-function publicOneDailyDropScore(rawScore, confidence) {
+/*
+ * The public score, and what it is allowed to mean.
+ *
+ * The raw model adds six components. Four of them — product rating, review
+ * confidence, seller reliability, shipping and returns — score zero when the
+ * source does not publish the field, so the total measured how much a shop
+ * tells us as much as how good the offer is. Measured across the live
+ * catalogue: eBay's listings reached a median of 42.6 and a maximum of 81.2,
+ * while Newegg's best listing of 1,015 reached 24.6 against a floor of 60. Not
+ * one Newegg or feed product could ever carry a score, which is 1,727 of 1,741
+ * listings, and the "highest scoring" shelf had fourteen things to rank.
+ *
+ * A shop that publishes less is not selling worse. So the public score is now
+ * calibrated on commerce quality, which averages only over the signals that
+ * are actually known, and evidence confidence stays as the second term — it
+ * honestly reports how much was known, and a sparse listing is still held
+ * below a well-documented one. Passing a quality directly is what a caller
+ * does when it can work one out; the older two-argument form still derives
+ * quality from the raw total so archived selections keep their scores.
+ */
+function publicOneDailyDropScore(rawScore, confidence, knownQuality = null) {
   const raw = number(rawScore, NaN);
   const evidence = number(confidence, NaN);
   if (!Number.isFinite(raw) || !Number.isFinite(evidence)) return null;
-  if (raw < EDITORIAL_SCORE_FLOOR || evidence < EDITORIAL_CONFIDENCE_FLOOR) return null;
+  if (evidence < EDITORIAL_CONFIDENCE_FLOOR) return null;
+  /* Not number(): Number(null) is 0, which would read as "quality zero" and
+     silently blank every score reached through the two-argument form. */
+  const measured = knownQuality == null ? NaN : number(knownQuality, NaN);
+  if (Number.isFinite(measured)) {
+    if (measured < EDITORIAL_QUALITY_FLOOR) return null;
+  } else if (raw < EDITORIAL_SCORE_FLOOR) {
+    return null;
+  }
 
   // The internal model scores every candidate from 0-100. The public score is
   // a calibrated score for offers that already passed the editorial floor:
   // 82 means qualified, 90+ means strong, and 95 is intentionally exceptional.
   // Offer quality carries most of the result while evidence coverage prevents
   // a sparse listing from receiving the same public score as a well-supported one.
-  const quality = Math.max(0, Math.min(1, (raw - EDITORIAL_SCORE_FLOOR) / 30));
+  const quality = Number.isFinite(measured)
+    ? Math.max(0, Math.min(1, measured))
+    : Math.max(0, Math.min(1, (raw - EDITORIAL_SCORE_FLOOR) / 30));
   const evidenceQuality = Math.max(0, Math.min(1, (evidence - EDITORIAL_CONFIDENCE_FLOOR) / 35));
   const calibrated = PUBLIC_SCORE_FLOOR +
     (PUBLIC_SCORE_CEILING - PUBLIC_SCORE_FLOOR) * (quality * 0.75 + evidenceQuality * 0.25);
@@ -233,7 +266,18 @@ function presentProduct(product, language = "en") {
     evidence_confidence:confidence,
     current_price:product?.drop_price ?? product?.current_price,
     original_price:product?.drop_original_price ?? product?.original_price
-  }) ? publicOneDailyDropScore(rawDealScore, confidence) : null;
+  }, {
+    /* A shop that publishes no per-listing delivery charge is not thereby a
+       worse offer. The drop's ten slots still demand one; a product page
+       scores what is known and lets the confidence carry the rest. */
+    requireKnownFulfillment:false
+  }) ? publicOneDailyDropScore(rawDealScore, confidence, product?.drop_score != null ? null : commerceQuality({
+    /* A drop snapshot keeps the score it was given on the day it was chosen;
+       recalibrating an archived selection would rewrite history. */
+    ...product,
+    current_price:product?.drop_price ?? product?.current_price,
+    original_price:product?.drop_original_price ?? product?.original_price
+  })) : null;
   const productRating = number(product.rating, NaN);
   const sellerPercent = sellerRatingPercent(product);
   const sellerFeedbackCount = Math.max(0, Math.round(number(product.seller_feedback_count)));

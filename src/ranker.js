@@ -300,8 +300,27 @@ function isEligible(product, options = {}) {
 function isDailyPickEligible(product, options = {}) {
   if (!isEligible(product, {...options, maximumShippingRatio:number(options.maximumShippingRatio, 0.25)})) return false;
   if (returnsNotAccepted(product)) return false;
-  const shipping = paidShippingCost(product);
-  if (shipping == null) return false;
+  /*
+   * A known delivery charge, required by default.
+   *
+   * This is the same tension the identifier option below describes, and it
+   * stayed invisible until someone counted. The ten drop slots can insist on
+   * knowing what delivery costs. A product page cannot: only eBay publishes a
+   * per-listing shipping cost, so requiring one meant 1,727 of 1,741 listings
+   * could show no Deal Score at all. Newegg is over half the catalogue and
+   * scored nothing, which left the "highest scoring" shelf with almost
+   * nothing to rank and made the daily pick a choice among fourteen. The same
+   * call also decides whether a page may be indexed, so it kept those pages
+   * out of search results as well.
+   *
+   * Not knowing a delivery charge is not evidence of a bad offer; it is
+   * missing evidence, and the score already says so without help. Commerce
+   * quality averages only over signals that are known, and evidence
+   * confidence drops twenty points when shipping and returns are unpublished,
+   * so a listing we know less about scores lower than an equal one we know
+   * more about. That is the honest answer. Refusing to score it was not.
+   */
+  if (options.requireKnownFulfillment !== false && paidShippingCost(product) == null) return false;
   const rating = number(product.rating);
   if (rating > 0 && rating < number(options.minimumDailyRating, 4.3)) return false;
   /* A drop candidate must be identifiable: a barcode (GTIN/UPC/EAN) or a
