@@ -45,7 +45,9 @@ export default async function CategoryPage({
   const category = getCategory(slug);
   if (!category) notFound();
 
-  const filter = { ...filterFromSearchParams(await searchParams), category: slug };
+  const query = await searchParams;
+  const filter = { ...filterFromSearchParams(query), category: slug };
+  const page = Number(Array.isArray(query.page) ? query.page[0] : query.page) || 1;
   const deals = await getDeals(market, filter);
   const language = await getLanguage(market);
   const name = categoryName(category.name, language);
@@ -60,6 +62,8 @@ export default async function CategoryPage({
       title={t(language, "app.category.title", { category: name })}
       intro={category.blurb}
       crumb={name}
+      page={page}
+      searchParams={query}
     />
   );
 }

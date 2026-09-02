@@ -27,7 +27,9 @@ export default async function SearchPage({
   searchParams,
 }: PageProps<"/[market]/search">) {
   const { market } = await params;
-  const filter = filterFromSearchParams(await searchParams);
+  const query = await searchParams;
+  const filter = filterFromSearchParams(query);
+  const page = Number(Array.isArray(query.page) ? query.page[0] : query.page) || 1;
   const deals = await getDeals(market, filter);
   const language = await getLanguage(market);
 
@@ -37,6 +39,8 @@ export default async function SearchPage({
       basePath={`/${market}/search`}
       filter={filter}
       deals={deals}
+      page={page}
+      searchParams={query}
       title={
         filter.query
           ? t(language, "app.search.resultsFor", { query: filter.query })
