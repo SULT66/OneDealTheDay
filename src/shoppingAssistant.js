@@ -2878,6 +2878,37 @@ function selectBalancedCatalogProducts(products, limit) {
   return selected;
 }
 
+/*
+ * The product the shopper is looking at, fetched rather than searched for.
+ *
+ * "Ask Delia about this" used to paste the listing's full retailer title into
+ * the question and leave her to find it again. Retailer titles are written for
+ * a search box, not by one — "Power Bank 20000mAh 45W Charging Portable
+ * External Battery Backup For Cell Phone" — and as a query that many terms
+ * matches nothing. Asked from the page of a product scoring 93, she answered
+ * "I could not find a shop in the United States selling that right now", about
+ * a listing sitting on the screen behind her. Asked the same thing in ordinary
+ * words — "I need a power bank under $40" — she returned that exact product
+ * first. Both were measured against production.
+ *
+ * So the page now says which product it is and this looks it up. Nothing here
+ * changes what she recommends or where she searches; it stops her hunting for
+ * something we were already holding.
+ */
+function catalogProductById(db, sourceSql, productId, marketCode, language) {
+  const id = Number(productId);
+  if (!Number.isInteger(id) || id <= 0) return null;
+  const row = db
+    .prepare(
+      `
+    SELECT * FROM products
+    WHERE id=? AND market=? AND status='published' AND ${sourceSql()}
+  `,
+    )
+    .get(id, marketCode);
+  return row ? assistantProduct(row, language) : null;
+}
+
 function searchCatalog(db, sourceSql, args, marketCode, language) {
   const query = normalizeSearch(args.query);
   const category = normalizeSearch(args.category);
@@ -4858,6 +4889,9 @@ function createShoppingAssistant({
       excludedOfferUrls = [],
       marketCode,
       language = "en",
+      /* Set when the question was asked from a product's own page, so the
+         product can be looked up instead of searched for. */
+      productId = null,
       /* Set by the "just show me options" button, so a broad request can be
          searched without answering anything first. */
       skipClarification = false,
@@ -5169,7 +5203,7 @@ function createShoppingAssistant({
         currency: selectedMarket.currency,
       });
       const catalogSearchStartedAt = Date.now();
-      const catalogProducts = searchCatalog(
+      const searchedProducts = searchCatalog(
         db,
         sourceSql,
         {
@@ -5179,6 +5213,12 @@ function createShoppingAssistant({
         selectedMarket.code,
         language,
       );
+      /* Asked from a product's own page, the product itself leads the
+         candidates whether or not a search would have turned it up. */
+      const focusProduct = catalogProductById(db, sourceSql, productId, selectedMarket.code, language);
+      const catalogProducts = focusProduct && !searchedProducts.some((product) => product.id === focusProduct.id)
+        ? [focusProduct, ...searchedProducts]
+        : searchedProducts;
       trace("stage: catalog searched in", Date.now() - catalogSearchStartedAt, "ms ->", catalogProducts.length, "rows; total", Date.now() - startedAt, "ms");
       progress("catalog", { found: catalogProducts.length });
       const referencedProducts = new Map(

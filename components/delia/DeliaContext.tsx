@@ -14,8 +14,15 @@ type DeliaState = {
   open: boolean;
   /** A question handed in by a trigger, e.g. "Is this Milwaukee kit a good price?" */
   seed: string | null;
+  /**
+   * The catalogue product a trigger opened Delia about, so the question can
+   * name it by id rather than by its full retailer title. Kept for the rest of
+   * the conversation: a follow-up like "does it charge wirelessly?" is about
+   * the same product.
+   */
+  seedProductId: string | null;
   market: string;
-  openDelia: (seed?: string) => void;
+  openDelia: (seed?: string, productId?: string) => void;
   closeDelia: () => void;
 };
 
@@ -40,17 +47,19 @@ export function DeliaProvider({
 }) {
   const [open, setOpen] = useState(false);
   const [seed, setSeed] = useState<string | null>(null);
+  const [seedProductId, setSeedProductId] = useState<string | null>(null);
 
-  const openDelia = useCallback((next?: string) => {
+  const openDelia = useCallback((next?: string, productId?: string) => {
     setSeed(next ?? null);
+    setSeedProductId(productId ?? null);
     setOpen(true);
   }, []);
 
   const closeDelia = useCallback(() => setOpen(false), []);
 
   const value = useMemo(
-    () => ({ open, seed, market, openDelia, closeDelia }),
-    [open, seed, market, openDelia, closeDelia],
+    () => ({ open, seed, seedProductId, market, openDelia, closeDelia }),
+    [open, seed, seedProductId, market, openDelia, closeDelia],
   );
 
   return (

@@ -153,6 +153,19 @@ export async function askAssistant(
      * the panel and never reached the request.
      */
     conversationId?: string;
+    /**
+     * The catalogue product this question is about, when it was asked from
+     * that product's own page.
+     *
+     * Without it the question had to carry the product's identity in words,
+     * and the page seeded it with the full retailer title: "Is Power Bank
+     * 20000mAh 45W Charging Portable External Battery Backup For Cell Phone a
+     * good price?". Retailer titles are written for a search box, not by one,
+     * and as a query that many terms matches nothing — so Delia answered that
+     * no shop in the country sold it, about the listing on the page behind
+     * her. The same product asked for in ordinary words came back first.
+     */
+    productId?: number | string;
   },
   /*
    * Called as the search reaches each milestone. Optional, and the request
@@ -176,6 +189,7 @@ export async function askAssistant(
       language: opts.language,
       skip_clarification: opts.skipClarification || undefined,
       conversation_id: opts.conversationId || undefined,
+      product_id: opts.productId || undefined,
     }),
   });
 
@@ -218,6 +232,7 @@ async function askAssistantStreaming(
         language: opts.language,
         skip_clarification: opts.skipClarification || undefined,
         conversation_id: opts.conversationId || undefined,
+        product_id: opts.productId || undefined,
       }),
     });
   } catch {
