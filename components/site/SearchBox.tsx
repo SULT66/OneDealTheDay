@@ -7,6 +7,18 @@ import { MagnifyingGlass } from "@phosphor-icons/react";
 /**
  * Free-text search. Hands off to the same `q` parameter the category pages and
  * Delia use, so all three routes end in one shared filter state.
+ *
+ * It is a real GET form, not a handler bolted to a div. It used to have no
+ * action and no name on the field, so it worked only once React had hydrated;
+ * before that — and on any page where hydration failed or was still on its way
+ * — submitting sent the browser to the current URL carrying nothing, and the
+ * query silently vanished. A reviewer typed "65 inch TV", pressed Search, and
+ * landed back on the homepage with an empty box, which is the single worst
+ * thing a search box can do.
+ *
+ * With action, method and name in place the browser alone reaches the right
+ * page with the right query; the submit handler is now only the faster
+ * client-side route when the script is ready.
  */
 export function SearchBox({
   market,
@@ -29,6 +41,8 @@ export function SearchBox({
   return (
     <form
       role="search"
+      action={`/${market}/search`}
+      method="get"
       onSubmit={(e) => {
         e.preventDefault();
         const q = value.trim();
@@ -48,6 +62,7 @@ export function SearchBox({
         </label>
         <input
           id="site-search"
+          name="q"
           type="search"
           value={value}
           onChange={(e) => setValue(e.target.value)}

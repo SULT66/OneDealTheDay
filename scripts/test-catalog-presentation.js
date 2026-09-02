@@ -104,4 +104,52 @@ assert(
   "the typo list has grown past what anybody has checked against the feed",
 );
 
-console.log("Catalogue presentation checks passed: card numbering, score order, one count, feed typos.");
+/*
+ * A count on a tile has to count things a shopper can reach.
+ *
+ * /api/categories answered with COUNT(*) over the table while every list on
+ * the site removes repeat listings on the way out, so the tiles promised 1,845
+ * where the pages behind them held 1,742 — 104 of the promised listings were
+ * the same products counted twice.
+ */
+const appSource = read("app.js");
+const categoriesRoute = /app\.get\("\/api\/categories"[\s\S]*?\n  \}\);/.exec(appSource);
+assert(categoriesRoute, "the /api/categories route moved out of app.js");
+assert(
+  !/COUNT\(\*\) AS count/.test(categoriesRoute[0]),
+  "category counts are back to counting table rows, duplicates and all",
+);
+assert(
+  /uniqueProductsInOrder\(/.test(categoriesRoute[0]),
+  "category counts no longer go through the deduplication the listings they describe use",
+);
+
+/*
+ * Both halves of "N listings across M categories" must come from one place.
+ * The size was live while the category count was the length of the local
+ * display file, so About said 11 where the catalogue held 13.
+ */
+const about = read("app", "[market]", "about", "page.tsx");
+assert(
+  !/getCategories\(\)\.length/.test(about),
+  "About counts categories from the local display file again, so its two numbers disagree",
+);
+
+/*
+ * Search has to work before the JavaScript does.
+ *
+ * The box had no action and its field no name, so a submit before hydration
+ * went to the current URL carrying nothing: a reviewer typed "65 inch TV",
+ * pressed Search, and landed back on the homepage with an empty box.
+ */
+const searchBox = read("components", "site", "SearchBox.tsx");
+assert(
+  /action=\{`\/\$\{market\}\/search`\}/.test(searchBox) && /method="get"/.test(searchBox),
+  "the search box no longer reaches the results page without JavaScript",
+);
+assert(
+  /name="q"/.test(searchBox),
+  "the search field has no name again, so a plain submit discards the query",
+);
+
+console.log("Catalogue presentation checks passed: card numbering, score order, one count, search without JavaScript.");
