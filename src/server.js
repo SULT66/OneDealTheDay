@@ -2749,22 +2749,44 @@ app.get("/api/admin/live-drops", admin, (req, res) => {
   /* The funnel alongside each drop, because "did it work" is the only question
      worth asking afterwards and it should not need a second screen. */
   const funnel = db.prepare("SELECT event_type, COUNT(*) AS total FROM live_drop_events WHERE drop_id=? GROUP BY event_type");
-  const reminders = db.prepare("SELECT COUNT(*) AS total FROM live_drop_reminders WHERE drop_id=?");
+  /*
+   * Asked for, and actually delivered, as two separate numbers.
+   *
+   * A rehearsal signed one person up and the console showed "reminders: 1",
+   * which read as success right up to the moment no email arrived. The send
+   * had failed — mail delivery was not configured at all — and a failure
+   * leaves reminded_at null, which at a glance is the same as "not due yet".
+   * Worse, sendDueReminders only looks at drops that have not started, so once
+   * the drop opens the row can never be retried and the failure has nowhere
+   * left to appear.
+   */
+  const reminders = db.prepare(`
+    SELECT COUNT(*) AS total, COUNT(reminded_at) AS sent
+    FROM live_drop_reminders WHERE drop_id=?
+  `);
 
   res.json({
     /* The market list comes from the server so the form cannot offer one that
        does not exist. */
     markets: c.markets,
     server_now: new Date(now).toISOString(),
-    drops: rows.map((row) => ({
+    /* Said plainly, because a drop with reminders and no mail delivery looks
+       exactly like a drop that is going fine until the moment it is not. */
+    email_delivery: process.env.SENDGRID_API_KEY ? "configured" : "not configured",
+    drops: rows.map((row) => {
+      const reminderCounts = reminders.get(row.id);
+      return {
       ...presentDrop(row, now),
       /* The admin sees the price before the reveal: they set it. */
       drop_price: row.drop_price,
       affiliate_url: row.affiliate_url,
       published: Boolean(row.published),
-      reminders: reminders.get(row.id).total,
+      reminders: reminderCounts.total,
+      reminders_sent: reminderCounts.sent,
+      reminders_unsent: reminderCounts.total - reminderCounts.sent,
       funnel: Object.fromEntries(funnel.all(row.id).map((entry) => [entry.event_type, entry.total])),
-    })),
+      };
+    }),
   });
 });
 
@@ -2949,6 +2971,21 @@ if (c.liveRefreshEnabled) {
  * the minute, and two overlapping sweeps would read the same unstamped rows
  * and email everybody twice.
  */
+/*
+ * Said once, at boot, where it cannot be missed.
+ *
+ * The reminder sweep runs every minute and fails silently by design: one bad
+ * address must not stop the queue. With no mail delivery configured at all,
+ * every address is a bad address, and the only trace was a log line a minute
+ * that nobody reads. A drop was scheduled, somebody asked to be reminded, the
+ * console said "reminders: 1", and the email was never going to arrive.
+ */
+if (!process.env.SENDGRID_API_KEY) {
+  console.warn(
+    "[mail] SENDGRID_API_KEY is not set: no reminder, subscription or password-reset email will be delivered.",
+  );
+}
+
 let reminderSweepRunning = false;
 cron.schedule(
   "* * * * *",
