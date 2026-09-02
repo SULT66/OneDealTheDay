@@ -1,8 +1,9 @@
-/* v3: the title rules learned the ordinary words for drills, SSDs, printers
-   and mixing bowls. The version is what makes the catalogue re-file itself —
-   app.js recalculates every product whose stamp does not match on boot — so
-   bumping it is how the widened rules reach the listings already stored. */
-const TAXONOMY_VERSION = "catalog-taxonomy-v3";
+/* v4: a department label a source sends can simply be wrong, and now loses to
+   an unambiguous product word in the title. The version is what makes the
+   catalogue re-file itself — app.js recalculates every product whose stamp does
+   not match on boot — so bumping it is how the corrected rules reach the
+   listings already stored. */
+const TAXONOMY_VERSION = "catalog-taxonomy-v4";
 
 // This is the only taxonomy exposed to shoppers. Source-feed category paths are
 // preserved in `category` for auditing, but must never be used as navigation.
@@ -104,7 +105,10 @@ const RAW_RULES = [
  */
 const TITLE_RULES = [
   // Device repair parts belong with the device, not with general tools.
-  ["Electronics", /\b(iphone|ipad|android|smartphone|cell phone|mobile phone|phone battery|battery replacement|screen replacement|charger|charging|usb|headphones?|earbuds?|laptop|computer|tablet|camera|smart watch|smartwatch|television|tvs?|oled|qled|projector|bluetooth|wi-?fi|ssd|nvme|hard drive|external drive|flash drive|memory card|micro ?sd|power bank|hdmi|webcam|router|soundbar|graphics card|motherboard|processor|gaming mouse|wireless mouse|computer mouse|mechanical keyboard|wireless keyboard|gaming monitor|computer monitor|portable speaker|bluetooth speaker|headset|smart thermostat|smart plug|smart bulb|security camera|video doorbell|streaming stick)\b/i],
+  /* Plurals count. "Gaming Headsets Xbox" was not a headset to this rule,
+     because \b after "headset" refuses the trailing s, so a Newegg listing
+     stayed filed under vehicle parts. */
+  ["Electronics", /\b(iphones?|ipads?|android|smartphones?|cell phones?|mobile phones?|phone batter(?:y|ies)|battery replacement|screen replacement|chargers?|charging|usb|headphones?|earbuds?|laptops?|computers?|tablets?|cameras?|smart watch(?:es)?|smartwatch(?:es)?|televisions?|tvs?|oled|qled|projectors?|bluetooth|wi-?fi|ssds?|nvme|hard drives?|external drives?|flash drives?|memory cards?|micro ?sd|power banks?|hdmi|webcams?|routers?|soundbars?|graphics cards?|motherboards?|processors?|gaming mouse|wireless mouse|computer mouse|mechanical keyboards?|wireless keyboards?|gaming monitors?|computer monitors?|portable speakers?|bluetooth speakers?|headsets?|smart thermostats?|smart plugs?|smart bulbs?|security cameras?|video doorbells?|streaming sticks?|3d printers?)\b/i],
   ["Mattresses & Sleep", /\b(mattress|mattresses|bed pillow|sleep topper|bed frame)\b/i],
   ["Bikes & Mobility", /\b(bicycle|bike|tricycle|e-?bike|scooter|mobility)\b/i],
   ["Office", /\b(office desk|computer desk|writing desk|standing desk|workstation|filing cabinet|office chair|printer|ink cartridge|toner|paper shredder|laminator|stapler|whiteboard|label maker|desk organizer|desk lamp|monitor stand|copy paper|file folders?)\b/i],
@@ -121,6 +125,40 @@ const TITLE_RULES = [
   ["Fashion", /\b(dress|shirt|jacket|shoes?|sneakers?|handbag|necklace|bracelet|earrings?|watch)\b/i],
   ["Gifts", /\b(gift|personalized|custom|keepsake|souvenir)\b/i]
 ];
+
+/*
+ * Words that settle an argument with the source.
+ *
+ * A category from a source is normally the better signal and still wins here.
+ * But it can be plainly wrong, and two different ways of being wrong showed up
+ * in the same aisle:
+ *
+ * Newegg's feed labelled 31 listings "Vehicle Parts & Accessories". Every one
+ * of them was a gaming headset; not one was a vehicle part, and no other
+ * Newegg category reached Automotive at all.
+ *
+ * For eBay the stored category is not a category — it is the search term that
+ * found the listing. A graphics card that surfaced under a car-accessory
+ * search was therefore filed under Automotive.
+ *
+ * Only unambiguous words belong here. A car monitor and a laptop car mount are
+ * both real things, so "monitor" and "laptop" are deliberately absent; a
+ * vehicle part that is a gaming headset is not a real thing.
+ *
+ * Preferring the title everywhere was measured against the live catalogue
+ * first and was worse: it moved 115 listings, sending cordless drills sold
+ * with "Battery and Charger Included" and office chairs described as "Computer
+ * Chair" into Electronics. Hence a short list of certainties rather than a
+ * general rule.
+ */
+const IMPOSSIBLE_FOR_CATEGORY = new Map([
+  ["Automotive", /\b(headsets?|headphones?|earbuds?|graphics cards?)\b/i]
+]);
+
+function contradictsCategory(category, title) {
+  const pattern = IMPOSSIBLE_FOR_CATEGORY.get(category);
+  return Boolean(pattern && pattern.test(title));
+}
 
 function clean(value) {
   return String(value || "").replace(/\s+/g, " ").trim();
@@ -151,15 +189,32 @@ function canonicalCategory(product = {}) {
   if (source.includes("king-koil")) return "Mattresses & Sleep";
   if (source.includes("mooncool")) return "Bikes & Mobility";
 
-  const titleMatch = firstMatch(fold(product.title), TITLE_RULES);
+  const title = fold(product.title);
+  const titleMatch = firstMatch(title, TITLE_RULES);
   if (exact === "Tools & DIY" && titleMatch === "Electronics") return titleMatch;
+  if (titleMatch && exact && contradictsCategory(exact, title)) return titleMatch;
   if (exact) return exact;
 
   const rawMatch = firstMatch(fold(raw), RAW_RULES);
   if (rawMatch === "Home & Kitchen" && ["Office", "Furniture", "Tools & DIY"].includes(titleMatch)) {
     return titleMatch;
   }
+  if (titleMatch && rawMatch && contradictsCategory(rawMatch, title)) return titleMatch;
   if (rawMatch) return rawMatch;
+
+  /*
+   * For eBay the stored category is the search term that found the listing, so
+   * it names a product rather than a department: "graphics card", "cordless
+   * drill", "dog bed". RAW_RULES only knows department words and lets those
+   * fall through to the title, which is the least reliable signal we have —
+   * eBay caps a title at 80 characters, and a graphics card whose seller ran
+   * out of room at "ATX Graphics Car" was read as a car part.
+   *
+   * The search term is better evidence than a truncated title, so try the
+   * product rules on it before giving up on it.
+   */
+  const keywordMatch = firstMatch(fold(raw), TITLE_RULES);
+  if (keywordMatch) return keywordMatch;
   if (titleMatch) return titleMatch;
 
   // Tribesigns is a furniture merchant. Specific office and home rules above

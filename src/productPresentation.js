@@ -173,9 +173,13 @@ function presentationReason(product, language) {
   const summary = t(language, "product.reasonSentence", {
     reasons: list(reasons.slice(0, 4), product, language) || t(language, "product.reasonCheckedOffer")
   });
+  /* Name the store the listing actually came from. This sentence said "eBay"
+     whoever the seller was, so every Newegg page — more than half the
+     catalogue — credited the wrong shop for the missing rating. */
+  const store = clean(product?.retailer_name) || clean(product?.source) || t(language, "product.retailer");
   return rating > 0 && reviews > 0
     ? summary
-    : `${summary} ${t(language, "product.noProductRating")}`;
+    : `${summary} ${t(language, "product.noProductRating", { store })}`;
 }
 
 function badge(product, language) {
