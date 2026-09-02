@@ -6,7 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { formatPrice } from "@/lib/format";
 import { DeliaTrigger } from "@/components/delia/DeliaTrigger";
-import { recordLiveDropEvent } from "@/lib/analyticsSession";
+import { analyticsSessionId, recordLiveDropEvent } from "@/lib/analyticsSession";
 
 /**
  * The Live Drop, as a shopper sees it.
@@ -246,7 +246,11 @@ export function LiveDropPanel({ market }: { market: string }) {
           <div className="mt-5 flex flex-wrap items-center gap-2.5">
             {isLive && drop.affiliate_url && (
               <a
-                href={drop.affiliate_url}
+                /* Through the server, so the drop's state is read at the
+                   moment of the click rather than when this page was drawn,
+                   and so the visit is counted even where analytics is
+                   blocked. */
+                href={`/live/go/${encodeURIComponent(drop.drop_key)}?sid=${encodeURIComponent(analyticsSessionId())}`}
                 target="_blank"
                 rel="sponsored noopener noreferrer"
                 onClick={() => recordLiveDropEvent(drop.drop_key, "buy_click")}

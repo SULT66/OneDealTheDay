@@ -1184,7 +1184,7 @@ app.post("/api/integrations/tavus/conversations", authRateLimit, async (req, res
   if ([...tavusConversations.values()].some(session => session.ipKey === ipKey)) {
     return res.status(409).json({error:"A Chloe session is already active in this browser."});
   }
-  if (tavusConversations.size >= 10) {
+  if (tavusConversations.size >= c.liveHostMaxSessions) {
     return res.status(503).json({error:"Chloe is helping other shoppers. Please try again shortly."});
   }
 
@@ -2636,6 +2636,52 @@ app.get("/go/:id", (req,res) => {
   });
   res.redirect(302, destinationUrl.toString());
 });
+
+/*
+ * The way out of a Live Drop.
+ *
+ * "Buy now" used to be the retailer link itself, printed into the page, and
+ * two things followed from that. The click counted only if the browser's
+ * analytics survived to report it. And the link stayed good in the HTML of a
+ * tab left open, so a drop that had since closed still sent people out to buy
+ * at whatever the shop charges now, with our drop price still on the screen
+ * beside it.
+ *
+ * Here the drop's state is read at the moment of the click and the visit is
+ * recorded by the server doing the redirecting. A drop that is over returns
+ * the shopper to the Live page rather than to a price that has gone.
+ */
+app.get("/live/go/:key", (req, res) => {
+  res.set("X-Robots-Tag", "noindex, nofollow").set("Cache-Control", "private, no-store");
+  const drop = db
+    .prepare("SELECT * FROM live_drops WHERE drop_key=? AND published=1")
+    .get(String(req.params.key || "").trim().slice(0, 80));
+  if (!drop) return res.sendStatus(404);
+  const livePage = `/${drop.market}/live`;
+  if (dropState(drop, Date.now()) !== "live") return res.redirect(302, livePage);
+
+  let destination;
+  try {
+    destination = new URL(String(drop.affiliate_url || ""));
+  } catch {
+    return res.redirect(302, livePage);
+  }
+  if (!/^https?:$/.test(destination.protocol)) return res.redirect(302, livePage);
+
+  const sessionId = analyticsToken(req.query.sid);
+  if (sessionId) {
+    try {
+      db.prepare(
+        "INSERT INTO live_drop_events(drop_id,market,event_type,session_id,occurred_at) VALUES(?,?,?,?,?)",
+      ).run(drop.id, drop.market, "buy_click", sessionId, new Date().toISOString());
+    } catch (error) {
+      /* One row per session per event: a second click is the same person. */
+      if (!String(error.message).includes("UNIQUE")) throw error;
+    }
+  }
+  res.redirect(302, destination.toString());
+});
+
 /*
  * Scheduling a Live Drop from a browser instead of an SSH session.
  *

@@ -21,6 +21,25 @@ const rakutenNeweggKeywords = String(process.env.RAKUTEN_NEWEGG_KEYWORDS || "gra
 const tavusToolSecret = String(process.env.TAVUS_TOOL_SECRET || "").trim();
 const tavusApiKey = String(process.env.TAVUS_API_KEY || "").trim();
 const tavusPalId = String(process.env.TAVUS_PAL_ID || "p5362d6973ab").trim();
+/*
+ * How many shoppers may hold a private conversation with Chloe at once.
+ *
+ * This is not the size of the audience, and raising it is not how a Live Drop
+ * reaches more people. A Tavus conversation is one paid video call per viewer,
+ * so a hundred viewers would mean a hundred simultaneous calls — which is also
+ * no longer one shared event. An audience is served by putting a broadcast in
+ * the drop's stream_embed_url: everybody watches the same one, at no
+ * per-viewer cost and with no ceiling, and BroadcastStage already prefers it
+ * whenever it is set.
+ *
+ * So this stays a modest number. It lives in configuration only so it can be
+ * matched to whatever the Tavus plan actually allows, rather than guessed at
+ * in code as a bare 10.
+ */
+const liveHostMaxSessions = Math.max(
+  1,
+  Math.min(200, Number(process.env.LIVE_HOST_MAX_SESSIONS) || 10),
+);
 const demoMode = false;
 
 function boundedNumber(value, fallback, minimum, maximum = Number.MAX_SAFE_INTEGER) {
@@ -212,6 +231,7 @@ module.exports = {
   tavusToolSecret,
   tavusApiKey,
   tavusPalId,
+  liveHostMaxSessions,
   ebayEnvironment: String(process.env.EBAY_ENVIRONMENT || "production").trim().toLowerCase(),
   affiliateTag: String(process.env.AFFILIATE_TAG || "").trim(),
   affiliateTagConfigured: markets.some(code => Boolean(affiliateTagForMarket(code))),
