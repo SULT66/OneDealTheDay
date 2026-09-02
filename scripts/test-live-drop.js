@@ -345,7 +345,57 @@ async function main() {
     "the admin key is now kept in storage, where it outlives whoever typed it",
   );
 
-  console.log("Live Drop admin guards and console checks passed.");
+  /*
+   * The way out of a drop goes through the server.
+   *
+   * "Buy now" was the retailer link printed into the page, so the click was
+   * counted only where the browser's analytics survived, and the link stayed
+   * good in a tab left open after the drop closed — sending somebody out to
+   * buy at whatever the shop charges now, with our drop price still beside it.
+   */
+  const liveGo = /app\.get\("\/live\/go\/:key"[\s\S]*?\n\}\);/.exec(serverSource);
+  assert(liveGo, "the Live Drop redirect is gone, so Buy now is a bare retailer link again");
+  assert(
+    /dropState\(drop, Date\.now\(\)\) !== "live"/.test(liveGo[0]),
+    "the redirect no longer checks the drop is live at the moment of the click",
+  );
+  assert(
+    /INSERT INTO live_drop_events/.test(liveGo[0]),
+    "the redirect no longer records the click, so it counts only where analytics runs",
+  );
+  const panel = fs.readFileSync(
+    path.join(__dirname, "..", "components", "live", "LiveDropPanel.tsx"),
+    "utf8",
+  );
+  assert(
+    !/href=\{drop\.affiliate_url\}/.test(panel),
+    "the panel prints the retailer link straight into the page again",
+  );
+
+  /*
+   * And a private host is not how a Live Drop reaches an audience. One Tavus
+   * conversation is one paid video call per viewer, so a hundred viewers would
+   * be a hundred calls and no longer one shared event. The audience is served
+   * by stream_embed_url, which BroadcastStage prefers; this ceiling only
+   * matches whatever the Tavus plan allows.
+   */
+  const configSource = fs.readFileSync(path.join(__dirname, "..", "src", "config.js"), "utf8");
+  assert(
+    /LIVE_HOST_MAX_SESSIONS/.test(configSource),
+    "the private-host ceiling is hard-coded again instead of matching the Tavus plan",
+  );
+  assert(
+    !/tavusConversations\.size >= 10/.test(serverSource),
+    "the bare 10 is back in the conversation endpoint",
+  );
+  const stage = /function BroadcastStage\([\s\S]*?\n\}/.exec(panel);
+  assert(stage, "BroadcastStage moved out of the Live panel");
+  assert(
+    stage[0].indexOf("hasHost ?") < stage[0].indexOf("drop.tavus_available ?"),
+    "the per-viewer host now outranks the broadcast everyone could watch",
+  );
+
+  console.log("Live Drop admin guards, server-side exit and broadcast priority passed.");
 }
 
 main().catch((error) => {
