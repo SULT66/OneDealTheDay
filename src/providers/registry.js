@@ -19,15 +19,20 @@ function nativeProviders(config) {
       source:"ebay",
       name:"eBay Browse API",
       markets:["us", "ca", "uk", "fr", "de"],
-      search:({market, keywords = market.searchKeywords, detailLimit, targetEligible}) => require("./ebay").searchProducts({
+      /* No keywords passed means the broad scheduled sweep, which takes a
+         rotating slice of the list. A shopper's own query arrives with its
+         keywords and is searched in full. */
+      search:({market, keywords, detailLimit, targetEligible, signal}) => require("./ebay").searchProducts({
         clientId:config.ebayClientId,
         clientSecret:config.ebayClientSecret,
         campaignId:config.ebayCampaignId,
         environment:config.ebayEnvironment,
-        keywords,
+        keywords:keywords || market.searchKeywords,
+        rotate:!keywords,
         market,
         detailLimit,
-        targetEligible
+        targetEligible,
+        signal
       })
     });
   }
@@ -111,6 +116,26 @@ function enabledProviders(config) {
   return [...byId.values()];
 }
 
+async function runWithDeadline(provider, market) {
+  const controller = new AbortController();
+  const message = `${provider.name} did not finish within ${Math.round(PROVIDER_DEADLINE_MS / 60000)} minutes`;
+  const timer = setTimeout(() => controller.abort(new Error(message)), PROVIDER_DEADLINE_MS);
+  timer.unref?.();
+  try {
+    return await Promise.race([
+      provider.search({market, signal:controller.signal}),
+      new Promise((_, reject) => {
+        controller.signal.addEventListener("abort", () => reject(new Error(message)), {once:true});
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+    /* Also on success: nothing is outstanding then, and it costs nothing to
+       guarantee that no request outlives the run that made it. */
+    controller.abort();
+  }
+}
+
 async function searchAll(config, market, {providerIds = []} = {}) {
   const selectedIds = new Set((providerIds || []).map(value => String(value || "").trim()).filter(Boolean));
   const providers = providersForMarket(config, market).filter(provider =>
@@ -129,15 +154,14 @@ async function searchAll(config, market, {providerIds = []} = {}) {
    * A source that runs over is reported as failed and the others still land.
    * Half a catalogue refreshed on time is worth more than all of it at some
    * unknown hour, and the report says plainly which source ran out.
+   *
+   * The deadline cancels the work rather than merely walking away from it.
+   * Racing a promise only stops the waiting: the abandoned eBay run carried on
+   * calling the Browse API in the background, and two of those left running at
+   * once spent the day's whole allowance, which took down all five markets.
    */
   const settled = await Promise.allSettled(providers.map(provider =>
-    Promise.race([
-      provider.search({market}),
-      new Promise((_, reject) => setTimeout(
-        () => reject(new Error(`${provider.name} did not finish within ${Math.round(PROVIDER_DEADLINE_MS / 60000)} minutes`)),
-        PROVIDER_DEADLINE_MS,
-      ).unref?.()),
-    ])
+    runWithDeadline(provider, market)
   ));
   const products = [];
   const reports = settled.map((result, index) => {
