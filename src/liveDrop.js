@@ -127,6 +127,39 @@ function presentDrop(drop, now = Date.now(), { earlyAccessSeconds = 0 } = {}) {
 }
 
 /**
+ * What Chloe says when she arrives, built from the drop itself.
+ *
+ * She used to open with "Welcome to OneDailyDrop Live! Ask me about today's
+ * verified live deal" — the same sentence at every drop, naming nothing. A
+ * shopper who came to see a monitor was greeted by a host who appeared not to
+ * know what she was presenting, and had to ask before anything happened.
+ *
+ * The price is the one thing this may not say early. Before the drop opens the
+ * server has not even sent it, and the whole mechanic is that it appears at a
+ * particular second; a host who reads it out in the waiting room gives away
+ * the event. So the opening names the product and the saving only once it is
+ * live, and before that says plainly that the price is still to come.
+ *
+ * Facts only, and only ones already on the page. Anything beyond this she has
+ * to look up through get_product_details, which withholds the same things for
+ * the same reasons.
+ */
+function hostGreeting(view) {
+  if (!view) return "Welcome to OneDailyDrop Live. I'm Chloe, your AI shopping host.";
+  const product = [view.brand, view.title].filter(Boolean).join(" ").trim() || "today's drop";
+  const shop = view.retailer_name ? ` It's sold and shipped by ${view.retailer_name}.` : "";
+  const opening = `Hi, I'm Chloe and this is OneDailyDrop Live. Today's drop is the ${product}.${shop}`;
+
+  if (view.state !== "live") {
+    return `${opening} The price opens in a moment — stay with me and I'll tell you the second it does. Ask me anything about it while we wait.`;
+  }
+  const saving = view.saving
+    ? ` That's ${view.saving.percent} percent below its usual price.`
+    : "";
+  return `${opening} It's live now at ${view.currency} ${view.drop_price}.${saving} Ask me anything about it, and the buy button is right below me.`;
+}
+
+/**
  * Sends the reminders people asked for, shortly before a drop opens.
  *
  * Lives here rather than in the server so it can be tested against a fixed
@@ -194,6 +227,7 @@ module.exports = {
   REMINDER_LEAD_MINUTES,
   WAITING_ROOM_SECONDS,
   dropSaving,
+  hostGreeting,
   dropState,
   presentDrop,
   sendDueReminders,
