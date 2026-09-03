@@ -1130,6 +1130,8 @@ app.get("/api/live/current", (req, res) => {
       tavus_available:Boolean(
         c.liveHostChatEnabled && c.tavusApiKey && c.tavusPalId && selectedMarket.code === "us",
       ),
+      /* Counted, not decorated. Every one of these is a page open right now. */
+      watching: watchingNow(drop.id),
     } : null,
     server_now: new Date().toISOString(),
   });
@@ -1400,6 +1402,43 @@ app.post("/api/live/remind", authRateLimit, (req, res) => {
  * unique index absorbs it and the response is the same either way.
  */
 const LIVE_DROP_EVENTS = new Set(["waiting_room", "reveal", "host_started", "buy_click", "remind"]);
+/*
+ * How many people are watching, as opposed to how many ever arrived.
+ *
+ * The funnel above keeps one row per session for the whole drop, so it can say
+ * how many turned up and never that anybody left — which makes it the wrong
+ * thing to put behind "1,248 watching". A page open during the drop refreshes
+ * its row here every half minute; a page that closed stops refreshing and
+ * falls out of the count on its own.
+ *
+ * The window is deliberately longer than the heartbeat, so one missed ping
+ * from a phone that dipped through a tunnel does not remove somebody who is
+ * still there.
+ */
+const WATCHING_WINDOW_MS = 90 * 1000;
+const watchingNow = dropId => db
+  .prepare("SELECT COUNT(*) AS total FROM live_drop_presence WHERE drop_id=? AND seen_at >= ?")
+  .get(dropId, new Date(Date.now() - WATCHING_WINDOW_MS).toISOString()).total;
+
+app.post("/api/live/watching", (req, res) => {
+  res.set("Cache-Control", "no-store");
+  const sessionId = analyticsToken(req.body?.session_id);
+  if (!sessionId) return res.status(400).json({error:"Missing session."});
+  const drop = db
+    .prepare("SELECT id FROM live_drops WHERE drop_key=? AND published=1")
+    .get(String(req.body?.drop_key || "").trim().slice(0, 80));
+  if (!drop) return res.sendStatus(204);
+  db.prepare(`
+    INSERT INTO live_drop_presence(drop_id,session_id,seen_at) VALUES(?,?,?)
+    ON CONFLICT(drop_id,session_id) DO UPDATE SET seen_at=excluded.seen_at
+  `).run(drop.id, sessionId, new Date().toISOString());
+  /* Rows for people who left hours ago help nobody, and this is the one moment
+     we are already writing to the table. */
+  db.prepare("DELETE FROM live_drop_presence WHERE drop_id=? AND seen_at < ?")
+    .run(drop.id, new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString());
+  res.json({watching: watchingNow(drop.id)});
+});
+
 app.post("/api/live/events", (req, res) => {
   const dropKey = String(req.body?.drop_key || "").trim().slice(0, 80);
   const eventType = String(req.body?.event_type || "").trim().toLowerCase();

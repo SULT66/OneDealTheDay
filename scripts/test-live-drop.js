@@ -423,7 +423,43 @@ async function main() {
     "an unconfigured mailer no longer says so at boot, only once a minute into a log nobody reads",
   );
 
-  console.log("Live Drop admin guards, server-side exit, broadcast priority and reminder delivery passed.");
+  /*
+   * "Watching now" counts presence, not arrivals.
+   *
+   * The funnel keeps one row per session for the whole drop, so it can say how
+   * many turned up and never that anybody left — putting it behind a live
+   * viewer count would only ever go up, which is the same lie as a stock
+   * counter that cannot go down. Presence is a row that gets overwritten and
+   * ages out on its own.
+   */
+  const presenceTable = /CREATE TABLE IF NOT EXISTS live_drop_presence\([\s\S]*?\n  \);/.exec(dbSource);
+  assert(presenceTable, "live_drop_presence is gone, so a viewer count has nothing honest behind it");
+  assert(
+    /PRIMARY KEY\(drop_id, session_id\)/.test(presenceTable[0]),
+    "presence rows accumulate per session again, so one person watching counts as many",
+  );
+  assert(
+    /ON CONFLICT\(drop_id,session_id\) DO UPDATE SET seen_at=excluded\.seen_at/.test(serverSource),
+    "a heartbeat inserts instead of refreshing, so leaving never lowers the count",
+  );
+  assert(
+    /seen_at >= \?/.test(serverSource) && /WATCHING_WINDOW_MS = 90 \* 1000/.test(serverSource),
+    "the count no longer has a window, so it counts everybody who ever arrived",
+  );
+  /* Longer than the heartbeat, or a phone that dipped through a tunnel drops
+     out of a count it belongs in. */
+  const heartbeat = /setInterval\(beat, (\d+)\)/.exec(panel);
+  assert(heartbeat, "the presence heartbeat is gone");
+  assert(
+    Number(heartbeat[1]) < 90 * 1000,
+    "the heartbeat is slower than the window it feeds, so watchers flicker in and out",
+  );
+  assert(
+    /onAir && drop\.watching > 0/.test(panel),
+    "the viewer count shows outside the drop, or shows a zero nobody needed to read",
+  );
+
+  console.log("Live Drop admin guards, server-side exit, broadcast priority, reminders and presence passed.");
 }
 
 main().catch((error) => {

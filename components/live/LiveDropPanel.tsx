@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { Eye } from "@phosphor-icons/react";
 import DailyIframe from "@daily-co/daily-js";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
@@ -46,6 +47,8 @@ export type LiveDropView = {
   video_url: string;
   stream_embed_url: string;
   tavus_available: boolean;
+  /* Pages open right now, counted rather than decorated. */
+  watching: number;
   terms: string;
   server_now: string;
 };
@@ -146,6 +149,31 @@ export function LiveDropPanel({
     recordLiveDropEvent(drop.drop_key, stage);
   }, [drop]);
 
+  /*
+   * The heartbeat behind "watching now".
+   *
+   * Only while the drop is actually on: a tab left open overnight on a drop
+   * that ended is not an audience. The server counts rows touched in the last
+   * ninety seconds, so stopping this is all it takes to leave the count, and
+   * closing the tab stops it without anybody having to say goodbye.
+   */
+  const dropKey = drop?.drop_key;
+  const onAir = drop?.state === "waiting" || drop?.state === "live";
+  useEffect(() => {
+    if (!dropKey || !onAir) return;
+    const beat = () => {
+      void fetch("/api/live/watching", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ drop_key: dropKey, session_id: analyticsSessionId() }),
+        keepalive: true,
+      }).catch(() => {});
+    };
+    beat();
+    const timer = setInterval(beat, 30000);
+    return () => clearInterval(timer);
+  }, [dropKey, onAir]);
+
   /* The local second hand between polls. */
   useEffect(() => {
     const ticking = setInterval(() => {
@@ -190,6 +218,17 @@ export function LiveDropPanel({
             OneDailyDrop <span className="text-accent">LIVE</span>
           </p>
           <StateBadge state={drop.state} />
+          {/* Only while the drop is on, and only once there is somebody to
+              count. "1 watching" on an empty page says the quiet part out
+              loud, and a number nobody is behind would be the other kind of
+              lie. */}
+          {onAir && drop.watching > 0 && (
+            <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-fg-muted tnum">
+              <Eye size={15} weight="fill" aria-hidden="true" />
+              {drop.watching.toLocaleString()}
+              <span className="font-normal text-fg-subtle">watching</span>
+            </span>
+          )}
         </div>
         <span className="rounded-full border border-border bg-surface-2 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-fg-muted">
           AI host
@@ -198,25 +237,10 @@ export function LiveDropPanel({
 
       <BroadcastStage market={market} drop={drop} />
 
-      <div
-        className={cn(
-          "mt-5 grid gap-5 rounded-2xl border border-border bg-surface-2 p-4 sm:p-5",
-          drop.image_url && "sm:grid-cols-[180px_minmax(0,1fr)]",
-        )}
-      >
-        {drop.image_url ? (
-          <div className="relative aspect-square w-full overflow-hidden rounded-xl bg-surface sm:w-[180px]">
-            <Image
-              src={drop.image_url}
-              alt=""
-              fill
-              sizes="180px"
-              className="object-contain"
-              unoptimized
-            />
-          </div>
-        ) : null}
-
+      {/* No product photograph in here any more: the stage above shows the
+          product twice, and a third copy pushed the price and the button
+          further down a phone screen than either should ever be. */}
+      <div className="mt-5 rounded-2xl border border-border bg-surface-2 p-4 sm:p-5">
         <div className="min-w-0">
           {drop.brand && (
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-fg-subtle">
@@ -252,7 +276,10 @@ export function LiveDropPanel({
             )}
           </div>
 
-          <div className="mt-4 grid grid-cols-2 gap-3 sm:flex sm:flex-wrap">
+          {/* The clock and the way out, on one line with the price. These were
+              stacked, so on a phone the button sat below the fold during the
+              ten minutes it exists for. */}
+          <div className="mt-4 flex flex-wrap items-stretch gap-3">
             <Countdown state={drop.state} untilStart={untilStart} untilEnd={untilEnd} />
             {drop.quantity_total > 0 && (
               <Metric label="Stock">
@@ -260,24 +287,23 @@ export function LiveDropPanel({
                 {isLive ? "left" : "available"}
               </Metric>
             )}
-          </div>
-
-          <div className="mt-5 flex flex-wrap items-center gap-2.5">
             {isLive && drop.affiliate_url && (
               <a
-                /* Through the server, so the drop's state is read at the
-                   moment of the click rather than when this page was drawn,
-                   and so the visit is counted even where analytics is
-                   blocked. */
+                /* Through the server, so the drop's state is read at the moment
+                   of the click rather than when this page was drawn, and so the
+                   visit is counted even where analytics is blocked. */
                 href={`/live/go/${encodeURIComponent(drop.drop_key)}?sid=${encodeURIComponent(analyticsSessionId())}`}
                 target="_blank"
                 rel="sponsored noopener noreferrer"
                 onClick={() => recordLiveDropEvent(drop.drop_key, "buy_click")}
-                className="inline-flex h-12 flex-1 items-center justify-center rounded-xl bg-accent px-6 text-sm font-bold text-white transition-opacity hover:opacity-88 sm:flex-none"
+                className="ml-auto inline-flex min-w-[9rem] flex-1 items-center justify-center rounded-xl bg-accent px-6 text-base font-bold text-white transition-opacity hover:opacity-88 sm:flex-none"
               >
                 Buy now
               </a>
             )}
+          </div>
+
+          <div className="mt-4 flex flex-wrap items-center gap-2.5">
             <DeliaTrigger
               variant="header"
               label="Ask a live question"
