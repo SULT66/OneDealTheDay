@@ -411,12 +411,30 @@ function RemindMe({ dropKey }: { dropKey: string }) {
  * hosted by somebody who already solved streaming, which is what the roadmap
  * says to do instead of building it.
  */
+/*
+ * What the audience watches.
+ *
+ * The order matters and used to be wrong. A recorded presentation sat in a
+ * side panel labelled "Product demo" while the main stage went to a private
+ * video call — so the one thing everybody could watch together was the small
+ * box, and the big one was a different conversation for each viewer. With
+ * twenty people that is twenty shows; with a thousand it is neither
+ * affordable nor a broadcast.
+ *
+ * So: a live stream first, then the recorded presentation, and the private
+ * host only where it has been deliberately switched on. The demo keeps its
+ * side panel only when something else is already holding the stage.
+ */
 function BroadcastStage({ market, drop }: { market: string; drop: LiveDropView }) {
   const showable = drop.state === "waiting" || drop.state === "live";
   if (!showable) return null;
 
-  const hasHost = Boolean(drop.stream_embed_url);
-  const hasDemo = Boolean(drop.video_url);
+  const hasStream = Boolean(drop.stream_embed_url);
+  const hasPresentation = Boolean(drop.video_url);
+  /* The recorded presentation takes the stage unless a live stream is running;
+     it only stays a side demo when it is not the main event. */
+  const hasHost = hasStream;
+  const hasDemo = hasPresentation && hasStream;
 
   return (
     <div
@@ -435,6 +453,18 @@ function BroadcastStage({ market, drop }: { market: string; drop: LiveDropView }
               allow="autoplay; encrypted-media; picture-in-picture"
               allowFullScreen
               className="absolute inset-0 h-full w-full border-0"
+            />
+          </div>
+        ) : hasPresentation ? (
+          /* The same recording for everybody, which is what makes it a
+             broadcast: no ceiling, no per-viewer cost, one message. */
+          <div className="relative aspect-[4/3] w-full">
+            <video
+              src={drop.video_url}
+              controls
+              autoPlay
+              playsInline
+              className="absolute inset-0 h-full w-full object-contain"
             />
           </div>
         ) : drop.tavus_available ? (

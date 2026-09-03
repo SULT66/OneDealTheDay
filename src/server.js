@@ -1121,8 +1121,15 @@ app.get("/api/live/current", (req, res) => {
     drop: presented ? {
       ...presented,
       /* Chloe's tool is currently grounded to the US market in Tavus. Do not
-         offer her in another market until that tool receives a market input. */
-      tavus_available:Boolean(c.tavusApiKey && c.tavusPalId && selectedMarket.code === "us"),
+         offer her in another market until that tool receives a market input.
+
+         And off unless switched on: a private call each is not a broadcast.
+         Twenty viewers would be twenty different shows, and every one of them
+         a paid video call. What an audience watches together is the recorded
+         presentation in video_url or the stream in stream_embed_url. */
+      tavus_available:Boolean(
+        c.liveHostChatEnabled && c.tavusApiKey && c.tavusPalId && selectedMarket.code === "us",
+      ),
     } : null,
     server_now: new Date().toISOString(),
   });
@@ -1154,6 +1161,9 @@ app.post("/api/integrations/tavus/conversations", authRateLimit, async (req, res
   res.set("Cache-Control", "no-store");
   if (!req.is("application/json")) {
     return res.status(415).json({error:"A JSON request is required."});
+  }
+  if (!c.liveHostChatEnabled) {
+    return res.status(503).json({error:"Chloe is presenting the drop rather than taking questions one at a time."});
   }
   if (!c.tavusApiKey || !c.tavusPalId) {
     return res.status(503).json({error:"Chloe is not connected yet."});
