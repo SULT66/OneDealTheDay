@@ -46,6 +46,8 @@ export type LiveDropView = {
   affiliate_url: string;
   video_url: string;
   stream_embed_url: string;
+  /* The line the AI host is handed when the price opens. Empty until then. */
+  host_reveal_line: string;
   tavus_available: boolean;
   /* Pages open right now, counted rather than decorated. */
   watching: number;
@@ -767,18 +769,50 @@ function TavusHost({ market, drop }: { market: string; drop: LiveDropView }) {
     recordLiveDropEvent(drop.drop_key, "host_started");
   };
 
-  const sendQuestion = (event: React.FormEvent) => {
-    event.preventDefault();
-    const text = question.trim().slice(0, 500);
+  const tell = (text: string) => {
     const call = callRef.current;
     const active = conversationRef.current;
-    if (!text || !call || !active || !joined) return;
+    if (!text || !call || !active || !joined) return false;
     call.sendAppMessage({
       message_type:"conversation",
       event_type:"conversation.respond",
       conversation_id:active.conversation_id,
       properties:{text},
     }, "*");
+    return true;
+  };
+
+  /*
+   * The moment the price opens, said out loud.
+   *
+   * A greeting is fixed when the conversation is created, so somebody who
+   * started chatting in the waiting room and stayed through the reveal heard
+   * "the price opens in a moment" while the price was already on the screen
+   * beside her. The opening is the one moment of a Live Drop a host cannot
+   * miss.
+   *
+   * Sent as the same conversation.respond the typed questions use, because
+   * that is the one interaction this code has watched work. Once per
+   * conversation: a poll every five seconds would otherwise have her announce
+   * the same reveal for the rest of the drop.
+   */
+  const revealLine = drop.host_reveal_line;
+  const announced = useRef("");
+  useEffect(() => {
+    if (!revealLine || !joined) return;
+    const active = conversationRef.current;
+    if (!active || announced.current === active.conversation_id) return;
+    announced.current = active.conversation_id;
+    tell(revealLine);
+    /* tell reads refs and `joined`; re-running on the line and the join is
+       what this needs and nothing more. */
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [revealLine, joined]);
+
+  const sendQuestion = (event: React.FormEvent) => {
+    event.preventDefault();
+    const text = question.trim().slice(0, 500);
+    if (!tell(text)) return;
     const id = `viewer-${++messageCounterRef.current}`;
     setMessages((current) => [...current.slice(-7), {id, role:"viewer", text}]);
     setQuestion("");

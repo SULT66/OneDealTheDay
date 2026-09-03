@@ -9,7 +9,7 @@ const db = require("./db");
 const c = require("./config");
 const { refreshProducts, localDate } = require("./refresh");
 const { runLinkHealthCheck } = require("./linkHealth");
-const { dropState, hostGreeting, presentDrop, sendDueReminders } = require("./liveDrop");
+const { dropState, hostGreeting, hostRevealLine, presentDrop, sendDueReminders } = require("./liveDrop");
 const { cacheKey, readCachedAnswer, writeCachedAnswer } = require("./deliaCache");
 const { tavusProductDetails } = require("./tavusProductTool");
 const {
@@ -1132,6 +1132,12 @@ app.get("/api/live/current", (req, res) => {
       ),
       /* Counted, not decorated. Every one of these is a page open right now. */
       watching: watchingNow(drop.id),
+      /* Empty until the drop opens, then the line the host is handed so she
+         announces the reveal instead of missing it. Her greeting is fixed when
+         the conversation starts, so somebody who began chatting in the waiting
+         room heard "the price opens in a moment" while the price was already
+         on the screen beside her. */
+      host_reveal_line: hostRevealLine(presented),
     } : null,
     server_now: new Date().toISOString(),
   });
