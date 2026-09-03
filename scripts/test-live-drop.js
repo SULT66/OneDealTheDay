@@ -152,6 +152,14 @@ const reveal = hostRevealLine(presentDrop(drop, at(60)));
 assert(reveal.includes("449"), "the reveal does not carry the price it exists to announce");
 assert(reveal.includes("44 percent"), "the reveal does not carry the saving");
 assert.strictEqual(hostRevealLine(null), "", "a missing drop throws instead of staying quiet");
+/* Urgency from the clock, which is ours and true; never from stock, which is
+   the shop's and invisible to us. Handed only the facts she closed a rehearsal
+   with "grab yours before they are gone", which nobody could know. */
+assert(/minutes/.test(reveal), "the reveal no longer carries the time pressure that makes the format work");
+assert(
+  /how many are left|will run out/.test(reveal),
+  "the reveal no longer forbids inventing scarcity, which is what affiliate programmes reject",
+);
 
 const separate = hostGreeting({ ...presentDrop(drop, at(60)), brand: "Juovi", title: "Power Bank 20000mAh" });
 assert(
