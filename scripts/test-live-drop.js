@@ -207,9 +207,13 @@ assert(
   /src=\{drop\.stream_embed_url\}/.test(panelSource) && /src=\{drop\.video_url\}/.test(panelSource),
   "one of the two broadcast media inputs is no longer rendered",
 );
+/* The labels changed with what they describe. A recording is the show an
+   audience watches together, not an optional demo beside a host who holds the
+   stage — that arrangement is what made a drop a private call for each
+   viewer. */
 assert(
-  /AI host embed URL \(optional\)/.test(adminSource) &&
-    /Product demo video URL \(optional\)/.test(adminSource),
+  /Live stream embed URL/.test(adminSource) &&
+    /Chloe's recorded presentation/.test(adminSource),
   "the operator console no longer explains which live media belongs in each field",
 );
 
