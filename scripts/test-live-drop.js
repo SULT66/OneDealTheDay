@@ -299,7 +299,7 @@ async function main() {
      back the drop price before the reveal, which is right for the person who
      set it and would be a leak on any unguarded route. */
   const adminRoutes = serverSource.match(/app\.(?:get|post|delete)\("\/api\/admin\/live-drops[^"]*", *[a-z]+/g) || [];
-  assert.strictEqual(adminRoutes.length, 5, "the set of admin Live Drop routes changed");
+  assert.strictEqual(adminRoutes.length, 6, "the set of admin Live Drop routes changed");
   for (const route of adminRoutes) {
     assert(/, *admin$/.test(route), `an admin Live Drop route is not behind the key: ${route}`);
   }
@@ -395,7 +395,33 @@ async function main() {
     "the per-viewer host now outranks the broadcast everyone could watch",
   );
 
-  console.log("Live Drop admin guards, server-side exit and broadcast priority passed.");
+  /*
+   * "Asked to be reminded" and "was reminded" are different numbers.
+   *
+   * A rehearsal signed one person up, the console showed "reminders: 1", and
+   * it read as success until no email arrived. Delivery was not configured at
+   * all; a failed send leaves reminded_at null, which at a glance is the same
+   * as "not due yet", and the sweep only looks at drops that have not started,
+   * so after the drop opens the failure has nowhere left to appear.
+   */
+  assert(
+    /COUNT\(reminded_at\) AS sent/.test(serverSource),
+    "the console counts reminders asked for without counting the ones that were sent",
+  );
+  assert(
+    /reminders_unsent:/.test(serverSource),
+    "an unsent reminder is invisible again",
+  );
+  assert(
+    /email_delivery: process\.env\.SENDGRID_API_KEY/.test(serverSource),
+    "the console no longer says whether email can be delivered at all",
+  );
+  assert(
+    /SENDGRID_API_KEY is not set/.test(serverSource),
+    "an unconfigured mailer no longer says so at boot, only once a minute into a log nobody reads",
+  );
+
+  console.log("Live Drop admin guards, server-side exit, broadcast priority and reminder delivery passed.");
 }
 
 main().catch((error) => {

@@ -40,6 +40,20 @@ const liveHostMaxSessions = Math.max(
   1,
   Math.min(200, Number(process.env.LIVE_HOST_MAX_SESSIONS) || 10),
 );
+/*
+ * Whether a shopper may open a private conversation with Chloe at all.
+ *
+ * Off by default, because a broadcast and a private call are different events.
+ * With twenty people watching, twenty private calls means twenty different
+ * answers and no shared show; the person who asked about delivery and the
+ * person who asked about the warranty did not attend the same drop. A recorded
+ * presentation is the one thing everybody can watch at once, at no per-viewer
+ * cost and with nothing to run out of.
+ *
+ * Kept switchable rather than deleted: a small drop where answering a handful
+ * of people personally is the point is a real use, just not the default one.
+ */
+const liveHostChatEnabled = String(process.env.LIVE_HOST_CHAT_ENABLED || "").trim().toLowerCase() === "true";
 const demoMode = false;
 
 function boundedNumber(value, fallback, minimum, maximum = Number.MAX_SAFE_INTEGER) {
@@ -232,6 +246,7 @@ module.exports = {
   tavusApiKey,
   tavusPalId,
   liveHostMaxSessions,
+  liveHostChatEnabled,
   ebayEnvironment: String(process.env.EBAY_ENVIRONMENT || "production").trim().toLowerCase(),
   affiliateTag: String(process.env.AFFILIATE_TAG || "").trim(),
   affiliateTagConfigured: markets.some(code => Boolean(affiliateTagForMarket(code))),

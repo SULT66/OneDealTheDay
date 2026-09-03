@@ -1121,8 +1121,15 @@ app.get("/api/live/current", (req, res) => {
     drop: presented ? {
       ...presented,
       /* Chloe's tool is currently grounded to the US market in Tavus. Do not
-         offer her in another market until that tool receives a market input. */
-      tavus_available:Boolean(c.tavusApiKey && c.tavusPalId && selectedMarket.code === "us"),
+         offer her in another market until that tool receives a market input.
+
+         And off unless switched on: a private call each is not a broadcast.
+         Twenty viewers would be twenty different shows, and every one of them
+         a paid video call. What an audience watches together is the recorded
+         presentation in video_url or the stream in stream_embed_url. */
+      tavus_available:Boolean(
+        c.liveHostChatEnabled && c.tavusApiKey && c.tavusPalId && selectedMarket.code === "us",
+      ),
     } : null,
     server_now: new Date().toISOString(),
   });
@@ -1154,6 +1161,9 @@ app.post("/api/integrations/tavus/conversations", authRateLimit, async (req, res
   res.set("Cache-Control", "no-store");
   if (!req.is("application/json")) {
     return res.status(415).json({error:"A JSON request is required."});
+  }
+  if (!c.liveHostChatEnabled) {
+    return res.status(503).json({error:"Chloe is presenting the drop rather than taking questions one at a time."});
   }
   if (!c.tavusApiKey || !c.tavusPalId) {
     return res.status(503).json({error:"Chloe is not connected yet."});
@@ -2749,22 +2759,44 @@ app.get("/api/admin/live-drops", admin, (req, res) => {
   /* The funnel alongside each drop, because "did it work" is the only question
      worth asking afterwards and it should not need a second screen. */
   const funnel = db.prepare("SELECT event_type, COUNT(*) AS total FROM live_drop_events WHERE drop_id=? GROUP BY event_type");
-  const reminders = db.prepare("SELECT COUNT(*) AS total FROM live_drop_reminders WHERE drop_id=?");
+  /*
+   * Asked for, and actually delivered, as two separate numbers.
+   *
+   * A rehearsal signed one person up and the console showed "reminders: 1",
+   * which read as success right up to the moment no email arrived. The send
+   * had failed — mail delivery was not configured at all — and a failure
+   * leaves reminded_at null, which at a glance is the same as "not due yet".
+   * Worse, sendDueReminders only looks at drops that have not started, so once
+   * the drop opens the row can never be retried and the failure has nowhere
+   * left to appear.
+   */
+  const reminders = db.prepare(`
+    SELECT COUNT(*) AS total, COUNT(reminded_at) AS sent
+    FROM live_drop_reminders WHERE drop_id=?
+  `);
 
   res.json({
     /* The market list comes from the server so the form cannot offer one that
        does not exist. */
     markets: c.markets,
     server_now: new Date(now).toISOString(),
-    drops: rows.map((row) => ({
+    /* Said plainly, because a drop with reminders and no mail delivery looks
+       exactly like a drop that is going fine until the moment it is not. */
+    email_delivery: process.env.SENDGRID_API_KEY ? "configured" : "not configured",
+    drops: rows.map((row) => {
+      const reminderCounts = reminders.get(row.id);
+      return {
       ...presentDrop(row, now),
       /* The admin sees the price before the reveal: they set it. */
       drop_price: row.drop_price,
       affiliate_url: row.affiliate_url,
       published: Boolean(row.published),
-      reminders: reminders.get(row.id).total,
+      reminders: reminderCounts.total,
+      reminders_sent: reminderCounts.sent,
+      reminders_unsent: reminderCounts.total - reminderCounts.sent,
       funnel: Object.fromEntries(funnel.all(row.id).map((entry) => [entry.event_type, entry.total])),
-    })),
+      };
+    }),
   });
 });
 
@@ -2802,6 +2834,35 @@ app.post("/api/admin/live-drops/:key/publish", admin, (req, res) => {
   db.prepare("UPDATE live_drops SET published=?, updated_at=? WHERE id=?")
     .run(published, new Date().toISOString(), drop.id);
   res.json({ok:true, published:Boolean(published)});
+});
+
+/*
+ * Closing a drop that is already open.
+ *
+ * Neither of the routes around this one would do it: unpublishing refuses to
+ * pull a drop from under whoever is watching, and deleting refuses anything
+ * that ran, because what was offered is a record. Both are right, and between
+ * them they left an open drop with no way to stop — which is fine until the
+ * shop changes the price mid-event, the link breaks, or the deal was simply
+ * wrong.
+ *
+ * Ending is not erasing. The window closes now, the drop keeps its history,
+ * its funnel and its reminders, and anybody on the page sees it end the same
+ * way they would have seen it end on time.
+ */
+app.post("/api/admin/live-drops/:key/end", admin, (req, res) => {
+  const drop = db.prepare("SELECT * FROM live_drops WHERE drop_key=?").get(String(req.params.key || ""));
+  if (!drop) return res.status(404).json({error:"No such drop."});
+  const nowIso = new Date().toISOString();
+  if (Date.parse(drop.end_at) <= Date.now()) {
+    return res.status(409).json({error:"That drop has already closed."});
+  }
+  /* Also brings the start back when it had not arrived yet, so a drop ended
+     early cannot sit forever as "opening soon". */
+  const startAt = Date.parse(drop.start_at) > Date.now() ? nowIso : drop.start_at;
+  db.prepare("UPDATE live_drops SET start_at=?, end_at=?, updated_at=? WHERE id=?")
+    .run(startAt, nowIso, nowIso, drop.id);
+  res.json({ok:true, drop_key:drop.drop_key, ended_at:nowIso});
 });
 
 app.post("/api/admin/live-drops/:key/stock", admin, (req, res) => {
@@ -2949,6 +3010,21 @@ if (c.liveRefreshEnabled) {
  * the minute, and two overlapping sweeps would read the same unstamped rows
  * and email everybody twice.
  */
+/*
+ * Said once, at boot, where it cannot be missed.
+ *
+ * The reminder sweep runs every minute and fails silently by design: one bad
+ * address must not stop the queue. With no mail delivery configured at all,
+ * every address is a bad address, and the only trace was a log line a minute
+ * that nobody reads. A drop was scheduled, somebody asked to be reminded, the
+ * console said "reminders: 1", and the email was never going to arrive.
+ */
+if (!process.env.SENDGRID_API_KEY) {
+  console.warn(
+    "[mail] SENDGRID_API_KEY is not set: no reminder, subscription or password-reset email will be delivered.",
+  );
+}
+
 let reminderSweepRunning = false;
 cron.schedule(
   "* * * * *",
