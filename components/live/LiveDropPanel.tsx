@@ -578,11 +578,7 @@ function BroadcastStage({ market, drop }: { market: string; drop: LiveDropView }
               {drop.secondary_image_url ? (
                 <ProductStill src={drop.secondary_image_url} alt="" inUse />
               ) : (
-                <div className="flex items-center justify-center border-t border-white/10 px-4 text-center">
-                  <p className="text-xs leading-relaxed text-white/40">
-                    A second photograph of the product in use goes here.
-                  </p>
-                </div>
+                <ProductStillMissing inUse />
               )}
             </>
           )}
@@ -592,12 +588,39 @@ function BroadcastStage({ market, drop }: { market: string; drop: LiveDropView }
   );
 }
 
-/* Contain rather than cover: a product photograph cropped to fill its box is a
-   product with its plug or its handle cut off. */
+/*
+ * Contain rather than cover: a product photograph cropped to fill its box is a
+ * product with its plug or its handle cut off.
+ *
+ * A URL that does not resolve falls back to the empty slot rather than the
+ * browser's broken-image icon. One wrong address in the admin form put that
+ * icon on the stage of a running drop, which looks like a broken site rather
+ * than a missing photograph — and the drop cannot be edited while it runs.
+ */
 function ProductStill({ src, alt, inUse = false }: { src: string; alt: string; inUse?: boolean }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) return <ProductStillMissing inUse={inUse} />;
   return (
     <div className={cn("relative overflow-hidden bg-[#0b1524]", inUse && "border-t border-white/10")}>
-      <Image src={src} alt={alt} fill sizes="(max-width: 640px) 45vw, 380px" className="object-contain p-2" unoptimized />
+      <Image
+        src={src}
+        alt={alt}
+        fill
+        sizes="(max-width: 640px) 45vw, 380px"
+        className="object-contain p-2"
+        unoptimized
+        onError={() => setFailed(true)}
+      />
+    </div>
+  );
+}
+
+function ProductStillMissing({ inUse }: { inUse?: boolean }) {
+  return (
+    <div className={cn("flex items-center justify-center px-4 text-center", inUse && "border-t border-white/10")}>
+      <p className="text-xs leading-relaxed text-white/40">
+        {inUse ? "A photograph of the product in use goes here." : "A photograph of the product goes here."}
+      </p>
     </div>
   );
 }
