@@ -205,12 +205,15 @@ export function AdminConsole() {
               <Field label="Member head start (seconds)" type="number" value={form.member_early_access_seconds} onChange={(v) => setForm({ ...form, member_early_access_seconds: v })} />
               <Field label="Image URL" type="url" value={form.image_url} onChange={(v) => setForm({ ...form, image_url: v })} />
               <Field label="Buy link" type="url" value={form.affiliate_url} onChange={(v) => setForm({ ...form, affiliate_url: v })} />
-              {/* The first OneDailyDrop Live MVP composes two existing media
-                  inputs: the avatar stream is the host, and the video file is
-                  the separate close-up product demonstration. Either input
-                  may still run on its own. */}
-              <Field label="Product demo video URL (optional)" type="url" value={form.video_url} onChange={(v) => setForm({ ...form, video_url: v })} />
-              <Field label="AI host embed URL (optional)" type="url" value={form.stream_embed_url} onChange={(v) => setForm({ ...form, stream_embed_url: v })} />
+              {/* Two panels, named for what each actually shows.
+                  "AI host embed URL" and "Product demo video (optional)"
+                  described the arrangement rather than the job, and the job is
+                  this: a presenter cannot hold up a monitor. One panel is
+                  whoever is talking, the other is where the product is
+                  actually seen, and either runs alone if that is all there
+                  is. */}
+              <Field label="Presenter video — embed URL (Chloe's recording, or a live stream)" type="url" value={form.stream_embed_url} onChange={(v) => setForm({ ...form, stream_embed_url: v })} />
+              <Field label="Product footage — video file URL (shown beside the presenter)" type="url" value={form.video_url} onChange={(v) => setForm({ ...form, video_url: v })} />
             </div>
 
             <label className="mt-2 block py-2">
