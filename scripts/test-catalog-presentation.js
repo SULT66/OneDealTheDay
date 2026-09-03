@@ -206,4 +206,39 @@ assert(
   "an unknown stock state publishes something instead of nothing",
 );
 
-console.log("Catalogue presentation checks passed: numbering, score order, one count, search without JavaScript, honest stock.");
+/*
+ * One spelling per thing, because two spellings is what put 404s in the
+ * sitemap.
+ *
+ * Product URLs are published in two forms — /us/deal/219861 and the readable
+ * /us/deal/8bitdo-retro-mechanical-keyboard-219861 — and the route read the
+ * whole segment as an id, so all 1,361 product URLs the sitemap advertises
+ * answered 404 while the same products answered 200 by number.
+ *
+ * Categories had two slug rules: Express turned "&" into " and " and produced
+ * home-and-kitchen, the pages resolve home-kitchen.
+ */
+const catalogSource = read("lib", "catalog.ts");
+assert(
+  /export function dealIdFromParam/.test(catalogSource),
+  "the product route reads the whole URL segment as an id again, so slug URLs 404",
+);
+assert(
+  /dealIdFromParam\(id\)/.test(catalogSource),
+  "getDeal no longer extracts the id, so the sitemap's URLs stop resolving",
+);
+assert(
+  /export async function resolveCategory/.test(catalogSource),
+  "categories are decided by the display file again, so the ones missing from it 404",
+);
+const serverSourceForSlugs = read("src", "server.js");
+assert(
+  /const categorySlug = value =>/.test(serverSourceForSlugs),
+  "categories share the deal slug rule again, which spells them home-and-kitchen",
+);
+assert(
+  !/`\/category\/\$\{slug\(value\)\}`/.test(serverSourceForSlugs),
+  "the sitemap builds category URLs with the deal slug rule again",
+);
+
+console.log("Catalogue presentation checks passed: numbering, score order, one count, search without JavaScript, honest stock, one URL per thing.");

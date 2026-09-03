@@ -1602,7 +1602,19 @@ app.post("/api/price-alerts", requireClub, (req, res) => {
 const esc = value => String(value ?? "").replace(/[&<>"']/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
 const slug = value => String(value || "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/&/g, " and ").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 90) || "deal";
 const dealPath = product => marketPath(product.market || "us", `/deal/${slug(product.canonical_title || product.title)}-${product.id}`);
-const catPath = (value, code = "us") => marketPath(code, `/category/${slug(value)}`);
+/*
+ * A category's slug, spelled the one way the pages answer to.
+ *
+ * slug() above turns "&" into " and ", so this produced home-and-kitchen while
+ * the route resolves home-kitchen, and the sitemap advertised seventeen
+ * category URLs that answered 404. Two slug rules for one thing; this is the
+ * one lib/backendAdapter.ts uses, and now the only one categories get.
+ */
+const categorySlug = value => String(value || "")
+  .toLowerCase()
+  .replace(/[^a-z0-9]+/g, "-")
+  .replace(/^-+|-+$/g, "");
+const catPath = (value, code = "us") => marketPath(code, `/category/${categorySlug(value)}`);
 const brandPath = (value, code = "us") => marketPath(code, `/brand/${slugifyBrand(value)}`);
 const money = (value, currency = "USD", locale = "en-US") => { if (value == null || value === "") return "Check current price"; const n = Number(value); if (!Number.isFinite(n)) return "Check current price"; try { return new Intl.NumberFormat(locale, { style: "currency", currency: String(currency || "USD").toUpperCase() }).format(n); } catch { return `$${n.toFixed(2)}`; } };
 const clean = value => String(value || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
@@ -2020,7 +2032,7 @@ app.get("/category/:slug", (req, res) => {
   const selectedMarket = requestMarket(req);
   const localizedMarketName = marketName(selectedMarket.code, req.language);
   const all = uniqueProductsInOrder(db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()} ORDER BY COALESCE(ranking_score,score) DESC,score DESC,updated_at DESC`).all(selectedMarket.code)).filter(isPubliclyIndexable);
-  const category = PUBLIC_CATEGORIES.find(value => slug(value) === req.params.slug);
+  const category = PUBLIC_CATEGORIES.find(value => categorySlug(value) === req.params.slug);
   if (!category) return sendNotFound(req, res);
   const products = all.filter(product => canonicalCategory(product) === category);
   if (!products.length) return sendNotFound(req, res);
@@ -2225,7 +2237,7 @@ app.get("/sitemap.xml", (req, res) => {
   for (const product of products) {
     const category = canonicalCategory(product);
     if (isPublicCategory(category)) {
-      const key = slug(category);
+      const key = categorySlug(category);
       if (!categoryMarkets.has(key)) categoryMarkets.set(key, new Set());
       categoryMarkets.get(key).add(product.market);
     }
@@ -2246,7 +2258,7 @@ app.get("/sitemap.xml", (req, res) => {
     if (brands.length) urls.push({ loc: SITE + marketPath(code, "/brands"), alternates: localizedAlternates("/brands", [...brandsMarkets]), lastmod: latestUpdate });
     categories.forEach(value => urls.push({
       loc: SITE + catPath(value, code),
-      alternates: localizedAlternates(`/category/${slug(value)}`, [...(categoryMarkets.get(slug(value)) || [])]),
+      alternates: localizedAlternates(`/category/${categorySlug(value)}`, [...(categoryMarkets.get(categorySlug(value)) || [])]),
       lastmod: marketProducts.filter(product => canonicalCategory(product) === value).map(product => validLastmod(product.updated_at)).filter(Boolean).sort().at(-1)
     }));
     brands.forEach(value => urls.push({
