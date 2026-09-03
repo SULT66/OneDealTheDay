@@ -178,7 +178,8 @@ assert.strictEqual(
  * States selling that right now" — measured against production, as was the
  * same product coming back first when asked for in ordinary words.
  */
-const assistant = fs.readFileSync(path.join(__dirname, "..", "src", "shoppingAssistant.js"), "utf8");
+const read = (...parts) => fs.readFileSync(path.join(__dirname, "..", ...parts), "utf8");
+const assistant = read("src", "shoppingAssistant.js");
 assert(
   /function catalogProductById\(/.test(assistant),
   "the assistant can no longer look a product up by id, only search for it",
@@ -200,4 +201,44 @@ assert(
   "the deal page no longer tells Delia which product it is",
 );
 
-console.log("Delia answer cache and product-page questions passed.");
+/*
+ * Naming the product is not enough on its own, and doing it only in the
+ * candidate list was not enough at all.
+ *
+ * Measured against production: with the product id attached and the question
+ * reduced to "Is this a good price?", the answer was still no_match — and from
+ * a monitor's page it offered custom photo boxer shorts. Everything downstream
+ * works from the mission, and the mission is built from the words of the
+ * question, so a question with no product in it has nothing to search for.
+ * The product now names the active shopping context as well.
+ */
+assert(
+  /const focusProduct = catalogProductById\(/.test(assistant) &&
+    assistant.indexOf("const focusProduct") < assistant.indexOf("const currentMissionValue"),
+  "the product is looked up after the mission is decided, which is too late to affect it",
+);
+assert(
+  /shoppingContext = focusProductPhrase\(focusProduct\)/.test(assistant),
+  "the product no longer names the active shopping context",
+);
+
+/*
+ * The phrase itself exists twice — once for the page that asks the question
+ * and once for the server that answers it — so the numbers that shape it are
+ * checked against each other here. A retailer title says what the thing is at
+ * the very end, so the front alone read "4K UHD" and classified a monitor as a
+ * television.
+ */
+const phraseTs = read("lib", "productPhrase.ts");
+for (const rule of ["slice(0, 6)", "slice(-3)", "parts.length <= 10", "open box"]) {
+  assert(
+    phraseTs.toLowerCase().includes(rule.toLowerCase()),
+    `the browser's product phrase lost "${rule}"`,
+  );
+  assert(
+    assistant.toLowerCase().includes(rule.toLowerCase()),
+    `the server's product phrase lost "${rule}", so the two have drifted apart`,
+  );
+}
+
+console.log("Delia answer cache, product-page questions and product phrasing passed.");

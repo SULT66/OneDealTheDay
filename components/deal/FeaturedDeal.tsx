@@ -1,3 +1,4 @@
+import { productPhrase } from "@/lib/productPhrase";
 import Link from "next/link";
 import { ArrowUpRight, Check } from "@phosphor-icons/react/ssr";
 import { getCategory } from "@/lib/catalog";
@@ -122,7 +123,7 @@ export async function FeaturedDeal({
               label={t(language, "app.deal.askAboutThis")}
               /* By id rather than by title: see the deal page for what the
                  full retailer title did to the search. */
-              seed="Is this a good price?"
+              seed={`Is this a good price? ${productPhrase(deal.title, deal.brand)}`}
               productId={deal.id}
             />
           </div>
