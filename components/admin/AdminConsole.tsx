@@ -205,12 +205,15 @@ export function AdminConsole() {
               <Field label="Member head start (seconds)" type="number" value={form.member_early_access_seconds} onChange={(v) => setForm({ ...form, member_early_access_seconds: v })} />
               <Field label="Image URL" type="url" value={form.image_url} onChange={(v) => setForm({ ...form, image_url: v })} />
               <Field label="Buy link" type="url" value={form.affiliate_url} onChange={(v) => setForm({ ...form, affiliate_url: v })} />
-              {/* The first OneDailyDrop Live MVP composes two existing media
-                  inputs: the avatar stream is the host, and the video file is
-                  the separate close-up product demonstration. Either input
-                  may still run on its own. */}
-              <Field label="Product demo video URL (optional)" type="url" value={form.video_url} onChange={(v) => setForm({ ...form, video_url: v })} />
-              <Field label="AI host embed URL (optional)" type="url" value={form.stream_embed_url} onChange={(v) => setForm({ ...form, stream_embed_url: v })} />
+              {/* The recording is the show, and these labels said otherwise.
+                  "Product demo video (optional)" described a small extra
+                  beside an AI host who took the stage — which is how the drop
+                  ended up as a private call each rather than one broadcast.
+                  The recording is what an audience watches together: no
+                  ceiling, no per-viewer cost, one message. A live stream still
+                  outranks it when there is one. */}
+              <Field label="Chloe's recorded presentation (video URL)" type="url" value={form.video_url} onChange={(v) => setForm({ ...form, video_url: v })} />
+              <Field label="Live stream embed URL (only for a real broadcast)" type="url" value={form.stream_embed_url} onChange={(v) => setForm({ ...form, stream_embed_url: v })} />
             </div>
 
             <label className="mt-2 block py-2">
