@@ -46,6 +46,7 @@ const BLANK = {
   duration_minutes: "10",
   member_early_access_seconds: "0",
   image_url: "",
+  secondary_image_url: "",
   affiliate_url: "",
   video_url: "",
   stream_embed_url: "",
@@ -203,7 +204,10 @@ export function AdminConsole() {
               <Field label="Starts" type="datetime-local" required value={form.start_at} onChange={(v) => setForm({ ...form, start_at: v })} />
               <Field label="Minutes open" type="number" required value={form.duration_minutes} onChange={(v) => setForm({ ...form, duration_minutes: v })} />
               <Field label="Member head start (seconds)" type="number" value={form.member_early_access_seconds} onChange={(v) => setForm({ ...form, member_early_access_seconds: v })} />
-              <Field label="Image URL" type="url" value={form.image_url} onChange={(v) => setForm({ ...form, image_url: v })} />
+              <Field label="Product photo — URL" type="url" value={form.image_url} onChange={(v) => setForm({ ...form, image_url: v })} />
+              {/* The presenter cannot hold the product up, so this is where a
+                  shopper sees it being used. */}
+              <Field label="Product in use — photo URL" type="url" value={form.secondary_image_url} onChange={(v) => setForm({ ...form, secondary_image_url: v })} />
               <Field label="Buy link" type="url" value={form.affiliate_url} onChange={(v) => setForm({ ...form, affiliate_url: v })} />
               {/* Two panels, named for what each actually shows.
                   "AI host embed URL" and "Product demo video (optional)"

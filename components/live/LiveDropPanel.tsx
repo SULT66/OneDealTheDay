@@ -28,6 +28,8 @@ export type LiveDropView = {
   brand: string;
   retailer_name: string;
   image_url: string;
+  /* The product in use, beside the product itself. */
+  secondary_image_url: string;
   currency: string;
   retail_price: number | null;
   drop_price: number | null;
@@ -464,12 +466,19 @@ function BroadcastStage({ market, drop }: { market: string; drop: LiveDropView }
    */
   const hasHost = hasStream || hasPresentation;
   const hasDemo = hasPresentation && hasStream;
+  /* The product panel earns its place whenever there is anything to put in it,
+     which is nearly always: a drop without a photograph is a drop nobody would
+     publish. */
+  const showsProduct = hasDemo || Boolean(drop.image_url);
 
   return (
     <div
       className={cn(
         "mt-4 grid overflow-hidden rounded-2xl border border-white/10 bg-[#061224] shadow-2xl",
-        (hasHost || drop.tavus_available) && hasDemo && "lg:grid-cols-[1.35fr_0.85fr]",
+        /* Side by side at every width, phone included: the presenter and the
+           product are the two halves of a shopping channel, and stacking them
+           on a phone would push the product below the fold. */
+        showsProduct && "grid-cols-[1.05fr_0.95fr] sm:grid-cols-[1.2fr_0.8fr]",
       )}
     >
       <div className="relative min-w-0 overflow-hidden bg-[radial-gradient(circle_at_50%_20%,#123b69_0%,#07172b_48%,#030914_100%)]">
@@ -521,20 +530,48 @@ function BroadcastStage({ market, drop }: { market: string; drop: LiveDropView }
         ) : null}
       </div>
 
-      {hasDemo && (
-        <div className="relative min-h-[260px] border-t border-white/10 bg-black lg:min-h-0 lg:border-l lg:border-t-0">
-          <StageLabel>Product demo</StageLabel>
-          <video
-            src={drop.video_url}
-            controls
-            autoPlay
-            muted
-            loop
-            playsInline
-            className="absolute inset-0 h-full w-full object-cover"
-          />
+      {showsProduct && (
+        <div className="grid grid-rows-2 border-l border-white/10 bg-black">
+          {hasDemo ? (
+            <video
+              src={drop.video_url}
+              controls
+              autoPlay
+              muted
+              loop
+              playsInline
+              className="row-span-2 h-full w-full object-cover"
+            />
+          ) : (
+            <>
+              {/* The product on its own, then the product being used. A
+                  presenter who cannot pick anything up makes this the only
+                  place a shopper actually sees the thing, and one still beside
+                  a talking head is thin. */}
+              <ProductStill src={drop.image_url} alt={drop.title} />
+              {drop.secondary_image_url ? (
+                <ProductStill src={drop.secondary_image_url} alt="" inUse />
+              ) : (
+                <div className="flex items-center justify-center border-t border-white/10 px-4 text-center">
+                  <p className="text-xs leading-relaxed text-white/40">
+                    A second photograph of the product in use goes here.
+                  </p>
+                </div>
+              )}
+            </>
+          )}
         </div>
       )}
+    </div>
+  );
+}
+
+/* Contain rather than cover: a product photograph cropped to fill its box is a
+   product with its plug or its handle cut off. */
+function ProductStill({ src, alt, inUse = false }: { src: string; alt: string; inUse?: boolean }) {
+  return (
+    <div className={cn("relative overflow-hidden bg-[#0b1524]", inUse && "border-t border-white/10")}>
+      <Image src={src} alt={alt} fill sizes="(max-width: 640px) 45vw, 380px" className="object-contain p-2" unoptimized />
     </div>
   );
 }
