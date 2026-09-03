@@ -165,10 +165,29 @@ assert(
   !/availability: textValue\(product\.availability \|\| "Available"\)/.test(refreshSource),
   "the importer fills an unknown stock state with Available again",
 );
+/*
+ * Where a stock claim is allowed to come from.
+ *
+ * Not the importer, which knows nothing about any particular shop and used to
+ * fill every blank with "Available". A provider may state one, because it
+ * knows what its own source returning a row means — Newegg's product search
+ * and a merchant's affiliate feed both exist to advertise what can be bought,
+ * and both are re-read every refresh. That is a real basis; a blanket fill in
+ * the middle of the pipeline was not.
+ */
 const feedSource = read("src", "providers", "affiliateFeed.js");
 assert(
-  !/: availabilityValue \|\| "Available"/.test(feedSource),
-  "a feed with no availability column is treated as in stock again",
+  /Newegg provider states/.test(feedSource),
+  "the affiliate feed no longer states the basis for the stock it reports",
+);
+const neweggSource = read("src", "providers", "rakutenNewegg.js");
+assert(
+  /tag\(block, "instock"\)/.test(neweggSource),
+  "the Newegg feed's own stock field is ignored again",
+);
+assert(
+  !/availability:"",/.test(neweggSource),
+  "Newegg leaves stock blank again for the importer to guess at",
 );
 const dealPageSource = read("app", "[market]", "deal", "[id]", "page.tsx");
 assert(
