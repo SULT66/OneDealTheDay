@@ -1,3 +1,4 @@
+import { productPhrase } from "@/lib/productPhrase";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -208,7 +209,7 @@ export default async function DealPage({
                  External Battery Backup For Cell Phone" matches nothing, and
                  Delia answered that no shop sold it — from that product's own
                  page. */
-              seed="Is this a good price?"
+              seed={`Is this a good price? ${productPhrase(deal.title, deal.brand)}`}
               productId={deal.id}
               className="h-14 px-6 text-base"
             />

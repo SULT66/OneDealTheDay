@@ -2895,6 +2895,47 @@ function selectBalancedCatalogProducts(products, limit) {
  * changes what she recommends or where she searches; it stops her hunting for
  * something we were already holding.
  */
+/*
+ * A product named the way a shopper would name it.
+ *
+ * Retailer titles are written for a search box rather than by one: eighty
+ * characters of specification with the model buried in the middle, and often
+ * an "Open Box -" prefix that describes the sale and not the thing. Handed to
+ * a search whole, that many terms matches nothing, which is how "Is Power Bank
+ * 20000mAh 45W Charging Portable External Battery Backup For Cell Phone a good
+ * price?" came back with no shop selling it.
+ *
+ * A brand and the first few words of the title is roughly what a person would
+ * type, and it is enough for the rest of the pipeline to work on.
+ */
+function focusProductPhrase(product) {
+  const brand = clean(product?.brand);
+  const title = clean(product?.title)
+    .replace(/^open box\s*[-–—]\s*/i, "")
+    /* Parenthetical asides are the seller talking to a search engine:
+       "(31.5' viewable)" narrows a query and answers nothing anybody asked. */
+    .replace(/\([^)]*\)/g, " ");
+  /*
+   * The front and the back of the title, because a retailer puts the brand and
+   * the specification first and says what the thing actually is at the very
+   * end: "ASUS 32' UHD 4K 60Hz Adaptive-Sync 99% sRGB HDR10 ... Computer
+   * Monitor". Taking the first words alone dropped the noun and left "4K UHD",
+   * which read as a television — for a monitor, from the monitor's own page.
+   */
+  const parts = title.split(/\s+/).filter(Boolean);
+  const trim = (value) => value.replace(/^[\s,\-–—:;.]+|[\s,\-–—:;.]+$/g, "").trim();
+  /* A short title is already a phrase; only a long one needs its front and its
+     back, and taking the front alone dropped "Headset" from a nine-word one. */
+  const words =
+    parts.length <= 10
+      ? trim(parts.join(" "))
+      : trim(`${trim(parts.slice(0, 6).join(" "))} ${trim(parts.slice(-3).join(" "))}`);
+  /* Most retailer titles already open with the brand; repeating it would only
+     narrow the search for nothing. */
+  const alreadyNamed = brand && new RegExp(`^${brand.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(words);
+  return clean(alreadyNamed || !brand ? words : `${brand} ${words}`).slice(0, 200);
+}
+
 function catalogProductById(db, sourceSql, productId, marketCode, language) {
   const id = Number(productId);
   if (!Number.isInteger(id) || id <= 0) return null;
@@ -4919,6 +4960,27 @@ function createShoppingAssistant({
         }
       };
       const userMessage = clean(message).slice(0, MAX_MESSAGE_LENGTH);
+      /*
+       * A question asked from a product's page is about that product, and the
+       * whole pipeline has to know it — not just the candidate list.
+       *
+       * Putting the product only among the candidates was not enough and made
+       * things worse. The classifier, the search queries and the intent match
+       * all work from the mission, and the mission is built from the words of
+       * the question. "Is this a good price?" contains no product, so there
+       * was nothing to look for: asked from a monitor's page it answered with
+       * custom photo boxer shorts, and asked with the product id attached it
+       * still came back no_match. Both were measured against production.
+       *
+       * Naming the product as the active shopping context fixes it at the
+       * root: every later step then works on the thing the shopper is looking
+       * at. An explicit context from the conversation still wins, because a
+       * shopper who has since asked for something else has moved on.
+       */
+      const focusProduct = catalogProductById(db, sourceSql, productId, marketCode, language);
+      if (focusProduct && !clean(shoppingContext)) {
+        shoppingContext = focusProductPhrase(focusProduct);
+      }
       const excludedUrls = new Set(
         (Array.isArray(excludedOfferUrls) ? excludedOfferUrls : [])
           .slice(0, 12)
@@ -5214,8 +5276,9 @@ function createShoppingAssistant({
         language,
       );
       /* Asked from a product's own page, the product itself leads the
-         candidates whether or not a search would have turned it up. */
-      const focusProduct = catalogProductById(db, sourceSql, productId, selectedMarket.code, language);
+         candidates whether or not the search would have turned it up. Looked
+         up once, at the top of the request, because it also names the active
+         shopping context that every step above this one works from. */
       const catalogProducts = focusProduct && !searchedProducts.some((product) => product.id === focusProduct.id)
         ? [focusProduct, ...searchedProducts]
         : searchedProducts;
@@ -6076,6 +6139,7 @@ module.exports = {
   createShoppingAssistant,
   budgetChoicesFromPrices,
   feedListingMatchesCategory,
+  focusProductPhrase,
   looksLikeAccessory,
   greetingContext,
   mergeShoppingMission,
