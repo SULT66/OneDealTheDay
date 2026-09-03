@@ -68,11 +68,28 @@ const clock = (totalSeconds: number | null) => {
   return hours > 0 ? `${hours}:${pad(minutes)}:${pad(rest)}` : `${pad(minutes)}:${pad(rest)}`;
 };
 
-export function LiveDropPanel({ market }: { market: string }) {
-  const [drop, setDrop] = useState<LiveDropView | null>(null);
-  const [loaded, setLoaded] = useState(false);
-  const [untilStart, setUntilStart] = useState<number | null>(null);
-  const [untilEnd, setUntilEnd] = useState<number | null>(null);
+export function LiveDropPanel({
+  market,
+  /* Fetched on the server so the page arrives with the drop in it. Without
+     this the first thing anybody received — a crawler included — was "Checking
+     for a drop..." and no heading. */
+  initialDrop = null,
+  /* Whether the server got an answer at all. A drop of null with this true is
+     "nothing scheduled"; with it false it is "we could not ask", and those
+     must not look the same — announcing "No drop scheduled" during an outage,
+     on the day of a drop, is the worst thing this page could say. */
+  serverChecked = false,
+}: {
+  market: string;
+  initialDrop?: LiveDropView | null;
+  serverChecked?: boolean;
+}) {
+  const [drop, setDrop] = useState<LiveDropView | null>(initialDrop);
+  const [loaded, setLoaded] = useState(serverChecked);
+  const [untilStart, setUntilStart] = useState<number | null>(
+    initialDrop?.seconds_until_start ?? null,
+  );
+  const [untilEnd, setUntilEnd] = useState<number | null>(initialDrop?.seconds_until_end ?? null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const load = useCallback(async () => {
@@ -431,9 +448,21 @@ function BroadcastStage({ market, drop }: { market: string; drop: LiveDropView }
 
   const hasStream = Boolean(drop.stream_embed_url);
   const hasPresentation = Boolean(drop.video_url);
-  /* The recorded presentation takes the stage unless a live stream is running;
-     it only stays a side demo when it is not the main event. */
-  const hasHost = hasStream;
+  /*
+   * Two panels when there are two things to show, one when there is one.
+   *
+   * A presenter cannot hold up a monitor. An AI host talking to camera is a
+   * voice and a face, and on its own it is somebody describing a product
+   * nobody can see — which is not a shopping show. The second panel is where
+   * the product actually appears: the manufacturer's own footage, a gallery,
+   * a close-up.
+   *
+   * So the host slot takes whichever presenter exists, a live stream first and
+   * the recording otherwise, and the product footage keeps its own panel
+   * beside it whenever both are supplied. Either runs alone if that is all
+   * there is.
+   */
+  const hasHost = hasStream || hasPresentation;
   const hasDemo = hasPresentation && hasStream;
 
   return (

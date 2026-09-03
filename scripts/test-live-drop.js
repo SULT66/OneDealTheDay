@@ -207,9 +207,11 @@ assert(
   /src=\{drop\.stream_embed_url\}/.test(panelSource) && /src=\{drop\.video_url\}/.test(panelSource),
   "one of the two broadcast media inputs is no longer rendered",
 );
+/* Named for what each panel shows rather than for the arrangement. A presenter
+   cannot hold up a monitor, so one panel is whoever is talking and the other
+   is where the product is actually seen. */
 assert(
-  /AI host embed URL \(optional\)/.test(adminSource) &&
-    /Product demo video URL \(optional\)/.test(adminSource),
+  /Presenter video/.test(adminSource) && /Product footage/.test(adminSource),
   "the operator console no longer explains which live media belongs in each field",
 );
 
