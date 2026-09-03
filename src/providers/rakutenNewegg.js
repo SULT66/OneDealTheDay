@@ -71,7 +71,10 @@ function parseProduct(block) {
     shortDescription:tag(block, "short"),
     longDescription:tag(block, "long"),
     linkUrl:tag(block, "linkurl"),
-    imageUrl:tag(block, "imageurl")
+    imageUrl:tag(block, "imageurl"),
+    /* Rakuten's product format carries this. Whether a given merchant fills it
+       in is another matter, so it is read rather than assumed. */
+    inStock:tag(block, "instock")
   };
 }
 
@@ -109,7 +112,26 @@ function normalizeProduct(item, keyword, rank, market) {
     shipping_summary:"",
     shipping_cost:null,
     return_summary:"",
-    availability:"",
+    /*
+     * What we can honestly say about stock, said here rather than guessed
+     * later.
+     *
+     * This was blank, and the importer filled every blank with "Available" —
+     * so 1,267 listings claimed stock on the strength of nothing, and the
+     * product page turned that into schema.org InStock for Google.
+     *
+     * We do have a basis, and it is worth stating precisely: Newegg's product
+     * search returned this item today. That search exists to advertise things
+     * a shopper can buy, and it is re-run every refresh, so a listing that
+     * stops being sold stops coming back and ages out of the catalogue within
+     * 48 hours. It is not a count of units on a shelf and never will be — the
+     * page says "confirm at the retailer" for exactly that reason — but it is
+     * a real statement about a real answer from the shop, which "" was not and
+     * an invented "Available" certainly was not.
+     */
+    availability:/^(?:0|false|no|out[ _-]?of[ _-]?stock)$/i.test(text(item.inStock))
+      ? "Out of stock"
+      : "In stock",
     checked_at:new Date().toISOString(),
     market:market?.code || "us",
     source:"newegg",

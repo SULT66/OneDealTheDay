@@ -360,7 +360,24 @@ function normalize(record, definition, market, index, map) {
   const model = compactText(field(record, map, "model"));
   const rawId = compactText(field(record, map, "id")) || crypto.createHash("sha256").update(`${affiliateUrl}|${title}`).digest("hex").slice(0, 24);
   const availabilityValue = compactText(field(record, map, "availability"));
-  const availability = /^(?:0|false|no|out[ _-]?of[ _-]?stock|unavailable)$/i.test(availabilityValue) ? "Out of stock" : availabilityValue || "Available";
+  /*
+   * The feed's own answer when it gives one, and a stated basis when it does
+   * not.
+   *
+   * Tribesigns and Mooncool fill this in; Giftlab does not, and the blank used
+   * to be filled with "Available" by the importer — a claim made by whoever
+   * wrote that line rather than by the merchant. The basis is the same one the
+   * Newegg provider states: this row is in the merchant's current product
+   * feed, which a merchant publishes to advertise what can be bought, and the
+   * feed is re-read every refresh, so a line that stops being sold stops
+   * appearing and ages out within 48 hours.
+   *
+   * It is not a count of units and the page never says it is. It is a real
+   * statement about a real answer from the shop.
+   */
+  const availability = /^(?:0|false|no|out[ _-]?of[ _-]?stock|unavailable)$/i.test(availabilityValue)
+    ? "Out of stock"
+    : availabilityValue || "In stock";
   const shipping = resolveShipping(record, map, definition, currentPrice);
   return {
     external_id:rawId,

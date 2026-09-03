@@ -152,4 +152,58 @@ assert(
   "the search field has no name again, so a plain submit discards the query",
 );
 
-console.log("Catalogue presentation checks passed: card numbering, score order, one count, search without JavaScript.");
+/*
+ * Silence is not stock.
+ *
+ * The product page published schema.org/InStock unconditionally, and the
+ * importer filled an empty availability with "Available" — so 1,248 Newegg
+ * listings, from a feed carrying no stock field at all, claimed stock on the
+ * page and in the markup Google reads.
+ */
+const refreshSource = read("src", "refresh.js");
+assert(
+  !/availability: textValue\(product\.availability \|\| "Available"\)/.test(refreshSource),
+  "the importer fills an unknown stock state with Available again",
+);
+/*
+ * Where a stock claim is allowed to come from.
+ *
+ * Not the importer, which knows nothing about any particular shop and used to
+ * fill every blank with "Available". A provider may state one, because it
+ * knows what its own source returning a row means — Newegg's product search
+ * and a merchant's affiliate feed both exist to advertise what can be bought,
+ * and both are re-read every refresh. That is a real basis; a blanket fill in
+ * the middle of the pipeline was not.
+ */
+const feedSource = read("src", "providers", "affiliateFeed.js");
+assert(
+  /Newegg provider states/.test(feedSource),
+  "the affiliate feed no longer states the basis for the stock it reports",
+);
+const neweggSource = read("src", "providers", "rakutenNewegg.js");
+assert(
+  /tag\(block, "instock"\)/.test(neweggSource),
+  "the Newegg feed's own stock field is ignored again",
+);
+assert(
+  !/availability:"",/.test(neweggSource),
+  "Newegg leaves stock blank again for the importer to guess at",
+);
+const dealPageSource = read("app", "[market]", "deal", "[id]", "page.tsx");
+assert(
+  !/availability: "https:\/\/schema\.org\/InStock"/.test(dealPageSource),
+  "every product page claims InStock again, whether or not the shop said so",
+);
+assert(
+  /schemaAvailability\(deal\.availability\)/.test(dealPageSource),
+  "the product page no longer derives availability from what the shop actually said",
+);
+/* "Confirm at retailer" is what the page prints when nobody told us. It must
+   not become a claim in the markup. */
+const availabilitySource = read("lib", "schemaAvailability.ts");
+assert(
+  /return undefined;/.test(availabilitySource),
+  "an unknown stock state publishes something instead of nothing",
+);
+
+console.log("Catalogue presentation checks passed: numbering, score order, one count, search without JavaScript, honest stock.");
