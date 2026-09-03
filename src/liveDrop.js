@@ -168,6 +168,25 @@ function hostGreeting(view) {
 }
 
 /**
+ * What the host is told the moment the price opens.
+ *
+ * A greeting is fixed when the conversation is created, so somebody who
+ * started chatting in the waiting room and stayed for the reveal heard "the
+ * price opens in a moment" while the price was already on the screen beside
+ * her. The opening is the one moment of a Live Drop that the host must not
+ * miss.
+ *
+ * Composed on the server for the same reason everything else here is: the page
+ * cannot be trusted to work out what may be said, and by the time this exists
+ * the price is public anyway — it is only produced once the drop is live.
+ */
+function hostRevealLine(view) {
+  if (!view || view.state !== "live" || view.drop_price == null) return "";
+  const saving = view.saving ? `, ${view.saving.percent} percent below its usual price` : "";
+  return `The drop just opened at ${view.currency} ${view.drop_price}${saving}. Announce it to the viewers now, in one or two sentences, and tell them the buy button is below you.`;
+}
+
+/**
  * Sends the reminders people asked for, shortly before a drop opens.
  *
  * Lives here rather than in the server so it can be tested against a fixed
@@ -236,6 +255,7 @@ module.exports = {
   WAITING_ROOM_SECONDS,
   dropSaving,
   hostGreeting,
+  hostRevealLine,
   dropState,
   presentDrop,
   sendDueReminders,

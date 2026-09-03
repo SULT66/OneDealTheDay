@@ -135,6 +135,24 @@ assert(hostGreeting(null).length > 0, "a drop-less greeting throws instead of fa
 const repeated = hostGreeting({ ...presentDrop(drop, at(60)), brand: "ASUS", title: "ASUS 32in Monitor" });
 assert(!/ASUS ASUS/.test(repeated), "the brand is said twice when the title already carries it");
 assert(repeated.includes("ASUS 32in Monitor"), "the product is no longer named");
+/*
+ * The reveal, announced rather than missed.
+ *
+ * A greeting is fixed when the conversation starts, so somebody who began
+ * chatting in the waiting room and stayed heard "the price opens in a moment"
+ * while the price was already on the screen beside her.
+ */
+const { hostRevealLine } = require("../src/liveDrop");
+assert.strictEqual(
+  hostRevealLine(presentDrop(drop, at(-120))),
+  "",
+  "the host is handed the reveal before the drop opens, which gives the price away",
+);
+const reveal = hostRevealLine(presentDrop(drop, at(60)));
+assert(reveal.includes("449"), "the reveal does not carry the price it exists to announce");
+assert(reveal.includes("44 percent"), "the reveal does not carry the saving");
+assert.strictEqual(hostRevealLine(null), "", "a missing drop throws instead of staying quiet");
+
 const separate = hostGreeting({ ...presentDrop(drop, at(60)), brand: "Juovi", title: "Power Bank 20000mAh" });
 assert(
   separate.includes("Juovi Power Bank"),
