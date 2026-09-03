@@ -41,19 +41,23 @@ const liveHostMaxSessions = Math.max(
   Math.min(200, Number(process.env.LIVE_HOST_MAX_SESSIONS) || 10),
 );
 /*
- * Whether a shopper may open a private conversation with Chloe at all.
+ * Whether a shopper may open a conversation with Chloe.
  *
- * Off by default, because a broadcast and a private call are different events.
- * With twenty people watching, twenty private calls means twenty different
- * answers and no shared show; the person who asked about delivery and the
- * person who asked about the warranty did not attend the same drop. A recorded
- * presentation is the one thing everybody can watch at once, at no per-viewer
- * cost and with nothing to run out of.
+ * On, and it took a wrong turn to work out why. Switching it off was right
+ * about the principle — a private call each is not a broadcast, and twenty
+ * viewers would be twenty different shows at twenty times the cost — but it
+ * answered the wrong question. Turning her off did not produce a broadcast. It
+ * produced an empty stage with a placeholder on it, because the recording that
+ * was supposed to replace her does not exist yet.
  *
- * Kept switchable rather than deleted: a small drop where answering a handful
- * of people personally is the point is a real use, just not the default one.
+ * The stage already prefers a live stream, then a recording, and only then
+ * her. So she fills the stage exactly when nothing better is on it, and steps
+ * off the moment a recording is added — no setting to remember either way.
+ * liveHostMaxSessions is what actually holds the cost, and it is still there.
+ *
+ * Set LIVE_HOST_CHAT_ENABLED=false to keep her off a market entirely.
  */
-const liveHostChatEnabled = String(process.env.LIVE_HOST_CHAT_ENABLED || "").trim().toLowerCase() === "true";
+const liveHostChatEnabled = String(process.env.LIVE_HOST_CHAT_ENABLED || "").trim().toLowerCase() !== "false";
 const demoMode = false;
 
 function boundedNumber(value, fallback, minimum, maximum = Number.MAX_SAFE_INTEGER) {
