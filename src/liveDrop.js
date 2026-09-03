@@ -95,6 +95,9 @@ function presentDrop(drop, now = Date.now(), { earlyAccessSeconds = 0 } = {}) {
     brand: drop.brand,
     retailer_name: drop.retailer_name,
     image_url: drop.image_url,
+    /* The product in use, shown under the product itself. The presenter cannot
+       hold it up, so this is where a shopper actually sees the thing. */
+    secondary_image_url: drop.secondary_image_url || "",
     currency: drop.currency,
     retail_price: number(drop.retail_price, 0) || null,
     /* Before the start this is deliberately null, not the real number. */

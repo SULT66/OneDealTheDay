@@ -554,8 +554,13 @@ db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_google_sub ON users(google_
 /* The video slot, added after the table existed. A drop can carry nothing (the
    mechanic works without a broadcast), a pre-recorded file, or an embed URL for
    a stream hosted somewhere that already solved streaming. */
+/* And a second product photograph, because the presenter cannot hold the thing
+   up. An AI host is a face and a voice, so the product has to be seen
+   somewhere else on the screen, and one still beside a talking head is thin.
+   Two — the product itself, and the product in use — is what a shopping
+   channel actually shows. */
 const liveDropColumns = new Set(db.prepare("PRAGMA table_info(live_drops)").all().map(column => column.name));
-for (const column of ["video_url", "stream_embed_url"]) {
+for (const column of ["video_url", "stream_embed_url", "secondary_image_url"]) {
   if (!liveDropColumns.has(column)) db.exec(`ALTER TABLE live_drops ADD COLUMN ${column} TEXT NOT NULL DEFAULT ""`);
 }
 

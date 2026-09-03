@@ -2737,6 +2737,8 @@ const liveDropInput = (body) => {
       brand: text(body.brand, 120),
       retailer_name: text(body.retailer_name, 120),
       image_url: text(body.image_url, 1000),
+      /* The product in use, beside the product itself. */
+      secondary_image_url: text(body.secondary_image_url, 1000),
       retail_price: money(body.retail_price),
       drop_price: money(body.drop_price),
       currency: text(body.currency, 3).toUpperCase() || "USD",
@@ -2807,11 +2809,11 @@ app.post("/api/admin/live-drops", admin, (req, res) => {
   const nowIso = new Date().toISOString();
   const dropKey = `drop_${nowIso.slice(0, 10).replace(/-/g, "_")}_${crypto.randomBytes(3).toString("hex")}`;
   db.prepare(`INSERT INTO live_drops(
-    drop_key,market,title,brand,retailer_name,image_url,retail_price,drop_price,currency,
+    drop_key,market,title,brand,retailer_name,image_url,secondary_image_url,retail_price,drop_price,currency,
     quantity_total,quantity_remaining,start_at,end_at,member_early_access_seconds,
     affiliate_url,video_url,stream_embed_url,terms,published,created_at,updated_at
   ) VALUES(
-    @drop_key,@market,@title,@brand,@retailer_name,@image_url,@retail_price,@drop_price,@currency,
+    @drop_key,@market,@title,@brand,@retailer_name,@image_url,@secondary_image_url,@retail_price,@drop_price,@currency,
     @quantity_total,@quantity_remaining,@start_at,@end_at,@member_early_access_seconds,
     @affiliate_url,@video_url,@stream_embed_url,@terms,0,@created_at,@updated_at
   )`).run({...drop, drop_key:dropKey, created_at:nowIso, updated_at:nowIso});
