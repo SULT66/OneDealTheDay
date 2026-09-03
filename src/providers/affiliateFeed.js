@@ -360,7 +360,12 @@ function normalize(record, definition, market, index, map) {
   const model = compactText(field(record, map, "model"));
   const rawId = compactText(field(record, map, "id")) || crypto.createHash("sha256").update(`${affiliateUrl}|${title}`).digest("hex").slice(0, 24);
   const availabilityValue = compactText(field(record, map, "availability"));
-  const availability = /^(?:0|false|no|out[ _-]?of[ _-]?stock|unavailable)$/i.test(availabilityValue) ? "Out of stock" : availabilityValue || "Available";
+  /* A feed with no availability column has not said the thing is in stock.
+     Defaulting to "Available" turned that silence into a claim on the page and
+     into schema.org InStock in the markup, so unknown now stays unknown. */
+  const availability = /^(?:0|false|no|out[ _-]?of[ _-]?stock|unavailable)$/i.test(availabilityValue)
+    ? "Out of stock"
+    : availabilityValue;
   const shipping = resolveShipping(record, map, definition, currentPrice);
   return {
     external_id:rawId,

@@ -152,4 +152,39 @@ assert(
   "the search field has no name again, so a plain submit discards the query",
 );
 
-console.log("Catalogue presentation checks passed: card numbering, score order, one count, search without JavaScript.");
+/*
+ * Silence is not stock.
+ *
+ * The product page published schema.org/InStock unconditionally, and the
+ * importer filled an empty availability with "Available" — so 1,248 Newegg
+ * listings, from a feed carrying no stock field at all, claimed stock on the
+ * page and in the markup Google reads.
+ */
+const refreshSource = read("src", "refresh.js");
+assert(
+  !/availability: textValue\(product\.availability \|\| "Available"\)/.test(refreshSource),
+  "the importer fills an unknown stock state with Available again",
+);
+const feedSource = read("src", "providers", "affiliateFeed.js");
+assert(
+  !/: availabilityValue \|\| "Available"/.test(feedSource),
+  "a feed with no availability column is treated as in stock again",
+);
+const dealPageSource = read("app", "[market]", "deal", "[id]", "page.tsx");
+assert(
+  !/availability: "https:\/\/schema\.org\/InStock"/.test(dealPageSource),
+  "every product page claims InStock again, whether or not the shop said so",
+);
+assert(
+  /schemaAvailability\(deal\.availability\)/.test(dealPageSource),
+  "the product page no longer derives availability from what the shop actually said",
+);
+/* "Confirm at retailer" is what the page prints when nobody told us. It must
+   not become a claim in the markup. */
+const availabilitySource = read("lib", "schemaAvailability.ts");
+assert(
+  /return undefined;/.test(availabilitySource),
+  "an unknown stock state publishes something instead of nothing",
+);
+
+console.log("Catalogue presentation checks passed: numbering, score order, one count, search without JavaScript, honest stock.");

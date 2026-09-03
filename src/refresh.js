@@ -38,8 +38,19 @@ function daysAgoDate(timezone, days) {
   return localDate(timezone, new Date(Date.now() - days * 86400000));
 }
 
+/*
+ * Three answers, not two. A shop that told us nothing has not told us the
+ * thing is in stock.
+ *
+ * This returned "Available" for silence, and Newegg's feed carries no stock
+ * field at all, so 1,248 listings were published as available on the strength
+ * of nothing at all. Unknown is now unknown — which the product page already
+ * renders as "Confirm at retailer", and which keeps a schema.org InStock claim
+ * off a page that has not earned one.
+ */
 function availabilityStatus(product) {
   const value = String(product.availability || "").toLowerCase();
+  if (!value) return "";
   if (/out of stock|sold out/.test(value)) return "Out of Stock";
   if (/unavailable|expired|discontinued/.test(value)) return "Deal Expired";
   return "Available";
@@ -351,7 +362,9 @@ async function refreshMarket(config, marketCode, options = {}) {
           return_summary: textValue(product.return_summary),
           shipping_cost: product.shipping_cost == null ? null : numberValue(product.shipping_cost, null),
           landed_cost: product.landed_cost == null ? numberValue(product.current_price, null) : numberValue(product.landed_cost, null),
-          availability: textValue(product.availability || "Available"),
+          /* Silence is stored as silence. Filling it with "Available" is how a
+             feed that carries no stock field ended up claiming stock. */
+          availability: textValue(product.availability),
           checked_at: textValue(product.checked_at || updatedAt),
           rating: numberValue(product.rating, 0),
           review_count: Math.round(numberValue(product.review_count, 0)),

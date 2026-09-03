@@ -1,3 +1,4 @@
+import { schemaAvailability } from "@/lib/schemaAvailability";
 import { productPhrase } from "@/lib/productPhrase";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -89,7 +90,14 @@ export default async function DealPage({
       "@type": "Offer",
       priceCurrency: deal.currency,
       price: deal.price,
-      availability: "https://schema.org/InStock",
+      /* Only when the shop actually said so. This was hardcoded, so every
+         product page told Google the item was in stock — including the 1,248
+         Newegg listings whose feed carries no stock field at all. An unknown
+         state now publishes no availability rather than a false one, which is
+         what the Express markup has always done. */
+      ...(schemaAvailability(deal.availability)
+        ? { availability: schemaAvailability(deal.availability) }
+        : {}),
       seller: { "@type": "Organization", name: retailerLabel(deal.retailer) },
     },
   };
