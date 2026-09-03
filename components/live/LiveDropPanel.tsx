@@ -309,7 +309,16 @@ export function LiveDropPanel({
             <DeliaTrigger
               variant="header"
               label="Ask a live question"
-              seed={`I am watching OneDailyDrop Live. Is the ${drop.title} a good deal at ${price || "the drop price"}?`}
+              /* Before the reveal there is no price to judge, and asking about
+                 "the drop price" only had her ask the shopper what it was — a
+                 round trip about a number the page is deliberately withholding.
+                 So beforehand she is asked what the thing is worth, which she
+                 can answer, and afterwards whether this price is good. */
+              seed={
+                price
+                  ? `I am watching OneDailyDrop Live. Is the ${drop.title} a good deal at ${price}?`
+                  : `I am watching OneDailyDrop Live. The ${drop.title} is about to drop. What is it usually worth, and what price would make it a good buy?`
+              }
               className="h-12 flex-1 justify-center rounded-xl px-5 sm:flex-none"
             />
             {!finished && drop.state !== "live" && <RemindMe dropKey={drop.drop_key} />}
@@ -473,8 +482,17 @@ function RemindMe({ dropKey }: { dropKey: string }) {
  * side panel only when something else is already holding the stage.
  */
 function BroadcastStage({ market, drop }: { market: string; drop: LiveDropView }) {
-  const showable = drop.state === "waiting" || drop.state === "live";
-  if (!showable) return null;
+  /*
+   * The presenter arrives with the waiting room; the product is on show from
+   * the moment the drop is announced.
+   *
+   * These were one condition, and taking the photograph out of the card left
+   * the page with no picture of the product at all until five minutes before
+   * the start — a countdown to a thing nobody could see. Only the price is a
+   * secret here, and it is kept one by the server.
+   */
+  const hasPresenter = drop.state === "waiting" || drop.state === "live";
+  if (drop.state !== "upcoming" && !hasPresenter) return null;
 
   const hasStream = Boolean(drop.stream_embed_url);
   const hasPresentation = Boolean(drop.video_url);
@@ -505,10 +523,13 @@ function BroadcastStage({ market, drop }: { market: string; drop: LiveDropView }
         "mt-4 grid overflow-hidden rounded-2xl border border-white/10 bg-[#061224] shadow-2xl",
         /* Side by side at every width, phone included: the presenter and the
            product are the two halves of a shopping channel, and stacking them
-           on a phone would push the product below the fold. */
-        showsProduct && "grid-cols-[1.05fr_0.95fr] sm:grid-cols-[1.2fr_0.8fr]",
+           on a phone would push the product below the fold. Before the waiting
+           room there is no presenter yet, so the product has the whole width
+           to itself. */
+        showsProduct && hasPresenter && "grid-cols-[1.05fr_0.95fr] sm:grid-cols-[1.2fr_0.8fr]",
       )}
     >
+      {hasPresenter && (
       <div className="relative min-w-0 overflow-hidden bg-[radial-gradient(circle_at_50%_20%,#123b69_0%,#07172b_48%,#030914_100%)]">
         <StageLabel>AI host</StageLabel>
         {hasHost ? (
@@ -557,6 +578,7 @@ function BroadcastStage({ market, drop }: { market: string; drop: LiveDropView }
           </div>
         ) : null}
       </div>
+      )}
 
       {showsProduct && (
         <div className="grid grid-rows-2 border-l border-white/10 bg-black">
