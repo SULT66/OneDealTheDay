@@ -202,6 +202,58 @@ export function dealIdFromParam(value: string): string {
   return trailing ? trailing[1] : String(value || "");
 }
 
+/**
+ * A text search, answered by the search the backend already has.
+ *
+ * The page used to fetch the whole catalogue and keep the rows whose title,
+ * brand, category or retailer contained the query as one literal substring. So
+ * "wireless earbuds under $50" matched nothing, because no product is called
+ * that: the page said "0 deals match" while /api/search — which parses the
+ * price out of the phrase and ranks on relevance — returned seventy-three,
+ * earbuds from $19 upward among them.
+ *
+ * The intent parser was written, tested and running the whole time. It was
+ * simply not the thing the search box called.
+ *
+ * The remaining filters — rating, score, discounted-only, and the sorts the
+ * API does not carry — still run locally over what comes back, so the filter
+ * panel behaves exactly as it did. A hundred is a deliberate ceiling: it is
+ * the API's own maximum, far more than anybody pages through, and it replaces
+ * a fetch of the entire catalogue on every keystroke-driven navigation.
+ */
+const SEARCH_LIMIT = 100;
+
+export async function searchDeals(marketCode: string, filter: DealFilter): Promise<Deal[]> {
+  const query = String(filter.query || "").trim();
+  if (!query) return getDeals(marketCode, filter);
+
+  const params = new URLSearchParams({
+    q: query,
+    market: marketCode,
+    limit: String(SEARCH_LIMIT),
+    /* Relevance from the backend; the shopper's own sort is applied below over
+       the set it returns. */
+    sort: "best_match",
+  });
+  if (filter.category) params.set("category", filter.category);
+  if (filter.minPrice != null) params.set("min_price", String(filter.minPrice));
+  if (filter.maxPrice != null) params.set("max_price", String(filter.maxPrice));
+
+  const res = await fetch(`${BACKEND_URL}/api/search?${params}`, { next: { revalidate: 120 } });
+  if (!res.ok) {
+    throw new Error(`Search failed for "${query}" in "${marketCode}" (${res.status}).`);
+  }
+  const body = (await res.json()) as { products?: RawProduct[] };
+  const found = (body.products ?? []).map((product, index) => ({
+    ...adaptProduct(product),
+    rank: index + 1,
+  }));
+
+  /* The query has been answered; everything else is the filter panel. */
+  const { query: _query, ...rest } = filter;
+  return sortDeals(applyFilter(found, rest), filter.sort);
+}
+
 export async function getDeal(marketCode: string, id: string): Promise<Deal | undefined> {
   const deals = await fetchMarketCatalog(marketCode);
   const dealId = dealIdFromParam(id);

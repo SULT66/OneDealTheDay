@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { filterFromSearchParams, getDeals, getMarket } from "@/lib/catalog";
+import { filterFromSearchParams, getMarket, searchDeals } from "@/lib/catalog";
 import { countryName, getLanguage, t } from "@/lib/i18n";
 import { DealListing } from "@/components/catalog/DealListing";
 
@@ -30,7 +30,7 @@ export default async function SearchPage({
   const query = await searchParams;
   const filter = filterFromSearchParams(query);
   const page = Number(Array.isArray(query.page) ? query.page[0] : query.page) || 1;
-  const deals = await getDeals(market, filter);
+  const deals = await searchDeals(market, filter);
   const language = await getLanguage(market);
 
   return (

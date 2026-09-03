@@ -241,4 +241,35 @@ assert(
   "the sitemap builds category URLs with the deal slug rule again",
 );
 
-console.log("Catalogue presentation checks passed: numbering, score order, one count, search without JavaScript, honest stock, one URL per thing.");
+/*
+ * The search box asks the search.
+ *
+ * The page fetched the whole catalogue and kept rows whose title, brand,
+ * category or retailer contained the query as one literal substring, so
+ * "wireless earbuds under $50" matched nothing — no product is called that —
+ * while /api/search parsed the price out of the phrase and returned
+ * seventy-three. The intent parser had been written, tested and running the
+ * whole time; it was simply not what the box called.
+ */
+assert(
+  /export async function searchDeals/.test(catalogSource),
+  "the search page has no way to reach the backend search again",
+);
+assert(
+  /\/api\/search\?/.test(catalogSource),
+  "searchDeals no longer calls the search endpoint",
+);
+const searchPage = read("app", "[market]", "search", "page.tsx");
+assert(
+  /searchDeals\(market, filter\)/.test(searchPage),
+  "the search page is back to filtering the whole catalogue by substring",
+);
+/* "Clear all" sat beside chips that included the query, and cleared all but
+   that one — the only one the shopper had typed. */
+const filterPanel = read("components", "catalog", "FilterPanel.tsx");
+assert(
+  !/go\(\{ sort: filter\.sort, query: filter\.query \}\)/.test(filterPanel),
+  "Clear all keeps the search query again, though it is listed as a filter",
+);
+
+console.log("Catalogue presentation checks passed: numbering, score order, one count, honest stock, one URL per thing, real search.");
