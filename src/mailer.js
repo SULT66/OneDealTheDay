@@ -8,7 +8,19 @@ const escapeHtml = value => String(value ?? "").replace(/[&<>"']/g, character =>
   "'": "&#39;"
 }[character]));
 
-const sendEmail = async ({to, toName, subject, html}) => {
+/*
+ * `unsubscribeUrl` is not decoration on a marketing email.
+ *
+ * A bulk message with no way out breaks CAN-SPAM in the United States, and
+ * mailbox providers read the List-Unsubscribe header directly: without it the
+ * only way a recipient can stop the mail is to mark it as spam, which is the
+ * one action that damages the sending domain for everybody else.
+ *
+ * List-Unsubscribe-Post is RFC 8058 one-click. Gmail and Outlook then show an
+ * Unsubscribe button of their own and POST to the URL; the route accepts that
+ * as well as a plain visit.
+ */
+const sendEmail = async ({to, toName, subject, html, unsubscribeUrl}) => {
   const apiKey = String(process.env.SENDGRID_API_KEY || "").trim();
   const fromEmail = String(process.env.EMAIL_FROM || process.env.PASSWORD_RESET_FROM_EMAIL || "account@onedailydrop.com").trim();
   const replyTo = String(process.env.EMAIL_REPLY_TO || "info@onedailydrop.com").trim();
@@ -29,6 +41,14 @@ const sendEmail = async ({to, toName, subject, html}) => {
       from: {email: fromEmail, name: "OneDailyDrop"},
       reply_to: {email: replyTo, name: "OneDailyDrop Support"},
       subject,
+      ...(unsubscribeUrl
+        ? {
+          headers: {
+            "List-Unsubscribe": `<${unsubscribeUrl}>`,
+            "List-Unsubscribe-Post": "List-Unsubscribe=One-Click"
+          }
+        }
+        : {}),
       content: [{type: "text/html", value: html}]
     })
   });
@@ -56,15 +76,20 @@ const passwordResetEmail = ({name, email, token}) => sendEmail({
     </div>`
 });
 
-const subscriptionEmail = ({email, categories}) => sendEmail({
+const subscriptionEmail = ({email, categories, unsubscribeUrl}) => sendEmail({
   to: email,
   subject: "You’re subscribed to OneDailyDrop",
+  unsubscribeUrl,
   html: `
     <div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;color:#17191d">
       <h1 style="font-size:24px">Your Daily Drop is on the way</h1>
       <p>We’ll send new OneDailyDrop updates to <strong>${escapeHtml(email)}</strong>.</p>
       ${categories.length ? `<p>Your interests: ${categories.map(escapeHtml).join(", ")}.</p>` : ""}
       <p><a href="${SITE}" style="color:#d95600;font-weight:bold">Visit OneDailyDrop</a></p>
+      ${unsubscribeUrl ? `<p style="margin-top:28px;font-size:13px;color:#6b7280">
+        You are receiving this because you subscribed at OneDailyDrop.
+        <a href="${escapeHtml(unsubscribeUrl)}" style="color:#6b7280">Unsubscribe</a> — one click, no sign-in.
+      </p>` : ""}
     </div>`
 });
 
