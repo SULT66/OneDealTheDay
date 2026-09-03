@@ -146,7 +146,15 @@ function presentDrop(drop, now = Date.now(), { earlyAccessSeconds = 0 } = {}) {
  */
 function hostGreeting(view) {
   if (!view) return "Welcome to OneDailyDrop Live. I'm Chloe, your AI shopping host.";
-  const product = [view.brand, view.title].filter(Boolean).join(" ").trim() || "today's drop";
+  /* A retailer title usually opens with the brand already, so putting the
+     brand in front of it had her say "the ASUS ASUS 32in UHD 4K Monitor" out
+     loud, on air. */
+  const brand = String(view.brand || "").trim();
+  const title = String(view.title || "").trim();
+  const alreadyNamed =
+    brand && new RegExp(`^${brand.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(title);
+  const product =
+    [alreadyNamed ? "" : brand, title].filter(Boolean).join(" ").trim() || "today's drop";
   const shop = view.retailer_name ? ` It's sold and shipped by ${view.retailer_name}.` : "";
   const opening = `Hi, I'm Chloe and this is OneDailyDrop Live. Today's drop is the ${product}.${shop}`;
 
