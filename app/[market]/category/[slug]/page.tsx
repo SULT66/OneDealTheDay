@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import {
   filterFromSearchParams,
   getCategories,
-  getCategory,
+  resolveCategory,
   getDeals,
   getMarket,
   getMarkets,
@@ -21,7 +21,7 @@ export async function generateMetadata({
   params,
 }: PageProps<"/[market]/category/[slug]">): Promise<Metadata> {
   const { market, slug } = await params;
-  const category = getCategory(slug);
+  const category = await resolveCategory(market, slug);
   if (!category) return {};
 
   const info = getMarket(market);
@@ -42,7 +42,7 @@ export default async function CategoryPage({
   searchParams,
 }: PageProps<"/[market]/category/[slug]">) {
   const { market, slug } = await params;
-  const category = getCategory(slug);
+  const category = await resolveCategory(market, slug);
   if (!category) notFound();
 
   const query = await searchParams;

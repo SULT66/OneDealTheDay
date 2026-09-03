@@ -106,6 +106,31 @@ export function getCategory(slug: string): Category | undefined {
 }
 
 /**
+ * Whether a category exists, decided by the catalogue rather than by a file.
+ *
+ * getCategory reads site-content/categories.json, which holds eleven entries
+ * of display copy. The catalogue has thirteen categories, so the three the
+ * file had never heard of — Sports & Outdoors, Toys & Games and Other Deals —
+ * answered 404 while the homepage and the footer went on linking to them.
+ *
+ * Two registries, and the smaller one was deciding what was real. It now only
+ * decorates: the catalogue says what exists, the file supplies an icon and a
+ * blurb where it has them, and a slug absent from both is still a 404.
+ */
+export async function resolveCategory(
+  marketCode: string,
+  slug: string,
+): Promise<Category | undefined> {
+  const known = getCategory(slug);
+  if (known) return known;
+  const live = await getCategoriesWithCounts(marketCode);
+  const match = live.find((entry) => entry.slug === slug);
+  if (!match) return undefined;
+  const { count: _count, ...category } = match;
+  return category;
+}
+
+/**
  * Live category slugs + counts, with local display metadata layered on.
  *
  * Reads /api/categories — one `GROUP BY` on the backend — rather than
@@ -160,14 +185,32 @@ export async function getCategoriesWithCounts(
     .sort((a, b) => b.count - a.count);
 }
 
+/**
+ * The listing id inside a product URL, in either form it is written.
+ *
+ * The site publishes two: `/us/deal/219861` and the older readable
+ * `/us/deal/8bitdo-retro-mechanical-keyboard-219861`, which is what the
+ * sitemap emits and what search engines have indexed. The route read the whole
+ * path segment as an id, so every one of the 1,361 product URLs in the sitemap
+ * answered 404 while the same product answered 200 by number.
+ *
+ * The id is the trailing number in both, so both resolve and nothing has to be
+ * renamed.
+ */
+export function dealIdFromParam(value: string): string {
+  const trailing = /(\d+)$/.exec(String(value || ""));
+  return trailing ? trailing[1] : String(value || "");
+}
+
 export async function getDeal(marketCode: string, id: string): Promise<Deal | undefined> {
   const deals = await fetchMarketCatalog(marketCode);
-  const deal = deals.find((d) => d.id === id);
+  const dealId = dealIdFromParam(id);
+  const deal = deals.find((d) => d.id === dealId);
   if (!deal) return undefined;
 
   try {
     const res = await fetch(
-      `${BACKEND_URL}/api/products/${encodeURIComponent(id)}/price-history`,
+      `${BACKEND_URL}/api/products/${encodeURIComponent(dealId)}/price-history`,
       { next: { revalidate: 900 } },
     );
     if (res.ok) {
