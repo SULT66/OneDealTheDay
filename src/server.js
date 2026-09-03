@@ -2836,6 +2836,35 @@ app.post("/api/admin/live-drops/:key/publish", admin, (req, res) => {
   res.json({ok:true, published:Boolean(published)});
 });
 
+/*
+ * Closing a drop that is already open.
+ *
+ * Neither of the routes around this one would do it: unpublishing refuses to
+ * pull a drop from under whoever is watching, and deleting refuses anything
+ * that ran, because what was offered is a record. Both are right, and between
+ * them they left an open drop with no way to stop — which is fine until the
+ * shop changes the price mid-event, the link breaks, or the deal was simply
+ * wrong.
+ *
+ * Ending is not erasing. The window closes now, the drop keeps its history,
+ * its funnel and its reminders, and anybody on the page sees it end the same
+ * way they would have seen it end on time.
+ */
+app.post("/api/admin/live-drops/:key/end", admin, (req, res) => {
+  const drop = db.prepare("SELECT * FROM live_drops WHERE drop_key=?").get(String(req.params.key || ""));
+  if (!drop) return res.status(404).json({error:"No such drop."});
+  const nowIso = new Date().toISOString();
+  if (Date.parse(drop.end_at) <= Date.now()) {
+    return res.status(409).json({error:"That drop has already closed."});
+  }
+  /* Also brings the start back when it had not arrived yet, so a drop ended
+     early cannot sit forever as "opening soon". */
+  const startAt = Date.parse(drop.start_at) > Date.now() ? nowIso : drop.start_at;
+  db.prepare("UPDATE live_drops SET start_at=?, end_at=?, updated_at=? WHERE id=?")
+    .run(startAt, nowIso, nowIso, drop.id);
+  res.json({ok:true, drop_key:drop.drop_key, ended_at:nowIso});
+});
+
 app.post("/api/admin/live-drops/:key/stock", admin, (req, res) => {
   const drop = db.prepare("SELECT * FROM live_drops WHERE drop_key=?").get(String(req.params.key || ""));
   if (!drop) return res.status(404).json({error:"No such drop."});

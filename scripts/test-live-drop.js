@@ -299,7 +299,7 @@ async function main() {
      back the drop price before the reveal, which is right for the person who
      set it and would be a leak on any unguarded route. */
   const adminRoutes = serverSource.match(/app\.(?:get|post|delete)\("\/api\/admin\/live-drops[^"]*", *[a-z]+/g) || [];
-  assert.strictEqual(adminRoutes.length, 5, "the set of admin Live Drop routes changed");
+  assert.strictEqual(adminRoutes.length, 6, "the set of admin Live Drop routes changed");
   for (const route of adminRoutes) {
     assert(/, *admin$/.test(route), `an admin Live Drop route is not behind the key: ${route}`);
   }
