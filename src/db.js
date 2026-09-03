@@ -489,6 +489,25 @@ db.exec(`
   CREATE UNIQUE INDEX IF NOT EXISTS idx_live_drop_events_unique
     ON live_drop_events(drop_id, event_type, session_id);
 
+  /* Who is watching right now, which the funnel above deliberately cannot
+     answer: it keeps one row per session for the whole drop, so it counts
+     everybody who ever arrived and never notices anyone leaving.
+     "1,248 watching" is a different question, and the honest version of it
+     needs a row that gets overwritten rather than one that accumulates.
+     A page open during the drop refreshes its own row; a page that closed
+     stops refreshing and falls out of the count on its own. Nothing here
+     identifies anybody: the session id is the same anonymous browser token
+     the funnel uses. */
+  CREATE TABLE IF NOT EXISTS live_drop_presence(
+    drop_id INTEGER NOT NULL,
+    session_id TEXT NOT NULL,
+    seen_at TEXT NOT NULL,
+    PRIMARY KEY(drop_id, session_id),
+    FOREIGN KEY(drop_id) REFERENCES live_drops(id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_live_drop_presence_seen
+    ON live_drop_presence(drop_id, seen_at);
+
   /* Retailer favicons, fetched by us so the browser never has to ask the shop
      itself and tell it who is looking. A row with no bytes is a remembered
      "we looked and there was not one", which is worth keeping: without it
