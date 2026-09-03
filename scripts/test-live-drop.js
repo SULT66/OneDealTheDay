@@ -109,7 +109,27 @@ assert.strictEqual(dropSaving({ retail_price: 449, drop_price: 449 }), null);
 assert.strictEqual(dropSaving({ retail_price: 400, drop_price: 449 }), null);
 assert.deepStrictEqual(dropSaving({ retail_price: 100, drop_price: 75 }), { amount: 25, percent: 25 });
 
-console.log("Live Drop states, early access, price reveal and saving checks passed.");
+/*
+ * What the host says on arrival, and the one thing she may not say early.
+ *
+ * The price is the mechanic. A host who reads it out in the waiting room gives
+ * away the event as surely as publishing it in the JSON would.
+ */
+const { hostGreeting } = require("../src/liveDrop");
+const waitingGreeting = hostGreeting(presentDrop(drop, at(-120)));
+assert(waitingGreeting.includes("iPhone 17"), "the host opens without naming what she is presenting");
+assert(
+  !waitingGreeting.includes("449"),
+  "the host reads the drop price out in the waiting room, giving the reveal away",
+);
+assert(!/\b44\s?percent\b/.test(waitingGreeting), "the saving gives the price away before the reveal");
+
+const liveGreeting = hostGreeting(presentDrop(drop, at(60)));
+assert(liveGreeting.includes("449"), "the host does not say the price once it is live");
+assert(liveGreeting.includes("44 percent"), "the host does not say the saving once it is live");
+assert(hostGreeting(null).length > 0, "a drop-less greeting throws instead of falling back");
+
+console.log("Live Drop states, early access, price reveal, saving and host greeting checks passed.");
 
 /* ------------------------------------------------------------------ funnel */
 

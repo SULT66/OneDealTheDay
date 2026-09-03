@@ -9,7 +9,7 @@ const db = require("./db");
 const c = require("./config");
 const { refreshProducts, localDate } = require("./refresh");
 const { runLinkHealthCheck } = require("./linkHealth");
-const { dropState, presentDrop, sendDueReminders } = require("./liveDrop");
+const { dropState, hostGreeting, presentDrop, sendDueReminders } = require("./liveDrop");
 const { cacheKey, readCachedAnswer, writeCachedAnswer } = require("./deliaCache");
 const { tavusProductDetails } = require("./tavusProductTool");
 const {
@@ -1213,7 +1213,11 @@ app.post("/api/integrations/tavus/conversations", authRateLimit, async (req, res
           "Use get_product_details before stating any product, price, discount, stock or purchase fact.",
           "Never ask the shopper for a product ID. Keep answers brief and suitable for a live shopping broadcast.",
         ].join(" "),
-        custom_greeting:"Welcome to OneDailyDrop Live! I'm Chloe, your AI shopping host. Ask me about today's verified live deal.",
+        /* Built from the drop she is actually presenting. One sentence at every
+           drop, naming nothing, left a shopper who came to see a monitor with a
+           host who appeared not to know what she was there for, and made them
+           ask before anything happened. */
+        custom_greeting:hostGreeting(view),
       }),
       signal:AbortSignal.timeout(15000),
     });
