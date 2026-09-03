@@ -131,7 +131,11 @@ export function FilterPanel({
             </h3>
             <button
               type="button"
-              onClick={() => go({ sort: filter.sort, query: filter.query })}
+              /* The query is listed above as a removable chip like every other
+                 active filter, so keeping it made "Clear all" clear all but
+                 one — and the one it kept was the only one the shopper had
+                 typed. Sort is not a filter and is not listed, so it stays. */
+              onClick={() => go({ sort: filter.sort })}
               className="cursor-pointer text-xs font-semibold text-fg-muted underline underline-offset-2 hover:text-fg"
             >
               {copy.clearAll}
