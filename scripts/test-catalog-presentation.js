@@ -272,4 +272,29 @@ assert(
   "Clear all keeps the search query again, though it is listed as a filter",
 );
 
-console.log("Catalogue presentation checks passed: numbering, score order, one count, honest stock, one URL per thing, real search.");
+/*
+ * A dropdown and a slider do not cost a catalogue.
+ *
+ * getActiveRetailers and getPriceBounds each downloaded the whole market —
+ * around seven megabytes — parsed it and reduced it, and DealListing calls
+ * both, so it happened twice per render of every search and every category
+ * page. The database answers both in one pass.
+ */
+assert(
+  !/getActiveRetailers\([\s\S]{0,120}fetchMarketCatalog/.test(catalogSource),
+  "the retailer list downloads the whole catalogue again",
+);
+assert(
+  !/getPriceBounds\([\s\S]{0,120}fetchMarketCatalog/.test(catalogSource),
+  "the price slider downloads the whole catalogue again",
+);
+assert(
+  /\/api\/catalog-facets\?market=/.test(catalogSource),
+  "the filter panel no longer asks the database for its facets",
+);
+assert(
+  /app\.get\("\/api\/catalog-facets"/.test(appSource),
+  "the facets endpoint is gone, so the filter panel has nothing cheap to call",
+);
+
+console.log("Catalogue presentation checks passed: numbering, score order, one count, honest stock, one URL per thing, real search, cheap facets.");

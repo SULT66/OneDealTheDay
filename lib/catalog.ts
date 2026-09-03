@@ -387,16 +387,33 @@ export async function getRelated(marketCode: string, deal: Deal, limit = 4): Pro
  * Both ends snap to multiples of the slider's $5 step so that a value arriving
  * from the URL — say `?max=400` — lands exactly on a stop.
  */
+/**
+ * The two things the filter panel needs, from one small query.
+ *
+ * Both of these used to download the whole market catalogue — around seven
+ * megabytes — parse it and reduce it, on every search and every category page,
+ * to fill a dropdown and set the ends of a price slider. DealListing calls
+ * both, so that happened twice per render, and it was most of why a search
+ * took fourteen seconds.
+ */
+const fetchFacets = cache(
+  async (marketCode: string): Promise<{ retailers: string[]; price: { min: number; max: number } }> => {
+    const res = await fetch(
+      `${BACKEND_URL}/api/catalog-facets?market=${encodeURIComponent(marketCode)}`,
+      { next: { revalidate: 300 } },
+    );
+    if (!res.ok) throw new Error(`Failed to load filter facets for "${marketCode}" (${res.status}).`);
+    return (await res.json()) as { retailers: string[]; price: { min: number; max: number } };
+  },
+);
+
 export async function getPriceBounds(marketCode: string): Promise<{ min: number; max: number }> {
-  const deals = await fetchMarketCatalog(marketCode);
-  const highest = deals.length ? Math.max(...deals.map((d) => d.price)) : 100;
-  return { min: 5, max: Math.ceil(highest / 50) * 50 };
+  return (await fetchFacets(marketCode)).price;
 }
 
 /** Retailers present in the catalog, so the filter never offers an empty option. */
 export async function getActiveRetailers(marketCode: string): Promise<string[]> {
-  const deals = await fetchMarketCatalog(marketCode);
-  return [...new Set(deals.map((d) => d.retailer))].sort();
+  return (await fetchFacets(marketCode)).retailers;
 }
 
 /** Total checked listings for a market — used by the About page's copy. */

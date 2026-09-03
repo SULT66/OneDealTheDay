@@ -325,6 +325,43 @@ function expressWithHomepage(...args) {
     return res.set("X-ODD-Cache", "MISS").json(presented);
   });
 
+  /*
+   * What the filter panel needs, which is a list of shops and two numbers.
+   *
+   * Both used to come from downloading the whole market catalogue — around
+   * seven megabytes — parsing it and reducing it, on every search and every
+   * category page, purely to fill a dropdown and set the ends of a slider.
+   * That was most of why a search took fourteen seconds.
+   *
+   * The database can answer both in one pass, so it does.
+   */
+  app.get("/api/catalog-facets", (req, res) => {
+    if (!config.isProduction) return res.json({retailers: [], price: {min: 5, max: 100}});
+    const selectedMarket = normalizeMarket(req.query.market) || marketFromIp(req).code;
+    const cacheKey = `facets:${selectedMarket}`;
+    const cached = cachedValue(cacheKey);
+    res.set("Cache-Control", "private, max-age=60, stale-while-revalidate=300");
+    if (cached) return res.set("X-ODD-Cache", "HIT").json(cached);
+
+    const where = `market=? AND status='published' AND ${sourceSql()}`;
+    const retailers = db.prepare(`
+      SELECT DISTINCT COALESCE(NULLIF(retailer_name,''), source) AS retailer
+      FROM products WHERE ${where} ORDER BY retailer
+    `).all(selectedMarket).map(row => row.retailer).filter(Boolean);
+    const {highest} = db.prepare(`
+      SELECT MAX(current_price) AS highest FROM products WHERE ${where}
+    `).get(selectedMarket);
+
+    /* The same rounding the slider used when it did this itself, so the top of
+       the range does not move just because the arithmetic moved. */
+    const facets = {
+      retailers,
+      price: {min: 5, max: Math.ceil((Number(highest) || 100) / 50) * 50},
+    };
+    cacheValue(cacheKey, facets, 60000);
+    return res.set("X-ODD-Cache", "MISS").json(facets);
+  });
+
   app.get("/api/categories", (req, res) => {
     if (!config.isProduction) return res.json([]);
     const selectedMarket = normalizeMarket(req.query.market) || marketFromIp(req).code;
