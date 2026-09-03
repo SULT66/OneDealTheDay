@@ -183,7 +183,21 @@ function hostGreeting(view) {
 function hostRevealLine(view) {
   if (!view || view.state !== "live" || view.drop_price == null) return "";
   const saving = view.saving ? `, ${view.saving.percent} percent below its usual price` : "";
-  return `The drop just opened at ${view.currency} ${view.drop_price}${saving}. Announce it to the viewers now, in one or two sentences, and tell them the buy button is below you.`;
+  /*
+   * Urgency, from the one thing that is true.
+   *
+   * A ten minute window is real pressure and she should use it. What she may
+   * not use is stock: handed only the facts, she closed a rehearsal with "grab
+   * yours before they are gone", which is a claim about a shelf we cannot see.
+   * We are an affiliate — the shop holds the inventory and reports none of it
+   * to us — so that sentence is invented, and inventing scarcity is the exact
+   * thing affiliate programmes reject applications over and US regulators
+   * treat as a pressure tactic.
+   *
+   * The clock does the same job and is ours to state.
+   */
+  const minutes = Math.max(1, Math.round(number(view.seconds_until_end, 0) / 60));
+  return `The drop just opened at ${view.currency} ${view.drop_price}${saving}, and this price is only live for the next ${minutes} minutes. Announce it to the viewers now, in one or two lively sentences: say the price, say how little time is left, and tell them the buy button is right below you. Push the urgency of the clock as hard as you like. Never say or imply how many are left or that they will run out — you cannot see the shop's stock, and the offer ends when the countdown does.`;
 }
 
 /**

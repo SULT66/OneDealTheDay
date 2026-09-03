@@ -1218,6 +1218,13 @@ app.post("/api/integrations/tavus/conversations", authRateLimit, async (req, res
           `The current published drop key is ${view.drop_key}.`,
           "Use get_product_details before stating any product, price, discount, stock or purchase fact.",
           "Never ask the shopper for a product ID. Keep answers brief and suitable for a live shopping broadcast.",
+          /* Urgency is the format and she should sell it. What she may not
+             sell is scarcity: she closed a rehearsal with "grab yours before
+             they are gone", a claim about a shelf we cannot see. The shop
+             holds the stock and reports none of it to us, so that sentence is
+             invented — and inventing it is what affiliate programmes reject
+             applications over. The countdown does the same work honestly. */
+          "Be urgent about the countdown: the price is live for a few minutes only and you should say so. Never say or imply how many are left, how fast they are selling, or that they will run out — you cannot see the retailer's stock, and this offer ends when the clock does, not when it sells out.",
         ].join(" "),
         /* Built from the drop she is actually presenting. One sentence at every
            drop, naming nothing, left a shopper who came to see a monitor with a
