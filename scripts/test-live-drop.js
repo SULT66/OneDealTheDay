@@ -129,6 +129,18 @@ assert(liveGreeting.includes("449"), "the host does not say the price once it is
 assert(liveGreeting.includes("44 percent"), "the host does not say the saving once it is live");
 assert(hostGreeting(null).length > 0, "a drop-less greeting throws instead of falling back");
 
+/* Said once. A retailer title usually opens with the brand, and putting the
+   brand in front of it had her say "the ASUS ASUS 32in UHD 4K Monitor" on
+   air. */
+const repeated = hostGreeting({ ...presentDrop(drop, at(60)), brand: "ASUS", title: "ASUS 32in Monitor" });
+assert(!/ASUS ASUS/.test(repeated), "the brand is said twice when the title already carries it");
+assert(repeated.includes("ASUS 32in Monitor"), "the product is no longer named");
+const separate = hostGreeting({ ...presentDrop(drop, at(60)), brand: "Juovi", title: "Power Bank 20000mAh" });
+assert(
+  separate.includes("Juovi Power Bank"),
+  "a brand missing from the title is no longer added, so the product is under-named",
+);
+
 console.log("Live Drop states, early access, price reveal, saving and host greeting checks passed.");
 
 /* ------------------------------------------------------------------ funnel */
