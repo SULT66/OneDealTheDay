@@ -398,7 +398,7 @@ export async function getRelated(marketCode: string, deal: Deal, limit = 4): Pro
  */
 type CatalogFacets = {
   retailers: string[];
-  shops?: Array<{ retailer: string; listings: number }>;
+  shops?: Array<{ retailer: string; listings: number; host?: string }>;
   price: { min: number; max: number };
 };
 
@@ -427,9 +427,11 @@ export async function getPriceBounds(marketCode: string): Promise<{ min: number;
  */
 export async function getConnectedShops(
   marketCode: string,
-): Promise<Array<{ retailer: string; listings: number }>> {
+): Promise<Array<{ retailer: string; listings: number; host: string }>> {
   const facets = await fetchFacets(marketCode);
-  return (facets.shops ?? []).filter((shop) => shop.listings > 0);
+  return (facets.shops ?? [])
+    .filter((shop) => shop.listings > 0)
+    .map((shop) => ({ ...shop, host: shop.host ?? "" }));
 }
 
 /** Retailers present in the catalog, so the filter never offers an empty option. */
