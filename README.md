@@ -17,6 +17,24 @@ npm start
 
 The site does not load demo products. Until verified products are added, visitors see an honest catalog update page with no sample prices, ratings or products.
 
+## Durable personal data
+
+The rebuildable product catalogue continues to use local SQLite. Accounts,
+sessions, subscribers, price alerts, saved offers and Delia conversations are
+also mirrored to PostgreSQL so an Azure container replacement cannot erase
+them.
+
+Configure these values only in Azure App Settings:
+
+- `ONEDAILYDROP_DATABASE_URL`: PostgreSQL connection URL with TLS required;
+- `ONEDAILYDROP_DATABASE_POOL_SIZE`: optional connection limit (defaults to 3);
+- `ONEDAILYDROP_MIGRATE_SQLITE_ON_STARTUP`: set to `1` for the first migration,
+  verify the reported row count, then return it to `0` for normal restarts.
+
+If PostgreSQL is temporarily unavailable, startup remains fail-open on the
+existing SQLite database and `/api/status` reports the personal database as
+unavailable without exposing connection details.
+
 ## Product sources
 Public products must use an explicitly approved source:
 
