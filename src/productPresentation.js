@@ -1,6 +1,7 @@
 const { categoryLabel, languageTag, t } = require("./i18n");
 const { SCORE_MODEL, scoreProduct, isDailyPickEligible, commerceQuality } = require("./ranker");
 const { canonicalCategory } = require("./catalogTaxonomy");
+const { storefrontUrl } = require("./storefrontLinks");
 
 const EDITORIAL_SCORE_FLOOR = 60;
 const EDITORIAL_CONFIDENCE_FLOOR = 55;
@@ -306,6 +307,14 @@ function presentProduct(product, language = "en") {
       ? t(language, "product.priceChecked", { date: checkedDate })
       : t(language, "product.priceVerified"),
     display_action_label: t(language, "product.viewDealAt", { store }),
+    /* Whether a link to this shop's front door can be built at all, so a page
+       only offers "Shop all at X" where following it would actually earn a
+       commission. Derived, not stored: it depends on the shape of the affiliate
+       link this listing carries, and that can change with the feed. The link
+       itself is not published here — the page asks for it by product id at
+       /go/:id?action=shop_all, which is also what records the click. */
+    display_shop_all: Boolean(storefrontUrl(product)),
+    display_shop_all_label: t(language, "product.shopAllAt", { store }),
     display_price_history_label: t(language, "product.priceHistory"),
     display_save_label: discount > 0 ? t(language, "product.belowReferencePercent", { percent: discount }) : "",
     display_off_label: discount > 0 ? t(language, "product.off", { percent: discount }) : "",

@@ -127,4 +127,49 @@ assert.strictEqual(
 assert.strictEqual(storefrontUrl({}), null, "a product with no affiliate link produces a store link anyway");
 assert.strictEqual(storefrontUrl({affiliate_url:"javascript:alert(1)"}), null, "a non-HTTP link is accepted as a store link");
 
-console.log("Storefront link checks passed: Awin deep and product-click links, Rakuten, eBay, labelled clicks, and no guessed link.");
+
+/* ------------------------------------------ where the link is actually offered */
+
+/*
+ * The store link has to be on the page a shopper is standing on.
+ *
+ * When this shipped, the only place offering it was /us/stores, because the
+ * Express product page that had carried "Shop all at X" for months is no longer
+ * what serves /deal/:id — Next.js is. The link was corrected in dead code and
+ * the live product page, the busiest surface on the site, offered nothing.
+ */
+const fs = require("fs");
+const path = require("path");
+const read = (...parts) => fs.readFileSync(path.join(__dirname, "..", ...parts), "utf8");
+
+const dealPage = read("app", "[market]", "deal", "[id]", "page.tsx");
+assert(
+  /action=shop_all/.test(dealPage),
+  "the product page offers no way through to the shop, only to the one listing",
+);
+assert(
+  /deal\.shopAll \?/.test(dealPage),
+  "the product page shows a store link whether or not one can be built, so some of them 404",
+);
+
+/* The flag it reads has to be published, or it is false everywhere and the
+   link never appears. */
+assert(
+  /display_shop_all: Boolean\(storefrontUrl\(product\)\)/.test(read("src", "productPresentation.js")),
+  "the API no longer says whether a shop has a front door, so no page can offer it",
+);
+assert(
+  /shopAll: Boolean\(raw\.display_shop_all\)/.test(read("lib", "backendAdapter.ts")),
+  "the flag stops at the API and never reaches the page",
+);
+
+/* The directory itself, which is where somebody browsing shops rather than
+   products arrives. */
+assert(
+  /\/go\/store\/\$\{slugifyCategory\(shop\.retailer\)\}/.test(
+    read("app", "[market]", "stores", "page.tsx"),
+  ),
+  "the shop directory lists shops without linking to any of them",
+);
+
+console.log("Storefront link checks passed: Awin deep and product-click links, Rakuten, eBay, labelled clicks, no guessed link, and links on the pages that need them.");

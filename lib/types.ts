@@ -49,6 +49,9 @@ export type Deal = {
   delivery: string;
   returns: string;
   availability: string;
+  /** True when a commissionable link to this shop's front door can be built.
+      False means no link is offered rather than one that pays nobody. */
+  shopAll: boolean;
   /** Bullet reasons this listing was selected. */
   whyWePicked: string[];
   strengths: string[];

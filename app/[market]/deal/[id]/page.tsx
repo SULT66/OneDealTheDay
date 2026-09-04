@@ -66,6 +66,15 @@ export default async function DealPage({
   const goHref = (placement: string) =>
     `/${market}/go/${deal.id}?source=product&placement=${placement}&action=view_deal`;
 
+  /* The way out for somebody who likes the shop but not this exact thing — a
+     different size, a different colour, or nothing to do with this page. It
+     goes through the same /go route, so the click is recorded here and the
+     visit is recorded by the network; a link straight to the shop would read
+     identically and earn nothing. Offered only where a front-door link can
+     actually be built, which is what display_shop_all reports. */
+  const shopAllHref =
+    `/${market}/go/${deal.id}?source=product&placement=shop_all&action=shop_all`;
+
   /* Same Product markup the live site publishes, so the redesign keeps its
      rich results when it takes over the URLs. */
   const jsonLd = {
@@ -222,6 +231,20 @@ export default async function DealPage({
               className="h-14 px-6 text-base"
             />
           </div>
+
+          {deal.shopAll ? (
+            <p className="text-sm text-fg-muted">
+              <a
+                href={shopAllHref}
+                target="_blank"
+                rel="sponsored nofollow noopener noreferrer"
+                className="underline underline-offset-4 hover:text-fg"
+              >
+                Shop all at {retailerLabel(deal.retailer)}
+              </a>{" "}
+              &mdash; we may earn a commission on anything you buy there.
+            </p>
+          ) : null}
 
           <p className="text-xs text-fg-subtle tnum">
             Price checked {formatDateTime(deal.checkedAt, market)}. Check the current
