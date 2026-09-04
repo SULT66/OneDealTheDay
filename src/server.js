@@ -564,7 +564,7 @@ app.post("/api/shopping-assistant/feedback", shoppingAssistantRateLimit, (req, r
  * they reach the catch-all at the bottom of this file instead of being
  * rewritten back onto the old bare-URL Express routes.
  */
-const nextOwnedPath = /^\/(?:about|account|saved|live|how-we-select-deals|search|daily-drop|archive|contact|privacy|terms|affiliate-disclosure|editorial-policy|for-retailers|price-disclaimer|category|deal\/[^/]+|category\/[^/]+)\/?$/;
+const nextOwnedPath = /^\/(?:about|account|saved|live|how-we-select-deals|search|daily-drop|archive|contact|privacy|terms|affiliate-disclosure|editorial-policy|for-retailers|price-disclaimer|stores|category|deal\/[^/]+|category\/[^/]+)\/?$/;
 app.use((req, res, next) => {
   const match = req.url.match(new RegExp(`^/(${marketCodes.join("|")})(?=/|\\?|$)`));
   /* Compare the path alone, not the whole URL: `/de` was left intact for Next
@@ -2282,7 +2282,7 @@ app.get("/sitemap.xml", (req, res) => {
      following a link, while the old server-rendered pages it *did* know about
      are the ones now returning 410. Listing the current set is half of getting
      the index to match the site. */
-  const staticPages = [...Object.keys(trustPages), "/daily-drop", "/search", "/for-retailers"];
+  const staticPages = [...Object.keys(trustPages), "/daily-drop", "/for-retailers", "/stores"];
   for (const code of marketCodes) {
     staticPages.forEach(pathname => urls.push({
       loc: SITE + marketPath(code, pathname),

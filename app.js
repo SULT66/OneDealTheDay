@@ -346,10 +346,15 @@ function expressWithHomepage(...args) {
     if (cached) return res.set("X-ODD-Cache", "HIT").json(cached);
 
     const where = `market=? AND status='published' AND ${sourceSql()}`;
-    const retailers = db.prepare(`
-      SELECT DISTINCT COALESCE(NULLIF(retailer_name,''), source) AS retailer
-      FROM products WHERE ${where} ORDER BY retailer
-    `).all(selectedMarket).map(row => row.retailer).filter(Boolean);
+    /* Counted as well as listed: the partner page says how many listings each
+       connected shop has, and that figure has to come from the catalogue
+       rather than from anybody's memory of it. */
+    const byRetailer = db.prepare(`
+      SELECT COALESCE(NULLIF(retailer_name,''), source) AS retailer, COUNT(*) AS listings
+      FROM products WHERE ${where}
+      GROUP BY retailer ORDER BY listings DESC
+    `).all(selectedMarket).filter(row => row.retailer);
+    const retailers = byRetailer.map(row => row.retailer).slice().sort();
     const {highest} = db.prepare(`
       SELECT MAX(current_price) AS highest FROM products WHERE ${where}
     `).get(selectedMarket);
@@ -358,6 +363,9 @@ function expressWithHomepage(...args) {
        the range does not move just because the arithmetic moved. */
     const facets = {
       retailers,
+      /* Name and count together, for the page that tells a partner who is
+         already connected here. */
+      shops: byRetailer,
       price: {min: 5, max: Math.ceil((Number(highest) || 100) / 50) * 50},
     };
     cacheValue(cacheKey, facets, 60000);

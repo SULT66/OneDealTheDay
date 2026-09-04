@@ -396,19 +396,40 @@ export async function getRelated(marketCode: string, deal: Deal, limit = 4): Pro
  * both, so that happened twice per render, and it was most of why a search
  * took fourteen seconds.
  */
+type CatalogFacets = {
+  retailers: string[];
+  shops?: Array<{ retailer: string; listings: number }>;
+  price: { min: number; max: number };
+};
+
 const fetchFacets = cache(
-  async (marketCode: string): Promise<{ retailers: string[]; price: { min: number; max: number } }> => {
+  async (marketCode: string): Promise<CatalogFacets> => {
     const res = await fetch(
       `${BACKEND_URL}/api/catalog-facets?market=${encodeURIComponent(marketCode)}`,
       { next: { revalidate: 300 } },
     );
     if (!res.ok) throw new Error(`Failed to load filter facets for "${marketCode}" (${res.status}).`);
-    return (await res.json()) as { retailers: string[]; price: { min: number; max: number } };
+    return (await res.json()) as CatalogFacets;
   },
 );
 
 export async function getPriceBounds(marketCode: string): Promise<{ min: number; max: number }> {
   return (await fetchFacets(marketCode)).price;
+}
+
+/**
+ * The shops actually connected here, with how much each one supplies.
+ *
+ * Read from the catalogue rather than from a list somebody maintains, because
+ * a partner page naming a retailer who has stopped supplying listings is worse
+ * than no page. /us/stores was a 404 until now — the first thing an affiliate
+ * manager looks for, answered with a broken link.
+ */
+export async function getConnectedShops(
+  marketCode: string,
+): Promise<Array<{ retailer: string; listings: number }>> {
+  const facets = await fetchFacets(marketCode);
+  return (facets.shops ?? []).filter((shop) => shop.listings > 0);
 }
 
 /** Retailers present in the catalog, so the filter never offers an empty option. */
