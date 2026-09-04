@@ -45,6 +45,7 @@ const { recalculateCatalog } = require("./src/catalogRecalculation");
 const { TAXONOMY_VERSION } = require("./src/catalogTaxonomy");
 const { RELEASE_ID } = require("./src/release");
 const { parseSearchOptions, searchCatalogProducts } = require("./src/catalogSearch");
+const { storefrontUrl } = require("./src/storefrontLinks");
 const { applySearchIntent } = require("./src/searchIntent");
 const createExpressApp = express;
 const CANONICAL_HOST = "www.onedailydrop.com";
@@ -360,6 +361,29 @@ function expressWithHomepage(...args) {
       GROUP BY retailer ORDER BY listings DESC
     `).all(selectedMarket).filter(row => row.retailer);
     const retailers = byRetailer.map(row => row.retailer).slice().sort();
+
+    /* The shop's own domain, so a page can show its logo beside its name.
+       Derived from a listing rather than kept in a table: the icon service
+       takes a host and fetches that site's own favicon, and this is the only
+       place that knows which host belongs to which shop. Taken from the
+       front-door link, so a shop with no commissionable link has no host and
+       no row for the directory to draw. */
+    const shopHost = retailer => {
+      const row = db.prepare(`
+        SELECT * FROM products
+        WHERE ${where} AND COALESCE(NULLIF(retailer_name,''), source)=?
+        ORDER BY id DESC LIMIT 25
+      `).all(selectedMarket, retailer).find(product => storefrontUrl(product));
+      if (!row) return "";
+      try {
+        const link = storefrontUrl(row);
+        const carried = link.url.match(/[?&](?:ued|murl|url|u)=([^&]+)/);
+        const target = carried ? decodeURIComponent(carried[1]) : link.url;
+        return new URL(target).hostname.replace(/^www\./, "");
+      } catch {
+        return "";
+      }
+    };
     const {highest} = db.prepare(`
       SELECT MAX(current_price) AS highest FROM products WHERE ${where}
     `).get(selectedMarket);
@@ -370,7 +394,7 @@ function expressWithHomepage(...args) {
       retailers,
       /* Name and count together, for the page that tells a partner who is
          already connected here. */
-      shops: byRetailer,
+      shops: byRetailer.map(row => ({...row, host: shopHost(row.retailer)})),
       price: {min: 5, max: Math.ceil((Number(highest) || 100) / 50) * 50},
     };
     cacheValue(cacheKey, facets, 60000);

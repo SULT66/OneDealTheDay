@@ -164,12 +164,39 @@ assert(
 );
 
 /* The directory itself, which is where somebody browsing shops rather than
-   products arrives. */
+   products arrives. The linking moved into the marquee when the page stopped
+   being a table, so that is where it is checked now. */
+const marquee = read("components", "site", "StoreMarquee.tsx");
+/* A shop with no commissionable link reports no host, and a tile with no host
+   would be a logo that goes nowhere. */
 assert(
-  /\/go\/store\/\$\{slugifyCategory\(shop\.retailer\)\}/.test(
-    read("app", "[market]", "stores", "page.tsx"),
-  ),
+  /shops\.filter\(\(shop\) => shop\.host\)/.test(marquee),
+  "the directory draws shops it cannot build a paying link for",
+);
+assert(
+  /\/go\/store\/\$\{slugifyCategory\(shop\.retailer\)\}/.test(marquee),
   "the shop directory lists shops without linking to any of them",
+);
+
+/*
+ * A shop without a favicon must not draw a broken image.
+ *
+ * /api/retailer-icon answers 404 for a site whose icon it cannot read —
+ * Giftlab is one — and a torn-page glyph in a row of real logos reads as the
+ * page being broken. Checking `complete && naturalWidth === 0` on mount is the
+ * part that matters: the image is requested while the HTML is still streaming,
+ * so the error usually fires before React is listening, and an onError handler
+ * on its own leaves the placeholder on screen. That is exactly what happened
+ * the first time.
+ */
+const logo = read("components", "site", "StoreLogo.tsx");
+assert(
+  /naturalWidth === 0/.test(logo),
+  "a logo that failed before hydration stays on screen as a broken image again",
+);
+assert(
+  /<Storefront /.test(logo),
+  "a shop with no readable favicon is drawn with nothing, or with a letter that reads as somebody else's brand",
 );
 
 console.log("Storefront link checks passed: Awin deep and product-click links, Rakuten, eBay, labelled clicks, no guessed link, and links on the pages that need them.");

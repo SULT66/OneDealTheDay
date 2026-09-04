@@ -257,3 +257,47 @@ body {
 .fade-in {
   animation: fade-in 200ms ease-out both;
 }
+
+/* Store marquee — the shop logos travelling across the directory page.
+ *
+ * The track holds the list twice and moves exactly half its own width, so the
+ * second copy is where the first was when the loop restarts and there is no
+ * jump. Duration comes from the page as --marquee-duration, because a fixed
+ * time would run at a different speed for four shops than for twenty.
+ */
+@keyframes store-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.store-marquee-track {
+  animation: store-marquee var(--marquee-duration, 40s) linear infinite;
+  width: max-content;
+}
+
+/* Stop it while somebody is reading a name or aiming at a link. A row that
+   keeps sliding under the cursor is a row you cannot click. */
+.store-marquee:hover .store-marquee-track,
+.store-marquee:focus-within .store-marquee-track {
+  animation-play-state: paused;
+}
+
+/* Motion is decoration here; the shops are the content. With motion turned
+   down the track stands still and wraps onto as many lines as it needs, so
+   every shop is still reachable rather than parked off-screen. */
+@media (prefers-reduced-motion: reduce) {
+  .store-marquee-track {
+    animation: none;
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .store-marquee-track > [data-marquee-copy="2"] {
+    display: none;
+  }
+}

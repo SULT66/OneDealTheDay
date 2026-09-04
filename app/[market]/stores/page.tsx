@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { getConnectedShops, getMarket } from "@/lib/catalog";
-import { slugifyCategory } from "@/lib/backendAdapter";
 import { Prose } from "@/components/site/Prose";
+import { StoreMarquee } from "@/components/site/StoreMarquee";
 
 /**
  * Who OneDailyDrop is actually connected to.
@@ -12,9 +12,14 @@ import { Prose } from "@/components/site/Prose";
  * else is already here — and found a broken link, which answers the question
  * in the worst possible way.
  *
- * The list is read from the catalogue rather than kept by hand, so it cannot
- * name a shop that has stopped supplying listings, and the counts beside each
- * name are the ones a visitor can go and verify in the same catalogue.
+ * It first shipped as a table of shop, listing count and the network each feed
+ * arrives through. Accurate, and wrong for the page: which network a shop
+ * reaches us by is our plumbing, not something a visitor came here to read,
+ * and printing it made a page about shops read like a technical appendix. The
+ * shops are the content, so the shops are what is on it.
+ *
+ * The list is still read from the catalogue rather than kept by hand, so it
+ * cannot name a shop that has stopped supplying listings.
  */
 export async function generateMetadata({
   params,
@@ -25,21 +30,10 @@ export async function generateMetadata({
   return {
     title: "Stores we work with",
     description:
-      "The retailers whose listings appear on OneDailyDrop, how they reach us, and what it takes to be added.",
+      "The retailers whose listings appear on OneDailyDrop, and how to be added.",
     alternates: { canonical: `/${market}/stores` },
   };
 }
-
-/* How each shop's listings reach us. Kept here rather than in the catalogue
-   because it describes a commercial relationship, not a product. */
-const HOW_THEY_REACH_US: Record<string, string> = {
-  eBay: "eBay Partner Network, through the Browse API",
-  Newegg: "Rakuten Advertising, through the product search API",
-  Tribesigns: "Awin product feed",
-  Mooncool: "Awin product feed",
-  Giftlab: "Awin product feed",
-  "King Koil": "Awin product feed",
-};
 
 export default async function StoresPage({
   params,
@@ -56,67 +50,34 @@ export default async function StoresPage({
       market={market}
       crumb="Stores"
       title="Stores we work with"
-      lede="Every retailer whose listings appear here, and how each one reaches us."
+      lede="Every retailer whose listings appear here."
     >
       <p>
         These are the shops connected to OneDailyDrop in{" "}
-        {info?.country ?? "this market"} today — {total.toLocaleString("en-US")}{" "}
-        listings between them. The list is read from the catalog itself rather
-        than kept by hand, so a shop that stops supplying listings stops
-        appearing here without anybody having to remember to remove it.
+        {info?.country ?? "this market"} today &mdash;{" "}
+        {total.toLocaleString("en-US")} listings between them. Every name links
+        straight through to that shop.
       </p>
 
-      <table>
-        <thead>
-          <tr>
-            <th scope="col">Store</th>
-            <th scope="col">Listings</th>
-            <th scope="col">How its listings reach us</th>
-          </tr>
-        </thead>
-        <tbody>
-          {shops.map((shop) => (
-            <tr key={shop.retailer}>
-              <td>
-                {/* Through the network, not straight at the shop. The link the
-                    visitor follows is built from a listing's own affiliate link
-                    with the destination swapped for the shop's front door, so a
-                    visitor who arrives and then buys something else entirely is
-                    still a visitor we sent. A link pointing at the shop itself
-                    would read identically on the page and earn nothing. */}
-                <a
-                  href={`/${market}/go/store/${slugifyCategory(shop.retailer)}`}
-                  rel="sponsored nofollow noopener"
-                  target="_blank"
-                >
-                  {shop.retailer}
-                </a>
-              </td>
-              <td className="tnum">{shop.listings.toLocaleString("en-US")}</td>
-              <td>{HOW_THEY_REACH_US[shop.retailer] ?? "Affiliate product feed"}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <StoreMarquee market={market} shops={shops} />
 
-      <p>
-        Each shop&rsquo;s name links to that shop through the affiliate network
-        it reaches us by, which means we may earn a commission on what you buy
-        there &mdash; on anything you buy there, not only on the listings shown
-        here. It costs you nothing and changes no price. It is also the only
-        reason this site can be free to read, and the reason the{" "}
-        <Link href={`/${market}/how-we-select-deals`}>ranking rules</Link> are
-        published: a site paid this way has to be checkable.
+      {/* Required, and kept to one sentence. The FTC asks for a disclosure a
+          visitor can find near the links it describes, and an affiliate manager
+          reviewing this site looks for the same thing. It is also simply true,
+          and a page that hides how it is paid for is a page nobody should
+          believe. */}
+      <p className="text-sm text-fg-muted">
+        These are affiliate links: we may earn a commission on anything you buy
+        at these shops, at no cost to you and with no change to any price.
       </p>
 
       <h2>What being here does and does not mean</h2>
       <p>
-        A shop appearing on this page has an affiliate relationship with us and
-        supplies a product feed or an API. It does not mean the shop pays for
-        placement, chooses which of its products appear, or has any say in how
-        they are scored — none of those are things we sell. A retailer sees the
-        same ranking rules as every other retailer, and can be outranked by them
-        on its own listings.
+        A shop appearing on this page supplies us with its listings. It does not
+        mean the shop pays for placement, chooses which of its products appear,
+        or has any say in how they are scored &mdash; none of those are things
+        we sell. A retailer sees the same ranking rules as every other retailer,
+        and can be outranked by them on its own listings.
       </p>
       <p>
         It also does not mean every listing a shop sends is published. Listings
@@ -126,15 +87,9 @@ export default async function StoresPage({
 
       <h2>Being added</h2>
       <p>
-        We connect through the usual affiliate networks — Awin, Rakuten
-        Advertising, Impact, CJ — and can read a standard product feed or a
-        documented API. The{" "}
-        <Link href={`/${market}/for-retailers`}>partner page</Link> covers what
-        we need in a feed, how listings are scored, and what a Live Drop
-        involves.
-      </p>
-      <p>
-        If you run a shop and want to be on this list, write to{" "}
+        The <Link href={`/${market}/for-retailers`}>partner page</Link> covers
+        what we need in a feed, how listings are scored, and what a Live Drop
+        involves. If you run a shop and want to be on this list, write to{" "}
         <a href="mailto:info@onedailydrop.com">info@onedailydrop.com</a>.
       </p>
     </Prose>
