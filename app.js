@@ -290,7 +290,8 @@ function expressWithHomepage(...args) {
            it. Left out when display_shop_all was added and the field was
            verified on /api/products, which is the uncompacted payload nothing
            on the site actually reads: every page goes through compact=1. */
-        display_shop_all:shaped.display_shop_all
+        display_shop_all:shaped.display_shop_all,
+        display_price_is_current:shaped.display_price_is_current
       };
     };
 

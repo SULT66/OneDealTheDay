@@ -8,6 +8,22 @@ const EDITORIAL_CONFIDENCE_FLOOR = 55;
 /* Commerce quality averages only over the signals a listing actually has, so
    this is the same bar the drop already applies to it in isDailyPickEligible. */
 const EDITORIAL_QUALITY_FLOOR = 0.45;
+/*
+ * How old a price may be and still be presented as this shop's price.
+ *
+ * Not a style choice. A shopper found an eBay backpack listed here at $79.95
+ * that the seller had since raised to $99.95, under a badge reading "59% below
+ * reference" — a saving worked out from a price nobody had confirmed in two
+ * days. Of 215 listings carrying a discount badge, 92 were computed from a
+ * price older than this.
+ *
+ * The last known price still shows, with the date it was last confirmed beside
+ * it, because a two-day-old price is useful information. What stops is the
+ * arithmetic performed on it: a discount is a claim about right now, and this
+ * is the line past which we no longer know.
+ */
+const PRICE_CONFIDENT_HOURS = 24;
+
 const PUBLIC_SCORE_FLOOR = 82;
 const PUBLIC_SCORE_CEILING = 95;
 
@@ -252,6 +268,11 @@ function presentProduct(product, language = "en") {
   const checkedDate = checkedAt && !Number.isNaN(new Date(checkedAt).getTime())
     ? new Date(checkedAt).toLocaleString(languageTag(product.market, language))
     : "";
+  const checkedTime = checkedAt ? new Date(checkedAt).getTime() : NaN;
+  /* Unknown counts as not current: a listing with no check date is the one we
+     know least about, not the one to trust most. */
+  const priceIsCurrent = Number.isFinite(checkedTime)
+    && Date.now() - checkedTime <= PRICE_CONFIDENT_HOURS * 3600 * 1000;
   const store = clean(product.retailer_name) || clean(product.source) || t(language, "product.retailer");
   const displayShipping = localizeShipping(product.shipping_summary, product, language);
   const displayReturns = localizeReturns(product.return_summary, language);
@@ -316,8 +337,14 @@ function presentProduct(product, language = "en") {
     display_shop_all: Boolean(storefrontUrl(product)),
     display_shop_all_label: t(language, "product.shopAllAt", { store }),
     display_price_history_label: t(language, "product.priceHistory"),
-    display_save_label: discount > 0 ? t(language, "product.belowReferencePercent", { percent: discount }) : "",
-    display_off_label: discount > 0 ? t(language, "product.off", { percent: discount }) : "",
+    /* A saving is arithmetic on a price, so it can be no fresher than the
+       price. Past the confidence window both of these go quiet rather than
+       repeating yesterday's percentage as though it were today's. */
+    display_save_label: discount > 0 && priceIsCurrent ? t(language, "product.belowReferencePercent", { percent: discount }) : "",
+    display_off_label: discount > 0 && priceIsCurrent ? t(language, "product.off", { percent: discount }) : "",
+    /* Published so the pages can make the same decision once, in one place,
+       instead of each re-deriving "how old is too old" from checked_at. */
+    display_price_is_current: priceIsCurrent,
     display_reviews_label: t(language, "product.reviews"),
     display_review_count: Math.round(number(product.review_count)).toLocaleString(languageTag(product.market, language)),
     display_score: dealScore,

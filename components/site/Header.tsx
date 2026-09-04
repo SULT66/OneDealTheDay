@@ -110,18 +110,20 @@ export async function Header({ market }: { market: string }) {
               this row is a short, fixed list instead of one tab per category. */}
           <ul className="flex items-center gap-1 overflow-x-auto py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {[
+              /* First, ahead of the drop. A live event is the only thing on
+                 this row that can be over by the time somebody looks again,
+                 and it was sitting second where it read as one more browsing
+                 tab. Red in both states, with the dot doing the work — see
+                 LiveNavLink. */
+              { href: `/${market}/live`, label: t(language, "app.nav.live"), live: true },
               {
                 href: `/${market}/daily-drop`,
-                label: t(language, "app.nav.dailyDrop"),
                 // The drop is the one thing on this row worth a visitor's
-                // full attention, so it keeps the brand colour the other
-                // three (browsing/info) tabs don't.
+                // full attention, so it keeps the brand colour the browsing
+                // and information tabs don't.
                 accent: true,
+                label: t(language, "app.nav.dailyDrop"),
               },
-              /* Second, behind the daily drop. It is grey and quiet on the
-                 days nothing is running, and grows a pulsing dot only while a
-                 drop is open or about to be. */
-              { href: `/${market}/live`, label: t(language, "app.nav.live"), live: true },
               { href: `/${market}/category`, label: t(language, "nav.categories") },
               { href: `/${market}/about`, label: t(language, "app.footer.about") },
               {
@@ -133,6 +135,10 @@ export async function Header({ market }: { market: string }) {
                  row above turns into Log out once somebody is signed in, so
                  this row is the only way back to the list. */
               { href: `/${market}/saved`, label: t(language, "app.nav.saved") },
+              /* The shops behind the catalogue, and the one page on the
+                 site whose links pay on anything bought after them. It lived
+                 in the footer, where a page nobody scrolls to earns nothing. */
+              { href: `/${market}/stores`, label: t(language, "app.nav.stores") },
             ].map((item) => (
               <li key={item.href} className="shrink-0">
                 {item.live ? (

@@ -66,6 +66,7 @@ export type RawProduct = {
   return_summary: string | null;
   display_availability: string | null;
   display_shop_all?: boolean;
+  display_price_is_current?: boolean;
   availability: string | null;
   selection_reason: string | null;
   display_selection_reason: string | null;
@@ -122,10 +123,24 @@ export function adaptProduct(raw: RawProduct): Omit<Deal, "rank"> {
     image,
     images: image ? [image] : [],
     price: raw.current_price,
+    /*
+     * No reference price once the current price is out of date, and that is
+     * deliberately the only place this decision is made.
+     *
+     * Every discount on the site — the card badge, the pill beside the price,
+     * the "discounted only" filter, the sort by biggest saving — is
+     * discountPercent(price, referencePrice). Withholding the reference turns
+     * all of them off at once, which is the only way to be sure none of them
+     * is left quietly claiming a saving worked out from a price nobody has
+     * confirmed since Tuesday.
+     */
     referencePrice:
-      raw.original_price && raw.original_price > raw.current_price
-        ? raw.original_price
-        : null,
+      raw.display_price_is_current === false
+        ? null
+        : raw.original_price && raw.original_price > raw.current_price
+          ? raw.original_price
+          : null,
+    priceIsCurrent: raw.display_price_is_current !== false,
     currency: raw.currency,
     score: raw.display_score,
     rating: raw.rating ?? 0,
