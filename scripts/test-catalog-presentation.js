@@ -335,4 +335,39 @@ assert(
   "the noindex search page is advertised in the sitemap again",
 );
 
-console.log("Catalogue presentation checks passed: numbering, score order, one count, honest stock, one URL per thing, real search, cheap facets, partner pages.");
+
+/* ------------------------------------- the payload the site actually reads */
+
+/*
+ * Every page reads /api/products?compact=1, and nothing reads the full one.
+ *
+ * display_shop_all was added to presentProduct, verified on /api/products, and
+ * shipped — and the store link still did not appear on a single product page,
+ * because the compact projection lists its fields by hand and the new one was
+ * not on the list. The field existed, the check that found it looked at the
+ * payload no page fetches, and the page went on rendering nothing.
+ *
+ * So this is checked as a contract rather than field by field: whatever the
+ * adapter reads off a raw product, the compact response has to carry.
+ */
+const compactStart = appSource.indexOf("if (!compactResponse) return shaped;");
+const compactBlock = compactStart > 0
+  ? appSource.slice(compactStart, appSource.indexOf("};", compactStart))
+  : "";
+assert(compactBlock, "the compact product projection moved out of app.js");
+const compactFields = new Set(
+  [...compactBlock.matchAll(/^\s+(display_[a-z_]+):/gm)].map((match) => match[1]),
+);
+const adapterReads = [
+  ...new Set([...adapter.matchAll(/raw\.(display_[a-z_]+)/g)].map((match) => match[1])),
+];
+assert(adapterReads.length > 0, "the adapter reads no display fields at all, which cannot be right");
+for (const field of adapterReads) {
+  assert(
+    compactFields.has(field),
+    `${field} is read by the front end but left out of the compact payload every page fetches, ` +
+    "so it arrives undefined and whatever depends on it silently disappears",
+  );
+}
+
+console.log("Catalogue presentation checks passed: numbering, score order, one count, honest stock, one URL per thing, real search, cheap facets, partner pages, complete compact payload.");
