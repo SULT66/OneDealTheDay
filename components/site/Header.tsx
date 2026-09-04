@@ -7,6 +7,8 @@ import { SearchBox } from "./SearchBox";
 import { ThemeToggle } from "./ThemeToggle";
 import { DeliaTrigger } from "@/components/delia/DeliaTrigger";
 import { LiveNavLink } from "@/components/live/LiveNavLink";
+import { NavLink } from "./NavLink";
+import { DropNavButton } from "./DropNavButton";
 
 /**
  * Site chrome. Navigation sits in the same place on every page and the category
@@ -110,17 +112,11 @@ export async function Header({ market }: { market: string }) {
               this row is a short, fixed list instead of one tab per category. */}
           <ul className="flex items-center gap-1 overflow-x-auto py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {[
-              {
-                href: `/${market}/daily-drop`,
-                label: t(language, "app.nav.dailyDrop"),
-                // The drop is the one thing on this row worth a visitor's
-                // full attention, so it keeps the brand colour the other
-                // three (browsing/info) tabs don't.
-                accent: true,
-              },
-              /* Second, behind the daily drop. It is grey and quiet on the
-                 days nothing is running, and grows a pulsing dot only while a
-                 drop is open or about to be. */
+              /* First, ahead of everything. A live event is the only thing on
+                 this row that can be over by the time somebody looks again,
+                 and it was sitting second where it read as one more browsing
+                 tab. Red in both states, with the dot doing the work — see
+                 LiveNavLink. */
               { href: `/${market}/live`, label: t(language, "app.nav.live"), live: true },
               { href: `/${market}/category`, label: t(language, "nav.categories") },
               { href: `/${market}/about`, label: t(language, "app.footer.about") },
@@ -133,24 +129,39 @@ export async function Header({ market }: { market: string }) {
                  row above turns into Log out once somebody is signed in, so
                  this row is the only way back to the list. */
               { href: `/${market}/saved`, label: t(language, "app.nav.saved") },
+              /* The shops behind the catalogue, and the one page on the site
+                 whose links pay on anything bought after them. It lived in the
+                 footer, where a page nobody scrolls to earns nothing. */
+              { href: `/${market}/stores`, label: t(language, "app.nav.stores") },
             ].map((item) => (
-              <li key={item.href} className="shrink-0">
+              /* Ordered rather than left to the DOM, because the row wants a
+                 different shape on a phone — see the drop button below. */
+              <li
+                key={item.href}
+                className={`shrink-0 sm:order-none ${item.live ? "order-1" : "order-3"}`}
+              >
                 {item.live ? (
                   <LiveNavLink market={market} label={item.label} />
                 ) : (
-                  <Link
-                    href={item.href}
-                    className={
-                      item.accent
-                        ? "inline-flex h-9 items-center rounded-full px-4 text-sm font-semibold text-lime-deep transition-colors hover:bg-surface-2"
-                        : "inline-flex h-9 items-center rounded-full px-4 text-sm text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg"
-                    }
-                  >
-                    {item.label}
-                  </Link>
+                  <NavLink href={item.href} label={item.label} />
                 )}
               </li>
             ))}
+            {/* Pushed to the far end, away from Live: two anchors with the
+                browsing links between them, rather than both loud items
+                crowded at one side and a grey tail after them.
+
+                Not on a phone, though. There the row scrolls, so "the far
+                end" means off-screen, and the lime button in the row above is
+                hidden below sm — which would leave the drop with no visible
+                way in at all on the smallest screens. It sits second there,
+                straight after Live. */}
+            <li className="order-2 shrink-0 sm:order-none sm:ml-auto sm:pl-3">
+              <DropNavButton
+                href={`/${market}/daily-drop`}
+                label={t(language, "app.nav.dailyDrop")}
+              />
+            </li>
           </ul>
         </nav>
       </div>

@@ -52,6 +52,9 @@ export type Deal = {
   /** True when a commissionable link to this shop's front door can be built.
       False means no link is offered rather than one that pays nobody. */
   shopAll: boolean;
+  /** False once the price is older than the backend's confidence window. The
+      price still shows, with its date; no saving is claimed from it. */
+  priceIsCurrent: boolean;
   /** Bullet reasons this listing was selected. */
   whyWePicked: string[];
   strengths: string[];

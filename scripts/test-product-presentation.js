@@ -106,4 +106,56 @@ assert(spanish.display_selection_reason.includes("eBay no facilitó una valoraci
 assert.strictEqual(categoryLabel("Electronics", "fr"), "Électronique");
 assert.strictEqual(categoryLabel("Home & Kitchen", "de"), "Wohnen und Küche");
 
+
+/* ------------------------------------------ a saving is a claim about today */
+
+/*
+ * A shopper found an eBay backpack listed here at $79.95 under a badge reading
+ * "59% below reference". The seller had raised it to $99.95; our price was two
+ * days old, because eBay's American refresh had failed five runs in a row and,
+ * even when it succeeds, only re-prices what its keyword rotation happens to
+ * rediscover. Of 215 listings carrying a discount badge, 92 were computed from
+ * a price older than a day.
+ *
+ * The price itself may be stale and still be worth showing, with its date. The
+ * arithmetic performed on it may not: a percentage off is a claim about right
+ * now.
+ */
+const { presentProduct: present } = require("../src/productPresentation");
+
+const listing = (hoursAgo) => ({
+  id: 1,
+  title: "Oakley Icon RC Backpack Travel Pack",
+  market: "us",
+  currency: "USD",
+  current_price: 79.95,
+  original_price: 195,
+  retailer_name: "eBay",
+  checked_at: new Date(Date.now() - hoursAgo * 3600 * 1000).toISOString(),
+});
+
+const freshly = present(listing(1), "en");
+assert.strictEqual(freshly.display_price_is_current, true, "a price checked an hour ago is treated as out of date");
+assert(freshly.display_save_label, "a freshly checked price stopped showing its saving");
+
+const yesterday = present(listing(50), "en");
+assert.strictEqual(yesterday.display_price_is_current, false, "a price two days old is presented as current");
+assert.strictEqual(
+  yesterday.display_save_label,
+  "",
+  "a saving is still worked out from a price nobody has confirmed in two days",
+);
+assert.strictEqual(yesterday.display_off_label, "", "the percentage-off pill survives on a stale price");
+/* The price itself stays. Withholding it would leave the page saying nothing
+   at all about what the thing costs, which helps nobody. */
+assert(yesterday.display_current_price, "the last known price was withheld along with the saving");
+
+/* Nothing to go on is not the same as recently checked. */
+assert.strictEqual(
+  present({...listing(1), checked_at: ""}, "en").display_price_is_current,
+  false,
+  "a listing with no check date at all is treated as freshly checked",
+);
+
+
 console.log("Localized product presentation and trust messaging passed.");

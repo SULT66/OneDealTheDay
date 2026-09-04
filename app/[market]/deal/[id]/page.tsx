@@ -246,10 +246,24 @@ export default async function DealPage({
             </p>
           ) : null}
 
+          {/* Two sentences, not one, when the price is old. The date alone is
+              true and easy to read past; a shopper who lands on a listing that
+              has since gone up should have been told in words, not left to
+              work out what a timestamp meant. */}
           <p className="text-xs text-fg-subtle tnum">
-            Price checked {formatDateTime(deal.checkedAt, market)}. Check the current
-            price and availability on the retailer&apos;s website.{" "}
-            {info?.country ?? "local"} terms apply at checkout.
+            {deal.priceIsCurrent ? (
+              <>Price checked {formatDateTime(deal.checkedAt, market)}.</>
+            ) : (
+              <>
+                <strong className="font-semibold text-fg-muted">
+                  This price was last confirmed{" "}
+                  {formatDateTime(deal.checkedAt, market)} and may have changed
+                  since.
+                </strong>{" "}
+              </>
+            )}{" "}
+            Check the current price and availability on the retailer&apos;s
+            website. {info?.country ?? "local"} terms apply at checkout.
           </p>
         </div>
       </div>
