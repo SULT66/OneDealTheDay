@@ -48,7 +48,7 @@ export function StoreMarquee({
       data-marquee-copy={copy === 2 ? "2" : undefined}
       className="group flex shrink-0 items-center gap-3 rounded-2xl border border-border bg-surface px-6 py-4 transition-colors hover:border-fg-subtle"
     >
-      <StoreLogo host={shop.host} name={shop.retailer} />
+      <StoreLogo host={shop.host} />
       <span className="whitespace-nowrap text-base font-semibold text-fg">
         {shop.retailer}
       </span>

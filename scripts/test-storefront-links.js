@@ -195,8 +195,8 @@ assert(
   "a logo that failed before hydration stays on screen as a broken image again",
 );
 assert(
-  /name\.slice\(0, 1\)/.test(logo),
-  "a shop with no readable favicon is drawn with nothing where its logo goes",
+  /<Storefront /.test(logo),
+  "a shop with no readable favicon is drawn with nothing, or with a letter that reads as somebody else's brand",
 );
 
 console.log("Storefront link checks passed: Awin deep and product-click links, Rakuten, eBay, labelled clicks, no guessed link, and links on the pages that need them.");
