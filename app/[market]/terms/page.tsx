@@ -11,10 +11,20 @@ import { Prose } from "@/components/site/Prose";
  * The params type is spelled out rather than using the generated `PageProps`
  * helper so a brand-new route compiles on a clean checkout.
  */
-export const metadata: Metadata = {
-  title: "Terms of Use",
-  description: "The terms you agree to by using OneDailyDrop.",
-};
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ market: string }>;
+}): Promise<Metadata> {
+  const { market } = await params;
+  return {
+    title: "Terms of Use",
+    description: "The terms you agree to by using OneDailyDrop.",
+    /* The same words live at five market prefixes; this says which one is the
+       original rather than leaving search engines to pick. */
+    alternates: { canonical: `/${market}/terms` },
+  };
+}
 
 export default async function TermsPage({
   params,
