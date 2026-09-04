@@ -2,11 +2,21 @@ import type { Metadata } from "next";
 import { getCatalogSize, getMarkets } from "@/lib/catalog";
 import { Prose } from "@/components/site/Prose";
 
-export const metadata: Metadata = {
-  title: "Partner with OneDailyDrop",
-  description:
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ market: string }>;
+}): Promise<Metadata> {
+  const { market } = await params;
+  return {
+    title: "Partner with OneDailyDrop",
+    description:
     "What OneDailyDrop is, how listings are selected, what a retailer gets, and how to reach the partnerships contact.",
-};
+    /* The same words live at five market prefixes; this says which one is the
+       original rather than leaving search engines to pick. */
+    alternates: { canonical: `/${market}/for-retailers` },
+  };
+}
 
 /**
  * The page an affiliate manager looks for before approving an application.

@@ -6,6 +6,10 @@ const helmet = require("helmet");
 const cron = require("node-cron");
 const Stripe = require("stripe");
 const db = require("./db");
+const {
+  bootstrapPersonalPostgres,
+  health: personalPostgresHealth,
+} = require("./personalPostgres");
 const c = require("./config");
 const { refreshProducts, localDate } = require("./refresh");
 const { runLinkHealthCheck } = require("./linkHealth");
@@ -2588,7 +2592,8 @@ app.get("/api/status", (req,res) => {
     brands:db.prepare(`SELECT COUNT(DISTINCT brand_slug) n FROM products WHERE status='published' AND ${sourceSql()} AND brand_slug<>''`).get().n,
     clicks:db.prepare(`SELECT COUNT(*) n FROM clicks c JOIN products p ON p.id=c.product_id WHERE c.destination_type='retailer' AND ${sourceSql("p")}`).get().n,
     priceObservations:db.prepare(`SELECT COUNT(*) n FROM price_history h JOIN products p ON p.id=h.product_id WHERE ${sourceSql("p")}`).get().n,
-    lastRun:c.liveRefreshEnabled ? latestRun : null
+    lastRun:c.liveRefreshEnabled ? latestRun : null,
+    personalDatabase:personalPostgresHealth()
   });
 });
 /*
@@ -3205,6 +3210,7 @@ app.use((error, req, res, next) => {
 (async () => {
   backfillBrands();
   await nextApp.prepare();
+  await bootstrapPersonalPostgres(db);
   app.listen(c.port, () => {
     console.log(`http://localhost:${c.port}`);
     // Azure production recovery is owned by app.js so only one initial API

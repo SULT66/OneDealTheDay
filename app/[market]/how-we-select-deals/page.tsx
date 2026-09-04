@@ -2,11 +2,21 @@ import type { Metadata } from "next";
 import { getMarket } from "@/lib/catalog";
 import { Prose } from "@/components/site/Prose";
 
-export const metadata: Metadata = {
-  title: "How we select deals",
-  description:
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ market: string }>;
+}): Promise<Metadata> {
+  const { market } = await params;
+  return {
+    title: "How we select deals",
+    description:
     "The evidence behind every OneDailyDrop pick: price signal, product quality and seller confidence, and what the Score does not measure.",
-};
+    /* The same words live at five market prefixes; this says which one is the
+       original rather than leaving search engines to pick. */
+    alternates: { canonical: `/${market}/how-we-select-deals` },
+  };
+}
 
 export default async function HowWeSelectPage({
   params,

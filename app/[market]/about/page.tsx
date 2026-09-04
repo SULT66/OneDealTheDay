@@ -2,11 +2,21 @@ import type { Metadata } from "next";
 import { getCatalogSize, getCategoriesWithCounts, getMarket } from "@/lib/catalog";
 import { Prose } from "@/components/site/Prose";
 
-export const metadata: Metadata = {
-  title: "About OneDailyDrop",
-  description:
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ market: string }>;
+}): Promise<Metadata> {
+  const { market } = await params;
+  return {
+    title: "About OneDailyDrop",
+    description:
     "What OneDailyDrop checks before it recommends anything, how it makes money, and what it deliberately does not do.",
-};
+    /* The same words live at five market prefixes; this says which one is the
+       original rather than leaving search engines to pick. */
+    alternates: { canonical: `/${market}/about` },
+  };
+}
 
 /**
  * Rewritten to describe the site as it now works.
@@ -97,11 +107,18 @@ export default async function AboutPage({
 
       <h2>Delia</h2>
       <p>
-        Delia searches the checked catalog rather than the wider web, so
-        anything she offers has already been through the same checks as
-        everything else here. Speech recognition runs in your browser and needs
-        no account; where a browser has none, the same assistant works by
-        typing.
+        {/* This paragraph said she searches the catalogue "rather than the
+            wider web" while the paragraph at the top of the page said she
+            looks beyond it. Both were on the same page; only the second was
+            true. */}
+        Delia searches the checked catalog first, so anything she offers from
+        it has already been through the same checks as everything else here.
+        She will also look further afield when the catalog cannot answer —
+        we have agreements with a handful of shops, not with every shop — and
+        she says which is which, because a listing we have checked and a page
+        we have merely found are not the same thing. Speech recognition runs in
+        your browser and needs no account; where a browser has none, the same
+        assistant works by typing.
       </p>
 
       <h2>Who runs it</h2>
