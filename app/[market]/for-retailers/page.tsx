@@ -67,11 +67,26 @@ export default async function ForRetailersPage({
 
       <h2>How a listing gets published</h2>
       <p>
-        A listing has to have a working commissionable link, a current price, a
-        known delivery cost, a stated returns policy and stock. It is then
-        scored on price evidence, product rating, review volume, seller history
-        and delivery terms. Links are re-checked nightly and a dead one is
-        withdrawn automatically.
+        A listing has to have a working commissionable link, a current price and
+        an image. It is then scored on price evidence, product rating, review
+        volume, seller history and, where the source supplies them, delivery and
+        returns terms. Links are re-checked nightly and a dead one is withdrawn
+        automatically.
+      </p>
+      <p>
+        {/* This said a known delivery cost and a stated returns policy were
+            required before publication. They are not, and most of the catalogue
+            does not carry them — a claim any partner can check in about a
+            minute, and one worth more to us as an admission than as a
+            promise. */}
+        Delivery and returns are worth spelling out, because we are strict about
+        them in one place and not in another. They are not required to be
+        listed: eBay publishes both per listing, most product feeds publish
+        neither, and a listing without them appears with &ldquo;confirm at
+        retailer&rdquo; where the figure would go rather than a number we made
+        up. They <em>are</em> required to be the Daily Drop or a Live Drop,
+        because those put a price in front of somebody as a recommendation, and
+        we will not recommend a price that is not the price they pay.
       </p>
       <p>
         Placement is not for sale. Commission rate is not an input to any score,
@@ -79,6 +94,37 @@ export default async function ForRetailersPage({
         Drop. If you ask us to feature a product, the honest answer will be no,
         which is the same answer your competitors get, and the reason a
         recommendation here is worth anything.
+      </p>
+
+      {/* The format this page exists to explain, and did not mention at all
+          while it was being pitched to merchants. */}
+      <h2>Live Drop</h2>
+      <p>
+        One product, one price, ten minutes, announced in advance. Shoppers
+        arrive at a waiting room before it opens; the price is not on the page
+        and not in the page&rsquo;s data until the second it starts, so there is
+        nothing to find early. An AI host presents the product and says the
+        price out loud the moment it opens. When the ten minutes are up the
+        offer closes and the page says so.
+      </p>
+      <p>
+        It exists because a catalog rewards a shopper who is already looking.
+        A Live Drop gives somebody a reason to arrive at a particular minute,
+        and it gives one product the whole screen instead of a row in a grid.
+      </p>
+      <p>
+        What we need from a retailer is a real offer: a product, a price that is
+        genuinely better than the everyday one, a commissionable link, and the
+        delivery and returns terms that go with it. We run the event, write the
+        script, notify the people who asked to be reminded, and report back
+        afterwards — how many waited, how many saw the reveal, how many clicked
+        through. What we will not do is invent scarcity: we do not hold your
+        stock and cannot see it, so the pressure in a Live Drop is the clock,
+        which is real, and never a countdown of units, which would not be.
+      </p>
+      <p>
+        If a first one interests you, the shortest version is a single product
+        for ten minutes, with no commitment beyond that day.
       </p>
 
       <h2>What a retailer gets</h2>

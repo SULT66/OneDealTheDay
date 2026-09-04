@@ -297,4 +297,42 @@ assert(
   "the facets endpoint is gone, so the filter panel has nothing cheap to call",
 );
 
-console.log("Catalogue presentation checks passed: numbering, score order, one count, honest stock, one URL per thing, real search, cheap facets.");
+/*
+ * The two pages a partner reads before answering a pitch.
+ *
+ * /us/stores was a 404 while the site invited retailers to partner with it —
+ * the first thing an affiliate manager looks for, answered with a broken link.
+ * And the partner page never mentioned Live Drop, the format it was about to
+ * be pitched on, while still promising that every listing carries a known
+ * delivery cost and returns policy, which most of the catalogue does not.
+ */
+const retailerPage = read("app", "[market]", "for-retailers", "page.tsx");
+assert(/Live Drop<\/h2>/.test(retailerPage), "the partner page does not mention Live Drop");
+assert(
+  !/known delivery cost, a stated returns policy and stock\. It is then/.test(retailerPage),
+  "the partner page promises delivery and returns on every listing again",
+);
+assert(
+  /never a countdown of units/.test(retailerPage),
+  "the Live Drop section no longer rules out inventing scarcity, which is what a reviewer checks",
+);
+assert(
+  fs.existsSync(path.join(__dirname, "..", "app", "[market]", "stores", "page.tsx")),
+  "the stores page is gone, so the partner page links to a 404 again",
+);
+/* A page under app/[market] that Express does not know about is a live 404,
+   which is how /us/daily-drop shipped broken once already. */
+assert(
+  /\|stores\|/.test(serverSourceForSlugs),
+  "Express does not route /stores to Next, so the page 404s however well it renders",
+);
+assert(
+  /"\/stores"/.test(serverSourceForSlugs),
+  "the stores page is not in the sitemap, so nobody finds it",
+);
+assert(
+  !/"\/daily-drop", "\/search"/.test(serverSourceForSlugs),
+  "the noindex search page is advertised in the sitemap again",
+);
+
+console.log("Catalogue presentation checks passed: numbering, score order, one count, honest stock, one URL per thing, real search, cheap facets, partner pages.");
