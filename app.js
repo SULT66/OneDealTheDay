@@ -32,6 +32,7 @@ const express = require("express");
 const helmet = require("helmet");
 const cron = require("node-cron");
 const db = require("./src/db");
+const { health: personalPostgresHealth } = require("./src/personalPostgres");
 const config = require("./src/config");
 const { localizeProduct } = require("./src/demoTranslations");
 const { presentProduct } = require("./src/productPresentation");
@@ -119,7 +120,8 @@ function catalogStatus(marketCode = "") {
     automatedCatalogConfigured: config.provider !== "unconfigured",
     affiliateTagConfigured: marketCode ? Boolean(config.affiliateTagForMarket(marketCode)) : Boolean(config.affiliateTagConfigured),
     searchKeywordCount: config.searchKeywords.length,
-    lastRun: config.liveRefreshEnabled ? latestRun : null
+    lastRun: config.liveRefreshEnabled ? latestRun : null,
+    personalDatabase: personalPostgresHealth()
   };
 }
 
