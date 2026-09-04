@@ -284,7 +284,12 @@ function expressWithHomepage(...args) {
         display_seller_feedback:shaped.display_seller_feedback,
         display_shipping_summary:shaped.display_shipping_summary,
         display_return_summary:shaped.display_return_summary,
-        display_availability:shaped.display_availability
+        display_availability:shaped.display_availability,
+        /* One boolean, and the product page cannot draw its store link without
+           it. Left out when display_shop_all was added and the field was
+           verified on /api/products, which is the uncompacted payload nothing
+           on the site actually reads: every page goes through compact=1. */
+        display_shop_all:shaped.display_shop_all
       };
     };
 
