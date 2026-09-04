@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { getConnectedShops, getMarket } from "@/lib/catalog";
+import { slugifyCategory } from "@/lib/backendAdapter";
 import { Prose } from "@/components/site/Prose";
 
 /**
@@ -76,13 +77,37 @@ export default async function StoresPage({
         <tbody>
           {shops.map((shop) => (
             <tr key={shop.retailer}>
-              <td>{shop.retailer}</td>
+              <td>
+                {/* Through the network, not straight at the shop. The link the
+                    visitor follows is built from a listing's own affiliate link
+                    with the destination swapped for the shop's front door, so a
+                    visitor who arrives and then buys something else entirely is
+                    still a visitor we sent. A link pointing at the shop itself
+                    would read identically on the page and earn nothing. */}
+                <a
+                  href={`/${market}/go/store/${slugifyCategory(shop.retailer)}`}
+                  rel="sponsored nofollow noopener"
+                  target="_blank"
+                >
+                  {shop.retailer}
+                </a>
+              </td>
               <td className="tnum">{shop.listings.toLocaleString("en-US")}</td>
               <td>{HOW_THEY_REACH_US[shop.retailer] ?? "Affiliate product feed"}</td>
             </tr>
           ))}
         </tbody>
       </table>
+
+      <p>
+        Each shop&rsquo;s name links to that shop through the affiliate network
+        it reaches us by, which means we may earn a commission on what you buy
+        there &mdash; on anything you buy there, not only on the listings shown
+        here. It costs you nothing and changes no price. It is also the only
+        reason this site can be free to read, and the reason the{" "}
+        <Link href={`/${market}/how-we-select-deals`}>ranking rules</Link> are
+        published: a site paid this way has to be checkable.
+      </p>
 
       <h2>What being here does and does not mean</h2>
       <p>

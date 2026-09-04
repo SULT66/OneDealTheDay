@@ -33,6 +33,12 @@ export async function Footer({ market }: { market: string }) {
       href: `/${market}/for-retailers`,
       label: t(language, "app.footer.forRetailers"),
     },
+    /* The shops whose listings are here, each name linking through to that
+       shop. It was in the sitemap and reachable from nowhere on the site. */
+    {
+      href: `/${market}/stores`,
+      label: t(language, "app.footer.stores"),
+    },
   ];
 
   return (

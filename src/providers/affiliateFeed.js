@@ -299,6 +299,33 @@ function resolveShipping(record, map, definition, price) {
   };
 }
 
+/**
+ * What the shop takes back, and where that came from.
+ *
+ * The same two steps as delivery, and for the same reason. Almost no affiliate
+ * feed carries a returns column — of 2,088 listings in the American catalogue,
+ * only eBay's 277 said anything at all. The other 1,811 printed "See retailer
+ * policy", which is the site admitting it does not know in words that sound as
+ * though it does.
+ *
+ * A merchant's published returns terms are a fact about that merchant, so they
+ * can be configured per feed and stated with the merchant's name attached. What
+ * is not allowed is inventing the sentence, or copying one shop's terms onto
+ * another because both of them sell furniture. Unset stays unset, and the page
+ * goes on saying it does not know.
+ */
+function resolveReturns(record, map, definition) {
+  const fromFeed = compactText(field(record, map, "returns"));
+  if (fromFeed) return fromFeed;
+  const policy = compactText(definition?.returns);
+  if (!policy) return "";
+  const merchant = definition.retailerName || "the merchant";
+  /* Named provenance, exactly as delivery does it: a shopper reading "per
+     Tribesigns returns policy" knows this is the shop's standard policy and not
+     a promise made about this particular listing. */
+  return `${policy}, per ${merchant} returns policy`;
+}
+
 function allowedByFeedPolicy(product, definition) {
   const policy = definition?.feedPolicy;
   if (!policy) return true;
@@ -419,7 +446,7 @@ function normalize(record, definition, market, index, map) {
     shipping_cost:shipping.cost,
     landed_cost:shipping.cost == null || !(currentPrice > 0) ? null : currentPrice + shipping.cost,
     shipping_cost_from_policy:Boolean(shipping.fromPolicy),
-    return_summary:compactText(field(record, map, "returns")),
+    return_summary:resolveReturns(record, map, definition),
     availability,
     source_availability:availabilityValue ? availability : null,
     source_updated_at:compactText(field(record, map, "source_updated_at")) || null,

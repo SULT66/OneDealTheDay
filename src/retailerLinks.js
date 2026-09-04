@@ -5,13 +5,14 @@ const normalizeToken = (value, allowed, fallback) => {
   return allowed.has(token) ? token : fallback;
 };
 
-const SOURCE_PAGES = new Set(["home", "product", "search", "category", "brand", "archive", "related", "unknown"]);
+const SOURCE_PAGES = new Set(["home", "product", "search", "category", "brand", "archive", "related", "stores", "unknown"]);
 const PLACEMENTS = new Set([
   "featured_cta",
   "daily_card_cta",
   "product_cta",
   "offer_comparison",
   "shop_all",
+  "store_directory",
   "featured_media",
   "featured_title",
   "daily_card_media",

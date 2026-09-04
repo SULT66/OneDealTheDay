@@ -133,6 +133,23 @@ function optionalShippingTerms(value, label) {
   };
 }
 
+/**
+ * A merchant's published returns terms, in the merchant's own words, used only
+ * when the feed itself carries no returns column — which is nearly always.
+ *
+ *   AFFILIATE_FEED_TRIBESIGNS_US_RETURNS="30-day returns, buyer pays return shipping"
+ *
+ * Unset by default, and meant to be copied from the shop's own returns page
+ * rather than remembered. It reaches the shopper with the shop's name attached
+ * to it, so what is written here is published as that shop's stated policy.
+ * That is the whole reason it is configuration and not a table in the code: a
+ * policy nobody has read off the merchant's page has no business being in
+ * front of a buyer.
+ */
+function optionalReturnsTerms(value) {
+  return String(value == null ? "" : value).replace(/\s+/g, " ").trim().slice(0, 200) || null;
+}
+
 function feedDefinitions(env = process.env) {
   const definitions = [];
   for (const retailer of RETAILERS) {
@@ -154,7 +171,8 @@ function feedDefinitions(env = process.env) {
         maxProducts:optionalProductLimit(env[`${prefix}_MAX_PRODUCTS`], retailer.maxCatalogProducts),
         feedPolicy:retailer.feedPolicy || null,
         shipping:optionalShippingTerms(env[`${prefix}_SHIPPING_JSON`], `${prefix}_SHIPPING_JSON`)
-          || retailer.shipping || null
+          || retailer.shipping || null,
+        returns:optionalReturnsTerms(env[`${prefix}_RETURNS`]) || retailer.returns || null
       });
     }
   }
@@ -194,7 +212,8 @@ function feedDefinitions(env = process.env) {
             ? JSON.stringify(custom.shipping)
             : custom?.shippingJson,
           `Affiliate feed ${retailerId} shipping`,
-        )
+        ),
+        returns:optionalReturnsTerms(custom?.returns)
       });
     }
   }

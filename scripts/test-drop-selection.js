@@ -231,4 +231,44 @@ assert(
   "the archive page must render unreachable picks without a link",
 );
 
-console.log("Drop selection guards passed: delivery cost, identity floor, no-repeat window, archive links.");
+/* ------------------------------------------- returns, and where they came from */
+
+/*
+ * "See retailer policy" on 1,811 of 2,088 listings.
+ *
+ * Delivery already had two honest sources — the feed's own column, then the
+ * merchant's published terms with the merchant's name attached — and returns
+ * had only the first, which almost no feed supplies. The second half is here
+ * now, and behaves the same way in all three states.
+ */
+const feedReturns = normalize({ ...baseRecord }, merchant, market, 0, {});
+assert.strictEqual(
+  feedReturns.return_summary,
+  "30 day returns",
+  "a returns column in the feed must be used exactly as the merchant wrote it",
+);
+
+const policyMerchant = { ...merchant, returns: "30-day returns, buyer pays return shipping" };
+const fromPolicy = normalize(
+  { ...baseRecord, return_summary: "" },
+  policyMerchant,
+  market,
+  0,
+  {},
+);
+assert.strictEqual(
+  fromPolicy.return_summary,
+  "30-day returns, buyer pays return shipping, per Tribesigns returns policy",
+  "a configured returns policy must reach the shopper with the shop's name on it",
+);
+
+/* The state that must not quietly acquire a sentence. Nobody has read this
+   merchant's returns page, so the site does not know, and saying so is the
+   only correct answer. */
+assert.strictEqual(
+  normalize({ ...baseRecord, return_summary: "" }, merchant, market, 0, {}).return_summary,
+  "",
+  "an unconfigured merchant gains a returns policy nobody has read",
+);
+
+console.log("Drop selection guards passed: delivery cost, identity floor, no-repeat window, archive links, returns provenance.");

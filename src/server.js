@@ -60,9 +60,9 @@ const {
   normalizeAction,
   normalizePlacement,
   normalizeSourcePage,
-  outboundPath,
-  retailerShopUrl
+  outboundPath
 } = require("./retailerLinks");
+const { storefrontUrl } = require("./storefrontLinks");
 const {
   challengeResponse: ebayChallengeResponse,
   createEbayPublicKeyClient,
@@ -2015,7 +2015,7 @@ app.get("/deal/:slug", (req, res) => {
     ? `<section><h3>${esc(t(req.language,"page.customerRating"))}</h3><p>${esc(t(req.language,"product.ratingSummary",{rating:Number(p.rating).toFixed(1),count:Number(p.review_count).toLocaleString(pageLocale)}))}</p></section>`
     : "";
   const scoreBlock = scoreMetrics(display, req.language);
-  const shopUrl = retailerShopUrl(p);
+  const shopUrl = storefrontUrl(p)?.url || "";
   const retailerActions = `<div class="card-actions retailer-actions"><a class="featured-button" href="${esc(outboundPath(p, { sourcePage:"product", placement:"product_cta", action:"view_deal" }))}" ${externalAttributes}>${esc(t(req.language,"product.viewDealAt",{store}))} →</a>${shopUrl ? `<a class="price-history-link retailer-shop-link" href="${esc(outboundPath(p, { sourcePage:"product", placement:"shop_all", action:"shop_all" }))}" ${externalAttributes}>${esc(t(req.language,"product.shopAllAt",{store}))} →</a>` : ""}${askDeliaButton(display, req.language)}</div>`;
   const briefBlock = `<section id="buying-brief" class="buying-brief" aria-labelledby="buyingBriefTitle"><header class="buying-brief-header"><div><p class="eyebrow">${esc(brief.eyebrow)}</p><h2 id="buyingBriefTitle">${esc(brief.heading)}</h2></div><p class="verified-editorial-note">✓ ${esc(brief.verifiedNote)}</p></header><div class="quick-verdict"><strong>${esc(brief.copy.quickVerdict)}</strong><p>${esc(brief.verdict)}</p></div><dl class="buying-facts">${brief.facts.map(([label,value]) => `<div><dt>${esc(label)}</dt><dd>${esc(value)}</dd></div>`).join("")}</dl><div class="brief-pros-cons"><section><h3>✓ ${esc(brief.copy.strengths)}</h3><ul>${brief.strengths.map(item => `<li>${esc(item)}</li>`).join("")}</ul></section><section><h3>! ${esc(brief.copy.watchouts)}</h3><ul>${brief.watchouts.map(item => `<li>${esc(item)}</li>`).join("")}</ul></section></div><div class="buying-brief-grid">${brief.sections.map(section => `<section class="buying-brief-section buying-brief-${esc(section.key)}"><h3>${esc(section.title)}</h3>${section.paragraphs.map(paragraph => `<p>${esc(paragraph)}</p>`).join("")}${section.key === "score" ? `<div class="score-component-list">${brief.components.map(component => `<div class="score-component"><span>${esc(component.label)}</span><div aria-hidden="true"><i style="--component:${Math.round(component.points/component.max*100)}%"></i></div><strong>${component.points}/${component.max}</strong></div>`).join("")}</div>` : ""}</section>`).join("")}</div></section>`;
   const comparisonOffers = offerRows.filter(offer => String(offer.source || "").toLowerCase() !== "demo" && /^https?:\/\//i.test(String(offer.affiliate_url || "")) && Number(offer.current_price) > 0);
@@ -2761,13 +2761,81 @@ app.get("/api/admin/automation-status", admin, (req,res) => {
     distribution
   });
 });
+/*
+ * The way out of the shop directory.
+ *
+ * Every other outbound link on the site is about one product, and carries that
+ * product's id. This one is about a shop: somebody read the list of shops whose
+ * listings we carry, recognised one, and wants to look around it. There is no
+ * product to name.
+ *
+ * The link is still built from a product's, because that is the only link known
+ * to work — the network ids live in it and nowhere else in this codebase. So a
+ * listing from that shop is looked up, its link is converted to a front-door
+ * link, and the click is recorded against the listing that supplied it. The
+ * placement says where it came from, which is what separates it in the reports
+ * from a shop-all click on a product page.
+ *
+ * Registered ahead of /go/:id. It would not be reached by that route in any
+ * case — two segments where it takes one — but the order is the thing a reader
+ * checks first, so it should not depend on that.
+ */
+app.get("/go/store/:retailer", (req,res) => {
+  res.set("X-Robots-Tag", "noindex, nofollow").set("Cache-Control", "private, no-store");
+  const marketCode = req.market || marketFromIp(req).code;
+  const slug = String(req.params.retailer || "").toLowerCase();
+  const shopName = db
+    .prepare("SELECT DISTINCT retailer_name FROM products WHERE market=? AND status='published' AND retailer_name<>''")
+    .all(marketCode)
+    .map(row => row.retailer_name)
+    .find(name => categorySlug(name) === slug);
+  if (!shopName) return res.sendStatus(404);
+  /* Newest first, so the listing that lends its link is one the feed has
+     confirmed recently rather than the oldest row we ever imported. Fifty is
+     enough to get past a run of listings whose links cannot be converted
+     without reading the whole shop. */
+  const candidates = db
+    .prepare("SELECT * FROM products WHERE market=? AND status='published' AND retailer_name=? ORDER BY id DESC LIMIT 50")
+    .all(marketCode, shopName);
+  let chosen = null;
+  let destination = null;
+  for (const product of candidates) {
+    if (!isPublicSource(product.source)) continue;
+    const link = storefrontUrl(product);
+    if (!link) continue;
+    chosen = product;
+    destination = link.url;
+    break;
+  }
+  /* No commissionable front door for this shop. Nothing is shown to send the
+     visitor here, so arriving is already unusual; sending them out through a
+     link that pays nobody would be worse than the 404. */
+  if (!chosen) return res.sendStatus(404);
+  recordClick(req, chosen, {
+    sourcePage:"stores",
+    placement:"store_directory",
+    action:"shop_all",
+    destinationType:"retailer",
+    sessionId:req.query.sid,
+    eventId:req.query.eid
+  });
+  res.redirect(302, destination);
+});
+
 app.get("/go/:id", (req,res) => {
   res.set("X-Robots-Tag", "noindex, nofollow").set("Cache-Control", "private, no-store");
   const product = db.prepare("SELECT * FROM products WHERE id=? AND status='published'").get(req.params.id);
   if (!product || !isPublicSource(product.source) || (req.market && req.market !== product.market)) return res.sendStatus(404);
   const requestedAction = normalizeAction(req.query.action);
   if (!new Set(["view_deal", "shop_all"]).has(requestedAction)) return res.status(400).send("Unsupported retailer action.");
-  const destination = requestedAction === "shop_all" ? retailerShopUrl(product) : String(product.affiliate_url || "");
+  /* A store link goes through the network the product link goes through, or it
+     does not go at all — see src/storefrontLinks.js. Until this line it went to
+     retailer_shop_url, which is the shop's own address with nothing in front of
+     it: every basket filled after that click was bought by an anonymous visitor
+     off the open web, and no commission was ever due on it. */
+  const destination = requestedAction === "shop_all"
+    ? storefrontUrl(product)?.url || ""
+    : String(product.affiliate_url || "");
   let destinationUrl;
   try {
     destinationUrl = new URL(destination);
