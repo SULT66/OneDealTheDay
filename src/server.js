@@ -2596,8 +2596,64 @@ app.get("/api/status", (req,res) => {
     personalDatabase:personalPostgresHealth()
   });
 });
-app.post("/api/subscribe", async (req,res) => {
-  const selectedMarket = requestMarket(req);
+/*
+ * The way out of the mailing list.
+ *
+ * The subscribers table has had a status column since the beginning and
+ * nothing anywhere set it to unsubscribed: no route, no link in any email, no
+ * way for a recipient to stop the mail except to report it as spam — the one
+ * action that damages the sending domain for everybody else on it. In the
+ * United States a bulk message with no working unsubscribe also breaks
+ * CAN-SPAM.
+ *
+ * A token rather than an address, so the link works straight from an inbox
+ * with no sign-in and nobody can unsubscribe a stranger by guessing their
+ * email. GET for a person clicking it; POST for the one-click button Gmail and
+ * Outlook render from the List-Unsubscribe header.
+ */
+const unsubscribeByToken = token => {
+  const value = String(token || "").trim();
+  if (!/^[A-Za-z0-9_-]{16,80}$/.test(value)) return false;
+  const nowIso = new Date().toISOString();
+  db.prepare(`
+    UPDATE subscribers SET status='unsubscribed', unsubscribed_at=?, updated_at=?
+    WHERE unsubscribe_token=? AND status<>'unsubscribed'
+  `).run(nowIso, nowIso, value);
+  /* A second click on the same link is a success, not an error: the person
+     asked to be off the list, and they are off it. */
+  return db.prepare("SELECT 1 FROM subscribers WHERE unsubscribe_token=?").get(value) != null;
+};
+
+app.post("/unsubscribe", (req, res) => {
+  res.set("Cache-Control", "no-store");
+  const done = unsubscribeByToken(req.query.token || req.body?.token);
+  return res.status(done ? 200 : 404).json({ok: done});
+});
+
+app.get("/unsubscribe", (req, res) => {
+  res.set("X-Robots-Tag", "noindex, nofollow").set("Cache-Control", "no-store");
+  const done = unsubscribeByToken(req.query.token);
+  const message = done
+    ? "You have been unsubscribed. No further Daily Drop email will be sent to this address."
+    : "That unsubscribe link is not one we recognise. If you are still receiving email from us, reply to it and we will remove you by hand.";
+  return res.status(done ? 200 : 404).send(`<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow">
+<title>Unsubscribed - OneDailyDrop</title></head>
+<body style="font-family:system-ui,Arial,sans-serif;max-width:34rem;margin:12vh auto;padding:0 1.25rem;color:#17191d">
+<h1 style="font-size:1.5rem">${done ? "Unsubscribed" : "Link not recognised"}</h1>
+<p style="line-height:1.6">${esc(message)}</p>
+<p><a href="/" style="color:#d95600;font-weight:600">Back to OneDailyDrop</a></p>
+</body></html>`);
+});
+
+/* Rate limited: without it this form sends mail from our domain to any address
+   anybody chooses, as fast as they can post to it. */
+app.post("/api/subscribe", authRateLimit, async (req,res) => {
+  /* The form sends the market the visitor is reading and this ignored it,
+     deciding from the IP instead — so somebody browsing /uk was signed up to
+     the American list. */
+  const requestedMarket = normalizeMarket(req.body?.market);
+  const selectedMarket = requestedMarket ? market(requestedMarket) : requestMarket(req);
   const email = String(req.body?.email || "").trim().toLowerCase();
   const requested = Array.isArray(req.body?.categories) ? req.body.categories : [];
   const categories = [...new Set(requested.map(value => String(value).trim()).filter(Boolean))].slice(0, 12);
@@ -2605,15 +2661,25 @@ app.post("/api/subscribe", async (req,res) => {
     return res.status(400).json({error:"Enter a valid email address."});
   }
   const now = new Date().toISOString();
+  /* Minted once and kept, so every email this address ever receives carries
+     the same working link — including the ones sent after they resubscribe. */
+  const unsubscribeToken = crypto.randomBytes(24).toString("base64url");
   db.prepare(`
-    INSERT INTO subscribers(email,categories,status,source,market,created_at,updated_at)
-    VALUES(?,?,?,?,?,?,?)
+    INSERT INTO subscribers(email,categories,status,source,market,unsubscribe_token,created_at,updated_at)
+    VALUES(?,?,?,?,?,?,?,?)
     ON CONFLICT(email) DO UPDATE SET
-      categories=excluded.categories,status='active',market=excluded.market,updated_at=excluded.updated_at
-  `).run(email, JSON.stringify(categories), "active", "homepage", selectedMarket.code, now, now);
+      categories=excluded.categories,status='active',market=excluded.market,updated_at=excluded.updated_at,
+      unsubscribe_token=CASE WHEN subscribers.unsubscribe_token='' THEN excluded.unsubscribe_token ELSE subscribers.unsubscribe_token END
+  `).run(email, JSON.stringify(categories), "active", "homepage", selectedMarket.code, unsubscribeToken, now, now);
+  const storedToken = db.prepare("SELECT unsubscribe_token AS token FROM subscribers WHERE email=?").get(email)?.token;
   let emailSent = false;
   try {
-    await subscriptionEmail({email, categories, market: selectedMarket.code});
+    await subscriptionEmail({
+      email,
+      categories,
+      market: selectedMarket.code,
+      unsubscribeUrl: storedToken ? `${SITE}/unsubscribe?token=${encodeURIComponent(storedToken)}` : "",
+    });
     emailSent = true;
   } catch (error) {
     console.error("Subscription confirmation email could not be sent:", error.code, error.message, error.details || "");

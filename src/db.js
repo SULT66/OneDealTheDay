@@ -588,6 +588,18 @@ if (!retailerIconColumns.has("pinned")) db.exec("ALTER TABLE retailer_icons ADD 
 
 const subscriberColumns = new Set(db.prepare("PRAGMA table_info(subscribers)").all().map(column => column.name));
 if (!subscriberColumns.has("market")) db.exec("ALTER TABLE subscribers ADD COLUMN market TEXT NOT NULL DEFAULT 'us'");
+/* The way out, which the table implied and nothing provided: there was a
+   status column and not one line anywhere that set it to unsubscribed, no
+   route to reach and no link in any email. A per-subscriber token means the
+   link works from an inbox, with no sign-in and no way to unsubscribe somebody
+   else by guessing their address. */
+if (!subscriberColumns.has("unsubscribe_token")) {
+  db.exec("ALTER TABLE subscribers ADD COLUMN unsubscribe_token TEXT NOT NULL DEFAULT ''");
+  db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_subscribers_unsubscribe ON subscribers(unsubscribe_token) WHERE unsubscribe_token <> ''");
+}
+if (!subscriberColumns.has("unsubscribed_at")) {
+  db.exec("ALTER TABLE subscribers ADD COLUMN unsubscribed_at TEXT");
+}
 
 const refreshRunColumns = new Set(db.prepare("PRAGMA table_info(refresh_runs)").all().map(column => column.name));
 if (!refreshRunColumns.has("market")) db.exec("ALTER TABLE refresh_runs ADD COLUMN market TEXT NOT NULL DEFAULT 'us'");
