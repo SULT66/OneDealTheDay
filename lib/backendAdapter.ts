@@ -65,6 +65,7 @@ export type RawProduct = {
   display_return_summary: string | null;
   return_summary: string | null;
   display_availability: string | null;
+  display_shop_all?: boolean;
   availability: string | null;
   selection_reason: string | null;
   display_selection_reason: string | null;
@@ -137,6 +138,7 @@ export function adaptProduct(raw: RawProduct): Omit<Deal, "rank"> {
     delivery: raw.display_shipping_summary || raw.shipping_summary || "",
     returns: raw.display_return_summary || raw.return_summary || "",
     availability: raw.display_availability || raw.availability || "",
+    shopAll: Boolean(raw.display_shop_all),
     whyWePicked: reason ? [reason] : [],
     strengths: [],
     watchOuts: [],
