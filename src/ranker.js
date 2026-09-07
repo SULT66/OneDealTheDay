@@ -297,6 +297,10 @@ function isEligible(product, options = {}) {
   return true;
 }
 
+/* What a drop has to be worth. See requireDealSaving in isDailyPickEligible. */
+const MINIMUM_DAILY_SAVING = 0.15;
+const MINIMUM_DAILY_PRICE = 25;
+
 function isDailyPickEligible(product, options = {}) {
   if (!isEligible(product, {...options, maximumShippingRatio:number(options.maximumShippingRatio, 0.25)})) return false;
   if (returnsNotAccepted(product)) return false;
@@ -345,6 +349,35 @@ function isDailyPickEligible(product, options = {}) {
      every page. The drop has ten slots a day and can afford to be this strict;
      a product page cannot. src/refresh.js opts in. */
   if (options.requireProductIdentity === true && !exactMatchKey(product)) return false;
+  /*
+   * A deal of the day has to be a deal.
+   *
+   * Nothing here asked how good the offer was. The gate checked that returns
+   * were accepted, that delivery was known, that the seller was solid and that
+   * the item was identifiable — all true of a $6.10 bamboo cutting board at 7%
+   * off, which is how it became Today's #1 Pick over an exercise mat at 78%
+   * and a dog feeder at 68% with fifty-four reviews. Seven percent of $6.54 is
+   * forty-four cents.
+   *
+   * Fifteen percent and twenty-five dollars: low enough that twenty-eight of
+   * today's fifty-eight candidates still clear it, which is comfortable for ten
+   * slots, and high enough that nothing anybody would call a non-event can win.
+   * A saving that cannot be verified counts as none — presentation withholds
+   * the reference price once it goes stale, and an unverifiable saving is
+   * exactly what a drop must not be built on.
+   *
+   * Opt-in, like the identity check above and for the same reason: this
+   * function is also the editorial floor for whether a product page may show a
+   * score, and a page is not required to be a bargain to be worth reading.
+   */
+  if (options.requireDealSaving === true) {
+    const current = number(product.current_price);
+    if (!(current >= number(options.minimumDailyPrice, MINIMUM_DAILY_PRICE))) return false;
+    const reference = number(product.original_price);
+    if (!(reference > current)) return false;
+    const saving = (reference - current) / reference;
+    if (saving < number(options.minimumDailySaving, MINIMUM_DAILY_SAVING)) return false;
+  }
   const source = retailer(product);
   if (source === "ebay" && (number(product.seller_rating) < 4.8 || number(product.seller_feedback_count) < 100)) return false;
   const result = scoreProduct(product);

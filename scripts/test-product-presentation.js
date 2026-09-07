@@ -1,16 +1,16 @@
 const assert = require("assert");
 const { categoryLabel } = require("../src/i18n");
-const { presentProduct, publicOneDailyDropScore } = require("../src/productPresentation");
+const { presentProduct, publicOneDailyDropScore, PUBLIC_SCORE_FLOOR } = require("../src/productPresentation");
 
 /*
  * These three moved when the band did. It used to run 82 to 95, so a
  * just-qualified pick started at 82 and every score the site printed began
  * with an 8 or a 9 — see the evidence-ceiling section further down for what
- * that cost. The floor is 62 now, and the top of the range is set by what is
+ * that cost. The floor is 70 now, and the top of the range is set by what is
  * actually known about the listing.
  */
-assert.strictEqual(publicOneDailyDropScore(60, 55), 62, "a just-qualified pick must start at the floor");
-assert.strictEqual(publicOneDailyDropScore(75, 80), 80, "a strong pick must land well clear of the floor");
+assert.strictEqual(publicOneDailyDropScore(60, 55), 70, "a just-qualified pick must start at the floor");
+assert.strictEqual(publicOneDailyDropScore(75, 80), 84, "a strong pick must land well clear of the floor");
 assert.strictEqual(publicOneDailyDropScore(90, 90), 95, "an exceptional pick with no stated evidence limit must reach 95");
 assert.strictEqual(publicOneDailyDropScore(59.9, 100), null, "a weak candidate must not be cosmetically promoted");
 assert.strictEqual(publicOneDailyDropScore(100, 54.9), null, "sparse evidence must block a public score");
@@ -94,10 +94,10 @@ const correctedSnapshot = presentProduct({
     shipping_returns:10
   })
 }, "fr");
-/* 80 rather than 89 since the band moved from 82-95 down to 62-95; the point
+/* 83 rather than 89 since the band moved from 82-95 down to 70-95; the point
    of the assertion is that a snapshot is scored by the calibration and not by
    its stored raw total. */
-assert.strictEqual(correctedSnapshot.display_score, 80, "a qualified snapshot must use the calibrated public score");
+assert.strictEqual(correctedSnapshot.display_score, 83, "a qualified snapshot must use the calibrated public score");
 
 const legacySnapshot = presentProduct({...fixture, drop_score:31, drop_price:44.62}, "fr");
 assert.notStrictEqual(legacySnapshot.display_score, 31, "a legacy archive snapshot must not expose the obsolete low score");
@@ -192,24 +192,32 @@ const thin = { hasReviews: false, hasStatedDiscount: false };
 const wellEvidenced = publicOneDailyDropScore(95, 95, 1, strong);
 const unevidenced = publicOneDailyDropScore(95, 95, 1, thin);
 assert(wellEvidenced > unevidenced, "evidence no longer raises the ceiling a listing can reach");
-assert(
-  unevidenced <= 79,
-  `a listing with no reviews and no stated saving reached ${unevidenced}, which is the 94/100 problem again`,
+/*
+ * No reviews, no number. Lowering the ceiling was half a fix and the other
+ * half showed on the page: 147 of 168 scores sat on listings with no reviews,
+ * and the "Best right now" grid filled with 67s under a heading calling them
+ * the best on the site. Wrong at 67 for the same reason it was wrong at 94.
+ */
+assert.strictEqual(
+  unevidenced,
+  null,
+  "a listing with nobody's reviews behind it is given a number again",
 );
-assert(
-  publicOneDailyDropScore(95, 95, 1, { hasReviews: false, hasStatedDiscount: true }) <= 79,
-  "a price advantage alone lifts a listing into the range reserved for reviewed ones",
+assert.strictEqual(
+  publicOneDailyDropScore(95, 95, 1, { hasReviews: false, hasStatedDiscount: true }),
+  null,
+  "a verified saving alone produces a score, though the card already states the saving",
 );
 assert(wellEvidenced >= 90, "a fully evidenced, excellent offer can no longer reach the top of the range");
 
 /*
- * Scaled, not capped. Two listings with the same thin evidence and different
- * offers must not land on the same number — that was the first attempt, and it
- * moved the problem rather than fixing it.
+ * Scaled, not capped, among the listings that do get a number. Two reviewed
+ * listings with different offers must not land on the same score — capping was
+ * the first attempt and piled 1,119 listings onto exactly 74.
  */
 assert(
-  publicOneDailyDropScore(95, 95, 1, thin) > publicOneDailyDropScore(95, 60, 0.5, thin),
-  "every thin listing scores the same again, which is what a flat 94 was",
+  publicOneDailyDropScore(95, 95, 1, strong) > publicOneDailyDropScore(95, 60, 0.5, strong),
+  "every scored listing lands on the same number again, which is what a flat 94 was",
 );
 
 /* An archived selection replays the score it was given on the day. Marking it
@@ -261,5 +269,17 @@ assert(
   `a listing with two reviews scored ${anecdote} against ${verdict} for one carrying seventy-one`,
 );
 
+
+
+/* Every number the site is willing to print has reviews behind it, so the
+   lowest it can be is well clear of the range that reads as a bad mark. */
+assert(
+  publicOneDailyDropScore(60, 55, 0.45, { hasReviews: true, hasStatedDiscount: false }) >= 70,
+  "a scored listing can show a number a shopper reads as a failing grade",
+);
+/* And the floor itself has to stay out of that range, since it is the lowest
+   number the site can print. 67 under a heading reading "Best right now" is
+   what this is here to prevent coming back. */
+assert(PUBLIC_SCORE_FLOOR >= 70, "the lowest printable score is back in the range that reads as a bad mark");
 
 console.log("Localized product presentation and trust messaging passed.");
