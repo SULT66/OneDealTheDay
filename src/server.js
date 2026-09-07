@@ -63,6 +63,7 @@ const {
   outboundPath
 } = require("./retailerLinks");
 const { storefrontUrl } = require("./storefrontLinks");
+const { previewMarket } = require("./catalogPreview");
 const {
   challengeResponse: ebayChallengeResponse,
   createEbayPublicKeyClient,
@@ -3115,6 +3116,36 @@ app.delete("/api/admin/live-drops/:key", admin, (req, res) => {
  * The URL still goes through every guard: a person typing an address into an
  * admin form is not a reason to let the server reach one it would refuse.
  */
+/*
+ * What every shop could give us, per category, without publishing anything.
+ *
+ * Written because the honest answer to "how many products would each category
+ * have" was that nobody knew, and the alternative to measuring was quoting an
+ * estimate as though it were a measurement.
+ *
+ * Read-only and bounded. The eBay half makes one call per keyword and skips
+ * the detail step a refresh spends most of its allowance on, so a full preview
+ * of the American keyword list costs about forty-seven calls out of five
+ * thousand. `keywords=8` trims it further while a shape is being checked.
+ */
+app.get("/api/admin/catalog-preview", admin, async (req, res) => {
+  const selectedMarket = market(normalizeMarket(req.query.market) || "us");
+  const keywordLimit = Math.max(0, Math.min(60, Math.round(Number(req.query.keywords) || 0)));
+  const controller = new AbortController();
+  res.once("close", () => {
+    if (!res.writableEnded) controller.abort();
+  });
+  try {
+    const preview = await previewMarket(c, selectedMarket, {
+      signal:controller.signal,
+      keywordLimit
+    });
+    res.json(preview);
+  } catch (error) {
+    res.status(502).json({error:error.message});
+  }
+});
+
 app.get("/api/admin/retailer-icons", admin, (req, res) => {
   const rows = db.prepare(`SELECT host, content_type, pinned, checked_at,
       LENGTH(bytes) AS size FROM retailer_icons ORDER BY pinned DESC, host`).all();
