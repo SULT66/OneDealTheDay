@@ -1,6 +1,6 @@
 const OpenAIExport = require("openai");
 const { marketPath } = require("./markets");
-const { presentProduct } = require("./productPresentation");
+const { presentProduct, PUBLIC_SCORE_FLOOR } = require("./productPresentation");
 
 const OpenAI = OpenAIExport.default || OpenAIExport;
 const DEFAULT_MODEL = "gpt-5.6-luna";
@@ -2955,9 +2955,20 @@ function searchCatalog(db, sourceSql, args, marketCode, language) {
   const category = normalizeSearch(args.category);
   const maxPrice = number(args.max_price, 0);
   const minPrice = number(args.min_price, 0);
+  /*
+   * Read from the presentation layer, never written here as a number.
+   *
+   * It was 82 twice in this file, which was the bottom of the public band at
+   * the time. When that band moved down to 62 — so a score could stop meaning
+   * "at least 82" and start meaning something — this filter kept its literal
+   * and Delia would have answered "nothing found" for every eBay and Newegg
+   * question on the site. The suite caught it; nothing else would have, because
+   * an assistant that finds nothing looks like an assistant with nothing to
+   * find.
+   */
   const minimumScore = Math.max(
-    82,
-    Math.min(95, number(args.minimum_score, 82)),
+    PUBLIC_SCORE_FLOOR,
+    Math.min(95, number(args.minimum_score, PUBLIC_SCORE_FLOOR)),
   );
   const limit = Math.max(1, Math.min(8, Math.round(number(args.limit, 6))));
   const tokens = normalizedIntentTokens(query).slice(0, 12);
@@ -3227,7 +3238,7 @@ function catalogSearchArgs(message) {
     /* A floor alone must never be read as a ceiling. */
     max_price: minPrice && maxPrice && maxPrice <= minPrice ? 0 : maxPrice,
     min_price: minPrice,
-    minimum_score: 82,
+    minimum_score: PUBLIC_SCORE_FLOOR,
     limit: 8,
   };
 }

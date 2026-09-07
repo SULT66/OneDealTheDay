@@ -1,9 +1,14 @@
-/* v4: a department label a source sends can simply be wrong, and now loses to
-   an unambiguous product word in the title. The version is what makes the
-   catalogue re-file itself — app.js recalculates every product whose stamp does
-   not match on boot — so bumping it is how the corrected rules reach the
-   listings already stored. */
-const TAXONOMY_VERSION = "catalog-taxonomy-v4";
+/* v5: for an eBay listing the "category" is the search term we sent, not one of
+   eBay's, so "packing cubes" filed a hundred corrugated shipping cartons under
+   Travel. A search term now loses to a title that plainly contradicts it.
+
+   v4: a department label a source sends can simply be wrong, and loses to an
+   unambiguous product word in the title.
+
+   The version is what makes the catalogue re-file itself — app.js recalculates
+   every product whose stamp does not match on boot — so bumping it is how
+   corrected rules reach the listings already stored. */
+const TAXONOMY_VERSION = "catalog-taxonomy-v5";
 
 // This is the only taxonomy exposed to shoppers. Source-feed category paths are
 // preserved in `category` for auditing, but must never be used as navigation.
@@ -152,7 +157,21 @@ const TITLE_RULES = [
  * general rule.
  */
 const IMPOSSIBLE_FOR_CATEGORY = new Map([
-  ["Automotive", /\b(headsets?|headphones?|earbuds?|graphics cards?)\b/i]
+  ["Automotive", /\b(headsets?|headphones?|earbuds?|graphics cards?)\b/i],
+  /*
+   * A hundred flat-packed shipping cartons filed under Travel, which a partner
+   * reviewing the site found on the first page of the catalogue.
+   *
+   * The classifier was not wrong; its input was. For an eBay listing the
+   * `category` field holds the search term that found the item — one of ours,
+   * not one of eBay's — and that term was "packing cubes", which maps to
+   * Travel perfectly correctly. eBay's keyword search then returned corrugated
+   * mailing boxes, and nothing downstream asked whether the title agreed.
+   *
+   * Naming what Travel cannot contain is cheaper than teaching the classifier
+   * to distrust a whole field: a carton is not luggage in any catalogue.
+   */
+  ["Travel", /\b(corrugated|mailing boxe?s?|shipping boxe?s?|cartons?|bubble wrap)\b/i]
 ]);
 
 function contradictsCategory(category, title) {
@@ -214,7 +233,17 @@ function canonicalCategory(product = {}) {
    * product rules on it before giving up on it.
    */
   const keywordMatch = firstMatch(fold(raw), TITLE_RULES);
-  if (keywordMatch) return keywordMatch;
+  /*
+   * Unless the listing itself says otherwise. The search term is what we asked
+   * eBay for, not what eBay sent back: "packing cubes" returned a hundred
+   * corrugated mailing cartons, and this line was filing them under Travel
+   * with no dissent from the title, which says "Cardboard Paper Boxes".
+   *
+   * When the two disagree this far, neither is trusted and the listing falls
+   * through to Other Deals below. An honest "we are not sure" beats a
+   * confident wrong shelf, which is what a reviewer finds in ten seconds.
+   */
+  if (keywordMatch && !contradictsCategory(keywordMatch, title)) return keywordMatch;
   if (titleMatch) return titleMatch;
 
   // Tribesigns is a furniture merchant. Specific office and home rules above

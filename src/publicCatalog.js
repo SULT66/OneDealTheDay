@@ -21,6 +21,26 @@ const quotedSources = PUBLIC_PRODUCT_SOURCES.length
   ? PUBLIC_PRODUCT_SOURCES.map(source => `'${source.replace(/'/g, "''")}'`).join(",")
   : "'__no_public_source__'";
 
+/*
+ * The most a listing may cost and still belong on a consumer shopping site.
+ *
+ * Newegg's feed carries its business catalogue too, so the price filter's upper
+ * bound read $66,479 — an HPE ProLiant rack server — and beneath it sat forty
+ * more workstations and servers between ten and forty-five thousand dollars.
+ * Nobody browsing a daily deals site is buying a rack server, and the slider on
+ * every category page was scaled to one.
+ *
+ * Five thousand, which clears everything actually sold here with room to spare:
+ * the priciest thing in the American catalogue outside that enterprise tail is
+ * a $2,000 electric trike. Set CONSUMER_PRICE_CEILING to change it without a
+ * deploy; zero switches the limit off.
+ */
+const CONSUMER_PRICE_CEILING = (() => {
+  const configured = Number(process.env.CONSUMER_PRICE_CEILING);
+  if (Number.isFinite(configured) && configured >= 0) return configured;
+  return 5000;
+})();
+
 const sourceSql = (alias = "") => {
   const prefix = alias ? `${alias}.` : "";
   return `(LOWER(COALESCE(${prefix}source,'')) IN (${quotedSources})
@@ -28,7 +48,8 @@ const sourceSql = (alias = "") => {
     AND LOWER(COALESCE(${prefix}availability,'')) NOT LIKE '%out of stock%'
     AND LOWER(COALESCE(${prefix}availability,'')) NOT LIKE '%sold out%'
     AND LOWER(COALESCE(${prefix}availability,'')) NOT LIKE '%expired%'
-    AND LOWER(COALESCE(${prefix}availability,'')) NOT LIKE '%discontinued%')`;
+    AND LOWER(COALESCE(${prefix}availability,'')) NOT LIKE '%discontinued%'
+    ${CONSUMER_PRICE_CEILING ? `AND COALESCE(${prefix}current_price,0) <= ${CONSUMER_PRICE_CEILING}` : ""})`;
 };
 
 const isPublicSource = source => PUBLIC_PRODUCT_SOURCES.includes(
@@ -38,9 +59,13 @@ const isPublicSource = source => PUBLIC_PRODUCT_SOURCES.includes(
 const isAvailable = availability => !/\b(?:out of stock|unavailable|sold out|expired|discontinued)\b/i.test(
   String(availability || "")
 );
+const isWithinConsumerPrice = price => !CONSUMER_PRICE_CEILING ||
+  !(Number(price) > CONSUMER_PRICE_CEILING);
+
 const isPublicProduct = product => Boolean(product) &&
   isPublicSource(product.source) &&
   isAvailable(product.availability) &&
+  isWithinConsumerPrice(product.current_price) &&
   product.status === "published";
 
 /**
@@ -80,4 +105,5 @@ const uniqueProductsInOrder = products => {
   return unique;
 };
 
-module.exports = { PUBLIC_PRODUCT_SOURCES, sourceSql, isAvailable, isPublicProduct, isPublicSource, uniqueProductsInOrder };
+module.exports = {
+  CONSUMER_PRICE_CEILING, PUBLIC_PRODUCT_SOURCES, sourceSql, isAvailable, isPublicProduct, isPublicSource, uniqueProductsInOrder };

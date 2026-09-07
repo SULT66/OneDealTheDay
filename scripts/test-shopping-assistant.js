@@ -1,5 +1,8 @@
 const assert = require("assert");
+const fs = require("fs");
+const path = require("path");
 const Database = require("better-sqlite3");
+const { PUBLIC_SCORE_FLOOR } = require("../src/productPresentation");
 const {
   broadDiscoveryQuestions,
   classifyShoppingScope,
@@ -694,7 +697,7 @@ const matches = searchCatalog(
     query: "quiet blender",
     category: "Kitchen",
     max_price: 100,
-    minimum_score: 82,
+    minimum_score: PUBLIC_SCORE_FLOOR,
     limit: 6,
   },
   "us",
@@ -705,7 +708,28 @@ assert.strictEqual(
   1,
   "Qualified regional catalog result was not returned",
 );
-assert(matches[0].score >= 82, "Assistant exposed an unqualified public score");
+assert(
+  matches[0].score >= PUBLIC_SCORE_FLOOR,
+  "Assistant exposed an unqualified public score",
+);
+/*
+ * The floor is read from the presentation layer, never written as a number.
+ *
+ * Both this file and searchCatalog carried a literal 82, the bottom of the
+ * public band at the time. When the band moved down to 62 so a score could
+ * start meaning something, that literal would have gone on filtering against
+ * a threshold the site no longer uses, and Delia would have answered "nothing
+ * found" to every eBay and Newegg question — which looks exactly like an
+ * assistant with nothing to find.
+ */
+const assistantSource = fs.readFileSync(
+  path.join(__dirname, "..", "src", "shoppingAssistant.js"),
+  "utf8",
+);
+assert(
+  !/minimum_score:\s*\d/.test(assistantSource),
+  "the assistant hard-codes a score floor again instead of reading the published one",
+);
 const feedMatches = searchCatalog(
   db,
   () => "source<>'demo'",
@@ -713,7 +737,7 @@ const feedMatches = searchCatalog(
     query: "Tribesigns executive desk",
     category: "",
     max_price: 500,
-    minimum_score: 82,
+    minimum_score: PUBLIC_SCORE_FLOOR,
     limit: 6,
   },
   "us",
@@ -725,7 +749,7 @@ assert.strictEqual(feedMatches[0].score, null, "A sparse affiliate product recei
 const balancedGiftMatches = searchCatalog(
   db,
   () => "source<>'demo'",
-  {query:"personalized custom family gift", category:"", max_price:500, minimum_score:82, limit:3},
+  {query:"personalized custom family gift", category:"", max_price:500, minimum_score:PUBLIC_SCORE_FLOOR, limit:3},
   "us",
   "en",
 );
@@ -741,7 +765,7 @@ const samsungTvMatches = searchCatalog(
     query: "Could I check if there are Samsung TVs under $500 in the US?",
     category: "",
     max_price: 500,
-    minimum_score: 82,
+    minimum_score: PUBLIC_SCORE_FLOOR,
     limit: 6,
   },
   "us",
