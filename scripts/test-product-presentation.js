@@ -2,9 +2,16 @@ const assert = require("assert");
 const { categoryLabel } = require("../src/i18n");
 const { presentProduct, publicOneDailyDropScore } = require("../src/productPresentation");
 
-assert.strictEqual(publicOneDailyDropScore(60, 55), 82, "a just-qualified pick must start at 82");
-assert.strictEqual(publicOneDailyDropScore(75, 80), 89, "a strong pick must land near 90");
-assert.strictEqual(publicOneDailyDropScore(90, 90), 95, "an exceptional pick must cap at 95");
+/*
+ * These three moved when the band did. It used to run 82 to 95, so a
+ * just-qualified pick started at 82 and every score the site printed began
+ * with an 8 or a 9 — see the evidence-ceiling section further down for what
+ * that cost. The floor is 62 now, and the top of the range is set by what is
+ * actually known about the listing.
+ */
+assert.strictEqual(publicOneDailyDropScore(60, 55), 62, "a just-qualified pick must start at the floor");
+assert.strictEqual(publicOneDailyDropScore(75, 80), 80, "a strong pick must land well clear of the floor");
+assert.strictEqual(publicOneDailyDropScore(90, 90), 95, "an exceptional pick with no stated evidence limit must reach 95");
 assert.strictEqual(publicOneDailyDropScore(59.9, 100), null, "a weak candidate must not be cosmetically promoted");
 assert.strictEqual(publicOneDailyDropScore(100, 54.9), null, "sparse evidence must block a public score");
 
@@ -87,7 +94,10 @@ const correctedSnapshot = presentProduct({
     shipping_returns:10
   })
 }, "fr");
-assert.strictEqual(correctedSnapshot.display_score, 89, "a qualified snapshot must use the calibrated public score");
+/* 80 rather than 89 since the band moved from 82-95 down to 62-95; the point
+   of the assertion is that a snapshot is scored by the calibration and not by
+   its stored raw total. */
+assert.strictEqual(correctedSnapshot.display_score, 80, "a qualified snapshot must use the calibrated public score");
 
 const legacySnapshot = presentProduct({...fixture, drop_score:31, drop_price:44.62}, "fr");
 assert.notStrictEqual(legacySnapshot.display_score, 31, "a legacy archive snapshot must not expose the obsolete low score");
@@ -155,6 +165,100 @@ assert.strictEqual(
   present({...listing(1), checked_at: ""}, "en").display_price_is_current,
   false,
   "a listing with no check date at all is treated as freshly checked",
+);
+
+
+
+/* ------------------------------------------ the score has to mean something */
+
+/*
+ * "Why does a shopping platform that claims to check product quality, review
+ * confidence and price signal give an unknown item with no reviews 94/100?"
+ *
+ * Because the public band was 82 to 95, so every score began with an 8 or a 9.
+ * Of 1,141 listings showing a score, 1,111 had no product reviews and 136 of
+ * those scored 90 or better. A car phone holder at $8.99, no reviews, no price
+ * history, was published at 94.
+ *
+ * The evidence now sets the top of the band and the offer decides where inside
+ * it the listing lands. Capping was tried first and was the same fault wearing
+ * a different number: 1,119 listings piled onto exactly 74.
+ */
+
+const strong = { hasReviews: true, hasStatedDiscount: true };
+const thin = { hasReviews: false, hasStatedDiscount: false };
+
+/* Same offer, same confidence, different evidence behind it. */
+const wellEvidenced = publicOneDailyDropScore(95, 95, 1, strong);
+const unevidenced = publicOneDailyDropScore(95, 95, 1, thin);
+assert(wellEvidenced > unevidenced, "evidence no longer raises the ceiling a listing can reach");
+assert(
+  unevidenced <= 79,
+  `a listing with no reviews and no stated saving reached ${unevidenced}, which is the 94/100 problem again`,
+);
+assert(
+  publicOneDailyDropScore(95, 95, 1, { hasReviews: false, hasStatedDiscount: true }) <= 79,
+  "a price advantage alone lifts a listing into the range reserved for reviewed ones",
+);
+assert(wellEvidenced >= 90, "a fully evidenced, excellent offer can no longer reach the top of the range");
+
+/*
+ * Scaled, not capped. Two listings with the same thin evidence and different
+ * offers must not land on the same number — that was the first attempt, and it
+ * moved the problem rather than fixing it.
+ */
+assert(
+  publicOneDailyDropScore(95, 95, 1, thin) > publicOneDailyDropScore(95, 60, 0.5, thin),
+  "every thin listing scores the same again, which is what a flat 94 was",
+);
+
+/* An archived selection replays the score it was given on the day. Marking it
+   down retrospectively would rewrite history. */
+assert.strictEqual(
+  publicOneDailyDropScore(95, 95, 1),
+  publicOneDailyDropScore(95, 95, 1, null),
+  "a stored score is re-judged against evidence the snapshot never carried",
+);
+
+/*
+ * Two glowing reviews is an anecdote, not a verdict.
+ *
+ * Copied out of the live catalogue on 5 September 2026 rather than invented,
+ * because the editorial gate this has to pass reads a dozen fields and a
+ * fixture written to suit the assertion would sail through a gate the real
+ * thing does not.
+ */
+const realListing = {
+  id: 228438,
+  title: 'Cat Tree Tower 55" STURDY Activity Center Large Playing House Condo',
+  market: "us",
+  currency: "USD",
+  current_price: 46.19,
+  retailer_name: "eBay",
+  source: "ebay",
+  image_url: "https://i.ebayimg.com/images/g/fP4AAOSwakZhtwws/s-l1600.jpg",
+  affiliate_url: "https://www.ebay.com/itm/264715047925?campid=5339179772",
+  availability: "In stock",
+  checked_at: new Date().toISOString(),
+  rating: 4.66,
+  review_count: 71,
+  seller_rating: 4.98,
+  seller_feedback_count: 15983,
+  score: 50.8,
+  evidence_confidence: 100,
+  shipping_summary: "Free delivery",
+  shipping_cost: 0,
+  return_summary: "Returns accepted within 60 days",
+  public_category: "Pet Supplies",
+  normalized_category: "Pet Supplies",
+};
+
+const verdict = present(realListing, "en").display_score;
+const anecdote = present({ ...realListing, rating: 5, review_count: 2 }, "en").display_score;
+assert(verdict > 0, "the real listing this compares against stopped scoring at all");
+assert(
+  verdict > anecdote,
+  `a listing with two reviews scored ${anecdote} against ${verdict} for one carrying seventy-one`,
 );
 
 

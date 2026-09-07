@@ -24,8 +24,70 @@ const EDITORIAL_QUALITY_FLOOR = 0.45;
  */
 const PRICE_CONFIDENT_HOURS = 24;
 
-const PUBLIC_SCORE_FLOOR = 82;
+/*
+ * What a published score is allowed to reach, given what is actually known
+ * about the listing.
+ *
+ * The band used to be 82 to 95, so every score the site printed began with an
+ * 8 or a 9 and the number carried almost no information. Measured on the live
+ * catalogue: of 1,141 listings showing a score, 1,111 had no product reviews
+ * at all, and 136 of those scored 90 or better. A car phone holder at $8.99
+ * with no reviews and no price history was published at 94 out of 100, on a
+ * site whose own methodology page says the score is built from review volume,
+ * price evidence and seller history.
+ *
+ * That is not a harsh grader or a lenient one. It is a number that says the
+ * same thing about everything, which is the same as saying nothing — and it is
+ * the first thing an affiliate reviewer checks, because it is the site's
+ * central claim.
+ *
+ * So the ceiling is now the evidence. A listing cannot score above what is
+ * known about it, whatever the model thinks of the offer:
+ *
+ *   reviews and a price advantage we can state   up to 95
+ *   reviews, no stateable price advantage        up to 89
+ *   no reviews, but a stated price advantage     up to 79
+ *   neither                                      up to 74
+ *
+ * Nothing here is a penalty for the shop. A merchant that publishes no review
+ * data still sells the thing perfectly well; we simply cannot claim to have
+ * checked what nobody showed us. The listing still appears, still carries its
+ * price and its reasoning, and says plainly how much is known.
+ */
+/*
+ * How many reviews before a rating counts as evidence.
+ *
+ * Two five-star reviews is not a verdict, it is an anecdote, and a listing
+ * carrying one was reaching 86 beside a Stanley tape measure with 38 reviews
+ * averaging 4.98. Five is a low bar and deliberately so — the point is to
+ * exclude the listing with a single glowing review, not to demand a hundred.
+ */
+const MEANINGFUL_REVIEW_COUNT = 5;
+
+const EVIDENCE_CEILING = Object.freeze({
+  reviewedAndPriced: 95,
+  reviewed: 89,
+  priced: 79,
+  thin: 74,
+});
+
+/* Low enough that the ceilings above have room to separate listings. At 82 a
+   cap of 74 would have been below the floor and the arithmetic would have
+   quietly put it back. */
+const PUBLIC_SCORE_FLOOR = 62;
 const PUBLIC_SCORE_CEILING = 95;
+
+/*
+ * Which ceiling applies. `priced` means a saving this site is willing to state
+ * — the same test the page uses before printing one, so the number and the
+ * badge can never disagree about whether a discount exists.
+ */
+function evidenceCeiling({hasReviews, hasStatedDiscount}) {
+  if (hasReviews && hasStatedDiscount) return EVIDENCE_CEILING.reviewedAndPriced;
+  if (hasReviews) return EVIDENCE_CEILING.reviewed;
+  if (hasStatedDiscount) return EVIDENCE_CEILING.priced;
+  return EVIDENCE_CEILING.thin;
+}
 
 const clean = value => String(value || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
 const number = (value, fallback = 0) => {
@@ -97,7 +159,7 @@ function oneDailyDropEvidenceConfidence(product) {
  * does when it can work one out; the older two-argument form still derives
  * quality from the raw total so archived selections keep their scores.
  */
-function publicOneDailyDropScore(rawScore, confidence, knownQuality = null) {
+function publicOneDailyDropScore(rawScore, confidence, knownQuality = null, known = null) {
   const raw = number(rawScore, NaN);
   const evidence = number(confidence, NaN);
   if (!Number.isFinite(raw) || !Number.isFinite(evidence)) return null;
@@ -120,9 +182,25 @@ function publicOneDailyDropScore(rawScore, confidence, knownQuality = null) {
     ? Math.max(0, Math.min(1, measured))
     : Math.max(0, Math.min(1, (raw - EDITORIAL_SCORE_FLOOR) / 30));
   const evidenceQuality = Math.max(0, Math.min(1, (evidence - EDITORIAL_CONFIDENCE_FLOOR) / 35));
+  /*
+   * The evidence sets the top of the band, and the offer decides where in that
+   * band it lands. Not a cap applied afterwards: capping was the first attempt
+   * and it produced 1,119 listings sitting on exactly 74, which is the same
+   * fault as everything scoring 94 — a number that says one thing about
+   * everything says nothing.
+   *
+   * Scaling instead means a thin listing with a genuinely good offer still
+   * outscores a thin listing with a mediocre one, while neither can reach a
+   * height that would imply evidence nobody supplied.
+   *
+   * `known` is omitted by callers with no listing to inspect — an archived
+   * selection replaying the score it was given on the day — and those keep the
+   * full range rather than being retrospectively marked down.
+   */
+  const top = known ? evidenceCeiling(known) : PUBLIC_SCORE_CEILING;
   const calibrated = PUBLIC_SCORE_FLOOR +
-    (PUBLIC_SCORE_CEILING - PUBLIC_SCORE_FLOOR) * (quality * 0.75 + evidenceQuality * 0.25);
-  return Math.round(Math.max(PUBLIC_SCORE_FLOOR, Math.min(PUBLIC_SCORE_CEILING, calibrated)));
+    (top - PUBLIC_SCORE_FLOOR) * (quality * 0.75 + evidenceQuality * 0.25);
+  return Math.round(Math.max(PUBLIC_SCORE_FLOOR, Math.min(top, calibrated)));
 }
 
 function sellerRatingPercent(product) {
@@ -299,7 +377,14 @@ function presentProduct(product, language = "en") {
     ...product,
     current_price:product?.drop_price ?? product?.current_price,
     original_price:product?.drop_original_price ?? product?.original_price
-  })) : null;
+  }), product?.drop_score != null ? null : {
+    /* Reviews of the product, not of the seller. A shop with a spotless
+       feedback record has still told us nothing about this thing. */
+    hasReviews: number(product.review_count) >= MEANINGFUL_REVIEW_COUNT && number(product.rating) > 0,
+    /* The same test the badge uses, so the number and the badge cannot
+       disagree about whether there is a saving. */
+    hasStatedDiscount: discount > 0 && priceIsCurrent,
+  }) : null;
   const productRating = number(product.rating, NaN);
   const sellerPercent = sellerRatingPercent(product);
   const sellerFeedbackCount = Math.max(0, Math.round(number(product.seller_feedback_count)));
@@ -373,6 +458,9 @@ function presentProduct(product, language = "en") {
 
 module.exports = {
   badge,
+  EVIDENCE_CEILING,
+  MEANINGFUL_REVIEW_COUNT,
+  PUBLIC_SCORE_FLOOR,
   discountPercent,
   evidenceCount,
   localizeAvailability,

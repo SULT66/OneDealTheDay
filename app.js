@@ -356,11 +356,29 @@ function expressWithHomepage(...args) {
     /* Counted as well as listed: the partner page says how many listings each
        connected shop has, and that figure has to come from the catalogue
        rather than from anybody's memory of it. */
-    const byRetailer = db.prepare(`
-      SELECT COALESCE(NULLIF(retailer_name,''), source) AS retailer, COUNT(*) AS listings
-      FROM products WHERE ${where}
-      GROUP BY retailer ORDER BY listings DESC
-    `).all(selectedMarket).filter(row => row.retailer);
+    /* Counted the way every list on this site counts, which is after repeat
+       listings are removed.
+     *
+       GROUP BY over the table was one query and the wrong number: the Stores
+       page added its shops up to 2,310 while About, For Retailers and the
+       search all said 2,188. Same bug as the category tiles had, in the
+       endpoint written to replace them — 122 of the promised listings were the
+       same products counted twice.
+
+       Reading rows to deduplicate costs more than an aggregate, but it happens
+       once a minute behind the cache below rather than once a page. */
+    const listingsByRetailer = new Map();
+    for (const product of uniqueProductsInOrder(db.prepare(`
+      SELECT * FROM products WHERE ${where}
+      ORDER BY COALESCE(ranking_score,score) DESC,score DESC,updated_at DESC
+    `).all(selectedMarket))) {
+      const retailer = product.retailer_name || product.source;
+      if (!retailer) continue;
+      listingsByRetailer.set(retailer, (listingsByRetailer.get(retailer) || 0) + 1);
+    }
+    const byRetailer = [...listingsByRetailer.entries()]
+      .map(([retailer, listings]) => ({retailer, listings}))
+      .sort((left, right) => right.listings - left.listings);
     const retailers = byRetailer.map(row => row.retailer).slice().sort();
 
     /* The shop's own domain, so a page can show its logo beside its name.

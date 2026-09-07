@@ -1,3 +1,6 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import { slugifyCategory } from "@/lib/backendAdapter";
 import { StoreLogo } from "@/components/site/StoreLogo";
 
@@ -31,6 +34,20 @@ export function StoreMarquee({
   shops: Shop[];
 }) {
   const withLogos = shops.filter((shop) => shop.host);
+
+  /*
+   * The second copy is added after mount, so it exists for the animation and
+   * not for anything reading the HTML.
+   *
+   * A reviewer using a browser sees one moving row. A crawler reading the
+   * markup saw the shop list printed twice in a row and reported it as a
+   * duplicate-render bug — on the page whose whole job is to look
+   * production-ready to exactly that kind of reader. The cost is one frame of a
+   * seam at the far right of a row that starts at the far left.
+   */
+  const [looping, setLooping] = useState(false);
+  useEffect(() => setLooping(true), []);
+
   if (!withLogos.length) return null;
 
   /* Roughly six seconds per shop, so a short list does not race past and a
@@ -73,7 +90,7 @@ export function StoreMarquee({
       />
       <div className="store-marquee-track flex items-center gap-4 px-4 sm:px-6">
         {withLogos.map((shop) => tile(shop, 1))}
-        {withLogos.map((shop) => tile(shop, 2))}
+        {looping && withLogos.map((shop) => tile(shop, 2))}
       </div>
     </div>
   );
