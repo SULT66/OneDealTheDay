@@ -58,6 +58,11 @@ export default async function CategoryPage({
       basePath={`/${market}/category/${slug}`}
       // The category is fixed by the route, so it is not a removable filter.
       filter={{ ...filter, category: undefined }}
+      /* The filter above deliberately forgets the category, so the panel does
+         not offer to remove something the URL fixes. The panel still has to
+         know which shelf it is on, or it describes the whole market: on
+         Furniture it offered King Koil, and choosing it emptied the page. */
+      scopeCategory={category.name}
       deals={deals}
       title={t(language, "app.category.title", { category: name })}
       intro={category.blurb}

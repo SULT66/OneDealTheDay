@@ -347,12 +347,19 @@ function expressWithHomepage(...args) {
   app.get("/api/catalog-facets", (req, res) => {
     if (!config.isProduction) return res.json({retailers: [], price: {min: 5, max: 100}});
     const selectedMarket = normalizeMarket(req.query.market) || marketFromIp(req).code;
-    const cacheKey = `facets:${selectedMarket}`;
+    /* Scoped to a category when one is asked for, because a filter that offers
+       a shop with nothing on the page is a filter that looks broken: the
+       Electronics page listed King Koil, a mattress company, and choosing it
+       returned nothing. */
+    const facetCategory = String(req.query.category || "").trim();
+    const cacheKey = `facets:${selectedMarket}:${facetCategory}`;
     const cached = cachedValue(cacheKey);
     res.set("Cache-Control", "private, max-age=60, stale-while-revalidate=300");
     if (cached) return res.set("X-ODD-Cache", "HIT").json(cached);
 
-    const where = `market=? AND status='published' AND ${sourceSql()}`;
+    const where = `market=? AND status='published' AND ${sourceSql()}`
+      + (facetCategory ? " AND normalized_category=?" : "");
+    const whereValues = facetCategory ? [selectedMarket, facetCategory] : [selectedMarket];
     /* Counted as well as listed: the partner page says how many listings each
        connected shop has, and that figure has to come from the catalogue
        rather than from anybody's memory of it. */
@@ -371,7 +378,7 @@ function expressWithHomepage(...args) {
     for (const product of uniqueProductsInOrder(db.prepare(`
       SELECT * FROM products WHERE ${where}
       ORDER BY COALESCE(ranking_score,score) DESC,score DESC,updated_at DESC
-    `).all(selectedMarket))) {
+    `).all(...whereValues))) {
       const retailer = product.retailer_name || product.source;
       if (!retailer) continue;
       listingsByRetailer.set(retailer, (listingsByRetailer.get(retailer) || 0) + 1);
@@ -392,7 +399,7 @@ function expressWithHomepage(...args) {
         SELECT * FROM products
         WHERE ${where} AND COALESCE(NULLIF(retailer_name,''), source)=?
         ORDER BY id DESC LIMIT 25
-      `).all(selectedMarket, retailer).find(product => storefrontUrl(product));
+      `).all(...whereValues, retailer).find(product => storefrontUrl(product));
       if (!row) return "";
       try {
         const link = storefrontUrl(row);
@@ -403,9 +410,29 @@ function expressWithHomepage(...args) {
         return "";
       }
     };
-    const {highest} = db.prepare(`
-      SELECT MAX(current_price) AS highest FROM products WHERE ${where}
-    `).get(selectedMarket);
+    /*
+     * A percentile, not the maximum.
+     *
+     * The bound was MAX(current_price) and read $66,479 — one HPE rack server
+     * — so the slider on every category page was scaled to a listing nobody
+     * was shopping for and the useful range was the first pixel. It was
+     * briefly "fixed" by deleting the expensive listings, which is a worse
+     * answer: a catalogue is not improved by hiding what a shop sells.
+     *
+     * The 98th percentile leaves the handle somewhere a shopper can aim, and
+     * the top of the slider already means "and up" — the panel drops the
+     * filter once the handle reaches the end — so nothing above the bound
+     * becomes unreachable.
+     */
+    const prices = db.prepare(`
+      SELECT current_price FROM products
+      WHERE ${where} AND current_price > 0
+      ORDER BY current_price
+    `).all(...whereValues).map(row => Number(row.current_price));
+    const highest = prices.length
+      ? prices[Math.min(prices.length - 1, Math.floor(prices.length * 0.98))]
+      : 0;
+    const lowest = prices.length ? prices[0] : 0;
 
     /* The same rounding the slider used when it did this itself, so the top of
        the range does not move just because the arithmetic moved. */
@@ -414,7 +441,10 @@ function expressWithHomepage(...args) {
       /* Name and count together, for the page that tells a partner who is
          already connected here. */
       shops: byRetailer.map(row => ({...row, host: shopHost(row.retailer)})),
-      price: {min: 5, max: Math.ceil((Number(highest) || 100) / 50) * 50},
+      price: {
+        min: Math.max(0, Math.floor((Number(lowest) || 5) / 5) * 5),
+        max: Math.ceil((Number(highest) || 100) / 50) * 50,
+      },
     };
     cacheValue(cacheKey, facets, 60000);
     return res.set("X-ODD-Cache", "MISS").json(facets);

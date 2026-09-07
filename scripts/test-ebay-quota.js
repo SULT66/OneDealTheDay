@@ -169,5 +169,51 @@ assert(!isQuotaError(new Error("The operation was aborted due to timeout")), "A 
     `The run kept fetching details after it was cancelled: ${detailCalls} lookups`,
   );
 
-  console.log("eBay allowance checks passed: rotation, early stop on an exhausted quota, cancellation.");
+  
+/* ------------------------------------------------ where the allowance goes */
+
+/*
+ * It was split five ways evenly. Every market refreshed on the same schedule
+ * with the same per-run budget, so the United States — 2,256 listings and half
+ * the site's clicks — got the same slice as Canada's 126. eBay is also the only
+ * source that supplies product reviews, so the split is what left the catalogue
+ * with 44 reviewed listings out of 2,256: it looked thin because we were asking
+ * eBay for very little, not because eBay had little.
+ */
+const config = require("../src/config");
+
+const primary = config.marketConfig(config.primaryMarket).searchBudget;
+const secondary = config.marketConfig(
+  config.markets.find((code) => code !== config.primaryMarket) || "ca",
+).searchBudget;
+
+assert(primary, "the primary market carries no search budget at all");
+assert(
+  primary.detailLimit > secondary.detailLimit,
+  "every market takes the same slice of the eBay allowance again",
+);
+/* Zero means the whole keyword list. A market with the allowance to sweep
+   everything should not be rotating through a sixteen-keyword slice and
+   waiting three hours for the rest of it. */
+assert.strictEqual(primary.keywordsPerRun, 0, "the primary market is back to rotating a slice of its keywords");
+assert(secondary.keywordsPerRun > 0, "a secondary market sweeps its whole list, which is what overspent the allowance");
+
+/* And the smaller markets are refreshed less often rather than closed: they
+   carry more than half the site's clicks. */
+assert.notStrictEqual(
+  config.offerCheckCron,
+  config.secondaryOfferCheckCron,
+  "every market is back on the same refresh schedule",
+);
+
+/* The whole point is that a run can now sweep the list rather than a slice. */
+const budgetTerms = Array.from({length: 47}, (unused, index) => `keyword ${index}`);
+assert.strictEqual(
+  keywordsForRun(budgetTerms, secondary.keywordsPerRun).length,
+  secondary.keywordsPerRun,
+  "a secondary market no longer takes the small slice it is budgeted for",
+);
+
+
+console.log("eBay allowance checks passed: rotation, early stop on an exhausted quota, cancellation.");
 })();

@@ -236,7 +236,8 @@ const config = {
     const googleFeed = [
       "id,title,description,google_product_category,brand,price,sale_price,image_link,link,availability",
       "tk2,Mooncool TK2,Electric trike,Sporting Goods > Outdoor Recreation > Cycling > Tricycles,mooncool,1699 USD,1399 USD,https://images.test/tk2.jpg,https://www.awin1.com/cread.php?id=2,out_of_stock",
-      "helmet,Mooncool Helmet,Helmet,Sporting Goods > Outdoor Recreation > Cycling > Bicycle Accessories,Mooncool,59 USD,,https://images.test/helmet.jpg,https://www.awin1.com/cread.php?id=3,in_stock"
+      "helmet,Mooncool Helmet,Helmet,Sporting Goods > Outdoor Recreation > Cycling > Bicycle Accessories,Mooncool,59 USD,,https://images.test/helmet.jpg,https://www.awin1.com/cread.php?id=3,in_stock",
+      "tube,Mooncool Replacement Part Inner Tube,Spare,Sporting Goods > Outdoor Recreation > Cycling > Bicycle Accessories,Mooncool,12 USD,,https://images.test/tube.jpg,https://www.awin1.com/cread.php?id=4,in_stock"
     ].join("\n");
     const mooncoolDefinition = feedDefinitions({AFFILIATE_FEED_MOONCOOL_US_URL:"https://productdata.awin.com/mooncool-google.csv"})[0];
     const googleProducts = await require("../src/providers/affiliateFeed").searchProducts({
@@ -244,7 +245,20 @@ const config = {
       market:{code:"us", currency:"USD"},
       fetchImpl:async () => new Response(googleFeed, {status:200, headers:{"content-type":"text/csv"}})
     });
-    assert.strictEqual(googleProducts.length, 1, "Mooncool accessories were not excluded from the main-product feed");
+    /*
+     * Two, not one, and the change is deliberate.
+     *
+     * The policy named two category leaves and kept only those, so Mooncool
+     * published 28 of the 47 products it sends and King Koil published one of
+     * thirty: the whole Mattresses shelf was a single air bed. A helmet is a
+     * real product at a real price and belongs beside the trike it is worn on.
+     * A spare part does not, and the inner tube below is still refused.
+     */
+    assert.strictEqual(googleProducts.length, 2, "the feed lost a real product to the accessories rule");
+    assert(
+      !googleProducts.some(product => /inner tube|replacement part/i.test(product.title)),
+      "a spare part reached the catalogue, which is what the accessories rule is for",
+    );
     assert.strictEqual(googleProducts[0].brand, "Mooncool", "Mooncool brand casing was not normalized");
     assert.strictEqual(googleProducts[0].current_price, 1399, "Google sale_price was not preferred");
     assert.strictEqual(googleProducts[0].original_price, 1699, "Google regular price was not retained");

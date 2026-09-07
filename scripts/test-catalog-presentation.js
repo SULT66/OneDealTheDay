@@ -289,8 +289,15 @@ assert(
   "the price slider downloads the whole catalogue again",
 );
 assert(
-  /\/api\/catalog-facets\?market=/.test(catalogSource),
+  /\/api\/catalog-facets\?/.test(catalogSource),
   "the filter panel no longer asks the database for its facets",
+);
+/* And it asks about the category on screen. The whole-market facets offered
+   King Koil, a mattress company, on the Electronics page; choosing it returned
+   nothing, which is a filter that can only empty the page. */
+assert(
+  /params\.set\("category", category\)/.test(catalogSource),
+  "the facets are back to describing the whole market rather than the page",
 );
 assert(
   /app\.get\("\/api\/catalog-facets"/.test(appSource),

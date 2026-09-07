@@ -403,9 +403,11 @@ type CatalogFacets = {
 };
 
 const fetchFacets = cache(
-  async (marketCode: string): Promise<CatalogFacets> => {
+  async (marketCode: string, category?: string): Promise<CatalogFacets> => {
+    const params = new URLSearchParams({ market: marketCode });
+    if (category) params.set("category", category);
     const res = await fetch(
-      `${BACKEND_URL}/api/catalog-facets?market=${encodeURIComponent(marketCode)}`,
+      `${BACKEND_URL}/api/catalog-facets?${params}`,
       { next: { revalidate: 300 } },
     );
     if (!res.ok) throw new Error(`Failed to load filter facets for "${marketCode}" (${res.status}).`);
@@ -413,8 +415,11 @@ const fetchFacets = cache(
   },
 );
 
-export async function getPriceBounds(marketCode: string): Promise<{ min: number; max: number }> {
-  return (await fetchFacets(marketCode)).price;
+export async function getPriceBounds(
+  marketCode: string,
+  category?: string,
+): Promise<{ min: number; max: number }> {
+  return (await fetchFacets(marketCode, category)).price;
 }
 
 /**
@@ -435,8 +440,11 @@ export async function getConnectedShops(
 }
 
 /** Retailers present in the catalog, so the filter never offers an empty option. */
-export async function getActiveRetailers(marketCode: string): Promise<string[]> {
-  return (await fetchFacets(marketCode)).retailers;
+export async function getActiveRetailers(
+  marketCode: string,
+  category?: string,
+): Promise<string[]> {
+  return (await fetchFacets(marketCode, category)).retailers;
 }
 
 /** Total checked listings for a market — used by the About page's copy. */

@@ -22,24 +22,19 @@ const quotedSources = PUBLIC_PRODUCT_SOURCES.length
   : "'__no_public_source__'";
 
 /*
- * The most a listing may cost and still belong on a consumer shopping site.
+ * No price ceiling on the catalogue.
  *
- * Newegg's feed carries its business catalogue too, so the price filter's upper
- * bound read $66,479 — an HPE ProLiant rack server — and beneath it sat forty
- * more workstations and servers between ten and forty-five thousand dollars.
- * Nobody browsing a daily deals site is buying a rack server, and the slider on
- * every category page was scaled to one.
+ * There was one, at five thousand dollars, added because the price filter's
+ * upper bound read $66,479 — an HPE rack server — and the slider on every
+ * category page was scaled to it. That fixed the slider by deleting forty-seven
+ * products, which is the wrong tool: a catalogue is not improved by hiding what
+ * a shop sells, and the shopper who wants a workstation is not helped by
+ * pretending it does not exist.
  *
- * Five thousand, which clears everything actually sold here with room to spare:
- * the priciest thing in the American catalogue outside that enterprise tail is
- * a $2,000 electric trike. Set CONSUMER_PRICE_CEILING to change it without a
- * deploy; zero switches the limit off.
+ * The slider is fixed where it broke instead — its bounds come from a
+ * percentile now rather than the single most expensive listing, and its top
+ * end means "and up", so everything above stays reachable.
  */
-const CONSUMER_PRICE_CEILING = (() => {
-  const configured = Number(process.env.CONSUMER_PRICE_CEILING);
-  if (Number.isFinite(configured) && configured >= 0) return configured;
-  return 5000;
-})();
 
 const sourceSql = (alias = "") => {
   const prefix = alias ? `${alias}.` : "";
@@ -48,8 +43,7 @@ const sourceSql = (alias = "") => {
     AND LOWER(COALESCE(${prefix}availability,'')) NOT LIKE '%out of stock%'
     AND LOWER(COALESCE(${prefix}availability,'')) NOT LIKE '%sold out%'
     AND LOWER(COALESCE(${prefix}availability,'')) NOT LIKE '%expired%'
-    AND LOWER(COALESCE(${prefix}availability,'')) NOT LIKE '%discontinued%'
-    ${CONSUMER_PRICE_CEILING ? `AND COALESCE(${prefix}current_price,0) <= ${CONSUMER_PRICE_CEILING}` : ""})`;
+    AND LOWER(COALESCE(${prefix}availability,'')) NOT LIKE '%discontinued%')`;
 };
 
 const isPublicSource = source => PUBLIC_PRODUCT_SOURCES.includes(
@@ -65,7 +59,6 @@ const isWithinConsumerPrice = price => !CONSUMER_PRICE_CEILING ||
 const isPublicProduct = product => Boolean(product) &&
   isPublicSource(product.source) &&
   isAvailable(product.availability) &&
-  isWithinConsumerPrice(product.current_price) &&
   product.status === "published";
 
 /**
@@ -106,4 +99,4 @@ const uniqueProductsInOrder = products => {
 };
 
 module.exports = {
-  CONSUMER_PRICE_CEILING, PUBLIC_PRODUCT_SOURCES, sourceSql, isAvailable, isPublicProduct, isPublicSource, uniqueProductsInOrder };
+  PUBLIC_PRODUCT_SOURCES, sourceSql, isAvailable, isPublicProduct, isPublicSource, uniqueProductsInOrder };

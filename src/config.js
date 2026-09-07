@@ -212,12 +212,48 @@ const keywordsForMarket = code => {
       ? configuredKeywords
       : localizedDefaultKeywords[code] || defaultKeywords;
 };
+/*
+ * Where the eBay allowance goes.
+ *
+ * It was split five ways evenly: every market refreshed on the same schedule
+ * with the same per-run budget, so the United States — 2,256 listings and half
+ * the site's clicks — got the same share as Canada, which has 126. Five
+ * markets times five runs times about a hundred and six calls is roughly four
+ * thousand two hundred of a five thousand daily allowance, and America saw a
+ * fifth of it.
+ *
+ * eBay is also the only source that supplies product reviews, so throttling it
+ * is what left the site with forty-four reviewed listings out of 2,256 and,
+ * once a score required reviews, with almost no scores at all. The catalogue
+ * did not look thin because eBay had nothing; it looked thin because we were
+ * asking eBay for very little.
+ *
+ * The smaller markets keep running — they carry more than half the clicks and
+ * closing them would be throwing away real visitors — but they are refreshed
+ * less often and take a smaller slice per run. Their catalogues change slowly;
+ * they do not need eight sweeps a day.
+ *
+ *   primary   5 runs x (47 searches + 260 details)  ~= 1,535 calls
+ *   others    4 markets x 2 runs x (8 + 40)         ~=   384 calls
+ *
+ * Under two thousand against an allowance of five, which leaves the headroom
+ * the previous arrangement did not have. PRIMARY_MARKET moves it.
+ */
+const primaryMarket = String(process.env.PRIMARY_MARKET || "us").trim().toLowerCase();
+
+const searchBudgetFor = code => (code === primaryMarket
+  ? {keywordsPerRun: 0, detailLimit: 260, targetEligible: 140}
+  : {keywordsPerRun: 8, detailLimit: 40, targetEligible: 30});
+
 const marketConfig = code => {
   const selected = market(code);
   return {
     ...selected,
     affiliateTag: affiliateTagForMarket(selected.code),
-    searchKeywords: keywordsForMarket(selected.code)
+    searchKeywords: keywordsForMarket(selected.code),
+    /* keywordsPerRun 0 means "the whole list", so the primary market stops
+       rotating through a sixteen-keyword slice and sweeps everything. */
+    searchBudget: searchBudgetFor(selected.code)
   };
 };
 
@@ -267,6 +303,10 @@ module.exports = {
   isProduction: isAzure,
   refreshCron: process.env.REFRESH_CRON || "15 0 * * *",
   offerCheckCron: process.env.OFFER_CHECK_CRON || "45 3,9,15,21 * * *",
+  /* Twice a day for a market with a hundred listings that barely move, so the
+     allowance those six extra sweeps were spending goes to the primary one. */
+  secondaryOfferCheckCron: process.env.SECONDARY_OFFER_CHECK_CRON || "45 9 * * *",
+  primaryMarket,
   /* Away from the refresh and the offer checks so the two never contend for
      the same retailer's rate limit. */
   linkHealthCron: process.env.LINK_HEALTH_CRON || "20 2 * * *",

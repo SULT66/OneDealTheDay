@@ -41,8 +41,10 @@ assert(
   /new AbortController\(\)/.test(registry),
   "The deadline no longer cancels the source it gave up on, so abandoned work keeps calling out",
 );
+/* The call also spreads the market's own slice of the daily allowance, so the
+   match stops at the signal rather than at the closing brace. */
 assert(
-  /provider\.search\(\{market, signal:controller\.signal\}\)/.test(registry),
+  /provider\.search\(\{market, signal:controller\.signal/.test(registry),
   "Sources are no longer given the signal that tells them the run stopped waiting",
 );
 assert(
