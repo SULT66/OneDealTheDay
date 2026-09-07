@@ -23,9 +23,14 @@ const RETAILERS = Object.freeze([
     name:"Mooncool",
     network:"Awin",
     markets:["us", "ca"],
+    /* Same again: 47 products a run and 28 published, because two leaf names
+       were listed and the shop uses more than two. The allow-list is gone, but
+       the parts are still kept out — a replacement battery is not a bike. */
     feedPolicy:{
-      categoryLeaves:["Bicycles", "Tricycles"],
-      excludeTitleTerms:["not sold separately", "not for sale", "non-delivery"]
+      excludeTitleTerms:[
+        "not sold separately", "not for sale", "non-delivery",
+        "replacement part", "spare part", "repair kit", "inner tube"
+      ]
     }
   },
   {
@@ -68,9 +73,25 @@ const RETAILERS = Object.freeze([
     name:"King Koil",
     network:"Awin",
     markets:["us"],
+    /*
+     * The leaf filter used to say ["Mattresses"], and the shop has one
+     * category leaf spelled exactly that. It sends thirty products a run and
+     * we published one, so the site's entire Mattresses & Sleep shelf was a
+     * single air bed.
+     *
+     * The leaf list is gone rather than lengthened. This is a mattress company
+     * — every leaf it has is a thing to sleep on — and the taxonomy already
+     * files the whole source under Mattresses & Sleep by name. Naming leaves
+     * here only re-decides, less well, something already decided.
+     */
     feedPolicy:{
-      categoryLeaves:["Mattresses"],
-      excludeTitleTerms:["not sold separately", "not for sale", "non-delivery"]
+      /* Spare parts, not the bed. A replacement pump is a thing you buy when
+         something broke, not a thing a deals site puts in front of anybody. */
+      excludeCategoryLeaves:["Mattress Accessories"],
+      excludeTitleTerms:[
+        "not sold separately", "not for sale", "non-delivery",
+        "replacement pump", "repair kit", "replacement part", "spare part"
+      ]
     }
   },
   {id:"currys", name:"Currys", network:"Awin", markets:["uk"]},

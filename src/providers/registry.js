@@ -22,7 +22,7 @@ function nativeProviders(config) {
       /* No keywords passed means the broad scheduled sweep, which takes a
          rotating slice of the list. A shopper's own query arrives with its
          keywords and is searched in full. */
-      search:({market, keywords, detailLimit, targetEligible, signal}) => require("./ebay").searchProducts({
+      search:({market, keywords, detailLimit, targetEligible, keywordsPerRun, signal}) => require("./ebay").searchProducts({
         clientId:config.ebayClientId,
         clientSecret:config.ebayClientSecret,
         campaignId:config.ebayCampaignId,
@@ -122,8 +122,11 @@ async function runWithDeadline(provider, market) {
   const timer = setTimeout(() => controller.abort(new Error(message)), PROVIDER_DEADLINE_MS);
   timer.unref?.();
   try {
+    /* The market carries its own slice of the daily allowance — see
+       searchBudgetFor in src/config.js. A provider that does not take these
+       simply ignores them. */
     return await Promise.race([
-      provider.search({market, signal:controller.signal}),
+      provider.search({market, signal:controller.signal, ...(market.searchBudget || {})}),
       new Promise((_, reject) => {
         controller.signal.addEventListener("abort", () => reject(new Error(message)), {once:true});
       }),

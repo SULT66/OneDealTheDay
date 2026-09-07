@@ -313,6 +313,10 @@ async function searchProducts({
   detailLimit = DEFAULT_DETAIL_LIMIT,
   targetEligible = DEFAULT_TARGET_ELIGIBLE,
   rotate = false,
+  /* 0 or unset means the whole list. A market with the allowance to sweep
+     everything should not be rotating through a slice of it and waiting three
+     hours for the rest. */
+  keywordsPerRun = 0,
   signal
 }) {
   if (!clientId || !clientSecret) throw new Error("eBay Production credentials are missing");
@@ -320,7 +324,9 @@ async function searchProducts({
   if (!market?.ebayMarketplaceId) throw new Error(`Unsupported eBay market: ${market?.code || "unknown"}`);
   const allTerms = [...new Set((keywords || []).map(text).filter(Boolean))];
   if (!allTerms.length) throw new Error("eBay search keywords are missing");
-  const searchTerms = rotate ? keywordsForRun(allTerms) : allTerms;
+  const searchTerms = rotate && keywordsPerRun > 0
+    ? keywordsForRun(allTerms, keywordsPerRun)
+    : allTerms;
 
   const ebayClient = client || createEbayClient({clientId, clientSecret, campaignId, environment, fetchImpl, signal});
 

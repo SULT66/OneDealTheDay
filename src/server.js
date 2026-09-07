@@ -3191,7 +3191,11 @@ for (const marketCode of c.markets) {
   );
   if (c.offerCheckEnabled) {
     cron.schedule(
-      c.offerCheckCron,
+      /* The primary market sweeps four times a day; the others twice, because
+         a hundred slow-moving listings do not need eight sweeps and the
+         allowance those sweeps spent is what the primary market was short of.
+         See searchBudgetFor in src/config.js. */
+      marketCode === c.primaryMarket ? c.offerCheckCron : c.secondaryOfferCheckCron,
       () => refreshProducts(c, {market:marketCode,preserveDailySelection:true}).catch(error => console.error(error.message)),
       {timezone:selectedMarket.timezone}
     );

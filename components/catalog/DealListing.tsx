@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { CaretRight } from "@phosphor-icons/react/ssr";
-import { getActiveRetailers, getMarket, getPriceBounds } from "@/lib/catalog";
+import { getActiveRetailers, getCategory, getMarket, getPriceBounds } from "@/lib/catalog";
 import type { Deal, DealFilter } from "@/lib/types";
 import { getLanguage, t } from "@/lib/i18n";
 import { DealCard } from "@/components/deal/DealCard";
@@ -28,6 +28,7 @@ export async function DealListing({
   intro,
   crumb,
   page = 1,
+  scopeCategory,
   searchParams = {},
 }: {
   market: string;
@@ -40,6 +41,10 @@ export async function DealListing({
   crumb?: string;
   /** 1-based, from ?page= in the URL. */
   page?: number;
+  /** The catalogue category this page is fixed to, if any. Not the same as
+      filter.category, which a category page clears so the panel does not
+      offer to remove the route. */
+  scopeCategory?: string;
   /** Everything else in the query string, so paging keeps the filters. */
   searchParams?: Record<string, string | string[] | undefined>;
 }) {
@@ -67,6 +72,8 @@ export async function DealListing({
     clearAll: t(language, "app.filter.clearAll"),
     removeFilter: t(language, "app.filter.removeFilter"),
     maximumPrice: t(language, "app.filter.maximumPrice"),
+    minimumPrice: t(language, "app.filter.minimumPrice"),
+    priceRange: t(language, "app.filter.priceRange"),
     retailer: t(language, "product.retailer"),
     productRating: t(language, "product.productRating"),
     score: t(language, "product.oneDailyDropScore"),
@@ -89,9 +96,18 @@ export async function DealListing({
       discount: t(language, "app.filter.biggestSaving"),
     },
   };
+  /* Scoped to the category on screen. The whole-market list offered King Koil,
+     a mattress company, on the Electronics page, and choosing it returned
+     nothing — a filter that can only empty the page reads as a broken one. */
+  /* The backend files listings under its own category names; the URL carries a
+     slug. getCategory turns one into the other, and an unknown slug simply
+     means "no category", which is the whole-market list as before. */
+  const backendCategory =
+    scopeCategory || (filter.category ? getCategory(filter.category)?.name : undefined);
+
   const [retailers, bounds] = await Promise.all([
-    getActiveRetailers(market),
-    getPriceBounds(market),
+    getActiveRetailers(market, backendCategory),
+    getPriceBounds(market, backendCategory),
   ]);
   const currency = getMarket(market)?.currency ?? "USD";
 

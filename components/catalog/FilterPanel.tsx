@@ -46,6 +46,8 @@ export type FilterCopy = {
   clearAll: string;
   removeFilter: string;
   maximumPrice: string;
+  minimumPrice: string;
+  priceRange: string;
   retailer: string;
   productRating: string;
   score: string;
@@ -120,6 +122,7 @@ export function FilterPanel({
   ].filter(Boolean) as Array<{ key: keyof DealFilter; label: string }>;
 
   const maxValue = filter.maxPrice ?? bounds.max;
+  const minValue = filter.minPrice ?? bounds.min;
 
   return (
     <div className="space-y-7">
@@ -163,17 +166,49 @@ export function FilterPanel({
         </div>
       )}
 
-      {/* price */}
+      {/*
+        * price
+        *
+        * One handle for the top end and nothing for the bottom, so a shopper
+        * who wanted to skip the two-dollar phone cases had no way to say so.
+        * Two handles now, each dropping its own filter when it reaches the end
+        * of its travel — the low one at the bottom, the high one at the top,
+        * which is what the trailing "+" has always meant.
+        */}
       <div>
-        <label
-          htmlFor="filter-max-price"
-          className="text-[0.7rem] font-semibold uppercase tracking-[0.16em] text-fg-subtle"
-        >
+        <h3 className="text-[0.7rem] font-semibold uppercase tracking-[0.16em] text-fg-subtle">
+          {copy.priceRange}
+        </h3>
+        <p className="mt-2 text-lg font-bold text-fg tnum">
+          {formatPrice(minValue, currency, market)} &ndash;{" "}
+          {formatPrice(maxValue, currency, market)}
+          {maxValue >= bounds.max ? "+" : ""}
+        </p>
+
+        <label htmlFor="filter-min-price" className="sr-only">
+          {copy.minimumPrice}
+        </label>
+        <input
+          id="filter-min-price"
+          type="range"
+          min={bounds.min}
+          max={bounds.max}
+          step={5}
+          value={minValue}
+          onChange={(e) => {
+            const v = Number(e.target.value);
+            /* Never past the other handle: a range whose bottom is above its
+               top matches nothing, and the page would look broken rather than
+               empty. */
+            const capped = Math.min(v, maxValue);
+            update({ minPrice: capped <= bounds.min ? undefined : capped });
+          }}
+          className="mt-2 h-11 w-full cursor-pointer accent-[var(--lime-deep)]"
+        />
+
+        <label htmlFor="filter-max-price" className="sr-only">
           {copy.maximumPrice}
         </label>
-        <p className="mt-2 text-lg font-bold text-fg tnum">
-          {formatPrice(maxValue, currency, market)}
-        </p>
         <input
           id="filter-max-price"
           type="range"
@@ -183,10 +218,12 @@ export function FilterPanel({
           value={maxValue}
           onChange={(e) => {
             const v = Number(e.target.value);
-            update({ maxPrice: v >= bounds.max ? undefined : v });
+            const floored = Math.max(v, minValue);
+            update({ maxPrice: floored >= bounds.max ? undefined : floored });
           }}
-          className="mt-2 h-11 w-full cursor-pointer accent-[var(--lime-deep)]"
+          className="h-11 w-full cursor-pointer accent-[var(--lime-deep)]"
         />
+
         <p className="flex justify-between text-xs text-fg-subtle tnum">
           <span>{formatPrice(bounds.min, currency, market)}</span>
           <span>{formatPrice(bounds.max, currency, market)}+</span>
