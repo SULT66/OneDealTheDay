@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 
 /**
  * What the shopper has put aside, shared by whatever wants to show a heart.
@@ -65,12 +65,28 @@ export function SavedOffersProvider({
   children: React.ReactNode;
 }) {
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
+  /* Read after the await above: the state captured when toggle was created is
+     stale by then, which would send a signed-in shopper down the guest path. */
+  const signedInRef = useRef<boolean | null>(null);
+  useEffect(() => {
+    signedInRef.current = signedIn;
+  }, [signedIn]);
   const [offers, setOffers] = useState<SavedOffer[]>([]);
   const [promptToSignIn, setPromptToSignIn] = useState(false);
 
+  /*
+   * The signed-in check, kept so a tap can wait for it.
+   *
+   * signedIn starts null and only becomes true once /api/saved answers. A
+   * heart tapped before that read null, took the "not signed in" branch and
+   * showed a signed-in shopper the create-an-account card instead of saving —
+   * on a slow connection, exactly the first tap after the page loads.
+   */
+  const checkRef = useRef<Promise<void> | null>(null);
+
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/saved")
+    checkRef.current = fetch("/api/saved")
       .then(async (response) => {
         if (cancelled) return;
         /* 401 is the ordinary answer for a visitor who has not signed in, not
@@ -86,6 +102,7 @@ export function SavedOffersProvider({
       .catch(() => {
         if (!cancelled) setSignedIn(false);
       });
+    return undefined;
     return () => {
       cancelled = true;
     };
@@ -100,7 +117,9 @@ export function SavedOffersProvider({
 
   const toggle = useCallback(
     async (offer: OfferToSave) => {
-      if (signedIn !== true) {
+      /* Still checking: wait for the answer rather than guessing at it. */
+      if (signedIn === null) await checkRef.current;
+      if (signedInRef.current !== true) {
         setPromptToSignIn(true);
         return;
       }
