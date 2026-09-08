@@ -55,6 +55,8 @@ const BLANK = {
   terms: "",
 };
 
+type EmailStep = { step: string; done: boolean | null; detail: string };
+
 type FormState = typeof BLANK;
 
 /* A datetime-local field speaks local wall clock and the server speaks ISO
@@ -71,6 +73,8 @@ export function AdminConsole() {
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [refreshOutput, setRefreshOutput] = useState("");
+  const [emailSteps, setEmailSteps] = useState<EmailStep[] | null>(null);
+  const [testTo, setTestTo] = useState("");
 
   const headers = useCallback(
     () => ({ "Content-Type": "application/json", "X-Admin-Key": adminKey }),
@@ -104,6 +108,40 @@ export function AdminConsole() {
     const timer = setTimeout(load, 400);
     return () => clearTimeout(timer);
   }, [load]);
+
+  const checkEmail = async () => {
+    setBusy(true);
+    try {
+      const response = await fetch("/api/admin/email-health", { headers: { "x-admin-key": adminKey } });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error || "That did not go through.");
+      setEmailSteps(body.steps);
+      setMessage(body.ready ? "Email is ready to send." : "Email is not ready yet.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "That did not go through.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const sendTestEmail = async () => {
+    setBusy(true);
+    try {
+      const response = await fetch("/api/admin/email-test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-admin-key": adminKey },
+        body: JSON.stringify({ to: testTo }),
+      });
+      const body = await response.json();
+      /* The provider's own words, not a shrug: "sender identity not verified"
+         and "domain authentication incomplete" need different fixes. */
+      setMessage(response.ok ? body.message : [body.error, body.provider].filter(Boolean).join(" — "));
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "That did not go through.");
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const act = async (url: string, body: unknown, method = "POST") => {
     setBusy(true);
@@ -167,6 +205,72 @@ export function AdminConsole() {
           aria-label="Admin key"
           className="mt-4 h-12 w-full max-w-md rounded-full border border-border bg-surface-2 px-5 text-sm text-fg outline-none transition-colors focus:border-border-strong"
         />
+      </Card>
+
+      {/*
+        * Email, above the drops, because a drop with no way to announce it is
+        * an event held in an empty room. The console used to say "not
+        * configured" and stop there, which named the last of four steps and
+        * none of the three before it.
+        */}
+      <Card className="mt-6">
+        <Legend>Email delivery</Legend>
+        <p className="mt-1 max-w-prose text-sm leading-relaxed text-fg-muted">
+          Four things in order. The DNS half is checked live, so a record you
+          believe you added and a record that resolves are not confused.
+        </p>
+
+        <div className="mt-5 flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            disabled={!unlocked || busy}
+            onClick={checkEmail}
+            className="inline-flex h-10 cursor-pointer items-center rounded-full border border-border px-5 text-sm font-semibold text-fg transition-colors hover:bg-surface-2 disabled:opacity-55"
+          >
+            Check
+          </button>
+          <input
+            type="email"
+            value={testTo}
+            onChange={(event) => setTestTo(event.target.value)}
+            placeholder="you@example.com"
+            aria-label="Send a test email to"
+            disabled={!unlocked || busy}
+            className="h-10 w-full max-w-xs rounded-full border border-border bg-surface-2 px-4 text-sm text-fg outline-none transition-colors focus:border-border-strong disabled:opacity-55"
+          />
+          <button
+            type="button"
+            disabled={!unlocked || busy || !testTo}
+            onClick={sendTestEmail}
+            className="inline-flex h-10 cursor-pointer items-center rounded-full bg-surface-inverse px-5 text-sm font-semibold text-fg-on-inverse transition-opacity hover:opacity-88 disabled:opacity-55"
+          >
+            Send a test
+          </button>
+        </div>
+
+        {emailSteps ? (
+          <ol className="mt-5 space-y-2 text-sm">
+            {emailSteps.map((step) => (
+              <li key={step.step} className="flex gap-3">
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    "mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-xs font-bold",
+                    step.done === true && "bg-lime text-ink",
+                    step.done === false && "bg-surface-2 text-fg-subtle",
+                    step.done === null && "bg-surface-2 text-fg-subtle",
+                  )}
+                >
+                  {step.done === true ? "✓" : step.done === null ? "?" : ""}
+                </span>
+                <span>
+                  <span className="font-semibold text-fg">{step.step}</span>
+                  <span className="block text-xs text-fg-muted">{step.detail}</span>
+                </span>
+              </li>
+            ))}
+          </ol>
+        ) : null}
       </Card>
 
       <Card className="mt-6">
