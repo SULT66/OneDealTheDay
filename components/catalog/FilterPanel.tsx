@@ -26,10 +26,19 @@ const RATING_STEPS = [
   { value: 4.5, label: "4.5★ and up" },
 ];
 
+/*
+ * "70+" and "80+" stopped separating anything.
+ *
+ * A score is only published for a listing with real product reviews now, and
+ * those land between 81 and 90, so both chips matched every scored listing and
+ * neither told a shopper anything. What is worth filtering on is the thing that
+ * actually divides the catalogue: 25 listings we can vouch for against 2,400 we
+ * can only describe.
+ */
 const SCORE_STEPS = [
   { value: undefined, label: "" },
-  { value: 70, label: "70+" },
-  { value: 80, label: "80+" },
+  { value: 1, label: "Scored" },
+  { value: 85, label: "85+" },
 ];
 
 /**
@@ -123,6 +132,8 @@ export function FilterPanel({
 
   const maxValue = filter.maxPrice ?? bounds.max;
   const minValue = filter.minPrice ?? bounds.min;
+  /* Never zero: the fill below divides by it. */
+  const span = Math.max(1, bounds.max - bounds.min);
 
   return (
     <div className="space-y-7">
@@ -185,45 +196,68 @@ export function FilterPanel({
           {maxValue >= bounds.max ? "+" : ""}
         </p>
 
-        <label htmlFor="filter-min-price" className="sr-only">
-          {copy.minimumPrice}
-        </label>
-        <input
-          id="filter-min-price"
-          type="range"
-          min={bounds.min}
-          max={bounds.max}
-          step={5}
-          value={minValue}
-          onChange={(e) => {
-            const v = Number(e.target.value);
-            /* Never past the other handle: a range whose bottom is above its
-               top matches nothing, and the page would look broken rather than
-               empty. */
-            const capped = Math.min(v, maxValue);
-            update({ minPrice: capped <= bounds.min ? undefined : capped });
-          }}
-          className="mt-2 h-11 w-full cursor-pointer accent-[var(--lime-deep)]"
-        />
-
-        <label htmlFor="filter-max-price" className="sr-only">
-          {copy.maximumPrice}
-        </label>
-        <input
-          id="filter-max-price"
-          type="range"
-          min={bounds.min}
-          max={bounds.max}
-          step={5}
-          value={maxValue}
-          onChange={(e) => {
-            const v = Number(e.target.value);
-            const floored = Math.max(v, minValue);
-            update({ maxPrice: floored >= bounds.max ? undefined : floored });
-          }}
-          className="h-11 w-full cursor-pointer accent-[var(--lime-deep)]"
-        />
-
+        {/*
+          * One track with both handles on it.
+          *
+          * They were two full-width sliders stacked, which read as two broken
+          * controls rather than one range: the upper looked empty and the lower
+          * looked full. Overlaid on a single rail, with the selected span lit
+          * between them, it reads as what it is.
+          *
+          * Both inputs sit on top of each other and are transparent to the
+          * pointer except at their thumbs, so whichever handle is under the
+          * cursor is the one that moves.
+          */}
+        <div className="relative mt-3 h-11">
+          <div /* border rather than surface-2: the panel sits on a white card, where
+               surface-2 is close enough to white that the unselected part of the
+               rail read as missing rather than as unselected. */
+            className="pointer-events-none absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-border" />
+          <div
+            className="pointer-events-none absolute top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-lime"
+            style={{
+              left: `${((minValue - bounds.min) / span) * 100}%`,
+              right: `${100 - ((maxValue - bounds.min) / span) * 100}%`,
+            }}
+          />
+          <label htmlFor="filter-min-price" className="sr-only">
+            {copy.minimumPrice}
+          </label>
+          <input
+            id="filter-min-price"
+            type="range"
+            min={bounds.min}
+            max={bounds.max}
+            step={5}
+            value={minValue}
+            onChange={(e) => {
+              const v = Number(e.target.value);
+              /* Never past the other handle: a range whose bottom is above its
+                 top matches nothing, and the page would look broken rather
+                 than empty. */
+              const capped = Math.min(v, maxValue);
+              update({ minPrice: capped <= bounds.min ? undefined : capped });
+            }}
+            className="range-thumb pointer-events-none absolute inset-0 h-11 w-full cursor-pointer"
+          />
+          <label htmlFor="filter-max-price" className="sr-only">
+            {copy.maximumPrice}
+          </label>
+          <input
+            id="filter-max-price"
+            type="range"
+            min={bounds.min}
+            max={bounds.max}
+            step={5}
+            value={maxValue}
+            onChange={(e) => {
+              const v = Number(e.target.value);
+              const floored = Math.max(v, minValue);
+              update({ maxPrice: floored >= bounds.max ? undefined : floored });
+            }}
+            className="range-thumb pointer-events-none absolute inset-0 h-11 w-full cursor-pointer"
+          />
+        </div>
         <p className="flex justify-between text-xs text-fg-subtle tnum">
           <span>{formatPrice(bounds.min, currency, market)}</span>
           <span>{formatPrice(bounds.max, currency, market)}+</span>
