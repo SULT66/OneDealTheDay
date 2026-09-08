@@ -65,6 +65,7 @@ const {
   passwordResetEmail, subscriptionEmail, clubWaitlistEmail, liveDropReminderEmail, deliveryTestEmail } = require("./mailer");
 const { emailHealth } = require("./emailHealth");
 const { htmlCache } = require("./htmlCache");
+const { startCacheWarmer, pathsFor } = require("./cacheWarmer");
 const { overview } = require("./overview");
 const {
   normalizeAction,
@@ -3457,6 +3458,18 @@ app.use((error, req, res, next) => {
   await bootstrapPersonalPostgres(db);
   app.listen(c.port, () => {
     console.log(`http://localhost:${c.port}`);
+    /*
+     * Keep the entry pages rendered so a visitor does not have to be the
+     * one who renders them. Only in production: locally the cost is a
+     * background render nobody asked for, on a machine with no visitors.
+     */
+    if (c.isProduction) {
+      startCacheWarmer({
+        baseUrl: `http://127.0.0.1:${c.port}`,
+        market: c.primaryMarket,
+        paths: pathsFor(c.primaryMarket, process.env.WARM_PATHS),
+      });
+    }
     // Azure production recovery is owned by app.js so only one initial API
     // pass can run. Keep this convenience bootstrap for local development.
     if (c.isProduction || c.provider === "unconfigured") return;
