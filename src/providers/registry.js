@@ -4,6 +4,10 @@ const affiliateFeed = require("./affiliateFeed");
    comfortably more than a healthy source needs and far less than the hour a
    run took when nothing was watching. */
 const PROVIDER_DEADLINE_MS = Number(process.env.SOURCE_REFRESH_DEADLINE_MS || 8 * 60 * 1000);
+/* How long after its deadline a source may take to hand back what it has.
+   Generous, because it is not the normal path: a source that respects its
+   signal returns in seconds, and this only catches one that does not. */
+const ABANDON_GRACE_MS = Number(process.env.SOURCE_ABANDON_GRACE_MS || 60 * 1000);
 const { normalizeCatalogProduct } = require("../catalogTaxonomy");
 
 const normalizeTokenText = value => String(value || "")
@@ -151,13 +155,32 @@ async function runWithDeadline(provider, market) {
   const timer = setTimeout(() => controller.abort(new Error(message)), deadlineMs);
   timer.unref?.();
   try {
-    /* The market carries its own slice of the daily allowance — see
-       searchBudgetFor in src/config.js. A provider that does not take these
-       simply ignores them. */
+    /*
+     * The deadline stops the source; it no longer throws away what the source
+     * had already found.
+     *
+     * It used to reject the moment the timer fired, so a run that spent twenty
+     * minutes calling eBay and had usable listings in hand reported "did not
+     * finish within 20 minutes" and found: 0. Every one of those calls came out
+     * of the daily allowance and bought nothing. That is also why raising the
+     * budget kept making things worse rather than better: a bigger ask made the
+     * window more likely to close, and closing it was total loss rather than
+     * partial gain.
+     *
+     * Aborting the signal is enough on its own. Every call the sources make
+     * carries a ten second timeout of its own and their loops check the signal
+     * between batches, so a stopped source hands back what it has within
+     * seconds. The backstop below exists only for a source that ignores its
+     * signal entirely, which must not be able to hold a refresh open forever.
+     *
+     * The market carries its own slice of the allowance; a provider that does
+     * not take these simply ignores them.
+     */
     return await Promise.race([
       provider.search({market, signal:controller.signal, ...(market.searchBudget || {})}),
       new Promise((_, reject) => {
-        controller.signal.addEventListener("abort", () => reject(new Error(message)), {once:true});
+        const backstop = setTimeout(() => reject(new Error(message)), deadlineMs + ABANDON_GRACE_MS);
+        backstop.unref?.();
       }),
     ]);
   } finally {
@@ -268,4 +291,4 @@ async function searchForAssistant(config, {query, queries, market, signal, perSo
   });
 }
 
-module.exports = { enabledProviders, feedProviders, nativeProviders, providersForMarket, searchAll, searchForAssistant };
+module.exports = { deadlineFor, runWithDeadline, enabledProviders, feedProviders, nativeProviders, providersForMarket, searchAll, searchForAssistant };

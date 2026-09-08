@@ -135,4 +135,72 @@ assert(
   );
 }
 
+
+/* ------------------------------ a stopped source keeps what it already had */
+
+/*
+ * A run spent twenty minutes calling eBay, had listings in hand, and reported
+ * found: 0 — because the deadline rejected rather than asking the source to
+ * stop. Every one of those calls came out of the daily allowance and bought
+ * nothing, which is also why raising the budget kept making things worse: a
+ * bigger ask made the window more likely to close, and closing it was total
+ * loss instead of partial gain.
+ */
+/* Milliseconds, not minutes: the behaviour under test is what happens at the
+   deadline, and the suite should not wait eight minutes to watch it. Set
+   before the module is required, since it reads these once at load. */
+process.env.SOURCE_REFRESH_DEADLINE_MS = "150";
+process.env.SOURCE_ABANDON_GRACE_MS = "300";
+const { runWithDeadline } = require("../src/providers/registry");
+
+(async () => {
+  /* The deadline timers are unref'd so a refresh can never hold the process
+     open. In a bare script that means Node exits before they fire and this
+     whole block silently does nothing — which it did, and passed. */
+  const keepAlive = setInterval(() => {}, 20);
+  const market = {code:"us", searchKeywords:["a"], searchBudget:{detailLimit:1, keywordsPerRun:1}};
+  const slowButObedient = {
+    name: "Test source",
+    /* Behaves the way the real ones do: watches its signal and hands back what
+       it gathered rather than throwing the work away. */
+    search: ({signal}) => new Promise((resolve) => {
+      /* Not on the abort event itself, which is what the first version of this
+         fixture did — and it passed against the old rejecting code, because
+         both settled on the same event and the provider happened to be
+         registered first. A real source finishes its in-flight calls before it
+         returns, so the resolve lands after the abort rather than with it, and
+         that gap is exactly what the old code lost the harvest in. */
+      const finish = () => setTimeout(() => resolve(["gathered"]), 80);
+      if (signal.aborted) return finish();
+      signal.addEventListener("abort", finish, {once:true});
+    }),
+  };
+
+  const started = Date.now();
+  const kept = await runWithDeadline(slowButObedient, market);
+  assert.deepStrictEqual(
+    kept,
+    ["gathered"],
+    "a source stopped at its deadline has its work thrown away again",
+  );
+  assert(
+    Date.now() - started < 60000,
+    "the deadline no longer stops the source promptly",
+  );
+
+  /* And a source that ignores the signal entirely still cannot hold the run. */
+  const deaf = {name:"Deaf source", search: () => new Promise(() => {})};
+  await assert.rejects(
+    runWithDeadline(deaf, market),
+    /did not finish within/,
+    "a source that ignores its signal can hold a refresh open forever",
+  );
+
+  clearInterval(keepAlive);
+  console.log("Partial-harvest check passed: a stopped source keeps what it gathered.");
+})().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});
+
 console.log("Refresh deadline and eBay budget checks passed.");
