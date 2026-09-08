@@ -62,7 +62,24 @@ jobs:
           # along.
           expected_taxonomy="$(node -e 'process.stdout.write(require("./src/catalogTaxonomy").TAXONOMY_VERSION)')"
           echo "Expecting release ${expected_release} with taxonomy ${expected_taxonomy}."
-          for attempt in {1..30}; do
+          # Stop retrying by the clock, not by a count of attempts.
+          #
+          # Thirty attempts sleeping twenty seconds was written as a ten
+          # minute budget, and it is only that when every request answers at
+          # once. Each attempt also makes up to six calls worth 200 seconds of
+          # curl timeouts, so a slow warm-up pushes the loop past the fifteen
+          # minute job timeout and the runner kills the step before it can
+          # print anything. That is what happened on release 64ca6d0: the run
+          # ended at 15m10s with no message, on a site that was serving the
+          # expected commit and passing every check in this file.
+          #
+          # A deadline keeps the promise the comment above already makes: ten
+          # minutes of waiting, then this step says so itself, in time for
+          # anyone to read it.
+          deadline=$(( SECONDS + 600 ))
+          attempt=0
+          while (( SECONDS < deadline )); do
+            attempt=$(( attempt + 1 ))
             status_payload="$(curl --fail --silent --show-error --max-time 20 'https://www.onedailydrop.com/api/status?market=us' || true)"
             if jq -e --arg release "${expected_release}" --arg taxonomy "${expected_taxonomy}" '
               .releaseId == $release and
@@ -105,7 +122,17 @@ jobs:
                 fi
               fi
             fi
-            echo "Attempt ${attempt}/30: Azure has not switched to the expected release yet."
+            echo "Attempt ${attempt}: Azure has not switched to the expected release yet ($(( deadline - SECONDS ))s left)."
+            # Out of time: stop, rather than starting an attempt that cannot
+            # finish. Skipping only the sleep instead turns the last seconds
+            # of the budget into a tight loop hammering the site — a local
+            # run of this script managed 38 attempts in 14 seconds that way.
+            # Written as an if rather than `(( ... )) && sleep`, because
+            # GitHub runs this step under set -e and a false arithmetic test
+            # as the final command would end the step, not the iteration.
+            if (( SECONDS + 20 >= deadline )); then
+              break
+            fi
             sleep 20
           done
 
