@@ -53,6 +53,35 @@ import { useDelia } from "./DeliaContext";
  * time, and the set as a whole is the plainest statement of what she can be
  * asked for.
  */
+const TRANSCRIPT_KEY = "odd-delia-transcript";
+
+/*
+ * Whether a stored turn can still be drawn.
+ *
+ * The transcript is written by whichever version of this file the visitor had
+ * when they opened the tab, and read by whichever one they have now. A deploy
+ * that adds a field to DeliaResult would otherwise leave old rows in a tab
+ * that crash the panel on every reopen — not "Delia forgot", but "Delia is
+ * broken until you notice the tab is the problem".
+ *
+ * So the arrays the renderer walks are required to be arrays. Trusting the
+ * shape of anything that survived a deploy is how that class of bug gets in.
+ */
+function isRenderableTurn(value: unknown): value is DeliaResult {
+  const turn = value as Partial<DeliaResult> | null;
+  return Boolean(
+    turn &&
+    typeof turn.transcript === "string" &&
+    typeof turn.message === "string" &&
+    Array.isArray(turn.recommendations) &&
+    Array.isArray(turn.partialOffers) &&
+    Array.isArray(turn.comparison) &&
+    Array.isArray(turn.comparisonNotes) &&
+    Array.isArray(turn.clarifyingQuestions) &&
+    Array.isArray(turn.clarificationPrompts),
+  );
+}
+
 const EXAMPLE_GROUPS = [
   [
     "Find me a mattress under six hundred dollars",
@@ -542,7 +571,71 @@ export function DeliaPanel() {
   const [available, setAvailable] = useState<boolean | null>(null);
   // The whole conversation, in order — not just the latest exchange, so
   // asking a follow-up no longer erases what Delia already said.
+  /*
+   * The transcript outlives the panel being closed.
+   *
+   * sessionStorage rather than state alone: closing the panel to move an
+   * overlay out of the way, or to look at a product, used to lose the whole
+   * conversation with no warning and no undo. This lasts exactly as long as
+   * the tab does, which is the lifetime a shopping session actually has.
+   *
+   * Every read and write is guarded — a private window, or a browser set to
+   * block site data, throws on access rather than returning empty, and a
+   * shopping assistant that cannot open is worse than one that forgets.
+   */
   const [turns, setTurns] = useState<DeliaResult[]>([]);
+
+  /*
+   * Read after mounting, not in the state initialiser.
+   *
+   * The initialiser was the obvious place and it silently did nothing: this
+   * renders on the server too, where there is no sessionStorage, so the
+   * initialiser returned an empty list and hydration then overwrote whatever
+   * the browser had worked out. The transcript came back into storage and
+   * never onto the screen.
+   */
+  useEffect(() => {
+    try {
+      const stored = window.sessionStorage.getItem(TRANSCRIPT_KEY);
+      if (!stored) return;
+      const parsed = JSON.parse(stored) as unknown;
+      const restored = Array.isArray(parsed) ? parsed.filter(isRenderableTurn) : [];
+      if (restored.length) setTurns(restored);
+      /* Anything unreadable goes, rather than sitting in the tab poisoning
+         every reopen until the visitor thinks to close it. */
+      else window.sessionStorage.removeItem(TRANSCRIPT_KEY);
+    } catch {
+      /* A private window throws on access. The panel works without it. */
+    }
+  }, []);
+
+  /*
+   * And what Delia herself remembers, rebuilt from the same transcript.
+   *
+   * Restoring only the visible messages would put four questions back on the
+   * screen while she answered the fifth as though it were the first — the
+   * conversation would look continuous and stop behaving like one, which is
+   * worse than losing it honestly.
+   */
+  const restoredRef = useRef(false);
+  useEffect(() => {
+    if (restoredRef.current || !turns.length) return;
+    restoredRef.current = true;
+    historyRef.current = turns.flatMap((turn) => [
+      { role: "user" as const, content: turn.transcript },
+      { role: "assistant" as const, content: turn.message },
+    ]);
+    missionRef.current = turns[turns.length - 1]?.shoppingMission ?? null;
+  }, [turns]);
+
+  useEffect(() => {
+    try {
+      if (turns.length) window.sessionStorage.setItem(TRANSCRIPT_KEY, JSON.stringify(turns));
+      else window.sessionStorage.removeItem(TRANSCRIPT_KEY);
+    } catch {
+      /* Nothing to do and nothing worth saying: the panel works either way. */
+    }
+  }, [turns]);
   const [loading, setLoading] = useState(false);
   // Shown immediately on submit, before the response arrives — otherwise the
   // question a shopper just sent had nowhere to render until the (sometimes
@@ -752,13 +845,20 @@ export function DeliaPanel() {
       document.body.style.overflow = previousOverflow;
       window.clearTimeout(focusTimer);
       restoreFocusRef.current?.focus?.();
-      // A closed panel starts the next conversation fresh rather than
-      // continuing a stale thread from the visitor's last visit.
-      historyRef.current = [];
-      missionRef.current = null;
-      setTurns([]);
+      /*
+       * Closing the panel no longer throws the conversation away.
+       *
+       * It used to, on the reasoning that a new visit should start fresh —
+       * true, and it could not tell a new visit from the thing that actually
+       * happens: somebody closes the panel to get an overlay out of the way,
+       * or to look at a product, and comes back to find four questions of work
+       * gone. There is no undo for that and no sign it was about to happen.
+       *
+       * Kept in sessionStorage instead, which is exactly the lifetime the old
+       * comment was reaching for: it survives closing and reopening the panel
+       * and moving between pages, and it is gone when the tab is.
+       */
       setErrorMsg(null);
-      setFeedbackGiven({});
     };
   }, [open, closeDelia]);
 
@@ -1041,7 +1141,15 @@ function SaveNeedsAccount() {
   return (
     <div
       role="status"
-      className="fade-in absolute inset-x-4 bottom-4 z-10 mx-auto max-w-md rounded-2xl border border-border bg-surface p-4 shadow-card sm:inset-x-auto"
+      /*
+        * Above the composer, not on top of it.
+        *
+        * At bottom-4 it covered the box you type in, so the only obvious way
+        * to get back to typing was the panel's X — which closed the panel and,
+        * until the change above, threw the conversation away. An invitation to
+        * make an account should not be standing in the doorway.
+        */
+      className="fade-in absolute inset-x-4 bottom-24 z-10 mx-auto max-w-md rounded-2xl border border-border bg-surface p-4 shadow-card sm:inset-x-auto"
     >
       <p className="text-sm font-semibold text-fg">Sign in to keep this</p>
       <p className="mt-1 text-sm leading-relaxed text-fg-muted">
