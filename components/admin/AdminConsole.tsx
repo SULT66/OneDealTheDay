@@ -31,6 +31,8 @@ type AdminDrop = {
   published: boolean;
   reminders: number;
   funnel: Record<string, number>;
+  reached: number;
+  click_label: string;
 };
 
 const BLANK = {
@@ -377,11 +379,54 @@ function DropRow({
         {drop.retailer_name ? ` · ${drop.retailer_name}` : ""}
       </p>
 
-      {/* Whether it worked, next to the drop itself rather than on a second
-          screen: waited, saw the price, went to buy. */}
-      <p className="mt-1 text-xs text-fg-subtle tnum">
-        {drop.funnel.waiting_room || 0} waited · {drop.funnel.reveal || 0} saw the reveal ·{" "}
-        {drop.funnel.buy_click || 0} went to buy · {drop.reminders} reminders
+      {/*
+        * Whether it worked, beside the drop rather than on a second screen.
+        *
+        * It was one dense line of four numbers with no rates, which answers
+        * "what happened" and not "did it work" — 40 of 200 and 40 of 45 read
+        * identically there. Each step now carries what share of the one above
+        * it got through, which is the only form in which these numbers say
+        * anything.
+        */}
+      <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-fg-muted sm:grid-cols-4">
+        {[
+          { label: "reached", value: drop.reached, of: 0 },
+          { label: "waited", value: drop.funnel.waiting_room || 0, of: drop.reached },
+          { label: "saw the price", value: drop.funnel.reveal || 0, of: drop.reached },
+          { label: "went to buy", value: drop.funnel.buy_click || 0, of: drop.funnel.reveal || 0 },
+        ].map((step) => (
+          <div key={step.label}>
+            <dt className="text-[0.65rem] uppercase tracking-[0.12em] text-fg-subtle">
+              {step.label}
+            </dt>
+            <dd className="font-semibold text-fg tnum">
+              {step.value}
+              {step.of > 0 && step.value > 0 ? (
+                <span className="ml-1 font-normal text-fg-subtle">
+                  {Math.round((step.value / step.of) * 100)}%
+                </span>
+              ) : null}
+            </dd>
+          </div>
+        ))}
+      </dl>
+
+      {/*
+        * The step this site cannot measure, said plainly rather than left as a
+        * gap somebody fills in with a guess.
+        *
+        * A purchase happens on the shop's own checkout. Nothing here ever
+        * learns about it, and no amount of analytics on this side will change
+        * that. The label below is the whole thread: it rides out on the Buy
+        * click and comes back on the sale in the network's own report, which
+        * is where the last two steps of the funnel actually live.
+        */}
+      <p className="mt-2 text-xs text-fg-subtle">
+        {drop.reminders} reminders asked for.{" "}
+        Purchases are only visible in the network report — search it for{" "}
+        <code className="rounded bg-surface-2 px-1 py-0.5 font-mono text-[0.7rem] text-fg">
+          {drop.click_label}
+        </code>
       </p>
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
