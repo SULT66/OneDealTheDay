@@ -55,7 +55,8 @@ const {
   timeoutResponse,
 } = require("./shoppingAssistant");
 const renderShoppingAssistantPanel = require("./shoppingAssistantPanel");
-const { passwordResetEmail, subscriptionEmail, clubWaitlistEmail, liveDropReminderEmail } = require("./mailer");
+const { passwordResetEmail, subscriptionEmail, clubWaitlistEmail, liveDropReminderEmail, deliveryTestEmail } = require("./mailer");
+const { emailHealth } = require("./emailHealth");
 const {
   normalizeAction,
   normalizePlacement,
@@ -3127,6 +3128,48 @@ app.delete("/api/admin/live-drops/:key", admin, (req, res) => {
  * The URL still goes through every guard: a person typing an address into an
  * admin form is not a reason to let the server reach one it would refuse.
  */
+/*
+ * Why no email is arriving, in the order the four things have to happen.
+ *
+ * The console said "not configured" and nothing else, which is true and
+ * useless: the API key is the last of four steps, and setting it while the
+ * three before it are undone produces mail SendGrid accepts and Gmail drops.
+ * The DNS half is checked live, because a record somebody believes they added
+ * and a record that resolves are different things.
+ */
+app.get("/api/admin/email-health", admin, async (req, res) => {
+  try {
+    res.json(await emailHealth());
+  } catch (error) {
+    res.status(502).json({error:error.message});
+  }
+});
+
+/*
+ * And whether it actually arrives, which no amount of checking proves.
+ *
+ * Sends one real message and hands back the provider's own words on failure.
+ * "Sender identity not verified" and "domain authentication incomplete" are
+ * different problems with different fixes, and a boolean tells them apart from
+ * neither.
+ */
+app.post("/api/admin/email-test", admin, express.json({limit:"4kb"}), async (req, res) => {
+  const to = String(req.body?.to || "").trim().slice(0, 160);
+  if (!/^[^@s]+@[^@s]+.[^@s]+$/.test(to)) return res.status(400).json({error:"Enter an address to send to."});
+  try {
+    await deliveryTestEmail({to});
+    res.json({ok:true, to, message:`Sent to ${to}. If it does not arrive, look in spam before changing anything.`});
+  } catch (error) {
+    res.status(502).json({
+      ok:false,
+      error:error.message,
+      /* Verbatim: the provider names the problem far better than any wrapper
+         around it can. */
+      provider:String(error.details || "").slice(0, 500),
+    });
+  }
+});
+
 app.get("/api/admin/retailer-icons", admin, (req, res) => {
   const rows = db.prepare(`SELECT host, content_type, pinned, checked_at,
       LENGTH(bytes) AS size FROM retailer_icons ORDER BY pinned DESC, host`).all();

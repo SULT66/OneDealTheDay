@@ -130,4 +130,26 @@ const liveDropReminderEmail = ({ email, title, market, minutes }) => sendEmail({
     </div>`
 });
 
-module.exports = { passwordResetEmail, subscriptionEmail, clubWaitlistEmail, liveDropReminderEmail };
+/*
+ * A message whose only job is to prove the pipe works.
+ *
+ * Mail delivery was unconfigured for weeks and the only way to find out was to
+ * schedule a drop, collect a reminder, and notice nothing arrived — by which
+ * point the drop had happened. This fails in ten seconds instead, and the
+ * caller passes the provider's own words back rather than a shrug.
+ */
+const deliveryTestEmail = ({ to }) => sendEmail({
+  to,
+  subject: "OneDailyDrop delivery test",
+  html: `
+    <div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;color:#17191d">
+      <h1 style="font-size:20px">Delivery works</h1>
+      <p>This message was sent from the OneDailyDrop admin console to prove that
+      mail leaves the site and arrives. Nobody was subscribed to anything.</p>
+      <p style="color:#6b7280;font-size:13px">Check the headers: DKIM and DMARC
+      should both pass, and the signing domain should be onedailydrop.com rather
+      than sendgrid.net.</p>
+    </div>`
+});
+
+module.exports = { passwordResetEmail, subscriptionEmail, clubWaitlistEmail, liveDropReminderEmail, deliveryTestEmail };
