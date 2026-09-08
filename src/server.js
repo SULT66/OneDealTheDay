@@ -2981,6 +2981,19 @@ app.get("/api/admin/live-drops", admin, (req, res) => {
      worth asking afterwards and it should not need a second screen. */
   const funnel = db.prepare("SELECT event_type, COUNT(*) AS total FROM live_drop_events WHERE drop_id=? GROUP BY event_type");
   /*
+   * How many people the drop reached at all, which none of the event counts
+   * answers on its own.
+   *
+   * Somebody who arrives before the doors open records waiting_room; somebody
+   * who arrives once it is running records reveal and never records the other.
+   * Reading either as "visitors" undercounts, and reading the sum double-counts
+   * everyone who did both. Distinct sessions across every event is the only
+   * honest answer to "how many people saw this".
+   */
+  const reached = db.prepare(
+    "SELECT COUNT(DISTINCT session_id) AS people FROM live_drop_events WHERE drop_id=? AND session_id<>''",
+  );
+  /*
    * Asked for, and actually delivered, as two separate numbers.
    *
    * A rehearsal signed one person up and the console showed "reminders: 1",
@@ -3016,6 +3029,12 @@ app.get("/api/admin/live-drops", admin, (req, res) => {
       reminders_sent: reminderCounts.sent,
       reminders_unsent: reminderCounts.total - reminderCounts.sent,
       funnel: Object.fromEntries(funnel.all(row.id).map((entry) => [entry.event_type, entry.total])),
+      reached: reached.get(row.id).people,
+      /* What to search the network report for once the drop is over. The site
+         never learns about a purchase — that happens on the shop's own
+         checkout — so this label is the only thread connecting a sale in
+         Awin, eBay or Rakuten back to this drop. */
+      click_label: liveDropLabel(row.drop_key),
       };
     }),
   });
