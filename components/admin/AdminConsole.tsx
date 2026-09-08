@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { ShopIcons } from "./ShopIcons";
+import { Numbers } from "./Numbers";
 
 /**
  * The admin console: scheduling a Live Drop, and the catalogue refresh.
@@ -205,6 +206,20 @@ export function AdminConsole() {
           aria-label="Admin key"
           className="mt-4 h-12 w-full max-w-md rounded-full border border-border bg-surface-2 px-5 text-sm text-fg outline-none transition-colors focus:border-border-strong"
         />
+      </Card>
+
+      {/*
+        * The numbers first, because this is the screen somebody opens to ask
+        * how the business is doing, and everything below it is a thing to do
+        * rather than a thing to know.
+        */}
+      <Card className="mt-6">
+        <Legend>Your numbers</Legend>
+        <p className="mt-1 max-w-prose text-sm leading-relaxed text-fg-muted">
+          Everything the site records, in the order a person moves through it.
+          What is not recorded is listed at the bottom rather than left blank.
+        </p>
+        <Numbers adminKey={adminKey} />
       </Card>
 
       {/*
