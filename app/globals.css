@@ -301,3 +301,50 @@ body {
     display: none;
   }
 }
+
+/* Price range: two handles on one rail.
+ *
+ * The inputs are transparent and stacked so the lit span between them can be
+ * drawn underneath, which means appearance:none — and that takes the thumb
+ * with it. These put it back, identically in both engines, and large enough
+ * to grab on a touch screen.
+ */
+.range-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+}
+
+.range-thumb::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  pointer-events: auto;
+  height: 1.25rem;
+  width: 1.25rem;
+  border-radius: 9999px;
+  background: var(--lime-deep);
+  border: 2px solid var(--surface);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.25);
+  cursor: pointer;
+}
+
+.range-thumb::-moz-range-thumb {
+  pointer-events: auto;
+  height: 1.25rem;
+  width: 1.25rem;
+  border-radius: 9999px;
+  background: var(--lime-deep);
+  border: 2px solid var(--surface);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.25);
+  cursor: pointer;
+}
+
+/* The rail itself is drawn by the div behind, so the input's own track is
+   invisible in both engines. */
+.range-thumb::-webkit-slider-runnable-track {
+  background: transparent;
+}
+
+.range-thumb::-moz-range-track {
+  background: transparent;
+}
