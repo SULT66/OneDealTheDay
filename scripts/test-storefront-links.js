@@ -97,7 +97,9 @@ assert.strictEqual(ebayUrl.searchParams.get("amdata"), null, "item-specific data
  */
 assert.strictEqual(tribesignsUrl.searchParams.get("clickref"), "odd-store", "Awin store clicks are no longer labelled");
 assert.strictEqual(neweggUrl.searchParams.get("u1"), "odd-store", "Rakuten store clicks are no longer labelled");
-assert.strictEqual(ebayUrl.searchParams.get("customid"), "odd-us-store", "eBay store clicks are no longer told apart from product clicks");
+/* One label per kind of click, set by src/clickLabels.js for every network,
+   so a store click and a Live Drop click cannot end up sharing one. */
+assert.strictEqual(ebayUrl.searchParams.get("customid"), "odd-store", "eBay store clicks are no longer told apart from product clicks");
 
 /* --------------------------------------------------------- refusing to guess */
 

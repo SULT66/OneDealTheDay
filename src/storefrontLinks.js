@@ -62,6 +62,10 @@ const DIRECT_CAMPAIGN_PARAMS = ["campid", "tag", "ascsubtag", "affid", "aff_id",
  */
 const CLICK_REF = "odd-store";
 
+/* Which parameter each network reads its label from lives in one module, so the
+   store links and the Live Drop cannot drift apart on it. */
+const { labelClick } = require("./clickLabels");
+
 function parseUrl(value) {
   let url;
   try {
@@ -112,8 +116,7 @@ function storefrontUrl(product) {
     deepLink.searchParams.set("awinmid", merchantId);
     deepLink.searchParams.set("awinaffid", affiliateId);
     deepLink.searchParams.set("ued", home);
-    deepLink.searchParams.set("clickref", CLICK_REF);
-    return {url:deepLink.toString(), network:"Awin"};
+    return {url:labelClick(deepLink.toString(), CLICK_REF), network:"Awin"};
   }
 
   /* Every other redirector we deal with names its destination in the query, so
@@ -121,9 +124,7 @@ function storefrontUrl(product) {
   for (const name of DESTINATION_PARAMS) {
     if (!link.searchParams.has(name)) continue;
     link.searchParams.set(name, home);
-    if (/(?:^|\.)awin1\.com$/i.test(link.hostname)) link.searchParams.set("clickref", CLICK_REF);
-    if (/(?:^|\.)linksynergy\.com$/i.test(link.hostname)) link.searchParams.set("u1", CLICK_REF);
-    return {url:link.toString(), network:link.hostname.replace(/^www\./, "")};
+    return {url:labelClick(link.toString(), CLICK_REF), network:link.hostname.replace(/^www\./, "")};
   }
 
   /* eBay puts its tracking on the shop's own address rather than in front of
@@ -139,10 +140,7 @@ function storefrontUrl(product) {
      means nothing on a front page and is not ours to reinterpret, so it goes
      with the item it described. */
   link.searchParams.delete("amdata");
-  if (link.searchParams.has("customid")) {
-    link.searchParams.set("customid", `${link.searchParams.get("customid")}-store`.slice(0, 256));
-  }
-  return {url:link.toString(), network:link.hostname.replace(/^www\./, "")};
+  return {url:labelClick(link.toString(), CLICK_REF), network:link.hostname.replace(/^www\./, "")};
 }
 
 module.exports = { storefrontUrl, CLICK_REF };
