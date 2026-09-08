@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { Eye, EyeSlash } from "@phosphor-icons/react";
 import { cn } from "@/lib/cn";
 
 /**
@@ -64,6 +65,7 @@ export function AccountPanel({ market }: { market: string }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [passwordVisible, setPasswordVisible] = useState(false);
   const [accepted, setAccepted] = useState(false);
   const [resetToken, setResetToken] = useState("");
   const [busy, setBusy] = useState(false);
@@ -308,15 +310,42 @@ export function AccountPanel({ market }: { market: string }) {
           {showPassword && (
             <label className="block text-xs font-bold text-fg">
               Password
-              <input
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                autoComplete={mode === "login" ? "current-password" : "new-password"}
-                required
-                minLength={12}
-                className="mt-2 h-12 w-full rounded-xl border border-border bg-surface-2 px-3 text-sm text-fg outline-none focus:border-border-strong"
-              />
+              {/*
+                * With a way to look at it.
+                *
+                * Twelve characters and four rules to satisfy, typed blind on a
+                * phone keyboard — the rules list underneath says which one is
+                * still unmet but never why, and the answer is almost always a
+                * typo the person cannot see. Every browser and password manager
+                * offers this; a form that asks for a long password and hides it
+                * is asking to be got wrong.
+                */}
+              <div className="relative mt-2">
+                <input
+                  type={passwordVisible ? "text" : "password"}
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  autoComplete={mode === "login" ? "current-password" : "new-password"}
+                  required
+                  minLength={12}
+                  className="h-12 w-full rounded-xl border border-border bg-surface-2 pl-3 pr-12 text-sm text-fg outline-none focus:border-border-strong"
+                />
+                <button
+                  type="button"
+                  onClick={() => setPasswordVisible((shown) => !shown)}
+                  /* Labelled rather than titled: a screen reader has to be told
+                     what the eye does, and the label has to change with it. */
+                  aria-label={passwordVisible ? "Hide password" : "Show password"}
+                  aria-pressed={passwordVisible}
+                  className="absolute inset-y-0 right-0 flex w-12 cursor-pointer items-center justify-center text-fg-subtle transition-colors hover:text-fg"
+                >
+                  {passwordVisible ? (
+                    <EyeSlash size={18} weight="bold" aria-hidden="true" />
+                  ) : (
+                    <Eye size={18} weight="bold" aria-hidden="true" />
+                  )}
+                </button>
+              </div>
             </label>
           )}
 
