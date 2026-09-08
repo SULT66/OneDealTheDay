@@ -601,6 +601,76 @@ if (!subscriberColumns.has("unsubscribed_at")) {
   db.exec("ALTER TABLE subscribers ADD COLUMN unsubscribed_at TEXT");
 }
 
+/*
+ * One reminder was not an announcement.
+ *
+ * The table had a single reminded_at and the job sent one message ten minutes
+ * before the doors opened — useful to somebody already waiting, useless to
+ * somebody who has to plan an evening around it. A drop lasts ten minutes; a
+ * ten-minute warning reaches whoever happens to be holding their phone.
+ *
+ * A stamp per stage rather than a single one, so a send that fails at one
+ * stage can still happen at the next, and so nobody is told twice.
+ */
+const reminderColumns = new Set(db.prepare("PRAGMA table_info(live_drop_reminders)").all().map(column => column.name));
+if (!reminderColumns.has("reminded_day_before_at")) {
+  db.exec("ALTER TABLE live_drop_reminders ADD COLUMN reminded_day_before_at TEXT");
+}
+if (!reminderColumns.has("reminded_hour_before_at")) {
+  db.exec("ALTER TABLE live_drop_reminders ADD COLUMN reminded_hour_before_at TEXT");
+}
+
+/*
+ * Who has been told about which drop, for the announcement that goes to the
+ * subscriber list rather than to people already standing on the drop page.
+ *
+ * Its own table because a subscriber is not a reminder: they never asked about
+ * this particular drop, so they are told once, well ahead, and never chased.
+ */
+db.exec(`
+  CREATE TABLE IF NOT EXISTS live_drop_announcements(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    drop_id INTEGER NOT NULL,
+    subscriber_id INTEGER NOT NULL,
+    sent_at TEXT NOT NULL,
+    FOREIGN KEY(drop_id) REFERENCES live_drops(id)
+  );
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_live_drop_announcements_unique
+    ON live_drop_announcements(drop_id, subscriber_id);
+`);
+
+/*
+ * Somebody who wants to know when a price falls.
+ *
+ * The site already writes a price for every listing on every refresh, so it
+ * knows the moment one drops — it simply had nobody to tell. This is the one
+ * reason to come back that does not depend on remembering to.
+ *
+ * Not the price_alerts table above, which is a different thing wearing a
+ * similar name: that one is keyed to a user id, sits behind a Club membership
+ * that does not exist yet, and — the part that matters — nothing anywhere ever
+ * reads it, so its rows have never produced an email. This one is keyed to an
+ * address, needs no account, and is read by the job that sends.
+ *
+ * The price when they asked is stored rather than recomputed later: "cheaper
+ * than when you looked" is a promise about their moment, and the listing may
+ * have moved twice since.
+ */
+db.exec(`
+  CREATE TABLE IF NOT EXISTS price_watches(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    product_id INTEGER NOT NULL,
+    email TEXT NOT NULL,
+    market TEXT NOT NULL DEFAULT 'us',
+    price_when_asked REAL NOT NULL,
+    created_at TEXT NOT NULL,
+    notified_at TEXT,
+    FOREIGN KEY(product_id) REFERENCES products(id)
+  );
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_price_watches_unique
+    ON price_watches(product_id, email);
+`);
+
 const refreshRunColumns = new Set(db.prepare("PRAGMA table_info(refresh_runs)").all().map(column => column.name));
 if (!refreshRunColumns.has("market")) db.exec("ALTER TABLE refresh_runs ADD COLUMN market TEXT NOT NULL DEFAULT 'us'");
 

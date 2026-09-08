@@ -13,7 +13,11 @@ const {
 const c = require("./config");
 const { refreshProducts, localDate } = require("./refresh");
 const { runLinkHealthCheck } = require("./linkHealth");
-const { dropState, hostGreeting, hostRevealLine, presentDrop, sendDueReminders } = require("./liveDrop");
+const {
+  dropState, hostGreeting, hostRevealLine, presentDrop,
+  sendDueReminders, sendStagedReminders, announceDropToSubscribers,
+} = require("./liveDrop");
+const { sendDuePriceDrops } = require("./priceWatches");
 const { cacheKey, readCachedAnswer, writeCachedAnswer } = require("./deliaCache");
 const { tavusProductDetails } = require("./tavusProductTool");
 const {
@@ -55,7 +59,10 @@ const {
   timeoutResponse,
 } = require("./shoppingAssistant");
 const renderShoppingAssistantPanel = require("./shoppingAssistantPanel");
-const { welcomeEmail, passwordResetEmail, subscriptionEmail, clubWaitlistEmail, liveDropReminderEmail, deliveryTestEmail } = require("./mailer");
+const {
+  welcomeEmail,
+  liveDropSaveTheDateEmail, liveDropStartingSoonEmail, liveDropAnnouncementEmail, priceDropEmail,
+  passwordResetEmail, subscriptionEmail, clubWaitlistEmail, liveDropReminderEmail, deliveryTestEmail } = require("./mailer");
 const { emailHealth } = require("./emailHealth");
 const {
   normalizeAction,
@@ -2648,6 +2655,45 @@ const unsubscribeByToken = token => {
   return db.prepare("SELECT 1 FROM subscribers WHERE unsubscribe_token=?").get(value) != null;
 };
 
+/*
+ * Watch a price.
+ *
+ * No account, on purpose. The whole value is catching somebody who is looking
+ * at one product and is not ready today — asking them to register first is
+ * asking for the thing they came here to avoid. An address is enough to send
+ * an email, and an email is all this promises.
+ *
+ * The price is read from the catalogue rather than taken from the request: a
+ * number the browser sends is a number anybody can send, and this one decides
+ * what "cheaper" means later.
+ */
+app.post("/api/price-watches", authRateLimit, express.json({limit:"4kb"}), (req, res) => {
+  const email = String(req.body?.email || "").trim().toLowerCase().slice(0, 160);
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i.test(email)) {
+    return res.status(400).json({error:"Enter a valid email address."});
+  }
+  const productId = Math.max(0, Math.round(Number(req.body?.product_id) || 0));
+  const product = productId
+    ? db.prepare("SELECT id, current_price, market FROM products WHERE id=? AND status='published'").get(productId)
+    : null;
+  if (!product || !(Number(product.current_price) > 0)) {
+    return res.status(404).json({error:"That listing is no longer available to watch."});
+  }
+
+  db.prepare(`
+    INSERT INTO price_watches(product_id,email,market,price_when_asked,created_at)
+    VALUES(?,?,?,?,?)
+    ON CONFLICT(product_id,email) DO UPDATE SET
+      /* Asking again re-arms a watch that already fired, and re-baselines it
+         to today. Anything else means the second ask does nothing. */
+      price_when_asked=excluded.price_when_asked,
+      created_at=excluded.created_at,
+      notified_at=NULL
+  `).run(product.id, email, product.market || "us", Number(product.current_price), new Date().toISOString());
+
+  res.status(201).json({ok:true, message:"We will email you if the price drops."});
+});
+
 app.post("/unsubscribe", (req, res) => {
   res.set("Cache-Control", "no-store");
   const done = unsubscribeByToken(req.query.token || req.body?.token);
@@ -3343,6 +3389,42 @@ cron.schedule(
     try {
       const sent = await sendDueReminders({db, sendReminder: liveDropReminderEmail});
       if (sent) console.log(`[live-drop] sent ${sent} reminder${sent === 1 ? "" : "s"}`);
+
+      /* The day before and the hour before, on the same sweep. A drop lasts
+         ten minutes; a ten-minute warning only reaches whoever is already
+         holding their phone. */
+      const staged = await sendStagedReminders({
+        db,
+        sendSaveTheDate: liveDropSaveTheDateEmail,
+        sendStartingSoon: liveDropStartingSoonEmail,
+      });
+      if (staged) console.log(`[live-drop] sent ${staged} early reminder${staged === 1 ? "" : "s"}`);
+
+      /* And the subscriber list, which until now had no connection to a drop
+         at all: somebody could subscribe on Monday and never learn a drop
+         happened on Thursday. */
+      const announced = await announceDropToSubscribers({
+        db,
+        sendAnnouncement: liveDropAnnouncementEmail,
+        unsubscribeUrlFor: (subscriber) => (subscriber.unsubscribe_token
+          ? `${SITE}/unsubscribe?token=${encodeURIComponent(subscriber.unsubscribe_token)}`
+          : ""),
+      });
+      if (announced) console.log(`[live-drop] announced to ${announced} subscriber${announced === 1 ? "" : "s"}`);
+
+      /* Watched prices, on the same minute. The refresh has already written
+         today's prices by the time this runs; nothing else reads them for
+         this purpose. */
+      const drops = await sendDuePriceDrops({
+        db,
+        sendPriceDrop: priceDropEmail,
+        dealPathFor: (watch) => dealPath({
+          id: watch.product_id,
+          market: watch.market,
+          title: watch.title,
+        }),
+      });
+      if (drops) console.log(`[price-watch] told ${drops} shopper${drops === 1 ? "" : "s"} about a price drop`);
     } catch (error) {
       console.error(`[live-drop] ${error.message}`);
     } finally {

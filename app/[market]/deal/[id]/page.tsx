@@ -9,6 +9,7 @@ import {
   Check,
   Warning,
 } from "@phosphor-icons/react/ssr";
+import { WatchPrice } from "@/components/deal/WatchPrice";
 import { getCategory, getDeal, getMarket, getRelated } from "@/lib/catalog";
 import { categoryName, getLanguage, t } from "@/lib/i18n";
 import {
@@ -231,6 +232,11 @@ export default async function DealPage({
               className="h-14 px-6 text-base"
             />
           </div>
+
+          {/* Somewhere to leave an address, on the page that actually
+              receives people. Search traffic lands here, not on the homepage,
+              and the homepage was the only place on the site that asked. */}
+          <WatchPrice dealId={deal.id} price={formatPrice(deal.price, deal.currency, market)} />
 
           {deal.shopAll ? (
             <p className="text-sm text-fg-muted">

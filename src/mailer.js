@@ -195,4 +195,91 @@ const welcomeEmail = ({ name, email, market = "us" }) => sendEmail({
     </div>`
 });
 
-module.exports = { welcomeEmail, passwordResetEmail, subscriptionEmail, clubWaitlistEmail, liveDropReminderEmail, deliveryTestEmail };
+/*
+ * The two reminders that come before the ten-minute one.
+ *
+ * A drop lasts ten minutes on a fixed clock. A single warning ten minutes
+ * ahead reaches whoever happens to be holding their phone; it cannot reach
+ * somebody who would have arranged an evening around it. The day before is
+ * when a plan gets made and the hour before is when it gets kept.
+ *
+ * The price is in none of them, and is not available to the sender either:
+ * it is revealed when the drop opens, and giving it away removes the only
+ * reason to arrive on time.
+ */
+const liveDropSaveTheDateEmail = ({ email, title, market, startsAt, unsubscribeUrl }) => sendEmail({
+  to: email,
+  subject: "Tomorrow: your Live Drop",
+  unsubscribeUrl,
+  html: `
+    <div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;color:#17191d">
+      <h1 style="font-size:24px">Tomorrow</h1>
+      <p><strong>${escapeHtml(title)}</strong></p>
+      <p>One product, one price, ten minutes. It opens ${escapeHtml(startsAt)}.</p>
+      <p style="margin:28px 0"><a href="${SITE}/${encodeURIComponent(market)}/live" style="background:#ff6b00;color:#fff;text-decoration:none;padding:13px 20px;border-radius:10px;font-weight:bold">See the drop page</a></p>
+      <p style="color:#6b7280;font-size:13px">The price is revealed when it opens, not before.</p>
+      ${unsubscribeUrl ? `<p style="margin-top:24px;font-size:13px;color:#6b7280"><a href="${escapeHtml(unsubscribeUrl)}" style="color:#6b7280">Unsubscribe</a></p>` : ""}
+    </div>`
+});
+
+const liveDropStartingSoonEmail = ({ email, title, market, minutes }) => sendEmail({
+  to: email,
+  subject: `Your Live Drop opens in ${minutes} minutes`,
+  html: `
+    <div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;color:#17191d">
+      <h1 style="font-size:24px">In ${minutes} minutes</h1>
+      <p><strong>${escapeHtml(title)}</strong></p>
+      <p style="margin:28px 0"><a href="${SITE}/${encodeURIComponent(market)}/live" style="background:#ff6b00;color:#fff;text-decoration:none;padding:13px 20px;border-radius:10px;font-weight:bold">Open the drop</a></p>
+      <p>You asked us for this. There is nothing else to unsubscribe from.</p>
+    </div>`
+});
+
+/*
+ * The announcement to the subscriber list.
+ *
+ * Different from a reminder in the one way that matters: these people never
+ * asked about this drop. They subscribed to the site, so this is marketing and
+ * carries a way out — and it is sent once, well ahead, never chased.
+ */
+const liveDropAnnouncementEmail = ({ email, title, market, startsAt, unsubscribeUrl }) => sendEmail({
+  to: email,
+  subject: `A Live Drop is coming: ${title}`,
+  unsubscribeUrl,
+  html: `
+    <div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;color:#17191d">
+      <h1 style="font-size:24px">One product. One price. Ten minutes.</h1>
+      <p><strong>${escapeHtml(title)}</strong></p>
+      <p>Opens ${escapeHtml(startsAt)}. The price is revealed the moment it does.</p>
+      <p style="margin:28px 0"><a href="${SITE}/${encodeURIComponent(market)}/live" style="background:#ff6b00;color:#fff;text-decoration:none;padding:13px 20px;border-radius:10px;font-weight:bold">Get reminded</a></p>
+      ${unsubscribeUrl ? `<p style="margin-top:24px;font-size:13px;color:#6b7280">
+        You are receiving this because you subscribed at OneDailyDrop.
+        <a href="${escapeHtml(unsubscribeUrl)}" style="color:#6b7280">Unsubscribe</a> — one click, no sign-in.
+      </p>` : ""}
+    </div>`
+});
+
+/*
+ * A price this person was watching has fallen.
+ *
+ * Both numbers are in it, because "cheaper" without them is an advertisement
+ * and this is supposed to be information. The comparison is against the price
+ * on the day they asked, not against a reference price somebody else set.
+ */
+const priceDropEmail = ({ email, title, market, dealPath, was, now, currency, unsubscribeUrl }) => sendEmail({
+  to: email,
+  subject: `${title} is cheaper than when you looked`,
+  unsubscribeUrl,
+  html: `
+    <div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;color:#17191d">
+      <h1 style="font-size:24px">The price dropped</h1>
+      <p><strong>${escapeHtml(title)}</strong></p>
+      <p style="font-size:20px"><strong>${escapeHtml(currency)} ${escapeHtml(now)}</strong>
+      <span style="color:#6b7280;text-decoration:line-through;margin-left:8px">${escapeHtml(currency)} ${escapeHtml(was)}</span></p>
+      <p style="color:#6b7280;font-size:14px">That is against the price on the day you asked us to watch it.</p>
+      <p style="margin:28px 0"><a href="${SITE}${escapeHtml(dealPath)}" style="background:#ff6b00;color:#fff;text-decoration:none;padding:13px 20px;border-radius:10px;font-weight:bold">See it</a></p>
+      <p style="color:#6b7280;font-size:13px">Prices move. Check the current one at the shop before buying.</p>
+      ${unsubscribeUrl ? `<p style="margin-top:20px;font-size:13px;color:#6b7280"><a href="${escapeHtml(unsubscribeUrl)}" style="color:#6b7280">Stop watching this</a></p>` : ""}
+    </div>`
+});
+
+module.exports = { welcomeEmail, liveDropSaveTheDateEmail, liveDropStartingSoonEmail, liveDropAnnouncementEmail, priceDropEmail, passwordResetEmail, subscriptionEmail, clubWaitlistEmail, liveDropReminderEmail, deliveryTestEmail };
