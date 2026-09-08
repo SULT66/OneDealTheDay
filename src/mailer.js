@@ -265,6 +265,34 @@ const liveDropAnnouncementEmail = ({ email, title, market, startsAt, unsubscribe
  * and this is supposed to be information. The comparison is against the price
  * on the day they asked, not against a reference price somebody else set.
  */
+/*
+ * Confirmation that we are now watching a price.
+ *
+ * Leaving a form and receiving nothing reads as a form that did not work.
+ * The watch was being saved correctly and silently, which is the same thing
+ * as broken from the other side of the screen: the first person to use it
+ * assumed it had failed, and was right to.
+ *
+ * It also says the price it will compare against, because "we will tell you
+ * if it gets cheaper" is only a promise if the number it is measured from
+ * is written down somewhere the person can see.
+ */
+const priceWatchStartedEmail = ({ email, title, market, dealPath, price, currency, unsubscribeUrl }) => sendEmail({
+  to: email,
+  subject: `Watching the price of ${title}`,
+  unsubscribeUrl,
+  html: `
+    <div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;color:#17191d">
+      <h1 style="font-size:24px">We are watching it</h1>
+      <p><strong>${escapeHtml(title)}</strong></p>
+      <p style="font-size:20px"><strong>${escapeHtml(currency)} ${escapeHtml(price)}</strong></p>
+      <p style="color:#6b7280;font-size:14px">That is today&rsquo;s price, and the one we will measure against.
+      If it drops, you get one email. If it does not, you hear nothing more about it.</p>
+      <p style="margin:28px 0"><a href="${SITE}${escapeHtml(dealPath)}" style="background:#ff6b00;color:#fff;text-decoration:none;padding:13px 20px;border-radius:10px;font-weight:bold">See the listing</a></p>
+      <p style="color:#6b7280;font-size:13px">No account was created and you are not on any mailing list.</p>
+      ${unsubscribeUrl ? `<p style="margin-top:20px;font-size:13px;color:#6b7280"><a href="${escapeHtml(unsubscribeUrl)}" style="color:#6b7280">Stop watching this</a></p>` : ""}
+    </div>`
+});
 const priceDropEmail = ({ email, title, market, dealPath, was, now, currency, unsubscribeUrl }) => sendEmail({
   to: email,
   subject: `${title} is cheaper than when you looked`,
@@ -282,4 +310,4 @@ const priceDropEmail = ({ email, title, market, dealPath, was, now, currency, un
     </div>`
 });
 
-module.exports = { welcomeEmail, liveDropSaveTheDateEmail, liveDropStartingSoonEmail, liveDropAnnouncementEmail, priceDropEmail, passwordResetEmail, subscriptionEmail, clubWaitlistEmail, liveDropReminderEmail, deliveryTestEmail };
+module.exports = { welcomeEmail, liveDropSaveTheDateEmail, liveDropStartingSoonEmail, liveDropAnnouncementEmail, priceDropEmail, priceWatchStartedEmail, passwordResetEmail, subscriptionEmail, clubWaitlistEmail, liveDropReminderEmail, deliveryTestEmail };

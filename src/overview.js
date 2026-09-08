@@ -55,14 +55,26 @@ function overview(db, { days = 30, now = Date.now() } = {}) {
   const saved = one("SELECT COUNT(*) AS total FROM saved_offers");
 
   /*
-   * Outbound clicks split by what they were. A store click and a Live Drop
-   * click are different products of the site, and lumping them together was
-   * how the store links looked like nothing for weeks.
+   * Outbound clicks split by what they were. A store click and a product click
+   * are different products of the site, and lumping them together was how the
+   * store links looked like nothing for weeks.
+   *
+   * An empty session id is not a session.
+   *
+   * COUNT(DISTINCT session_id) counted the empty string as one, so a week of
+   * 4,895 clicks that carried no id at all reported "1 session" — which reads
+   * as one visitor and is really "we did not record this". Only the Live Drop
+   * panel was attaching an id; every product and store link went out bare
+   * (fixed in components/site/ClickAttribution.tsx). Clicks from before that
+   * therefore count as unattributed rather than as a person, and the two are
+   * reported separately so the gap stays visible instead of averaging into a
+   * number that looks fine.
    */
   const clicks = one(
     `SELECT
        COUNT(*) AS total,
-       COUNT(DISTINCT session_id) AS sessions,
+       COUNT(DISTINCT NULLIF(session_id, '')) AS sessions,
+       SUM(CASE WHEN COALESCE(session_id, '') = '' THEN 1 ELSE 0 END) AS unattributed,
        SUM(CASE WHEN action_type = 'shop_all' THEN 1 ELSE 0 END) AS to_a_shop,
        SUM(CASE WHEN action_type = 'view_deal' THEN 1 ELSE 0 END) AS to_a_product
      FROM clicks
@@ -126,6 +138,10 @@ function overview(db, { days = 30, now = Date.now() } = {}) {
     },
     outbound: {
       total: number(clicks.total),
+      /* Clicks nobody can be attached to. Mostly crawlers walking every
+         link, and impossible to tell apart from people until a session id
+         rides along. */
+      unattributed: number(clicks.unattributed),
       toAProduct: number(clicks.to_a_product),
       toAShop: number(clicks.to_a_shop),
     },
@@ -153,6 +169,7 @@ function overview(db, { days = 30, now = Date.now() } = {}) {
      */
     notMeasuredHere: [
       "Visitors — no page view is recorded anywhere, so the top of the funnel is unknown.",
+      "Anyone behind an unattributed click — those carry no session id, so they are counted as clicks and not as people.",
       "Purchases and commission — they happen at the shop; search the network report for the odd- labels.",
     ],
   };

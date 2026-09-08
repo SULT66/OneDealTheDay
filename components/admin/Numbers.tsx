@@ -29,7 +29,7 @@ type Overview = {
     accountsViaGoogle: number;
   };
   intent: { savedProducts: number; priceWatches: number; priceWatchesWaiting: number; priceWatchesTold: number };
-  outbound: { total: number; toAProduct: number; toAShop: number };
+  outbound: { total: number; unattributed: number; toAProduct: number; toAShop: number };
   live: {
     drops: number;
     published: number;
@@ -105,7 +105,11 @@ export function Numbers({ adminKey }: { adminKey: string }) {
       </div>
 
       <Group title="People">
-        <Stat label="Sessions that did something" value={count(data.engagedSessions)} note={`in ${days} days`} />
+        <Stat
+          label="People we could recognise"
+          value={count(data.engagedSessions)}
+          note={`in ${days} days · ${count(outbound.unattributed)} clicks had no one attached`}
+        />
         <Stat
           label="Email subscribers"
           value={count(audience.subscribers)}
@@ -133,7 +137,11 @@ export function Numbers({ adminKey }: { adminKey: string }) {
       </Group>
 
       <Group title="Left for a shop">
-        <Stat label="Clicks out" value={count(outbound.total)} note={`in ${days} days`} />
+        <Stat
+          label="Clicks out"
+          value={count(outbound.total)}
+          note={`in ${days} days · ${count(outbound.unattributed)} unattributed`}
+        />
         <Stat label="To a product" value={count(outbound.toAProduct)} note="the deal itself" />
         <Stat label="To a whole shop" value={count(outbound.toAShop)} note="anything they buy counts" />
       </Group>
