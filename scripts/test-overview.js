@@ -92,6 +92,11 @@ db.prepare("INSERT INTO saved_offers(user_id,url,title,retailer,price_value,curr
 const click = db.prepare(`INSERT INTO clicks(session_id,product_id,market,retailer_name,source_page,placement,action_type,destination_type,clicked_at)
   VALUES(?,?,?,?,?,?,?,?,?)`);
 click.run("session-a", 1, "us", "eBay", "deal", "hero", "view_deal", "retailer", inWindow);
+/* A click with no session id: every product and store link sent these until
+   ClickAttribution started stamping them. It is a click, and it is nobody —
+   counting the empty string as a session reported 4,895 of them as one
+   visitor. */
+click.run("", 1, "us", "eBay", "deal", "hero", "view_deal", "retailer", inWindow);
 click.run("session-a", 1, "us", "eBay", "deal", "hero", "shop_all", "retailer", inWindow);
 click.run("session-b", 2, "us", "eBay", "deal", "hero", "shop_all", "retailer", inWindow);
 /* Outside the window, and an internal click that never left the site: neither
@@ -132,10 +137,11 @@ assert.strictEqual(numbers.intent.priceWatches, 2);
 assert.strictEqual(numbers.intent.priceWatchesWaiting, 1);
 assert.strictEqual(numbers.intent.priceWatchesTold, 1);
 
-assert.strictEqual(numbers.outbound.total, 3, "in the window, and only clicks that left for a shop");
-assert.strictEqual(numbers.outbound.toAProduct, 1);
+assert.strictEqual(numbers.outbound.total, 4, "in the window, and only clicks that left for a shop");
+assert.strictEqual(numbers.outbound.unattributed, 1, "the click with no session is reported, not hidden");
+assert.strictEqual(numbers.outbound.toAProduct, 2);
 assert.strictEqual(numbers.outbound.toAShop, 2);
-assert.strictEqual(numbers.engagedSessions, 2, "two sessions, not three clicks");
+assert.strictEqual(numbers.engagedSessions, 2, "two real sessions — the empty one is not a third person");
 
 assert.strictEqual(numbers.live.drops, 2);
 assert.strictEqual(numbers.live.published, 1);
@@ -161,6 +167,7 @@ assert.strictEqual(week.intent.priceWatches, 2);
 /* The gaps are stated on the payload itself rather than only in the panel, so
    a second reader of this endpoint cannot mistake silence for zero. */
 assert.ok(numbers.notMeasuredHere.some(line => /visitor/i.test(line)), "says visitors are not counted");
+assert.ok(numbers.notMeasuredHere.some(line => /unattributed/i.test(line)), "says unattributed clicks are not people");
 assert.ok(numbers.notMeasuredHere.some(line => /purchase|commission/i.test(line)), "says purchases are not counted");
 
 /* Nothing here is allowed to call an engaged session a visitor. The number is

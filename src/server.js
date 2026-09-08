@@ -62,6 +62,7 @@ const renderShoppingAssistantPanel = require("./shoppingAssistantPanel");
 const {
   welcomeEmail,
   liveDropSaveTheDateEmail, liveDropStartingSoonEmail, liveDropAnnouncementEmail, priceDropEmail,
+  priceWatchStartedEmail,
   passwordResetEmail, subscriptionEmail, clubWaitlistEmail, liveDropReminderEmail, deliveryTestEmail } = require("./mailer");
 const { emailHealth } = require("./emailHealth");
 const { htmlCache } = require("./htmlCache");
@@ -2666,7 +2667,7 @@ app.post("/api/price-watches", authRateLimit, express.json({limit:"4kb"}), (req,
   }
   const productId = Math.max(0, Math.round(Number(req.body?.product_id) || 0));
   const product = productId
-    ? db.prepare("SELECT id, current_price, market FROM products WHERE id=? AND status='published'").get(productId)
+    ? db.prepare("SELECT id, title, current_price, currency, market FROM products WHERE id=? AND status='published'").get(productId)
     : null;
   if (!product || !(Number(product.current_price) > 0)) {
     return res.status(404).json({error:"That listing is no longer available to watch."});
@@ -2683,7 +2684,26 @@ app.post("/api/price-watches", authRateLimit, express.json({limit:"4kb"}), (req,
       notified_at=NULL
   `).run(product.id, email, product.market || "us", Number(product.current_price), new Date().toISOString());
 
-  res.status(201).json({ok:true, message:"We will email you if the price drops."});
+  /*
+   * Tell them it worked.
+   *
+   * The watch was already being saved correctly and in complete silence,
+   * which from the other side of the screen is indistinguishable from a form
+   * that did nothing — the first person to use it assumed it had failed.
+   *
+   * Fire-and-forget: a mail provider having a bad minute must not turn a
+   * watch that is safely stored into an error the visitor has to act on.
+   */
+  priceWatchStartedEmail({
+    email,
+    title: product.title,
+    market: product.market || "us",
+    dealPath: dealPath(product),
+    price: Number(product.current_price).toFixed(2),
+    currency: product.currency || "USD",
+  }).catch(error => console.error(`[price-watch] confirmation to ${email}: ${error.message}`));
+
+  res.status(201).json({ok:true, message:"Saved. Check your email — we just confirmed it."});
 });
 
 app.post("/unsubscribe", (req, res) => {
