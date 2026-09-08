@@ -64,6 +64,7 @@ const {
   liveDropSaveTheDateEmail, liveDropStartingSoonEmail, liveDropAnnouncementEmail, priceDropEmail,
   passwordResetEmail, subscriptionEmail, clubWaitlistEmail, liveDropReminderEmail, deliveryTestEmail } = require("./mailer");
 const { emailHealth } = require("./emailHealth");
+const { htmlCache } = require("./htmlCache");
 const { overview } = require("./overview");
 const {
   normalizeAction,
@@ -666,41 +667,17 @@ app.use(express.static(publicDir, {
   }
 }));
 
-const publicHtmlCache = new Map();
-app.use((req, res, next) => {
-  if (req.method !== "GET" || !/^\/(?:deal\/[^/]+|category\/[^/]+|search|archive|brand\/[^/]+|brands|about|contact|privacy|terms|affiliate-disclosure|editorial-policy|how-we-select-deals|price-disclaimer)\/?$/.test(req.path)) return next();
-  const cacheKey = `${req.language || "en"}:${req.originalUrl}`;
-  const cached = publicHtmlCache.get(cacheKey);
-  if (cached && cached.expiresAt > Date.now()) {
-    if (cached.robots) res.set("X-Robots-Tag", cached.robots);
-    return res.set("X-ODD-Cache", "HIT")
-      .set("Cache-Control", cached.cacheControl)
-      .type("html")
-      .send(cached.body);
-  }
-  if (cached) publicHtmlCache.delete(cacheKey);
-  const originalSend = res.send.bind(res);
-  res.send = body => {
-    if (res.statusCode === 200 && typeof body === "string" && body.length < 1000000) {
-      if (publicHtmlCache.size >= 500) publicHtmlCache.delete(publicHtmlCache.keys().next().value);
-      const isProductPage = /^\/deal\/[^/]+\/?$/.test(req.path);
-      const isDefaultLanguage = req.language === defaultLanguages[req.market || marketFromIp(req).code];
-      const cacheControl = isProductPage && isDefaultLanguage
-        ? "public, max-age=120, s-maxage=600, stale-while-revalidate=3600"
-        : "private, max-age=45, stale-while-revalidate=180";
-      const cacheTtlMs = isProductPage ? 10 * 60 * 1000 : 45 * 1000;
-      publicHtmlCache.set(cacheKey, {
-        body,
-        cacheControl,
-        robots:String(res.get("X-Robots-Tag") || ""),
-        expiresAt:Date.now() + cacheTtlMs
-      });
-      res.set("X-ODD-Cache", "MISS").set("Cache-Control", cacheControl);
-    }
-    return originalSend(body);
-  };
-  return next();
-});
+/*
+ * Pages that were already rendered, served without rendering them again.
+ *
+ * The cache that used to sit here had never run once: its paths were the old
+ * bare URLs, and it captured bodies through `res.send`, which Next does not
+ * use. src/htmlCache.js explains both in full. Registered here, after the
+ * market/language middleware so `req.language` is set, and before the Next
+ * handler that does the expensive work.
+ */
+const publicHtmlCache = htmlCache();
+app.use(publicHtmlCache);
 
 const authAttempts = new Map();
 const authRateLimit = (req, res, next) => {
@@ -2815,6 +2792,9 @@ app.post("/api/admin/refresh", admin, (req,res) => {
   setImmediate(async () => {
     try {
       job.result = await refreshProducts(c, requestedMarket ? {market:requestedMarket} : {});
+      /* New prices on the listings mean the rendered pages quoting the old
+         ones are wrong, however fast they are to serve. */
+      publicHtmlCache.clear();
       job.status = "success";
     } catch (error) {
       job.status = "failed";
@@ -3342,7 +3322,7 @@ for (const marketCode of c.markets) {
   const selectedMarket = c.marketConfig(marketCode);
   cron.schedule(
     c.refreshCron,
-    () => refreshProducts(c, {market:marketCode}).catch(error => console.error(error.message)),
+    () => refreshProducts(c, {market:marketCode}).then(() => publicHtmlCache.clear()).catch(error => console.error(error.message)),
     {timezone:selectedMarket.timezone}
   );
   if (c.offerCheckEnabled) {
@@ -3352,7 +3332,7 @@ for (const marketCode of c.markets) {
          allowance those sweeps spent is what the primary market was short of.
          See searchBudgetFor in src/config.js. */
       marketCode === c.primaryMarket ? c.offerCheckCron : c.secondaryOfferCheckCron,
-      () => refreshProducts(c, {market:marketCode,preserveDailySelection:true}).catch(error => console.error(error.message)),
+      () => refreshProducts(c, {market:marketCode,preserveDailySelection:true}).then(() => publicHtmlCache.clear()).catch(error => console.error(error.message)),
       {timezone:selectedMarket.timezone}
     );
   }
