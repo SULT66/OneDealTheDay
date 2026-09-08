@@ -1136,6 +1136,7 @@ export function DeliaPanel() {
  */
 function SaveNeedsAccount() {
   const saved = useSavedOffers();
+  const { closeDelia } = useDelia();
   if (!saved?.promptToSignIn) return null;
 
   return (
@@ -1159,6 +1160,19 @@ function SaveNeedsAccount() {
       <div className="mt-3 flex items-center gap-2">
         <Link
           href={`/${saved.market}/account`}
+          /*
+           * Closes the panel on the way.
+           *
+           * The panel lives in the layout, so it stays mounted across a
+           * client-side navigation: tapping this took you to the account page
+           * and left Delia sitting on top of it, so nothing appeared to
+           * happen and the button read as broken. It was working; it was just
+           * standing in front of its own result.
+           */
+          onClick={() => {
+            saved.dismissPrompt();
+            closeDelia();
+          }}
           className="inline-flex h-10 items-center rounded-full bg-lime px-4 text-sm font-semibold text-ink transition-opacity hover:opacity-88"
         >
           Create a free account
