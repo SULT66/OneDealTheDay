@@ -64,6 +64,7 @@ const {
   liveDropSaveTheDateEmail, liveDropStartingSoonEmail, liveDropAnnouncementEmail, priceDropEmail,
   passwordResetEmail, subscriptionEmail, clubWaitlistEmail, liveDropReminderEmail, deliveryTestEmail } = require("./mailer");
 const { emailHealth } = require("./emailHealth");
+const { overview } = require("./overview");
 const {
   normalizeAction,
   normalizePlacement,
@@ -2402,6 +2403,19 @@ app.post("/api/analytics/events", (req, res) => {
     return res.status(400).json({error:error.message});
   }
   return res.sendStatus(204);
+});
+/*
+ * One page with every number the site holds.
+ *
+ * The parts existed already and were unreachable: clicks in one endpoint, the
+ * Live Drop funnel in another, and subscribers, accounts and price watches
+ * counted nowhere. Asked how many people came and how many signed up, there
+ * was no answer to point at.
+ */
+app.get("/api/admin/overview", admin, (req, res) => {
+  const requestedDays = Number(req.query.days || 30);
+  const days = Number.isFinite(requestedDays) ? Math.min(90, Math.max(1, Math.round(requestedDays))) : 30;
+  res.json(overview(db, {days}));
 });
 app.get("/api/admin/click-analytics", admin, (req, res) => {
   const requestedDays = Number(req.query.days || 30);
