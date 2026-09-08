@@ -55,7 +55,7 @@ const {
   timeoutResponse,
 } = require("./shoppingAssistant");
 const renderShoppingAssistantPanel = require("./shoppingAssistantPanel");
-const { passwordResetEmail, subscriptionEmail, clubWaitlistEmail, liveDropReminderEmail, deliveryTestEmail } = require("./mailer");
+const { welcomeEmail, passwordResetEmail, subscriptionEmail, clubWaitlistEmail, liveDropReminderEmail, deliveryTestEmail } = require("./mailer");
 const { emailHealth } = require("./emailHealth");
 const {
   normalizeAction,
@@ -869,6 +869,7 @@ app.post("/api/auth/register", authRateLimit, (req, res) => {
     const result = db.prepare("INSERT INTO users(email,name,password_hash,membership,market,created_at) VALUES(?,?,?,?,?,?)")
       .run(email, name, passwordHash(password), "free", userMarket, new Date().toISOString());
     startSession(res, result.lastInsertRowid);
+    sendWelcome({name, email, market: userMarket});
     res.status(201).json({user:{id:result.lastInsertRowid,email,name,membership:"free"}});
   } catch (error) {
     if (String(error.message).includes("UNIQUE")) return res.status(409).json({error:"An account with this email already exists."});
@@ -911,17 +912,34 @@ const googleAuth = googleConfig();
  * alternative was rebuilding the users table to drop a NOT NULL, on a database
  * that has been through two corruptions this week.
  */
+/* Returns whether the account was created here as well as which one it is:
+   a welcome belongs on the first sign-in and nowhere else, and signing in
+   again is not a new account. */
 const googleUserId = (profile, marketCode) => {
   const existing = db.prepare("SELECT id FROM users WHERE google_sub=?").get(profile.subject);
-  if (existing) return existing.id;
+  if (existing) return {id: existing.id, created: false};
   const byEmail = db.prepare("SELECT id FROM users WHERE email=?").get(profile.email);
   if (byEmail) {
     db.prepare("UPDATE users SET google_sub=? WHERE id=?").run(profile.subject, byEmail.id);
-    return byEmail.id;
+    return {id: byEmail.id, created: false};
   }
-  return db.prepare("INSERT INTO users(email,name,password_hash,membership,market,created_at,google_sub) VALUES(?,?,?,?,?,?,?)")
+  const id = db.prepare("INSERT INTO users(email,name,password_hash,membership,market,created_at,google_sub) VALUES(?,?,?,?,?,?,?)")
     .run(profile.email, profile.name, "", "free", marketCode, new Date().toISOString(), profile.subject)
     .lastInsertRowid;
+  return {id, created: true};
+};
+
+/*
+ * The welcome, sent without the caller waiting for it.
+ *
+ * A sign-up must not fail, or stall behind a mail provider, because a welcome
+ * could not be sent — the account exists either way and the person is standing
+ * in front of the screen. Failures are logged rather than raised.
+ */
+const sendWelcome = (user) => {
+  welcomeEmail(user).catch((error) => {
+    console.error(`[welcome] ${user.email}: ${error.message}${error.details ? ` — ${error.details}` : ""}`);
+  });
 };
 
 app.get("/api/auth/providers", (req, res) => res.json({google: googleAuth.configured}));
@@ -948,7 +966,11 @@ app.get("/api/auth/google/callback", authRateLimit, async (req, res) => {
     const tokens = await exchangeCodeForTokens(googleAuth, req.query.code);
     const profile = verifiedGoogleProfile(tokens?.id_token, googleAuth.clientId);
     if (!profile) return res.redirect("/account?error=google_identity");
-    startSession(res, googleUserId(profile, marketFromIp(req).code));
+    const account = googleUserId(profile, marketFromIp(req).code);
+    startSession(res, account.id);
+    if (account.created) {
+      sendWelcome({name: profile.name, email: profile.email, market: marketFromIp(req).code});
+    }
     return res.redirect("/account?signed_in=google");
   } catch (error) {
     /* Loudly, because a broken sign-in is invisible from the outside: the

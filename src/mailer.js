@@ -152,4 +152,47 @@ const deliveryTestEmail = ({ to }) => sendEmail({
     </div>`
 });
 
-module.exports = { passwordResetEmail, subscriptionEmail, clubWaitlistEmail, liveDropReminderEmail, deliveryTestEmail };
+/*
+ * The one email a new account gets, and the only moment the site has their
+ * attention with nothing to sell yet.
+ *
+ * Registration used to send nothing at all — not through Google, not through
+ * the form — so a typo in an address went unnoticed until somebody tried to
+ * reset a password they could never receive. That is the first job here:
+ * proving the address is real, on the day it is given.
+ *
+ * The second is that signing up and subscribing are different things, and the
+ * site had no way to turn one into the other. Somebody who made an account is
+ * the warmest person it will ever have; asking them here costs nothing and is
+ * the only place the question gets asked at all.
+ *
+ * Transactional, so it carries no unsubscribe of its own — there is nothing
+ * to unsubscribe from until they say yes.
+ */
+const welcomeEmail = ({ name, email, market = "us" }) => sendEmail({
+  to: email,
+  toName: name,
+  subject: "Your OneDailyDrop account is ready",
+  html: `
+    <div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;color:#17191d">
+      <h1 style="font-size:24px">Welcome${name ? `, ${escapeHtml(name)}` : ""}</h1>
+      <p>Your account at <strong>${escapeHtml(email)}</strong> is ready. Anything you save
+      now stays with it, so it is still there on your phone tomorrow.</p>
+
+      <p style="margin-top:24px">Two things worth knowing:</p>
+      <ul style="padding-left:18px;line-height:1.7">
+        <li>Every listing is checked before it is shown, and where a signal is
+        missing we say so rather than filling the gap.</li>
+        <li>A <strong>Live Drop</strong> is one product at one price for ten
+        minutes. There is no way to hear about one unless you ask.</li>
+      </ul>
+
+      <p style="margin:28px 0"><a href="${SITE}/${encodeURIComponent(market)}#subscribe" style="background:#ff6b00;color:#fff;text-decoration:none;padding:13px 20px;border-radius:10px;font-weight:bold">Tell us what you shop for</a></p>
+
+      <p style="color:#6b7280;font-size:13px">You are getting this because an
+      account was created at OneDailyDrop with this address. If that was not
+      you, ignore this and nothing else will be sent.</p>
+    </div>`
+});
+
+module.exports = { welcomeEmail, passwordResetEmail, subscriptionEmail, clubWaitlistEmail, liveDropReminderEmail, deliveryTestEmail };
