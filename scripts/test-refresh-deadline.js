@@ -94,4 +94,45 @@ assert(
   `Detail lookups need ${detailRounds} rounds; at ten seconds each that is longer than a nightly run can wait`,
 );
 
+
+/* ------------------------------------- the deadline has to fit the budget */
+
+/*
+ * Eight minutes was right for sixteen keywords and ninety detail calls. When
+ * the primary market was given the allowance the other four were wasting — the
+ * whole keyword list and up to two hundred and sixty details, roughly three
+ * hundred calls against a hundred and six — the ceiling stayed at eight and the
+ * American run failed every time. A triggered refresh showed it within the
+ * minute: "eBay Browse API did not finish within 8 minutes", found 0.
+ *
+ * Raising a budget without raising the time to spend it turns an intermittent
+ * failure into a certain one, so the deadline is derived from the budget and
+ * cannot be left behind by the next change to it.
+ */
+assert(
+  /function deadlineFor\(market\)/.test(registry),
+  "the deadline is a constant again, so a larger budget cannot be spent inside it",
+);
+assert(
+  /budget\.detailLimit/.test(registry),
+  "the deadline no longer takes account of how much the source was asked for",
+);
+
+{
+  const config = require("../src/config");
+  const primary = config.marketConfig(config.primaryMarket);
+  const secondary = config.marketConfig(
+    config.markets.find((code) => code !== config.primaryMarket) || "ca",
+  );
+  const callsFor = (market) => {
+    const budget = market.searchBudget || {};
+    const searches = Number(budget.keywordsPerRun) || (market.searchKeywords || []).length;
+    return Number(budget.detailLimit || 0) + searches;
+  };
+  assert(
+    callsFor(primary) > callsFor(secondary),
+    "the primary market no longer carries the larger share of the allowance",
+  );
+}
+
 console.log("Refresh deadline and eBay budget checks passed.");

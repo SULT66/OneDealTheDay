@@ -116,10 +116,39 @@ function enabledProviders(config) {
   return [...byId.values()];
 }
 
+/*
+ * How long a source may take, which has to follow how much it was asked for.
+ *
+ * Eight minutes was right for sixteen keywords and ninety detail calls. The
+ * primary market now sweeps forty-seven keywords and up to two hundred and
+ * sixty details — roughly three hundred calls against a hundred and six — and
+ * a triggered run proved the obvious: it timed out at eight minutes every
+ * time. Raising the budget without raising the ceiling turned an intermittent
+ * failure into a certain one.
+ *
+ * Derived rather than configured per market, so a budget change cannot leave
+ * a deadline behind again. The floor keeps small markets where they were.
+ */
+function deadlineFor(market) {
+  const budget = market?.searchBudget || {};
+  /* keywordsPerRun of 0 means the whole list, which is the primary market and
+     the case that most needs the time. Counting it as zero would set the
+     deadline from the detail budget alone and undershoot by a sweep. */
+  const searches = Number(budget.keywordsPerRun) || (market?.searchKeywords || []).length;
+  const calls = Number(budget.detailLimit || 0) + searches;
+  if (!calls) return PROVIDER_DEADLINE_MS;
+  /* Measured, not guessed: successful runs of about a hundred calls took
+     between seven and a hundred and thirty seconds, so the slow end is close
+     to one and a quarter seconds a call. Four seconds each is generous enough
+     that a slow afternoon does not fail the run, and still bounded. */
+  return Math.max(PROVIDER_DEADLINE_MS, Math.min(30 * 60 * 1000, calls * 4000));
+}
+
 async function runWithDeadline(provider, market) {
   const controller = new AbortController();
-  const message = `${provider.name} did not finish within ${Math.round(PROVIDER_DEADLINE_MS / 60000)} minutes`;
-  const timer = setTimeout(() => controller.abort(new Error(message)), PROVIDER_DEADLINE_MS);
+  const deadlineMs = deadlineFor(market);
+  const message = `${provider.name} did not finish within ${Math.round(deadlineMs / 60000)} minutes`;
+  const timer = setTimeout(() => controller.abort(new Error(message)), deadlineMs);
   timer.unref?.();
   try {
     /* The market carries its own slice of the daily allowance — see
