@@ -67,14 +67,19 @@ const MEANINGFUL_REVIEW_COUNT = 5;
 const EVIDENCE_CEILING = Object.freeze({
   reviewedAndPriced: 95,
   reviewed: 89,
-  priced: 79,
-  thin: 74,
 });
 
-/* Low enough that the ceilings above have room to separate listings. At 82 a
-   cap of 74 would have been below the floor and the arithmetic would have
-   quietly put it back. */
-const PUBLIC_SCORE_FLOOR = 62;
+/*
+ * The bottom of the range, and it has to be a number a shopper reads as
+ * "fine", not as a failing mark.
+ *
+ * Everything that reaches this point has cleared the editorial gate and has
+ * real product reviews behind it; there is no such thing here as a listing we
+ * scored badly, only listings we did not score at all. Sixty-two was briefly
+ * the floor and put 67s on a shelf headed "Best right now", which reads as the
+ * site rubbishing its own picks.
+ */
+const PUBLIC_SCORE_FLOOR = 70;
 const PUBLIC_SCORE_CEILING = 95;
 
 /*
@@ -83,10 +88,23 @@ const PUBLIC_SCORE_CEILING = 95;
  * badge can never disagree about whether a discount exists.
  */
 function evidenceCeiling({hasReviews, hasStatedDiscount}) {
-  if (hasReviews && hasStatedDiscount) return EVIDENCE_CEILING.reviewedAndPriced;
-  if (hasReviews) return EVIDENCE_CEILING.reviewed;
-  if (hasStatedDiscount) return EVIDENCE_CEILING.priced;
-  return EVIDENCE_CEILING.thin;
+  /*
+   * No reviews, no number, whatever else is known.
+   *
+   * Lowering the ceiling was half a fix and the other half was visible on the
+   * page: 147 of 168 scores sat on listings with no reviews at all, and the
+   * "Best right now" shelf filled with 67s and 68s. A site that says it scores
+   * on review volume, price evidence, seller history and delivery cannot put a
+   * number on a listing that has one of the four — it was wrong at 94 for the
+   * same reason it was wrong at 67, only in the other direction.
+   *
+   * A verified saving is real evidence and the card already states it, as
+   * "36% BELOW REF." beside the price. That is the honest way to show one
+   * signal: say which signal it is, rather than compressing it into a score
+   * that implies four.
+   */
+  if (!hasReviews) return null;
+  return hasStatedDiscount ? EVIDENCE_CEILING.reviewedAndPriced : EVIDENCE_CEILING.reviewed;
 }
 
 const clean = value => String(value || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
@@ -198,6 +216,10 @@ function publicOneDailyDropScore(rawScore, confidence, knownQuality = null, know
    * full range rather than being retrospectively marked down.
    */
   const top = known ? evidenceCeiling(known) : PUBLIC_SCORE_CEILING;
+  /* Null means the evidence does not support a number at all. The listing is
+     still published, still carries its price, its badge and its rating line —
+     it simply does not get a score, and no page draws a ring for it. */
+  if (top == null) return null;
   const calibrated = PUBLIC_SCORE_FLOOR +
     (top - PUBLIC_SCORE_FLOOR) * (quality * 0.75 + evidenceQuality * 0.25);
   return Math.round(Math.max(PUBLIC_SCORE_FLOOR, Math.min(top, calibrated)));

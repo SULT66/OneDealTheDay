@@ -313,6 +313,19 @@ export async function getTopPicks(
 
   for (const deal of deals) {
     if (picked.length >= limit) break;
+    /*
+     * A shelf called "Best right now" may only hold things we can call best.
+     *
+     * It took the top of the catalogue by score and printed whatever came, so
+     * once the score stopped flattering thin listings the grid filled with
+     * 67s and 68s under a heading claiming they were the best on the site.
+     * An unscored listing is not a bad one — it is one we have no reviews for
+     * — and it belongs in the category pages, not here.
+     *
+     * The grid is allowed to come back short. Padding it with the listings
+     * this line just rejected is how it went wrong in the first place.
+     */
+    if (deal.score == null) continue;
     if ((categoryCount.get(deal.category) ?? 0) >= perCategory) continue;
     if ((retailerCount.get(deal.retailer) ?? 0) >= perRetailer) continue;
     picked.push(deal);

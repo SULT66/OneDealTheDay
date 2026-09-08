@@ -274,7 +274,7 @@ async function refreshMarket(config, marketCode, options = {}) {
      * is well past anything a single day can consume. */
     const ranked = uniqueProducts
       .filter(product => config.provider === "demo" ||
-        isDailyPickEligible(product, {requireProductIdentity: true}))
+        isDailyPickEligible(product, {requireProductIdentity: true, requireDealSaving: true}))
       .slice(0, 400);
     if (!Array.isArray(found) || found.length < 1 || catalogProducts.length < 1) {
       throw new Error(`${selectedMarket.name} refresh returned no valid catalog products (${found.length} found, ${catalogProducts.length} valid)`);

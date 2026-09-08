@@ -155,8 +155,13 @@ function records(retailer, prefix, duplicateFirst = false) {
     gtin:duplicateFirst && index === 0
       ? "00012345678905"
       : gtin13(`0001234567${prefix === "t" ? "1" : "2"}${index}`),
-    price:String(20 + index),
-    original_price:String(30 + index),
+    /* Priced like something that could actually be a drop. They used to run
+       $20 against $30, and once a daily pick had to be worth having — fifteen
+       percent off, twenty-five dollars and up — the whole fixture fell under
+       the floor and the run selected one product instead of ten. The offers
+       were never meant to be marginal; nobody had needed them not to be. */
+    price:String(40 + index * 5),
+    original_price:String(Math.round((40 + index * 5) * 1.4)),
     currency:"USD",
     image_url:`https://images.test/${prefix}-${index + 1}.jpg`,
     affiliate_url:`https://click.test/${prefix}-${index + 1}`,

@@ -271,4 +271,81 @@ assert.strictEqual(
   "an unconfigured merchant gains a returns policy nobody has read",
 );
 
-console.log("Drop selection guards passed: delivery cost, identity floor, no-repeat window, archive links, returns provenance.");
+/* --------------------------------------------- a drop has to be a deal */
+
+/*
+ * "Today's #1 Pick": a Farberware bamboo cutting board, $6.10, 7% off.
+ *
+ * Nothing in the gate asked how good the offer was. It checked that returns
+ * were accepted, delivery known, seller solid and the item identifiable — all
+ * true of that board — so it won over an exercise mat at 78% off and a dog
+ * feeder at 68% with fifty-four reviews. Seven percent of $6.54 is forty-four
+ * cents.
+ */
+const { isDailyPickEligible: eligible } = require("../src/ranker");
+
+/*
+ * A real drop candidate out of the live catalogue, so the gate this exercises
+ * is the whole gate. A fixture assembled by hand missed commerce quality and
+ * evidence confidence and was refused before ever reaching the saving rule,
+ * which would have made every assertion below pass for the wrong reason.
+ */
+const realCandidate = {
+  title: "Milwaukee 3697-22 M18 FUEL 18V 2-Tool Combo Kit",
+  source: "ebay",
+  market: "us",
+  currency: "USD",
+  availability: "In stock",
+  image_url: "https://i.ebayimg.com/images/g/NsMAAeSwTihofr4K/s-l1600.jpg",
+  affiliate_url: "https://www.ebay.com/itm/376422330467?campid=5339179772",
+  gtin: "00045242637744",
+  upc: "00045242637744",
+  mpn: "3697-22",
+  brand: "Milwaukee",
+  rating: 4.97,
+  review_count: 38,
+  seller_rating: 4.99,
+  seller_feedback_count: 189250,
+  shipping_cost: 0,
+  shipping_summary: "Free delivery via Standard Shipping",
+  return_summary: "Returns accepted within 30 days",
+  current_price: 368.81,
+  original_price: 702.5,
+  score: 66.8,
+  evidence_confidence: 100,
+  commerce_quality: 78.295,
+  normalized_category: "Tools & DIY",
+  public_category: "Tools & DIY",
+};
+
+const candidate = (overrides) => ({ ...realCandidate, ...overrides });
+
+const dropRules = { requireProductIdentity: true, requireDealSaving: true };
+
+assert.strictEqual(
+  eligible(candidate({ current_price: 6.1, original_price: 6.54 }), dropRules),
+  false,
+  "a $6.10 item at 7% off can be the deal of the day again",
+);
+assert.strictEqual(
+  eligible(candidate({ current_price: 31, original_price: 141 }), dropRules),
+  true,
+  "a real saving on a real price no longer qualifies as a drop",
+);
+/* A saving nobody can verify is not a saving. Presentation withholds the
+   reference price once the price goes stale, and a drop must not be built on
+   one. */
+assert.strictEqual(
+  eligible(candidate({ current_price: 70, original_price: 0 }), dropRules),
+  false,
+  "a listing with no reference price at all is offered as a discount",
+);
+/* And none of this may touch a product page, which shares this function as its
+   editorial floor. A page does not have to be a bargain to be worth reading. */
+assert.strictEqual(
+  eligible(candidate({ current_price: 6.1, original_price: 6.54 }), { requireKnownFulfillment: false }),
+  true,
+  "the drop's saving rule leaked into whether a product page may show a score",
+);
+
+console.log("Drop selection guards passed: delivery cost, identity floor, no-repeat window, archive links, returns provenance, a drop worth having.");
