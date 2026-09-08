@@ -63,6 +63,7 @@ const {
   outboundPath
 } = require("./retailerLinks");
 const { storefrontUrl } = require("./storefrontLinks");
+const { labelClick, liveDropLabel } = require("./clickLabels");
 const {
   challengeResponse: ebayChallengeResponse,
   createEbayPublicKeyClient,
@@ -2884,6 +2885,17 @@ app.get("/live/go/:key", (req, res) => {
     return res.redirect(302, livePage);
   }
   if (!/^https?:$/.test(destination.protocol)) return res.redirect(302, livePage);
+  /*
+   * Labelled with the drop, so a sale can be traced back to the event that
+   * caused it.
+   *
+   * Until this line the Buy button sent the buyer out under the same label as
+   * every other click on the site, so a drop could be watched by two hundred
+   * people and sell twelve units with no report anywhere connecting the twelve
+   * to the drop. The whole reason to run a first Live is to be able to tell a
+   * retailer what it produced.
+   */
+  destination = new URL(labelClick(destination.toString(), liveDropLabel(drop.drop_key)));
 
   const sessionId = analyticsToken(req.query.sid);
   if (sessionId) {
