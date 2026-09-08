@@ -8,6 +8,7 @@ import { DealCard } from "@/components/deal/DealCard";
 import { DeliaTrigger } from "@/components/delia/DeliaTrigger";
 import { FilterPanel, type FilterCopy } from "./FilterPanel";
 import { FilterShell } from "./FilterShell";
+import { InterestSignup } from "@/components/site/InterestSignup";
 import { Pagination } from "./Pagination";
 
 /* Two dozen fits three rows on a laptop and reaches the bottom on a phone
@@ -187,6 +188,20 @@ export async function DealListing({
               ))}
             </ul>
           )}
+
+          {/*
+            * Somewhere to leave an address on a category or search page.
+            *
+            * These are the pages search traffic lands on — there are two
+            * thousand of them against one homepage, and the homepage was the
+            * only place on the site that asked for an email. A visitor here
+            * who was not buying today had exactly one outcome: leave, and
+            * never be heard from again.
+            *
+            * Below the results rather than over them. A page that interrupts
+            * before it has been read has not earned the question.
+            */}
+          {deals.length > 0 && <InterestSignup categories={[]} market={market} />}
 
           {deals.length > 0 && (
             <Pagination

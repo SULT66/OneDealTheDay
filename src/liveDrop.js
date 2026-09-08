@@ -264,6 +264,146 @@ async function sendDueReminders({
   return sent;
 }
 
+/*
+ * The two stages that come before the ten-minute reminder.
+ *
+ * Same shape as sendDueReminders and deliberately separate from it: each stage
+ * carries its own stamp, so a provider outage at one stage does not silence
+ * the next, and nobody is told twice. A drop that is written and never
+ * published is never announced — publishing is the decision to tell people.
+ */
+const STAGES = Object.freeze([
+  {
+    column: "reminded_day_before_at",
+    /* From a day and a half out down to twelve hours, so a drop scheduled at
+       any hour still catches one of these passes. */
+    fromMinutes: 12 * 60,
+    toMinutes: 36 * 60,
+  },
+  {
+    column: "reminded_hour_before_at",
+    fromMinutes: 20,
+    toMinutes: 90,
+  },
+]);
+
+async function sendStagedReminders({
+  db,
+  sendSaveTheDate,
+  sendStartingSoon,
+  now = Date.now(),
+  batch = 200,
+  logger = console,
+}) {
+  let sent = 0;
+  for (const [index, stage] of STAGES.entries()) {
+    const due = db.prepare(`
+      SELECT r.id, r.email, d.title, d.market, d.start_at
+      FROM live_drop_reminders r
+      JOIN live_drops d ON d.id = r.drop_id
+      WHERE r.${stage.column} IS NULL AND d.published = 1
+        AND d.start_at > ? AND d.start_at <= ?
+      ORDER BY d.start_at
+      LIMIT ?
+    `).all(
+      new Date(now + stage.fromMinutes * 60000).toISOString(),
+      new Date(now + stage.toMinutes * 60000).toISOString(),
+      batch,
+    );
+    const stamp = db.prepare(`UPDATE live_drop_reminders SET ${stage.column}=? WHERE id=?`);
+    for (const reminder of due) {
+      try {
+        if (index === 0) {
+          await sendSaveTheDate({
+            email: reminder.email,
+            title: reminder.title,
+            market: reminder.market,
+            startsAt: new Date(reminder.start_at).toUTCString(),
+          });
+        } else {
+          await sendStartingSoon({
+            email: reminder.email,
+            title: reminder.title,
+            market: reminder.market,
+            minutes: Math.max(1, Math.round((Date.parse(reminder.start_at) - now) / 60000)),
+          });
+        }
+        stamp.run(new Date(now).toISOString(), reminder.id);
+        sent += 1;
+      } catch (error) {
+        logger.error(`[live-drop] ${stage.column} to ${reminder.email} failed: ${error.message}`);
+      }
+    }
+  }
+  return sent;
+}
+
+/*
+ * The announcement to the subscriber list.
+ *
+ * These people never asked about this drop — they subscribed to the site — so
+ * they are told once, well ahead, and never chased. Without this the list and
+ * the drop were two unconnected things: somebody could subscribe on Monday and
+ * never hear that a drop happened on Thursday.
+ *
+ * Only for a published drop, only to active subscribers of that market, and
+ * only those who have not already been told about this one.
+ */
+async function announceDropToSubscribers({
+  db,
+  sendAnnouncement,
+  unsubscribeUrlFor = () => "",
+  now = Date.now(),
+  /* Far enough out to be a plan rather than an interruption, and inside the
+     window where the drop is real. */
+  fromMinutes = 60,
+  toMinutes = 72 * 60,
+  batch = 500,
+  logger = console,
+}) {
+  const drops = db.prepare(`
+    SELECT id, title, market, start_at FROM live_drops
+    WHERE published = 1 AND start_at > ? AND start_at <= ?
+    ORDER BY start_at
+  `).all(
+    new Date(now + fromMinutes * 60000).toISOString(),
+    new Date(now + toMinutes * 60000).toISOString(),
+  );
+
+  const mark = db.prepare(
+    "INSERT OR IGNORE INTO live_drop_announcements(drop_id,subscriber_id,sent_at) VALUES(?,?,?)",
+  );
+  let sent = 0;
+  for (const drop of drops) {
+    const audience = db.prepare(`
+      SELECT s.id, s.email, s.unsubscribe_token FROM subscribers s
+      WHERE s.status = 'active' AND s.market = ?
+        AND NOT EXISTS (
+          SELECT 1 FROM live_drop_announcements a
+          WHERE a.drop_id = ? AND a.subscriber_id = s.id
+        )
+      LIMIT ?
+    `).all(drop.market, drop.id, batch);
+
+    for (const subscriber of audience) {
+      try {
+        await sendAnnouncement({
+          email: subscriber.email,
+          title: drop.title,
+          market: drop.market,
+          startsAt: new Date(drop.start_at).toUTCString(),
+          unsubscribeUrl: unsubscribeUrlFor(subscriber),
+        });
+        mark.run(drop.id, subscriber.id, new Date(now).toISOString());
+        sent += 1;
+      } catch (error) {
+        logger.error(`[live-drop] announcement to ${subscriber.email} failed: ${error.message}`);
+      }
+    }
+  }
+  return sent;
+}
+
 module.exports = {
   REMINDER_LEAD_MINUTES,
   WAITING_ROOM_SECONDS,
@@ -273,4 +413,6 @@ module.exports = {
   dropState,
   presentDrop,
   sendDueReminders,
+  sendStagedReminders,
+  announceDropToSubscribers,
 };

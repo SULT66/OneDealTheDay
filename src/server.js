@@ -13,7 +13,11 @@ const {
 const c = require("./config");
 const { refreshProducts, localDate } = require("./refresh");
 const { runLinkHealthCheck } = require("./linkHealth");
-const { dropState, hostGreeting, hostRevealLine, presentDrop, sendDueReminders } = require("./liveDrop");
+const {
+  dropState, hostGreeting, hostRevealLine, presentDrop,
+  sendDueReminders, sendStagedReminders, announceDropToSubscribers,
+} = require("./liveDrop");
+const { sendDuePriceDrops } = require("./priceWatches");
 const { cacheKey, readCachedAnswer, writeCachedAnswer } = require("./deliaCache");
 const { tavusProductDetails } = require("./tavusProductTool");
 const {
@@ -55,7 +59,10 @@ const {
   timeoutResponse,
 } = require("./shoppingAssistant");
 const renderShoppingAssistantPanel = require("./shoppingAssistantPanel");
-const { passwordResetEmail, subscriptionEmail, clubWaitlistEmail, liveDropReminderEmail, deliveryTestEmail } = require("./mailer");
+const {
+  welcomeEmail,
+  liveDropSaveTheDateEmail, liveDropStartingSoonEmail, liveDropAnnouncementEmail, priceDropEmail,
+  passwordResetEmail, subscriptionEmail, clubWaitlistEmail, liveDropReminderEmail, deliveryTestEmail } = require("./mailer");
 const { emailHealth } = require("./emailHealth");
 const {
   normalizeAction,
@@ -869,6 +876,7 @@ app.post("/api/auth/register", authRateLimit, (req, res) => {
     const result = db.prepare("INSERT INTO users(email,name,password_hash,membership,market,created_at) VALUES(?,?,?,?,?,?)")
       .run(email, name, passwordHash(password), "free", userMarket, new Date().toISOString());
     startSession(res, result.lastInsertRowid);
+    sendWelcome({name, email, market: userMarket});
     res.status(201).json({user:{id:result.lastInsertRowid,email,name,membership:"free"}});
   } catch (error) {
     if (String(error.message).includes("UNIQUE")) return res.status(409).json({error:"An account with this email already exists."});
@@ -911,17 +919,34 @@ const googleAuth = googleConfig();
  * alternative was rebuilding the users table to drop a NOT NULL, on a database
  * that has been through two corruptions this week.
  */
+/* Returns whether the account was created here as well as which one it is:
+   a welcome belongs on the first sign-in and nowhere else, and signing in
+   again is not a new account. */
 const googleUserId = (profile, marketCode) => {
   const existing = db.prepare("SELECT id FROM users WHERE google_sub=?").get(profile.subject);
-  if (existing) return existing.id;
+  if (existing) return {id: existing.id, created: false};
   const byEmail = db.prepare("SELECT id FROM users WHERE email=?").get(profile.email);
   if (byEmail) {
     db.prepare("UPDATE users SET google_sub=? WHERE id=?").run(profile.subject, byEmail.id);
-    return byEmail.id;
+    return {id: byEmail.id, created: false};
   }
-  return db.prepare("INSERT INTO users(email,name,password_hash,membership,market,created_at,google_sub) VALUES(?,?,?,?,?,?,?)")
+  const id = db.prepare("INSERT INTO users(email,name,password_hash,membership,market,created_at,google_sub) VALUES(?,?,?,?,?,?,?)")
     .run(profile.email, profile.name, "", "free", marketCode, new Date().toISOString(), profile.subject)
     .lastInsertRowid;
+  return {id, created: true};
+};
+
+/*
+ * The welcome, sent without the caller waiting for it.
+ *
+ * A sign-up must not fail, or stall behind a mail provider, because a welcome
+ * could not be sent — the account exists either way and the person is standing
+ * in front of the screen. Failures are logged rather than raised.
+ */
+const sendWelcome = (user) => {
+  welcomeEmail(user).catch((error) => {
+    console.error(`[welcome] ${user.email}: ${error.message}${error.details ? ` — ${error.details}` : ""}`);
+  });
 };
 
 app.get("/api/auth/providers", (req, res) => res.json({google: googleAuth.configured}));
@@ -948,7 +973,11 @@ app.get("/api/auth/google/callback", authRateLimit, async (req, res) => {
     const tokens = await exchangeCodeForTokens(googleAuth, req.query.code);
     const profile = verifiedGoogleProfile(tokens?.id_token, googleAuth.clientId);
     if (!profile) return res.redirect("/account?error=google_identity");
-    startSession(res, googleUserId(profile, marketFromIp(req).code));
+    const account = googleUserId(profile, marketFromIp(req).code);
+    startSession(res, account.id);
+    if (account.created) {
+      sendWelcome({name: profile.name, email: profile.email, market: marketFromIp(req).code});
+    }
     return res.redirect("/account?signed_in=google");
   } catch (error) {
     /* Loudly, because a broken sign-in is invisible from the outside: the
@@ -2626,6 +2655,45 @@ const unsubscribeByToken = token => {
   return db.prepare("SELECT 1 FROM subscribers WHERE unsubscribe_token=?").get(value) != null;
 };
 
+/*
+ * Watch a price.
+ *
+ * No account, on purpose. The whole value is catching somebody who is looking
+ * at one product and is not ready today — asking them to register first is
+ * asking for the thing they came here to avoid. An address is enough to send
+ * an email, and an email is all this promises.
+ *
+ * The price is read from the catalogue rather than taken from the request: a
+ * number the browser sends is a number anybody can send, and this one decides
+ * what "cheaper" means later.
+ */
+app.post("/api/price-watches", authRateLimit, express.json({limit:"4kb"}), (req, res) => {
+  const email = String(req.body?.email || "").trim().toLowerCase().slice(0, 160);
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i.test(email)) {
+    return res.status(400).json({error:"Enter a valid email address."});
+  }
+  const productId = Math.max(0, Math.round(Number(req.body?.product_id) || 0));
+  const product = productId
+    ? db.prepare("SELECT id, current_price, market FROM products WHERE id=? AND status='published'").get(productId)
+    : null;
+  if (!product || !(Number(product.current_price) > 0)) {
+    return res.status(404).json({error:"That listing is no longer available to watch."});
+  }
+
+  db.prepare(`
+    INSERT INTO price_watches(product_id,email,market,price_when_asked,created_at)
+    VALUES(?,?,?,?,?)
+    ON CONFLICT(product_id,email) DO UPDATE SET
+      /* Asking again re-arms a watch that already fired, and re-baselines it
+         to today. Anything else means the second ask does nothing. */
+      price_when_asked=excluded.price_when_asked,
+      created_at=excluded.created_at,
+      notified_at=NULL
+  `).run(product.id, email, product.market || "us", Number(product.current_price), new Date().toISOString());
+
+  res.status(201).json({ok:true, message:"We will email you if the price drops."});
+});
+
 app.post("/unsubscribe", (req, res) => {
   res.set("Cache-Control", "no-store");
   const done = unsubscribeByToken(req.query.token || req.body?.token);
@@ -3321,6 +3389,42 @@ cron.schedule(
     try {
       const sent = await sendDueReminders({db, sendReminder: liveDropReminderEmail});
       if (sent) console.log(`[live-drop] sent ${sent} reminder${sent === 1 ? "" : "s"}`);
+
+      /* The day before and the hour before, on the same sweep. A drop lasts
+         ten minutes; a ten-minute warning only reaches whoever is already
+         holding their phone. */
+      const staged = await sendStagedReminders({
+        db,
+        sendSaveTheDate: liveDropSaveTheDateEmail,
+        sendStartingSoon: liveDropStartingSoonEmail,
+      });
+      if (staged) console.log(`[live-drop] sent ${staged} early reminder${staged === 1 ? "" : "s"}`);
+
+      /* And the subscriber list, which until now had no connection to a drop
+         at all: somebody could subscribe on Monday and never learn a drop
+         happened on Thursday. */
+      const announced = await announceDropToSubscribers({
+        db,
+        sendAnnouncement: liveDropAnnouncementEmail,
+        unsubscribeUrlFor: (subscriber) => (subscriber.unsubscribe_token
+          ? `${SITE}/unsubscribe?token=${encodeURIComponent(subscriber.unsubscribe_token)}`
+          : ""),
+      });
+      if (announced) console.log(`[live-drop] announced to ${announced} subscriber${announced === 1 ? "" : "s"}`);
+
+      /* Watched prices, on the same minute. The refresh has already written
+         today's prices by the time this runs; nothing else reads them for
+         this purpose. */
+      const drops = await sendDuePriceDrops({
+        db,
+        sendPriceDrop: priceDropEmail,
+        dealPathFor: (watch) => dealPath({
+          id: watch.product_id,
+          market: watch.market,
+          title: watch.title,
+        }),
+      });
+      if (drops) console.log(`[price-watch] told ${drops} shopper${drops === 1 ? "" : "s"} about a price drop`);
     } catch (error) {
       console.error(`[live-drop] ${error.message}`);
     } finally {
