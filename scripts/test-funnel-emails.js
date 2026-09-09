@@ -15,7 +15,13 @@ const { sendDuePriceDrops } = require("../src/priceWatches");
 
 const db = new Database(":memory:");
 db.exec(`
-  CREATE TABLE live_drops(id INTEGER PRIMARY KEY, title TEXT, market TEXT, start_at TEXT, published INTEGER);
+  /* The product columns are here because the emails now show the thing being
+     sold — its picture, its shop and its usual price. A fixture narrower than
+     the real table stopped the query dead, which is how this one earned them. */
+  CREATE TABLE live_drops(
+    id INTEGER PRIMARY KEY, title TEXT, market TEXT, start_at TEXT, published INTEGER,
+    brand TEXT, retailer_name TEXT, image_url TEXT, retail_price REAL, currency TEXT
+  );
   CREATE TABLE live_drop_reminders(
     id INTEGER PRIMARY KEY, drop_id INTEGER, email TEXT,
     reminded_at TEXT, reminded_day_before_at TEXT, reminded_hour_before_at TEXT
@@ -35,8 +41,10 @@ db.exec(`
 const now = Date.UTC(2026, 8, 10, 12, 0, 0);
 const at = (hours) => new Date(now + hours * 3600 * 1000).toISOString();
 
-db.prepare("INSERT INTO live_drops VALUES(1,'Ninja Creami','us',?,1)").run(at(24));
-db.prepare("INSERT INTO live_drops VALUES(2,'Unpublished','us',?,0)").run(at(24));
+/* Columns named rather than positional: a bare VALUES list breaks the day
+   the table grows, which is exactly what happened here. */
+db.prepare("INSERT INTO live_drops(id,title,market,start_at,published,brand,retailer_name,image_url,retail_price,currency) VALUES(1,'Ninja Creami','us',?,1,'Ninja','eBay','https://example.com/creami.jpg',229.99,'USD')").run(at(24));
+db.prepare("INSERT INTO live_drops(id,title,market,start_at,published) VALUES(2,'Unpublished','us',?,0)").run(at(24));
 db.prepare("INSERT INTO live_drop_reminders(id,drop_id,email) VALUES(1,1,'waiting@example.com')").run();
 db.prepare("INSERT INTO live_drop_reminders(id,drop_id,email) VALUES(2,2,'onadraft@example.com')").run();
 

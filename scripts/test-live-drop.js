@@ -371,9 +371,13 @@ async function main() {
     /dropState\(drop, Date\.now\(\)\) === "live"/.test(serverSource),
     "an open drop can now be unpublished from under whoever is watching it",
   );
+  /* The guard moved off the clock. A draft whose scheduled hour merely passed
+     was never public and has to be removable — dead test drafts had no way out
+     and polluted the funnel counts. What must survive is a drop that was
+     published even once, which first_published_at records and never clears. */
   assert(
-    /drop\.published \|\| Date\.now\(\) >= Date\.parse\(drop\.start_at\)/.test(serverSource),
-    "a drop that has run can now be deleted, so the record of what was offered can vanish",
+    /drop\.first_published_at/.test(serverSource),
+    "a drop that was once published can now be deleted, so the record of what was offered can vanish",
   );
 
   /* The buy link is the one field that sends a shopper off our site. */

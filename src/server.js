@@ -3216,8 +3216,15 @@ app.post("/api/admin/live-drops/:key/publish", admin, (req, res) => {
   if (!published && dropState(drop, Date.now()) === "live") {
     return res.status(409).json({error:"That drop is open. Let it close rather than pulling it from under whoever is watching."});
   }
+  const nowIso = new Date().toISOString();
   db.prepare("UPDATE live_drops SET published=?, updated_at=? WHERE id=?")
-    .run(published, new Date().toISOString(), drop.id);
+    .run(published, nowIso, drop.id);
+  /* Stamped once and never cleared. `published` says where the drop is now,
+     which cannot answer whether it was ever public — and that is the question
+     deletion turns on. */
+  if (published && !drop.first_published_at) {
+    db.prepare("UPDATE live_drops SET first_published_at=? WHERE id=?").run(nowIso, drop.id);
+  }
   res.json({ok:true, published:Boolean(published)});
 });
 
@@ -3267,9 +3274,34 @@ app.post("/api/admin/live-drops/:key/stock", admin, (req, res) => {
 app.delete("/api/admin/live-drops/:key", admin, (req, res) => {
   const drop = db.prepare("SELECT * FROM live_drops WHERE drop_key=?").get(String(req.params.key || ""));
   if (!drop) return res.status(404).json({error:"No such drop."});
-  if (drop.published || Date.now() >= Date.parse(drop.start_at)) {
-    return res.status(409).json({error:"Only an unannounced draft can be deleted. A drop that ran is the record of what was offered."});
+  /*
+   * Ever public is the line, not the clock and not published-right-now.
+   *
+   * This used to refuse anything whose start time had passed, which sounds
+   * like "a drop that ran cannot be erased" but is not that statement: a draft
+   * that was never published never ran — nobody was told, and no public page
+   * ever existed for it, since /api/live/current only returns published drops.
+   * Its scheduled hour arriving only meant it could never be deleted, so dead
+   * test drafts had no way out and went on polluting the funnel counts.
+   *
+   * Loosening it to `published` alone went too far the other way, and a test
+   * written for the original rule caught it: unpublish a drop that had already
+   * run and the record of what was offered to real people could be erased.
+   * first_published_at is set on the first publish and never cleared, so a
+   * drop that was ever public stays.
+   */
+  if (drop.published) {
+    return res.status(409).json({
+      error: "This drop is published. Unpublish it first — deleting one out from under the people looking at it is a separate decision.",
+    });
   }
+  if (drop.first_published_at) {
+    return res.status(409).json({
+      error: "This drop was published once, so it is the record of what was offered. It can be unpublished, not deleted.",
+    });
+  }
+  db.prepare("DELETE FROM live_drop_announcements WHERE drop_id=?").run(drop.id);
+  db.prepare("DELETE FROM live_drop_presence WHERE drop_id=?").run(drop.id);
   db.prepare("DELETE FROM live_drop_reminders WHERE drop_id=?").run(drop.id);
   db.prepare("DELETE FROM live_drop_events WHERE drop_id=?").run(drop.id);
   db.prepare("DELETE FROM live_drops WHERE id=?").run(drop.id);

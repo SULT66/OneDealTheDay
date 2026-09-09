@@ -246,7 +246,7 @@ async function sendDueReminders({
   logger = console,
 }) {
   const due = db.prepare(`
-    SELECT r.id, r.email, d.title, d.market, d.start_at
+    SELECT r.id, r.email, d.title, d.market, d.start_at, d.brand, d.retailer_name, d.image_url, d.retail_price, d.currency
     FROM live_drop_reminders r
     JOIN live_drops d ON d.id = r.drop_id
     WHERE r.reminded_at IS NULL AND d.published = 1
@@ -287,6 +287,22 @@ async function sendDueReminders({
  * the next, and nobody is told twice. A drop that is written and never
  * published is never announced — publishing is the decision to tell people.
  */
+/*
+ * The product half of a drop email, from whichever row the caller has.
+ *
+ * Deliberately never includes the drop price. That is the mechanic the whole
+ * format rests on — the page does not send it before the reveal and neither
+ * does the mail. The usual price is public and is what makes the saving
+ * legible when the reveal comes.
+ */
+const emailProduct = (row) => ({
+  brand: row.brand || "",
+  retailerName: row.retailer_name || "",
+  imageUrl: row.image_url || "",
+  retailPrice: row.retail_price ? Number(row.retail_price).toFixed(2) : "",
+  currency: row.currency || "",
+});
+
 const STAGES = Object.freeze([
   {
     column: "reminded_day_before_at",
@@ -313,7 +329,7 @@ async function sendStagedReminders({
   let sent = 0;
   for (const [index, stage] of STAGES.entries()) {
     const due = db.prepare(`
-      SELECT r.id, r.email, d.title, d.market, d.start_at
+      SELECT r.id, r.email, d.title, d.market, d.start_at, d.brand, d.retailer_name, d.image_url, d.retail_price, d.currency
       FROM live_drop_reminders r
       JOIN live_drops d ON d.id = r.drop_id
       WHERE r.${stage.column} IS NULL AND d.published = 1
@@ -334,6 +350,7 @@ async function sendStagedReminders({
             title: reminder.title,
             market: reminder.market,
             startsAt: new Date(reminder.start_at).toUTCString(),
+            ...emailProduct(reminder),
           });
         } else {
           await sendStartingSoon({
@@ -341,6 +358,7 @@ async function sendStagedReminders({
             title: reminder.title,
             market: reminder.market,
             minutes: Math.max(1, Math.round((Date.parse(reminder.start_at) - now) / 60000)),
+            ...emailProduct(reminder),
           });
         }
         stamp.run(new Date(now).toISOString(), reminder.id);
@@ -377,7 +395,11 @@ async function announceDropToSubscribers({
   logger = console,
 }) {
   const drops = db.prepare(`
-    SELECT id, title, market, start_at FROM live_drops
+    /* The picture and the usual price travel with it now: an email
+       announcing a ten minute event for one product, showing no picture of
+       the product, asks somebody to care on trust. */
+    SELECT id, title, market, start_at, brand, retailer_name, image_url, retail_price, currency
+    FROM live_drops
     WHERE published = 1 AND start_at > ? AND start_at <= ?
     ORDER BY start_at
   `).all(
@@ -407,6 +429,7 @@ async function announceDropToSubscribers({
           title: drop.title,
           market: drop.market,
           startsAt: new Date(drop.start_at).toUTCString(),
+          ...emailProduct(drop),
           unsubscribeUrl: unsubscribeUrlFor(subscriber),
         });
         mark.run(drop.id, subscriber.id, new Date(now).toISOString());
