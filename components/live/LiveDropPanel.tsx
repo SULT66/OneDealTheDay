@@ -236,7 +236,17 @@ export function LiveDropPanel({
   const finished = drop.state === "sold_out" || drop.state === "ended";
 
   return (
-    <Frame>
+    /*
+     * The backdrop belongs to an event in progress, not to the page.
+     *
+     * It is a fixed band behind the top of the card, which reads as a lit stage
+     * while the card is tall enough to sit on it — with the broadcast panel in
+     * it, that is most of the drop. On a short card, an ended drop or one still
+     * hours away, the band sticks out past the card as a black rectangle with
+     * nothing in it, which is what it looked like: a stray shape, not a
+     * background.
+     */
+    <Frame lit={drop.state === "waiting" || drop.state === "live"}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <p className="text-lg font-black tracking-tight text-fg sm:text-xl">
@@ -367,31 +377,38 @@ export function LiveDropPanel({
   );
 }
 
-function Frame({ children }: { children: React.ReactNode }) {
+function Frame({ children, lit = false }: { children: React.ReactNode; lit?: boolean }) {
   return (
     /*
-     * A stage, not a document.
+     * A stage, but only while something is on it.
      *
-     * This was one white card on a white page, and it read like a form: the
-     * page where an event is supposed to be happening looked quieter than the
-     * catalogue behind it. The backdrop is the site's own graphite, the same
-     * surface the homepage hero uses, so the card is lit against something
-     * instead of floating on nothing.
+     * The page was one white card on white and read like a form, so the card
+     * got the site's own graphite behind it — the surface the homepage hero
+     * uses — to be lit against something instead of floating on nothing.
      *
-     * Decoration only — aria-hidden, no pointer events, and nothing here moves
-     * or carries meaning. The countdown and the stock are the page; this is the
-     * room they stand in.
+     * The band is a fixed height, which works while the card is tall enough to
+     * cover it: during the drop, with the broadcast panel inside. On a short
+     * card — an ended drop, or one still hours away — it stuck out past the
+     * card as a black rectangle containing nothing, and read as a stray shape
+     * rather than a background. So it appears while the drop is on, and the
+     * rest of the time the page is plain.
+     *
+     * Decoration only: aria-hidden, no pointer events, nothing that moves or
+     * carries meaning. The countdown and the stock are the page; this is the
+     * room they stand in, and an empty room needs no lighting.
      */
     <section className="relative mx-auto w-full max-w-6xl px-3 py-6 sm:px-6 sm:py-10">
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-56 overflow-hidden rounded-b-[2rem] bg-graphite sm:h-64"
-      >
-        {/* A single soft light above the stage. One accent, kept faint: the
-            lime is the buy button's colour and it should not have to compete
-            with the wall behind it. */}
-        <div className="absolute -top-24 left-1/2 h-56 w-[36rem] -translate-x-1/2 rounded-full bg-lime/20 blur-3xl" />
-      </div>
+      {lit && (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-56 overflow-hidden rounded-b-[2rem] bg-graphite sm:h-64"
+        >
+          {/* A single soft light above the stage. One accent, kept faint: the
+              lime is the buy button's colour and it should not have to compete
+              with the wall behind it. */}
+          <div className="absolute -top-24 left-1/2 h-56 w-[36rem] -translate-x-1/2 rounded-full bg-lime/20 blur-3xl" />
+        </div>
+      )}
       <div className="rounded-3xl border border-border bg-surface p-4 shadow-lg sm:p-6">{children}</div>
     </section>
   );
