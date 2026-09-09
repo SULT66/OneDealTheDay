@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { ShopIcons } from "./ShopIcons";
 import { Numbers } from "./Numbers";
+import { AmazonPicks } from "./AmazonPicks";
 
 /**
  * The admin console: scheduling a Live Drop, and the catalogue refresh.
@@ -379,6 +380,18 @@ export function AdminConsole() {
             <DropRow key={drop.drop_key} drop={drop} busy={busy} act={act} />
           ))}
         </div>
+      </Card>
+
+      <Card className="mt-6">
+        <Legend>Amazon picks</Legend>
+        <p className="mt-1 max-w-prose text-sm leading-relaxed text-fg-muted">
+          Chosen by you, linked by you. Nothing here asks Amazon for anything:
+          their agreement only allows their price, availability and images to be
+          shown when they come from the Product Advertising API, and that opens
+          after three qualifying sales. Until then these appear on the homepage
+          as a name and a link, below the catalogue and never mixed into it.
+        </p>
+        <AmazonPicks adminKey={adminKey} />
       </Card>
 
       <Card className="mt-6">

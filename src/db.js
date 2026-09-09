@@ -686,6 +686,36 @@ db.exec(`
     ON price_watches(product_id, email);
 `);
 
+/*
+ * Products picked by hand from Amazon.
+ *
+ * Amazon is the one source whose data we may not gather ourselves: their
+ * agreement requires price, availability and images to come from the Product
+ * Advertising API, and that API only opens after three qualifying sales. So
+ * until then a pick here carries nothing but what a person typed and the
+ * affiliate link they made themselves — no price, no score, no photo.
+ *
+ * Which is also why these do not live in `products`. Everything there has a
+ * checked price and evidence behind its score; a row with neither would
+ * either break the ranking or force a hole through it. A separate table keeps
+ * the catalogue honest and lets these be shown for exactly what they are.
+ */
+db.exec(`
+  CREATE TABLE IF NOT EXISTS amazon_picks(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    market TEXT NOT NULL DEFAULT 'us',
+    title TEXT NOT NULL,
+    category TEXT NOT NULL DEFAULT '',
+    /* The affiliate link exactly as SiteStripe produced it, never rewritten:
+       it carries the tag that is the only reason a click earns anything. */
+    url TEXT NOT NULL,
+    asin TEXT NOT NULL DEFAULT '',
+    position INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+  );
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_amazon_picks_url ON amazon_picks(market, url);
+`);
+
 const refreshRunColumns = new Set(db.prepare("PRAGMA table_info(refresh_runs)").all().map(column => column.name));
 if (!refreshRunColumns.has("market")) db.exec("ALTER TABLE refresh_runs ADD COLUMN market TEXT NOT NULL DEFAULT 'us'");
 
