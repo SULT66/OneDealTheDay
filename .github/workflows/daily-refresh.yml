@@ -45,12 +45,35 @@ jobs:
             exit 1
           fi
 
-      - name: Wake Azure App Service
+      - name: Wake Azure App Service, and wait for it to settle
         run: |
+          set -euo pipefail
           curl --fail --silent --show-error \
             --retry 5 --retry-delay 15 --retry-all-errors \
             "https://www.onedailydrop.com/api/status" \
             > /dev/null
+
+          # Answering is not the same as being ready.
+          #
+          # This step used to be the whole check, and it passed on 2026-09-09
+          # ten minutes after a deploy: /api/status answers in a quarter of a
+          # second while page renders are still taking ten. The refresh went
+          # ahead onto a single core that was still warming, and the site was
+          # 503 for twenty-five minutes.
+          #
+          # The server refuses a refresh while it is settling and says how
+          # long is left, so the honest thing to do is wait for it rather than
+          # ask and be turned away. A scheduled run has all day.
+          for attempt in $(seq 1 20); do
+            uptime=$(curl --fail --silent --show-error --max-time 20 \
+              "https://www.onedailydrop.com/api/status" | jq -r ".uptimeSeconds // 0")
+            if [ "${uptime}" -ge 600 ]; then
+              echo "Up for ${uptime}s — settled."
+              break
+            fi
+            echo "Attempt ${attempt}/20: up for only ${uptime}s, waiting for it to settle."
+            sleep 45
+          done
 
       - name: Trigger OneDealTheDay refresh
         env:

@@ -121,6 +121,14 @@ function catalogStatus(marketCode = "") {
     automatedCatalogConfigured: config.provider !== "unconfigured",
     affiliateTagConfigured: marketCode ? Boolean(config.affiliateTagForMarket(marketCode)) : Boolean(config.affiliateTagConfigured),
     searchKeywordCount: config.searchKeywords.length,
+    /* How long this process has been up.
+
+       Absent until an outage made it necessary: asked whether the site had
+       restarted or merely been slow, there was no way to tell from outside,
+       and the difference decides where to look. It is also what lets a
+       caller see for itself that an instance is too fresh to be given
+       heavy work. */
+    uptimeSeconds: Math.round(process.uptime()),
     lastRun: config.liveRefreshEnabled ? latestRun : null,
     personalDatabase: personalPostgresHealth()
   };
