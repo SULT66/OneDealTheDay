@@ -621,6 +621,21 @@ if (!reminderColumns.has("reminded_hour_before_at")) {
 }
 
 /*
+ * When the shop last confirmed how many are left.
+ *
+ * The page may only show a live count while this is recent. The number in
+ * quantity_remaining is otherwise whatever was typed into the admin form,
+ * and presenting that as a countdown is the false-scarcity claim this whole
+ * change exists to remove. If eBay stops answering, the stamp goes stale on
+ * its own and the counter stops claiming — no cleanup, no flag to remember
+ * to unset.
+ */
+const dropColumns = new Set(db.prepare("PRAGMA table_info(live_drops)").all().map(column => column.name));
+if (!dropColumns.has("stock_verified_at")) {
+  db.exec("ALTER TABLE live_drops ADD COLUMN stock_verified_at TEXT");
+}
+
+/*
  * Who has been told about which drop, for the announcement that goes to the
  * subscriber list rather than to people already standing on the drop page.
  *

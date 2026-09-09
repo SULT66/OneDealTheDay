@@ -168,6 +168,12 @@ function createEbayClient({clientId, clientSecret, campaignId, environment = "pr
     },
     getItem(itemId, market) {
       return request(`/buy/browse/v1/item/${encodeURIComponent(itemId)}`, market);
+    },
+    /* The numeric id printed in an ebay.com/itm/… link is the legacy one, and
+       the plain item route does not accept it. A Live Drop only ever holds the
+       buy link, so this is the form its stock has to be looked up by. */
+    getItemByLegacyId(legacyItemId, market) {
+      return request("/buy/browse/v1/item/get_item_by_legacy_id", market, {legacy_item_id:String(legacyItemId)});
     }
   };
 }

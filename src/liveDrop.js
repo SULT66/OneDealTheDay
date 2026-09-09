@@ -105,6 +105,21 @@ function presentDrop(drop, now = Date.now(), { earlyAccessSeconds = 0 } = {}) {
     saving,
     quantity_total: number(drop.quantity_total, 0),
     quantity_remaining: Math.max(0, number(drop.quantity_remaining, 0)),
+    /*
+     * Whether the number above is the shop's or ours.
+     *
+     * quantity_remaining used to be a figure typed into the admin form that
+     * nothing ever decremented, shown to the visitor as "12 left". This is
+     * true only while eBay has confirmed the count within the last two
+     * minutes; the page shows a countdown on that condition alone and
+     * otherwise says how many the offer holds without pretending to count
+     * down. If eBay stops answering the stamp goes stale by itself and the
+     * claim disappears with it.
+     */
+    stock_is_live: (() => {
+      const verified = Date.parse(drop.stock_verified_at || "");
+      return Number.isFinite(verified) && now - verified <= 2 * 60 * 1000;
+    })(),
     state,
     start_at: drop.start_at,
     end_at: drop.end_at,

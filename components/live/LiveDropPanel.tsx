@@ -37,6 +37,9 @@ export type LiveDropView = {
   saving: { amount: number; percent: number } | null;
   quantity_total: number;
   quantity_remaining: number;
+  /* True only while the shop itself has confirmed the count in the last two
+     minutes. Everything that presents a countdown is gated on it. */
+  stock_is_live: boolean;
   state: "upcoming" | "waiting" | "live" | "sold_out" | "ended";
   start_at: string;
   end_at: string;
@@ -283,10 +286,32 @@ export function LiveDropPanel({
               ten minutes it exists for. */}
           <div className="mt-4 flex flex-wrap items-stretch gap-3">
             <Countdown state={drop.state} untilStart={untilStart} untilEnd={untilEnd} />
+            {/*
+              * "N left" only when the shop has said so.
+              *
+              * This counted down from a number typed into the admin form that
+              * nothing ever decremented. The sale happens on eBay's checkout
+              * and their report arrives the next day, so for the ten minutes
+              * it mattered the countdown was a scarcity claim with nothing
+              * behind it. The server now asks eBay every fifteen seconds while
+              * a drop runs, and stock_is_live is true only while that answer is
+              * under two minutes old.
+              *
+              * Without it the size of the offer is still worth stating — twenty
+              * units at this price is a fact about the deal — but it is stated
+              * as a fact, never as a countdown.
+              */}
             {drop.quantity_total > 0 && (
               <Metric label="Stock">
-                <span className="tnum">{isLive ? drop.quantity_remaining : drop.quantity_total}</span>{" "}
-                {isLive ? "left" : "available"}
+                {isLive && drop.stock_is_live ? (
+                  <>
+                    <span className="tnum">{drop.quantity_remaining}</span> left
+                  </>
+                ) : (
+                  <>
+                    <span className="tnum">{drop.quantity_total}</span> at this price
+                  </>
+                )}
               </Metric>
             )}
             {isLive && drop.affiliate_url && (

@@ -67,6 +67,7 @@ const {
 const { emailHealth } = require("./emailHealth");
 const { htmlCache } = require("./htmlCache");
 const { startCacheWarmer, pathsFor } = require("./cacheWarmer");
+const { readEbayStock, refreshDropStock, ebayItemIdFrom } = require("./liveStock");
 const { overview } = require("./overview");
 const {
   normalizeAction,
@@ -2984,9 +2985,18 @@ app.get("/live/go/:key", (req, res) => {
   const sessionId = analyticsToken(req.query.sid);
   if (sessionId) {
     try {
+      /*
+       * Recorded as its own step, not as the button press.
+       *
+       * The panel already writes buy_click the moment the button is pressed,
+       * in the browser. This is the other half: the visitor actually arrived
+       * here and is being handed to the shop. They are different numbers —
+       * a blocked script loses the first, a cancelled navigation loses the
+       * second — and writing both under one name made the gap invisible.
+       */
       db.prepare(
         "INSERT INTO live_drop_events(drop_id,market,event_type,session_id,occurred_at) VALUES(?,?,?,?,?)",
-      ).run(drop.id, drop.market, "buy_click", sessionId, new Date().toISOString());
+      ).run(drop.id, drop.market, "buy_handoff", sessionId, new Date().toISOString());
     } catch (error) {
       /* One row per session per event: a second click is the same person. */
       if (!String(error.message).includes("UNIQUE")) throw error;
@@ -3093,6 +3103,19 @@ app.get("/api/admin/live-drops", admin, (req, res) => {
     FROM live_drop_reminders WHERE drop_id=?
   `);
 
+  /* Who was told this drop existed at all, which is the step before anybody
+     could arrive. A drop nobody was told about and a drop nobody wanted look
+     the same in the funnel without it. */
+  const announced = db.prepare("SELECT COUNT(*) AS sent FROM live_drop_announcements WHERE drop_id=?");
+
+  /* Who is on the page right now. The funnel above keeps one row per session
+     for the whole drop, so it counts everybody who ever arrived and never
+     notices anyone leaving; "watching now" is a different question and needs
+     a row that expires. Sixty seconds, matching the page heartbeat. */
+  const watchingNow = db.prepare(
+    "SELECT COUNT(*) AS people FROM live_drop_presence WHERE drop_id=? AND seen_at>=?",
+  );
+
   res.json({
     /* The market list comes from the server so the form cannot offer one that
        does not exist. */
@@ -3118,6 +3141,13 @@ app.get("/api/admin/live-drops", admin, (req, res) => {
          never learns about a purchase — that happens on the shop's own
          checkout — so this label is the only thread connecting a sale in
          Awin, eBay or Rakuten back to this drop. */
+      announced: announced.get(row.id).sent,
+      watching_now: watchingNow.get(row.id, new Date(now - 60000).toISOString()).people,
+      /* Whether the remaining count is the shop's or ours. A drop whose
+         listing gives no exact quantity can still run — it simply never
+         shows a countdown. */
+      stock_verified_at: row.stock_verified_at || null,
+      stock_is_live: Boolean(row.stock_verified_at && now - Date.parse(row.stock_verified_at) <= 2 * 60 * 1000),
       click_label: liveDropLabel(row.drop_key),
       };
     }),
@@ -3239,6 +3269,35 @@ app.delete("/api/admin/live-drops/:key", admin, (req, res) => {
  * The DNS half is checked live, because a record somebody believes they added
  * and a record that resolves are different things.
  */
+/*
+ * What eBay says about one listing's stock, before a drop is built on it.
+ *
+ * Whether a Live Drop can show a real counter depends entirely on the seller:
+ * some listings answer with an exact count, some only with "more than ten",
+ * some with nothing at all. That is worth knowing while choosing the product,
+ * not while two hundred people are watching.
+ */
+app.get("/api/admin/ebay-stock", admin, async (req, res) => {
+  const raw = String(req.query.item || req.query.url || "").trim();
+  const itemId = /^\d+$/.test(raw) ? raw : ebayItemIdFrom(raw);
+  if (!itemId) return res.status(400).json({error:"Give an eBay item id, or the listing URL."});
+  try {
+    const marketCode = normalizeMarket(req.query.market) || c.primaryMarket;
+    const stock = await readEbayStock(itemId, {market:market(marketCode)});
+    return res.json({
+      ...stock,
+      /* Said in words, because `exact:false` is the whole answer to "can this
+         product have a live counter" and it should not need decoding. */
+      verdict: stock.exact
+        ? "eBay gives an exact count — this listing can drive a real counter."
+        : stock.threshold !== null
+          ? `eBay only says "more than ${stock.threshold}" — no countdown is possible.`
+          : "eBay gives no quantity for this listing — no countdown is possible.",
+    });
+  } catch (error) {
+    return res.status(502).json({error:error.message});
+  }
+});
 app.get("/api/admin/email-health", admin, async (req, res) => {
   try {
     res.json(await emailHealth());
@@ -3395,6 +3454,42 @@ if (!process.env.SENDGRID_API_KEY) {
   );
 }
 
+/*
+ * The remaining count, kept true by the shop rather than by hand.
+ *
+ * Every fifteen seconds while a drop is actually running, and not at all the
+ * rest of the time: the check below is one indexed row read, so an idle site
+ * pays nothing, and a ten minute drop costs forty eBay calls out of a daily
+ * allowance of five thousand.
+ *
+ * Once a minute — the sweep below — was tempting and wrong: a minute of lag
+ * on a ten minute event is a tenth of it, and the whole point is that the
+ * page stops offering something that has gone.
+ */
+const LIVE_STOCK_POLL_MS = 15000;
+let stockPollRunning = false;
+const stockPoll = setInterval(async () => {
+  if (stockPollRunning) return;
+  stockPollRunning = true;
+  try {
+    const nowIso = new Date().toISOString();
+    const live = db.prepare(`
+      SELECT * FROM live_drops
+      WHERE published=1 AND start_at<=? AND end_at>=? AND quantity_remaining>0
+    `).all(nowIso, nowIso);
+    for (const drop of live) {
+      const result = await refreshDropStock(drop, {db, market:market(drop.market)});
+      if (result.changed) {
+        console.log(`[live-drop] ${drop.drop_key}: ${result.remaining} left${result.soldOut ? " — sold out, drop closed" : ""}`);
+      }
+    }
+  } catch (error) {
+    console.error(`[live-drop] stock poll: ${error.message}`);
+  } finally {
+    stockPollRunning = false;
+  }
+}, LIVE_STOCK_POLL_MS);
+stockPoll.unref?.();
 let reminderSweepRunning = false;
 cron.schedule(
   "* * * * *",
