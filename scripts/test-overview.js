@@ -115,6 +115,18 @@ dropEvent.run(1, "us", "reveal", "session-a", inWindow);
 dropEvent.run(1, "us", "buy_click", "session-a", inWindow);
 dropEvent.run(1, "us", "waiting_room", "session-b", inWindow);
 
+/*
+ * A second drop the same person also looked at. This is the shape that broke
+ * the funnel: the top step counted distinct people and every step under it
+ * counted rows, so one visitor across two drops read as one who arrived and
+ * two who saw the price — "7 reached, 16 saw the price", which cannot happen
+ * and makes the whole screen untrustworthy.
+ */
+db.prepare(`INSERT INTO live_drops(drop_key,market,title,start_at,end_at,published,created_at,updated_at)
+  VALUES(?,?,?,?,?,?,?,?)`).run("drop-3", "us", "Another drop", inWindow, inWindow, 1, inWindow, inWindow);
+dropEvent.run(3, "us", "reveal", "session-a", inWindow);
+dropEvent.run(3, "us", "buy_click", "session-a", inWindow);
+
 db.prepare(`INSERT INTO live_drop_reminders(drop_id,email,created_at,reminded_at,reminded_day_before_at,reminded_hour_before_at)
   VALUES(?,?,?,?,?,?)`).run(1, "one@example.com", inWindow, inWindow, inWindow, null);
 db.prepare("INSERT INTO live_drop_reminders(drop_id,email,created_at) VALUES(?,?,?)")
@@ -143,11 +155,14 @@ assert.strictEqual(numbers.outbound.toAProduct, 2);
 assert.strictEqual(numbers.outbound.toAShop, 2);
 assert.strictEqual(numbers.engagedSessions, 2, "two real sessions — the empty one is not a third person");
 
-assert.strictEqual(numbers.live.drops, 2);
-assert.strictEqual(numbers.live.published, 1);
-assert.strictEqual(numbers.live.reached, 2, "distinct sessions, not events");
-assert.strictEqual(numbers.live.sawThePrice, 1);
-assert.strictEqual(numbers.live.wentToBuy, 1);
+assert.strictEqual(numbers.live.drops, 3);
+assert.strictEqual(numbers.live.published, 2);
+assert.strictEqual(numbers.live.reached, 2, "distinct people, not events");
+assert.strictEqual(numbers.live.sawThePrice, 1, "one person saw a price, on two drops — not two");
+assert.strictEqual(numbers.live.wentToBuy, 1, "and one went to buy, on however many drops");
+/* The property the whole change exists for: the steps are comparable. */
+assert.ok(numbers.live.sawThePrice <= numbers.live.reached, "a step can never exceed the one above it");
+assert.ok(numbers.live.wentToBuy <= numbers.live.sawThePrice, "nor the one above that");
 assert.strictEqual(numbers.live.remindersAsked, 2);
 assert.strictEqual(numbers.live.remindersSent, 2, "two stages sent for one person, none for the other");
 assert.strictEqual(numbers.live.announcementsSent, 1);

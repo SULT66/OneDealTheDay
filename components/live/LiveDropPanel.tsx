@@ -145,8 +145,28 @@ export function LiveDropPanel({
   const reported = useRef(new Set<string>());
   useEffect(() => {
     if (!drop) return;
+    /*
+     * Somebody who opens the page days early counts too.
+     *
+     * Only the waiting room and the reveal were reported, so every visit before
+     * the last five minutes was invisible: a drop advertised on Monday and
+     * opened on Friday showed nobody arriving all week, and the only people in
+     * "arrived" were those who happened to press the reminder. That is the
+     * number the funnel starts from, so it made the whole ladder unreadable —
+     * an ad could bring twenty people and the console would say none came.
+     *
+     * "ended" and "sold_out" stay unreported: arriving after the fact is a
+     * different thing from arriving for it, and counting them would inflate a
+     * drop's audience for as long as the page exists.
+     */
     const stage =
-      drop.state === "waiting" ? "waiting_room" : drop.state === "live" ? "reveal" : "";
+      drop.state === "upcoming"
+        ? "arrived"
+        : drop.state === "waiting"
+          ? "waiting_room"
+          : drop.state === "live"
+            ? "reveal"
+            : "";
     if (!stage) return;
     const seen = `${drop.drop_key}:${stage}`;
     if (reported.current.has(seen)) return;

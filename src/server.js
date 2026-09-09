@@ -1434,7 +1434,11 @@ app.post("/api/live/remind", authRateLimit, (req, res) => {
  * on a phone with a bad connection, is the same person arriving once, so the
  * unique index absorbs it and the response is the same either way.
  */
-const LIVE_DROP_EVENTS = new Set(["waiting_room", "reveal", "host_started", "buy_click", "remind"]);
+/* The events the page may report. A stage missing from here is silently
+   dropped, which is how "arrived" would have been added to the panel and
+   changed nothing at all. buy_handoff is absent on purpose: it is written by
+   the redirect itself and must not be claimable by a browser. */
+const LIVE_DROP_EVENTS = new Set(["arrived", "waiting_room", "reveal", "host_started", "buy_click", "remind"]);
 /*
  * How many people are watching, as opposed to how many ever arrived.
  *
@@ -3178,6 +3182,7 @@ app.get("/api/admin/live-drops", admin, (req, res) => {
          listing gives no exact quantity can still run — it simply never
          shows a countdown. */
       stock_verified_at: row.stock_verified_at || null,
+      stock_checked_at: row.stock_checked_at || null,
       /* Prefilled into the media editor, so saving cannot blank a field it
          could not see. */
       image_url: row.image_url || "",
@@ -3704,11 +3709,28 @@ const stockPoll = setInterval(async () => {
   if (stockPollRunning) return;
   stockPollRunning = true;
   try {
-    const nowIso = new Date().toISOString();
+    const now = Date.now();
+    const nowIso = new Date(now).toISOString();
+    /*
+     * Running drops, and the next one due, because the console has to be able
+     * to say before the drop whether a live count is even possible.
+     *
+     * It only asked during the drop, so beforehand stock_verified_at was null
+     * and the panel read that as "the shop gives no live count" — which is a
+     * statement about eBay, not about us never having asked. The one moment
+     * that answer is useful is while choosing and scheduling the product, and
+     * that is exactly when it was wrong.
+     *
+     * A drop starting inside the next day is checked at the same fifteen
+     * seconds, which is a rounding error against a five thousand call daily
+     * allowance and buys an answer hours before it is needed.
+     */
+    const soonIso = new Date(now + 24 * 60 * 60 * 1000).toISOString();
     const live = db.prepare(`
       SELECT * FROM live_drops
-      WHERE published=1 AND start_at<=? AND end_at>=? AND quantity_remaining>0
-    `).all(nowIso, nowIso);
+      WHERE published=1 AND quantity_remaining>0 AND end_at>=?
+        AND start_at<=?
+    `).all(nowIso, soonIso);
     for (const drop of live) {
       const result = await refreshDropStock(drop, {db, market:market(drop.market)});
       if (result.changed) {

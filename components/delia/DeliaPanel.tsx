@@ -336,6 +336,7 @@ function DeliaExchange({
   result,
   market,
   onFollowUp,
+  onAnswerFollowUp,
   onSkipClarification,
   onClose,
   feedbackGiven,
@@ -345,6 +346,9 @@ function DeliaExchange({
   result: DeliaResult;
   market: string;
   onFollowUp: (text: string) => void;
+  /* Puts the cursor in the composer so the shopper answers Delia's question,
+     rather than sending it back to her as their own. */
+  onAnswerFollowUp: () => void;
   onSkipClarification: () => void;
   onClose: () => void;
   feedbackGiven: boolean;
@@ -528,14 +532,31 @@ function DeliaExchange({
           </ul>
         )}
 
+        {/*
+          * Delia's question to the shopper, shown as hers.
+          *
+          * This was a chip that sent its own text as the shopper's message, and
+          * the backend writes follow_up as the question she is asking them —
+          * "One short useful follow-up question" in the schema, "ask about it
+          * the way a person would" in the prompt. Pressing it therefore made
+          * the shopper appear to ask "What price is OneDailyDrop showing you?",
+          * which is nonsense in that direction, and she answered her own
+          * question.
+          *
+          * Pressing it now puts the cursor in the box to answer, which is what
+          * a control under a question was always going to be taken to mean.
+          */}
         {result.followUp && (
           <button
             type="button"
             disabled={disabled}
-            onClick={() => onFollowUp(result.followUp)}
-            className="inline-flex items-center gap-1.5 rounded-full border border-border px-3.5 py-2 text-sm font-medium text-fg-muted transition-colors hover:border-border-strong hover:text-fg disabled:cursor-default disabled:opacity-40 disabled:hover:border-border"
+            onClick={onAnswerFollowUp}
+            className="flex w-full items-start rounded-2xl border border-border bg-surface-2 px-4 py-3 text-left transition-colors hover:border-border-strong disabled:cursor-default disabled:opacity-40"
           >
-            {result.followUp}
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-medium text-fg">{result.followUp}</span>
+              <span className="mt-0.5 block text-xs text-fg-subtle">Answer to narrow it down</span>
+            </span>
           </button>
         )}
 
@@ -1048,6 +1069,7 @@ export function DeliaPanel() {
                   result={result}
                   market={market}
                   onFollowUp={ask}
+                  onAnswerFollowUp={() => inputRef.current?.focus()}
                   onSkipClarification={() => ask(result.transcript, true)}
                   onClose={closeDelia}
                   feedbackGiven={Boolean(feedbackGiven[i])}
