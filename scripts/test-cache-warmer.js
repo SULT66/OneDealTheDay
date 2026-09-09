@@ -49,6 +49,7 @@ const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
       baseUrl: "http://127.0.0.1:1234",
       paths: ["/us", "/us/daily-drop", "/us/stores"],
       intervalMs: 10_000,
+      firstRunMs: 20,
       spacingMs: 20,
       fetchImpl,
       onCycle: () => { cycles += 1; },
@@ -84,6 +85,7 @@ const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
       paths: ["/us", "/us/daily-drop"],
       /* Deliberately shorter than one cycle takes. */
       intervalMs: 40,
+      firstRunMs: 20,
       spacingMs: 10,
       fetchImpl,
     });
@@ -109,6 +111,7 @@ const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
       baseUrl: "http://127.0.0.1:1234",
       paths: ["/us", "/us/daily-drop"],
       intervalMs: 60,
+      firstRunMs: 20,
       spacingMs: 5,
       fetchImpl,
       log: { warn: () => {} },
@@ -139,6 +142,7 @@ const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
       baseUrl: "http://127.0.0.1:1234",
       paths: ["/us", "/us/daily-drop", "/us/stores"],
       intervalMs: 50,
+      firstRunMs: 20,
       spacingMs: 40,
       fetchImpl,
     });
@@ -163,12 +167,32 @@ const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
       baseUrl: "http://127.0.0.1:1234",
       paths: ["/us"],
       intervalMs: 10_000,
+      firstRunMs: 20,
       spacingMs: 5,
       fetchImpl,
     });
     await sleep(120);
     stop();
     assert.strictEqual(drained, 1, "the body is read, so the response completes and the cache stores it");
+  }
+
+  /* --- It leaves a freshly booted process alone. ---
+     The first version waited one spacing, twenty seconds, and started
+     rendering the two heaviest pages while Azure was still bringing the
+     container up. The release check went from passing in four minutes to
+     failing at ten. The default has to stay well clear of boot, so it is
+     asserted rather than left to a constant nobody re-reads. */
+  {
+    let calls = 0;
+    const stop = startCacheWarmer({
+      baseUrl: "http://127.0.0.1:1234",
+      paths: ["/us"],
+      /* No firstRunMs here on purpose: this is about the default. */
+      fetchImpl: async () => { calls += 1; return { status: 200, headers: { get: () => "MISS" }, arrayBuffer: async () => new ArrayBuffer(0) }; },
+    });
+    await sleep(300);
+    stop();
+    assert.strictEqual(calls, 0, "nothing is warmed in the first moments after boot");
   }
 
   console.log("cache warmer: ok");

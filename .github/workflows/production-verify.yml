@@ -34,7 +34,9 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Comfortably past the retry budget below, so the step always ends on
+    # its own terms and says why, rather than being killed mid-attempt.
+    timeout-minutes: 20
     steps:
       - name: Check out the expected release
         uses: actions/checkout@v4
@@ -76,7 +78,14 @@ jobs:
           # A deadline keeps the promise the comment above already makes: ten
           # minutes of waiting, then this step says so itself, in time for
           # anyone to read it.
-          deadline=$(( SECONDS + 600 ))
+          # Fifteen minutes, not ten.
+          #
+          # Ten was chosen when a cold start took four or five. Since then the
+          # cache warmer and a heavier first render have pushed Azure to the
+          # edge of the budget: runs 156, 157 and 158 took 10m31s, 10m01s and
+          # then failed at 10m08s, on a site that answered in under a second
+          # once it settled. Failing a healthy deploy is worse than waiting.
+          deadline=$(( SECONDS + 900 ))
           attempt=0
           while (( SECONDS < deadline )); do
             attempt=$(( attempt + 1 ))
@@ -136,5 +145,5 @@ jobs:
             sleep 20
           done
 
-          echo "Azure did not serve the expected release within 10 minutes."
+          echo "Azure did not serve the expected release within 15 minutes."
           exit 1

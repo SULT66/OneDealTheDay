@@ -34,6 +34,22 @@ const DEFAULT_SPACING_MS = 20 * 1000;
 /* Nothing here is worth blocking on: a warm request that hangs must not keep
    the next cycle from running. */
 const REQUEST_TIMEOUT_MS = 45 * 1000;
+/*
+ * How long to leave a freshly started process alone.
+ *
+ * This began at twenty seconds — one spacing — on the reasoning that a booting
+ * process is busy and should not be interrupted immediately. Twenty seconds
+ * was nowhere near enough. The release check, which polls the live site until
+ * it answers correctly, went from passing in four and five minutes before the
+ * warmer existed to ten, ten and then a failure after it: on a single core,
+ * rendering the two heaviest pages while Azure is still bringing the container
+ * up competes with the very requests that prove the deploy worked.
+ *
+ * Three minutes puts the first cycle after the deploy has settled. Nothing is
+ * lost by waiting: the pages it warms have a ten minute life, and the first
+ * visitors in that window are the deploy's own health checks anyway.
+ */
+const DEFAULT_FIRST_RUN_MS = 3 * 60 * 1000;
 
 const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -52,6 +68,7 @@ function startCacheWarmer({
   paths,
   intervalMs = DEFAULT_INTERVAL_MS,
   spacingMs = DEFAULT_SPACING_MS,
+  firstRunMs = DEFAULT_FIRST_RUN_MS,
   fetchImpl = global.fetch,
   log = console,
   onCycle,
@@ -108,9 +125,10 @@ function startCacheWarmer({
 
   const timer = setInterval(cycle, intervalMs);
   timer.unref?.();
-  /* Not on the very first tick: a process that has just started is already
-     busy, and the deploy's own health check is the request that matters. */
-  const first = setTimeout(cycle, spacingMs);
+  /* Well clear of boot: see DEFAULT_FIRST_RUN_MS. A process that has just
+     started is busy proving it started, and those are the requests that
+     matter. */
+  const first = setTimeout(cycle, firstRunMs);
   first.unref?.();
 
   return function stop() {
