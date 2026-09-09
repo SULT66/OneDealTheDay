@@ -3178,6 +3178,11 @@ app.get("/api/admin/live-drops", admin, (req, res) => {
          listing gives no exact quantity can still run — it simply never
          shows a countdown. */
       stock_verified_at: row.stock_verified_at || null,
+      /* Prefilled into the media editor, so saving cannot blank a field it
+         could not see. */
+      image_url: row.image_url || "",
+      video_url: row.video_url || "",
+      stream_embed_url: row.stream_embed_url || "",
       stock_is_live: Boolean(row.stock_verified_at && now - Date.parse(row.stock_verified_at) <= 2 * 60 * 1000),
       click_label: liveDropLabel(row.drop_key),
       };
@@ -3269,6 +3274,62 @@ app.post("/api/admin/live-drops/:key/stock", admin, (req, res) => {
   db.prepare("UPDATE live_drops SET quantity_remaining=?, updated_at=? WHERE id=?")
     .run(remaining, new Date().toISOString(), drop.id);
   res.json({ok:true, quantity_remaining:remaining});
+});
+
+/*
+ * Changing what a drop shows, after it has been created.
+ *
+ * There was no way to. A drop could be created, published, unpublished and
+ * deleted, and nothing in between — so a published drop with the wrong
+ * picture, or no video, was stuck with it: deleting is refused for anything
+ * that was ever public, which is right, and recreating loses the reminders
+ * people already left on it.
+ *
+ * Only the media. The price, the quantity and the hour are the offer itself,
+ * and quietly editing those under people who were told about them is a
+ * different act with different consequences.
+ */
+app.patch("/api/admin/live-drops/:key/media", admin, express.json({limit:"8kb"}), (req, res) => {
+  const drop = db.prepare("SELECT * FROM live_drops WHERE drop_key=?").get(String(req.params.key || ""));
+  if (!drop) return res.status(404).json({error:"No such drop."});
+
+  /* Empty clears the slot, which is how a wrong video is removed rather than
+     replaced. Anything else has to be a URL we would be willing to load. */
+  const link = (value, current) => {
+    if (value === undefined) return current;
+    const text = String(value || "").trim();
+    if (!text) return "";
+    /* A site-relative path is how a file in public/ is referenced, and it is
+       the safest form: it cannot point at another origin. */
+    if (text.startsWith("/") && !text.startsWith("//")) return text.slice(0, 500);
+    try {
+      const url = new URL(text);
+      if (!/^https:$/.test(url.protocol)) throw new Error("not https");
+      return url.toString().slice(0, 500);
+    } catch {
+      return null;
+    }
+  };
+
+  const fields = {
+    image_url: link(req.body?.image_url, drop.image_url),
+    secondary_image_url: link(req.body?.secondary_image_url, drop.secondary_image_url),
+    video_url: link(req.body?.video_url, drop.video_url),
+    stream_embed_url: link(req.body?.stream_embed_url, drop.stream_embed_url),
+  };
+  const bad = Object.entries(fields).filter(([, value]) => value === null).map(([name]) => name);
+  if (bad.length) {
+    return res.status(400).json({error:`Use an https link or a path starting with / — check: ${bad.join(", ")}.`});
+  }
+
+  db.prepare(
+    "UPDATE live_drops SET image_url=?, secondary_image_url=?, video_url=?, stream_embed_url=?, updated_at=? WHERE id=?",
+  ).run(
+    fields.image_url, fields.secondary_image_url, fields.video_url, fields.stream_embed_url,
+    new Date().toISOString(), drop.id,
+  );
+  publicHtmlCache.clear();
+  return res.json({ok:true, ...fields});
 });
 
 app.delete("/api/admin/live-drops/:key", admin, (req, res) => {

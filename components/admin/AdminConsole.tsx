@@ -38,6 +38,9 @@ type AdminDrop = {
   watching_now: number;
   stock_is_live: boolean;
   stock_verified_at: string | null;
+  image_url: string;
+  video_url: string;
+  stream_embed_url: string;
   click_label: string;
 };
 
@@ -485,6 +488,14 @@ function DropRow({
 }) {
   const [stock, setStock] = useState(String(drop.quantity_remaining));
   const [rowMessage, setRowMessage] = useState("");
+  /* Editing what a published drop shows. Deleting one that was ever public is
+     refused — rightly — so without this a wrong picture or a missing video was
+     permanent. */
+  const [media, setMedia] = useState({
+    image_url: drop.image_url || "",
+    video_url: drop.video_url || "",
+    stream_embed_url: drop.stream_embed_url || "",
+  });
   /* A published drop shows where it is in its own life. An unpublished one is
      a draft whatever the clock says, because nobody can see it. */
   const state = drop.published ? drop.state : "draft";
@@ -661,6 +672,39 @@ function DropRow({
           Open the page
         </a>
       </div>
+
+      {/* What the drop shows, editable after it is published. The offer
+          itself — price, quantity, hour — is deliberately not here: people
+          were told those, and changing them quietly is a different act. */}
+      <div className="mt-3 grid gap-2 sm:grid-cols-3">
+        {([
+          ["image_url", "Product photo URL"],
+          ["video_url", "Product video URL"],
+          ["stream_embed_url", "Presenter embed URL"],
+        ] as const).map(([field, label]) => (
+          <label key={field} className="block">
+            <span className="text-[0.65rem] uppercase tracking-[0.12em] text-fg-subtle">{label}</span>
+            <input
+              value={media[field]}
+              onChange={(event) => setMedia({ ...media, [field]: event.target.value })}
+              placeholder="/media/file.mp4 or https://…"
+              className="mt-1 h-9 w-full rounded-full border border-border bg-surface-2 px-3 text-xs text-fg outline-none focus:border-border-strong"
+            />
+          </label>
+        ))}
+      </div>
+      <button
+        type="button"
+        disabled={busy}
+        onClick={async () =>
+          setRowMessage(
+            (await act(`/api/admin/live-drops/${drop.drop_key}/media`, media, "PATCH")) || "Saved.",
+          )
+        }
+        className="mt-2 inline-flex h-9 cursor-pointer items-center rounded-full border border-border px-4 text-xs font-semibold text-fg transition-colors hover:bg-surface-2 disabled:opacity-55"
+      >
+        Save media
+      </button>
 
       {/* Beside the button that was pressed. A refusal printed at the top of a
           long console is a refusal nobody reads, and the button then looks
