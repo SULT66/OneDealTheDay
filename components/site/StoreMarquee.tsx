@@ -5,11 +5,9 @@ import { slugifyCategory } from "@/lib/backendAdapter";
 import { StoreLogo } from "@/components/site/StoreLogo";
 
 /*
- * href is set only for a shop that is not reached through the catalogue.
- * Amazon is the one such case: we link to it by hand rather than through a
- * listings feed, so its tile points at the picks on this site instead of at a
- * front door we have no commissionable link for. A link that pays nobody is
- * the failure this whole file exists to avoid.
+ * href is set only for a shop that is not read off the catalogue. Amazon is
+ * the one such case: it is added by name rather than by feed, so it brings its
+ * own outbound route instead of the slug-derived one.
  */
 type Shop = { retailer: string; listings: number; host: string; href?: string };
 
@@ -65,8 +63,8 @@ export function StoreMarquee({
     <a
       key={`${copy}-${shop.retailer}`}
       href={shop.href || `/${market}/go/store/${slugifyCategory(shop.retailer)}`}
-      target={shop.href ? undefined : "_blank"}
-      rel={shop.href ? undefined : "sponsored nofollow noopener noreferrer"}
+      target="_blank"
+      rel="sponsored nofollow noopener noreferrer"
       aria-hidden={copy === 2 ? true : undefined}
       tabIndex={copy === 2 ? -1 : undefined}
       data-marquee-copy={copy === 2 ? "2" : undefined}
