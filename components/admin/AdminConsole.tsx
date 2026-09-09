@@ -158,8 +158,13 @@ export function AdminConsole() {
     }).catch(() => null);
     const result = await response?.json().catch(() => ({}));
     setBusy(false);
-    setMessage(response?.ok ? "Done." : result?.error || "That did not go through.");
+    const failure = response?.ok ? "" : result?.error || "That did not go through.";
+    setMessage(failure || "Done.");
     load();
+    /* Returned so the row that was clicked can say what happened next to the
+       button. A refusal printed at the top of a long console reads as a button
+       that does nothing — which is exactly how the delete guard was reported. */
+    return failure;
   };
 
   const create = async (event: React.FormEvent) => {
@@ -476,9 +481,10 @@ function DropRow({
 }: {
   drop: AdminDrop;
   busy: boolean;
-  act: (url: string, body: unknown, method?: string) => void;
+  act: (url: string, body: unknown, method?: string) => Promise<string>;
 }) {
   const [stock, setStock] = useState(String(drop.quantity_remaining));
+  const [rowMessage, setRowMessage] = useState("");
   /* A published drop shows where it is in its own life. An unpublished one is
      a draft whatever the clock says, because nobody can see it. */
   const state = drop.published ? drop.state : "draft";
@@ -639,7 +645,7 @@ function DropRow({
           <button
             type="button"
             disabled={busy}
-            onClick={() => act(`/api/admin/live-drops/${drop.drop_key}`, null, "DELETE")}
+            onClick={async () => setRowMessage(await act(`/api/admin/live-drops/${drop.drop_key}`, null, "DELETE"))}
             className="inline-flex h-9 cursor-pointer items-center rounded-full border border-border px-4 text-xs font-semibold text-fg-muted transition-colors hover:bg-surface-2 disabled:opacity-55"
           >
             Delete draft
@@ -655,6 +661,15 @@ function DropRow({
           Open the page
         </a>
       </div>
+
+      {/* Beside the button that was pressed. A refusal printed at the top of a
+          long console is a refusal nobody reads, and the button then looks
+          broken — which is exactly how the delete guard was reported. */}
+      {rowMessage && (
+        <p className="mt-3 text-xs font-semibold text-danger" role="status">
+          {rowMessage}
+        </p>
+      )}
     </div>
   );
 }

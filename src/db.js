@@ -631,6 +631,20 @@ if (!reminderColumns.has("reminded_hour_before_at")) {
  * to unset.
  */
 const dropColumns = new Set(db.prepare("PRAGMA table_info(live_drops)").all().map(column => column.name));
+/*
+ * The first time this drop was ever made public, and never cleared.
+ *
+ *  says where it is now, which is the wrong question for deletion:
+ * unpublishing a drop that already ran would otherwise make it erasable, and
+ * what it offered to real people is a record. A draft that was never public
+ * has no such history and can go.
+ */
+if (!dropColumns.has("first_published_at")) {
+  db.exec("ALTER TABLE live_drops ADD COLUMN first_published_at TEXT");
+  /* Anything already published when this column arrived was public before it
+     existed; stamping it with its start time keeps that true. */
+  db.exec("UPDATE live_drops SET first_published_at=start_at WHERE published=1 AND first_published_at IS NULL");
+}
 if (!dropColumns.has("stock_verified_at")) {
   db.exec("ALTER TABLE live_drops ADD COLUMN stock_verified_at TEXT");
 }
