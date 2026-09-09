@@ -33,6 +33,9 @@ type AdminDrop = {
   reminders: number;
   funnel: Record<string, number>;
   reached: number;
+  announced: number;
+  stock_is_live: boolean;
+  stock_verified_at: string | null;
   click_label: string;
 };
 
@@ -507,8 +510,9 @@ function DropRow({
         * it got through, which is the only form in which these numbers say
         * anything.
         */}
-      <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-fg-muted sm:grid-cols-4">
+      <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-fg-muted sm:grid-cols-5">
         {[
+          { label: "told", value: drop.announced, of: 0 },
           { label: "reached", value: drop.reached, of: 0 },
           { label: "waited", value: drop.funnel.waiting_room || 0, of: drop.reached },
           { label: "saw the price", value: drop.funnel.reveal || 0, of: drop.reached },
@@ -540,6 +544,14 @@ function DropRow({
         * click and comes back on the sale in the network's own report, which
         * is where the last two steps of the funnel actually live.
         */}
+      {/* Where the remaining count comes from. A drop whose listing gives no
+          exact quantity still runs; it just never shows a countdown, and this
+          is where that is visible before the drop rather than after. */}
+      <p className="mt-2 text-xs text-fg-subtle">
+        {drop.stock_is_live
+          ? "Stock is confirmed by the shop — the page shows a live count."
+          : "The shop gives no live count — the page shows the offer size, not a countdown."}
+      </p>
       <p className="mt-2 text-xs text-fg-subtle">
         {drop.reminders} reminders asked for.{" "}
         Purchases are only visible in the network report — search it for{" "}
