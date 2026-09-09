@@ -68,6 +68,7 @@ const { emailHealth } = require("./emailHealth");
 const { htmlCache } = require("./htmlCache");
 const { startCacheWarmer, pathsFor } = require("./cacheWarmer");
 const { readEbayStock, refreshDropStock, ebayItemIdFrom } = require("./liveStock");
+const { checkAmazonLinks } = require("./amazonLinkHealth");
 const { overview } = require("./overview");
 const {
   normalizeAction,
@@ -3332,15 +3333,30 @@ app.post("/api/admin/amazon-picks", admin, express.json({limit:"8kb"}), (req, re
   const url = String(req.body?.url || "").trim();
   const category = String(req.body?.category || "").trim().slice(0, 60);
   const marketCode = normalizeMarket(req.body?.market) || c.primaryMarket;
+  const note = String(req.body?.note || "").trim().slice(0, 400);
+  /*
+   * A price is stored with the moment it was typed, and shown beside it.
+   * Amazon's own prices move several times a day — which is why their
+   * agreement has prices come from the API — so this is never presented as
+   * the current one. Dated, it stays true however old it gets.
+   */
+  const price = Number(req.body?.price);
+  const hasPrice = Number.isFinite(price) && price > 0;
+  const currency = String(req.body?.currency || "USD").trim().toUpperCase().slice(0, 3);
   if (!title) return res.status(400).json({error:"Give it a name — nothing is fetched from Amazon, so this is the only title it will have."});
   if (!AMAZON_LINK.test(url)) return res.status(400).json({error:"That is not an Amazon link. Use the short link SiteStripe gives you."});
   /* Recorded so a link can be recognised again later, and so the API can fill
      in real data for the same product once it is available. */
   const asin = (url.match(/\/(?:dp|gp\/product)\/([A-Z0-9]{10})/) || [])[1] || "";
   try {
+    const nowIso = new Date().toISOString();
     const info = db.prepare(
-      "INSERT INTO amazon_picks(market,title,category,url,asin,position,created_at) VALUES(?,?,?,?,?,?,?)",
-    ).run(marketCode, title, category, url, asin, Number(req.body?.position) || 0, new Date().toISOString());
+      `INSERT INTO amazon_picks(market,title,category,url,asin,position,created_at,price,currency,price_checked_at,note)
+       VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
+    ).run(
+      marketCode, title, category, url, asin, Number(req.body?.position) || 0, nowIso,
+      hasPrice ? price : null, currency, hasPrice ? nowIso : null, note,
+    );
     /* The homepage is cached; a pick nobody can see for ten minutes reads as
        a form that did not work. */
     publicHtmlCache.clear();
@@ -3349,6 +3365,34 @@ app.post("/api/admin/amazon-picks", admin, express.json({limit:"8kb"}), (req, re
     if (String(error.message).includes("UNIQUE")) return res.status(409).json({error:"That link is already on the site."});
     throw error;
   }
+});
+
+/*
+ * Updating one, which for a price is the whole point: it goes stale by
+ * definition, and the alternative to editing it is deleting the row and
+ * retyping the name and the note.
+ */
+app.patch("/api/admin/amazon-picks/:id", admin, express.json({limit:"8kb"}), (req, res) => {
+  const pick = db.prepare("SELECT * FROM amazon_picks WHERE id=?").get(Number(req.params.id) || 0);
+  if (!pick) return res.sendStatus(404);
+  const price = Number(req.body?.price);
+  const hasPrice = Number.isFinite(price) && price > 0;
+  const nowIso = new Date().toISOString();
+  db.prepare(
+    "UPDATE amazon_picks SET title=?, category=?, note=?, price=?, currency=?, price_checked_at=? WHERE id=?",
+  ).run(
+    String(req.body?.title ?? pick.title).trim().slice(0, 200) || pick.title,
+    String(req.body?.category ?? pick.category).trim().slice(0, 60),
+    String(req.body?.note ?? pick.note).trim().slice(0, 400),
+    hasPrice ? price : null,
+    String(req.body?.currency || pick.currency || "USD").trim().toUpperCase().slice(0, 3),
+    /* Re-stamped only when a price is actually given, so an edit to the
+       note does not make an old price look freshly checked. */
+    hasPrice ? nowIso : null,
+    pick.id,
+  );
+  publicHtmlCache.clear();
+  return res.json({ok:true});
 });
 
 app.delete("/api/admin/amazon-picks/:id", admin, (req, res) => {
@@ -3363,9 +3407,15 @@ app.get("/api/amazon-picks", (req, res) => {
   const marketCode = normalizeMarket(req.query.market) || c.primaryMarket;
   res.set("Cache-Control", "public, max-age=300, stale-while-revalidate=900");
   res.json(
-    db.prepare(
-      "SELECT id,title,category FROM amazon_picks WHERE market=? ORDER BY position, id LIMIT 24",
-    ).all(marketCode),
+    db.prepare(`
+      SELECT id,title,category,note,price,currency,price_checked_at
+      FROM amazon_picks
+      /* A link the daily check found dead stops being offered. Marked, not
+         deleted: the name and the note were written by hand and the product
+         may come back. */
+      WHERE market=? AND link_status<>'dead'
+      ORDER BY position, id LIMIT 24
+    `).all(marketCode),
   );
 });
 
@@ -3414,6 +3464,18 @@ app.get("/amazon/go/:id", (req, res) => {
   /* The link is used exactly as SiteStripe made it. Adding parameters to an
      Amazon affiliate link is how the tag stops being honoured. */
   return res.redirect(302, pick.url);
+});
+
+/* On demand as well as daily, because after fixing a link the answer to
+   "is it alive now" should not be a day away. */
+app.post("/api/admin/amazon-picks/check", admin, async (req, res) => {
+  try {
+    const summary = await checkAmazonLinks({db});
+    publicHtmlCache.clear();
+    return res.json(summary);
+  } catch (error) {
+    return res.status(502).json({error:error.message});
+  }
 });
 
 app.get("/api/admin/ebay-stock", admin, async (req, res) => {
@@ -3567,6 +3629,28 @@ if (c.liveRefreshEnabled) {
     () => runLinkHealthCheck({limit: c.linkHealthBatch})
       .catch(error => console.error(`[link-health] ${error.message}`)),
     {timezone:"UTC"}
+  );
+
+  /* The hand-added Amazon links, on the same daily pass as the catalogue's.
+     They are the only thing on this site nothing else ever revisits. */
+  cron.schedule(
+    c.linkHealthCron,
+    async () => {
+      try {
+        const summary = await checkAmazonLinks({db});
+        if (summary.checked) {
+          console.log(
+            `[amazon-links] checked ${summary.checked}: ${summary.ok} ok, ${summary.dead} dead, ${summary.unknown} unknown`,
+          );
+        }
+        if (summary.dead) {
+          console.warn(`[amazon-links] no longer offered: ${summary.deadIds.join(", ")}`);
+        }
+      } catch (error) {
+        console.error(`[amazon-links] ${error.message}`);
+      }
+    },
+    {timezone:"Etc/UTC"},
   );
 }
 
