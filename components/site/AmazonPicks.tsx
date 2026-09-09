@@ -48,7 +48,8 @@ export async function AmazonPicks({ market }: { market: string }) {
   if (!picks.length) return null;
 
   return (
-    <section className="mt-14 border-t border-border pt-10">
+    /* Named, so the stores page can point a visitor straight at it. */
+    <section id="amazon" className="mt-14 scroll-mt-32 border-t border-border pt-10">
       <h2 className="text-lg font-bold text-fg">Also worth a look on Amazon</h2>
       {/* Said plainly and up front, because the reader is about to notice
           there are no prices and should not have to wonder why. */}

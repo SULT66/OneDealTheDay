@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { getConnectedShops, getMarket } from "@/lib/catalog";
+import { getConnectedShops, getMarket, hasAmazonPicks } from "@/lib/catalog";
 import { Prose } from "@/components/site/Prose";
 import { StoreMarquee } from "@/components/site/StoreMarquee";
 
@@ -45,6 +45,24 @@ export default async function StoresPage({
   const shops = await getConnectedShops(market);
   const total = shops.reduce((sum, shop) => sum + shop.listings, 0);
 
+  /*
+   * Amazon belongs on this page and cannot arrive the way the others do.
+   *
+   * Every shop above reaches us through a listings feed, which is what gives it
+   * a count and a front-door link. Amazon has neither: their agreement lets
+   * their data be shown only through the Product Advertising API, which opens
+   * after three qualifying sales, so what we have from them is a short list
+   * chosen by hand. Its tile therefore points at that list rather than at a
+   * storefront link we cannot make earn anything.
+   *
+   * Named only while there is something of theirs on the site: a shop claimed
+   * and not used is exactly the kind of decoration this site keeps removing.
+   */
+  const amazon = await hasAmazonPicks(market);
+  const tiles = amazon
+    ? [...shops, { retailer: "Amazon", listings: 0, host: "amazon.com", href: `/${market}#amazon` }]
+    : shops;
+
   return (
     <Prose
       market={market}
@@ -59,7 +77,19 @@ export default async function StoresPage({
         straight through to that shop.
       </p>
 
-      <StoreMarquee market={market} shops={shops} />
+      <StoreMarquee market={market} shops={tiles} />
+
+      {/* The count above is listings, and Amazon contributes none of them, so
+          the difference is stated rather than left for the reader to work out
+          from a tile that behaves differently to the rest. */}
+      {amazon && (
+        <p>
+          <strong>Amazon</strong> is here differently to the others. We are an
+          Amazon Associate, but their listings do not reach us as a feed, so
+          nothing of theirs is scored or priced on this site. What we have is a
+          short list picked by hand &mdash; that tile leads to it.
+        </p>
+      )}
 
       {/* Required, and kept to one sentence. The FTC asks for a disclosure a
           visitor can find near the links it describes, and an affiliate manager
