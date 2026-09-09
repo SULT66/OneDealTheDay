@@ -349,8 +349,30 @@ export function LiveDropPanel({
 
 function Frame({ children }: { children: React.ReactNode }) {
   return (
-    <section className="mx-auto w-full max-w-6xl px-3 py-6 sm:px-6 sm:py-10">
-      <div className="rounded-3xl border border-border bg-surface p-4 shadow-sm sm:p-6">{children}</div>
+    /*
+     * A stage, not a document.
+     *
+     * This was one white card on a white page, and it read like a form: the
+     * page where an event is supposed to be happening looked quieter than the
+     * catalogue behind it. The backdrop is the site's own graphite, the same
+     * surface the homepage hero uses, so the card is lit against something
+     * instead of floating on nothing.
+     *
+     * Decoration only — aria-hidden, no pointer events, and nothing here moves
+     * or carries meaning. The countdown and the stock are the page; this is the
+     * room they stand in.
+     */
+    <section className="relative mx-auto w-full max-w-6xl px-3 py-6 sm:px-6 sm:py-10">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-56 overflow-hidden rounded-b-[2rem] bg-graphite sm:h-64"
+      >
+        {/* A single soft light above the stage. One accent, kept faint: the
+            lime is the buy button's colour and it should not have to compete
+            with the wall behind it. */}
+        <div className="absolute -top-24 left-1/2 h-56 w-[36rem] -translate-x-1/2 rounded-full bg-lime/20 blur-3xl" />
+      </div>
+      <div className="rounded-3xl border border-border bg-surface p-4 shadow-lg sm:p-6">{children}</div>
     </section>
   );
 }
@@ -421,12 +443,19 @@ function RemindMe({ dropKey }: { dropKey: string }) {
 
   if (!open) {
     return (
+      /*
+       * The one thing to do on this page before the drop opens, and it looked
+       * like the least important: an outlined button beside a filled one, so
+       * the eye went to "Ask a live question" and the reminder read as a
+       * secondary option. It is the opposite — a question is a nice extra, and
+       * the reminder is the whole reason to arrive early.
+       */
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex h-12 items-center rounded-full border border-border px-5 text-sm font-semibold text-fg transition-colors hover:bg-surface-2"
+        className="inline-flex h-12 items-center rounded-full bg-lime px-6 text-sm font-bold text-ink transition-opacity hover:opacity-88"
       >
-        Remind me
+        Remind me when it opens
       </button>
     );
   }
