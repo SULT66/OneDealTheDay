@@ -94,7 +94,9 @@ const clientReturning = (item) => ({
       prepare(sql) {
         return {
           run(...params) {
-            if (sql.includes("quantity_remaining=?")) {
+            if (sql.includes("stock_checked_at=?")) {
+              rows.stock_checked_at = params[0];
+            } else if (sql.includes("quantity_remaining=?")) {
               rows.quantity_remaining = params[0];
               rows.stock_verified_at = params[1];
             } else if (sql.includes("stock_verified_at=?")) {

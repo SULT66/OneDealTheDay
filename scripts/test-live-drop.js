@@ -228,7 +228,7 @@ const allowed = /const LIVE_DROP_EVENTS = new Set\(\[([^\]]*)\]\)/.exec(serverSo
 assert(allowed, "the allowed Live Drop events are no longer declared in server.js");
 assert.deepStrictEqual(
   allowed[1].match(/"[a-z_]+"/g),
-  ['"waiting_room"', '"reveal"', '"host_started"', '"buy_click"', '"remind"'],
+  ['"arrived"', '"waiting_room"', '"reveal"', '"host_started"', '"buy_click"', '"remind"'],
   "the Live Drop funnel stages changed",
 );
 assert(

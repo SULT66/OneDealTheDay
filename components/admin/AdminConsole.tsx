@@ -38,6 +38,7 @@ type AdminDrop = {
   watching_now: number;
   stock_is_live: boolean;
   stock_verified_at: string | null;
+  stock_checked_at: string | null;
   image_url: string;
   video_url: string;
   stream_embed_url: string;
@@ -601,9 +602,14 @@ function DropRow({
           exact quantity still runs; it just never shows a countdown, and this
           is where that is visible before the drop rather than after. */}
       <p className="mt-2 text-xs text-fg-subtle">
+        {/* Three states, because two of them were being reported as one: a
+            drop nobody had asked the shop about looked exactly like a drop
+            whose seller publishes no quantity. */}
         {drop.stock_is_live
           ? "Stock is confirmed by the shop — the page shows a live count."
-          : "The shop gives no live count — the page shows the offer size, not a countdown."}
+          : drop.stock_checked_at
+            ? "The shop gives no live count — the page shows the offer size, not a countdown."
+            : "Not checked with the shop yet. The answer arrives within a minute of publishing."}
       </p>
       <p className="mt-2 text-xs text-fg-subtle">
         {drop.reminders} reminders asked for. <strong>Bought: not knowable here.</strong>{" "}

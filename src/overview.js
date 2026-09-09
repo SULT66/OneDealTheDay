@@ -89,12 +89,25 @@ function overview(db, { days = 30, now = Date.now() } = {}) {
      FROM live_drops`,
   );
 
+  /*
+   * People at every step, not people at one and events at the next.
+   *
+   * `reached` counted distinct sessions across every drop while the steps under
+   * it counted rows, so one person who looked at three drops was one at the top
+   * and three below it. The panel then read "7 reached · 16 saw the price",
+   * which cannot happen and is the sort of number that makes somebody stop
+   * trusting the whole screen.
+   *
+   * Distinct sessions throughout. The steps are comparable now, and the total
+   * is what it always claimed to be: how many different people.
+   */
   const dropFunnel = one(
     `SELECT
        COUNT(DISTINCT session_id) AS reached,
-       SUM(CASE WHEN event_type = 'reveal' THEN 1 ELSE 0 END) AS saw_the_price,
-       SUM(CASE WHEN event_type = 'buy_click' THEN 1 ELSE 0 END) AS went_to_buy
-     FROM live_drop_events`,
+       COUNT(DISTINCT CASE WHEN event_type = 'reveal' THEN session_id END) AS saw_the_price,
+       COUNT(DISTINCT CASE WHEN event_type = 'buy_click' THEN session_id END) AS went_to_buy
+     FROM live_drop_events
+     WHERE session_id <> ''`,
   );
 
   const reminders = one(
