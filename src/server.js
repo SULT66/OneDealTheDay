@@ -2790,8 +2790,39 @@ function refreshJobResponse(job) {
   };
 }
 
+/*
+ * A refresh is the heaviest thing this process does, and it must not start
+ * while the process is still finding its feet.
+ *
+ * On 2026-09-09 a deploy finished at 04:34 and GitHub released a scheduled
+ * refresh — delayed four and a half hours from its 00:15 slot — at 04:44.
+ * It landed on a container that had been up ten minutes, on a plan with one
+ * core. The site returned 503 for twenty-five minutes, the refresh itself
+ * died after five, and the release check failed alongside it.
+ *
+ * The workflow had a wake-up step and it passed: /api/status answers in a
+ * quarter of a second while page renders are still taking ten. Answering is
+ * not the same as being ready, so readiness is decided here, where the
+ * uptime actually is, and every caller is covered rather than the one
+ * workflow that happened to cause it.
+ */
+/* Ten minutes, and settable — a test cannot wait that long, and neither can
+   somebody who needs a refresh now and knows why the guard is there. */
+const SETTLING_SECONDS = Number(process.env.REFRESH_SETTLING_SECONDS ?? 600);
+
 app.post("/api/admin/refresh", admin, (req,res) => {
   const requestedMarket = normalizeMarket(req.query.market);
+  const settlingFor = Math.ceil(SETTLING_SECONDS - process.uptime());
+  if (settlingFor > 0) {
+    /* 503 with Retry-After, so a caller waits rather than treating this as a
+       failure — the refresh is not refused, only postponed. */
+    return res.status(503).set("Retry-After", String(settlingFor)).json({
+      accepted: false,
+      settling: true,
+      retry_after_seconds: settlingFor,
+      error: `This instance started ${Math.round(process.uptime())}s ago and is still settling. Try again in ${settlingFor}s.`,
+    });
+  }
   if (adminRefreshJob?.status === "running") {
     return res.status(202).json({accepted:false, alreadyRunning:true, ...refreshJobResponse(adminRefreshJob)});
   }
