@@ -2,7 +2,7 @@
   "use strict";
 
   const STORAGE_KEY = "odd_cookie_consent_v1";
-  const ANALYTICS_ID = "G-0V49XQ3WEG";
+  const ANALYTICS_ID = "G-1L69NBBDV2";
   const CONSENT_MARKETS = new Set(["fr", "de"]);
   const pathMarket = location.pathname.split("/").filter(Boolean)[0] || "";
   const market = String(window.__ODD_MARKET__ || pathMarket).toLowerCase();
