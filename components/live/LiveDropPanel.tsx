@@ -546,8 +546,20 @@ function BroadcastStage({ market, drop }: { market: string; drop: LiveDropView }
    * beside it whenever both are supplied. Either runs alone if that is all
    * there is.
    */
-  const hasHost = hasStream || hasPresentation;
-  const hasDemo = hasPresentation && hasStream;
+  /*
+   * Chloe is a presenter, and she was treated as the last resort.
+   *
+   * The host slot took a stream or a recording, and she appeared only when
+   * there was neither — so supplying product footage silently removed her, and
+   * the two things this format is built on could never be on screen together.
+   * That is exactly backwards: a live host who cannot hold anything up is the
+   * case the second panel exists for.
+   *
+   * So she counts as a host, and any recorded footage then belongs in the
+   * product panel beside her rather than on the stage instead of her.
+   */
+  const hasHost = hasStream || hasPresentation || drop.tavus_available;
+  const hasDemo = hasPresentation && (hasStream || drop.tavus_available);
   /* The product panel earns its place whenever there is anything to put in it,
      which is nearly always: a drop without a photograph is a drop nobody would
      publish. */
@@ -575,20 +587,29 @@ function BroadcastStage({ market, drop }: { market: string; drop: LiveDropView }
               className="absolute inset-0 h-full w-full border-0"
             />
           </div>
+        ) : drop.tavus_available ? (
+          /* A live host outranks a recording. She answers questions and a file
+             cannot, and with her on the stage the footage moves to the panel
+             beside her, which is where a presenter who cannot hold anything up
+             needs it to be. */
+          <TavusHost market={market} drop={drop} />
         ) : hasPresentation ? (
           /* The same recording for everybody, which is what makes it a
-             broadcast: no ceiling, no per-viewer cost, one message. */
+             broadcast: no ceiling, no per-viewer cost, one message. Looping,
+             because a drop runs for ten minutes and a clip that ends leaves a
+             black rectangle for the rest of them. Muted so the browser will
+             actually start it — an autoplaying video with sound is blocked. */
           <div className="relative aspect-[4/3] w-full">
             <video
               src={drop.video_url}
               controls
               autoPlay
+              muted
+              loop
               playsInline
               className="absolute inset-0 h-full w-full object-contain"
             />
           </div>
-        ) : drop.tavus_available ? (
-          <TavusHost market={market} drop={drop} />
         ) : (
           <div className="flex aspect-[4/3] w-full flex-col items-center justify-center px-8 text-center">
             {drop.image_url ? (
