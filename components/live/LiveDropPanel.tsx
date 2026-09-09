@@ -578,7 +578,9 @@ function BroadcastStage({ market, drop }: { market: string; drop: LiveDropView }
    * So she counts as a host, and any recorded footage then belongs in the
    * product panel beside her rather than on the stage instead of her.
    */
-  const hasHost = hasStream || hasPresentation || drop.tavus_available;
+  /* Whether anything at all holds the stage. Not used to pick what — each
+     branch below tests its own source, which is what went wrong when this was
+     doing both jobs. */
   const hasDemo = hasPresentation && (hasStream || drop.tavus_available);
   /* The product panel earns its place whenever there is anything to put in it,
      which is nearly always: a drop without a photograph is a drop nobody would
@@ -597,7 +599,17 @@ function BroadcastStage({ market, drop }: { market: string; drop: LiveDropView }
     >
       <div className="relative min-w-0 overflow-hidden bg-[radial-gradient(circle_at_50%_20%,#123b69_0%,#07172b_48%,#030914_100%)]">
         <StageLabel>AI host</StageLabel>
-        {hasHost ? (
+        {/*
+          * hasStream, not hasHost.
+          *
+          * This branch draws the stream iframe, and it was keyed on hasHost —
+          * which was fine while hasHost meant "a stream or a recording", and
+          * became a bug the moment Chloe was added to it: she made hasHost true,
+          * fell into the iframe, and the page rendered an <iframe> with no src.
+          * A black rectangle where the host should be, on a live drop, and she
+          * never got the chance to load at all.
+          */}
+        {hasStream ? (
           <div className="relative aspect-[4/3] w-full">
             <iframe
               src={drop.stream_embed_url}
