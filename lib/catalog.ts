@@ -453,6 +453,28 @@ export async function getConnectedShops(
 }
 
 /** Retailers present in the catalog, so the filter never offers an empty option. */
+/**
+ * Whether anything from Amazon is on the site right now.
+ *
+ * Amazon is not in the catalogue and never will be until their API opens, so
+ * it cannot appear among the connected shops the ordinary way. The stores page
+ * asks this instead, and names Amazon only while there is actually something
+ * of theirs to point at — claiming a shop we are not currently using would be
+ * the same kind of decoration this site spends its time removing.
+ */
+export async function hasAmazonPicks(marketCode: string): Promise<boolean> {
+  try {
+    const response = await fetch(
+      `${BACKEND_URL}/api/amazon-picks?market=${encodeURIComponent(marketCode)}`,
+      { cache: "no-store" },
+    );
+    if (!response.ok) return false;
+    return ((await response.json()) as unknown[]).length > 0;
+  } catch {
+    return false;
+  }
+}
+
 export async function getActiveRetailers(
   marketCode: string,
   category?: string,

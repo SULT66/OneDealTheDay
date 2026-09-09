@@ -13,6 +13,7 @@ import { InterestSignup } from "@/components/site/InterestSignup";
 import { DeliaTrigger } from "@/components/delia/DeliaTrigger";
 import { DealCard } from "@/components/deal/DealCard";
 import { NextLiveDrop } from "@/components/live/NextLiveDrop";
+import { AmazonPicks } from "@/components/site/AmazonPicks";
 
 export async function generateMetadata({
   params,
@@ -71,6 +72,13 @@ export default async function MarketHome({ params }: PageProps<"/[market]">) {
             survives the empty state instead of disappearing with everything
             else. */}
         <NextLiveDrop market={market} />
+        {/* And the hand-picked links, for the same reason: when the catalogue
+            has nothing to offer, these are the only thing that does. They
+            carry no price and no score, so an outage cannot make them
+            misleading the way a stale catalogue would. */}
+        <div className="mt-4 text-left">
+          <AmazonPicks market={market} />
+        </div>
       </div>
     );
   }
@@ -207,6 +215,12 @@ export default async function MarketHome({ params }: PageProps<"/[market]">) {
       </section>
 
       {/* ------------------------------------------------------------ signup */}
+      {/* Below the catalogue, never mixed into it: these have no price and no
+          score, and a card without either sitting beside cards with both
+          invites the reader to assume it was checked the same way. Renders
+          nothing at all until a pick is added. */}
+      <AmazonPicks market={market} />
+
       {/* scroll-mt clears the sticky header when a visitor arrives via the
           header's CTA — on this page that's a same-page jump straight to
           #subscribe, on any other page it's a normal navigation that lands
