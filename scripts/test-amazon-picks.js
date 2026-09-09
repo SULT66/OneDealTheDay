@@ -137,6 +137,26 @@ const LINK = "https://amzn.to/4xQn882";
   assert.strictEqual(click.retailer_name, "Amazon");
   assert.strictEqual(click.destination_type, "retailer");
 
+  /* --- The storefront tile, which behaves like every other shop on the
+     stores page: out to the front door, counted as shop_all so that anything
+     bought after arriving is ours, not only a product we named. The tag is
+     the whole point — without it this is a link that pays nobody while
+     looking exactly like one that works. --- */
+  {
+    const out = await realFetch(
+      `${base}/us/amazon/go/store?sid=test-session-abcdef123456`,
+      { redirect: "manual" },
+    );
+    assert.strictEqual(out.status, 302);
+    const destination = new URL(out.headers.get("location"));
+    assert.strictEqual(destination.hostname, "www.amazon.com");
+    assert.ok(destination.searchParams.get("tag"), "the associate tag is on the link");
+    const shopClick = db.prepare("SELECT retailer_name, action_type, session_id FROM clicks ORDER BY id DESC LIMIT 1").get();
+    assert.strictEqual(shopClick.retailer_name, "Amazon");
+    assert.strictEqual(shopClick.action_type, "shop_all");
+    assert.strictEqual(shopClick.session_id, "test-session-abcdef123456");
+  }
+
   /* A pick that does not exist is a 404, not a redirect to nowhere. */
   assert.strictEqual((await realFetch(`${base}/us/amazon/go/999999`, { redirect: "manual" })).status, 404);
 

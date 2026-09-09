@@ -301,6 +301,17 @@ module.exports = {
   rainforestApiKey,
   bluecartApiKey,
   isProduction: isAzure,
+  /*
+   * The Amazon Associates tag, which is the only reason a click to Amazon
+   * pays anything. Without it a storefront link is indistinguishable from
+   * one that works and earns nothing — the exact failure the shop links had
+   * for months before anyone noticed.
+   *
+   * The default is this account's own tag, read from the affiliate links it
+   * produced. The environment wins, so a new account does not need a code
+   * change.
+   */
+  amazonAssociateTag: String(process.env.AMAZON_ASSOCIATE_TAG || "onedailydrop-20").trim(),
   refreshCron: process.env.REFRESH_CRON || "15 0 * * *",
   offerCheckCron: process.env.OFFER_CHECK_CRON || "45 3,9,15,21 * * *",
   /* Twice a day for a market with a hundred listings that barely move, so the

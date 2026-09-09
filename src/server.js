@@ -3377,6 +3377,29 @@ app.get("/api/amazon-picks", (req, res) => {
  * anonymous total — the thing that was wrong with all outbound clicks until
  * recently.
  */
+/*
+ * Out to Amazon's front door, counted like any other shop tile.
+ *
+ * Registered before /amazon/go/:id so the literal path wins over the
+ * parameter. Recorded as shop_all because that is what it is: whatever the
+ * visitor buys after arriving counts, not only a product we named.
+ */
+app.get("/amazon/go/store", (req, res) => {
+  res.set("X-Robots-Tag", "noindex, nofollow").set("Cache-Control", "private, no-store");
+  if (!c.amazonAssociateTag) return res.sendStatus(404);
+  const marketCode = req.market || marketFromIp(req).code;
+  const sessionId = analyticsToken(req.query.sid);
+  db.prepare(
+    "INSERT INTO clicks(session_id,product_id,market,retailer_name,source_page,placement,action_type,destination_type,clicked_at,referrer,user_agent) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+  ).run(
+    sessionId, null, marketCode, "Amazon", "stores", "store_directory", "shop_all", "retailer",
+    new Date().toISOString(), String(req.get("referer") || "").slice(0, 1000), String(req.get("user-agent") || "").slice(0, 500),
+  );
+  /* The documented associate link: the shop's own address with the tag on
+     it, which is exactly what SiteStripe writes for a storefront. */
+  return res.redirect(302, `https://www.amazon.com/?tag=${encodeURIComponent(c.amazonAssociateTag)}`);
+});
+
 app.get("/amazon/go/:id", (req, res) => {
   res.set("Cache-Control", "private, no-store");
   const pick = db.prepare("SELECT * FROM amazon_picks WHERE id=?").get(Number(req.params.id) || 0);
