@@ -2985,9 +2985,18 @@ app.get("/live/go/:key", (req, res) => {
   const sessionId = analyticsToken(req.query.sid);
   if (sessionId) {
     try {
+      /*
+       * Recorded as its own step, not as the button press.
+       *
+       * The panel already writes buy_click the moment the button is pressed,
+       * in the browser. This is the other half: the visitor actually arrived
+       * here and is being handed to the shop. They are different numbers —
+       * a blocked script loses the first, a cancelled navigation loses the
+       * second — and writing both under one name made the gap invisible.
+       */
       db.prepare(
         "INSERT INTO live_drop_events(drop_id,market,event_type,session_id,occurred_at) VALUES(?,?,?,?,?)",
-      ).run(drop.id, drop.market, "buy_click", sessionId, new Date().toISOString());
+      ).run(drop.id, drop.market, "buy_handoff", sessionId, new Date().toISOString());
     } catch (error) {
       /* One row per session per event: a second click is the same person. */
       if (!String(error.message).includes("UNIQUE")) throw error;
@@ -3099,6 +3108,14 @@ app.get("/api/admin/live-drops", admin, (req, res) => {
      the same in the funnel without it. */
   const announced = db.prepare("SELECT COUNT(*) AS sent FROM live_drop_announcements WHERE drop_id=?");
 
+  /* Who is on the page right now. The funnel above keeps one row per session
+     for the whole drop, so it counts everybody who ever arrived and never
+     notices anyone leaving; "watching now" is a different question and needs
+     a row that expires. Sixty seconds, matching the page heartbeat. */
+  const watchingNow = db.prepare(
+    "SELECT COUNT(*) AS people FROM live_drop_presence WHERE drop_id=? AND seen_at>=?",
+  );
+
   res.json({
     /* The market list comes from the server so the form cannot offer one that
        does not exist. */
@@ -3125,6 +3142,7 @@ app.get("/api/admin/live-drops", admin, (req, res) => {
          checkout — so this label is the only thread connecting a sale in
          Awin, eBay or Rakuten back to this drop. */
       announced: announced.get(row.id).sent,
+      watching_now: watchingNow.get(row.id, new Date(now - 60000).toISOString()).people,
       /* Whether the remaining count is the shop's or ours. A drop whose
          listing gives no exact quantity can still run — it simply never
          shows a countdown. */

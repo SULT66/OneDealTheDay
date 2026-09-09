@@ -34,6 +34,7 @@ type AdminDrop = {
   funnel: Record<string, number>;
   reached: number;
   announced: number;
+  watching_now: number;
   stock_is_live: boolean;
   stock_verified_at: string | null;
   click_label: string;
@@ -483,6 +484,13 @@ function DropRow({
           {state.replace(/_/g, " ")}
         </span>
         <h3 className="min-w-0 flex-1 truncate text-sm font-semibold text-fg">{drop.title}</h3>
+        {/* Only while it is running: "0 watching" on a drop that ended last
+            week is not information. */}
+        {live && (
+          <span className="shrink-0 text-xs font-semibold text-fg-muted tnum">
+            {drop.watching_now} watching now
+          </span>
+        )}
       </div>
 
       <p className="mt-2 text-xs leading-relaxed text-fg-muted">
@@ -510,23 +518,38 @@ function DropRow({
         * it got through, which is the only form in which these numbers say
         * anything.
         */}
-      <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-fg-muted sm:grid-cols-5">
+      <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-fg-muted sm:grid-cols-3 lg:grid-cols-6">
         {[
+          /*
+           * One step per real question, in the order a person moves through the
+           * drop, each measured against the step above it.
+           *
+           * "Pressed buy" and "sent to the shop" are deliberately separate.
+           * They used to be written under one event name and so could never
+           * disagree — but a blocked script loses the first and an abandoned
+           * navigation loses the second, and the gap between them is the only
+           * place that ever shows.
+           */
           { label: "told", value: drop.announced, of: 0 },
-          { label: "reached", value: drop.reached, of: 0 },
+          { label: "arrived", value: drop.reached, of: drop.announced },
           { label: "waited", value: drop.funnel.waiting_room || 0, of: drop.reached },
           { label: "saw the price", value: drop.funnel.reveal || 0, of: drop.reached },
-          { label: "went to buy", value: drop.funnel.buy_click || 0, of: drop.funnel.reveal || 0 },
+          { label: "pressed buy", value: drop.funnel.buy_click || 0, of: drop.funnel.reveal || 0 },
+          { label: "sent to the shop", value: drop.funnel.buy_handoff || 0, of: drop.funnel.buy_click || 0 },
         ].map((step) => (
           <div key={step.label}>
             <dt className="text-[0.65rem] uppercase tracking-[0.12em] text-fg-subtle">
               {step.label}
             </dt>
+            {/* The rate sits under the count rather than beside it. Side by
+                side they ran together — "3" next to "75%" reads as 375% at a
+                glance, which is the one way these numbers could mislead the
+                person they exist for. */}
             <dd className="font-semibold text-fg tnum">
               {step.value}
               {step.of > 0 && step.value > 0 ? (
-                <span className="ml-1 font-normal text-fg-subtle">
-                  {Math.round((step.value / step.of) * 100)}%
+                <span className="block text-[0.65rem] font-normal text-fg-subtle">
+                  {Math.round((step.value / step.of) * 100)}% of above
                 </span>
               ) : null}
             </dd>
@@ -553,7 +576,7 @@ function DropRow({
           : "The shop gives no live count — the page shows the offer size, not a countdown."}
       </p>
       <p className="mt-2 text-xs text-fg-subtle">
-        {drop.reminders} reminders asked for.{" "}
+        {drop.reminders} reminders asked for. <strong>Bought: not knowable here.</strong>{" "}
         Purchases are only visible in the network report — search it for{" "}
         <code className="rounded bg-surface-2 px-1 py-0.5 font-mono text-[0.7rem] text-fg">
           {drop.click_label}
