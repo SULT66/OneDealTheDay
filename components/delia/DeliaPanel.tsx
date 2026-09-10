@@ -508,17 +508,6 @@ function DeliaExchange({
                 here, which is why a search that genuinely found something could
                 still come back as prose with no products under it. Numbered on
                 from the priced ones so the shortlist reads as one list. */}
-            {result.partialOffers.map((rec, i) => (
-              <li key={`partial-${rec.url}-${i}`}>
-                <OfferRow
-                  rec={rec}
-                  market={market}
-                  onClose={onClose}
-                  position={result.recommendations.length + i + 1}
-                  priceUnconfirmed
-                />
-              </li>
-            ))}
           </ul>
         )}
 

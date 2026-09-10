@@ -3776,9 +3776,28 @@ function productMetadataFromHtml(htmlValue, pageUrl, currency) {
     product.name || metadata.get("og:title") || metadata.get("twitter:title") || metadata.get("name"),
     retailer,
   );
-  const rawPrice = offers.price || offers.lowPrice || priceSpecification.price ||
+  let rawPrice = offers.price || offers.lowPrice || priceSpecification.price ||
     metadata.get("product:price:amount") || metadata.get("og:price:amount") ||
     metadata.get("price");
+  /*
+   * Wayfair's current product page does not publish the product offer in
+   * JSON-LD or OpenGraph. It does, however, render the actual selling price in
+   * a dedicated PriceDisplay element in the server HTML. Read that first-party
+   * value instead of demoting a perfectly usable Wayfair product to an
+   * unpriced row. Keep this deliberately tied to Wayfair and its labelled
+   * price element so a random dollar amount elsewhere on a page can never be
+   * mistaken for the selling price.
+   */
+  if (!rawPrice && /(?:^|\.)wayfair\.(?:com|ca)$/i.test(sourceHostKey(pageUrl))) {
+    const embeddedLeadPrice = html.match(
+      /leadPrice\\":\{\\"displayPrice\\":\\"([$€£])\1?([\d,]+(?:\.\d{1,2})?)/i,
+    );
+    rawPrice = embeddedLeadPrice
+      ? `${embeddedLeadPrice[1]}${embeddedLeadPrice[2]}`
+      : html.match(
+          /data-test-id=["']PriceDisplay["'][^>]*>\s*([$€£]\s*[\d,]+(?:\.\d{1,2})?)/i,
+        )?.[1];
+  }
   const priceValue = number(rawPrice, null) ?? priceValueFromDisplay(rawPrice);
   const priceCurrency = clean(
     offers.priceCurrency || priceSpecification.priceCurrency ||
@@ -4428,21 +4447,35 @@ function deduplicateRecommendations(items) {
   for (const item of items) {
     const { lookup, register } = recommendationIdentities(item);
     if (!register.length) continue;
-    const existingIndex = lookup
+    const urlIdentity = comparableUrl(item.url);
+    const lookupKeys = [
+      ...(urlIdentity ? [`url:${urlIdentity}`] : []),
+      ...lookup,
+    ];
+    const registerKeys = [
+      ...(urlIdentity ? [`url:${urlIdentity}`] : []),
+      ...register,
+    ];
+    const existingIndex = lookupKeys
       .map((identity) => positions.get(identity))
       .find((index) => index != null);
     if (existingIndex == null) {
-      for (const identity of register) positions.set(identity, unique.length);
+      for (const identity of registerKeys) positions.set(identity, unique.length);
       unique.push(item);
       continue;
     }
     /* The offer that arrived second answers to names the first one did not,
        so record those too: a third listing matching either is the same
        product again. */
-    for (const identity of register) {
+    for (const identity of registerKeys) {
       if (!positions.has(identity)) positions.set(identity, existingIndex);
     }
-    if (!unique[existingIndex].in_catalog && item.in_catalog) {
+    const existingPrice = landedPrice(unique[existingIndex]);
+    const candidatePrice = landedPrice(item);
+    if (
+      (!unique[existingIndex].in_catalog && item.in_catalog) ||
+      (!(existingPrice > 0) && candidatePrice > 0)
+    ) {
       addOffer(item, unique[existingIndex]);
       unique[existingIndex] = item;
     } else {
@@ -4513,6 +4546,28 @@ function selectRetailerDiverseCandidates(items, limit) {
     selectedItems.add(item);
     retailers.add(retailer);
     if (selected.length >= limit) return selected;
+  }
+  return selected;
+}
+
+/*
+ * Lead with different shops, then use additional distinct products from shops
+ * already represented to complete the shortlist. The old one-product-per-shop
+ * rule turned eight valid priced candle listings into two rows merely because
+ * they came from two retailers. Diversity still decides the first pass; it no
+ * longer prevents Delia from giving the shopper at least five choices when the
+ * candidate pool can support them.
+ */
+function selectCompleteShortlist(items, limit, repeatEligible = () => true) {
+  const candidates = Array.isArray(items) ? items : [];
+  const selected = selectRetailerDiverseCandidates(candidates, limit);
+  if (selected.length >= limit) return selected;
+  const included = new Set(selected);
+  for (const item of candidates) {
+    if (included.has(item) || !repeatEligible(item)) continue;
+    selected.push(item);
+    included.add(item);
+    if (selected.length >= limit) break;
   }
   return selected;
 }
@@ -4661,7 +4716,7 @@ function verifiedRetailerRecommendations(
     return [];
   }
   const { max_price: maxPrice } = catalogSearchArgs(request);
-  return selectRetailerDiverseCandidates(deduplicateRecommendations(
+  return deduplicateRecommendations(
     (Array.isArray(products) ? products : [])
       .filter(
         (product) =>
@@ -4736,7 +4791,7 @@ function verifiedRetailerRecommendations(
       })
       .filter((product) => !maxPrice || landedPrice(product) <= maxPrice)
       .filter((product) => product.title && product.retailer),
-  ), MAX_RECOMMENDATIONS);
+  );
 }
 
 function providerFirstResponse({
@@ -4814,7 +4869,7 @@ function providerFirstResponse({
     if (ceiling && price > ceiling) return false;
     return !floor || price >= floor;
   };
-  const candidates = selectRetailerDiverseCandidates(
+  const candidates = selectCompleteShortlist(
     deduplicateRecommendations([
       ...catalogCandidates,
       ...verifiedRetailerRecommendations(
@@ -4826,6 +4881,11 @@ function providerFirstResponse({
       ),
     ]).filter(withinBudget),
     MAX_RECOMMENDATIONS,
+    (candidate) => feedListingMatchesCategory(
+      candidate,
+      resolvedRequest,
+      requestedProductType,
+    ),
   ).filter((recommendation) =>
       !excludedUrls.has(comparableUrl(recommendation.url)),
     );
@@ -5890,17 +5950,25 @@ function createShoppingAssistant({
          is put in price order for reading. */
       const visibleCandidates = sortOffersByPrice(
         assignRecommendationRoles(
-          selectRetailerDiverseCandidates(rankedCandidates, recommendationCap),
+          selectCompleteShortlist(
+            rankedCandidates.filter(
+              (candidate) => candidate.evidence_level !== "partial" && landedPrice(candidate) > 0,
+            ),
+            recommendationCap,
+            (candidate) => feedListingMatchesCategory(
+              candidate,
+              resolvedRequest,
+              activeMission.product_type,
+            ),
+          ),
           resolvedRequest,
         ),
         userMessage,
       );
-      const recommendations = visibleCandidates.filter(
-        (recommendation) => recommendation.evidence_level !== "partial",
-      );
-      const partialOffers = visibleCandidates.filter(
-        (recommendation) => recommendation.evidence_level === "partial",
-      );
+      const recommendations = visibleCandidates;
+      /* Unpriced pages remain useful as internal search evidence, but never as
+         product cards. Every row the shopper sees now carries a real amount. */
+      const partialOffers = [];
       const comparisonRequest = isComparisonRequest(userMessage);
       const hasRejectedRecommendation =
         structuredRecommendationCandidates.length !==

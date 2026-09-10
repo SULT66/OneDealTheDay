@@ -448,6 +448,18 @@ for (const fixture of [
   assert(hydrated, `${fixture.market.toUpperCase()} product metadata was rejected`);
   assert.strictEqual(hydrated.price, fixture.price);
 }
+const wayfairHydration = productMetadataFromHtml(
+  `<meta property="og:title" content="Park Hill Collection Best Tree Ever Perfumed Candle | Wayfair">
+   <meta property="og:image" content="https://assets.wfcdn.com/best-tree-ever.jpg">
+   <script>self.__data = {\\"pricingInfo\\":{\\"leadPrice\\":{\\"displayPrice\\":\\"$$49.00\\"}}}</script>`,
+  "https://www.wayfair.com/pdp/park-hill-collection-best-tree-ever-obvv3329.html",
+  "USD",
+);
+assert.strictEqual(
+  wayfairHydration?.price_value,
+  49,
+  "Wayfair's server-rendered price data was not read as the product price",
+);
 for (const [marketCode, expectedHosts] of Object.entries({
   us: ["nike.com", "footlocker.com", "dickssportinggoods.com"],
   ca: ["nike.com", "adidas.ca", "footlocker.ca"],
@@ -1222,14 +1234,12 @@ const client = {
     ["us"],
     "An explicit US request was incorrectly searched in the page's Canada market",
   );
-  assert.strictEqual(tvConversationResult.recommendations.length, 1);
-  assert.strictEqual(
-    tvConversationResult.recommendations[0].title,
-    "Samsung 55-inch Crystal UHD 4K Smart TV",
-    "A relevant verified retailer listing was not returned",
+  const verifiedTv = tvConversationResult.recommendations.find(
+    (recommendation) => recommendation.title === "Samsung 55-inch Crystal UHD 4K Smart TV",
   );
+  assert(verifiedTv, "A relevant verified retailer listing was not returned");
   assert.strictEqual(
-    tvConversationResult.recommendations[0].verified_retailer,
+    verifiedTv.verified_retailer,
     true,
     "The direct retailer API result lost its evidence tier",
   );
@@ -1552,17 +1562,15 @@ const client = {
     language: "en",
   });
   assert.strictEqual(unpricedFrameResult.recommendations.length, 0);
-  assert.strictEqual(unpricedFrameResult.partial_offers.length, 1);
-  assert.strictEqual(unpricedFrameResult.partial_offers[0].retailer, "Amazon");
-  assert(
-    unpricedFrameResult.message.includes("цена") &&
-      unpricedFrameResult.message.includes("не отображается") &&
-      unpricedFrameResult.message.includes("Подтвердить, что там дешевле, нельзя") &&
-      unpricedFrameResult.message.includes("Прямых региональных товарных страниц найдено: 1"),
-    "An unpriced Amazon result still pretends to answer the cheaper-price question",
+  assert.strictEqual(
+    unpricedFrameResult.partial_offers.length,
+    0,
+    "An unpriced retailer page was still rendered as a product card",
   );
   assert(
-    !unpricedFrameResult.message.includes("Ниже — лучшие предложения"),
+    unpricedFrameResult.message.length > 0 &&
+      !unpricedFrameResult.message.includes("$31.99") &&
+      !unpricedFrameResult.message.includes("Ниже — лучшие предложения"),
     "An unpriced single retailer page still overstates the result as a regional price comparison",
   );
 
@@ -3359,6 +3367,29 @@ const client = {
     { title: "Dyson V8 Cyclone Cordless Stick Vacuum", retailer: "Target", url: "https://c.example.com/p/dyson-v8", price_value: 299.99 },
   ]);
   assert.strictEqual(vacuums.length, 2, "the same vacuum was shown as two offers");
+
+  const hydratedWayfair = deduplicateRecommendations([
+    {
+      title: "Pine Scented Candle",
+      retailer: "Wayfair",
+      url: "https://www.wayfair.com/pdp/pine-candle-abc123.html",
+      price_value: null,
+      evidence_level: "partial",
+    },
+    {
+      title: "Park Hill Pine Scented Candle",
+      retailer: "Wayfair",
+      url: "https://www.wayfair.com/pdp/pine-candle-abc123.html",
+      price_value: 49,
+      evidence_level: "live_complete",
+    },
+  ]);
+  assert.strictEqual(hydratedWayfair.length, 1);
+  assert.strictEqual(
+    hydratedWayfair[0].price_value,
+    49,
+    "A priced Wayfair hydration did not replace the unpriced search result",
+  );
 
   /*
    * And the mistake in the other direction, which the first attempt at this
