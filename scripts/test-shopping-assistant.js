@@ -38,7 +38,7 @@ db.exec(`
     retailer_name TEXT,current_price REAL,original_price REAL,currency TEXT,rating REAL,review_count INTEGER,
     seller_name TEXT,seller_rating REAL,seller_feedback_count INTEGER,shipping_summary TEXT,return_summary TEXT,
     availability TEXT,checked_at TEXT,updated_at TEXT,image_url TEXT,affiliate_url TEXT,score REAL,
-    evidence_confidence REAL,score_breakdown TEXT
+    shipping_cost REAL,evidence_confidence REAL,score_breakdown TEXT
   );
   CREATE TABLE price_history (product_id INTEGER,price REAL,currency TEXT,observed_at TEXT);
 `);
@@ -741,6 +741,12 @@ const assistantSource = fs.readFileSync(
 assert(
   !/minimum_score:\s*\d/.test(assistantSource),
   "the assistant hard-codes a score floor again instead of reading the published one",
+);
+assert(
+  !/LIMIT 10000/.test(assistantSource) &&
+    /delia_retailer_rank<=120/.test(assistantSource) &&
+    /catalogSqlTerms\(query, args\.product_type\)/.test(assistantSource),
+  "Delia is back to hydrating the whole catalogue before starting its live search",
 );
 const feedMatches = searchCatalog(
   db,
@@ -1625,10 +1631,10 @@ const client = {
     "required",
     "A concrete shopping request did not force live web discovery",
   );
-  assert.deepStrictEqual(
-    calls[1].tools[0].search_content_types,
-    ["image", "text"],
-    "Product image search is not enabled",
+  assert(
+    !calls[1].tools[0].search_content_types?.includes("image") &&
+      !calls[1].include.includes("web_search_call.results"),
+    "Delia spends live-search time and response payload on product photos again",
   );
   assert.strictEqual(
     calls[1].text.format.type,
