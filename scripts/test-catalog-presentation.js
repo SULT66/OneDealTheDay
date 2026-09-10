@@ -331,6 +331,21 @@ assert(
 );
 
 /*
+ * Product photos must not queue behind the application server.
+ *
+ * On the production single-core instance, an uncached retailer photo sent
+ * through /_next/image timed out after 60 seconds without returning a byte;
+ * the same URL loaded directly from the retailer CDN. ProductImage is shared
+ * by every category, search result and product page, so keep only these remote
+ * catalogue images out of the local optimizer.
+ */
+const productImage = read("components", "ui", "ProductImage.tsx");
+assert(
+  /<Image[\s\S]*?\bunoptimized\b/.test(productImage),
+  "retailer photos are routed through the application image optimizer again",
+);
+
+/*
  * The two pages a partner reads before answering a pitch.
  *
  * /us/stores was a 404 while the site invited retailers to partner with it —
@@ -403,4 +418,4 @@ for (const field of adapterReads) {
   );
 }
 
-console.log("Catalogue presentation checks passed: numbering, score order, one count, honest stock, one URL per thing, real search, cheap facets, partner pages, complete compact payload.");
+console.log("Catalogue presentation checks passed: numbering, score order, one count, honest stock, one URL per thing, real search, cheap facets, direct product images, partner pages, complete compact payload.");

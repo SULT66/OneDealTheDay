@@ -81,6 +81,10 @@ export function ProductImage({
     <Image
       src={src}
       alt={alt}
+      // Retailer CDNs already serve these assets. Sending them through the
+      // app's single-core Next.js image optimizer can leave cards blank while
+      // it downloads and transforms several remote images at once.
+      unoptimized
       {...(fill ? { fill: true } : { width, height })}
       sizes={sizes}
       priority={priority}
