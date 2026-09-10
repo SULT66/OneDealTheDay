@@ -2609,6 +2609,117 @@ app.get("/api/brands", (req,res) => {
   res.json(brands.map(brand => ({...brand,url:brandPath(brand.brand, selectedMarket)})));
 });
 app.get("/api/brands/:slug", (req,res) => { const products = uniqueProductsInOrder(db.prepare(`SELECT * FROM products WHERE status='published' AND ${sourceSql()} AND brand_slug=? ORDER BY COALESCE(ranking_score,score) DESC,score DESC`).all(req.params.slug)).filter(isPubliclyIndexable); if (!products.length) return res.status(404).json({error:"Brand not found"}); const brand = products[0].brand; res.json({brand,slug:req.params.slug,url:brandPath(brand),summary:{products:products.length,average_price:products.reduce((s,p)=>s+Number(p.current_price||0),0)/products.length,average_rating:products.reduce((s,p)=>s+Number(p.rating||0),0)/products.length,average_discount:products.reduce((s,p)=>s+discountPercent(p),0)/products.length,total_clicks:db.prepare(`SELECT COUNT(*) n FROM clicks c JOIN products p ON p.id=c.product_id WHERE c.destination_type='retailer' AND ${sourceSql("p")} AND p.brand_slug=?`).get(req.params.slug).n},products:products.map(p=>({...p,deal_url:dealPath(p)}))}); });
+const compactApiProduct = product => ({
+  id:product.id,
+  title:product.title,
+  brand:product.brand,
+  public_category:product.public_category,
+  retailer_name:product.retailer_name,
+  source:product.source,
+  image_url:product.image_url,
+  current_price:product.current_price,
+  original_price:product.original_price,
+  currency:product.currency,
+  display_score:product.display_score,
+  rating:product.rating,
+  review_count:product.review_count,
+  seller_name:product.seller_name,
+  seller_rating:product.seller_rating,
+  seller_feedback_count:product.seller_feedback_count,
+  display_seller_rating:product.display_seller_rating,
+  display_shipping_summary:product.display_shipping_summary,
+  shipping_summary:product.shipping_summary,
+  display_return_summary:product.display_return_summary,
+  return_summary:product.return_summary,
+  display_availability:product.display_availability,
+  display_shop_all:product.display_shop_all,
+  display_price_is_current:product.display_price_is_current,
+  availability:product.availability,
+  selection_reason:product.selection_reason,
+  display_selection_reason:product.display_selection_reason,
+  daily_rank:product.daily_rank,
+  checked_at:product.checked_at
+});
+/**
+ * Everything the Next.js product page needs, from indexed point queries.
+ *
+ * That page previously downloaded the complete market catalogue twice: once
+ * to find its own id and once to choose four related products. In the US that
+ * means thousands of rows and several megabytes of JSON before the first byte
+ * of HTML can be sent. Product lookup is an id query; related products need a
+ * short ranked window, not the rest of the market. Keeping both in one response
+ * also lets generateMetadata and the page render share the same memoized fetch.
+ */
+app.get("/api/products/:id", (req, res) => {
+  const id = /^\d+$/.test(String(req.params.id || "")) ? String(req.params.id) : "";
+  if (!id) return res.status(404).json({error:"Product not found"});
+  const selectedMarket = normalizeMarket(req.query.market) || requestMarket(req).code;
+  const product = db.prepare(`
+    SELECT * FROM products
+    WHERE id=? AND market=? AND status='published' AND ${sourceSql()}
+  `).get(id, selectedMarket);
+  if (!product) return res.status(404).json({error:"Product not found"});
+
+  const snapshot = db.prepare(`
+    SELECT rank,selection_reason
+    FROM daily_drops
+    WHERE product_id=? AND market=?
+      AND drop_date=(SELECT MAX(drop_date) FROM daily_drops WHERE market=?)
+    LIMIT 1
+  `).get(product.id, selectedMarket, selectedMarket);
+  const prepared = {
+    ...product,
+    daily_rank:snapshot?.rank || null,
+    selection_reason:snapshot?.selection_reason || product.selection_reason,
+    slug:slug(product.title),
+    deal_url:dealPath(product),
+    category_url:isPublicCategory(canonicalCategory(product)) ? catPath(canonicalCategory(product), selectedMarket) : null,
+    brand_url:product.brand && !isGenericBrand(product.brand_slug || product.brand)
+      ? brandPath(product.brand, selectedMarket)
+      : null
+  };
+
+  const relatedRows = db.prepare(`
+    SELECT * FROM products
+    WHERE market=? AND status='published' AND ${sourceSql()}
+      AND normalized_category=? AND id<>?
+    ORDER BY COALESCE(ranking_score,score) DESC,score DESC,updated_at DESC
+    LIMIT 80
+  `).all(selectedMarket, product.normalized_category, product.id);
+  let related = uniqueProductsInOrder(relatedRows).slice(0, 12);
+  if (related.length < 12) {
+    const fallbackRows = db.prepare(`
+      SELECT * FROM products
+      WHERE market=? AND status='published' AND ${sourceSql()}
+        AND normalized_category<>? AND id<>?
+      ORDER BY COALESCE(ranking_score,score) DESC,score DESC,updated_at DESC
+      LIMIT 80
+    `).all(selectedMarket, product.normalized_category, product.id);
+    related = uniqueProductsInOrder([...related, ...fallbackRows])
+      .slice(0, 12);
+  }
+
+  const history = historyFor(product.id);
+  res.set("X-Robots-Tag", "noindex, nofollow");
+  res.set("Cache-Control", "private, max-age=60, stale-while-revalidate=300");
+  return res.json({
+    product:compactApiProduct(presentProduct(localizeProduct(prepared, req.language), req.language)),
+    related:related.map(row => compactApiProduct(presentProduct(localizeProduct({
+      ...row,
+      deal_url:dealPath(row)
+    }, req.language), req.language))),
+    price_history:{
+      product:{id:product.id,title:product.title,current_price:product.current_price,currency:product.currency},
+      summary:{
+        observations:history.length,
+        lowest_30_days:minSince(history,30),
+        lowest_90_days:minSince(history,90),
+        lowest_ever:history.length?Math.min(...history.map(row=>Number(row.price)).filter(Number.isFinite)):null
+      },
+      history
+    }
+  });
+});
 app.get("/api/products/:id/price-history", (req,res) => { const product = db.prepare(`SELECT id,title,current_price,currency FROM products WHERE id=? AND status='published' AND ${sourceSql()}`).get(req.params.id); if (!product) return res.status(404).json({error:"Product not found"}); const history = historyFor(product.id); res.json({product,summary:{observations:history.length,lowest_30_days:minSince(history,30),lowest_90_days:minSince(history,90),lowest_ever:history.length?Math.min(...history.map(row=>Number(row.price)).filter(Number.isFinite)):null},history}); });
 app.get("/api/status", (req,res) => {
   const latestRun = db.prepare("SELECT * FROM refresh_runs ORDER BY id DESC LIMIT 1").get() || null;

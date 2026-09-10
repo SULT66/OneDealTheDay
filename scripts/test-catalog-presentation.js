@@ -228,10 +228,36 @@ assert(
   "getDeal no longer extracts the id, so the sitemap's URLs stop resolving",
 );
 assert(
+  /\/api\/products\/\$\{encodeURIComponent\(dealId\)\}/.test(catalogSource),
+  "the product page no longer uses the point product endpoint",
+);
+const getDealSource = /export const getDeal = cache\([\s\S]*?\n\);/.exec(catalogSource);
+assert(getDealSource, "getDeal is no longer request-memoized");
+assert(
+  !/fetchMarketCatalog/.test(getDealSource[0]),
+  "the product page downloads the complete market catalogue again",
+);
+const todaysDropSource = /export async function getTodaysDrop\([\s\S]*?\n\}/.exec(catalogSource);
+assert(todaysDropSource, "getTodaysDrop moved out of lib/catalog.ts");
+assert(
+  /fetchMarketCatalog\(marketCode, 1\)/.test(todaysDropSource[0]),
+  "Daily Drop downloads the complete market catalogue again",
+);
+const archiveSource = /export async function getArchive\([\s\S]*?\n\}/.exec(catalogSource);
+assert(archiveSource, "getArchive moved out of lib/catalog.ts");
+assert(
+  !/fetchMarketCatalog/.test(archiveSource[0]),
+  "the archive downloads the complete market catalogue to re-check availability",
+);
+assert(
   /export async function resolveCategory/.test(catalogSource),
   "categories are decided by the display file again, so the ones missing from it 404",
 );
 const serverSourceForSlugs = read("src", "server.js");
+assert(
+  serverSourceForSlugs.includes('app.get("/api/products/:id"'),
+  "the backend has no point product endpoint",
+);
 assert(
   /const categorySlug = value =>/.test(serverSourceForSlugs),
   "categories share the deal slug rule again, which spells them home-and-kitchen",
