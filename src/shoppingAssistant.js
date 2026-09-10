@@ -4965,13 +4965,16 @@ function createShoppingAssistant({
   retailerSearch,
   scopeTimeoutMs = SCOPE_TIMEOUT_MS,
   searchTimeoutMs = SEARCH_TIMEOUT_MS,
-  /* The live retailer search runs up to 8 keyword queries at concurrency 3 and
-     then up to 18 item-detail fetches at concurrency 6, so it needs real time
-     to produce anything at all. It no longer stands in front of the live search
-     (see RETAILER_FAST_PATH_WINDOW_MS), so it can have that time back: it now
-     runs alongside the search and is read when the search gives up, which is
-     precisely when having its results matters most. */
-  retailerSearchTimeoutMs = 14000,
+  /*
+   * The live retailer search runs keyword queries and then item-detail
+   * fetches, so it needs real time to produce a fallback. It runs beside the
+   * model search, not in front of it, which means this does not add thirty
+   * seconds to the response. Fourteen seconds cut eBay off during hydration
+   * for a real "decorative dining candles" request; the model then timed out
+   * too and Delia discarded both searches even though the retailer was still
+   * producing priced products.
+   */
+  retailerSearchTimeoutMs = 30000,
   /*
    * Off by default. Store discovery fires a separate model call per candidate
    * retailer, up to five at once, against the same API key the live search is
