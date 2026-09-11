@@ -525,6 +525,7 @@ module.exports = {
   badge,
   EVIDENCE_CEILING,
   MEANINGFUL_REVIEW_COUNT,
+  PRICE_CONFIDENT_HOURS,
   PUBLIC_SCORE_FLOOR,
   discountPercent,
   evidenceCount,
