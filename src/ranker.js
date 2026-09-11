@@ -140,6 +140,28 @@ function queryBudget(query, intent = {}) {
   };
 }
 
+/*
+ * Whether a listing could match at all — the same test as relevance, minus
+ * the arithmetic.
+ *
+ * Relevance is only ever above zero when one of the query's terms appears in
+ * the title, brand, category or description; everything else textMatchScore
+ * does adjusts a number that already exists. So this is exactly the set the
+ * search is going to keep, and it can be worked out without scoring anything.
+ *
+ * It exists because search scored the entire market on every query: 2,088
+ * listings put through identity normalization, offer comparison, six score
+ * components and a ranking layer, to answer a question that sixteen of them
+ * matched. That is about 700ms of one CPU on a fast machine and roughly five
+ * seconds on the instance this runs on — and it is synchronous, so for those
+ * five seconds nobody else's page is being served either.
+ */
+function matchesAnySearchTerm(product, terms) {
+  if (!terms.length) return true;
+  const haystack = `${normalizedTitle(product?.title)} ${normalizedTitle(product?.brand)} ${normalizedTitle(product?.normalized_category || product?.category)} ${normalizedTitle(product?.description)}`;
+  return terms.some(term => haystack.includes(term));
+}
+
 function textMatchScore(product, query, intent = {}) {
   const requestedCategory = normalizedTitle(intent.category || "");
   const requestedBrand = normalizedTitle(intent.brand || "");
@@ -767,6 +789,9 @@ exports.deduplicationCandidateKeys = deduplicationCandidateKeys;
 exports.offerRepeatKey = offerRepeatKey;
 exports.deduplicationKeys = deduplicationKeys;
 exports.exactMatchKey = exactMatchKey;
+exports.searchTokens = searchTokens;
+exports.normalizedTitle = normalizedTitle;
+exports.matchesAnySearchTerm = matchesAnySearchTerm;
 exports.landedCost = landedCost;
 exports.paidShippingCost = paidShippingCost;
 exports.SCORE_MODEL = SCORE_MODEL;

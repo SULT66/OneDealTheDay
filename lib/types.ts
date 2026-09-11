@@ -128,6 +128,22 @@ export type DealFilter = {
 };
 
 export const SORT_KEYS = [
+  /*
+   * The order the search itself came back in, and the right default whenever
+   * there is a query.
+   *
+   * Without it the only default was "score", so a search for "office chair"
+   * asked the backend for the best matches — which it returned, twelve chairs,
+   * relevance 100 — and then sorted them by Deal Score. Fewer than one listing
+   * in a hundred carries a score, so the handful that do went to the top
+   * whatever they were: the first six results were printer paper, three label
+   * makers, ink cartridges and a paper shredder. The first actual chair was
+   * seventh, below the fold.
+   *
+   * Sorting by quality is a real thing to want, and it stays on the menu. It
+   * is just not what someone who typed two words is asking for.
+   */
+  "relevance",
   "score",
   "price-asc",
   "price-desc",

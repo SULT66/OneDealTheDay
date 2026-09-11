@@ -16,6 +16,10 @@ export function sortDeals<T extends DealLike>(
 ): T[] {
   const sorted = [...list];
   switch (sort) {
+    /* rank is the position the search returned, so this restores that order
+       after the filter panel has removed things from the middle of it. */
+    case "relevance":
+      return sorted.sort((a, b) => a.rank - b.rank);
     case "price-asc":
       return sorted.sort((a, b) => a.price - b.price);
     case "price-desc":

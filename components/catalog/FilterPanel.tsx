@@ -73,7 +73,11 @@ export type FilterCopy = {
   sorts: Record<SortKey, string>;
 };
 
-const sortOrder: SortKey[] = ["score", "price-asc", "price-desc", "rating", "discount"];
+/* "relevance" is offered only where it means something: with no query there is
+   nothing for results to be relevant to. */
+const sortOrder: SortKey[] = ["relevance", "score", "price-asc", "price-desc", "rating", "discount"];
+const sortsFor = (hasQuery: boolean) =>
+  hasQuery ? sortOrder : sortOrder.filter((value) => value !== "relevance");
 
 export function FilterPanel({
   basePath,
@@ -358,11 +362,11 @@ export function FilterPanel({
         </label>
         <select
           id="filter-sort"
-          value={filter.sort ?? "score"}
+          value={filter.sort ?? (filter.query ? "relevance" : "score")}
           onChange={(e) => update({ sort: e.target.value as SortKey })}
           className="mt-2 h-12 w-full cursor-pointer rounded-full border border-border bg-surface px-4 text-sm text-fg outline-none transition-colors focus:border-border-strong"
         >
-          {sortOrder.map((value) => (
+          {sortsFor(Boolean(filter.query)).map((value) => (
             <option key={value} value={value}>
               {copy.sorts[value]}
             </option>

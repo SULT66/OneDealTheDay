@@ -1,4 +1,4 @@
-const { scoreOffers, selectUniqueProducts } = require("./ranker");
+const { matchesAnySearchTerm, scoreOffers, searchTokens, selectUniqueProducts } = require("./ranker");
 
 const SORTS = Object.freeze(["best_match", "price_asc", "price_desc", "newest", "quality"]);
 const DEFAULT_PAGE_SIZE = 24;
@@ -132,7 +132,18 @@ function searchCatalogProducts(rows, options) {
     .filter(product => options.availability !== "in_stock" || /\b(?:in stock|available)\b/i.test(clean(product.availability)))
     .filter(product => updatedAfter == null || timestamp(product) >= updatedAfter);
 
-  const scored = selectUniqueProducts(scoreOffers(candidates, {
+  /*
+   * Everything that cannot match is dropped before anything is scored. The
+   * terms are the query's own plus the requested category's, which is the
+   * full set textMatchScore builds for these options.
+   */
+  const intentCategory = options.categories.length === 1 ? options.categories[0] : "";
+  const searchTerms = [...new Set([...searchTokens(options.query), ...searchTokens(intentCategory)])];
+  const matching = options.query
+    ? candidates.filter(product => matchesAnySearchTerm(product, searchTerms))
+    : candidates;
+
+  const scored = selectUniqueProducts(scoreOffers(matching, {
     /* Search ranks; it does not re-decide what a listing is worth. */
     preservePublishedScore:true,
     query:options.query,
