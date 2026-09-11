@@ -90,6 +90,7 @@ export async function DealListing({
         ? t(language, "app.filter.matchCountOne")
         : t(language, "app.filter.matchCount", { count: deals.length }),
     sorts: {
+      relevance: t(language, "app.filter.bestMatch"),
       score: t(language, "app.filter.bestScore"),
       "price-asc": t(language, "app.filter.priceAsc"),
       "price-desc": t(language, "app.filter.priceDesc"),

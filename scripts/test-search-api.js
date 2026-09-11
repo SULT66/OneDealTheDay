@@ -288,4 +288,54 @@ assert.strictEqual(
   "search prints a different score than the listing's own page",
 );
 
-console.log("Day 8 Search API and Day 10 result constraints passed.");
+/*
+ * The cheap test that decides what gets scored has to agree with the real one.
+ *
+ * Search used to score the whole market on every query — every listing put
+ * through identity normalization, offer comparison, six score components and a
+ * ranking layer, to answer something sixteen of them matched. Now anything
+ * that cannot match is dropped first. The risk in that is a listing the
+ * prefilter throws away and the scorer would have kept, and the place it hides
+ * is the description: relevance counts a description hit at 0.55, so a listing
+ * whose title never says "tripod" is still a real result for "tripod".
+ */
+const describedOnly = {
+  id:9912,
+  market:"us",
+  status:"published",
+  source:"ebay",
+  external_id:"ebay:described-only",
+  title:"Manfrotto Befree Advanced aluminium support",
+  description:"A travel tripod with a ball head, folding to 40cm.",
+  brand:"Manfrotto",
+  normalized_category:"Photography",
+  image_url:"https://example.com/tripod.jpg",
+  affiliate_url:"https://www.ebay.com/itm/described-only",
+  current_price:149.99,
+  currency:"USD",
+  rating:4.7,
+  review_count:120,
+  seller_name:"manfrotto-store",
+  seller_rating:99.1,
+  seller_feedback_count:8000,
+  availability:"In stock",
+  shipping_summary:"Free delivery",
+  return_summary:"Returns accepted within 30 days",
+  shipping_cost:0,
+  updated_at:new Date().toISOString()
+};
+const byDescription = searchCatalogProducts([describedOnly], parseSearchOptions({q:"tripod"}));
+assert.strictEqual(
+  byDescription.products.length,
+  1,
+  "a listing that matches only in its description is being dropped before it is scored",
+);
+/* And the other direction: something sharing no term with the query must not
+   arrive just because the prefilter was generous. */
+assert.strictEqual(
+  searchCatalogProducts([describedOnly], parseSearchOptions({q:"microwave"})).products.length,
+  0,
+  "an unrelated listing survived the query",
+);
+
+console.log("Day 8 Search API and Day 10 result constraints passed.");

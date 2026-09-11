@@ -251,7 +251,13 @@ export async function searchDeals(marketCode: string, filter: DealFilter): Promi
 
   /* The query has been answered; everything else is the filter panel. */
   const { query: _query, ...rest } = filter;
-  return sortDeals(applyFilter(found, rest), filter.sort);
+  /*
+   * The shopper's sort if they picked one, and otherwise the order the backend
+   * ranked these in. It used to fall through to sortDeals' own default of
+   * "score", which threw the ranking away on every search nobody had touched
+   * the sort control on — that is to say, on every search from an ad.
+   */
+  return sortDeals(applyFilter(found, rest), filter.sort ?? "relevance");
 }
 
 type RawDealPageResponse = {
