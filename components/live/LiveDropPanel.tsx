@@ -351,7 +351,7 @@ export function LiveDropPanel({
                    visit is counted even where analytics is blocked. */
                 href={`/live/go/${encodeURIComponent(drop.drop_key)}?sid=${encodeURIComponent(analyticsSessionId())}`}
                 target="_blank"
-                rel="sponsored noopener noreferrer"
+                rel="sponsored noopener"
                 onClick={() => recordLiveDropEvent(drop.drop_key, "buy_click")}
                 className="ml-auto inline-flex min-w-[9rem] flex-1 items-center justify-center rounded-xl bg-accent px-6 text-base font-bold text-white transition-opacity hover:opacity-88 sm:flex-none"
               >

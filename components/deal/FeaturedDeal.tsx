@@ -100,7 +100,7 @@ export async function FeaturedDeal({
             <a
               href={`/${market}/go/${deal.id}?source=home&placement=featured_cta&action=view_deal`}
               target="_blank"
-              rel="sponsored noopener noreferrer"
+              rel="sponsored noopener"
               className="inline-flex h-14 flex-1 cursor-pointer items-center justify-center gap-2 rounded-full bg-surface-inverse px-6 text-base font-semibold text-fg-on-inverse transition-opacity hover:opacity-88 active:scale-[0.98]"
             >
               View deal at {retailerLabel(deal.retailer)}

@@ -21,6 +21,9 @@ export type DeliaRecommendation = {
   url: string;
   action_label: string;
   source_type: "catalog" | "web";
+  /* A path on this site that leads to `url`, signed by the server. Empty for
+     catalog results, which reach their own page instead. */
+  click_url?: string;
   image_url: string;
   catalog_product_id: number | null;
   /* The backend sends the same evidence it shows on a deal page with every

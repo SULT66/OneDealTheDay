@@ -77,6 +77,7 @@ const {
   outboundPath
 } = require("./retailerLinks");
 const { storefrontUrl } = require("./storefrontLinks");
+const { hostLabel, verifyOutbound } = require("./outboundLinks");
 const { labelClick, liveDropLabel } = require("./clickLabels");
 const {
   challengeResponse: ebayChallengeResponse,
@@ -140,7 +141,28 @@ const getEbayPublicKey = createEbayPublicKeyClient({
   environment:c.ebayEnvironment
 });
 
-app.use(helmet({ contentSecurityPolicy: false }));
+/*
+ * Security headers, minus the one that hid where every click came from.
+ *
+ * helmet's default is `Referrer-Policy: no-referrer`, which nobody chose: it
+ * arrived with the library and applied to the whole site. Commissions kept
+ * working because attribution rides on parameters inside the link — campid,
+ * clickref — so nothing ever looked broken.
+ *
+ * What it did break is the answer to "which page sent this visitor". The
+ * merchant could not tell, our own reports could not tell, and an affiliate
+ * network reviewing the site sees clicks arriving from nowhere — which is the
+ * signature of the automated traffic they exist to screen out. Sovrn's code of
+ * conduct names it directly: a publisher must not obscure the origin of a link.
+ *
+ * strict-origin-when-cross-origin is the modern default and the honest one:
+ * the full path stays inside the site, and anyone we send a visitor to learns
+ * that the visitor came from onedailydrop.com. The outbound redirect widens
+ * this deliberately — see the /go routes.
+ */
+const SECURITY_HEADERS = { contentSecurityPolicy: false, referrerPolicy: { policy: "strict-origin-when-cross-origin" } };
+
+app.use(helmet(SECURITY_HEADERS));
 app.post("/api/stripe/webhook", express.raw({type:"application/json"}), (req, res) => {
   if (!stripe || !stripeWebhookSecret) return res.status(503).send("Stripe webhook is not configured.");
   let event;
@@ -1677,7 +1699,7 @@ const analyticsPosition = value => {
 };
 const askDeliaButton = (product, language = "en") =>
   `<button class="ask-delia-button" type="button" data-ask-delia data-product-id="${Number(product.id)}" data-product-title="${esc(shortTitle(localizeProduct(product, language).title))}" data-product-score="${Number(product.display_score || product.score || 0)}" data-product-url="${esc(dealPath(product))}">✦ ${esc(t(language,"assistant.askProduct"))}</button>`;
-const externalAttributes = 'target="_blank" rel="sponsored noopener noreferrer"';
+const externalAttributes = 'target="_blank" rel="sponsored noopener"';
 const recordClick = (req, product, {
   sourcePage = "unknown",
   placement = "unknown",
@@ -3020,8 +3042,30 @@ app.get("/api/admin/automation-status", admin, (req,res) => {
  * case — two segments where it takes one — but the order is the thing a reader
  * checks first, so it should not depend on that.
  */
+/*
+ * Headers for every link that leaves the site.
+ *
+ * The referrer is widened here on purpose, past the site-wide policy. A
+ * merchant paying commission on a sale is entitled to know which page sent the
+ * buyer, and an affiliate network reviewing us checks exactly that: it matches
+ * the traffic sources a publisher declares against the sources actually
+ * producing clicks. Under no-referrer every click we sent arrived from
+ * nowhere, which is the signature of the automated traffic those checks exist
+ * to catch.
+ *
+ * no-referrer-when-downgrade sends the full page URL to an https destination
+ * and nothing at all to an http one. These are public catalogue pages; there
+ * is nothing in their paths a shop should not see.
+ */
+function outboundHeaders(res) {
+  return res
+    .set("X-Robots-Tag", "noindex, nofollow")
+    .set("Cache-Control", "private, no-store")
+    .set("Referrer-Policy", "no-referrer-when-downgrade");
+}
+
 app.get("/go/store/:retailer", (req,res) => {
-  res.set("X-Robots-Tag", "noindex, nofollow").set("Cache-Control", "private, no-store");
+  outboundHeaders(res);
   const marketCode = req.market || marketFromIp(req).code;
   const slug = String(req.params.retailer || "").toLowerCase();
   const shopName = db
@@ -3062,8 +3106,47 @@ app.get("/go/store/:retailer", (req,res) => {
   res.redirect(302, destination);
 });
 
+/*
+ * Out to somewhere we do not carry, counted like everything else.
+ *
+ * Delia's web findings used to link straight out. A shopper who took her
+ * advice and bought was a shopper we sent for nothing, and nobody could tell
+ * whether her suggestions were followed at all. This is also where an
+ * affiliate network's rewrite goes once there is one — one door, so there is
+ * one place to change.
+ *
+ * Only URLs this server signed are followed; see src/outboundLinks.js for why
+ * that matters more than it sounds.
+ */
+app.get("/go/web", (req, res) => {
+  outboundHeaders(res);
+  const destination = verifyOutbound(req.query);
+  if (!destination) return res.sendStatus(404);
+  db.prepare(`
+    INSERT INTO clicks(
+      session_id,product_id,market,retailer_name,source_page,placement,action_type,
+      destination_type,clicked_at,referrer,user_agent
+    ) VALUES(?,?,?,?,?,?,?,?,?,?,?)
+  `).run(
+    analyticsToken(req.query.sid),
+    /* No product id: this is not a listing we hold, and pretending otherwise
+       would put a row in the funnel that no page can account for. */
+    null,
+    req.market || marketFromIp(req).code,
+    hostLabel(destination),
+    "delia",
+    "delia_web_result",
+    "view_deal",
+    "retailer",
+    new Date().toISOString(),
+    String(req.get("referer") || "").slice(0, 1000),
+    String(req.get("user-agent") || "").slice(0, 500),
+  );
+  return res.redirect(302, destination);
+});
+
 app.get("/go/:id", (req,res) => {
-  res.set("X-Robots-Tag", "noindex, nofollow").set("Cache-Control", "private, no-store");
+  outboundHeaders(res);
   const product = db.prepare("SELECT * FROM products WHERE id=? AND status='published'").get(req.params.id);
   if (!product || !isPublicSource(product.source) || (req.market && req.market !== product.market)) return res.sendStatus(404);
   const requestedAction = normalizeAction(req.query.action);
@@ -3109,7 +3192,7 @@ app.get("/go/:id", (req,res) => {
  * the shopper to the Live page rather than to a price that has gone.
  */
 app.get("/live/go/:key", (req, res) => {
-  res.set("X-Robots-Tag", "noindex, nofollow").set("Cache-Control", "private, no-store");
+  outboundHeaders(res);
   const drop = db
     .prepare("SELECT * FROM live_drops WHERE drop_key=? AND published=1")
     .get(String(req.params.key || "").trim().slice(0, 80));
@@ -3651,7 +3734,7 @@ app.get("/api/amazon-picks", (req, res) => {
  * visitor buys after arriving counts, not only a product we named.
  */
 app.get("/amazon/go/store", (req, res) => {
-  res.set("X-Robots-Tag", "noindex, nofollow").set("Cache-Control", "private, no-store");
+  outboundHeaders(res);
   if (!c.amazonAssociateTag) return res.sendStatus(404);
   const marketCode = req.market || marketFromIp(req).code;
   const sessionId = analyticsToken(req.query.sid);
@@ -3667,7 +3750,7 @@ app.get("/amazon/go/store", (req, res) => {
 });
 
 app.get("/amazon/go/:id", (req, res) => {
-  res.set("Cache-Control", "private, no-store");
+  outboundHeaders(res);
   const pick = db.prepare("SELECT * FROM amazon_picks WHERE id=?").get(Number(req.params.id) || 0);
   if (!pick) return res.sendStatus(404);
   const sessionId = analyticsToken(req.query.sid);

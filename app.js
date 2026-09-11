@@ -138,7 +138,9 @@ function expressWithHomepage(...args) {
   const app = createExpressApp(...args);
   app.set("trust proxy", 1);
   app.disable("x-powered-by");
-  app.use(helmet({ contentSecurityPolicy:false }));
+  /* Same policy as the Express side, and for the same reason: a click with no
+     referring page is indistinguishable from a bot's. See src/server.js. */
+  app.use(helmet({ contentSecurityPolicy:false, referrerPolicy:{ policy:"strict-origin-when-cross-origin" } }));
   app.use((req, res, next) => {
     const forwardedHost = String(req.headers["x-forwarded-host"] || req.headers.host || "")
       .split(",")[0]
