@@ -51,7 +51,7 @@ const { missingConfiguredProviders } = require("../src/catalogRecovery");
 const db = require("../src/db");
 
 assert(RETAILERS.length >= 20, "The complete target retailer catalog is missing");
-for (const retailer of ["Amazon", "eBay", "Walmart", "Target", "Best Buy", "Tribesigns", "Mooncool", "Giftlab", "King Koil", "Currys", "Fnac", "Darty", "MediaMarkt", "Saturn", "OTTO", "Samsung"]) {
+for (const retailer of ["Amazon", "eBay", "Walmart", "Target", "Best Buy", "Tribesigns", "Mooncool", "Giftlab", "King Koil", "FED Fitness", "Currys", "Fnac", "Darty", "MediaMarkt", "Saturn", "OTTO", "Samsung"]) {
   assert(RETAILERS.some(item => item.name === retailer), `${retailer} is missing from retailer coverage`);
 }
 assert.throws(() => safeFeedUrl("http://localhost/feed.csv"), /public HTTPS/);
@@ -66,10 +66,11 @@ const feedEnv = {
   AFFILIATE_FEED_MOONCOOL_US_URL:"https://productdata.awin.com/mooncool-us.csv.gz",
   AFFILIATE_FEED_MOONCOOL_CA_URL:"https://productdata.awin.com/mooncool-ca.csv.gz",
   AFFILIATE_FEED_GIFTLAB_US_URL:"https://productdata.awin.com/giftlab-us.csv.gz",
-  AFFILIATE_FEED_KING_KOIL_US_URL:"https://productdata.awin.com/king-koil-us.csv.gz"
+  AFFILIATE_FEED_KING_KOIL_US_URL:"https://productdata.awin.com/king-koil-us.csv.gz",
+  AFFILIATE_FEED_FED_FITNESS_US_URL:"https://productdata.awin.com/fed-fitness-us.csv.gz"
 };
 const definitions = feedDefinitions(feedEnv);
-assert.strictEqual(definitions.length, 6);
+assert.strictEqual(definitions.length, 7);
 assert.strictEqual(definitions.find(item => item.id === "target-us").retailerName, "Target");
 assert.strictEqual(definitions.find(item => item.id === "tribesigns-us").retailerName, "Tribesigns");
 assert.strictEqual(definitions.find(item => item.id === "giftlab-us").retailerName, "Giftlab");
@@ -84,6 +85,18 @@ assert.strictEqual(
   allowedByFeedPolicy({title:"King Koil Replacement Pump", category:"Mattress Accessories"}, kingKoilDefinition),
   false,
   "King Koil accessories were not excluded from the mattress feed",
+);
+const fedFitnessDefinition = definitions.find(item => item.id === "fed-fitness-us");
+assert.strictEqual(fedFitnessDefinition.retailerName, "FED Fitness");
+assert.strictEqual(
+  allowedByFeedPolicy({title:"Worry-Free Purchase - USD9.29", category:""}, fedFitnessDefinition),
+  false,
+  "FED Fitness checkout protection was imported as a product",
+);
+assert.strictEqual(
+  allowedByFeedPolicy({title:"FED Fitness Adjustable Weight Bench", category:"Exercise Benches"}, fedFitnessDefinition),
+  true,
+  "A real FED Fitness product was rejected",
 );
 const giftlabDefinition = definitions.find(item => item.id === "giftlab-us");
 /*

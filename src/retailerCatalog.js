@@ -94,6 +94,21 @@ const RETAILERS = Object.freeze([
       ]
     }
   },
+  {
+    id:"fed-fitness",
+    name:"FED Fitness",
+    network:"Awin",
+    markets:["us"],
+    /* The Awin feed includes Seel purchase-protection price points as if they
+       were products. They are checkout add-ons, not fitness equipment, and
+       must never become catalogue cards. */
+    feedPolicy:{
+      excludeTitleTerms:[
+        "worry-free purchase", "purchase protection",
+        "not sold separately", "not for sale", "non-delivery"
+      ]
+    }
+  },
   {id:"currys", name:"Currys", network:"Awin", markets:["uk"]},
   {id:"ao", name:"AO.com", network:"Awin", markets:["uk"]},
   {id:"fnac", name:"Fnac", network:"Awin", markets:["fr"]},
