@@ -89,11 +89,34 @@ jobs:
         id: verify-health
         continue-on-error: true
         run: |
-          curl --fail --silent --show-error \
-            --retry 8 --retry-delay 10 --retry-all-errors \
-            --max-time 20 \
-            "https://onedealtheday-g3dme0aghzerc3a2.centralus-01.azurewebsites.net/api/status" \
-            > /dev/null
+          set -uo pipefail
+          # Wait by the clock, not by a count of retries.
+          #
+          # Eight retries ten seconds apart gave up after about a minute and a
+          # half. Azure takes longer than that to come back on this plan, so
+          # deploy #495 was marked failed and its release check skipped —
+          # against a site that was serving the new commit correctly minutes
+          # later. A red deploy that shipped fine is worse than a slow one:
+          # the next real failure is the one nobody believes.
+          #
+          # Ten minutes, which is inside the job's own limit and past every
+          # warm-up seen so far.
+          host=https://onedealtheday-g3dme0aghzerc3a2.centralus-01.azurewebsites.net
+          deadline=$(( SECONDS + 600 ))
+          attempt=0
+          while (( SECONDS < deadline )); do
+            attempt=$(( attempt + 1 ))
+            if curl --fail --silent --show-error --max-time 20 "${host}/api/status" > /dev/null; then
+              echo "Healthy after ${attempt} attempt(s), $(( 600 - (deadline - SECONDS) ))s."
+              exit 0
+            fi
+            echo "Attempt ${attempt}: not answering yet ($(( deadline - SECONDS ))s left)."
+            # Out of time is a stop, not a tighter loop against a struggling site.
+            if (( SECONDS + 15 >= deadline )); then break; fi
+            sleep 15
+          done
+          echo "Production did not answer within 10 minutes of the deploy."
+          exit 1
 
       - name: Collect Azure startup logs after failed health check
         if: steps.verify-health.outcome == 'failure'
