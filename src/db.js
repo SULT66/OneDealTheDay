@@ -741,6 +741,36 @@ db.exec(`
   CREATE UNIQUE INDEX IF NOT EXISTS idx_amazon_picks_url ON amazon_picks(market, url);
 `);
 
+/*
+ * What a hand-added Amazon pick can carry beyond its name.
+ *
+ * A price is here, and it is deliberately never shown as the current one.
+ * Amazon's agreement has prices come from their API precisely because they
+ * move several times a day, and a number typed in on Monday and displayed as
+ * today's on Friday is wrong in the way that matters. So the moment it was
+ * entered is stored with it and shown beside it: "$45.00 on Amazon, checked
+ * 9 Sep" stays true however old it gets, and the reader can see for
+ * themselves how old that is.
+ *
+ * The note is the owner's own words about why the thing is worth a look —
+ * not Amazon's copy, which is theirs and not ours to reproduce.
+ *
+ * link_status is what the daily check writes. Nothing else on this site
+ * would ever notice one of these going dead: the catalogue has a link
+ * checker, and it only walks the catalogue.
+ */
+const amazonPickColumns = new Set(db.prepare("PRAGMA table_info(amazon_picks)").all().map(column => column.name));
+for (const [column, definition] of [
+  ["price", "REAL"],
+  ["currency", "TEXT NOT NULL DEFAULT 'USD'"],
+  ["price_checked_at", "TEXT"],
+  ["note", "TEXT NOT NULL DEFAULT ''"],
+  ["link_status", "TEXT NOT NULL DEFAULT 'unchecked'"],
+  ["link_checked_at", "TEXT"],
+]) {
+  if (!amazonPickColumns.has(column)) db.exec(`ALTER TABLE amazon_picks ADD COLUMN ${column} ${definition}`);
+}
+
 const refreshRunColumns = new Set(db.prepare("PRAGMA table_info(refresh_runs)").all().map(column => column.name));
 if (!refreshRunColumns.has("market")) db.exec("ALTER TABLE refresh_runs ADD COLUMN market TEXT NOT NULL DEFAULT 'us'");
 

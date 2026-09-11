@@ -114,11 +114,23 @@ const LINK = "https://amzn.to/4xQn882";
   /* --- What the public sees: a name, and nothing that could go stale. --- */
   const publicList = await (await realFetch(`${base}/api/amazon-picks?market=us`)).json();
   assert.strictEqual(publicList.length, 2);
-  assert.deepStrictEqual(Object.keys(publicList[0]).sort(), ["category", "id", "title"]);
-  /* No price and no image field even exists to be filled in later by accident:
-     both are Amazon's to publish, not ours to copy. */
-  for (const key of ["price", "image", "image_url", "url"]) {
+  assert.deepStrictEqual(Object.keys(publicList[0]).sort(),
+    ["category", "currency", "id", "note", "price", "price_checked_at", "title"]);
+  /*
+   * An image is Amazon's to publish and not ours to copy, so no field for one
+   * exists to be filled in later by accident. The url is withheld for a
+   * different reason: the redirect is the only way out, which is what counts
+   * the click and keeps the associate tag beyond reach of anything that might
+   * helpfully rewrite it.
+   */
+  for (const key of ["image", "image_url", "url"]) {
     assert.ok(!(key in publicList[0]), `the public shape must not carry ${key}`);
+  }
+
+  /* A price is never published on its own: without the day it was entered it
+     reads as today's, which is the one thing it is not. */
+  for (const entry of publicList) {
+    if (entry.price) assert.ok(entry.price_checked_at, "a published price carries the day it was entered");
   }
 
   /* --- The link goes out exactly as it came in. --- */
