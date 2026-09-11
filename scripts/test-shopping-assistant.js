@@ -69,7 +69,7 @@ const product = {
   score: 75,
   evidence_confidence: 80,
   score_breakdown: JSON.stringify({
-    model: "current-offer-v7",
+    model: "current-offer-v8",
     price_quality: 12,
     product_quality: 15,
     review_confidence: 12,

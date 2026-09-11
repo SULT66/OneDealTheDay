@@ -1,6 +1,10 @@
 const assert = require("assert");
 const { categoryLabel } = require("../src/i18n");
 const { presentProduct, publicOneDailyDropScore, PUBLIC_SCORE_FLOOR } = require("../src/productPresentation");
+/* By constant, not by name: these fixtures mean "scored with the model in
+   force", and spelling the version out turned them into legacy records the
+   moment the model was bumped. */
+const { SCORE_MODEL } = require("../src/ranker");
 
 /*
  * These three moved when the band did. It used to run 82 to 95, so a
@@ -81,11 +85,11 @@ assert(french.display_seller_feedback.includes("12 000") || french.display_sel
 const correctedSnapshot = presentProduct({
   ...fixture,
   drop_score: 77,
-  drop_score_model: "current-offer-v7",
+  drop_score_model: SCORE_MODEL,
   drop_price: 44.62,
   evidence_confidence: 70,
   score_breakdown: JSON.stringify({
-    model:"current-offer-v7",
+    model:SCORE_MODEL,
     price_quality:20,
     product_quality:0,
     review_confidence:0,
@@ -132,7 +136,7 @@ assert.strictEqual(
 const cheapSnapshot = presentProduct({
   ...fixture,
   drop_score: 77,
-  drop_score_model: "current-offer-v7",
+  drop_score_model: SCORE_MODEL,
   drop_price: fixture.current_price * 0.4,
   drop_original_price: fixture.current_price,
 }, "fr");

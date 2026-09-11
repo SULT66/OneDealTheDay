@@ -2,6 +2,7 @@ const { market } = require("./markets");
 const { normalizeProductIdentity } = require("./productIdentity");
 const { SCORE_MODEL, isDailyPickEligible, scoreOffers, selectUniqueProducts } = require("./ranker");
 const { TAXONOMY_VERSION, normalizeCatalogProduct } = require("./catalogTaxonomy");
+const { priceIntelligence } = require("./priceIntelligence");
 
 function localDate(timezone, value = new Date()) {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -38,12 +39,57 @@ function recalculateCatalog(db, marketCodes = ["us", "ca", "uk", "fr", "de"], op
   if (!options.force && !needsRecalculation(db)) return { changed:false, products:0, selections:0, markets:[] };
 
   const rows = db.prepare("SELECT * FROM products").all();
+
+  /*
+   * The price history, read back before anything is scored.
+   *
+   * A refresh attaches thirty- and ninety-day averages to each product before
+   * scoring it, and nothing writes them to the row — there are no columns for
+   * them. So a recalculation, which starts from the rows, scored every listing
+   * as though its price had never been observed before. That is worth
+   * twenty-five points of evidence confidence, and it moved the published
+   * number: a pair of earbuds stored at 100 confidence and 86 came back at 75
+   * and 84, purely because the recalculation did not look at observations the
+   * database was holding the whole time.
+   *
+   * Lowering a score for evidence we have and did not read is not caution, it
+   * is a wrong answer. Same history, same function, same shape as the refresh
+   * uses, so the two paths agree by construction rather than by coincidence.
+   */
+  const historyRows = db.prepare(`
+    SELECT product_id, price, observed_at
+    FROM price_history
+    WHERE observed_at>=?
+    ORDER BY observed_at ASC
+  `).all(new Date(Date.now() - 90 * 86400000).toISOString());
+  const historyByProduct = new Map();
+  for (const row of historyRows) {
+    if (!historyByProduct.has(row.product_id)) historyByProduct.set(row.product_id, []);
+    historyByProduct.get(row.product_id).push(row);
+  }
+  const withPriceHistory = row => {
+    const observed = historyByProduct.get(row.id);
+    if (!observed?.length) return row;
+    const intelligence = priceIntelligence(observed);
+    if (!intelligence.observations.length) return row;
+    return {
+      ...row,
+      price_history_observation_count:intelligence.observations.length,
+      price_history_distinct_days:intelligence.day90.distinctDays,
+      price_history_coverage_days:intelligence.day90.coverageDays,
+      average_30_day_price:intelligence.day30.sufficient ? intelligence.day30.average : 0,
+      lowest_30_day_price:intelligence.day30.sufficient ? intelligence.day30.low : 0,
+      average_90_day_price:intelligence.day90.sufficient ? intelligence.day90.average : 0,
+      lowest_90_day_price:intelligence.day90.sufficient ? intelligence.day90.low : 0
+    };
+  };
+
   const scoredById = new Map();
   const normalizedById = new Map();
   const selectedByMarket = new Map();
   const selectionMarkets = Array.isArray(options.selectionMarkets) ? options.selectionMarkets : marketCodes;
 
-  for (const row of rows) normalizedById.set(row.id, normalizeProductIdentity(normalizeCatalogProduct(row)));
+  for (const row of rows) normalizedById.set(row.id, normalizeProductIdentity(normalizeCatalogProduct(withPriceHistory(row))));
   for (const code of marketCodes) {
     const candidates = rows.filter(row => row.market === code).map(row => normalizedById.get(row.id));
     const scored = scoreOffers(candidates, {

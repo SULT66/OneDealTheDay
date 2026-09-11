@@ -101,7 +101,15 @@ function deduplicationCandidateKeys(product) {
   return [`title-candidate:${brand}:${category || "uncategorized"}:${fingerprint}${variant ? `:${variant}` : ""}`];
 }
 
-const SCORE_MODEL = "current-offer-v7";
+/*
+ * Bumped with the demand change below, and it has to be: the stored catalogue
+ * is only recalculated when this string stops matching what a row was scored
+ * with. Change the model and leave the name alone, and every surface that
+ * rescores on the fly gets the new number while every surface that reads the
+ * stored one keeps the old — which is the exact disagreement the change is
+ * there to end.
+ */
+const SCORE_MODEL = "current-offer-v8";
 const RANKING_MODEL = "ranking-v1";
 
 const SEARCH_STOP_WORDS = new Set([
@@ -440,12 +448,42 @@ function sellerScore(product) {
     (feedback >= 100 ? 2 : feedback > 0 ? 1 : 0));
 }
 
+/*
+ * Demand, from the two things about it we actually keep.
+ *
+ * This used to award up to four points for `source_rank` — where the listing
+ * sat in whatever the provider handed us. There is no such column on the
+ * products table, so the input exists for the length of one refresh and is
+ * then gone forever. The score computed during ingest included those points;
+ * every later recalculation, from the same row, could not. One pair of
+ * earbuds therefore read 86 on its own page, where the stored number is used,
+ * and 84 in search, which rescores what it loads — the same field, under the
+ * same label, disagreeing with itself because part of it was unrepeatable.
+ *
+ * Persisting the column would have made the two agree, and would have made
+ * this permanent instead, which is worse. For a CSV feed `source_rank` is
+ * `index + 1`: the line number in the file. A treadmill on row 3 of an Awin
+ * export was collecting nearly four points for being near the top of a file,
+ * and no Awin listing beyond row 200 could ever collect any — while eBay,
+ * whose rank at least reflects a real ordering, drew from a different
+ * distribution entirely. The stores page promises every retailer the same
+ * ranking rules, and this quietly broke that promise in a direction nobody
+ * could see.
+ *
+ * What remains is reviews and the merchant's own badge, both of which are
+ * stored, so the score recomputes to itself wherever it is asked for. The
+ * ceiling on this component drops from 10 to 6, which lowers the listings
+ * that were carrying rank points down to the number every other surface was
+ * already showing for them. Nothing is lost that could be checked.
+ *
+ * `source_rank` is still set by every provider and still orders candidates
+ * during ingest, which is a fair use of it: it decides what we look at, not
+ * what we claim about it afterwards.
+ */
 function demandScore(product) {
-  const position = number(product.source_rank, 100);
-  const rankPoints = clamp(1 - (position - 1) / 50) * 4;
   const reviewDemand = clamp(Math.log10(number(product.review_count) + 1) / 5) * 4;
   const badge = /best|choice|popular|deal|trending/i.test(String(product.badge || "")) ? 2 : 0;
-  return rankPoints + reviewDemand + badge;
+  return reviewDemand + badge;
 }
 
 function fulfillmentScore(product) {
@@ -607,7 +645,25 @@ function betterOffer(left, right) {
   return rightPrice < leftPrice ? right : left;
 }
 
+/*
+ * The number already published for this listing, if the model in force is the
+ * one that produced it. Returns null otherwise, which means "score it fresh".
+ */
+function publishedScoreOf(product) {
+  const score = number(product?.score, NaN);
+  if (!Number.isFinite(score) || score <= 0) return null;
+  const confidence = number(product?.evidence_confidence, NaN);
+  if (!Number.isFinite(confidence)) return null;
+  let breakdown = product?.score_breakdown;
+  if (typeof breakdown === "string") {
+    try { breakdown = JSON.parse(breakdown); } catch { return null; }
+  }
+  if (!breakdown || typeof breakdown !== "object" || breakdown.model !== SCORE_MODEL) return null;
+  return {score, evidence_confidence:confidence, breakdown};
+}
+
 function scoreOffers(items, options = {}) {
+  const preservePublishedScore = options.preservePublishedScore === true;
   const budget = queryBudget(options.query, options.intent || {});
   const eligibilityOptions = {
     ...options,
@@ -619,15 +675,36 @@ function scoreOffers(items, options = {}) {
   return eligible.map(item => {
     const result = scoreProduct(item);
     const ranking = rankingLayers(item, options, result);
+    /*
+     * A read path orders listings; it does not re-decide what they are worth.
+     *
+     * Search loads rows and rescores them, and the product page prints the
+     * number stored on the row, so the same earbuds read 84 in one place and
+     * 86 in the other. Every explanation I tried first was a difference in the
+     * inputs, and fixing those is right but it is not the bug: two code paths
+     * that each compute the site's central claim will drift apart again on the
+     * next input either one of them cannot see.
+     *
+     * So the claim is computed once, when the listing is refreshed and the
+     * evidence is at its fullest, and every read path repeats it. Relevance
+     * and rank stay contextual, because what to show first genuinely depends
+     * on what was asked. What the listing is worth does not.
+     *
+     * Only a row scored by the model in force is trusted this way. Anything
+     * older has no published number worth keeping, and presentation already
+     * recalculates those — identically on every surface, because it is the
+     * same function reading the same row.
+     */
+    const published = preservePublishedScore && publishedScoreOf(item);
     return {
       ...item,
-      score: result.total,
-      evidence_confidence: result.evidenceConfidence,
+      score: published ? published.score : result.total,
+      evidence_confidence: published ? published.evidence_confidence : result.evidenceConfidence,
       relevance_score: ranking.relevance,
       commerce_quality: ranking.commerce_quality,
       ranking_score: ranking.final_rank,
-      score_breakdown: {...result.breakdown, ranking},
-      selection_reason: selectionReason(item, result)
+      score_breakdown: published ? {...published.breakdown, ranking} : {...result.breakdown, ranking},
+      selection_reason: published ? (item.selection_reason || selectionReason(item, result)) : selectionReason(item, result)
     };
   }).filter(item => isDemo(item) || (
     item.score >= number(options.minimumScore, 0) &&

@@ -45,10 +45,16 @@ const score = scoreProduct({
   return_summary: "30-day returns",
   source_rank: 1
 });
-assert(score.total >= 65 && score.total <= 100, `strong real offer should score credibly, received ${score.total}`);
+/*
+ * Sixty, not sixty-five. Four of the points this listing used to score were
+ * for `source_rank: 1` — being the first row the provider handed back, which
+ * for a CSV feed is the first line of the file. Those points are gone, and a
+ * bar that still expected them would be a bar asking for them back.
+ */
+assert(score.total >= 60 && score.total <= 100, `strong real offer should score credibly, received ${score.total}`);
 assert.equal(score.breakdown.price_quality, 15,
   "a retailer reference price alone must not exceed half of the price-quality component");
-assert.equal(score.breakdown.model, "current-offer-v7");
+assert.equal(score.breakdown.model, "current-offer-v8");
 
 const newListing = {
   source: "ebay",

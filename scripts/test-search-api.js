@@ -226,4 +226,66 @@ for (const [url, expected] of [
   assert.strictEqual(found, expected, `market recovered from ${url}`);
 }
 
-console.log("Day 8 Search API and Day 10 result constraints passed.");
+/*
+ * Search and the product page must print the same number.
+ *
+ * They did not. Search rescores what it loads and the product page prints
+ * what is stored, so one pair of earbuds read 84 in a result list and 86 on
+ * its own page — the site's central claim, disagreeing with itself under one
+ * label. The inputs behind that gap were worth fixing on their own, and did
+ * not fix this: two paths that each recompute a published claim drift apart
+ * again on the next input one of them cannot see.
+ *
+ * The row here carries a stored score of the model in force, computed with
+ * evidence a read path cannot reconstruct — a price history it has no
+ * columns for. Search must repeat that number, not re-derive a poorer one.
+ */
+const { presentProduct:presentOne } = require("../src/productPresentation");
+const { SCORE_MODEL:MODEL } = require("../src/ranker");
+const storedRow = {
+  id:9911,
+  market:"us",
+  status:"published",
+  source:"ebay",
+  external_id:"ebay:stored-score",
+  title:"Anker Soundcore Liberty 4 NC wireless earbuds",
+  brand:"Anker",
+  image_url:"https://example.com/earbuds.jpg",
+  affiliate_url:"https://www.ebay.com/itm/stored-score",
+  gtin:"00194644101565",
+  current_price:21.99,
+  currency:"USD",
+  rating:4.58,
+  review_count:276,
+  seller_name:"anker-direct",
+  seller_rating:99.4,
+  seller_feedback_count:41000,
+  availability:"In stock",
+  shipping_summary:"Free delivery via USPS First Class",
+  return_summary:"Returns accepted within 30 days",
+  shipping_cost:0,
+  landed_cost:21.99,
+  /* What the refresh wrote, with the price history it could see. */
+  score:51.9,
+  evidence_confidence:100,
+  score_breakdown:JSON.stringify({
+    model:MODEL,
+    price_quality:0,
+    product_quality:13,
+    review_confidence:9.2,
+    seller_reliability:15,
+    demand_usefulness:4.7,
+    shipping_returns:10
+  }),
+  updated_at:new Date().toISOString()
+};
+
+const searched = searchCatalogProducts([storedRow], parseSearchOptions({q:"earbuds", market:"us"}));
+assert.strictEqual(searched.products.length, 1, "the fixture must survive search");
+assert.strictEqual(
+  presentOne(searched.products[0], "en").display_score,
+  presentOne(storedRow, "en").display_score,
+  "search prints a different score than the listing's own page",
+);
+
+console.log("Day 8 Search API and Day 10 result constraints passed.");

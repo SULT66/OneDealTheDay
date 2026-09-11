@@ -18,7 +18,7 @@ const {
   normalizeTradeItemId
 } = require("../src/productIdentity");
 
-assert.strictEqual(SCORE_MODEL, "current-offer-v7");
+assert.strictEqual(SCORE_MODEL, "current-offer-v8");
 assert.strictEqual(RANKING_MODEL, "ranking-v1");
 for (const placeholder of ["Does not apply", "Does Not Apply", "Non applicable", "Nicht zutreffend", "Ne s'applique pas", "不适用", "N/A"]) {
   assert.strictEqual(normalizeTradeItemId(placeholder), "", `Placeholder GTIN was accepted: ${placeholder}`);
@@ -179,5 +179,58 @@ const budgetResults = scoreOffers([
   {...sourceNeutral, external_id:"over-budget", source:"ebay", current_price:900, rating:5, review_count:100000}
 ], {query:"queen mattress under 700", minimumEvidenceConfidence:0});
 assert.deepStrictEqual(budgetResults.map(product => product.external_id), ["within-budget"], "A hard budget constraint was compensated by reviews or quality");
+
+/*
+ * A score has to survive the trip through the database.
+ *
+ * This is the invariant that was missing, and its absence cost two wrong
+ * diagnoses before anyone looked at the arithmetic. `source_rank` — the
+ * listing's position in whatever the provider handed back — was worth up to
+ * four points, and there is no column for it: present while the refresh was
+ * running, gone from every row it wrote. The number stored at ingest could
+ * therefore never be reproduced, so the product page (which reads the stored
+ * number) and search (which rescores what it loads) printed 86 and 84 for the
+ * same pair of earbuds, under the same label.
+ *
+ * Stated as a property rather than as a number: scoring a listing as it
+ * arrives and scoring the row we kept must agree. Anything read at ingest and
+ * not written down breaks this test on the day it is introduced, rather than
+ * months later on a reviewer's screen.
+ */
+const asIngested = {
+  source:"ebay",
+  external_id:"reproducible",
+  title:"Anker Soundcore Liberty 4 NC wireless earbuds",
+  brand:"Anker",
+  gtin:"00194644101565",
+  current_price:21.99,
+  original_price:0,
+  currency:"USD",
+  rating:4.58,
+  review_count:276,
+  seller_name:"anker-direct",
+  seller_rating:99.4,
+  seller_feedback_count:41000,
+  availability:"In stock",
+  shipping_summary:"Free delivery",
+  return_summary:"30-day returns",
+  shipping_cost:0,
+  badge:"",
+  /* Set by every provider, stored by none. */
+  source_rank:17
+};
+const { source_rank, ...asStored } = asIngested;
+assert.strictEqual(
+  scoreProduct(asIngested).total,
+  scoreProduct(asStored).total,
+  "the score depends on something the products table does not keep, so it cannot be recomputed",
+);
+/* The same statement one level up, where the site actually prints it. */
+const { presentProduct } = require("../src/productPresentation");
+assert.strictEqual(
+  presentProduct(asIngested, "en").display_score,
+  presentProduct(asStored, "en").display_score,
+  "the published score changes depending on whether the listing was just ingested",
+);
 
 console.log("Ranking v1, source neutrality, identity normalization, landed cost and evidence confidence passed.");

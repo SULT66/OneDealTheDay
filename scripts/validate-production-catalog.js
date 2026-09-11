@@ -113,7 +113,7 @@ const methodology = fs.readFileSync(path.join(root, "src/methodology.js"), "utf8
 for (const required of ["price_quality", "product_quality", "review_confidence", "seller_reliability", "demand_usefulness", "shipping_returns"]) {
   if (!ranker.includes(required)) throw new Error(`OneDailyDrop Score component is missing: ${required}`);
 }
-for (const required of ["current-offer-v7", "ranking-v1", "comparable_median_landed_cost", "trackedPriceQuality", "evidenceConfidence", "commerceQuality", "rankingLayers", "relevance:0.60", "commerce_quality:0.25", "data_confidence:0.15", "maximumShippingRatio", "isDailyPickEligible", "returnsNotAccepted", "referenceGap * 30"]) {
+for (const required of ["current-offer-v8", "ranking-v1", "comparable_median_landed_cost", "trackedPriceQuality", "evidenceConfidence", "commerceQuality", "rankingLayers", "relevance:0.60", "commerce_quality:0.25", "data_confidence:0.15", "maximumShippingRatio", "isDailyPickEligible", "returnsNotAccepted", "referenceGap * 30"]) {
   if (!ranker.includes(required)) throw new Error(`OneDailyDrop Score weighting is incomplete: ${required}`);
 }
 for (const forbidden of ["evidencePenalty"]) {
