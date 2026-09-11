@@ -500,6 +500,19 @@ function expressWithHomepage(...args) {
   });
 
   app.get("/go/:id", (req, res, next) => {
+    /*
+     * Product ids only.
+     *
+     * This guard runs before every /go route because app.js is mounted first,
+     * and it answered /go/web by looking for a product called "web", finding
+     * none, and returning 404. The route that sends Delia's findings out was
+     * therefore dead in production the moment it shipped — the redirect was
+     * correct, the tests passed, and nothing reached it.
+     *
+     * Anything that is not a number belongs to a named route further down, so
+     * it is not this guard's business.
+     */
+    if (!/^[0-9]+$/.test(String(req.params.id || ""))) return next();
     if (!config.isProduction) return next();
     const product = db.prepare("SELECT source,availability,status FROM products WHERE id=?").get(req.params.id);
     if (!isPublicProduct(product)) return res.sendStatus(404);
