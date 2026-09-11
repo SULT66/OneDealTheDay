@@ -77,6 +77,7 @@ const {
   outboundPath
 } = require("./retailerLinks");
 const { storefrontUrl } = require("./storefrontLinks");
+const { hostLabel, verifyOutbound } = require("./outboundLinks");
 const { labelClick, liveDropLabel } = require("./clickLabels");
 const {
   challengeResponse: ebayChallengeResponse,
@@ -3103,6 +3104,45 @@ app.get("/go/store/:retailer", (req,res) => {
     eventId:req.query.eid
   });
   res.redirect(302, destination);
+});
+
+/*
+ * Out to somewhere we do not carry, counted like everything else.
+ *
+ * Delia's web findings used to link straight out. A shopper who took her
+ * advice and bought was a shopper we sent for nothing, and nobody could tell
+ * whether her suggestions were followed at all. This is also where an
+ * affiliate network's rewrite goes once there is one — one door, so there is
+ * one place to change.
+ *
+ * Only URLs this server signed are followed; see src/outboundLinks.js for why
+ * that matters more than it sounds.
+ */
+app.get("/go/web", (req, res) => {
+  outboundHeaders(res);
+  const destination = verifyOutbound(req.query);
+  if (!destination) return res.sendStatus(404);
+  db.prepare(`
+    INSERT INTO clicks(
+      session_id,product_id,market,retailer_name,source_page,placement,action_type,
+      destination_type,clicked_at,referrer,user_agent
+    ) VALUES(?,?,?,?,?,?,?,?,?,?,?)
+  `).run(
+    analyticsToken(req.query.sid),
+    /* No product id: this is not a listing we hold, and pretending otherwise
+       would put a row in the funnel that no page can account for. */
+    null,
+    req.market || marketFromIp(req).code,
+    hostLabel(destination),
+    "delia",
+    "delia_web_result",
+    "view_deal",
+    "retailer",
+    new Date().toISOString(),
+    String(req.get("referer") || "").slice(0, 1000),
+    String(req.get("user-agent") || "").slice(0, 500),
+  );
+  return res.redirect(302, destination);
 });
 
 app.get("/go/:id", (req,res) => {

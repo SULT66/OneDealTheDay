@@ -1,5 +1,6 @@
 const OpenAIExport = require("openai");
 const { marketPath } = require("./markets");
+const { signOutbound } = require("./outboundLinks");
 const { presentProduct, PUBLIC_SCORE_FLOOR } = require("./productPresentation");
 
 const OpenAI = OpenAIExport.default || OpenAIExport;
@@ -3653,6 +3654,10 @@ function normalizeAssistantResponse(
       url: safeUrl(item?.url),
       action_label: cleanDisplayText(item?.action_label).slice(0, 40),
       source_type: item?.source_type === "catalog" ? "catalog" : "web",
+      /* A web result leaves through our own door, so the click is counted and
+         the link can be affiliated later. A catalog result goes to its own
+         page here and leaves through /go/:id from there. */
+      click_url: item?.source_type === "catalog" ? "" : signOutbound(safeUrl(item?.url)),
       image_url: safeUrl(item?.image_url),
       catalog_product_id: Math.max(
         0,

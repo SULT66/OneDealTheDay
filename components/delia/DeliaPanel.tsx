@@ -217,7 +217,17 @@ function OfferRow({
   priceUnconfirmed?: boolean;
 }) {
   const inCatalog = rec.source_type === "catalog" && Boolean(rec.catalog_product_id);
-  const href = inCatalog ? `/${market}/deal/${rec.catalog_product_id}` : rec.url;
+  /*
+   * A web result leaves through our own redirect when the server signed one.
+   *
+   * These used to link straight out, which cost the click — nobody could tell
+   * whether Delia's suggestions were followed — and cost the commission, since
+   * a link we do not send cannot be affiliated. `rec.url` stays as the
+   * fallback for an older response that carries no signed path.
+   */
+  const href = inCatalog
+    ? `/${market}/deal/${rec.catalog_product_id}`
+    : rec.click_url || rec.url;
   /* Our own formatting wins whenever there is a number to format. The model
      writes the price as prose and is not consistent about it: one live answer
      listed the same vacuum twice, once as "$199.99" and once as "USD 199.99".
