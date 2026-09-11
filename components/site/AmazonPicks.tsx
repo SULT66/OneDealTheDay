@@ -87,7 +87,7 @@ export async function AmazonPicks({ market }: { market: string }) {
                  number. The link itself is never rewritten. */
               href={`/${market}/amazon/go/${pick.id}`}
               target="_blank"
-              rel="sponsored noopener noreferrer"
+              rel="sponsored noopener"
               className="group flex h-full items-start gap-3 rounded-2xl border border-border bg-surface px-4 py-3 transition-colors hover:bg-surface-2"
             >
               <span className="min-w-0 flex-1">

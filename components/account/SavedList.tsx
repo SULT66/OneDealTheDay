@@ -210,7 +210,7 @@ function SavedRow({ offer, market }: { offer: SavedOffer; market: string }) {
           {body}
         </Link>
       ) : (
-        <a href={href} target="_blank" rel="sponsored noopener noreferrer" className={linkClass}>
+        <a href={href} target="_blank" rel="sponsored noopener" className={linkClass}>
           {body}
         </a>
       )}
