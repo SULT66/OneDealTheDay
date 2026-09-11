@@ -212,7 +212,7 @@ export default async function DealPage({
             <a
               href={goHref("product_cta")}
               target="_blank"
-              rel="sponsored noopener noreferrer"
+              rel="sponsored noopener"
               className="inline-flex h-14 flex-1 cursor-pointer items-center justify-center gap-2 rounded-full bg-surface-inverse px-6 text-base font-semibold text-fg-on-inverse transition-opacity hover:opacity-88 active:scale-[0.98]"
             >
               View deal at {retailerLabel(deal.retailer)}
@@ -243,7 +243,7 @@ export default async function DealPage({
               <a
                 href={shopAllHref}
                 target="_blank"
-                rel="sponsored nofollow noopener noreferrer"
+                rel="sponsored nofollow noopener"
                 className="underline underline-offset-4 hover:text-fg"
               >
                 Shop all at {retailerLabel(deal.retailer)}
@@ -413,7 +413,7 @@ export default async function DealPage({
           <a
             href={goHref("price_history_cta")}
             target="_blank"
-            rel="sponsored noopener noreferrer"
+            rel="sponsored noopener"
             className="inline-flex h-14 cursor-pointer items-center justify-center gap-2 rounded-full bg-lime px-7 text-base font-semibold text-ink transition-opacity hover:opacity-88 active:scale-[0.98]"
           >
             Check current price at {retailerLabel(deal.retailer)}

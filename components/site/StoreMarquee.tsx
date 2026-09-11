@@ -64,7 +64,7 @@ export function StoreMarquee({
       key={`${copy}-${shop.retailer}`}
       href={shop.href || `/${market}/go/store/${slugifyCategory(shop.retailer)}`}
       target="_blank"
-      rel="sponsored nofollow noopener noreferrer"
+      rel="sponsored nofollow noopener"
       aria-hidden={copy === 2 ? true : undefined}
       tabIndex={copy === 2 ? -1 : undefined}
       data-marquee-copy={copy === 2 ? "2" : undefined}
