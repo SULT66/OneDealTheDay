@@ -117,6 +117,31 @@ assert.strictEqual(
   "display_score still changes depending on whether the listing was once a daily pick",
 );
 
+/*
+ * And the snapshot's price must not reach the live score either.
+ *
+ * Moving the score off drop_score was only half the fix: the recalculation,
+ * the eligibility test and the commerce quality all still read drop_price, so
+ * the listing went on being scored against the price it had on the day it was
+ * chosen. Search and the product page stayed apart — 84 against 86 — for a
+ * reason one step further down than the one I had just fixed.
+ *
+ * A drop price far below today's is the version that would move the number if
+ * anything still read it.
+ */
+const cheapSnapshot = presentProduct({
+  ...fixture,
+  drop_score: 77,
+  drop_score_model: "current-offer-v7",
+  drop_price: fixture.current_price * 0.4,
+  drop_original_price: fixture.current_price,
+}, "fr");
+assert.strictEqual(
+  cheapSnapshot.display_score,
+  presentProduct(fixture, "fr").display_score,
+  "the archived drop price is still reaching the live score",
+);
+
 const legacySnapshot = presentProduct({...fixture, drop_score:31, drop_price:44.62}, "fr");
 assert.notStrictEqual(legacySnapshot.display_score, 31, "a legacy archive snapshot must not expose the obsolete low score");
 
