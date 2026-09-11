@@ -77,7 +77,7 @@ const {
   outboundPath
 } = require("./retailerLinks");
 const { storefrontUrl } = require("./storefrontLinks");
-const { hostLabel, verifyOutbound } = require("./outboundLinks");
+const { hostLabel, verifyOutbound, withSignedLinks } = require("./outboundLinks");
 const { labelClick, liveDropLabel } = require("./clickLabels");
 const {
   challengeResponse: ebayChallengeResponse,
@@ -383,7 +383,7 @@ app.post("/api/shopping-assistant/stream", shoppingAssistantRateLimit, async (re
   });
   const send = (payload) => {
     if (res.writableEnded) return;
-    res.write(`${JSON.stringify(payload)}\n`);
+    res.write(`${JSON.stringify(withSignedLinks(payload))}\n`);
   };
 
   const key = cacheKey({
@@ -496,7 +496,7 @@ app.post("/api/shopping-assistant", shoppingAssistantRateLimit, async (req, res)
   const cached = key ? readCachedAnswer(db, key) : null;
   if (cached) {
     rememberExchange(req, selectedMarket.code, cached);
-    return res.set("Cache-Control", "no-store").json(cached);
+    return res.set("Cache-Control", "no-store").json(withSignedLinks(cached));
   }
 
   let hardTimeoutTimer;
@@ -548,7 +548,7 @@ app.post("/api/shopping-assistant", shoppingAssistantRateLimit, async (req, res)
       }
     }
     rememberExchange(req, selectedMarket.code, result);
-    return res.set("Cache-Control", "no-store").json(result);
+    return res.set("Cache-Control", "no-store").json(withSignedLinks(result));
   } catch (error) {
     clearTimeout(hardTimeoutTimer);
     const status = Number(error.statusCode) || 502;
