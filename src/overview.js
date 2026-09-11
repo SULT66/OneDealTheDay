@@ -18,12 +18,15 @@
  * fiction.
  */
 
+const { MEANINGFUL_REVIEW_COUNT } = require("./productPresentation");
+
 const sinceIso = (days, now = Date.now()) =>
   new Date(now - days * 24 * 60 * 60 * 1000).toISOString();
 
 function overview(db, { days = 30, now = Date.now() } = {}) {
   const since = sinceIso(days, now);
   const one = (sql, ...params) => db.prepare(sql).get(...params) || {};
+  const all = (sql, ...params) => db.prepare(sql).all(...params);
 
   const audience = one(
     `SELECT
@@ -128,6 +131,35 @@ function overview(db, { days = 30, now = Date.now() } = {}) {
      FROM products WHERE status = 'published'`,
   );
 
+  /*
+   * The same counts per shop, which is where they mean something.
+   *
+   * FED Fitness was connected, its feed ran, and its listings landed — none of
+   * which can be scored, become the Daily Drop, or reach the shelf of the best
+   * right now. Not a bug: the feed carries no review data and no reference
+   * price, so there is nothing to score and no saving to state, and the site
+   * says so correctly by printing no number. But nothing anywhere said it, so
+   * a shop could be signed, ingested and quietly inert, and the only way to
+   * find out was to notice its name never appearing.
+   *
+   * Both columns are things the merchant chooses to send. An Awin feed is
+   * assembled column by column, so "this shop sends no reviews" is usually one
+   * request away from being fixed — and worth knowing before the next shop is
+   * connected on the same terms.
+   */
+  const shops = all(
+    `SELECT
+       COALESCE(NULLIF(retailer_name, ''), source, 'unknown') AS shop,
+       COUNT(*) AS listings,
+       SUM(CASE WHEN rating > 0 AND review_count >= ? THEN 1 ELSE 0 END) AS can_be_scored,
+       SUM(CASE WHEN original_price > current_price THEN 1 ELSE 0 END) AS can_state_a_saving
+     FROM products
+     WHERE status = 'published'
+     GROUP BY shop
+     ORDER BY listings DESC`,
+    MEANINGFUL_REVIEW_COUNT,
+  );
+
   const number = (value) => Math.max(0, Math.round(Number(value) || 0));
 
   return {
@@ -174,6 +206,14 @@ function overview(db, { days = 30, now = Date.now() } = {}) {
     catalogue: {
       listings: number(catalogue.listings),
       withReviews: number(catalogue.with_reviews),
+      /* Per shop, so a feed that supplies nothing scoreable is visible as soon
+         as it lands rather than months later. */
+      shops: shops.map((shop) => ({
+        shop: String(shop.shop || "unknown"),
+        listings: number(shop.listings),
+        canBeScored: number(shop.can_be_scored),
+        canStateASaving: number(shop.can_state_a_saving),
+      })),
     },
     /*
      * Said out loud rather than left as a gap somebody fills in with a guess.

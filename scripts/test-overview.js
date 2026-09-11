@@ -72,14 +72,24 @@ db.prepare("INSERT INTO users(email,name,password_hash,membership,market,created
 db.prepare("INSERT INTO users(email,name,password_hash,membership,market,created_at,google_sub) VALUES(?,?,?,?,?,?,?)")
   .run("b@example.com", "B", "x", "free", "us", longAgo, "sub-1");
 
-db.prepare(`INSERT INTO products(external_id,market,title,current_price,currency,status,rating,updated_at,first_seen_at,last_seen_at)
-  VALUES(?,?,?,?,?,?,?,?,?,?)`).run("p1", "us", "Reviewed thing", 40, "USD", "published", 4.5, inWindow, inWindow, inWindow);
-db.prepare(`INSERT INTO products(external_id,market,title,current_price,currency,status,rating,updated_at,first_seen_at,last_seen_at)
-  VALUES(?,?,?,?,?,?,?,?,?,?)`).run("p2", "us", "Unreviewed thing", 40, "USD", "published", 0, inWindow, inWindow, inWindow);
+const product = db.prepare(`INSERT INTO products(
+  external_id,market,title,retailer_name,current_price,original_price,currency,status,rating,review_count,
+  updated_at,first_seen_at,last_seen_at
+) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`);
+
+product.run("p1", "us", "Reviewed thing", "eBay", 40, 60, "USD", "published", 4.5, 12, inWindow, inWindow, inWindow);
+product.run("p2", "us", "Unreviewed thing", "FED Fitness", 40, null, "USD", "published", 0, 0, inWindow, inWindow, inWindow);
 /* A draft is not part of the catalogue anybody can see, so it must not be
    counted in it. */
-db.prepare(`INSERT INTO products(external_id,market,title,current_price,currency,status,rating,updated_at,first_seen_at,last_seen_at)
-  VALUES(?,?,?,?,?,?,?,?,?,?)`).run("p3", "us", "Draft thing", 40, "USD", "candidate", 4.9, inWindow, inWindow, inWindow);
+product.run("p3", "us", "Draft thing", "FED Fitness", 40, 90, "USD", "candidate", 4.9, 40, inWindow, inWindow, inWindow);
+/*
+ * Rated, and still not scoreable.
+ *
+ * Two five-star reviews is an anecdote, and the site refuses to build a score
+ * on one — so a shop whose feed carries ratings can still be sending nothing
+ * usable. Counting "has a rating" here would have reported that shop as fine.
+ */
+product.run("p4", "us", "Barely reviewed thing", "Giftlab", 40, 55, "USD", "published", 5, 2, inWindow, inWindow, inWindow);
 
 db.prepare("INSERT INTO price_watches(product_id,email,market,price_when_asked,created_at,notified_at) VALUES(?,?,?,?,?,?)")
   .run(1, "watch@example.com", "us", 40, inWindow, null);
@@ -167,8 +177,32 @@ assert.strictEqual(numbers.live.remindersAsked, 2);
 assert.strictEqual(numbers.live.remindersSent, 2, "two stages sent for one person, none for the other");
 assert.strictEqual(numbers.live.announcementsSent, 1);
 
-assert.strictEqual(numbers.catalogue.listings, 2, "published only");
-assert.strictEqual(numbers.catalogue.withReviews, 1);
+assert.strictEqual(numbers.catalogue.listings, 3, "published only");
+assert.strictEqual(numbers.catalogue.withReviews, 2);
+
+/*
+ * Per shop, because that is where the number is actionable: a shop can be
+ * connected, ingesting nightly and incapable of ever producing a pick.
+ */
+const byShop = Object.fromEntries(numbers.catalogue.shops.map((shop) => [shop.shop, shop]));
+assert.deepStrictEqual(byShop["eBay"], {
+  shop: "eBay",
+  listings: 1,
+  canBeScored: 1,
+  canStateASaving: 1,
+});
+/* The whole point of the table: listings arriving, none of them usable. */
+assert.deepStrictEqual(byShop["FED Fitness"], {
+  shop: "FED Fitness",
+  listings: 1,
+  canBeScored: 0,
+  canStateASaving: 0,
+});
+assert.strictEqual(byShop["Giftlab"].canBeScored, 0, "two reviews is not evidence");
+assert.strictEqual(byShop["Giftlab"].canStateASaving, 1);
+/* Drafts are not in the shop table either, or a shop would look busier than
+   the catalogue it actually contributes to. */
+assert.strictEqual(byShop["FED Fitness"].listings, 1, "the candidate row must not be counted");
 
 /* A shorter window has to move the numbers that are windowed and leave the
    standing totals alone — the panel labels them differently and would be

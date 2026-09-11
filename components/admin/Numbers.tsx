@@ -40,7 +40,11 @@ type Overview = {
     remindersSent: number;
     announcementsSent: number;
   };
-  catalogue: { listings: number; withReviews: number };
+  catalogue: {
+    listings: number;
+    withReviews: number;
+    shops: { shop: string; listings: number; canBeScored: number; canStateASaving: number }[];
+  };
   notMeasuredHere: string[];
 };
 
@@ -135,6 +139,64 @@ export function Numbers({ adminKey }: { adminKey: string }) {
           note={`of ${count(catalogue.listings)} published`}
         />
       </Group>
+
+      {/*
+        * What each shop's feed is actually good for.
+        *
+        * A shop can be connected, ingesting nightly and completely inert: FED
+        * Fitness landed 41 listings, none of which can carry a score or state
+        * a saving, because its feed sends no reviews and no reference price.
+        * That is the site behaving correctly — it will not print a number it
+        * cannot stand behind — but it means those listings can never be the
+        * Daily Drop or reach a ranked shelf, and nothing said so out loud.
+        *
+        * Both columns are the merchant's choice of what to send, and an Awin
+        * feed is assembled column by column, so a zero here is usually one
+        * email away from being fixed.
+        */}
+      <section className="mt-6">
+        <h3 className="text-xs font-semibold uppercase tracking-[0.12em] text-fg-subtle">
+          What each shop sends
+        </h3>
+        <div className="mt-2 overflow-x-auto rounded-2xl border border-border">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border text-left text-xs text-fg-subtle">
+                <th className="px-4 py-2 font-medium">Shop</th>
+                <th className="px-4 py-2 text-right font-medium">Listings</th>
+                <th className="px-4 py-2 text-right font-medium">Can be scored</th>
+                <th className="px-4 py-2 text-right font-medium">Can show a saving</th>
+              </tr>
+            </thead>
+            <tbody>
+              {catalogue.shops.map((shop) => (
+                <tr key={shop.shop} className="border-b border-border last:border-0">
+                  <td className="px-4 py-2 text-fg">{shop.shop}</td>
+                  <td className="px-4 py-2 text-right text-fg tnum">{count(shop.listings)}</td>
+                  {/* A zero is the point of the table, so it is not left to
+                      read like any other number. */}
+                  <td
+                    className={`px-4 py-2 text-right tnum ${shop.canBeScored ? "text-fg" : "font-semibold text-fg-muted"}`}
+                  >
+                    {count(shop.canBeScored)}
+                  </td>
+                  <td
+                    className={`px-4 py-2 text-right tnum ${shop.canStateASaving ? "text-fg" : "font-semibold text-fg-muted"}`}
+                  >
+                    {count(shop.canStateASaving)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="mt-2 text-xs leading-relaxed text-fg-subtle">
+          A listing needs real reviews before it can carry a Deal Score, and a
+          reference price before a discount can be stated. Both come from the
+          shop&rsquo;s feed: a shop sitting on zero is one that can never win a
+          drop until its feed carries those columns.
+        </p>
+      </section>
 
       <Group title="Left for a shop">
         <Stat
