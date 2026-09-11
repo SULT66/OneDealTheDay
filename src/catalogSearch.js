@@ -133,6 +133,8 @@ function searchCatalogProducts(rows, options) {
     .filter(product => updatedAfter == null || timestamp(product) >= updatedAfter);
 
   const scored = selectUniqueProducts(scoreOffers(candidates, {
+    /* Search ranks; it does not re-decide what a listing is worth. */
+    preservePublishedScore:true,
     query:options.query,
     minimumPrice:options.minimumPrice,
     maximumPrice:options.maximumPrice,
