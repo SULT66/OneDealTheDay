@@ -402,9 +402,16 @@ function normalize(record, definition, market, index, map) {
    * It is not a count of units and the page never says it is. It is a real
    * statement about a real answer from the shop.
    */
-  const availability = /^(?:0|false|no|out[ _-]?of[ _-]?stock|unavailable)$/i.test(availabilityValue)
-    ? "Out of stock"
-    : availabilityValue || "In stock";
+  /* Same three answers as the Newegg provider, and for the same reason: a row
+     being in the feed says the shop still sells it, which is not the sentence
+     "in stock" and must not be printed as one. Tribesigns and Mooncool fill
+     this field in and keep their answer; Giftlab does not, and its listings
+     now say so. */
+  const availability = !availabilityValue
+    ? ""
+    : /^(?:0|false|no|out[ _-]?of[ _-]?stock|unavailable)$/i.test(availabilityValue)
+      ? "Out of stock"
+      : availabilityValue;
   const shipping = resolveShipping(record, map, definition, currentPrice);
   return {
     external_id:rawId,
