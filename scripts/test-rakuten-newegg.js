@@ -91,6 +91,47 @@ async function run() {
   assert.strictEqual(products[0].original_price, 699.99);
   assert(products[0].affiliate_url.includes("linksynergy.com"));
   assert.strictEqual(products[0].shipping_cost, null, "Unknown shipping must not be invented");
+  /*
+   * Nor must unknown stock.
+   *
+   * This fixture carries no <instock> tag, which is what Newegg's feed
+   * actually looks like — and the importer answered that silence with "In
+   * stock" on the argument that a listing coming back from today's search is
+   * a real answer from the shop. It is, and it is a different sentence: being
+   * advertised today says the shop still sells the thing, not that a unit is
+   * waiting. Every listing in the catalogue claimed stock, 1,595 of them on
+   * the strength of nothing, and the product page turned that into
+   * schema.org/InStock for Google.
+   *
+   * The useful half of that argument is kept by checked_at, which says when
+   * the shop last advertised the row.
+   */
+  assert.strictEqual(products[0].availability, "", "Unknown stock must not be reported as in stock");
+  assert.ok(products[0].checked_at, "the date the shop last advertised it is what we do know");
+
+  /* A merchant that does fill the field keeps its own answer, in both
+     directions. */
+  const withStock = await searchProducts({
+    clientId:"test-client",
+    clientSecret:"test-secret",
+    publisherSid:"1234567",
+    mid:"44583",
+    keywords:["graphics card"],
+    market:{code:"us", currency:"USD"},
+    client:{search:async () => raw.map(item => ({...item, inStock:"yes"}))}
+  });
+  assert.strictEqual(withStock[0].availability, "In stock");
+
+  const soldOut = await searchProducts({
+    clientId:"test-client",
+    clientSecret:"test-secret",
+    publisherSid:"1234567",
+    mid:"44583",
+    keywords:["graphics card"],
+    market:{code:"us", currency:"USD"},
+    client:{search:async () => raw.map(item => ({...item, inStock:"no"}))}
+  });
+  assert.strictEqual(soldOut[0].availability, "Out of stock");
 
   await assert.rejects(
     () => searchProducts({

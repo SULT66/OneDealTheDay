@@ -78,6 +78,28 @@ function parseProduct(block) {
   };
 }
 
+/*
+ * Three answers, and silence is one of them.
+ *
+ * This used to return "In stock" whenever the merchant had not said
+ * otherwise, on the argument that a listing coming back from today's product
+ * search is a real answer from the shop. That argument is true and it is not
+ * the same sentence: being advertised today says the shop still sells the
+ * thing, not that a unit is on a shelf, and the card was printing the second
+ * one. Every listing in the catalogue — all 2,088 of them — claimed stock,
+ * and for the 1,595 from a feed that carries no stock field the claim rested
+ * on nothing.
+ *
+ * The fact that the row is in today's feed is not lost: it is what
+ * checked_at records, and it is the honest version of the sentence. What is
+ * gone is the invented one.
+ */
+function availabilityFrom(value) {
+  const stated = text(value);
+  if (!stated) return "";
+  return /^(?:0|false|no|out[ _-]?of[ _-]?stock|unavailable)$/i.test(stated) ? "Out of stock" : "In stock";
+}
+
 function normalizeProduct(item, keyword, rank, market) {
   const salePrice = item.salePrice > 0 ? item.salePrice : null;
   const retailPrice = item.price > 0 ? item.price : null;
@@ -129,9 +151,7 @@ function normalizeProduct(item, keyword, rank, market) {
      * a real statement about a real answer from the shop, which "" was not and
      * an invented "Available" certainly was not.
      */
-    availability:/^(?:0|false|no|out[ _-]?of[ _-]?stock)$/i.test(text(item.inStock))
-      ? "Out of stock"
-      : "In stock",
+    availability:availabilityFrom(item.inStock),
     checked_at:new Date().toISOString(),
     market:market?.code || "us",
     source:"newegg",
