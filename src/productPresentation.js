@@ -122,11 +122,27 @@ function scoreBreakdown(product) {
   }
 }
 
-function oneDailyDropScore(product) {
+/*
+ * The score — of one of two kinds, and never the wrong one under the other's
+ * name.
+ *
+ * This preferred `drop_score` whenever a product carried one, so any listing
+ * that had ever been a daily pick was scored from that old snapshot wherever it
+ * appeared. The search endpoint attaches the snapshot to every result it can,
+ * so the same earbuds read 84 in search and 86 on their own page: one field,
+ * one label, two numbers. A reviewer found it in minutes and was right to
+ * distrust the whole screen for it — a score that disagrees with itself is not
+ * a score.
+ *
+ * The snapshot now has to be asked for. The archive asks, because "what we
+ * picked that day" is a statement about that day and recalibrating it would
+ * rewrite history. Everywhere else gets today's number.
+ */
+function oneDailyDropScore(product, { snapshot = false } = {}) {
   const breakdown = scoreBreakdown(product);
-  const raw = product?.drop_score ?? product?.score;
+  const isSelectionSnapshot = snapshot && product?.drop_score != null;
+  const raw = isSelectionSnapshot ? product?.drop_score : product?.score;
   const value = number(raw, NaN);
-  const isSelectionSnapshot = product?.drop_score != null;
   const scoreModel = isSelectionSnapshot ? product?.drop_score_model : breakdown.model;
   if (scoreModel === SCORE_MODEL && Number.isFinite(value)) {
     return Math.round(Math.max(0, Math.min(100, value)));
@@ -393,13 +409,11 @@ function presentProduct(product, language = "en") {
        worse offer. The drop's ten slots still demand one; a product page
        scores what is known and lets the confidence carry the rest. */
     requireKnownFulfillment:false
-  }) ? publicOneDailyDropScore(rawDealScore, confidence, product?.drop_score != null ? null : commerceQuality({
-    /* A drop snapshot keeps the score it was given on the day it was chosen;
-       recalibrating an archived selection would rewrite history. */
+  }) ? publicOneDailyDropScore(rawDealScore, confidence, commerceQuality({
     ...product,
     current_price:product?.drop_price ?? product?.current_price,
     original_price:product?.drop_original_price ?? product?.original_price
-  }), product?.drop_score != null ? null : {
+  }), {
     /* Reviews of the product, not of the seller. A shop with a spotless
        feedback record has still told us nothing about this thing. */
     hasReviews: number(product.review_count) >= MEANINGFUL_REVIEW_COUNT && number(product.rating) > 0,
@@ -407,6 +421,23 @@ function presentProduct(product, language = "en") {
        disagree about whether there is a saving. */
     hasStatedDiscount: discount > 0 && priceIsCurrent,
   }) : null;
+
+  /*
+   * The number as it stood on the day this was chosen, for the one place that
+   * is a statement about that day: the archive.
+   *
+   * Kept out of display_score deliberately. Both are real and they mean
+   * different things, and putting them in one field is what let a search
+   * result and a product page disagree about the same product.
+   *
+   * Not recalibrated — no commerce quality, no evidence test. Those describe
+   * the listing as it is now, and applying them to a past selection would
+   * rewrite what we said at the time, which is the whole reason the snapshot
+   * exists.
+   */
+  const selectionScore = product?.drop_score != null
+    ? publicOneDailyDropScore(oneDailyDropScore(product, { snapshot: true }), confidence, null, null)
+    : null;
   const productRating = number(product.rating, NaN);
   const sellerPercent = sellerRatingPercent(product);
   const sellerFeedbackCount = Math.max(0, Math.round(number(product.seller_feedback_count)));
@@ -459,6 +490,7 @@ function presentProduct(product, language = "en") {
     display_score_context: t(language, "product.overallDealScore"),
     display_evidence_confidence: confidence,
     display_evidence_confidence_label: t(language, "product.evidenceConfidence"),
+    display_score_at_selection: selectionScore,
     display_score_at_selection_label: t(language, "product.scoreAtSelection"),
     display_product_rating: Number.isFinite(productRating) && productRating > 0
       ? `${productRating.toFixed(1)}/5`

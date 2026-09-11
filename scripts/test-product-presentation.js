@@ -97,7 +97,25 @@ const correctedSnapshot = presentProduct({
 /* 83 rather than 89 since the band moved from 82-95 down to 70-95; the point
    of the assertion is that a snapshot is scored by the calibration and not by
    its stored raw total. */
-assert.strictEqual(correctedSnapshot.display_score, 83, "a qualified snapshot must use the calibrated public score");
+assert.strictEqual(
+  correctedSnapshot.display_score_at_selection,
+  83,
+  "a qualified snapshot must use the calibrated public score",
+);
+/*
+ * The snapshot moved out of display_score, and that is the fix for a bug a
+ * reviewer found in minutes: display_score preferred the snapshot whenever one
+ * existed, so a listing that had once been a daily pick read 84 in search and
+ * 86 on its own page — one field, one label, two numbers.
+ *
+ * One field, one meaning. A listing scores the same whether or not it was ever
+ * chosen.
+ */
+assert.strictEqual(
+  correctedSnapshot.display_score,
+  presentProduct(fixture, "fr").display_score,
+  "display_score still changes depending on whether the listing was once a daily pick",
+);
 
 const legacySnapshot = presentProduct({...fixture, drop_score:31, drop_price:44.62}, "fr");
 assert.notStrictEqual(legacySnapshot.display_score, 31, "a legacy archive snapshot must not expose the obsolete low score");

@@ -1821,7 +1821,14 @@ const shell = (title, description, canonical, body, schema = null, image = "", r
 };
 
 const scoreMetrics = (display, language = "en", { atSelection = false } = {}) => {
-  const score = display?.display_score == null ? NaN : Number(display.display_score);
+  /* At selection the archive means the number from that day, which now has its
+     own field: one field carrying both meanings is what made a search result
+     and a product page disagree. Falls back for a selection saved before the
+     snapshot was kept separately. */
+  const shown = atSelection && display?.display_score_at_selection != null
+    ? display.display_score_at_selection
+    : display?.display_score;
+  const score = shown == null ? NaN : Number(shown);
   const hasScore = Number.isFinite(score) && score >= 60;
   const productRating = clean(display?.display_product_rating);
   const sellerRating = clean(display?.display_seller_rating);
