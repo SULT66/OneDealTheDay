@@ -145,8 +145,28 @@ export function LiveDropPanel({
   const reported = useRef(new Set<string>());
   useEffect(() => {
     if (!drop) return;
+    /*
+     * Somebody who opens the page days early counts too.
+     *
+     * Only the waiting room and the reveal were reported, so every visit before
+     * the last five minutes was invisible: a drop advertised on Monday and
+     * opened on Friday showed nobody arriving all week, and the only people in
+     * "arrived" were those who happened to press the reminder. That is the
+     * number the funnel starts from, so it made the whole ladder unreadable —
+     * an ad could bring twenty people and the console would say none came.
+     *
+     * "ended" and "sold_out" stay unreported: arriving after the fact is a
+     * different thing from arriving for it, and counting them would inflate a
+     * drop's audience for as long as the page exists.
+     */
     const stage =
-      drop.state === "waiting" ? "waiting_room" : drop.state === "live" ? "reveal" : "";
+      drop.state === "upcoming"
+        ? "arrived"
+        : drop.state === "waiting"
+          ? "waiting_room"
+          : drop.state === "live"
+            ? "reveal"
+            : "";
     if (!stage) return;
     const seen = `${drop.drop_key}:${stage}`;
     if (reported.current.has(seen)) return;
@@ -216,7 +236,17 @@ export function LiveDropPanel({
   const finished = drop.state === "sold_out" || drop.state === "ended";
 
   return (
-    <Frame>
+    /*
+     * The backdrop belongs to an event in progress, not to the page.
+     *
+     * It is a fixed band behind the top of the card, which reads as a lit stage
+     * while the card is tall enough to sit on it — with the broadcast panel in
+     * it, that is most of the drop. On a short card, an ended drop or one still
+     * hours away, the band sticks out past the card as a black rectangle with
+     * nothing in it, which is what it looked like: a stray shape, not a
+     * background.
+     */
+    <Frame lit={drop.state === "waiting" || drop.state === "live"}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <p className="text-lg font-black tracking-tight text-fg sm:text-xl">
@@ -347,10 +377,39 @@ export function LiveDropPanel({
   );
 }
 
-function Frame({ children }: { children: React.ReactNode }) {
+function Frame({ children, lit = false }: { children: React.ReactNode; lit?: boolean }) {
   return (
-    <section className="mx-auto w-full max-w-6xl px-3 py-6 sm:px-6 sm:py-10">
-      <div className="rounded-3xl border border-border bg-surface p-4 shadow-sm sm:p-6">{children}</div>
+    /*
+     * A stage, but only while something is on it.
+     *
+     * The page was one white card on white and read like a form, so the card
+     * got the site's own graphite behind it — the surface the homepage hero
+     * uses — to be lit against something instead of floating on nothing.
+     *
+     * The band is a fixed height, which works while the card is tall enough to
+     * cover it: during the drop, with the broadcast panel inside. On a short
+     * card — an ended drop, or one still hours away — it stuck out past the
+     * card as a black rectangle containing nothing, and read as a stray shape
+     * rather than a background. So it appears while the drop is on, and the
+     * rest of the time the page is plain.
+     *
+     * Decoration only: aria-hidden, no pointer events, nothing that moves or
+     * carries meaning. The countdown and the stock are the page; this is the
+     * room they stand in, and an empty room needs no lighting.
+     */
+    <section className="relative mx-auto w-full max-w-6xl px-3 py-6 sm:px-6 sm:py-10">
+      {lit && (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-56 overflow-hidden rounded-b-[2rem] bg-graphite sm:h-64"
+        >
+          {/* A single soft light above the stage. One accent, kept faint: the
+              lime is the buy button's colour and it should not have to compete
+              with the wall behind it. */}
+          <div className="absolute -top-24 left-1/2 h-56 w-[36rem] -translate-x-1/2 rounded-full bg-lime/20 blur-3xl" />
+        </div>
+      )}
+      <div className="rounded-3xl border border-border bg-surface p-4 shadow-lg sm:p-6">{children}</div>
     </section>
   );
 }
@@ -421,12 +480,19 @@ function RemindMe({ dropKey }: { dropKey: string }) {
 
   if (!open) {
     return (
+      /*
+       * The one thing to do on this page before the drop opens, and it looked
+       * like the least important: an outlined button beside a filled one, so
+       * the eye went to "Ask a live question" and the reminder read as a
+       * secondary option. It is the opposite — a question is a nice extra, and
+       * the reminder is the whole reason to arrive early.
+       */
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex h-12 items-center rounded-full border border-border px-5 text-sm font-semibold text-fg transition-colors hover:bg-surface-2"
+        className="inline-flex h-12 items-center rounded-full bg-lime px-6 text-sm font-bold text-ink transition-opacity hover:opacity-88"
       >
-        Remind me
+        Remind me when it opens
       </button>
     );
   }
@@ -517,8 +583,22 @@ function BroadcastStage({ market, drop }: { market: string; drop: LiveDropView }
    * beside it whenever both are supplied. Either runs alone if that is all
    * there is.
    */
-  const hasHost = hasStream || hasPresentation;
-  const hasDemo = hasPresentation && hasStream;
+  /*
+   * Chloe is a presenter, and she was treated as the last resort.
+   *
+   * The host slot took a stream or a recording, and she appeared only when
+   * there was neither — so supplying product footage silently removed her, and
+   * the two things this format is built on could never be on screen together.
+   * That is exactly backwards: a live host who cannot hold anything up is the
+   * case the second panel exists for.
+   *
+   * So she counts as a host, and any recorded footage then belongs in the
+   * product panel beside her rather than on the stage instead of her.
+   */
+  /* Whether anything at all holds the stage. Not used to pick what — each
+     branch below tests its own source, which is what went wrong when this was
+     doing both jobs. */
+  const hasDemo = hasPresentation && (hasStream || drop.tavus_available);
   /* The product panel earns its place whenever there is anything to put in it,
      which is nearly always: a drop without a photograph is a drop nobody would
      publish. */
@@ -536,7 +616,17 @@ function BroadcastStage({ market, drop }: { market: string; drop: LiveDropView }
     >
       <div className="relative min-w-0 overflow-hidden bg-[radial-gradient(circle_at_50%_20%,#123b69_0%,#07172b_48%,#030914_100%)]">
         <StageLabel>AI host</StageLabel>
-        {hasHost ? (
+        {/*
+          * hasStream, not hasHost.
+          *
+          * This branch draws the stream iframe, and it was keyed on hasHost —
+          * which was fine while hasHost meant "a stream or a recording", and
+          * became a bug the moment Chloe was added to it: she made hasHost true,
+          * fell into the iframe, and the page rendered an <iframe> with no src.
+          * A black rectangle where the host should be, on a live drop, and she
+          * never got the chance to load at all.
+          */}
+        {hasStream ? (
           <div className="relative aspect-[4/3] w-full">
             <iframe
               src={drop.stream_embed_url}
@@ -546,20 +636,29 @@ function BroadcastStage({ market, drop }: { market: string; drop: LiveDropView }
               className="absolute inset-0 h-full w-full border-0"
             />
           </div>
+        ) : drop.tavus_available ? (
+          /* A live host outranks a recording. She answers questions and a file
+             cannot, and with her on the stage the footage moves to the panel
+             beside her, which is where a presenter who cannot hold anything up
+             needs it to be. */
+          <TavusHost market={market} drop={drop} />
         ) : hasPresentation ? (
           /* The same recording for everybody, which is what makes it a
-             broadcast: no ceiling, no per-viewer cost, one message. */
+             broadcast: no ceiling, no per-viewer cost, one message. Looping,
+             because a drop runs for ten minutes and a clip that ends leaves a
+             black rectangle for the rest of them. Muted so the browser will
+             actually start it — an autoplaying video with sound is blocked. */
           <div className="relative aspect-[4/3] w-full">
             <video
               src={drop.video_url}
               controls
               autoPlay
+              muted
+              loop
               playsInline
               className="absolute inset-0 h-full w-full object-contain"
             />
           </div>
-        ) : drop.tavus_available ? (
-          <TavusHost market={market} drop={drop} />
         ) : (
           <div className="flex aspect-[4/3] w-full flex-col items-center justify-center px-8 text-center">
             {drop.image_url ? (

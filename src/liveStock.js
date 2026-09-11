@@ -132,6 +132,13 @@ async function refreshDropStock(drop, { db, readStock = readEbayStock, market, n
     return { changed: false, reason: `could not ask eBay: ${error.message}` };
   }
 
+  /* Stamped on any answer at all, including an unhelpful one. Without it a
+     drop nobody had asked about and a drop whose seller publishes no quantity
+     looked identical, and the console reported the second while the truth was
+     the first. */
+  db.prepare("UPDATE live_drops SET stock_checked_at=? WHERE id=?")
+    .run(new Date(now).toISOString(), drop.id);
+
   if (!stock.exact && !stock.outOfStock) return { changed: false, reason: "eBay gives no exact count", stock };
 
   /* Never above what this drop was allocated: the shop may have five hundred,

@@ -254,32 +254,53 @@ export async function searchDeals(marketCode: string, filter: DealFilter): Promi
   return sortDeals(applyFilter(found, rest), filter.sort);
 }
 
-export async function getDeal(marketCode: string, id: string): Promise<Deal | undefined> {
-  const deals = await fetchMarketCatalog(marketCode);
-  const dealId = dealIdFromParam(id);
-  const deal = deals.find((d) => d.id === dealId);
-  if (!deal) return undefined;
+type RawDealPageResponse = {
+  product: RawProduct;
+  related?: RawProduct[];
+  price_history?: RawPriceHistoryResponse;
+};
 
-  try {
+/**
+ * One small response for the product, its history and its related shelf.
+ *
+ * `generateMetadata`, the page and `getRelated` all reach this function with
+ * the same arguments. React's request cache and Next's five-minute data cache
+ * therefore turn those reads into one backend call instead of two complete
+ * catalogue downloads and a separate history request.
+ */
+const fetchDealPage = cache(
+  async (marketCode: string, id: string): Promise<RawDealPageResponse | undefined> => {
+    const dealId = dealIdFromParam(id);
+    const params = new URLSearchParams({ market: marketCode });
     const res = await fetch(
-      `${BACKEND_URL}/api/products/${encodeURIComponent(dealId)}/price-history`,
-      { next: { revalidate: 900 } },
+      `${BACKEND_URL}/api/products/${encodeURIComponent(dealId)}?${params}`,
+      { next: { revalidate: 300 } },
     );
-    if (res.ok) {
-      const raw = (await res.json()) as RawPriceHistoryResponse;
-      const { priceHistory, lows } = adaptPriceHistory(raw);
-      return { ...deal, priceHistory, lows };
+    if (res.status === 404) return undefined;
+    if (!res.ok) {
+      throw new Error(`Failed to load deal "${dealId}" for "${marketCode}" (${res.status}).`);
     }
-  } catch {
-    // Price history is a nice-to-have on the detail page — the deal itself
-    // still renders without it.
-  }
-  return deal;
-}
+    return (await res.json()) as RawDealPageResponse;
+  },
+);
+
+export const getDeal = cache(
+  async (marketCode: string, id: string): Promise<Deal | undefined> => {
+    const payload = await fetchDealPage(marketCode, id);
+    if (!payload) return undefined;
+    const deal = {
+      ...adaptProduct(payload.product),
+      rank: payload.product.daily_rank ?? 0,
+    };
+    if (!payload.price_history) return deal;
+    const { priceHistory, lows } = adaptPriceHistory(payload.price_history);
+    return { ...deal, priceHistory, lows };
+  },
+);
 
 /** Rank 1 — the single pick the whole site is built around. */
 export async function getTodaysDrop(marketCode: string): Promise<Deal> {
-  const deals = await fetchMarketCatalog(marketCode);
+  const deals = await fetchMarketCatalog(marketCode, 1);
   return deals[0];
 }
 
@@ -349,7 +370,7 @@ export async function getTopPicks(
 
 /** Everything except today's drop, in rank order. */
 export async function getMorePicks(marketCode: string, limit?: number): Promise<Deal[]> {
-  const deals = await fetchMarketCatalog(marketCode);
+  const deals = await fetchMarketCatalog(marketCode, limit ? limit + 1 : undefined);
   const rest = deals.slice(1);
   return limit ? rest.slice(0, limit) : rest;
 }
@@ -388,10 +409,11 @@ export async function getDeals(marketCode: string, filter: DealFilter = {}): Pro
 
 /** Same category first, then anything else with a strong score. */
 export async function getRelated(marketCode: string, deal: Deal, limit = 4): Promise<Deal[]> {
-  const deals = await fetchMarketCatalog(marketCode);
-  const sameCategory = deals.filter((d) => d.id !== deal.id && d.category === deal.category);
-  const rest = deals.filter((d) => d.id !== deal.id && d.category !== deal.category);
-  return [...sortDeals(sameCategory), ...sortDeals(rest)].slice(0, limit);
+  const payload = await fetchDealPage(marketCode, deal.id);
+  return (payload?.related ?? []).slice(0, limit).map((product, index) => ({
+    ...adaptProduct(product),
+    rank: index + 1,
+  }));
 }
 
 /**
@@ -539,16 +561,6 @@ export async function getArchive(marketCode: string, days = 30): Promise<Archive
       available?: boolean;
     }>;
   }>;
-  /* A pick is only linkable if the deal page can actually find it, and that
-     page reads the same catalog this call returns. Two separate things drop a
-     product out of it: being archived (checked server-side), and being merged
-     away as a duplicate offer — five identical "No Pull Dog Pet Harness"
-     listings collapse to one, and the archive was linking the four that lost.
-     Cross-checking against the catalog covers both without guessing at the
-     rules. `fetchMarketCatalog` is memoized per request, so this is free: the
-     header on the same page has already fetched it. */
-  const catalogIds = new Set((await fetchMarketCatalog(marketCode)).map((d) => d.id));
-
   return raw.map((day) => ({
     date: day.date,
     picks: day.picks.map((pick, index) => ({
@@ -559,7 +571,11 @@ export async function getArchive(marketCode: string, days = 30): Promise<Archive
           ? pick.drop_price
           : null,
       status: pick.availability_status || "",
-      available: pick.available !== false && catalogIds.has(String(pick.id)),
+      /* The archive endpoint applies the same published/source/eligibility
+         rules as the product route. It used to be checked a second time here
+         by downloading the entire market catalogue — several megabytes to
+         decide a boolean already present on every returned pick. */
+      available: pick.available !== false,
     })),
   }));
 }

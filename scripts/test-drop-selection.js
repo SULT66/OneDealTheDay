@@ -211,18 +211,18 @@ assert(
 const catalogSource = fs.readFileSync(path.join(__dirname, "..", "lib", "catalog.ts"), "utf8");
 const serverSource = fs.readFileSync(path.join(__dirname, "..", "src", "server.js"), "utf8");
 
-/* A past pick can stop being reachable two ways, and the archive hit both:
-   the product gets archived (/deal/:id and /go/:id require status='published'),
-   or it is merged away as a duplicate offer and disappears from the catalog the
-   deal page reads. Half of one market's archived picks were dead links. */
+/* A past pick stops being reachable when the product is archived. Duplicate
+   offers used to disappear because the product page searched the deduplicated
+   full catalogue; it now has an id endpoint, so a still-published historical
+   pick remains directly reachable without downloading that catalogue. */
 assert(
   /available:\s*stillLive/.test(serverSource),
   "the archive API must mark picks whose product is no longer published",
 );
 assert(
-  /catalogIds\.has\(String\(pick\.id\)\)/.test(catalogSource),
-  "the archive must cross-check every pick against the catalog the deal page reads, " +
-  "or a deduplicated-away offer is linked to a 404",
+  !/catalogIds\.has\(String\(pick\.id\)\)/.test(catalogSource) &&
+    serverSource.includes('app.get("/api/products/:id"'),
+  "the archive must rely on the point product endpoint instead of downloading the catalogue",
 );
 assert(
   /unavailable=\{!pick\.available\}/.test(

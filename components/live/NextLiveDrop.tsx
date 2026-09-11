@@ -90,6 +90,23 @@ export function NextLiveDrop({ market }: { market: string }) {
           </span>
           <span className="text-lg font-black text-fg tnum">{countdown}</span>
         </span>
+
+        {/*
+          * What to do about it, said out loud.
+          *
+          * This block was a countdown and nothing else. Somebody arriving from
+          * an ad reads "opens in 95 hours" and leaves, because nothing on it
+          * suggests there is an alternative to remembering by themselves — the
+          * reminder is one click away on the drop page and the block never
+          * mentions it.
+          *
+          * A span rather than a button: the whole block is already a link, and
+          * a control inside a link is a control that swallows the click it was
+          * supposed to pass on.
+          */}
+        <span className="inline-flex shrink-0 items-center rounded-full bg-lime px-4 py-1.5 text-xs font-bold text-ink">
+          {live ? "Join the drop" : "Remind me — one email when it opens"}
+        </span>
       </Link>
     </section>
   );

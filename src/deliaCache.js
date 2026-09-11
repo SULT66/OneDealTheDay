@@ -14,6 +14,12 @@
 const DEFAULT_TTL_MS = 6 * 60 * 60 * 1000;
 /** Enough rows to cover a busy evening without the table becoming a landfill. */
 const MAX_ROWS = 500;
+/*
+ * Part of every cache key, so a product-behaviour change cannot keep serving
+ * an answer produced by the previous rules for another six hours. Increment
+ * this whenever the shape or acceptance rules of a Delia answer change.
+ */
+const CACHE_VERSION = "v2";
 
 /**
  * The question, reduced to what it is actually asking.
@@ -52,7 +58,7 @@ function cacheKey({ message, messages, shoppingMission, excludedOfferUrls, marke
      them. */
   const product = Number(productId);
   const focus = Number.isInteger(product) && product > 0 ? `p${product}:` : "";
-  return `${marketCode}:${language}:${focus}${question}`;
+  return `${CACHE_VERSION}:${marketCode}:${language}:${focus}${question}`;
 }
 
 /**

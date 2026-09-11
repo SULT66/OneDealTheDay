@@ -228,10 +228,36 @@ assert(
   "getDeal no longer extracts the id, so the sitemap's URLs stop resolving",
 );
 assert(
+  /\/api\/products\/\$\{encodeURIComponent\(dealId\)\}/.test(catalogSource),
+  "the product page no longer uses the point product endpoint",
+);
+const getDealSource = /export const getDeal = cache\([\s\S]*?\n\);/.exec(catalogSource);
+assert(getDealSource, "getDeal is no longer request-memoized");
+assert(
+  !/fetchMarketCatalog/.test(getDealSource[0]),
+  "the product page downloads the complete market catalogue again",
+);
+const todaysDropSource = /export async function getTodaysDrop\([\s\S]*?\n\}/.exec(catalogSource);
+assert(todaysDropSource, "getTodaysDrop moved out of lib/catalog.ts");
+assert(
+  /fetchMarketCatalog\(marketCode, 1\)/.test(todaysDropSource[0]),
+  "Daily Drop downloads the complete market catalogue again",
+);
+const archiveSource = /export async function getArchive\([\s\S]*?\n\}/.exec(catalogSource);
+assert(archiveSource, "getArchive moved out of lib/catalog.ts");
+assert(
+  !/fetchMarketCatalog/.test(archiveSource[0]),
+  "the archive downloads the complete market catalogue to re-check availability",
+);
+assert(
   /export async function resolveCategory/.test(catalogSource),
   "categories are decided by the display file again, so the ones missing from it 404",
 );
 const serverSourceForSlugs = read("src", "server.js");
+assert(
+  serverSourceForSlugs.includes('app.get("/api/products/:id"'),
+  "the backend has no point product endpoint",
+);
 assert(
   /const categorySlug = value =>/.test(serverSourceForSlugs),
   "categories share the deal slug rule again, which spells them home-and-kitchen",
@@ -302,6 +328,21 @@ assert(
 assert(
   /app\.get\("\/api\/catalog-facets"/.test(appSource),
   "the facets endpoint is gone, so the filter panel has nothing cheap to call",
+);
+
+/*
+ * Product photos must not queue behind the application server.
+ *
+ * On the production single-core instance, an uncached retailer photo sent
+ * through /_next/image timed out after 60 seconds without returning a byte;
+ * the same URL loaded directly from the retailer CDN. ProductImage is shared
+ * by every category, search result and product page, so keep only these remote
+ * catalogue images out of the local optimizer.
+ */
+const productImage = read("components", "ui", "ProductImage.tsx");
+assert(
+  /<Image[\s\S]*?\bunoptimized\b/.test(productImage),
+  "retailer photos are routed through the application image optimizer again",
 );
 
 /*
@@ -377,4 +418,4 @@ for (const field of adapterReads) {
   );
 }
 
-console.log("Catalogue presentation checks passed: numbering, score order, one count, honest stock, one URL per thing, real search, cheap facets, partner pages, complete compact payload.");
+console.log("Catalogue presentation checks passed: numbering, score order, one count, honest stock, one URL per thing, real search, cheap facets, direct product images, partner pages, complete compact payload.");

@@ -478,7 +478,10 @@ db.exec(`
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     drop_id INTEGER NOT NULL,
     market TEXT NOT NULL DEFAULT 'us',
-    /* waiting_room, reveal, buy_click or remind. */
+    /* arrived, waiting_room, reveal, buy_click, buy_handoff or remind.
+       arrived is a visit before the waiting room opens, which nothing recorded
+       until it turned out the funnel started from a number that counted only
+       people who pressed the reminder. */
     event_type TEXT NOT NULL,
     session_id TEXT NOT NULL DEFAULT '',
     occurred_at TEXT NOT NULL,
@@ -631,6 +634,28 @@ if (!reminderColumns.has("reminded_hour_before_at")) {
  * to unset.
  */
 const dropColumns = new Set(db.prepare("PRAGMA table_info(live_drops)").all().map(column => column.name));
+/*
+ * The first time this drop was ever made public, and never cleared.
+ *
+ *  says where it is now, which is the wrong question for deletion:
+ * unpublishing a drop that already ran would otherwise make it erasable, and
+ * what it offered to real people is a record. A draft that was never public
+ * has no such history and can go.
+ */
+if (!dropColumns.has("first_published_at")) {
+  db.exec("ALTER TABLE live_drops ADD COLUMN first_published_at TEXT");
+  /* Anything already published when this column arrived was public before it
+     existed; stamping it with its start time keeps that true. */
+  db.exec("UPDATE live_drops SET first_published_at=start_at WHERE published=1 AND first_published_at IS NULL");
+}
+/* When the shop was last asked, whatever it answered.
+
+   stock_verified_at only records a useful answer, so a null there meant both
+   "eBay would not give a number" and "nobody has asked yet" — and the console
+   printed the first while the truth was the second. */
+if (!dropColumns.has("stock_checked_at")) {
+  db.exec("ALTER TABLE live_drops ADD COLUMN stock_checked_at TEXT");
+}
 if (!dropColumns.has("stock_verified_at")) {
   db.exec("ALTER TABLE live_drops ADD COLUMN stock_verified_at TEXT");
 }

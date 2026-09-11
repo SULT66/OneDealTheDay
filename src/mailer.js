@@ -207,31 +207,96 @@ const welcomeEmail = ({ name, email, market = "us" }) => sendEmail({
  * it is revealed when the drop opens, and giving it away removes the only
  * reason to arrive on time.
  */
-const liveDropSaveTheDateEmail = ({ email, title, market, startsAt, unsubscribeUrl }) => sendEmail({
+/*
+ * One shape for every Live Drop email.
+ *
+ * They were four separate blocks of ad-hoc HTML: a heading, the product's
+ * name as bare text, and an orange button — orange, on a site whose accent
+ * has been lime for months. Nothing showed the thing being sold. An email
+ * announcing a ten minute event for one product, with no picture of the
+ * product, is asking somebody to care on trust.
+ *
+ * Table-based and inline-styled because that is what mail clients render;
+ * Outlook has no flexbox and Gmail strips a stylesheet.
+ */
+const LIME = "#b8ec44";
+const INK = "#010101";
+const GRAPHITE = "#434343";
+
+const dropEmailLayout = ({ eyebrow, heading, title, brand, retailerName, retailPrice, currency, imageUrl, line, ctaLabel, ctaHref, footer }) => `
+  <div style="font-family:Arial,Helvetica,sans-serif;background:#f6f6f6;padding:24px 12px">
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:560px;margin:auto;background:#ffffff;border-radius:16px;overflow:hidden">
+      <tr><td style="background:${GRAPHITE};padding:18px 24px">
+        <span style="color:#ffffff;font-size:15px;font-weight:bold;letter-spacing:.02em">OneDailyDrop</span>
+        <span style="color:${LIME};font-size:15px;font-weight:bold"> LIVE</span>
+        ${eyebrow ? `<div style="color:rgba(255,255,255,.72);font-size:11px;letter-spacing:.14em;text-transform:uppercase;margin-top:6px">${escapeHtml(eyebrow)}</div>` : ""}
+      </td></tr>
+
+      ${imageUrl ? `<tr><td style="padding:0">
+        <img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(title)}" width="560"
+          style="display:block;width:100%;max-width:560px;height:auto;border:0;background:#f6f6f6">
+      </td></tr>` : ""}
+
+      <tr><td style="padding:24px">
+        <h1 style="margin:0 0 14px;font-size:24px;line-height:1.2;color:${INK}">${escapeHtml(heading)}</h1>
+        ${brand ? `<div style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#6b7280;margin-bottom:4px">${escapeHtml(brand)}</div>` : ""}
+        <div style="font-size:17px;font-weight:bold;color:${INK}">${escapeHtml(title)}</div>
+        ${retailerName ? `<div style="font-size:13px;color:#6b7280;margin-top:4px">Sold and shipped by ${escapeHtml(retailerName)}</div>` : ""}
+
+        ${retailPrice ? `<div style="margin-top:14px">
+          <span style="font-size:15px;color:#6b7280;text-decoration:line-through">${escapeHtml(currency || "")} ${escapeHtml(retailPrice)}</span>
+          <span style="font-size:13px;color:#6b7280;margin-left:8px">usual price</span>
+        </div>` : ""}
+
+        <p style="margin:16px 0 0;font-size:15px;line-height:1.6;color:#374151">${line}</p>
+
+        <p style="margin:24px 0 0">
+          <a href="${ctaHref}" style="background:${LIME};color:${INK};text-decoration:none;padding:14px 24px;border-radius:999px;font-weight:bold;font-size:15px;display:inline-block">${escapeHtml(ctaLabel)}</a>
+        </p>
+      </td></tr>
+
+      ${footer ? `<tr><td style="padding:0 24px 22px;font-size:12px;line-height:1.6;color:#9ca3af">${footer}</td></tr>` : ""}
+    </table>
+  </div>`;
+
+const dropUrl = (market) => `${SITE}/${encodeURIComponent(market)}/live`;
+
+/* The unsubscribe line, in the two forms these emails need. A reminder was
+   asked for and has nothing to leave; an announcement is marketing and must
+   always carry the way out. */
+const unsubscribeFooter = (unsubscribeUrl, because) => (unsubscribeUrl
+  ? `${escapeHtml(because)} <a href="${escapeHtml(unsubscribeUrl)}" style="color:#9ca3af">Unsubscribe</a> — one click, no sign-in.`
+  : "");
+
+const liveDropSaveTheDateEmail = ({ email, title, market, startsAt, unsubscribeUrl, brand, retailerName, retailPrice, currency, imageUrl }) => sendEmail({
   to: email,
-  subject: "Tomorrow: your Live Drop",
+  subject: `Tomorrow: ${title}`,
   unsubscribeUrl,
-  html: `
-    <div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;color:#17191d">
-      <h1 style="font-size:24px">Tomorrow</h1>
-      <p><strong>${escapeHtml(title)}</strong></p>
-      <p>One product, one price, ten minutes. It opens ${escapeHtml(startsAt)}.</p>
-      <p style="margin:28px 0"><a href="${SITE}/${encodeURIComponent(market)}/live" style="background:#ff6b00;color:#fff;text-decoration:none;padding:13px 20px;border-radius:10px;font-weight:bold">See the drop page</a></p>
-      <p style="color:#6b7280;font-size:13px">The price is revealed when it opens, not before.</p>
-      ${unsubscribeUrl ? `<p style="margin-top:24px;font-size:13px;color:#6b7280"><a href="${escapeHtml(unsubscribeUrl)}" style="color:#6b7280">Unsubscribe</a></p>` : ""}
-    </div>`
+  html: dropEmailLayout({
+    eyebrow: "Tomorrow",
+    heading: "Your Live Drop is tomorrow",
+    title, brand, retailerName, retailPrice, currency, imageUrl,
+    line: `One product, one price, ten minutes. It opens <strong>${escapeHtml(startsAt)}</strong>. The price is revealed when it opens, not before.`,
+    ctaLabel: "See the drop page",
+    ctaHref: dropUrl(market),
+    footer: unsubscribeFooter(unsubscribeUrl, "You asked to be reminded about this drop."),
+  }),
 });
 
-const liveDropStartingSoonEmail = ({ email, title, market, minutes }) => sendEmail({
+const liveDropStartingSoonEmail = ({ email, title, market, minutes, brand, retailerName, retailPrice, currency, imageUrl }) => sendEmail({
   to: email,
-  subject: `Your Live Drop opens in ${minutes} minutes`,
-  html: `
-    <div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;color:#17191d">
-      <h1 style="font-size:24px">In ${minutes} minutes</h1>
-      <p><strong>${escapeHtml(title)}</strong></p>
-      <p style="margin:28px 0"><a href="${SITE}/${encodeURIComponent(market)}/live" style="background:#ff6b00;color:#fff;text-decoration:none;padding:13px 20px;border-radius:10px;font-weight:bold">Open the drop</a></p>
-      <p>You asked us for this. There is nothing else to unsubscribe from.</p>
-    </div>`
+  subject: `Opens in ${minutes} minutes: ${title}`,
+  html: dropEmailLayout({
+    eyebrow: `In ${minutes} minutes`,
+    heading: `It opens in ${minutes} minutes`,
+    title, brand, retailerName, retailPrice, currency, imageUrl,
+    line: "Ten minutes, then it is gone. The price appears the moment it opens.",
+    ctaLabel: "Open the drop",
+    ctaHref: dropUrl(market),
+    /* Nothing to unsubscribe from: this is the thing they asked for, and
+       offering an exit from a one-off they requested reads as a mistake. */
+    footer: "You asked us for this one. There is nothing else to unsubscribe from.",
+  }),
 });
 
 /*
@@ -241,23 +306,20 @@ const liveDropStartingSoonEmail = ({ email, title, market, minutes }) => sendEma
  * asked about this drop. They subscribed to the site, so this is marketing and
  * carries a way out — and it is sent once, well ahead, never chased.
  */
-const liveDropAnnouncementEmail = ({ email, title, market, startsAt, unsubscribeUrl }) => sendEmail({
+const liveDropAnnouncementEmail = ({ email, title, market, startsAt, unsubscribeUrl, brand, retailerName, retailPrice, currency, imageUrl }) => sendEmail({
   to: email,
   subject: `A Live Drop is coming: ${title}`,
   unsubscribeUrl,
-  html: `
-    <div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;color:#17191d">
-      <h1 style="font-size:24px">One product. One price. Ten minutes.</h1>
-      <p><strong>${escapeHtml(title)}</strong></p>
-      <p>Opens ${escapeHtml(startsAt)}. The price is revealed the moment it does.</p>
-      <p style="margin:28px 0"><a href="${SITE}/${encodeURIComponent(market)}/live" style="background:#ff6b00;color:#fff;text-decoration:none;padding:13px 20px;border-radius:10px;font-weight:bold">Get reminded</a></p>
-      ${unsubscribeUrl ? `<p style="margin-top:24px;font-size:13px;color:#6b7280">
-        You are receiving this because you subscribed at OneDailyDrop.
-        <a href="${escapeHtml(unsubscribeUrl)}" style="color:#6b7280">Unsubscribe</a> — one click, no sign-in.
-      </p>` : ""}
-    </div>`
+  html: dropEmailLayout({
+    eyebrow: "One product. One price. Ten minutes.",
+    heading: "A Live Drop is coming",
+    title, brand, retailerName, retailPrice, currency, imageUrl,
+    line: `Opens <strong>${escapeHtml(startsAt)}</strong>. The price is revealed the moment it does — press the button and we will remind you.`,
+    ctaLabel: "Remind me when it opens",
+    ctaHref: dropUrl(market),
+    footer: unsubscribeFooter(unsubscribeUrl, "You are receiving this because you subscribed at OneDailyDrop."),
+  }),
 });
-
 /*
  * A price this person was watching has fallen.
  *

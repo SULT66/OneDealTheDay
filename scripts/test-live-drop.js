@@ -228,7 +228,7 @@ const allowed = /const LIVE_DROP_EVENTS = new Set\(\[([^\]]*)\]\)/.exec(serverSo
 assert(allowed, "the allowed Live Drop events are no longer declared in server.js");
 assert.deepStrictEqual(
   allowed[1].match(/"[a-z_]+"/g),
-  ['"waiting_room"', '"reveal"', '"host_started"', '"buy_click"', '"remind"'],
+  ['"arrived"', '"waiting_room"', '"reveal"', '"host_started"', '"buy_click"', '"remind"'],
   "the Live Drop funnel stages changed",
 );
 assert(
@@ -358,8 +358,11 @@ async function main() {
   /* Every admin route sits behind the key, the read included. The list hands
      back the drop price before the reveal, which is right for the person who
      set it and would be a leak on any unguarded route. */
-  const adminRoutes = serverSource.match(/app\.(?:get|post|delete)\("\/api\/admin\/live-drops[^"]*", *[a-z]+/g) || [];
-  assert.strictEqual(adminRoutes.length, 6, "the set of admin Live Drop routes changed");
+  /* patch is in the list because a verb missing from it is a route that
+     escapes the check below entirely — which is the one thing this exists to
+     prevent, and it nearly happened the day the media route was added. */
+  const adminRoutes = serverSource.match(/app\.(?:get|post|patch|delete)\("\/api\/admin\/live-drops[^"]*", *[a-z]+/g) || [];
+  assert.strictEqual(adminRoutes.length, 7, "the set of admin Live Drop routes changed");
   for (const route of adminRoutes) {
     assert(/, *admin$/.test(route), `an admin Live Drop route is not behind the key: ${route}`);
   }
@@ -371,9 +374,13 @@ async function main() {
     /dropState\(drop, Date\.now\(\)\) === "live"/.test(serverSource),
     "an open drop can now be unpublished from under whoever is watching it",
   );
+  /* The guard moved off the clock. A draft whose scheduled hour merely passed
+     was never public and has to be removable — dead test drafts had no way out
+     and polluted the funnel counts. What must survive is a drop that was
+     published even once, which first_published_at records and never clears. */
   assert(
-    /drop\.published \|\| Date\.now\(\) >= Date\.parse\(drop\.start_at\)/.test(serverSource),
-    "a drop that has run can now be deleted, so the record of what was offered can vanish",
+    /drop\.first_published_at/.test(serverSource),
+    "a drop that was once published can now be deleted, so the record of what was offered can vanish",
   );
 
   /* The buy link is the one field that sends a shopper off our site. */

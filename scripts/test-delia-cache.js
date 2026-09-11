@@ -29,6 +29,10 @@ assert.strictEqual(
   cacheKey({ message: "iphone 17 pro  256gb", marketCode: "us", language: "en" }),
   "the same question written differently produced two keys",
 );
+assert(
+  cacheKey({ message: "candles", marketCode: "us", language: "en" }).startsWith("v2:"),
+  "A Delia behaviour change did not invalidate answers produced by older rules",
+);
 
 /* Word order carries meaning and is deliberately left alone. */
 assert.notStrictEqual(

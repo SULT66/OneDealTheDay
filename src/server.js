@@ -1435,7 +1435,11 @@ app.post("/api/live/remind", authRateLimit, (req, res) => {
  * on a phone with a bad connection, is the same person arriving once, so the
  * unique index absorbs it and the response is the same either way.
  */
-const LIVE_DROP_EVENTS = new Set(["waiting_room", "reveal", "host_started", "buy_click", "remind"]);
+/* The events the page may report. A stage missing from here is silently
+   dropped, which is how "arrived" would have been added to the panel and
+   changed nothing at all. buy_handoff is absent on purpose: it is written by
+   the redirect itself and must not be claimable by a browser. */
+const LIVE_DROP_EVENTS = new Set(["arrived", "waiting_room", "reveal", "host_started", "buy_click", "remind"]);
 /*
  * How many people are watching, as opposed to how many ever arrived.
  *
@@ -2606,6 +2610,117 @@ app.get("/api/brands", (req,res) => {
   res.json(brands.map(brand => ({...brand,url:brandPath(brand.brand, selectedMarket)})));
 });
 app.get("/api/brands/:slug", (req,res) => { const products = uniqueProductsInOrder(db.prepare(`SELECT * FROM products WHERE status='published' AND ${sourceSql()} AND brand_slug=? ORDER BY COALESCE(ranking_score,score) DESC,score DESC`).all(req.params.slug)).filter(isPubliclyIndexable); if (!products.length) return res.status(404).json({error:"Brand not found"}); const brand = products[0].brand; res.json({brand,slug:req.params.slug,url:brandPath(brand),summary:{products:products.length,average_price:products.reduce((s,p)=>s+Number(p.current_price||0),0)/products.length,average_rating:products.reduce((s,p)=>s+Number(p.rating||0),0)/products.length,average_discount:products.reduce((s,p)=>s+discountPercent(p),0)/products.length,total_clicks:db.prepare(`SELECT COUNT(*) n FROM clicks c JOIN products p ON p.id=c.product_id WHERE c.destination_type='retailer' AND ${sourceSql("p")} AND p.brand_slug=?`).get(req.params.slug).n},products:products.map(p=>({...p,deal_url:dealPath(p)}))}); });
+const compactApiProduct = product => ({
+  id:product.id,
+  title:product.title,
+  brand:product.brand,
+  public_category:product.public_category,
+  retailer_name:product.retailer_name,
+  source:product.source,
+  image_url:product.image_url,
+  current_price:product.current_price,
+  original_price:product.original_price,
+  currency:product.currency,
+  display_score:product.display_score,
+  rating:product.rating,
+  review_count:product.review_count,
+  seller_name:product.seller_name,
+  seller_rating:product.seller_rating,
+  seller_feedback_count:product.seller_feedback_count,
+  display_seller_rating:product.display_seller_rating,
+  display_shipping_summary:product.display_shipping_summary,
+  shipping_summary:product.shipping_summary,
+  display_return_summary:product.display_return_summary,
+  return_summary:product.return_summary,
+  display_availability:product.display_availability,
+  display_shop_all:product.display_shop_all,
+  display_price_is_current:product.display_price_is_current,
+  availability:product.availability,
+  selection_reason:product.selection_reason,
+  display_selection_reason:product.display_selection_reason,
+  daily_rank:product.daily_rank,
+  checked_at:product.checked_at
+});
+/**
+ * Everything the Next.js product page needs, from indexed point queries.
+ *
+ * That page previously downloaded the complete market catalogue twice: once
+ * to find its own id and once to choose four related products. In the US that
+ * means thousands of rows and several megabytes of JSON before the first byte
+ * of HTML can be sent. Product lookup is an id query; related products need a
+ * short ranked window, not the rest of the market. Keeping both in one response
+ * also lets generateMetadata and the page render share the same memoized fetch.
+ */
+app.get("/api/products/:id", (req, res) => {
+  const id = /^\d+$/.test(String(req.params.id || "")) ? String(req.params.id) : "";
+  if (!id) return res.status(404).json({error:"Product not found"});
+  const selectedMarket = normalizeMarket(req.query.market) || requestMarket(req).code;
+  const product = db.prepare(`
+    SELECT * FROM products
+    WHERE id=? AND market=? AND status='published' AND ${sourceSql()}
+  `).get(id, selectedMarket);
+  if (!product) return res.status(404).json({error:"Product not found"});
+
+  const snapshot = db.prepare(`
+    SELECT rank,selection_reason
+    FROM daily_drops
+    WHERE product_id=? AND market=?
+      AND drop_date=(SELECT MAX(drop_date) FROM daily_drops WHERE market=?)
+    LIMIT 1
+  `).get(product.id, selectedMarket, selectedMarket);
+  const prepared = {
+    ...product,
+    daily_rank:snapshot?.rank || null,
+    selection_reason:snapshot?.selection_reason || product.selection_reason,
+    slug:slug(product.title),
+    deal_url:dealPath(product),
+    category_url:isPublicCategory(canonicalCategory(product)) ? catPath(canonicalCategory(product), selectedMarket) : null,
+    brand_url:product.brand && !isGenericBrand(product.brand_slug || product.brand)
+      ? brandPath(product.brand, selectedMarket)
+      : null
+  };
+
+  const relatedRows = db.prepare(`
+    SELECT * FROM products
+    WHERE market=? AND status='published' AND ${sourceSql()}
+      AND normalized_category=? AND id<>?
+    ORDER BY COALESCE(ranking_score,score) DESC,score DESC,updated_at DESC
+    LIMIT 80
+  `).all(selectedMarket, product.normalized_category, product.id);
+  let related = uniqueProductsInOrder(relatedRows).slice(0, 12);
+  if (related.length < 12) {
+    const fallbackRows = db.prepare(`
+      SELECT * FROM products
+      WHERE market=? AND status='published' AND ${sourceSql()}
+        AND normalized_category<>? AND id<>?
+      ORDER BY COALESCE(ranking_score,score) DESC,score DESC,updated_at DESC
+      LIMIT 80
+    `).all(selectedMarket, product.normalized_category, product.id);
+    related = uniqueProductsInOrder([...related, ...fallbackRows])
+      .slice(0, 12);
+  }
+
+  const history = historyFor(product.id);
+  res.set("X-Robots-Tag", "noindex, nofollow");
+  res.set("Cache-Control", "private, max-age=60, stale-while-revalidate=300");
+  return res.json({
+    product:compactApiProduct(presentProduct(localizeProduct(prepared, req.language), req.language)),
+    related:related.map(row => compactApiProduct(presentProduct(localizeProduct({
+      ...row,
+      deal_url:dealPath(row)
+    }, req.language), req.language))),
+    price_history:{
+      product:{id:product.id,title:product.title,current_price:product.current_price,currency:product.currency},
+      summary:{
+        observations:history.length,
+        lowest_30_days:minSince(history,30),
+        lowest_90_days:minSince(history,90),
+        lowest_ever:history.length?Math.min(...history.map(row=>Number(row.price)).filter(Number.isFinite)):null
+      },
+      history
+    }
+  });
+});
 app.get("/api/products/:id/price-history", (req,res) => { const product = db.prepare(`SELECT id,title,current_price,currency FROM products WHERE id=? AND status='published' AND ${sourceSql()}`).get(req.params.id); if (!product) return res.status(404).json({error:"Product not found"}); const history = historyFor(product.id); res.json({product,summary:{observations:history.length,lowest_30_days:minSince(history,30),lowest_90_days:minSince(history,90),lowest_ever:history.length?Math.min(...history.map(row=>Number(row.price)).filter(Number.isFinite)):null},history}); });
 app.get("/api/status", (req,res) => {
   const latestRun = db.prepare("SELECT * FROM refresh_runs ORDER BY id DESC LIMIT 1").get() || null;
@@ -3179,6 +3294,12 @@ app.get("/api/admin/live-drops", admin, (req, res) => {
          listing gives no exact quantity can still run — it simply never
          shows a countdown. */
       stock_verified_at: row.stock_verified_at || null,
+      stock_checked_at: row.stock_checked_at || null,
+      /* Prefilled into the media editor, so saving cannot blank a field it
+         could not see. */
+      image_url: row.image_url || "",
+      video_url: row.video_url || "",
+      stream_embed_url: row.stream_embed_url || "",
       stock_is_live: Boolean(row.stock_verified_at && now - Date.parse(row.stock_verified_at) <= 2 * 60 * 1000),
       click_label: liveDropLabel(row.drop_key),
       };
@@ -3217,8 +3338,15 @@ app.post("/api/admin/live-drops/:key/publish", admin, (req, res) => {
   if (!published && dropState(drop, Date.now()) === "live") {
     return res.status(409).json({error:"That drop is open. Let it close rather than pulling it from under whoever is watching."});
   }
+  const nowIso = new Date().toISOString();
   db.prepare("UPDATE live_drops SET published=?, updated_at=? WHERE id=?")
-    .run(published, new Date().toISOString(), drop.id);
+    .run(published, nowIso, drop.id);
+  /* Stamped once and never cleared. `published` says where the drop is now,
+     which cannot answer whether it was ever public — and that is the question
+     deletion turns on. */
+  if (published && !drop.first_published_at) {
+    db.prepare("UPDATE live_drops SET first_published_at=? WHERE id=?").run(nowIso, drop.id);
+  }
   res.json({ok:true, published:Boolean(published)});
 });
 
@@ -3265,12 +3393,93 @@ app.post("/api/admin/live-drops/:key/stock", admin, (req, res) => {
   res.json({ok:true, quantity_remaining:remaining});
 });
 
+/*
+ * Changing what a drop shows, after it has been created.
+ *
+ * There was no way to. A drop could be created, published, unpublished and
+ * deleted, and nothing in between — so a published drop with the wrong
+ * picture, or no video, was stuck with it: deleting is refused for anything
+ * that was ever public, which is right, and recreating loses the reminders
+ * people already left on it.
+ *
+ * Only the media. The price, the quantity and the hour are the offer itself,
+ * and quietly editing those under people who were told about them is a
+ * different act with different consequences.
+ */
+app.patch("/api/admin/live-drops/:key/media", admin, express.json({limit:"8kb"}), (req, res) => {
+  const drop = db.prepare("SELECT * FROM live_drops WHERE drop_key=?").get(String(req.params.key || ""));
+  if (!drop) return res.status(404).json({error:"No such drop."});
+
+  /* Empty clears the slot, which is how a wrong video is removed rather than
+     replaced. Anything else has to be a URL we would be willing to load. */
+  const link = (value, current) => {
+    if (value === undefined) return current;
+    const text = String(value || "").trim();
+    if (!text) return "";
+    /* A site-relative path is how a file in public/ is referenced, and it is
+       the safest form: it cannot point at another origin. */
+    if (text.startsWith("/") && !text.startsWith("//")) return text.slice(0, 500);
+    try {
+      const url = new URL(text);
+      if (!/^https:$/.test(url.protocol)) throw new Error("not https");
+      return url.toString().slice(0, 500);
+    } catch {
+      return null;
+    }
+  };
+
+  const fields = {
+    image_url: link(req.body?.image_url, drop.image_url),
+    secondary_image_url: link(req.body?.secondary_image_url, drop.secondary_image_url),
+    video_url: link(req.body?.video_url, drop.video_url),
+    stream_embed_url: link(req.body?.stream_embed_url, drop.stream_embed_url),
+  };
+  const bad = Object.entries(fields).filter(([, value]) => value === null).map(([name]) => name);
+  if (bad.length) {
+    return res.status(400).json({error:`Use an https link or a path starting with / — check: ${bad.join(", ")}.`});
+  }
+
+  db.prepare(
+    "UPDATE live_drops SET image_url=?, secondary_image_url=?, video_url=?, stream_embed_url=?, updated_at=? WHERE id=?",
+  ).run(
+    fields.image_url, fields.secondary_image_url, fields.video_url, fields.stream_embed_url,
+    new Date().toISOString(), drop.id,
+  );
+  publicHtmlCache.clear();
+  return res.json({ok:true, ...fields});
+});
+
 app.delete("/api/admin/live-drops/:key", admin, (req, res) => {
   const drop = db.prepare("SELECT * FROM live_drops WHERE drop_key=?").get(String(req.params.key || ""));
   if (!drop) return res.status(404).json({error:"No such drop."});
-  if (drop.published || Date.now() >= Date.parse(drop.start_at)) {
-    return res.status(409).json({error:"Only an unannounced draft can be deleted. A drop that ran is the record of what was offered."});
+  /*
+   * Ever public is the line, not the clock and not published-right-now.
+   *
+   * This used to refuse anything whose start time had passed, which sounds
+   * like "a drop that ran cannot be erased" but is not that statement: a draft
+   * that was never published never ran — nobody was told, and no public page
+   * ever existed for it, since /api/live/current only returns published drops.
+   * Its scheduled hour arriving only meant it could never be deleted, so dead
+   * test drafts had no way out and went on polluting the funnel counts.
+   *
+   * Loosening it to `published` alone went too far the other way, and a test
+   * written for the original rule caught it: unpublish a drop that had already
+   * run and the record of what was offered to real people could be erased.
+   * first_published_at is set on the first publish and never cleared, so a
+   * drop that was ever public stays.
+   */
+  if (drop.published) {
+    return res.status(409).json({
+      error: "This drop is published. Unpublish it first — deleting one out from under the people looking at it is a separate decision.",
+    });
   }
+  if (drop.first_published_at) {
+    return res.status(409).json({
+      error: "This drop was published once, so it is the record of what was offered. It can be unpublished, not deleted.",
+    });
+  }
+  db.prepare("DELETE FROM live_drop_announcements WHERE drop_id=?").run(drop.id);
+  db.prepare("DELETE FROM live_drop_presence WHERE drop_id=?").run(drop.id);
   db.prepare("DELETE FROM live_drop_reminders WHERE drop_id=?").run(drop.id);
   db.prepare("DELETE FROM live_drop_events WHERE drop_id=?").run(drop.id);
   db.prepare("DELETE FROM live_drops WHERE id=?").run(drop.id);
@@ -3695,11 +3904,28 @@ const stockPoll = setInterval(async () => {
   if (stockPollRunning) return;
   stockPollRunning = true;
   try {
-    const nowIso = new Date().toISOString();
+    const now = Date.now();
+    const nowIso = new Date(now).toISOString();
+    /*
+     * Running drops, and the next one due, because the console has to be able
+     * to say before the drop whether a live count is even possible.
+     *
+     * It only asked during the drop, so beforehand stock_verified_at was null
+     * and the panel read that as "the shop gives no live count" — which is a
+     * statement about eBay, not about us never having asked. The one moment
+     * that answer is useful is while choosing and scheduling the product, and
+     * that is exactly when it was wrong.
+     *
+     * A drop starting inside the next day is checked at the same fifteen
+     * seconds, which is a rounding error against a five thousand call daily
+     * allowance and buys an answer hours before it is needed.
+     */
+    const soonIso = new Date(now + 24 * 60 * 60 * 1000).toISOString();
     const live = db.prepare(`
       SELECT * FROM live_drops
-      WHERE published=1 AND start_at<=? AND end_at>=? AND quantity_remaining>0
-    `).all(nowIso, nowIso);
+      WHERE published=1 AND quantity_remaining>0 AND end_at>=?
+        AND start_at<=?
+    `).all(nowIso, soonIso);
     for (const drop of live) {
       const result = await refreshDropStock(drop, {db, market:market(drop.market)});
       if (result.changed) {

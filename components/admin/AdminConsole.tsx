@@ -38,6 +38,10 @@ type AdminDrop = {
   watching_now: number;
   stock_is_live: boolean;
   stock_verified_at: string | null;
+  stock_checked_at: string | null;
+  image_url: string;
+  video_url: string;
+  stream_embed_url: string;
   click_label: string;
 };
 
@@ -158,8 +162,13 @@ export function AdminConsole() {
     }).catch(() => null);
     const result = await response?.json().catch(() => ({}));
     setBusy(false);
-    setMessage(response?.ok ? "Done." : result?.error || "That did not go through.");
+    const failure = response?.ok ? "" : result?.error || "That did not go through.";
+    setMessage(failure || "Done.");
     load();
+    /* Returned so the row that was clicked can say what happened next to the
+       button. A refusal printed at the top of a long console reads as a button
+       that does nothing — which is exactly how the delete guard was reported. */
+    return failure;
   };
 
   const create = async (event: React.FormEvent) => {
@@ -476,9 +485,18 @@ function DropRow({
 }: {
   drop: AdminDrop;
   busy: boolean;
-  act: (url: string, body: unknown, method?: string) => void;
+  act: (url: string, body: unknown, method?: string) => Promise<string>;
 }) {
   const [stock, setStock] = useState(String(drop.quantity_remaining));
+  const [rowMessage, setRowMessage] = useState("");
+  /* Editing what a published drop shows. Deleting one that was ever public is
+     refused — rightly — so without this a wrong picture or a missing video was
+     permanent. */
+  const [media, setMedia] = useState({
+    image_url: drop.image_url || "",
+    video_url: drop.video_url || "",
+    stream_embed_url: drop.stream_embed_url || "",
+  });
   /* A published drop shows where it is in its own life. An unpublished one is
      a draft whatever the clock says, because nobody can see it. */
   const state = drop.published ? drop.state : "draft";
@@ -584,9 +602,14 @@ function DropRow({
           exact quantity still runs; it just never shows a countdown, and this
           is where that is visible before the drop rather than after. */}
       <p className="mt-2 text-xs text-fg-subtle">
+        {/* Three states, because two of them were being reported as one: a
+            drop nobody had asked the shop about looked exactly like a drop
+            whose seller publishes no quantity. */}
         {drop.stock_is_live
           ? "Stock is confirmed by the shop — the page shows a live count."
-          : "The shop gives no live count — the page shows the offer size, not a countdown."}
+          : drop.stock_checked_at
+            ? "The shop gives no live count — the page shows the offer size, not a countdown."
+            : "Not checked with the shop yet. The answer arrives within a minute of publishing."}
       </p>
       <p className="mt-2 text-xs text-fg-subtle">
         {drop.reminders} reminders asked for. <strong>Bought: not knowable here.</strong>{" "}
@@ -639,7 +662,7 @@ function DropRow({
           <button
             type="button"
             disabled={busy}
-            onClick={() => act(`/api/admin/live-drops/${drop.drop_key}`, null, "DELETE")}
+            onClick={async () => setRowMessage(await act(`/api/admin/live-drops/${drop.drop_key}`, null, "DELETE"))}
             className="inline-flex h-9 cursor-pointer items-center rounded-full border border-border px-4 text-xs font-semibold text-fg-muted transition-colors hover:bg-surface-2 disabled:opacity-55"
           >
             Delete draft
@@ -655,6 +678,48 @@ function DropRow({
           Open the page
         </a>
       </div>
+
+      {/* What the drop shows, editable after it is published. The offer
+          itself — price, quantity, hour — is deliberately not here: people
+          were told those, and changing them quietly is a different act. */}
+      <div className="mt-3 grid gap-2 sm:grid-cols-3">
+        {([
+          ["image_url", "Product photo URL"],
+          ["video_url", "Product video URL"],
+          ["stream_embed_url", "Presenter embed URL"],
+        ] as const).map(([field, label]) => (
+          <label key={field} className="block">
+            <span className="text-[0.65rem] uppercase tracking-[0.12em] text-fg-subtle">{label}</span>
+            <input
+              value={media[field]}
+              onChange={(event) => setMedia({ ...media, [field]: event.target.value })}
+              placeholder="/media/file.mp4 or https://…"
+              className="mt-1 h-9 w-full rounded-full border border-border bg-surface-2 px-3 text-xs text-fg outline-none focus:border-border-strong"
+            />
+          </label>
+        ))}
+      </div>
+      <button
+        type="button"
+        disabled={busy}
+        onClick={async () =>
+          setRowMessage(
+            (await act(`/api/admin/live-drops/${drop.drop_key}/media`, media, "PATCH")) || "Saved.",
+          )
+        }
+        className="mt-2 inline-flex h-9 cursor-pointer items-center rounded-full border border-border px-4 text-xs font-semibold text-fg transition-colors hover:bg-surface-2 disabled:opacity-55"
+      >
+        Save media
+      </button>
+
+      {/* Beside the button that was pressed. A refusal printed at the top of a
+          long console is a refusal nobody reads, and the button then looks
+          broken — which is exactly how the delete guard was reported. */}
+      {rowMessage && (
+        <p className="mt-3 text-xs font-semibold text-danger" role="status">
+          {rowMessage}
+        </p>
+      )}
     </div>
   );
 }
