@@ -233,16 +233,26 @@ const keywordsForMarket = code => {
  * less often and take a smaller slice per run. Their catalogues change slowly;
  * they do not need eight sweeps a day.
  *
- *   primary   5 runs x (47 searches + 260 details)  ~= 1,535 calls
+ * The primary market's detail budget then went up again, because the run now
+ * keeps reviewed listings by preference and whether an item has reviews is
+ * only known once its detail has been fetched. About one eBay item in five
+ * carries product reviews — 60 of 277 in the catalogue — so a run that stops
+ * after 260 details finds roughly fifty it can score. Four hundred details
+ * finds closer to ninety, and the run spends the difference on looking rather
+ * than on keeping what it happened to see first.
+ *
+ *   primary   5 runs x (47 searches + 400 details)  ~= 2,235 calls
  *   others    4 markets x 2 runs x (8 + 40)         ~=   384 calls
  *
- * Under two thousand against an allowance of five, which leaves the headroom
- * the previous arrangement did not have. PRIMARY_MARKET moves it.
+ * Around two and a half thousand against an allowance of five. Still half the
+ * allowance in reserve, which matters: a run that exhausts it does not fail
+ * politely, it stops answering and the catalogue ages out. PRIMARY_MARKET
+ * moves it.
  */
 const primaryMarket = String(process.env.PRIMARY_MARKET || "us").trim().toLowerCase();
 
 const searchBudgetFor = code => (code === primaryMarket
-  ? {keywordsPerRun: 0, detailLimit: 260, targetEligible: 140}
+  ? {keywordsPerRun: 0, detailLimit: 400, targetEligible: 140}
   : {keywordsPerRun: 8, detailLimit: 40, targetEligible: 30});
 
 const marketConfig = code => {

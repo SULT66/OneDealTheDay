@@ -146,6 +146,78 @@ const fetchImpl = async (url, options = {}) => {
   assert(hasTrustEvidence(sellerBacked), "An established seller was not accepted as fallback evidence");
   assert(!hasTrustEvidence({...sellerBacked, seller_rating:4.7}), "Weak seller evidence was accepted");
 
+  /*
+   * Reviewed listings first; the others only fill what is left.
+   *
+   * eBay is the only source in the catalogue that supplies product reviews at
+   * all, and about one eBay item in five has them — so a run that kept
+   * whichever items came back first filled the shelves with listings that
+   * could never carry a score. Nothing is excluded here: a listing with no
+   * reviews has an honest rung of its own. This decides which ones get the
+   * space.
+   */
+  const mixed = Array.from({ length: 6 }, (_, index) => ({
+    ...summary,
+    itemId: `v1|mix${index}|0`,
+    legacyItemId: `mix${index}`,
+    itemAffiliateWebUrl: `https://www.ebay.com/itm/mix${index}?campid=${campaignId}`,
+  }));
+  /* The two with reviews are the last the search returns, so the run has to
+     look past the first four to find them. */
+  const reviewed = new Set(["mix4", "mix5"]);
+  const mixedFetch = async (url) => {
+    const parsed = new URL(url);
+    if (parsed.pathname.endsWith("/identity/v1/oauth2/token")) {
+      return { ok: true, status: 200, json: async () => ({ access_token: "production-token", expires_in: 7200 }) };
+    }
+    if (parsed.pathname.endsWith("/item_summary/search")) {
+      return { ok: true, status: 200, json: async () => ({ itemSummaries: mixed }) };
+    }
+    const id = decodeURIComponent(parsed.pathname.split("/").pop()).split("|")[1];
+    const item = mixed.find((entry) => entry.itemId.includes(id));
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        ...item,
+        brand: "Example Brand",
+        gtin: `01234567890${id.slice(-1)}`,
+        mpn: `MODEL-${id}`,
+        shortDescription: "A product.",
+        ...(reviewed.has(id) ? { primaryProductReviewRating: { averageRating: "4.6", reviewCount: 180 } } : {}),
+        shippingOptions: [{ shippingCost: { value: "0.00", currency: "USD" }, shippingServiceCode: "USPS" }],
+        returnTerms: { returnsAccepted: true, returnPeriod: { value: 30, unit: "CALENDAR_DAY" }, returnShippingCostPayer: "SELLER" },
+      }),
+    };
+  };
+  const runMixed = (targetEligible) => searchProducts({
+    clientId: "production-client-id",
+    clientSecret: "production-client-secret",
+    campaignId,
+    keywords: ["smart home"],
+    market,
+    fetchImpl: mixedFetch,
+    detailLimit: 6,
+    targetEligible,
+  });
+
+  /* Room for three, and the two that can be scored must be among them. */
+  const balanced = await runMixed(3);
+  assert.strictEqual(balanced.length, 3, "the shelf should still be filled");
+  assert.strictEqual(
+    balanced.filter((product) => product.review_count >= 5).length,
+    2,
+    "the reviewed listings were not kept by preference",
+  );
+
+  /* And where there is room for two, an unreviewed listing takes neither. */
+  const tight = await runMixed(2);
+  assert.strictEqual(tight.length, 2);
+  assert.ok(
+    tight.every((product) => product.review_count >= 5),
+    "an unreviewed listing took a slot a scoreable one needed",
+  );
+
   console.log("eBay Browse API validation passed.");
 })().catch(error => {
   console.error(error);

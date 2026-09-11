@@ -307,6 +307,26 @@ function hasTrustEvidence(product) {
   return reviewedProduct || establishedSeller;
 }
 
+/*
+ * Whether this listing can ever carry a Deal Score.
+ *
+ * eBay is the only source in the catalogue that supplies product reviews at
+ * all: of 2,088 published listings, 1,595 Newegg rows and 216 feed rows have
+ * none between them, and 60 of 277 eBay rows have them. The score needs
+ * reviews, so eBay is the only supply of scoreable listings there is — and
+ * this run was keeping whichever eBay items came back first, four in five of
+ * which could never be scored.
+ *
+ * The same threshold the public score uses, so a listing kept for being
+ * reviewed is a listing that can actually be scored rather than one that
+ * clears a lower bar set here and a higher one later.
+ */
+const SCOREABLE_REVIEW_COUNT = 5;
+
+function canBeScored(product) {
+  return number(product.rating, 0) > 0 && number(product.review_count, 0) >= SCOREABLE_REVIEW_COUNT;
+}
+
 async function searchProducts({
   clientId,
   clientSecret,
@@ -377,16 +397,35 @@ async function searchProducts({
   if (!candidates.size) throw new Error(`eBay returned no commissionable new fixed-price items. ${failures.join(" | ")}`.trim());
 
   const queue = [...candidates.values()].sort((left, right) => right.candidateScore - left.candidateScore);
-  const maximumDetails = Math.min(queue.length, positiveInteger(detailLimit, DEFAULT_DETAIL_LIMIT), 260);
+  /* 600 rather than 260: the run stops when it has enough scoreable listings,
+     and with about one item in five carrying reviews the old ceiling was
+     reached long before that. It remains a ceiling — the allowance, not this
+     number, is what actually limits a run. */
+  const maximumDetails = Math.min(queue.length, positiveInteger(detailLimit, DEFAULT_DETAIL_LIMIT), 600);
   /* Sixty was the real limit on how many products this site could hold from
      eBay, and nothing said so. A run refreshes what it can, anything it does
      not touch ages out after 48 hours, so the catalogue settles at roughly
      one run of eligible items. Sixty across every category is why Electronics
      sat at ten while Gifts sat at two thousand. */
   const eligibleTarget = Math.min(140, positiveInteger(targetEligible, DEFAULT_TARGET_ELIGIBLE));
+  /*
+   * Reviewed listings first, and the rest only to fill what is left.
+   *
+   * Whether an item has reviews is not in the search response — it arrives
+   * with the item detail, which is a call already spent by the time we know.
+   * So this cannot be a cheaper run, only a better-spent one: the run looks at
+   * as many items as the allowance permits and keeps the ones it can score,
+   * topping up from the others so the catalogue does not shrink.
+   *
+   * Not a hard requirement. A listing without reviews is not a bad listing,
+   * it is one nobody has said anything about, and the site now has an honest
+   * rung for exactly that. This decides what to spend the shelf space on.
+   */
+  const scoreable = [];
+  const unreviewed = [];
   const products = [];
 
-  for (let offset = 0; offset < maximumDetails && products.length < eligibleTarget; offset += DETAIL_CONCURRENCY) {
+  for (let offset = 0; offset < maximumDetails && scoreable.length < eligibleTarget; offset += DETAIL_CONCURRENCY) {
     if (signal?.aborted) break;
     const batch = queue.slice(offset, Math.min(offset + DETAIL_CONCURRENCY, maximumDetails));
     const details = await mapLimit(batch, DETAIL_CONCURRENCY, candidate => ebayClient.getItem(candidate.item.itemId, market));
@@ -403,7 +442,7 @@ async function searchProducts({
       };
       const product = normalizeItem(merged, candidate.keyword, candidate.sourceRank, market);
       if (hasTrustEvidence(product) && product.current_price > 0 && product.affiliate_url && product.image_url && listingAvailable(merged)) {
-        products.push(product);
+        (canBeScored(product) ? scoreable : unreviewed).push(product);
       }
     });
     /* Once the allowance is gone every further lookup is a refusal. Keep what
@@ -411,6 +450,10 @@ async function searchProducts({
        questions eBay will not answer. */
     if (quotaExhausted) break;
   }
+
+  /* What was found that can be scored, then as much of the rest as there is
+     room for. */
+  products.push(...scoreable, ...unreviewed.slice(0, Math.max(0, eligibleTarget - scoreable.length)));
 
   if (!products.length) {
     if (quotaExhausted) {
@@ -427,6 +470,7 @@ async function searchProducts({
 module.exports = {
   candidateIsUsable,
   createEbayClient,
+  canBeScored,
   hasTrustEvidence,
   isQuotaError,
   keywordsForRun,
