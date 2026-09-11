@@ -1,9 +1,30 @@
 import Link from "next/link";
-import { Globe } from "@phosphor-icons/react/ssr";
+import {
+  FacebookLogo,
+  Globe,
+  InstagramLogo,
+  TiktokLogo,
+  YoutubeLogo,
+} from "@phosphor-icons/react/ssr";
 import { getCategoriesWithCounts } from "@/lib/catalog";
 import { getLanguage, hasLanguageChoice, t } from "@/lib/i18n";
 import { countryOptions, languageLinks } from "@/lib/switchers";
 import { Logo } from "./Logo";
+
+/*
+ * Where OneDailyDrop is, off its own site.
+ *
+ * One list, in the order the accounts are actually used: video first, then
+ * the two feeds, then the one that is mostly a placeholder. Hard-coded rather
+ * than configurable — four URLs that change once a decade do not need a
+ * settings screen, and a missing one would be worse than an edit.
+ */
+const SOCIAL_LINKS = [
+  { href: "https://www.youtube.com/@OneDailyDrop", label: "OneDailyDrop on YouTube", Icon: YoutubeLogo },
+  { href: "https://www.instagram.com/onedailydrop/", label: "OneDailyDrop on Instagram", Icon: InstagramLogo },
+  { href: "https://www.tiktok.com/@onedailydrop.com", label: "OneDailyDrop on TikTok", Icon: TiktokLogo },
+  { href: "https://www.facebook.com/onedailydropcom", label: "OneDailyDrop on Facebook", Icon: FacebookLogo },
+] as const;
 
 export async function Footer({ market }: { market: string }) {
   const language = await getLanguage(market);
@@ -55,6 +76,31 @@ export async function Footer({ market }: { market: string }) {
             <p className="mt-4 max-w-xs text-sm leading-relaxed text-fg-subtle">
               {t(language, "footer.disclosure")}
             </p>
+
+            {/*
+              * The accounts, in the footer where a visitor looks for them.
+              *
+              * Kept as one short list rather than a row of brand-coloured
+              * badges: this is a site about not shouting, and four logos in
+              * four different reds would be the loudest thing on the page.
+              * They inherit the footer's own colour and lift on hover.
+              */}
+            <ul aria-label="OneDailyDrop on social media" className="mt-6 flex items-center gap-1">
+              {SOCIAL_LINKS.map(({ href, label, Icon }) => (
+                <li key={href}>
+                  <a
+                    href={href}
+                    target="_blank"
+                    rel="noopener noreferrer me"
+                    aria-label={label}
+                    title={label}
+                    className="inline-flex h-10 w-10 items-center justify-center rounded-full text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg"
+                  >
+                    <Icon size={20} weight="fill" aria-hidden="true" />
+                  </a>
+                </li>
+              ))}
+            </ul>
           </div>
 
           <nav aria-label={t(language, "nav.categories")}>
