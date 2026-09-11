@@ -123,6 +123,19 @@ function scoreBreakdown(product) {
 }
 
 /*
+ * The listing at the price it is being scored at.
+ *
+ * A drop snapshot carries the price from the day it was chosen, and that price
+ * belongs to the snapshot alone. Applying it while presenting the listing as it
+ * is today scores today's product against a price it no longer has.
+ */
+const pricedAs = (product, snapshot) => ({
+  ...product,
+  current_price: snapshot ? (product?.drop_price ?? product?.current_price) : product?.current_price,
+  original_price: snapshot ? (product?.drop_original_price ?? product?.original_price) : product?.original_price,
+});
+
+/*
  * The score — of one of two kinds, and never the wrong one under the other's
  * name.
  *
@@ -152,11 +165,13 @@ function oneDailyDropScore(product, { snapshot = false } = {}) {
   // and a short local price history as negative evidence. Recalculate those
   // records at presentation time so every existing card is corrected as soon
   // as the new release starts, including archived selections.
-  const recalculated = scoreProduct({
-    ...product,
-    current_price: product?.drop_price ?? product?.current_price,
-    original_price: product?.drop_original_price ?? product?.original_price
-  }).total;
+  //
+  // At the price this is being scored at, which is the drop's price only when
+  // the drop is what is being presented. Moving the score off the snapshot and
+  // leaving this on it was half a fix: the listing still scored from a price it
+  // had on the day it was chosen, so search and the product page went on
+  // disagreeing — 84 against 86 — for a reason one step further down.
+  const recalculated = scoreProduct(pricedAs(product, isSelectionSnapshot)).total;
   return Number.isFinite(recalculated) ? Math.round(recalculated) : null;
 }
 
@@ -166,11 +181,9 @@ function oneDailyDropEvidenceConfidence(product) {
   if (breakdown.model === SCORE_MODEL && Number.isFinite(stored)) {
     return Math.round(Math.max(0, Math.min(100, stored)));
   }
-  return scoreProduct({
-    ...product,
-    current_price: product?.drop_price ?? product?.current_price,
-    original_price: product?.drop_original_price ?? product?.original_price
-  }).evidenceConfidence;
+  /* Today's price: how much is known about a listing is a question about the
+     listing now, not about the day it was once chosen. */
+  return scoreProduct(pricedAs(product, false)).evidenceConfidence;
 }
 
 /*
@@ -398,22 +411,20 @@ function presentProduct(product, language = "en") {
   const confidence = oneDailyDropEvidenceConfidence(product);
   // Candidate ranking and consumer presentation are deliberately separate.
   // Only offers that pass the editorial floor receive a calibrated public score.
+  /* Today's price throughout: this is the live score, and every input to it has
+     to describe the listing as it is now. Leaving the snapshot's price here
+     while the score came from the current one is what kept search and the
+     product page apart after the first half of this fix. */
   const dealScore = isDailyPickEligible({
-    ...product,
+    ...pricedAs(product, false),
     score:rawDealScore,
     evidence_confidence:confidence,
-    current_price:product?.drop_price ?? product?.current_price,
-    original_price:product?.drop_original_price ?? product?.original_price
   }, {
     /* A shop that publishes no per-listing delivery charge is not thereby a
        worse offer. The drop's ten slots still demand one; a product page
        scores what is known and lets the confidence carry the rest. */
     requireKnownFulfillment:false
-  }) ? publicOneDailyDropScore(rawDealScore, confidence, commerceQuality({
-    ...product,
-    current_price:product?.drop_price ?? product?.current_price,
-    original_price:product?.drop_original_price ?? product?.original_price
-  }), {
+  }) ? publicOneDailyDropScore(rawDealScore, confidence, commerceQuality(pricedAs(product, false)), {
     /* Reviews of the product, not of the seller. A shop with a spotless
        feedback record has still told us nothing about this thing. */
     hasReviews: number(product.review_count) >= MEANINGFUL_REVIEW_COUNT && number(product.rating) > 0,
