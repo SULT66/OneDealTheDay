@@ -46,6 +46,8 @@
   };
   const t = copy[language] || copy.en;
   let analyticsLoaded = false;
+  let lareoStarted = false;
+  let lareoConfigAttempts = 0;
 
   const createLareoAnalytics = config => {
     const endpoint = config.endpoint.replace(/\/$/, "");
@@ -177,11 +179,19 @@
     }, true);
   };
 
-  const loadLareoAnalytics = async () => {
+  const loadLareoAnalytics = () => {
+    if (lareoStarted) return;
     const config = window.__LAREO_ANALYTICS__;
-    if (!config?.endpoint || !config?.writeKey) return;
+    if (!config?.endpoint || !config?.writeKey) {
+      if (lareoConfigAttempts < 50) {
+        lareoConfigAttempts += 1;
+        window.setTimeout(loadLareoAnalytics, 100);
+      }
+      return;
+    }
     try {
       const analytics = createLareoAnalytics(config);
+      lareoStarted = true;
       window.lareoAnalytics = analytics;
       installLareoInteractions(analytics);
       analytics.page();

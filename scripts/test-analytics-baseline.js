@@ -57,6 +57,8 @@ for (const eventName of ["button_clicked", "navigation_clicked", "product_viewed
 }
 assert(analyticsClient.includes("query_length"), "Search analytics must send query length only");
 assert(!analyticsClient.includes("query_text"), "Search analytics must not send search text");
+assert(analyticsClient.includes("lareoConfigAttempts < 50"), "Lareo config startup retry is missing");
+assert(analyticsClient.includes("setTimeout(loadLareoAnalytics, 100)"), "Lareo config startup retry delay is missing");
 const db = require("../src/db");
 const now = new Date().toISOString();
 const product = db.prepare(`
