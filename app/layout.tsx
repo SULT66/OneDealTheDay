@@ -74,7 +74,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
             uses (public/cookie-consent.js) — self-contained, reads the
             market straight from the URL, shows the EU consent banner only
             for fr/de. */}
-        <script src="/cookie-consent.js?v=20260912-interactions" />
+        <script src="/cookie-consent.js?v=20260912-startup-fix" />
       </body>
     </html>
   );
