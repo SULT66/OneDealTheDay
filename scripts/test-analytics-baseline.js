@@ -48,6 +48,10 @@ process.env.EBAY_CAMPAIGN_ID = "5339179772";
 process.env.ADMIN_KEY = "test-admin-key";
 
 const assert = (condition, message) => { if (!condition) throw new Error(message); };
+const analyticsClient = fs.readFileSync(path.join(__dirname, "../public/cookie-consent.js"), "utf8");
+assert(analyticsClient.includes("createLareoAnalytics"), "Lareo browser analytics client is missing");
+assert(analyticsClient.includes("/v1/events"), "Lareo collector endpoint is missing");
+assert(!analyticsClient.includes("/sdk/lareo-analytics.js"), "Lareo client still depends on an external SDK file");
 const db = require("../src/db");
 const now = new Date().toISOString();
 const product = db.prepare(`
