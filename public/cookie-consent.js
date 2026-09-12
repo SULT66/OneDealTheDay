@@ -113,13 +113,68 @@
 
     return {
       track,
-      page:() => track("page_viewed", {
-        path:location.pathname,
-        title:document.title,
-        language:navigator.language,
-        screen_width:screen.width
-      })
+      page:() => {
+        const properties = {
+          path:location.pathname,
+          title:document.title,
+          language:navigator.language,
+          screen_width:screen.width
+        };
+        track("page_viewed", properties);
+        if (/\/deal\/[^/]+/.test(location.pathname)) track("product_viewed", properties);
+      }
     };
+  };
+
+  const installLareoInteractions = analytics => {
+    if (document.documentElement.dataset.lareoInteractions === "active") return;
+    document.documentElement.dataset.lareoInteractions = "active";
+
+    document.addEventListener("click", event => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      const control = target.closest("a,button");
+      if (!control) return;
+
+      const sourcePath = location.pathname;
+      if (control instanceof HTMLButtonElement) {
+        analytics.track("button_clicked", {
+          path:sourcePath,
+          control_id:control.id || control.dataset.analyticsAction || control.type || "button"
+        });
+        return;
+      }
+
+      const href = control.getAttribute("href");
+      if (!href) return;
+      let url;
+      try { url = new URL(href, location.origin); } catch { return; }
+
+      if (url.origin !== location.origin) {
+        analytics.track(url.protocol === "mailto:" || url.protocol === "tel:" ? "contact_clicked" : "outbound_clicked", {
+          path:sourcePath,
+          target_origin:url.origin
+        });
+        return;
+      }
+
+      const properties = { path:sourcePath, target_path:url.pathname };
+      if (/\/go\//.test(url.pathname)) analytics.track("affiliate_clicked", properties);
+      else if (/\/deal\/[^/]+/.test(url.pathname)) analytics.track("product_viewed", properties);
+      else analytics.track("navigation_clicked", properties);
+    }, true);
+
+    document.addEventListener("submit", event => {
+      const form = event.target;
+      if (!(form instanceof HTMLFormElement)) return;
+      const action = new URL(form.getAttribute("action") || location.href, location.origin);
+      const searchInput = form.querySelector('input[name="q"], input[type="search"]');
+      analytics.track("search_submitted", {
+        path:location.pathname,
+        target_path:action.pathname,
+        query_length:searchInput instanceof HTMLInputElement ? searchInput.value.length : 0
+      });
+    }, true);
   };
 
   const loadLareoAnalytics = async () => {
@@ -128,6 +183,7 @@
     try {
       const analytics = createLareoAnalytics(config);
       window.lareoAnalytics = analytics;
+      installLareoInteractions(analytics);
       analytics.page();
     } catch {
       // Product behavior must never depend on analytics availability.
