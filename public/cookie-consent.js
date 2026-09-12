@@ -47,6 +47,23 @@
   const t = copy[language] || copy.en;
   let analyticsLoaded = false;
 
+  const loadLareoAnalytics = async () => {
+    const config = window.__LAREO_ANALYTICS__;
+    if (!config?.endpoint || !config?.writeKey) return;
+    try {
+      const sdk = await import(`${config.endpoint.replace(/\/$/, "")}/sdk/lareo-analytics.js`);
+      const analytics = sdk.createLareoAnalytics({
+        endpoint: config.endpoint,
+        writeKey: config.writeKey,
+        environment: "production"
+      });
+      window.lareoAnalytics = analytics;
+      analytics.page();
+    } catch {
+      // Product behavior must never depend on analytics availability.
+    }
+  };
+
   const preference = () => {
     try {
       return localStorage.getItem(STORAGE_KEY);
@@ -86,6 +103,7 @@
     document.head.appendChild(script);
     window.gtag("js", new Date());
     window.gtag("config", ANALYTICS_ID, { anonymize_ip: true });
+    loadLareoAnalytics();
   };
 
   const removeBanner = () => document.getElementById("oddCookieConsent")?.remove();

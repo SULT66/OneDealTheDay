@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { Outfit } from "next/font/google";
+import Script from "next/script";
 import { tagFor } from "@/lib/i18n";
 import "./globals.css";
 
@@ -59,6 +60,12 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
     <html lang={lang} className={`${outfit.variable} h-full antialiased`}>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+        <Script id="lareo-analytics-config" strategy="beforeInteractive">
+          {`window.__LAREO_ANALYTICS__=${JSON.stringify({
+            endpoint: process.env.NEXT_PUBLIC_LAREO_ANALYTICS_ENDPOINT || "",
+            writeKey: process.env.NEXT_PUBLIC_LAREO_ANALYTICS_WRITE_KEY || "",
+          })}`}
+        </Script>
         <link rel="stylesheet" href="/cookie-consent.css?v=20260730" />
       </head>
       <body className="min-h-full flex flex-col bg-bg text-fg">
