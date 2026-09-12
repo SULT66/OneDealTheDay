@@ -47,16 +47,86 @@
   const t = copy[language] || copy.en;
   let analyticsLoaded = false;
 
+  const createLareoAnalytics = config => {
+    const endpoint = config.endpoint.replace(/\/$/, "");
+    const readStorage = key => {
+      try { return localStorage.getItem(key); } catch { return null; }
+    };
+    const writeStorage = (key, value) => {
+      try { localStorage.setItem(key, value); } catch {}
+    };
+    const id = () => crypto.randomUUID();
+
+    let anonymousId = readStorage("lareo_analytics_id");
+    if (!anonymousId) {
+      anonymousId = id();
+      writeStorage("lareo_analytics_id", anonymousId);
+    }
+
+    const now = Date.now();
+    let session;
+    try { session = JSON.parse(readStorage("lareo_analytics_session") || "null"); }
+    catch { session = null; }
+    if (!session || now - Number(session.lastSeen || 0) > 30 * 60 * 1000) {
+      session = { id:id(), started:now };
+    }
+    session.lastSeen = now;
+    writeStorage("lareo_analytics_session", JSON.stringify(session));
+
+    const query = new URLSearchParams(location.search);
+    let referrerOrigin;
+    try { referrerOrigin = document.referrer ? new URL(document.referrer).origin : undefined; }
+    catch {}
+    const acquisition = {
+      referrer:referrerOrigin,
+      utm_source:query.get("utm_source") || undefined,
+      utm_medium:query.get("utm_medium") || undefined,
+      utm_campaign:query.get("utm_campaign") || undefined
+    };
+
+    const track = async (eventName, properties = {}) => {
+      const payload = {
+        event_id:id(),
+        event_name:eventName,
+        event_time:new Date().toISOString(),
+        anonymous_user_id:anonymousId,
+        session_id:session.id,
+        environment:"production",
+        source:acquisition.utm_source || acquisition.referrer,
+        device:/Mobi/i.test(navigator.userAgent) ? "mobile" : "desktop",
+        properties:{ ...acquisition, ...properties }
+      };
+      try {
+        await fetch(`${endpoint}/v1/events`, {
+          method:"POST",
+          keepalive:true,
+          headers:{
+            "Content-Type":"application/json",
+            "X-Lareo-Write-Key":config.writeKey
+          },
+          body:JSON.stringify(payload)
+        });
+      } catch {
+        // Analytics must never interrupt the storefront.
+      }
+    };
+
+    return {
+      track,
+      page:() => track("page_viewed", {
+        path:location.pathname,
+        title:document.title,
+        language:navigator.language,
+        screen_width:screen.width
+      })
+    };
+  };
+
   const loadLareoAnalytics = async () => {
     const config = window.__LAREO_ANALYTICS__;
     if (!config?.endpoint || !config?.writeKey) return;
     try {
-      const sdk = await import(`${config.endpoint.replace(/\/$/, "")}/sdk/lareo-analytics.js`);
-      const analytics = sdk.createLareoAnalytics({
-        endpoint: config.endpoint,
-        writeKey: config.writeKey,
-        environment: "production"
-      });
+      const analytics = createLareoAnalytics(config);
       window.lareoAnalytics = analytics;
       analytics.page();
     } catch {
