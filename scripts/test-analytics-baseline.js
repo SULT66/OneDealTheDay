@@ -52,6 +52,11 @@ const analyticsClient = fs.readFileSync(path.join(__dirname, "../public/cookie-c
 assert(analyticsClient.includes("createLareoAnalytics"), "Lareo browser analytics client is missing");
 assert(analyticsClient.includes("/v1/events"), "Lareo collector endpoint is missing");
 assert(!analyticsClient.includes("/sdk/lareo-analytics.js"), "Lareo client still depends on an external SDK file");
+for (const eventName of ["button_clicked", "navigation_clicked", "product_viewed", "affiliate_clicked", "search_submitted"]) {
+  assert(analyticsClient.includes(`"${eventName}"`), `Lareo ${eventName} event is missing`);
+}
+assert(analyticsClient.includes("query_length"), "Search analytics must send query length only");
+assert(!analyticsClient.includes("query_text"), "Search analytics must not send search text");
 const db = require("../src/db");
 const now = new Date().toISOString();
 const product = db.prepare(`
