@@ -20,6 +20,7 @@ const {
   isSendable,
   signOutbound,
   verifyOutbound,
+  withSignedLinks,
 } = require("../src/outboundLinks");
 
 const query = (link) => Object.fromEntries(new URLSearchParams(link.split("?")[1]));
@@ -118,5 +119,48 @@ assert.strictEqual(verifyOutbound({ ...query(other), u: signed.u }), "");
 assert.strictEqual(hostLabel("https://www.walmart.com/ip/12345"), "walmart.com");
 assert.strictEqual(hostLabel("https://shop.example.co.uk/x"), "shop.example.co.uk");
 assert.strictEqual(hostLabel("not a url"), "");
+
+/* --------------------------------------------- every answer that leaves */
+
+/*
+ * Delia builds web recommendations in four places — the model's own list, a
+ * live-offer path, an eBay path and a catalogue fallback. Signing them where
+ * they were built covered one of the four, and the three it missed were
+ * exactly the eBay ones: on a live answer, four of six results came back with
+ * no door to leave by.
+ *
+ * So the answer is signed on its way out instead, which is also the only
+ * place that can be right about a cached one: signatures expire, and an
+ * answer replayed from cache five hours later used to carry links that were
+ * already dead.
+ */
+const signedPayload = withSignedLinks({
+  answer: "Two of these look right.",
+  recommendations: [
+    { source_type: "web", url: "https://www.ebay.com/itm/147473110983?mkevt=1&mkcid=1" },
+    { source_type: "web", url: "https://www.logitech.com/en-us/products/mice/m220.html" },
+    { source_type: "catalog", url: "/us/deal/thing-218985", catalog_product_id: 218985 },
+    { source_type: "web", url: "" },
+  ],
+});
+
+assert.strictEqual(signedPayload.answer, "Two of these look right.", "the rest of the answer must survive");
+/* The eBay link is the one the old version missed. */
+assert.ok(signedPayload.recommendations[0].click_url.startsWith("/go/web?"), "an eBay web result left without a door");
+assert.strictEqual(
+  verifyOutbound(query(signedPayload.recommendations[0].click_url)),
+  "https://www.ebay.com/itm/147473110983?mkevt=1&mkcid=1",
+  "the query string was lost on the way through",
+);
+assert.ok(signedPayload.recommendations[1].click_url.startsWith("/go/web?"));
+/* A catalogue result goes to its own page and leaves through /go/:id there. */
+assert.strictEqual(signedPayload.recommendations[2].click_url, "");
+/* Nothing to sign is not something to invent. */
+assert.strictEqual(signedPayload.recommendations[3].click_url, "");
+
+/* An answer with no recommendations passes through untouched rather than
+   growing an empty array. */
+assert.deepStrictEqual(withSignedLinks({ answer: "Which one?" }), { answer: "Which one?" });
+assert.strictEqual(withSignedLinks(null), null);
 
 console.log("Signed outbound web links passed.");

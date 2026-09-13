@@ -97,4 +97,30 @@ function hostLabel(url) {
   }
 }
 
-module.exports = { SIGNATURE_TTL_MS, hostLabel, isSendable, signOutbound, verifyOutbound };
+
+/*
+ * Every web recommendation in an answer, given a door on this site.
+ *
+ * Delia builds recommendations in four places — the model's own list, a
+ * live-offer path, an eBay path and a catalogue fallback — and signing them
+ * where they are built covered one. Signing them where the answer leaves
+ * covers all four and cannot be missed by the fifth, whenever there is one.
+ *
+ * It also fixes something the earlier version got wrong quietly: answers are
+ * cached, signatures expire, and a cached answer served five hours later
+ * carried links that were already dead. Signed on the way out, every answer
+ * leaves with a fresh one.
+ */
+function withSignedLinks(payload) {
+  if (!payload || !Array.isArray(payload.recommendations)) return payload;
+  return {
+    ...payload,
+    recommendations: payload.recommendations.map((item) => {
+      /* A catalogue result goes to its own page and leaves from there. */
+      if (item?.source_type === "catalog") return { ...item, click_url: "" };
+      return { ...item, click_url: signOutbound(item?.url) };
+    }),
+  };
+}
+
+module.exports = { SIGNATURE_TTL_MS, hostLabel, isSendable, signOutbound, verifyOutbound, withSignedLinks };
