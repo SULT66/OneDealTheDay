@@ -69,13 +69,13 @@ export async function AmazonPicks({ market }: { market: string }) {
 
   return (
     <section id="amazon" className="mt-14 scroll-mt-32 border-t border-border pt-10">
-      <h2 className="text-lg font-bold text-fg">Also worth a look on Amazon</h2>
-      {/* Up front, because the reader is about to notice these carry no score,
-          and should not have to work out what is different about them. */}
+      <h2 className="text-lg font-bold text-fg">Featured on Amazon</h2>
+      {/* What the reader needs, said once and plainly: where these came from and
+          how old a price is. The date beside each price carries the second half,
+          which Amazon's terms require whenever a price is not live. */}
       <p className="mt-1 max-w-prose text-sm leading-relaxed text-fg-muted">
-        Picked by hand from Amazon&rsquo;s best sellers. We don&rsquo;t score these,
-        and any price below is what it was on the day we looked &mdash; Amazon
-        changes prices often, so the live one is on their page.
+        Selected from Amazon&rsquo;s best sellers. Prices are shown with the date
+        they were recorded; the current price is on Amazon.
       </p>
 
       <ul className="mt-5 grid gap-2 sm:grid-cols-2">
