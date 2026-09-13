@@ -22,6 +22,7 @@ type DeliaState = {
    */
   seedProductId: string | null;
   market: string;
+  language?: string;
   openDelia: (seed?: string, productId?: string) => void;
   closeDelia: () => void;
 };
@@ -40,9 +41,11 @@ export function useDelia(): DeliaState {
  */
 export function DeliaProvider({
   market,
+  language = "en",
   children,
 }: {
   market: string;
+  language?: string;
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -58,8 +61,8 @@ export function DeliaProvider({
   const closeDelia = useCallback(() => setOpen(false), []);
 
   const value = useMemo(
-    () => ({ open, seed, seedProductId, market, openDelia, closeDelia }),
-    [open, seed, seedProductId, market, openDelia, closeDelia],
+    () => ({ open, seed, seedProductId, market, language, openDelia, closeDelia }),
+    [open, seed, seedProductId, market, language, openDelia, closeDelia],
   );
 
   return (

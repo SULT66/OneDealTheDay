@@ -73,7 +73,7 @@ const bodyOf = (message) => String(message.content[0].value);
     /* The product, visible. */
     assert.match(html, /Pet Lodge Automatic Dog Feeder/, "the product is named");
     assert.match(html, /i\.ebayimg\.com/, "the picture is in the email");
-    assert.match(html, /Sold and shipped by eBay/, "the shop is named");
+    assert.match(html, /Available on eBay/, "the shop is named");
     assert.match(html, /219\.99/, "the usual price is shown");
 
     /* The site's own colour, not the orange these used to carry. */

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { AffiliateNotice } from "@/components/site/AffiliateNotice";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowRight,
@@ -586,7 +587,7 @@ function DeliaExchange({
 }
 
 export function DeliaPanel() {
-  const { open, seed, seedProductId, market, closeDelia } = useDelia();
+  const { open, seed, seedProductId, market, language, closeDelia } = useDelia();
 
   const [available, setAvailable] = useState<boolean | null>(null);
   // The whole conversation, in order — not just the latest exchange, so
@@ -980,6 +981,10 @@ export function DeliaPanel() {
               <X size={20} weight="bold" aria-hidden="true" />
             </button>
           </div>
+        </div>
+
+        <div className="shrink-0 border-b border-border px-5 py-3 sm:px-6">
+          <AffiliateNotice market={market} language={language} />
         </div>
 
         {/* body */}

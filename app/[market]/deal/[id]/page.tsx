@@ -14,6 +14,7 @@ import { getCategory, getDeal, getMarket, getRelated } from "@/lib/catalog";
 import { categoryName, getLanguage, t } from "@/lib/i18n";
 import {
   discountPercent,
+  formatDate,
   formatDateTime,
   formatPrice,
   retailerLabel,
@@ -292,6 +293,15 @@ export default async function DealPage({
           This brief uses verified listing data and OneDailyDrop calculations.
           Unknown specifications are not filled in or guessed.
         </p>
+
+        {deal.priceHistory.length > 0 && (
+          <p className="mb-4 text-sm text-fg-muted">
+            Price lows use only our recorded observations, which may cover less
+            than 30 or 90 days. The history shown starts on{" "}
+            {formatDate(deal.priceHistory.map((point) => point.date).sort()[0], market)}.
+            Prices between observations may differ.
+          </p>
+        )}
 
         <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {[

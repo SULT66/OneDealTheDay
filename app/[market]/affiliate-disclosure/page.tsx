@@ -4,9 +4,7 @@ import { Prose } from "@/components/site/Prose";
 /**
  * Affiliate disclosure, moved onto the current design.
  *
- * The wording is carried over from the Express version word for word: this is
- * the text the site is held to, so it was moved, not rewritten. Only the chrome
- * around it changed.
+ * Keep the compensation explanation in sync with the Express fallback page.
  *
  * The params type is spelled out rather than using the generated `PageProps`
  * helper so a brand-new route compiles on a clean checkout.
@@ -19,7 +17,7 @@ export async function generateMetadata({
   const { market } = await params;
   return {
     title: "Affiliate Disclosure",
-    description: "OneDailyDrop may earn a commission when you purchase through eligible retailer links.",
+    description: "OneDailyDrop may earn a commission when you click some retailer links or make a qualifying purchase.",
     /* The same words live at five market prefixes; this says which one is the
        original rather than leaving search engines to pick. */
     alternates: { canonical: `/${market}/affiliate-disclosure` },
@@ -38,14 +36,14 @@ export default async function AffiliateDisclosurePage({
       market={market}
       crumb="Affiliate disclosure"
       title="Affiliate Disclosure"
-      lede="OneDailyDrop may earn a commission when you purchase through eligible retailer links."
+      lede="OneDailyDrop may earn a commission when you click some retailer links or make a qualifying purchase."
     >
       <p>
-        You do not pay more because a link is affiliated. A retailer or affiliate network may compensate OneDailyDrop for a qualifying purchase.
+        You do not pay more because a link is affiliated. A retailer or affiliate network may compensate OneDailyDrop for an eligible click or qualifying purchase.
       </p>
       <h2>How affiliate links work</h2>
       <p>
-        Some links include tracking information that allows a retailer or affiliate network to identify that a shopper came from OneDailyDrop. If a qualifying purchase is completed within the applicable attribution period, we may receive a commission.
+        Some links include tracking information that allows a retailer or affiliate network to identify that a shopper came from OneDailyDrop. Depending on the program, we may receive a commission for an eligible click, or for a qualifying purchase completed within the applicable attribution period. Not every link or click earns a payment.
       </p>
       <h2>Editorial independence</h2>
       <p>
@@ -59,7 +57,7 @@ export default async function AffiliateDisclosurePage({
       <p>
         Questions about affiliate relationships may be sent to <a className="font-medium text-fg underline underline-offset-4" href="mailto:info@onedailydrop.com">info@onedailydrop.com</a>.
       </p>
-      <p className="pt-4 text-sm text-fg-subtle">Last updated: July 30, 2026</p>
+      <p className="pt-4 text-sm text-fg-subtle">Last updated: September 13, 2026</p>
     </Prose>
   );
 }

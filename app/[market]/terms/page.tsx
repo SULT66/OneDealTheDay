@@ -50,7 +50,7 @@ export default async function TermsPage({
       </p>
       <h2>Affiliate relationships</h2>
       <p>
-        Some outbound links are affiliate links. OneDailyDrop may receive compensation from qualifying purchases, at no extra cost to the shopper.
+        Some outbound links are affiliate links. OneDailyDrop may receive compensation from eligible clicks or qualifying purchases, at no extra cost to the shopper.
       </p>
       <h2>No warranties</h2>
       <p>
@@ -76,7 +76,7 @@ export default async function TermsPage({
       <p>
         Questions about these terms may be sent to <a className="font-medium text-fg underline underline-offset-4" href="mailto:info@onedailydrop.com">info@onedailydrop.com</a>.
       </p>
-      <p className="pt-4 text-sm text-fg-subtle">Effective: July 22, 2026</p>
+      <p className="pt-4 text-sm text-fg-subtle">Effective: September 13, 2026</p>
     </Prose>
   );
 }

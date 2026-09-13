@@ -99,7 +99,7 @@ export default async function AboutPage({
       <h2>How we make money</h2>
       <p>
         When you choose a deal we send you to the retailer, and we may earn an
-        affiliate commission on what you buy. That commission adds no points to
+        affiliate commission for eligible clicks or purchases. That commission adds no points to
         any score and plays no part in what gets recommended. It is the reason
         the site is free, and it is disclosed on every page that carries a
         retailer link.

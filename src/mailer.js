@@ -241,7 +241,7 @@ const dropEmailLayout = ({ eyebrow, heading, title, brand, retailerName, retailP
         <h1 style="margin:0 0 14px;font-size:24px;line-height:1.2;color:${INK}">${escapeHtml(heading)}</h1>
         ${brand ? `<div style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#6b7280;margin-bottom:4px">${escapeHtml(brand)}</div>` : ""}
         <div style="font-size:17px;font-weight:bold;color:${INK}">${escapeHtml(title)}</div>
-        ${retailerName ? `<div style="font-size:13px;color:#6b7280;margin-top:4px">Sold and shipped by ${escapeHtml(retailerName)}</div>` : ""}
+        ${retailerName ? `<div style="font-size:13px;color:#6b7280;margin-top:4px">Available on ${escapeHtml(retailerName)}</div>` : ""}
 
         ${retailPrice ? `<div style="margin-top:14px">
           <span style="font-size:15px;color:#6b7280;text-decoration:line-through">${escapeHtml(currency || "")} ${escapeHtml(retailPrice)}</span>

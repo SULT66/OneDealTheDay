@@ -170,7 +170,7 @@ function hostGreeting(view) {
     brand && new RegExp(`^${brand.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(title);
   const product =
     [alreadyNamed ? "" : brand, title].filter(Boolean).join(" ").trim() || "today's drop";
-  const shop = view.retailer_name ? ` It's sold and shipped by ${view.retailer_name}.` : "";
+  const shop = view.retailer_name ? ` It's available on ${view.retailer_name}.` : "";
   const opening = `Hi, I'm Chloe and this is OneDailyDrop Live. Today's drop is the ${product}.${shop}`;
 
   if (view.state !== "live") {

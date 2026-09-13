@@ -50,7 +50,7 @@ export default async function PrivacyPage({
       </p>
       <h2>Affiliate links</h2>
       <p>
-        When you click a retailer link, the retailer or affiliate network may use cookies or tracking parameters to attribute a qualifying purchase to OneDailyDrop. Those third parties process data under their own privacy policies.
+        When you click a retailer link, the retailer or affiliate network may use cookies or tracking parameters to attribute an eligible click or qualifying purchase to OneDailyDrop. Those third parties process data under their own privacy policies.
       </p>
       <h2>How information is used</h2>
       <ul>
