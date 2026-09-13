@@ -48,10 +48,12 @@ export function PartnerPicks({ market }: { market: string }) {
 
   return (
     <section id="partners" className="mt-10 scroll-mt-32">
-      <h2 className="text-lg font-bold text-fg">Also worth a look at other shops</h2>
+      <h2 className="text-lg font-bold text-fg">Featured at other retailers</h2>
+      {/* Stated as a fact about where the price lives, not as an apology for
+          what this card lacks: that it carries no score is visible, and does
+          not need announcing ahead of the product. */}
       <p className="mt-1 max-w-prose text-sm leading-relaxed text-fg-muted">
-        Picked by hand. We don&rsquo;t score these and don&rsquo;t show a price for
-        them &mdash; it changes on the shop&rsquo;s own page, so check it there.
+        Selected by OneDailyDrop. Prices and availability are set by each retailer.
       </p>
 
       <ul className="mt-5 grid gap-2 sm:grid-cols-2">
@@ -70,7 +72,7 @@ export function PartnerPicks({ market }: { market: string }) {
                 ) : null}
                 <span className="mt-1.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                   <span className="text-sm font-semibold text-fg">View deal</span>
-                  <span className="text-xs text-fg-subtle">Check price at {pick.retailer}</span>
+                  <span className="text-xs text-fg-subtle">See price at {pick.retailer}</span>
                 </span>
               </span>
               <ArrowUpRight
