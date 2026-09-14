@@ -76,16 +76,24 @@ const passwordResetEmail = ({name, email, token}) => sendEmail({
     </div>`
 });
 
-const subscriptionEmail = ({email, categories, unsubscribeUrl}) => sendEmail({
+/*
+ * The welcome for the Live Drop list.
+ *
+ * It promised "your Daily Drop is on the way", and no Daily Drop email has
+ * ever been sent: this list gets an announcement before each Live Drop and
+ * nothing else. It now says exactly that, and sends them to the page the
+ * drops happen on.
+ */
+const subscriptionEmail = ({email, market = "us", unsubscribeUrl}) => sendEmail({
   to: email,
-  subject: "You’re subscribed to OneDailyDrop",
+  subject: "You’re on the OneDailyDrop Live list",
   unsubscribeUrl,
   html: `
     <div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;color:#17191d">
-      <h1 style="font-size:24px">Your Daily Drop is on the way</h1>
-      <p>We’ll send new OneDailyDrop updates to <strong>${escapeHtml(email)}</strong>.</p>
-      ${categories.length ? `<p>Your interests: ${categories.map(escapeHtml).join(", ")}.</p>` : ""}
-      <p><a href="${SITE}" style="color:#d95600;font-weight:bold">Visit OneDailyDrop</a></p>
+      <h1 style="font-size:24px">You won’t miss a Live Drop</h1>
+      <p>A Live Drop is one product, at one price, for ten minutes. The price is revealed when it starts.</p>
+      <p>We’ll email <strong>${escapeHtml(email)}</strong> before each drop, so you are there when it opens. That is the only email this list sends.</p>
+      <p style="margin:28px 0"><a href="${SITE}/${encodeURIComponent(market)}/live" style="background:#ff6b00;color:#fff;text-decoration:none;padding:13px 20px;border-radius:10px;font-weight:bold">See the next drop</a></p>
       ${unsubscribeUrl ? `<p style="margin-top:28px;font-size:13px;color:#6b7280">
         You are receiving this because you subscribed at OneDailyDrop.
         <a href="${escapeHtml(unsubscribeUrl)}" style="color:#6b7280">Unsubscribe</a> — one click, no sign-in.
@@ -187,7 +195,7 @@ const welcomeEmail = ({ name, email, market = "us" }) => sendEmail({
         minutes. There is no way to hear about one unless you ask.</li>
       </ul>
 
-      <p style="margin:28px 0"><a href="${SITE}/${encodeURIComponent(market)}#subscribe" style="background:#ff6b00;color:#fff;text-decoration:none;padding:13px 20px;border-radius:10px;font-weight:bold">Tell us what you shop for</a></p>
+      <p style="margin:28px 0"><a href="${SITE}/${encodeURIComponent(market)}#subscribe" style="background:#ff6b00;color:#fff;text-decoration:none;padding:13px 20px;border-radius:10px;font-weight:bold">Get told before every Live Drop</a></p>
 
       <p style="color:#6b7280;font-size:13px">You are getting this because an
       account was created at OneDailyDrop with this address. If that was not

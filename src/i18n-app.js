@@ -29,7 +29,7 @@ const appCopy = {
     "app.list.nextPage": "Next",
     "app.nav.live": "Live",
     "app.header.askDelia": "Ask Delia",
-    "app.header.subscribe": "Get my Daily Drop",
+    "app.header.subscribe": "Never miss a drop",
     "app.header.signIn": "Sign in",
     "app.header.signOut": "Log out",
 
@@ -150,7 +150,7 @@ const appCopy = {
     "app.list.nextPage": "Siguiente",
     "app.nav.live": "En directo",
     "app.header.askDelia": "Pregunta a Delia",
-    "app.header.subscribe": "Recibir mi oferta diaria",
+    "app.header.subscribe": "No te pierdas un drop",
     "app.header.signIn": "Iniciar sesión",
     "app.header.signOut": "Cerrar sesión",
 
@@ -271,7 +271,7 @@ const appCopy = {
     "app.list.nextPage": "Suivant",
     "app.nav.live": "En direct",
     "app.header.askDelia": "Demander à Delia",
-    "app.header.subscribe": "Recevoir mon offre du jour",
+    "app.header.subscribe": "Ne ratez aucun drop",
     "app.header.signIn": "Se connecter",
     "app.header.signOut": "Se déconnecter",
 
@@ -392,7 +392,7 @@ const appCopy = {
     "app.list.nextPage": "Weiter",
     "app.nav.live": "Live",
     "app.header.askDelia": "Delia fragen",
-    "app.header.subscribe": "Mein Tagesangebot erhalten",
+    "app.header.subscribe": "Keinen Drop verpassen",
     "app.header.signIn": "Anmelden",
     "app.header.signOut": "Abmelden",
 
