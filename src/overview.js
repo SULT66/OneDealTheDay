@@ -19,6 +19,7 @@
  */
 
 const { MEANINGFUL_REVIEW_COUNT } = require("./productPresentation");
+const { visitorNumbers } = require("./pageViews");
 
 const sinceIso = (days, now = Date.now()) =>
   new Date(now - days * 24 * 60 * 60 * 1000).toISOString();
@@ -167,6 +168,8 @@ function overview(db, { days = 30, now = Date.now() } = {}) {
     since,
     /* Named "sessions that did something", never "visitors". */
     engagedSessions: number(clicks.sessions),
+    /* Visitors, counted from pages that actually ran in a browser. */
+    visits: visitorNumbers(db, since),
     audience: {
       subscribers: number(audience.active),
       unsubscribed: number(audience.unsubscribed),
@@ -221,7 +224,7 @@ function overview(db, { days = 30, now = Date.now() } = {}) {
      * learns about it; the network's report is the only place it exists.
      */
     notMeasuredHere: [
-      "Visitors — no page view is recorded anywhere, so the top of the funnel is unknown.",
+      "Visitors before counting started, and anyone browsing with JavaScript off. Bots are left out on purpose.",
       "Anyone behind an unattributed click — those carry no session id, so they are counted as clicks and not as people.",
       "Purchases and commission — they happen at the shop; search the network report for the odd- labels.",
     ],

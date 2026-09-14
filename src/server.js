@@ -70,6 +70,7 @@ const { startCacheWarmer, pathsFor } = require("./cacheWarmer");
 const { readEbayStock, refreshDropStock, ebayItemIdFrom } = require("./liveStock");
 const { checkAmazonLinks } = require("./amazonLinkHealth");
 const { overview } = require("./overview");
+const { pageViewRow, recordPageView } = require("./pageViews");
 const {
   normalizeAction,
   normalizePlacement,
@@ -1509,6 +1510,21 @@ app.post("/api/live/watching", (req, res) => {
   db.prepare("DELETE FROM live_drop_presence WHERE drop_id=? AND seen_at < ?")
     .run(drop.id, new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString());
   res.json({watching: watchingNow(drop.id)});
+});
+
+/* A page opened in a browser. See src/pageViews.js. Always 204: a visitor
+   count is never worth an error in somebody's console. */
+app.post("/api/analytics/page-view", (req, res) => {
+  try {
+    recordPageView(db, pageViewRow(req.body, {
+      userAgent: req.get("user-agent"),
+      ownHost: req.get("host"),
+      markets: marketCodes,
+    }));
+  } catch (error) {
+    console.error(`[page-views] not recorded: ${error.message}`);
+  }
+  res.sendStatus(204);
 });
 
 app.post("/api/live/events", (req, res) => {

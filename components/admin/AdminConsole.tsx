@@ -252,7 +252,7 @@ export function AdminConsole() {
       <div
         role="tablist"
         aria-label="Admin sections"
-        className="mt-6 flex gap-1 overflow-x-auto border-b border-border"
+        className="mt-6 flex gap-1 overflow-x-auto overflow-y-hidden border-b border-border"
         onKeyDown={(event) => {
           if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
           const index = TABS.findIndex((item) => item.id === tab);
@@ -719,7 +719,7 @@ function DropRow({
             : "Not checked with the shop yet. The answer arrives within a minute of publishing."}
       </p>
       <p className="mt-2 text-xs text-fg-subtle">
-        {drop.reminders} reminders asked for. <strong>Bought: not knowable here.</strong>{" "}
+        {drop.reminders} {drop.reminders === 1 ? "reminder" : "reminders"} asked for. <strong>Bought: not knowable here.</strong>{" "}
         Purchases are only visible in the network report — search it for{" "}
         <code className="rounded bg-surface-2 px-1 py-0.5 font-mono text-[0.7rem] text-fg">
           {drop.click_label}

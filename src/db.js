@@ -492,6 +492,24 @@ db.exec(`
   CREATE UNIQUE INDEX IF NOT EXISTS idx_live_drop_events_unique
     ON live_drop_events(drop_id, event_type, session_id);
 
+  /* Who opened which page, and where they came from. See src/pageViews.js.
+     One row per session, page and day: a reload or a second look the same
+     day is not a second visitor, and a refresh loop cannot grow the table. */
+  CREATE TABLE IF NOT EXISTS page_views(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT NOT NULL,
+    day TEXT NOT NULL,
+    path TEXT NOT NULL,
+    market TEXT NOT NULL DEFAULT 'us',
+    source TEXT NOT NULL DEFAULT 'direct',
+    campaign TEXT NOT NULL DEFAULT '',
+    viewed_at TEXT NOT NULL
+  );
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_page_views_unique
+    ON page_views(session_id, day, path);
+  CREATE INDEX IF NOT EXISTS idx_page_views_viewed
+    ON page_views(viewed_at);
+
   /* Who is watching right now, which the funnel above deliberately cannot
      answer: it keeps one row per session for the whole drop, so it counts
      everybody who ever arrived and never notices anyone leaving.
