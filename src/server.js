@@ -2904,7 +2904,7 @@ app.get("/unsubscribe", (req, res) => {
   res.set("X-Robots-Tag", "noindex, nofollow").set("Cache-Control", "no-store");
   const done = unsubscribeByToken(req.query.token);
   const message = done
-    ? "You have been unsubscribed. No further Daily Drop email will be sent to this address."
+    ? "You have been unsubscribed. We will not email this address about Live Drops again."
     : "That unsubscribe link is not one we recognise. If you are still receiving email from us, reply to it and we will remove you by hand.";
   return res.status(done ? 200 : 404).send(`<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow">

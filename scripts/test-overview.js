@@ -66,6 +66,9 @@ db.prepare("INSERT INTO subscribers(email,categories,status,source,market,create
   .run("old@example.com", "[]", "active", "homepage", "us", longAgo, longAgo);
 db.prepare("INSERT INTO subscribers(email,categories,status,source,market,created_at,updated_at) VALUES(?,?,?,?,?,?,?)")
   .run("gone@example.com", "[]", "unsubscribed", "homepage", "us", longAgo, longAgo);
+/* Left recently, with the date recorded — the only kind a window can count. */
+db.prepare("INSERT INTO subscribers(email,categories,status,source,market,created_at,updated_at,unsubscribed_at) VALUES(?,?,?,?,?,?,?,?)")
+  .run("left-recently@example.com", "[]", "unsubscribed", "homepage", "us", longAgo, inWindow, inWindow);
 
 db.prepare("INSERT INTO users(email,name,password_hash,membership,market,created_at) VALUES(?,?,?,?,?,?)")
   .run("a@example.com", "A", "x", "free", "us", inWindow);
@@ -148,7 +151,11 @@ const numbers = overview(db, {days:30, now});
 
 assert.strictEqual(numbers.days, 30);
 assert.strictEqual(numbers.audience.subscribers, 2, "active subscribers, unsubscribed excluded");
-assert.strictEqual(numbers.audience.unsubscribed, 1);
+assert.strictEqual(numbers.audience.unsubscribed, 2);
+assert.strictEqual(numbers.audience.unsubscribedInWindow, 1, "only the unsubscribe dated inside the window");
+/* Two people pressed Remind me; the same address on a second drop is still one person. */
+db.prepare("INSERT INTO live_drop_reminders(drop_id,email,created_at) VALUES(?,?,?)").run(3, "ONE@example.com", inWindow);
+assert.strictEqual(overview(db, {days:30, now}).audience.oneDropReminderPeople, 2, "one person on two drops was counted twice");
 assert.strictEqual(numbers.audience.subscribedInWindow, 1, "only the one who joined inside the window");
 assert.strictEqual(numbers.audience.accounts, 2);
 assert.strictEqual(numbers.audience.accountsInWindow, 1);
