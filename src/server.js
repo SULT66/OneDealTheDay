@@ -3378,7 +3378,8 @@ app.get("/api/admin/live-drops", admin, (req, res) => {
    * left to appear.
    */
   const reminders = db.prepare(`
-    SELECT COUNT(*) AS total, COUNT(reminded_at) AS sent
+    SELECT COUNT(*) AS total, COUNT(reminded_at) AS sent,
+      COUNT(reminded_at) + COUNT(reminded_day_before_at) + COUNT(reminded_hour_before_at) AS emails
     FROM live_drop_reminders WHERE drop_id=?
   `);
 
@@ -3414,6 +3415,10 @@ app.get("/api/admin/live-drops", admin, (req, res) => {
       reminders: reminderCounts.total,
       reminders_sent: reminderCounts.sent,
       reminders_unsent: reminderCounts.total - reminderCounts.sent,
+      /* Every reminder email that went out: up to three per person. */
+      reminder_emails_sent: reminderCounts.emails,
+      /* Whether it was ever public, which decides whether it can be deleted. */
+      ever_published: Boolean(row.first_published_at),
       funnel: Object.fromEntries(funnel.all(row.id).map((entry) => [entry.event_type, entry.total])),
       reached: reached.get(row.id).people,
       /* What to search the network report for once the drop is over. The site

@@ -33,6 +33,9 @@ type AdminDrop = {
   start_at: string;
   published: boolean;
   reminders: number;
+  /* Optional: absent from a server deployed before they were sent. */
+  reminder_emails_sent?: number;
+  ever_published?: boolean;
   funnel: Record<string, number>;
   reached: number;
   announced: number;
@@ -648,7 +651,11 @@ function DropRow({
   });
   /* A published drop shows where it is in its own life. An unpublished one is
      a draft whatever the clock says, because nobody can see it. */
-  const state = drop.published ? drop.state : "draft";
+  /* A drop that was public once and has been taken down is not a draft: it
+     ran, people were told, and it can no longer be deleted. Calling it a draft
+     offered a Delete button that the server then refused. */
+  const everPublished = drop.published || Boolean(drop.ever_published);
+  const state = drop.published ? drop.state : everPublished ? "unpublished" : "draft";
   const live = drop.published && drop.state === "live";
 
   return (
@@ -710,12 +717,19 @@ function DropRow({
            * navigation loses the second, and the gap between them is the only
            * place that ever shows.
            */
-          { label: "told", value: drop.announced, of: 0 },
-          { label: "arrived", value: drop.reached, of: drop.announced },
-          { label: "waited", value: drop.funnel.waiting_room || 0, of: drop.reached },
-          { label: "saw the price", value: drop.funnel.reveal || 0, of: drop.reached },
-          { label: "pressed buy", value: drop.funnel.buy_click || 0, of: drop.funnel.reveal || 0 },
-          { label: "sent to the shop", value: drop.funnel.buy_handoff || 0, of: drop.funnel.buy_click || 0 },
+          /*
+           * Each rate names what it is a share of. "% of above" was wrong in
+           * two places: "saw the price" was measured against everyone who
+           * arrived while the column above it was "waited", so 3 of 0 read as
+           * 100%; and "arrived" was measured against the people emailed, when
+           * most arrivals never came from that email at all.
+           */
+          { label: "told", value: drop.announced, of: 0, ofLabel: "" },
+          { label: "arrived", value: drop.reached, of: 0, ofLabel: "" },
+          { label: "waited", value: drop.funnel.waiting_room || 0, of: drop.reached, ofLabel: "arrived" },
+          { label: "saw the price", value: drop.funnel.reveal || 0, of: drop.reached, ofLabel: "arrived" },
+          { label: "pressed buy", value: drop.funnel.buy_click || 0, of: drop.funnel.reveal || 0, ofLabel: "saw the price" },
+          { label: "sent to the shop", value: drop.funnel.buy_handoff || 0, of: drop.funnel.buy_click || 0, ofLabel: "pressed buy" },
         ].map((step) => (
           <div key={step.label}>
             <dt className="text-[0.65rem] uppercase tracking-[0.12em] text-fg-subtle">
@@ -729,7 +743,7 @@ function DropRow({
               {step.value}
               {step.of > 0 && step.value > 0 ? (
                 <span className="block text-[0.65rem] font-normal text-fg-subtle">
-                  {Math.round((step.value / step.of) * 100)}% of above
+                  {Math.round((step.value / step.of) * 100)}% of {step.ofLabel}
                 </span>
               ) : null}
             </dd>
@@ -761,7 +775,11 @@ function DropRow({
             : "Not checked with the shop yet. The answer arrives within a minute of publishing."}
       </p>
       <p className="mt-2 text-xs text-fg-subtle">
-        {drop.reminders} {drop.reminders === 1 ? "reminder" : "reminders"} asked for. <strong>Bought: not knowable here.</strong>{" "}
+        {/* People and emails, never one standing in for the other: one person
+            gets up to three reminders (a day, an hour, ten minutes before). */}
+        {drop.reminders} {drop.reminders === 1 ? "person" : "people"} asked for a reminder
+        {drop.reminder_emails_sent != null ? ` · ${drop.reminder_emails_sent} reminder ${drop.reminder_emails_sent === 1 ? "email" : "emails"} sent` : ""}
+        {" · "}told = people emailed the announcement, once each. <strong>Bought: not knowable here.</strong>{" "}
         Purchases are only visible in the network report — search it for{" "}
         <code className="rounded bg-surface-2 px-1 py-0.5 font-mono text-[0.7rem] text-fg">
           {drop.click_label}
@@ -807,6 +825,8 @@ function DropRow({
               Set stock
             </button>
           </>
+        ) : everPublished ? (
+          <span className="px-1 text-xs text-fg-subtle">Ran once, so it is kept as a record and cannot be deleted.</span>
         ) : (
           <button
             type="button"

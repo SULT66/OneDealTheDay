@@ -130,7 +130,7 @@ export function Numbers({ adminKey }: { adminKey: string }) {
             <Stat
               label="Visitors"
               value={count(data.visits.visitors)}
-              note={`in ${days} days · ${count(data.visits.pageViews)} pages opened`}
+              note={`in ${days} days · ${count(data.visits.pageViews)} pages opened · one browser tab counts once`}
             />
             <Stat
               label="Opened the Live Drop page"
@@ -202,9 +202,9 @@ export function Numbers({ adminKey }: { adminKey: string }) {
 
       <Group title="People">
         <Stat
-          label="People we could recognise"
+          label="People who went to a shop"
           value={count(data.engagedSessions)}
-          note={`in ${days} days · ${count(outbound.unattributed)} clicks had no one attached`}
+          note={`in ${days} days · ${count(outbound.unattributed)} more clicks came from bots`}
         />
         <Stat
           label="Accounts"
@@ -295,17 +295,21 @@ export function Numbers({ adminKey }: { adminKey: string }) {
         <Stat label="To a whole shop" value={count(outbound.toAShop)} note="anything they buy counts" />
       </Group>
 
-      <Group title="Live Drop">
-        <Stat label="Drops" value={count(live.drops)} note={`${count(live.published)} published`} />
+      {/* All time, not the window above: there have been too few drops for a
+          window to mean anything, and the cards said nothing either way. */}
+      <Group title="Live Drop · all time">
+        <Stat label="Drops" value={count(live.drops)} note={`${count(live.published)} on the site now`} />
         <Stat
-          label="Reached a drop"
+          label="People on a drop page"
           value={count(live.reached)}
-          note={`${count(live.sawThePrice)} saw the price · ${count(live.wentToBuy)} went to buy`}
+          note={`${count(live.sawThePrice)} saw the price · ${count(live.wentToBuy)} pressed buy`}
         />
+        {/* Emails, counted as emails, beside the requests they answer. "2 sent"
+            under "1" read as two people. */}
         <Stat
-          label="Reminders"
+          label="Reminder requests"
           value={count(live.remindersAsked)}
-          note={`${count(live.remindersSent)} sent · ${count(live.announcementsSent)} announcements`}
+          note={`${count(live.remindersSent)} reminder emails · ${count(live.announcementsSent)} announcement emails`}
         />
       </Group>
 
