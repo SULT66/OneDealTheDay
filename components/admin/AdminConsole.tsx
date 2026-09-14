@@ -5,6 +5,7 @@ import { cn } from "@/lib/cn";
 import { ShopIcons } from "./ShopIcons";
 import { Numbers } from "./Numbers";
 import { AmazonPicks } from "./AmazonPicks";
+import { MediaUpload } from "./MediaUpload";
 
 /**
  * The admin console: scheduling a Live Drop, and the catalogue refresh.
@@ -40,6 +41,7 @@ type AdminDrop = {
   stock_verified_at: string | null;
   stock_checked_at: string | null;
   image_url: string;
+  secondary_image_url?: string;
   video_url: string;
   stream_embed_url: string;
   click_label: string;
@@ -394,7 +396,7 @@ export function AdminConsole() {
           )}
           {unlocked && !drops.length && <p className="text-sm text-fg-subtle">Nothing scheduled yet.</p>}
           {(drops || []).map((drop) => (
-            <DropRow key={drop.drop_key} drop={drop} busy={busy} act={act} />
+            <DropRow key={drop.drop_key} drop={drop} busy={busy} act={act} adminKey={adminKey} />
           ))}
         </div>
       </Card>
@@ -408,11 +410,17 @@ export function AdminConsole() {
 
         <form onSubmit={create} className="mt-6">
           <fieldset disabled={!unlocked || busy} className="border-0 p-0 disabled:opacity-55">
-            <div className="grid gap-x-4 gap-y-1 sm:grid-cols-2 lg:grid-cols-3">
+            {/* In the order the drop is thought through: what it is, what it
+                costs, when it runs, what people see. Fifteen fields in one grid
+                had no order at all. */}
+            <FormGroup title="Product">
               <Field label="Product title" required value={form.title} onChange={(v) => setForm({ ...form, title: v })} />
               <Field label="Brand" value={form.brand} onChange={(v) => setForm({ ...form, brand: v })} />
               <Field label="Retailer" value={form.retailer_name} onChange={(v) => setForm({ ...form, retailer_name: v })} />
+              <Field label="Buy link" type="url" value={form.affiliate_url} onChange={(v) => setForm({ ...form, affiliate_url: v })} />
+            </FormGroup>
 
+            <FormGroup title="Price and stock">
               <label className="block py-2">
                 <span className="text-xs font-semibold uppercase tracking-[0.1em] text-fg-subtle">Market</span>
                 <select
@@ -428,28 +436,27 @@ export function AdminConsole() {
                 </select>
               </label>
 
+              <Field label="Currency" value={form.currency} onChange={(v) => setForm({ ...form, currency: v })} />
               <Field label="Normal price" type="number" step="0.01" value={form.retail_price} onChange={(v) => setForm({ ...form, retail_price: v })} />
               <Field label="Drop price" type="number" step="0.01" value={form.drop_price} onChange={(v) => setForm({ ...form, drop_price: v })} />
-              <Field label="Currency" value={form.currency} onChange={(v) => setForm({ ...form, currency: v })} />
               <Field label="Units" type="number" required value={form.quantity_total} onChange={(v) => setForm({ ...form, quantity_total: v })} />
+            </FormGroup>
+
+            <FormGroup title="When">
               <Field label="Starts" type="datetime-local" required value={form.start_at} onChange={(v) => setForm({ ...form, start_at: v })} />
               <Field label="Minutes open" type="number" required value={form.duration_minutes} onChange={(v) => setForm({ ...form, duration_minutes: v })} />
               <Field label="Member head start (seconds)" type="number" value={form.member_early_access_seconds} onChange={(v) => setForm({ ...form, member_early_access_seconds: v })} />
-              <Field label="Product photo — URL" type="url" value={form.image_url} onChange={(v) => setForm({ ...form, image_url: v })} />
-              {/* The presenter cannot hold the product up, so this is where a
-                  shopper sees it being used. */}
-              <Field label="Product in use — photo URL" type="url" value={form.secondary_image_url} onChange={(v) => setForm({ ...form, secondary_image_url: v })} />
-              <Field label="Buy link" type="url" value={form.affiliate_url} onChange={(v) => setForm({ ...form, affiliate_url: v })} />
-              {/* Two panels, named for what each actually shows.
-                  "AI host embed URL" and "Product demo video (optional)"
-                  described the arrangement rather than the job, and the job is
-                  this: a presenter cannot hold up a monitor. One panel is
-                  whoever is talking, the other is where the product is
-                  actually seen, and either runs alone if that is all there
-                  is. */}
-              <Field label="Presenter video — embed URL (Chloe's recording, or a live stream)" type="url" value={form.stream_embed_url} onChange={(v) => setForm({ ...form, stream_embed_url: v })} />
-              <Field label="Product footage — video file URL (shown beside the presenter)" type="url" value={form.video_url} onChange={(v) => setForm({ ...form, video_url: v })} />
-            </div>
+            </FormGroup>
+
+            {/* Files, not links. Two panels, named for what each shows: a
+                presenter cannot hold up a monitor, so one panel is whoever is
+                talking and the other is where the product is actually seen. */}
+            <FormGroup title="What people see" columns={2}>
+              <MediaUpload adminKey={adminKey} kind="image" label="Product photo" hint="The product on its own, clean background." value={form.image_url} onChange={(v) => setForm({ ...form, image_url: v })} disabled={!unlocked || busy} />
+              <MediaUpload adminKey={adminKey} kind="image" label="Product in use — photo" hint="Somebody using it. Optional." value={form.secondary_image_url} onChange={(v) => setForm({ ...form, secondary_image_url: v })} disabled={!unlocked || busy} />
+              <MediaUpload adminKey={adminKey} kind="video" label="Presenter video" hint="Chloe's recording. Plays on the left." value={form.stream_embed_url} onChange={(v) => setForm({ ...form, stream_embed_url: v })} allowLink disabled={!unlocked || busy} />
+              <MediaUpload adminKey={adminKey} kind="video" label="Product footage" hint="The product up close. Plays beside the presenter." value={form.video_url} onChange={(v) => setForm({ ...form, video_url: v })} disabled={!unlocked || busy} />
+            </FormGroup>
 
             <label className="mt-2 block py-2">
               <span className="text-xs font-semibold uppercase tracking-[0.1em] text-fg-subtle">Terms</span>
@@ -555,6 +562,23 @@ function Legend({ children }: { children: React.ReactNode }) {
   return <h2 className="text-lg font-bold text-fg">{children}</h2>;
 }
 
+function FormGroup({
+  title,
+  children,
+  columns = 3,
+}: {
+  title: string;
+  children: React.ReactNode;
+  columns?: 2 | 3;
+}) {
+  return (
+    <div className="mt-2 border-t border-border pt-4 first:mt-0 first:border-t-0 first:pt-0">
+      <p className="text-sm font-bold text-fg">{title}</p>
+      <div className={cn("mt-1 grid gap-x-4 gap-y-1 sm:grid-cols-2", columns === 3 && "lg:grid-cols-4")}>{children}</div>
+    </div>
+  );
+}
+
 function Field({
   label,
   value,
@@ -589,8 +613,10 @@ function DropRow({
   drop,
   busy,
   act,
+  adminKey,
 }: {
   drop: AdminDrop;
+  adminKey: string;
   busy: boolean;
   act: (url: string, body: unknown, method?: string) => Promise<string>;
 }) {
@@ -601,6 +627,7 @@ function DropRow({
      permanent. */
   const [media, setMedia] = useState({
     image_url: drop.image_url || "",
+    secondary_image_url: drop.secondary_image_url || "",
     video_url: drop.video_url || "",
     stream_embed_url: drop.stream_embed_url || "",
   });
@@ -789,22 +816,11 @@ function DropRow({
       {/* What the drop shows, editable after it is published. The offer
           itself — price, quantity, hour — is deliberately not here: people
           were told those, and changing them quietly is a different act. */}
-      <div className="mt-3 grid gap-2 sm:grid-cols-3">
-        {([
-          ["image_url", "Product photo URL"],
-          ["video_url", "Product video URL"],
-          ["stream_embed_url", "Presenter embed URL"],
-        ] as const).map(([field, label]) => (
-          <label key={field} className="block">
-            <span className="text-[0.65rem] uppercase tracking-[0.12em] text-fg-subtle">{label}</span>
-            <input
-              value={media[field]}
-              onChange={(event) => setMedia({ ...media, [field]: event.target.value })}
-              placeholder="/media/file.mp4 or https://…"
-              className="mt-1 h-9 w-full rounded-full border border-border bg-surface-2 px-3 text-xs text-fg outline-none focus:border-border-strong"
-            />
-          </label>
-        ))}
+      <div className="mt-3 grid gap-x-4 sm:grid-cols-2">
+        <MediaUpload adminKey={adminKey} kind="image" label="Product photo" value={media.image_url} onChange={(v) => setMedia({ ...media, image_url: v })} disabled={busy} />
+        <MediaUpload adminKey={adminKey} kind="image" label="Product in use — photo" value={media.secondary_image_url} onChange={(v) => setMedia({ ...media, secondary_image_url: v })} disabled={busy} />
+        <MediaUpload adminKey={adminKey} kind="video" label="Presenter video" value={media.stream_embed_url} onChange={(v) => setMedia({ ...media, stream_embed_url: v })} allowLink disabled={busy} />
+        <MediaUpload adminKey={adminKey} kind="video" label="Product footage" value={media.video_url} onChange={(v) => setMedia({ ...media, video_url: v })} disabled={busy} />
       </div>
       <button
         type="button"

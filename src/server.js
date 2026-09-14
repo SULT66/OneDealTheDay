@@ -71,6 +71,7 @@ const { readEbayStock, refreshDropStock, ebayItemIdFrom } = require("./liveStock
 const { checkAmazonLinks } = require("./amazonLinkHealth");
 const { overview } = require("./overview");
 const { pageViewRow, recordPageView } = require("./pageViews");
+const { PUBLIC_PREFIX: PUBLIC_MEDIA_PREFIX, mediaDirectory, saveUpload } = require("./dropMedia");
 const {
   normalizeAction,
   normalizePlacement,
@@ -686,6 +687,17 @@ app.use((req, res, next) => {
   const queryIndex = String(req.originalUrl || "").indexOf("?");
   return res.redirect(301, `${destination}${queryIndex >= 0 ? req.originalUrl.slice(queryIndex) : ""}`);
 });
+/* Drop photos and videos uploaded from the admin console, served from the
+   durable share (src/dropMedia.js). Named by a random id and never changed,
+   so they can be cached for good; express.static answers Range requests,
+   which is what lets a long video start playing before it has downloaded. */
+app.use(PUBLIC_MEDIA_PREFIX, express.static(mediaDirectory(), {
+  etag:true,
+  dotfiles:"ignore",
+  fallthrough:false,
+  maxAge:"30d",
+  immutable:true,
+}));
 app.use(express.static(publicDir, {
   etag:true,
   setHeaders:(res, filePath) => {
@@ -3416,6 +3428,7 @@ app.get("/api/admin/live-drops", admin, (req, res) => {
       /* Prefilled into the media editor, so saving cannot blank a field it
          could not see. */
       image_url: row.image_url || "",
+      secondary_image_url: row.secondary_image_url || "",
       video_url: row.video_url || "",
       stream_embed_url: row.stream_embed_url || "",
       stock_is_live: Boolean(row.stock_verified_at && now - Date.parse(row.stock_verified_at) <= 2 * 60 * 1000),
@@ -3524,6 +3537,19 @@ app.post("/api/admin/live-drops/:key/stock", admin, (req, res) => {
  * and quietly editing those under people who were told about them is a
  * different act with different consequences.
  */
+/* A drop photo or video, sent as the raw file body. Answers with the path to
+   put in the drop's media field; see src/dropMedia.js. */
+app.post("/api/admin/drop-media", admin, async (req, res) => {
+  const kind = req.query.kind === "video" ? "video" : req.query.kind === "image" ? "image" : "";
+  try {
+    const saved = await saveUpload(req, { kind });
+    return res.json({ ok:true, ...saved });
+  } catch (error) {
+    if (!error.status) console.error(`[drop-media] upload failed: ${error.message}`);
+    return res.status(error.status || 500).json({ error: error.status ? error.message : "The file could not be saved." });
+  }
+});
+
 app.patch("/api/admin/live-drops/:key/media", admin, express.json({limit:"8kb"}), (req, res) => {
   const drop = db.prepare("SELECT * FROM live_drops WHERE drop_key=?").get(String(req.params.key || ""));
   if (!drop) return res.status(404).json({error:"No such drop."});
