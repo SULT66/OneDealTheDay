@@ -7,6 +7,7 @@ import { Footer } from "@/components/site/Footer";
 import { DeliaProvider } from "@/components/delia/DeliaContext";
 import { ClickAttribution } from "@/components/site/ClickAttribution";
 import { PageViews } from "@/components/site/PageViews";
+import { LiveDropBar } from "@/components/live/LiveDropBar";
 
 /**
  * Everything lives under a market segment, mirroring the live site's /us URLs
@@ -33,6 +34,8 @@ export default async function MarketLayout({
       <ClickAttribution />
       {/* Visitors and where they came from, for the admin numbers. */}
       <PageViews />
+      {/* The next Live Drop, above every page while one is on the calendar. */}
+      <LiveDropBar market={market} />
       <Header market={market} />
       <main id="main" className="flex-1">
         <div className="mx-auto max-w-7xl px-5 py-3 sm:px-8">
