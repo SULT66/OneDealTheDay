@@ -202,31 +202,107 @@ export function AdminConsole() {
 
   const unlocked = drops !== null;
 
+  /*
+   * One job per tab.
+   *
+   * Everything used to be one long page — numbers, email, the drop form, the
+   * schedule, Amazon picks, shop icons, the refresh — and finding the drop
+   * you were about to run meant scrolling past four things that had nothing
+   * to do with it. Every tab stays mounted and is only hidden, so a half-typed
+   * drop or icon URL survives a look at the numbers.
+   */
+  const [tab, setTab] = useState<TabId>("numbers");
+  /* The tab is in the address, so a reload or a bookmark lands where you were.
+     Only the tab name: the key never goes anywhere near the URL. */
+  useEffect(() => {
+    const fromHash = window.location.hash.replace("#", "");
+    if (TABS.some((item) => item.id === fromHash)) setTab(fromHash as TabId);
+  }, []);
+  const choose = (id: TabId) => {
+    setTab(id);
+    setMessage("");
+    window.history.replaceState(null, "", `#${id}`);
+  };
+  const upcoming = (drops || []).filter((drop) => drop.published && ["upcoming", "waiting", "live"].includes(drop.state)).length;
+  const liveNow = (drops || []).some((drop) => drop.published && drop.state === "live");
+
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-10 sm:px-6 sm:py-14">
-      <h1 className="text-3xl font-bold tracking-tight text-fg sm:text-4xl">Admin</h1>
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <h1 className="text-3xl font-bold tracking-tight text-fg sm:text-4xl">Admin</h1>
+        {/* The key, kept small and at the top: it is needed once per visit and
+            is not a section anybody works in. */}
+        <label className="block w-full max-w-sm">
+          <span className="text-xs font-semibold uppercase tracking-[0.1em] text-fg-subtle">
+            Admin key {unlocked ? "· unlocked" : ""}
+          </span>
+          <input
+            type="password"
+            autoComplete="off"
+            value={adminKey}
+            onChange={(event) => setAdminKey(event.target.value)}
+            placeholder="Paste the key to unlock"
+            aria-label="Admin key"
+            className="mt-1.5 h-11 w-full rounded-full border border-border bg-surface-2 px-5 text-sm text-fg outline-none transition-colors focus:border-border-strong"
+          />
+        </label>
+      </div>
+      <p className="mt-2 text-xs text-fg-subtle">ADMIN_KEY from the environment. Kept in this tab only, never stored.</p>
 
-      <Card className="mt-6">
-        <Legend>Admin key</Legend>
-        <p className="mt-1 text-sm text-fg-muted">
-          ADMIN_KEY from the environment. Kept in this tab only, never stored.
+      <div
+        role="tablist"
+        aria-label="Admin sections"
+        className="mt-6 flex gap-1 overflow-x-auto border-b border-border"
+        onKeyDown={(event) => {
+          if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
+          const index = TABS.findIndex((item) => item.id === tab);
+          const next = TABS[(index + (event.key === "ArrowRight" ? 1 : TABS.length - 1)) % TABS.length];
+          choose(next.id);
+          document.getElementById(`admin-tab-${next.id}`)?.focus();
+        }}
+      >
+        {TABS.map((item) => {
+          const selected = item.id === tab;
+          return (
+            <button
+              key={item.id}
+              id={`admin-tab-${item.id}`}
+              type="button"
+              role="tab"
+              aria-selected={selected}
+              aria-controls={`admin-panel-${item.id}`}
+              tabIndex={selected ? 0 : -1}
+              onClick={() => choose(item.id)}
+              className={cn(
+                "-mb-px inline-flex shrink-0 cursor-pointer items-center gap-2 border-b-2 px-4 py-3 text-sm font-semibold transition-colors",
+                selected ? "border-fg text-fg" : "border-transparent text-fg-muted hover:text-fg",
+              )}
+            >
+              {item.label}
+              {item.id === "drops" && liveNow && (
+                <span className="h-2 w-2 animate-pulse rounded-full bg-danger" aria-label="live now" />
+              )}
+              {item.id === "drops" && !liveNow && upcoming > 0 && (
+                <span className="rounded-full bg-surface-2 px-1.5 text-[0.65rem] font-bold text-fg-muted tnum">{upcoming}</span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* One status line for whatever was just done, in whichever tab. It used
+          to live inside the drops section, so the result of an email test was
+          printed under a form on a different part of the page. */}
+      {message && (
+        <p className="mt-4 rounded-xl bg-surface-2 px-4 py-2.5 text-sm font-medium text-fg" role="status">
+          {message}
         </p>
-        <input
-          type="password"
-          autoComplete="off"
-          value={adminKey}
-          onChange={(event) => setAdminKey(event.target.value)}
-          placeholder="Paste the key to unlock"
-          aria-label="Admin key"
-          className="mt-4 h-12 w-full max-w-md rounded-full border border-border bg-surface-2 px-5 text-sm text-fg outline-none transition-colors focus:border-border-strong"
-        />
-      </Card>
+      )}
+      {!unlocked && (
+        <p className="mt-4 text-sm text-fg-subtle">Enter the admin key to load everything.</p>
+      )}
 
-      {/*
-        * The numbers first, because this is the screen somebody opens to ask
-        * how the business is doing, and everything below it is a thing to do
-        * rather than a thing to know.
-        */}
+      <TabPanel id="numbers" active={tab}>
       <Card className="mt-6">
         <Legend>Your numbers</Legend>
         <p className="mt-1 max-w-prose text-sm leading-relaxed text-fg-muted">
@@ -235,13 +311,13 @@ export function AdminConsole() {
         </p>
         <Numbers adminKey={adminKey} />
       </Card>
+      </TabPanel>
 
       {/*
-        * Email, above the drops, because a drop with no way to announce it is
-        * an event held in an empty room. The console used to say "not
-        * configured" and stop there, which named the last of four steps and
-        * none of the three before it.
+        * The console used to say "not configured" and stop there, which named
+        * the last of four steps and none of the three before it.
         */}
+      <TabPanel id="email" active={tab}>
       <Card className="mt-6">
         <Legend>Email delivery</Legend>
         <p className="mt-1 max-w-prose text-sm leading-relaxed text-fg-muted">
@@ -301,13 +377,33 @@ export function AdminConsole() {
           </ol>
         ) : null}
       </Card>
+      </TabPanel>
+
+      {/* The schedule first: opening this tab is usually about a drop that
+          already exists. A new one is written below it. */}
+      <TabPanel id="drops" active={tab}>
+      <Card className="mt-6">
+        <Legend>Schedule</Legend>
+        <p className="mt-1 max-w-prose text-sm leading-relaxed text-fg-muted">
+          Every drop, drafts included. Publishing is a separate, deliberate step, because
+          writing a drop and announcing it are different decisions and this site is live.
+        </p>
+        <div className="mt-6 space-y-3">
+          {!unlocked && (
+            <p className="text-sm text-fg-subtle">Enter the admin key to load the schedule.</p>
+          )}
+          {unlocked && !drops.length && <p className="text-sm text-fg-subtle">Nothing scheduled yet.</p>}
+          {(drops || []).map((drop) => (
+            <DropRow key={drop.drop_key} drop={drop} busy={busy} act={act} />
+          ))}
+        </div>
+      </Card>
 
       <Card className="mt-6">
-        <Legend>Live Drops</Legend>
+        <Legend>New drop</Legend>
         <p className="mt-1 max-w-prose text-sm leading-relaxed text-fg-muted">
-          A drop is saved as a draft. Publishing is a separate, deliberate step, because
-          writing a drop and announcing it are different decisions and this site is live.
-          Times are in the timezone of this computer.
+          Saved as a draft that nobody can see until you publish it. Times are in the
+          timezone of this computer.
         </p>
 
         <form onSubmit={create} className="mt-6">
@@ -373,24 +469,10 @@ export function AdminConsole() {
             </button>
           </fieldset>
         </form>
-
-        {message && (
-          <p className="mt-4 text-sm font-medium text-fg" role="status">
-            {message}
-          </p>
-        )}
-
-        <div className="mt-8 space-y-3">
-          {!unlocked && (
-            <p className="text-sm text-fg-subtle">Enter the admin key to load the schedule.</p>
-          )}
-          {unlocked && !drops.length && <p className="text-sm text-fg-subtle">Nothing scheduled yet.</p>}
-          {(drops || []).map((drop) => (
-            <DropRow key={drop.drop_key} drop={drop} busy={busy} act={act} />
-          ))}
-        </div>
       </Card>
+      </TabPanel>
 
+      <TabPanel id="amazon" active={tab}>
       <Card className="mt-6">
         <Legend>Amazon picks</Legend>
         <p className="mt-1 max-w-prose text-sm leading-relaxed text-fg-muted">
@@ -402,7 +484,9 @@ export function AdminConsole() {
         </p>
         <AmazonPicks adminKey={adminKey} />
       </Card>
+      </TabPanel>
 
+      <TabPanel id="icons" active={tab}>
       <Card className="mt-6">
         <Legend>Shop icons</Legend>
         <p className="mt-1 max-w-prose text-sm leading-relaxed text-fg-muted">
@@ -414,7 +498,9 @@ export function AdminConsole() {
         </p>
         <ShopIcons adminKey={adminKey} />
       </Card>
+      </TabPanel>
 
+      <TabPanel id="catalogue" active={tab}>
       <Card className="mt-6">
         <Legend>Catalogue refresh</Legend>
         <p className="mt-1 text-sm text-fg-muted">Run discovery now and publish the top ten.</p>
@@ -432,6 +518,27 @@ export function AdminConsole() {
           </pre>
         )}
       </Card>
+      </TabPanel>
+    </div>
+  );
+}
+
+const TABS = [
+  { id: "numbers", label: "Numbers" },
+  { id: "drops", label: "Live Drops" },
+  { id: "email", label: "Email" },
+  { id: "amazon", label: "Amazon picks" },
+  { id: "icons", label: "Shop icons" },
+  { id: "catalogue", label: "Catalogue" },
+] as const;
+
+type TabId = (typeof TABS)[number]["id"];
+
+/* Hidden, not unmounted: see the note on the tabs in AdminConsole. */
+function TabPanel({ id, active, children }: { id: TabId; active: TabId; children: React.ReactNode }) {
+  return (
+    <div role="tabpanel" id={`admin-panel-${id}`} aria-labelledby={`admin-tab-${id}`} hidden={id !== active}>
+      {children}
     </div>
   );
 }
