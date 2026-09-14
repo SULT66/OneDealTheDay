@@ -101,7 +101,18 @@ export function AdminConsole() {
     const body = await response?.json().catch(() => ({}));
     if (!response?.ok) {
       setDrops(null);
-      setMessage(body?.error || "That key was not accepted.");
+      /* Three different problems used to share one sentence, and "not
+         accepted" sends somebody to retype a key that may be perfectly right
+         while the server is restarting or has no key set at all. */
+      setMessage(
+        !response
+          ? "Could not reach the server. It may be restarting after a deploy; try again in a minute."
+          : response.status === 401
+            ? "That key does not match ADMIN_KEY on the server."
+            : response.status === 503
+              ? "ADMIN_KEY is not set on the server (Azure → Environment variables)."
+              : body?.error || `The server answered ${response.status}. Try again in a minute.`,
+      );
       return;
     }
     setMarkets(body.markets || ["us"]);
@@ -242,7 +253,11 @@ export function AdminConsole() {
             type="password"
             autoComplete="off"
             value={adminKey}
-            onChange={(event) => setAdminKey(event.target.value)}
+            /* Spaces, line breaks and invisible characters come along when a
+               key is copied out of a note or a chat, and any of them makes the
+               key fail to match (or makes the browser refuse to send it at
+               all). The key itself is plain printable ASCII. */
+            onChange={(event) => setAdminKey(event.target.value.replace(/[^\x21-\x7e]/g, ""))}
             placeholder="Paste the key to unlock"
             aria-label="Admin key"
             className="mt-1.5 h-11 w-full rounded-full border border-border bg-surface-2 px-5 text-sm text-fg outline-none transition-colors focus:border-border-strong"
