@@ -988,7 +988,20 @@ export function DeliaPanel() {
         </div>
 
         {/* body */}
-        <div className="flex flex-1 flex-col overflow-y-auto px-5 py-5 sm:min-h-[420px] sm:px-6 sm:py-6">
+        {/*
+          * The part that gives way when the window is short.
+          *
+          * The panel is capped at 92% of the viewport, and this body carried a
+          * fixed 420px floor. That fitted until the commission notice was added
+          * above it: header, notice, a 420px body and the question box no longer
+          * fitted in a laptop's window, and because nothing marked the box as
+          * untouchable, it was the box that got clipped — the one control the
+          * panel exists for, cut off at the bottom edge.
+          *
+          * min-h-0 lets this scroll instead, and the floor now yields to a short
+          * window rather than pushing the input off it.
+          */}
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-5 py-5 sm:min-h-[min(420px,45dvh)] sm:px-6 sm:py-6">
           {/* Past conversations take over the panel rather than squeezing in
               beside it. At this width a permanent rail would leave the offers
               in a column too narrow to read a product name in, and the list is
@@ -1121,7 +1134,9 @@ export function DeliaPanel() {
         {/* input row */}
         <form
           onSubmit={submitTyped}
-          className="flex items-center gap-2 border-t border-border px-5 py-4"
+          /* Never squeezed, and clear of a phone's home indicator, where this
+             panel sits flush against the bottom of the screen. */
+          className="flex shrink-0 items-center gap-2 border-t border-border px-5 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:pb-5"
         >
           <label htmlFor="delia-input" className="sr-only">
             Ask Delia a question

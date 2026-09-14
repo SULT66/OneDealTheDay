@@ -202,7 +202,13 @@ export async function DealListing({
             * Below the results rather than over them. A page that interrupts
             * before it has been read has not earned the question.
             */}
-          {deals.length > 0 && <InterestSignup categories={[]} market={market} />}
+          {/* Its own block, apart from the grid above: pressed against the last
+              row of cards it read as one more card. */}
+          {deals.length > 0 && (
+            <div className="mt-12">
+              <InterestSignup categories={[]} market={market} />
+            </div>
+          )}
 
           {deals.length > 0 && (
             <Pagination
