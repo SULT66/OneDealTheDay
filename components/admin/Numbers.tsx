@@ -20,6 +20,17 @@ import { useCallback, useEffect, useState } from "react";
 type Overview = {
   days: number;
   engagedSessions: number;
+  /* Optional so the panel still renders against a backend deployed before
+     visitors were counted. */
+  visits?: {
+    visitors: number;
+    pageViews: number;
+    liveVisitors: number;
+    countingSince: string | null;
+    sources: { source: string; visitors: number; liveVisitors: number }[];
+    campaigns: { campaign: string; visitors: number }[];
+    pages: { page: string; visitors: number }[];
+  };
   audience: {
     subscribers: number;
     unsubscribed: number;
@@ -107,6 +118,53 @@ export function Numbers({ adminKey }: { adminKey: string }) {
             row itself rather than being silently clipped to the window. */}
         <span className="text-xs text-fg-subtle">for anything that happened in a window</span>
       </div>
+
+      {/* The top of the funnel, first: nothing below it means much without
+          knowing how many people it is a share of. */}
+      {data.visits && (
+        <>
+          <Group title="Visitors">
+            <Stat
+              label="Visitors"
+              value={count(data.visits.visitors)}
+              note={`in ${days} days · ${count(data.visits.pageViews)} pages opened`}
+            />
+            <Stat
+              label="Opened the Live Drop page"
+              value={count(data.visits.liveVisitors)}
+              note={
+                data.visits.visitors
+                  ? `${Math.round((data.visits.liveVisitors / data.visits.visitors) * 100)}% of visitors`
+                  : "no visitors yet"
+              }
+            />
+            <Stat
+              label="Counting since"
+              value={data.visits.countingSince ? new Date(data.visits.countingSince).toLocaleDateString() : "—"}
+              note="browsers only · bots left out"
+            />
+          </Group>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <MiniTable
+              title="Where they came from"
+              hint="first page of each visit · add ?utm_source=tiktok to your links"
+              rows={data.visits.sources.map((row) => [
+                row.source,
+                `${count(row.visitors)}${row.liveVisitors ? ` · ${count(row.liveVisitors)} to Live` : ""}`,
+              ])}
+            />
+            <MiniTable
+              title="What they opened"
+              hint={
+                data.visits.campaigns.length
+                  ? `campaigns: ${data.visits.campaigns.map((row) => `${row.campaign} ${count(row.visitors)}`).join(" · ")}`
+                  : "visitors per kind of page"
+              }
+              rows={data.visits.pages.map((row) => [row.page, count(row.visitors)])}
+            />
+          </div>
+        </>
+      )}
 
       <Group title="People">
         <Stat
@@ -245,6 +303,27 @@ function Group({ title, children }: { title: string; children: React.ReactNode }
       <h3 className="text-xs font-semibold uppercase tracking-[0.12em] text-fg-subtle">{title}</h3>
       <dl className="mt-2 grid gap-3 sm:grid-cols-3">{children}</dl>
     </section>
+  );
+}
+
+function MiniTable({ title, hint, rows }: { title: string; hint: string; rows: [string, string][] }) {
+  return (
+    <div className="rounded-2xl border border-border p-4">
+      <p className="text-xs text-fg-muted">{title}</p>
+      {rows.length ? (
+        <ul className="mt-2 space-y-1 text-sm">
+          {rows.map(([name, value]) => (
+            <li key={name} className="flex justify-between gap-3">
+              <span className="truncate text-fg">{name}</span>
+              <span className="shrink-0 font-semibold text-fg tnum">{value}</span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-2 text-sm text-fg-subtle">Nothing yet.</p>
+      )}
+      <p className="mt-2 text-xs text-fg-subtle">{hint}</p>
+    </div>
   );
 }
 
