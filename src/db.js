@@ -492,6 +492,16 @@ db.exec(`
   CREATE UNIQUE INDEX IF NOT EXISTS idx_live_drop_events_unique
     ON live_drop_events(drop_id, event_type, session_id);
 
+  /* Last week's numbers, frozen when the week closed. See src/growthMetrics.js. */
+  CREATE TABLE IF NOT EXISTS weekly_snapshots(
+    week_end TEXT PRIMARY KEY,
+    week_start TEXT NOT NULL,
+    first_day TEXT NOT NULL,
+    last_day TEXT NOT NULL,
+    metrics TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  );
+
   /* Who opened which page, and where they came from. See src/pageViews.js.
      One row per session, page and day: a reload or a second look the same
      day is not a second visitor, and a refresh loop cannot grow the table. */

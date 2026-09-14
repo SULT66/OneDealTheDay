@@ -85,6 +85,8 @@ function pageViewRow(body, { userAgent = "", ownHost = "", markets = ["us"], now
   if (looksLikeBot(userAgent)) return null;
   const sessionId = String(body?.session_id || "");
   if (!SESSION.test(sessionId)) return null;
+  /* The owner's own browser (see src/growthMetrics.js) is not a visitor. */
+  if (sessionId.startsWith("internal_")) return null;
   const rawPath = String(body?.path || "");
   if (!rawPath.startsWith("/") || rawPath.startsWith("//")) return null;
   const path = rawPath.split(/[?#]/)[0].replace(/[^\x20-\x7e]/g, "").slice(0, 200) || "/";
