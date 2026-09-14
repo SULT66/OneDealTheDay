@@ -1,5 +1,12 @@
 const OpenAIExport = require("openai");
 const { marketPath } = require("./markets");
+const {
+  arrangeRecommendations,
+  measurementSizeMatch,
+  namesUnshownProduct,
+  outcomeCounts,
+  stripCitationDomains,
+} = require("./deliaAnswerShape");
 const { presentProduct, PUBLIC_SCORE_FLOOR } = require("./productPresentation");
 
 const OpenAI = OpenAIExport.default || OpenAIExport;
@@ -2481,8 +2488,12 @@ const RESPONSE_COPY = {
 
 const OUTCOME_COPY = {
   en: {
-    picks: "I found {count} shops selling it right now. Here is where I would look first. Prices in {currency}.",
-    picksOne: "I found one shop selling it right now. Here it is. Price in {currency}.",
+    /* Counted as what they are: products and shops are different numbers. See
+       outcomeCounts in src/deliaAnswerShape.js. */
+    picks: "I found {count} options at {shops} shops. Here is where I would look first. Prices in {currency}.",
+    picksOneShop: "I found {count} options at {retailer}. Prices in {currency}.",
+    picksSameProduct: "I found it at {shops} shops. Prices in {currency}.",
+    picksOne: "I found one option at {retailer}. Price in {currency}.",
     partial: "I found {count} shops selling it. A few details still need checking at the shop itself. Prices in {currency}.",
     partialOne: "I found one shop selling it. A few details still need checking at the shop itself. Price in {currency}.",
     retailerFound: "I found a matching option on {retailer} for {market}. Below are the strongest regional choices in {currency}.",
@@ -2499,8 +2510,10 @@ const OUTCOME_COPY = {
     closestOne: "Nothing matched exactly. This is the closest I found in {market}, price in {currency}. Check the final price at the shop before you buy.",
   },
   ru: {
-    picks: "Нашла магазины, где это продаётся прямо сейчас: {count}. Вот куда я бы посмотрела в первую очередь. Цены в {currency}.",
-    picksOne: "Нашла один магазин, где это продаётся прямо сейчас. Вот он, цена в {currency}.",
+    picks: "Нашла варианты: {count}, в магазинах: {shops}. Вот с чего я бы начала. Цены в {currency}.",
+    picksOneShop: "Нашла варианты в {retailer}: {count}. Цены в {currency}.",
+    picksSameProduct: "Нашла это в магазинах: {shops}. Цены в {currency}.",
+    picksOne: "Нашла один вариант в {retailer}. Цена в {currency}.",
     partial: "Нашла магазины, где это продаётся: {count}. Часть деталей стоит уточнить у самого магазина. Цены в {currency}.",
     partialOne: "Нашла один магазин, где это продаётся. Часть деталей стоит уточнить у магазина. Цена в {currency}.",
     retailerFound: "На {retailer} найден подходящий вариант. Ниже лучшие предложения для региона {market}. Цены указаны в {currency}.",
@@ -2755,7 +2768,14 @@ function regionalOutcomeMessage({
   if (offers.length && resultState === "closest_alternatives") {
     return fillCopy(one(copy.closest, copy.closestOne), values);
   }
-  if (recommendations.length) return fillCopy(one(copy.picks, copy.picksOne), values);
+  if (recommendations.length) {
+    const { products, shops, retailer: firstRetailer } = outcomeCounts(recommendations);
+    const counted = { ...values, count: products, shops, retailer: firstRetailer };
+    if (products === 1 && shops > 1 && copy.picksSameProduct) return fillCopy(copy.picksSameProduct, counted);
+    if (products === 1 && copy.picksOne) return fillCopy(copy.picksOne, counted);
+    if (shops === 1 && copy.picksOneShop) return fillCopy(copy.picksOneShop, counted);
+    return fillCopy(copy.picks, counted);
+  }
   if (partialOffers.length) return fillCopy(one(copy.partial, copy.partialOne), values);
   return fillCopy(copy.noMatch, values);
 }
@@ -3660,15 +3680,18 @@ function normalizeAssistantResponse(
       ),
     }))
     .filter((item) => item.title && item.reason);
+  /* Web-search citations like "(walmart.com)" come out of every piece of prose
+     the model writes. The shop is on the card underneath. */
+  const prose = (value) => stripCitationDomains(cleanDisplayText(value));
   return {
     answer:
-      cleanDisplayText(parsed.answer || parsed.message).slice(0, 700) &&
+      prose(parsed.answer || parsed.message).slice(0, 700) &&
       !looksLikeSerializedPayload(parsed.answer || parsed.message)
-        ? cleanDisplayText(parsed.answer || parsed.message).slice(0, 700)
+        ? prose(parsed.answer || parsed.message).slice(0, 700)
         : recommendations.length
           ? copy.sourceAnswer
           : copy.empty,
-    follow_up: cleanDisplayText(parsed.follow_up).slice(0, 240),
+    follow_up: prose(parsed.follow_up).slice(0, 240),
     result_state: ["exact_matches", "closest_alternatives", "no_match"].includes(
       parsed.result_state,
     )
@@ -3682,7 +3705,7 @@ function normalizeAssistantResponse(
       Array.isArray(parsed.comparison_notes) ? parsed.comparison_notes : []
     )
       .slice(0, 4)
-      .map((item) => cleanDisplayText(item).slice(0, 220))
+      .map((item) => prose(item).slice(0, 220))
       .filter(Boolean),
     comparison: (Array.isArray(parsed.comparison) ? parsed.comparison : [])
       .slice(0, 4)
@@ -4419,10 +4442,23 @@ function recommendationIdentity(recommendation) {
   const model = (title.match(/\b(?=[a-z0-9-]*[a-z])(?=[a-z0-9-]*\d)[a-z0-9-]{2,}\b/gi) || [])
     .find(
       (token) =>
-        !/^\d+(?:in|inch|cm|mm|gb|tb|hz|w)$/i.test(token) &&
+        /* "65-inch" is a size, not a model, and was being taken for one: the
+           hyphen stopped the unit test from matching, so a Samsung M70H listed
+           as "Samsung 65-inch M70H" got the model "65-inch". */
+        !/^\d+-?(?:in|inch|cm|mm|gb|tb|hz|w|k|p|mah|oz|lbs?|ml|l|qt|ft|v)$/i.test(token) &&
         !/^\d+-?(?:pack|pk|count|ct|piece|pair)s?$/i.test(token),
     );
-  if (model) return `model:${brand}:${model.toLowerCase()}`;
+  /* Hyphens are how shops print a model, not part of it: the same Sony
+     headphones were listed as WH-CH720N at eBay and WHCH720N at Best Buy, and
+     shown as two products a few rows apart.
+
+     The size stays in the key, because a family name is not a product. "65-inch"
+     used to be mistaken for the model, and that accident was all that kept a
+     55, a 65 and a 50 inch Frame LS03D apart; taking it out of the model
+     without putting it here merged three televisions at three prices into one. */
+  const size = title.match(/\b(\d{2,3})\s*-?\s*(?:in\b|inch|inches|″|")/i)?.[1] ||
+    title.match(/\b(\d+(?:\.\d+)?)\s*-?\s*(tb|gb)\b/i)?.slice(1, 3).join("").toLowerCase() || "";
+  if (model) return `model:${brand}:${model.toLowerCase().replace(/-/g, "")}${size ? `:${size}` : ""}`;
   if (recommendation.product_key) return `key:${recommendation.product_key}`;
   return recommendationTitleKey(title);
 }
@@ -4459,10 +4495,11 @@ function recommendationIdentities(recommendation) {
   const primary = recommendationIdentity(recommendation);
   if (!primary) return { lookup: [], register: [] };
   const model = primary.startsWith("model:") ? primary.split(":")[2] : "";
-  /* The model token is only letters, digits and hyphens, so a plain
-     case-insensitive split is enough and needs no escaping. */
+  /* The model key has had its hyphens taken out, and the title may still carry
+     them anywhere — WH-CH720N for the key whch720n — so each gap allows one.
+     The key is only letters and digits, so it needs no escaping. */
   const withoutModel = model
-    ? clean(recommendation.title).split(new RegExp(model, "i")).join(" ")
+    ? clean(recommendation.title).split(new RegExp(model.split("").join("-?"), "i")).join(" ")
     : recommendation.title;
   const titleKey = recommendationTitleKey(withoutModel);
   const register = [...new Set([primary, titleKey].filter(Boolean))];
@@ -4629,48 +4666,6 @@ function retailerDiversityKey(item) {
   );
 }
 
-/**
- * Cheapest first, because that is the question being asked.
- *
- * The shortlist came out in ranking order, which is about how much we trust an
- * offer, and left the shopper reading $769, then $929.99, then $829.59 down
- * the page and doing the comparison themselves. They came here to find out
- * where to buy something and what it costs.
- *
- * Ranking still decides which offers make the list; it just stops deciding the
- * order they are read in. Ties keep their ranked order, since sort is stable,
- * and an offer whose price we could not confirm goes last rather than pretending
- * to be free. A comparison is left alone: "compare these two" wants them in the
- * order they were named, not reordered by price behind the shopper's back.
- */
-function sortOffersByPrice(items, request = "") {
-  if (isComparisonRequest(request)) return items;
-  return [...items].sort((left, right) => {
-    const leftPrice = landedPrice(left);
-    const rightPrice = landedPrice(right);
-    return (leftPrice > 0 ? leftPrice : Infinity) - (rightPrice > 0 ? rightPrice : Infinity);
-  });
-}
-
-function assignRecommendationRoles(items, request = "") {
-  if (!items.length) return [];
-  const wantsLowerPrice = isLowerPriceRequest(request);
-  const roles = items.map((_item, index) =>
-    !wantsLowerPrice && index === 0 ? "best_overall" : "alternative",
-  );
-  const priced = items
-    .map((item, index) => ({ index, price: landedPrice(item) }))
-    .filter(({ price }) => price > 0)
-    .sort((left, right) => left.price - right.price);
-  if (priced.length && (wantsLowerPrice || priced[0].index !== 0)) {
-    roles[priced[0].index] = "lowest_price";
-  }
-  return items.map((item, index) => ({
-    ...item,
-    position_role: roles[index],
-  }));
-}
-
 const APPAREL_FOLLOW_UP_COPY = {
   en: {
     size: "What size should I check before confirming availability?",
@@ -4730,6 +4725,12 @@ function offerConfirmsRequestedSize(recommendation, requestedSize) {
     const stated = statedDisplaySize(recommendation?.title);
     return stated != null && stated >= wantedRange.min && stated <= wantedRange.max;
   }
+  /* A capacity, a volume, a bed size — measured in the product's own name,
+     like a screen, and never in a clothing size list. "1TB" went through the
+     clothing branch, found no size list on a hard drive, and turned two
+     matching 1TB drives into "nothing matched exactly". */
+  const measured = measurementSizeMatch(recommendation?.title, requestedSize);
+  if (measured !== null) return measured;
   const sizes = Array.isArray(recommendation?.available_sizes)
     ? recommendation.available_sizes
     : [];
@@ -4938,10 +4939,17 @@ function providerFirstResponse({
   ).filter((recommendation) =>
       !excludedUrls.has(comparableUrl(recommendation.url)),
     );
-  const recommendations = assignRecommendationRoles(
-    rankRecommendationCandidates(candidates, resolvedRequest),
-    resolvedRequest,
-  ).slice(0, MAX_RECOMMENDATIONS);
+  /* The same three groups as every other answer. This one is always the
+     template, so the pick is the offer the ranking trusts most. */
+  const recommendations = arrangeRecommendations(
+    rankRecommendationCandidates(candidates, resolvedRequest).slice(0, MAX_RECOMMENDATIONS),
+    {
+      request: userMessage,
+      landedPrice,
+      isComparison: isComparisonRequest(userMessage),
+      lowerPriceRequested: isLowerPriceRequest(userMessage),
+    },
+  );
   if (!recommendations.length) return null;
   const requested = requestedRetailer(userMessage);
   const requestedMatch = requested && recommendations.some((recommendation) =>
@@ -4974,6 +4982,7 @@ function providerFirstResponse({
       resultState: "exact_matches",
       lowerPriceRequested: isLowerPriceRequest(userMessage),
     }),
+    message_source: "template",
     follow_up: followUp,
     recommendations: recommendations.map(
       ({ _recommendation_index, product_key, ...recommendation }) =>
@@ -5993,25 +6002,20 @@ function createShoppingAssistant({
         pricePlausibleCandidates,
         resolvedRequest,
       );
-      /* Roles are decided on the ranked order, so "best overall" still means
-         the offer we trust most rather than simply the cheapest. Then the list
-         is put in price order for reading. */
-      const visibleCandidates = sortOffersByPrice(
-        assignRecommendationRoles(
-          selectCompleteShortlist(
-            rankedCandidates.filter(
-              (candidate) => candidate.evidence_level !== "partial" && landedPrice(candidate) > 0,
-            ),
-            recommendationCap,
-            (candidate) => feedListingMatchesCategory(
-              candidate,
-              resolvedRequest,
-              activeMission.product_type,
-            ),
-          ),
-          resolvedRequest,
+      /* Kept in ranking order here. Roles and reading order are decided at the
+         end, once it is known whether Delia's own sentence stands — her pick
+         has to be the product that sentence recommends, and nothing before
+         that point knows which one it is. See arrangeRecommendations. */
+      const visibleCandidates = selectCompleteShortlist(
+        rankedCandidates.filter(
+          (candidate) => candidate.evidence_level !== "partial" && landedPrice(candidate) > 0,
         ),
-        userMessage,
+        recommendationCap,
+        (candidate) => feedListingMatchesCategory(
+          candidate,
+          resolvedRequest,
+          activeMission.product_type,
+        ),
       );
       const recommendations = visibleCandidates;
       /* Unpriced pages remain useful as internal search evidence, but never as
@@ -6116,39 +6120,18 @@ function createShoppingAssistant({
         visibleCandidates.map((candidate) => comparableUrl(candidate.url)).filter(Boolean),
       );
       const answerText = clean(structured.answer);
-      const shownTitleWords = new Set(
-        visibleCandidates.flatMap((candidate) =>
-          clean(candidate.title)
-            .toLowerCase()
-            .split(/[^a-z0-9Ѐ-ӿ]+/iu)
-            .filter((word) => word.length >= 5),
-        ),
+      /* Anything she wrote that names a product which is not on the screen has
+         to go, whether it is the summary or the question after it. A question
+         like "want to buy the UnsafePro at Amazon?" points the shopper straight
+         at the listing we just refused to show them, and "I would choose the
+         Dell XPS 13" above a list with no Dell in it sends them looking for
+         something that is not there. The check lives in deliaAnswerShape.js;
+         it used to ignore any word under five letters, which is most brands. */
+      const withheldPicks = structured.recommendations.filter(
+        (recommendation) => !shownUrls.has(comparableUrl(recommendation.url)),
       );
-      /* Anything she wrote that names a pick which did not make it onto the
-         screen has to go, whether it is the summary or the question after it.
-         A question like "want to buy the UnsafePro at Amazon?" points the
-         shopper straight at the listing we just refused to show them. */
-      const mentionsMissingPick = (text) => {
-        const value = clean(text).toLowerCase();
-        if (!value) return false;
-        return structured.recommendations.some((recommendation) => {
-          if (shownUrls.has(comparableUrl(recommendation.url))) return false;
-          const title = clean(recommendation.title).toLowerCase();
-          if (title.length >= 6 && value.includes(title.slice(0, 24))) return true;
-          /* Whole titles rarely survive into a sentence. What does survive is
-             the distinctive part, the model name, which is exactly the word
-             that would send the shopper looking for the listing we withheld.
-             A word that also appears in something we are showing is not
-             distinctive: "wireless" and "espresso" are how she describes the
-             offers on screen, and treating those as leaks silenced her on
-             most requests. */
-          return title
-            .split(/[^a-z0-9Ѐ-ӿ]+/iu)
-            .filter((word) => word.length >= 5 && !/^\d+$/.test(word))
-            .filter((word) => !shownTitleWords.has(word))
-            .some((word) => value.includes(word));
-        });
-      };
+      const mentionsMissingPick = (text) =>
+        namesUnshownProduct(text, { shown: visibleCandidates, withheld: withheldPicks });
       const namesAMissingPick = mentionsMissingPick(answerText);
       const canSpeakForHerself =
         Boolean(answerText) &&
@@ -6182,6 +6165,17 @@ function createShoppingAssistant({
         visibleCandidates,
         selectedMarket.currency,
       );
+      const inHerOwnWords = Boolean(visibleOfferCount && canSpeakForHerself && !structured.malformed);
+      /* Three groups — her pick, a cheaper option, the lowest price — then the
+         rest by price. The pick is the product her sentence recommends when
+         her sentence is what the shopper will read. */
+      const arrangedRecommendations = arrangeRecommendations(recommendations, {
+        request: userMessage,
+        narrative: inHerOwnWords ? structured.answer : "",
+        landedPrice,
+        isComparison: comparisonRequest,
+        lowerPriceRequested: isLowerPriceRequest(userMessage),
+      });
       return {
         /*
          * Delia gets to say it in her own words when she has something to show.
@@ -6205,7 +6199,7 @@ function createShoppingAssistant({
         message:
           structured.malformed && !visibleOfferCount
             ? copy.malformed
-            : visibleOfferCount && canSpeakForHerself
+            : inHerOwnWords
               ? structured.answer
               : regionalOutcomeMessage({
               language: shopperLanguage,
@@ -6217,8 +6211,12 @@ function createShoppingAssistant({
               resultState,
               lowerPriceRequested: isLowerPriceRequest(userMessage),
             }),
+        /* Whose words the message is. The panel adds its own "nothing matched
+           exactly" line only to hers: the template already says it, and the
+           shopper was reading the same sentence twice. */
+        message_source: inHerOwnWords ? "delia" : "template",
         follow_up: finalFollowUp,
-        recommendations: recommendations.map(
+        recommendations: arrangedRecommendations.map(
           ({ _recommendation_index, product_key, ...recommendation }) =>
             recommendation,
         ),
@@ -6278,6 +6276,7 @@ module.exports = {
   retailerDiscoveryHosts,
   retailerSearchQueries,
   retailerWebSearchQueries,
+  regionalOutcomeMessage,
   responseLanguage,
   selectRetailerDiverseCandidates,
   normalizeDeliaPunctuation,

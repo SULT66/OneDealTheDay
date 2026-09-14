@@ -43,7 +43,23 @@ export type DeliaRecommendation = {
   /* Which offer this is within the shortlist. The backend has worked this out
      all along and nothing was reading it, so a shopper scanning six shops had
      no idea which one Delia would take or which one was simply cheapest. */
-  position_role?: "best_overall" | "lowest_price" | "alternative";
+  position_role?: "best_overall" | "cheaper_option" | "lowest_price" | "alternative";
+  /* Delia's pick that also happens to be the cheapest: one card, two labels. */
+  lowest_price?: boolean;
+  /* Restored, renewed or open-box stock, which is never the lowest price unless
+     the shopper asked for it. */
+  condition?: "refurbished";
+  /* The same product at other shops, folded into this card by the backend's
+     duplicate check rather than shown as a second product. */
+  other_offers?: {
+    retailer: string;
+    price?: string;
+    price_value?: number | null;
+    currency?: string;
+    url: string;
+    click_url?: string;
+    in_catalog?: boolean;
+  }[];
 };
 
 export type DeliaComparisonRow = {
@@ -62,6 +78,9 @@ export type DeliaClarificationPrompt = {
 export type DeliaResult = {
   transcript: string;
   message: string;
+  /* Whether `message` is Delia's own sentence or the plain template. Absent on
+     answers stored before this existed. */
+  messageSource?: "delia" | "template";
   resultState: "exact_matches" | "closest_alternatives" | "no_match";
   followUp: string;
   recommendations: DeliaRecommendation[];
@@ -122,6 +141,7 @@ export type DeliaProgress = {
  */
 type AssistantResponse = {
   message?: string;
+  message_source?: "delia" | "template";
   result_state?: DeliaResult["resultState"];
   follow_up?: string;
   recommendations?: DeliaRecommendation[];
@@ -291,6 +311,7 @@ function toResult(transcript: string, data: AssistantResponse): DeliaResult {
   return {
     transcript,
     message: data.message || "",
+    messageSource: data.message_source,
     resultState: data.result_state || "no_match",
     followUp: data.follow_up || "",
     recommendations: data.recommendations || [],

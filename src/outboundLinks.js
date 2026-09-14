@@ -116,9 +116,18 @@ function withSignedLinks(payload) {
   return {
     ...payload,
     recommendations: payload.recommendations.map((item) => {
+      /* The same product at other shops is shown too now — "Also at eBay" —
+         and those links leave the site as well, so they get a door the same
+         way. A catalogue offer among them has no outside URL to sign. */
+      const otherOffers = Array.isArray(item?.other_offers)
+        ? item.other_offers.map((offer) => ({
+            ...offer,
+            click_url: offer?.in_catalog ? "" : signOutbound(offer?.url),
+          }))
+        : item?.other_offers;
       /* A catalogue result goes to its own page and leaves from there. */
-      if (item?.source_type === "catalog") return { ...item, click_url: "" };
-      return { ...item, click_url: signOutbound(item?.url) };
+      if (item?.source_type === "catalog") return { ...item, click_url: "", other_offers: otherOffers };
+      return { ...item, click_url: signOutbound(item?.url), other_offers: otherOffers };
     }),
   };
 }
