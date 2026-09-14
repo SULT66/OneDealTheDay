@@ -163,4 +163,13 @@ assert.strictEqual(signedPayload.recommendations[3].click_url, "");
 assert.deepStrictEqual(withSignedLinks({ answer: "Which one?" }), { answer: "Which one?" });
 assert.strictEqual(withSignedLinks(null), null);
 
+/* The other shops selling the same product leave the site too, and are signed
+   the same way; a catalogue offer among them has nothing outside to sign. */
+const withOthers = withSignedLinks({ recommendations: [{ source_type: "web", url: "https://www.bestbuy.com/p/1", other_offers: [
+  { retailer: "eBay", url: "https://www.ebay.com/itm/2" },
+  { retailer: "OneDailyDrop", url: "/us/deal/3", in_catalog: true },
+] }] });
+assert.strictEqual(verifyOutbound(query(withOthers.recommendations[0].other_offers[0].click_url)), "https://www.ebay.com/itm/2");
+assert.strictEqual(withOthers.recommendations[0].other_offers[1].click_url, "");
+
 console.log("Signed outbound web links passed.");

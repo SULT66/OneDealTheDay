@@ -262,18 +262,17 @@ function OfferRow({
               by logo long before it is read by word. */}
           <RetailerIcon retailer={rec.retailer} url={rec.url} />
           <span className="truncate text-xs text-fg-muted">{rec.retailer}</span>
-          {/* The list is in price order, so "cheapest" mostly confirms what the
-              eye already sees. The pick is the one worth pointing at: it is not
-              always the cheapest, and without this the shopper has to read the
-              summary to find out which row Delia meant. */}
-          {rec.position_role === "best_overall" && (
-            <span className="shrink-0 rounded-full bg-lime px-1.5 py-px text-[0.65rem] font-semibold text-ink">
-              Delia&rsquo;s pick
+          {/* Which group a card is in is its heading now (see OfferGroups).
+              What stays on the card is what the heading cannot say: that her
+              pick is also the cheapest, and that it is not new. */}
+          {rec.position_role === "best_overall" && rec.lowest_price && (
+            <span className="shrink-0 rounded-full bg-bg px-1.5 py-px text-[0.65rem] font-semibold text-fg-muted">
+              Lowest price
             </span>
           )}
-          {rec.position_role === "lowest_price" && (
-            <span className="shrink-0 rounded-full bg-surface-2 px-1.5 py-px text-[0.65rem] font-semibold text-fg-muted">
-              Cheapest
+          {rec.condition === "refurbished" && (
+            <span className="shrink-0 rounded-full border border-border px-1.5 py-px text-[0.65rem] font-semibold text-fg-muted">
+              Refurbished
             </span>
           )}
         </span>
@@ -294,18 +293,116 @@ function OfferRow({
   /* The heart is a sibling of the link, not inside it. A button nested in an
      anchor is invalid, and worse, tapping it would follow the link to the shop
      as well as saving. */
+  /*
+   * The same product at other shops, on this card instead of as more cards.
+   *
+   * The duplicate check folded these in all along and nothing showed them, so
+   * the same Sony headphones appeared twice a few rows apart when the check
+   * missed, and vanished without trace when it caught them. Each is its own
+   * link, beside the main one rather than inside it.
+   */
+  const otherOffers = (rec.other_offers || []).filter((offer) => offer?.url && offer?.retailer);
+
   return (
-    <div className="flex items-start gap-2 rounded-2xl border border-border bg-surface py-3 pl-3.5 pr-2 transition-colors hover:border-border-strong hover:bg-bg">
-      {inCatalog ? (
-        <Link href={href} onClick={onClose} className={linkClass}>
-          {body}
-        </Link>
-      ) : (
-        <a href={href} target="_blank" rel="sponsored noopener" className={linkClass}>
-          {body}
-        </a>
+    <div className="rounded-2xl border border-border bg-surface py-3 pl-3.5 pr-2 transition-colors hover:border-border-strong hover:bg-bg">
+      <div className="flex items-start gap-2">
+        {inCatalog ? (
+          <Link href={href} onClick={onClose} className={linkClass}>
+            {body}
+          </Link>
+        ) : (
+          <a href={href} target="_blank" rel="sponsored noopener" className={linkClass}>
+            {body}
+          </a>
+        )}
+        <SaveOfferButton rec={rec} price={price} />
+      </div>
+      {otherOffers.length > 0 && (
+        <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 pl-7 text-xs text-fg-muted">
+          <span>Also at</span>
+          {otherOffers.map((offer) => {
+            const otherPrice =
+              offer.price_value != null
+                ? formatPrice(offer.price_value, offer.currency || rec.currency || "USD", market)
+                : offer.price || "";
+            return (
+              <a
+                key={offer.url}
+                href={offer.click_url || offer.url}
+                target="_blank"
+                rel="sponsored noopener"
+                className="font-medium text-fg underline-offset-4 hover:underline"
+              >
+                {offer.retailer}
+                {otherPrice && <span className="tnum text-fg-muted"> · {otherPrice}</span>}
+              </a>
+            );
+          })}
+        </p>
       )}
-      <SaveOfferButton rec={rec} price={price} />
+    </div>
+  );
+}
+
+/*
+ * The shortlist in groups: Delia's pick, a cheaper option, the lowest price,
+ * then everything else — and only the first three until more are asked for.
+ *
+ * The backend decides the groups and the order (arrangeRecommendations); this
+ * only draws a heading wherever the group changes. Six rows, a paragraph,
+ * questions and a follow-up at once was a wall on a phone, and the three that
+ * answer "which one" are what most people need.
+ */
+const GROUP_HEADING: Record<string, string> = {
+  best_overall: "Delia’s pick",
+  cheaper_option: "Cheaper option",
+  lowest_price: "Lowest price",
+};
+const FIRST_SHOWN = 3;
+
+function OfferGroups({
+  recs,
+  market,
+  onClose,
+}: {
+  recs: DeliaRecommendation[];
+  market: string;
+  onClose: () => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const shown = expanded ? recs : recs.slice(0, FIRST_SHOWN);
+  const hiddenCount = recs.length - FIRST_SHOWN;
+  let previousHeading = "";
+
+  return (
+    <div className="space-y-2">
+      <ul className="space-y-2">
+        {shown.map((rec, i) => {
+          const heading = GROUP_HEADING[rec.position_role || ""] || "Other options";
+          const startsGroup = heading !== previousHeading;
+          previousHeading = heading;
+          return (
+            <li key={`rec-${rec.url}-${i}`}>
+              {startsGroup && (
+                <p className={cn("px-0.5 pb-1.5 text-xs font-semibold text-fg-subtle", i > 0 && "pt-2")}>
+                  {heading}
+                </p>
+              )}
+              <OfferRow rec={rec} market={market} onClose={onClose} position={i + 1} />
+            </li>
+          );
+        })}
+      </ul>
+      {hiddenCount > 0 && (
+        <button
+          type="button"
+          onClick={() => setExpanded((value) => !value)}
+          aria-expanded={expanded}
+          className="cursor-pointer rounded-full px-1 text-sm font-semibold text-fg-muted underline-offset-4 transition-colors hover:text-fg hover:underline"
+        >
+          {expanded ? "Show fewer" : `Show ${hiddenCount} more ${hiddenCount === 1 ? "option" : "options"}`}
+        </button>
+      )}
     </div>
   );
 }
@@ -424,6 +521,14 @@ function DeliaExchange({
     answerableIndexes.length > 0 &&
     answerableIndexes.every((i) => Boolean(selections[i]));
 
+  /* A question is only worth a second card when it is a different question. */
+  const asQuestion = (text: string) => text.toLowerCase().replace(/[^a-z0-9Ѐ-ӿ]+/g, " ").trim();
+  const askedAbove = new Set([
+    ...result.clarificationPrompts.map((prompt) => asQuestion(prompt.question)),
+    ...result.clarifyingQuestions.map(asQuestion),
+  ]);
+  const followUpIsNew = Boolean(result.followUp) && !askedAbove.has(asQuestion(result.followUp));
+
   function pickOption(promptIndex: number, option: string) {
     if (!multiQuestion) {
       onFollowUp(option);
@@ -440,10 +545,50 @@ function DeliaExchange({
         <DeliaMark />
         <div className="min-w-0 flex-1 space-y-4">
         <p className="whitespace-pre-wrap text-[0.95rem] leading-7 text-fg">{result.message}</p>
-        {/* Structured clarifying questions — tappable options answer them in
-            one tap instead of making the shopper type. */}
-        {result.clarificationPrompts.length > 0 && (
+
+        {/* Delia already works out whether these are what was asked for, and
+            said so in result_state, but the shopper was never told. Somebody
+            who asked for 32oz maple syrup and got a 33.8oz bottle deserves to
+            know that before they click, not after it arrives.
+
+            Only under her own words. The plain template already opens with
+            "Nothing matched exactly", and the shopper was reading it twice. */}
+        {result.resultState === "closest_alternatives" &&
+          result.messageSource === "delia" &&
+          result.recommendations.length > 0 && (
+            <p className="text-xs font-medium text-fg-muted">
+              Nothing matched exactly, so these are the closest I found.
+            </p>
+          )}
+
+        {result.recommendations.length > 0 && (
+          <OfferGroups recs={result.recommendations} market={market} onClose={onClose} />
+        )}
+
+        {result.comparisonNotes.length > 0 && (
+          <ul className="space-y-1.5">
+            {result.comparisonNotes.map((note, i) => (
+              <li key={i} className="text-sm text-fg-muted">
+                {note}
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {/*
+          * Questions come after the results, never before them.
+          *
+          * They used to sit between Delia's sentence and her shortlist, so the
+          * shopper met "What will you mainly use them for?" before seeing that
+          * anything had been found, and could not tell whether they had to
+          * answer first. The results are ready; these only narrow them.
+          */}
+        {(result.clarificationPrompts.length > 0 || result.clarifyingQuestions.length > 0) && (
           <div className="space-y-3">
+            {result.recommendations.length > 0 && (
+              <p className="px-0.5 text-xs font-semibold text-fg-subtle">Narrow it down</p>
+            )}
+
             {result.clarificationPrompts.map((prompt, i) => (
               <div key={i}>
                 <p className="text-sm font-semibold text-fg">{prompt.question}</p>
@@ -461,7 +606,7 @@ function DeliaExchange({
                             "cursor-pointer rounded-full border px-3.5 py-2 text-sm transition-colors disabled:cursor-default disabled:opacity-40",
                             selected
                               ? "border-transparent bg-lime text-ink hover:opacity-90"
-                              : "border-border text-fg-muted hover:border-border-strong hover:bg-surface-2 hover:text-fg disabled:hover:border-border disabled:hover:bg-transparent",
+                              : "border-border text-fg-muted hover:border-border-strong hover:bg-bg hover:text-fg disabled:hover:border-border disabled:hover:bg-transparent",
                           )}
                         >
                           {option}
@@ -472,6 +617,7 @@ function DeliaExchange({
                 </ul>
               </div>
             ))}
+
             {multiQuestion && (
               <button
                 type="button"
@@ -503,62 +649,22 @@ function DeliaExchange({
                 type="button"
                 disabled={disabled}
                 onClick={onSkipClarification}
-                className="text-sm font-semibold text-fg-muted underline underline-offset-4 transition-colors hover:text-fg disabled:cursor-default disabled:opacity-40"
+                className="block text-sm font-semibold text-fg-muted underline underline-offset-4 transition-colors hover:text-fg disabled:cursor-default disabled:opacity-40"
               >
                 Just show me options
               </button>
             )}
+
+            {result.clarificationPrompts.length === 0 && (
+              <ul className="space-y-1.5">
+                {result.clarifyingQuestions.map((question, i) => (
+                  <li key={i} className="text-sm text-fg">
+                    {question}
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
-        )}
-
-        {result.clarificationPrompts.length === 0 && result.clarifyingQuestions.length > 0 && (
-          <ul className="space-y-1.5">
-            {result.clarifyingQuestions.map((question, i) => (
-              <li key={i} className="text-sm text-fg">
-                {question}
-              </li>
-            ))}
-          </ul>
-        )}
-
-        {/* Delia already works out whether these are what was asked for, and
-            said so in result_state, but the shopper was never told. Somebody
-            who asked for 32oz maple syrup and got a 33.8oz bottle deserves to
-            know that before they click, not after it arrives. */}
-        {result.resultState === "closest_alternatives" && result.recommendations.length > 0 && (
-          <p className="text-xs font-medium text-fg-muted">
-            Nothing matched exactly, so these are the closest I found.
-          </p>
-        )}
-
-        {(result.recommendations.length > 0 || result.partialOffers.length > 0) && (
-          <ul className="space-y-3">
-            {result.recommendations.map((rec, i) => (
-              <li key={`rec-${rec.url}-${i}`}>
-                <OfferRow
-                  rec={rec}
-                  market={market}
-                  onClose={onClose}
-                  position={i + 1}
-                />
-              </li>
-            ))}
-            {/* Products the backend found and stands behind but could not price
-                in this market's currency. They used to be dropped on the floor
-                here, which is why a search that genuinely found something could
-                still come back as prose with no products under it. Numbered on
-                from the priced ones so the shortlist reads as one list. */}
-          </ul>
-        )}
-
-        {result.comparisonNotes.length > 0 && (
-          <ul className="space-y-1.5">
-            {result.comparisonNotes.map((note, i) => (
-              <li key={i} className="text-sm text-fg-muted">
-                {note}
-              </li>
-            ))}
-          </ul>
         )}
 
         {/*
@@ -574,13 +680,17 @@ function DeliaExchange({
           *
           * Pressing it now puts the cursor in the box to answer, which is what
           * a control under a question was always going to be taken to mean.
+          *
+          * Not when it repeats a question already asked above with options:
+          * "Is this for a desktop, laptop, or PS5?" was shown twice, once as
+          * chips and once again here.
           */}
-        {result.followUp && (
+        {followUpIsNew && (
           <button
             type="button"
             disabled={disabled}
             onClick={onAnswerFollowUp}
-            className="flex w-full items-start rounded-2xl border border-border bg-surface-2 px-4 py-3 text-left transition-colors hover:border-border-strong disabled:cursor-default disabled:opacity-40"
+            className="flex w-full items-start rounded-2xl border border-border bg-bg px-4 py-3 text-left transition-colors hover:border-border-strong disabled:cursor-default disabled:opacity-40"
           >
             <span className="min-w-0 flex-1">
               <span className="block text-sm font-medium text-fg">{result.followUp}</span>
