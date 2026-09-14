@@ -541,6 +541,8 @@ function RemindMe({ dropKey }: { dropKey: string }) {
  * host only where it has been deliberately switched on. The demo keeps its
  * side panel only when something else is already holding the stage.
  */
+const isVideoFile = (value: string) => /\.(?:mp4|mov|webm)(?:[?#].*)?$/i.test(value || "");
+
 function BroadcastStage({ market, drop }: { market: string; drop: LiveDropView }) {
   const showable = drop.state === "waiting" || drop.state === "live";
   if (!showable) return null;
@@ -604,7 +606,23 @@ function BroadcastStage({ market, drop }: { market: string; drop: LiveDropView }
           * A black rectangle where the host should be, on a live drop, and she
           * never got the chance to load at all.
           */}
-        {hasStream ? (
+        {hasStream && isVideoFile(drop.stream_embed_url) ? (
+          /* Chloe's recording uploaded as a file rather than a link to a
+             player. An iframe pointed at an .mp4 shows a bare browser player,
+             or nothing; a video element is what a file needs. Muted so the
+             browser will start it, with controls to turn the sound on. */
+          <div className="relative aspect-[4/3] w-full">
+            <video
+              src={drop.stream_embed_url}
+              controls
+              autoPlay
+              muted
+              loop
+              playsInline
+              className="absolute inset-0 h-full w-full object-contain"
+            />
+          </div>
+        ) : hasStream ? (
           <div className="relative aspect-[4/3] w-full">
             <iframe
               src={drop.stream_embed_url}
