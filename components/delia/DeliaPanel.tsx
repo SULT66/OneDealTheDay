@@ -5,11 +5,12 @@ import { AffiliateNotice } from "@/components/site/AffiliateNotice";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowRight,
+  ArrowUp,
   ArrowUpRight,
-  ClockCounterClockwise,
   Heart,
+  MagnifyingGlass,
   NotePencil,
-  PaperPlaneRight,
+  SidebarSimple,
   Sparkle,
   ThumbsDown,
   ThumbsUp,
@@ -119,6 +120,13 @@ const EXAMPLE_GROUPS = [
 const FIRST_EXAMPLES = EXAMPLE_GROUPS.map((group) => group[0]);
 const pickExamples = () =>
   EXAMPLE_GROUPS.map((group) => group[Math.floor(Math.random() * group.length)]);
+
+/* A fresh conversation. Nothing is lost: the one being left has already been
+   written on the server, and is a tap away in the list. */
+const newConversationKey = () =>
+  typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : String(Date.now());
 
 /**
  * What Delia is doing, while she does it.
@@ -244,7 +252,9 @@ function OfferRow({
         {position}
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-medium leading-snug text-fg">
+        {/* Two lines before it gives up. On a phone one line cut every name to
+            "PlayStation 5 Digit…", which is the part that told them apart. */}
+        <span className="line-clamp-2 text-sm font-medium leading-snug text-fg">
           {rec.title}
         </span>
         <span className="flex min-w-0 items-center gap-1.5">
@@ -285,7 +295,7 @@ function OfferRow({
      anchor is invalid, and worse, tapping it would follow the link to the shop
      as well as saving. */
   return (
-    <div className="flex items-start gap-2 rounded-xl border border-border py-2.5 pl-3 pr-2 transition-colors hover:border-border-strong hover:bg-surface-2">
+    <div className="flex items-start gap-2 rounded-2xl border border-border bg-surface py-3 pl-3.5 pr-2 transition-colors hover:border-border-strong hover:bg-bg">
       {inCatalog ? (
         <Link href={href} onClick={onClose} className={linkClass}>
           {body}
@@ -342,7 +352,36 @@ function SaveOfferButton({ rec, price }: { rec: DeliaRecommendation; price: stri
   );
 }
 
-/** One question-and-answer exchange, rendered as a pair of chat bubbles. */
+/*
+ * The two voices, drawn the way people now expect a conversation with an
+ * assistant to look.
+ *
+ * The shopper's words sit in a soft grey bubble on the right. Delia's answer is
+ * not a bubble at all: it is plain text across the column, beside her mark,
+ * with the products under it. A black bubble for the shopper and a grey one for
+ * her made every exchange look like two blocks of equal weight, when the
+ * answer is the thing being read and the question is a one-line reminder of
+ * what was asked.
+ */
+function UserBubble({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex justify-end">
+      <p className="max-w-[80%] whitespace-pre-wrap wrap-anywhere rounded-3xl bg-bg px-4 py-2.5 text-[0.95rem] leading-relaxed text-fg">
+        {children}
+      </p>
+    </div>
+  );
+}
+
+function DeliaMark() {
+  return (
+    <span className="mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-lime text-ink">
+      <Sparkle size={14} weight="fill" aria-hidden="true" />
+    </span>
+  );
+}
+
+/** One question-and-answer exchange. */
 function DeliaExchange({
   result,
   market,
@@ -394,23 +433,13 @@ function DeliaExchange({
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex justify-end">
-        <p className="max-w-[85%] wrap-anywhere rounded-2xl rounded-br-md bg-surface-inverse px-4 py-2.5 text-sm font-medium text-fg-on-inverse">
-          {result.transcript}
-        </p>
-      </div>
+    <div className="space-y-5">
+      <UserBubble>{result.transcript}</UserBubble>
 
-      <div className="flex items-start gap-2.5">
-        <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-lime text-ink">
-          <Sparkle size={15} weight="fill" aria-hidden="true" />
-        </span>
-        <p className="max-w-[85%] rounded-2xl rounded-tl-md bg-surface-2 px-4 py-3 text-sm leading-relaxed text-fg">
-          {result.message}
-        </p>
-      </div>
-
-      <div className="space-y-4 pl-[42px]">
+      <div className="flex items-start gap-3">
+        <DeliaMark />
+        <div className="min-w-0 flex-1 space-y-4">
+        <p className="whitespace-pre-wrap text-[0.95rem] leading-7 text-fg">{result.message}</p>
         {/* Structured clarifying questions — tappable options answer them in
             one tap instead of making the shopper type. */}
         {result.clarificationPrompts.length > 0 && (
@@ -560,29 +589,199 @@ function DeliaExchange({
           </button>
         )}
 
-        <div className="flex items-center gap-2 border-t border-border pt-4">
-          <span className="text-xs text-fg-subtle">Was this helpful?</span>
+        {/* Quiet actions under the answer, as icons rather than a labelled row
+            with a rule above it: they are there for the few who want them. */}
+        <div className="-ml-1.5 flex items-center gap-0.5">
           <button
             type="button"
             disabled={feedbackGiven}
             onClick={() => onFeedback("helpful")}
             aria-label="This was helpful"
-            className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-full text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg disabled:opacity-40"
+            title={feedbackGiven ? "Thanks for the feedback" : "Helpful"}
+            className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg text-fg-subtle transition-colors hover:bg-bg hover:text-fg disabled:cursor-default disabled:opacity-40"
           >
-            <ThumbsUp size={15} weight="bold" aria-hidden="true" />
+            <ThumbsUp size={16} aria-hidden="true" />
           </button>
           <button
             type="button"
             disabled={feedbackGiven}
             onClick={() => onFeedback("not_helpful")}
             aria-label="This was not helpful"
-            className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-full text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg disabled:opacity-40"
+            title={feedbackGiven ? "Thanks for the feedback" : "Not helpful"}
+            className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg text-fg-subtle transition-colors hover:bg-bg hover:text-fg disabled:cursor-default disabled:opacity-40"
           >
-            <ThumbsDown size={15} weight="bold" aria-hidden="true" />
+            <ThumbsDown size={16} aria-hidden="true" />
           </button>
+        </div>
         </div>
       </div>
     </div>
+  );
+}
+
+/*
+ * Groups a list the way it is scanned: by how long ago, not by date string.
+ * Nobody looks for "9/11/2026"; they look for "the one from yesterday".
+ */
+function groupByRecency(conversations: DeliaConversationSummary[], now = new Date()) {
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const day = 24 * 60 * 60 * 1000;
+  const groups: { label: string; items: DeliaConversationSummary[] }[] = [
+    { label: "Today", items: [] },
+    { label: "Yesterday", items: [] },
+    { label: "Previous 7 days", items: [] },
+    { label: "Older", items: [] },
+  ];
+  for (const conversation of conversations) {
+    const at = new Date(conversation.updated_at).getTime();
+    const index = Number.isNaN(at)
+      ? 3
+      : at >= startOfToday
+        ? 0
+        : at >= startOfToday - day
+          ? 1
+          : at >= startOfToday - 7 * day
+            ? 2
+            : 3;
+    groups[index].items.push(conversation);
+  }
+  return groups.filter((group) => group.items.length > 0);
+}
+
+/**
+ * Past conversations, beside the chat on a wide screen and over it on a phone.
+ *
+ * The list used to replace the conversation inside the panel, with the question
+ * box still showing underneath it. Typing there sent a real question into a
+ * conversation nobody could see — the answer arrived behind the list — so what
+ * you typed appeared to vanish. On a wide screen the list now sits alongside
+ * and nothing is hidden; on a phone it covers the whole chat, question box
+ * included, so there is nothing to type into that you cannot see.
+ *
+ * The box at the top searches what was said, not only the titles. A title is
+ * written from the first question, and "hi, can you help me" hides a whole
+ * conversation about a PS5.
+ */
+function ConversationSidebar({
+  conversations,
+  activeKey,
+  query,
+  onQuery,
+  searching,
+  onOpen,
+  onDelete,
+  onNew,
+  onClose,
+}: {
+  conversations: DeliaConversationSummary[];
+  activeKey: string;
+  query: string;
+  onQuery: (value: string) => void;
+  searching: boolean;
+  onOpen: (id: number) => void;
+  onDelete: (id: number, key: string) => void;
+  onNew: () => void;
+  /* Present when the sidebar is an overlay that can be dismissed. */
+  onClose?: () => void;
+}) {
+  const groups = groupByRecency(conversations);
+  const hasQuery = query.trim().length > 0;
+
+  return (
+    <aside className="flex h-full w-full flex-col bg-bg md:w-72 md:shrink-0 md:border-r md:border-border">
+      <div className="flex items-center gap-2 px-3 pt-3">
+        <button
+          type="button"
+          onClick={onNew}
+          className="inline-flex h-10 flex-1 cursor-pointer items-center gap-2 rounded-xl px-3 text-sm font-semibold text-fg transition-colors hover:bg-surface"
+        >
+          <NotePencil size={18} aria-hidden="true" />
+          New chat
+        </button>
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close conversations"
+            className="inline-flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-xl text-fg-muted transition-colors hover:bg-surface hover:text-fg"
+          >
+            <X size={18} aria-hidden="true" />
+          </button>
+        )}
+      </div>
+
+      <div className="px-3 pb-2 pt-2">
+        <label className="flex h-10 items-center gap-2 rounded-xl border border-border bg-surface px-3 transition-colors focus-within:border-fg-subtle">
+          <MagnifyingGlass size={16} className="shrink-0 text-fg-subtle" aria-hidden="true" />
+          <span className="sr-only">Search conversations</span>
+          <input
+            type="search"
+            value={query}
+            onChange={(event) => onQuery(event.target.value)}
+            placeholder="Search chats"
+            autoComplete="off"
+            spellCheck={false}
+            className="focus-self h-full min-w-0 flex-1 bg-transparent text-sm text-fg outline-none placeholder:text-fg-subtle"
+          />
+        </label>
+      </div>
+
+      <nav aria-label="Past conversations" className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
+        {conversations.length === 0 ? (
+          <p className="px-3 pt-3 text-sm leading-relaxed text-fg-muted">
+            {hasQuery
+              ? searching
+                ? "Searching…"
+                : `No conversations mention “${query.trim()}”.`
+              : "Your conversations will appear here."}
+          </p>
+        ) : (
+          groups.map((group) => (
+            <div key={group.label} className="pt-3">
+              <p className="px-3 pb-1 text-xs font-semibold text-fg-subtle">{group.label}</p>
+              <ul>
+                {group.items.map((conversation) => {
+                  const active = conversation.conversation_key === activeKey;
+                  return (
+                    <li key={conversation.id} className="group relative">
+                      <button
+                        type="button"
+                        onClick={() => onOpen(conversation.id)}
+                        aria-current={active ? "true" : undefined}
+                        className={cn(
+                          "block w-full cursor-pointer rounded-lg py-2 pl-3 pr-9 text-left transition-colors",
+                          active ? "bg-surface" : "hover:bg-surface",
+                        )}
+                      >
+                        <span className="block truncate text-sm text-fg">
+                          {conversation.title || "Untitled conversation"}
+                        </span>
+                        {conversation.snippet && (
+                          <span className="mt-0.5 block truncate text-xs text-fg-subtle">
+                            {conversation.snippet}
+                          </span>
+                        )}
+                      </button>
+                      {/* Out of the way until wanted on a mouse; always there on
+                          touch, where there is no hover to reveal it. */}
+                      <button
+                        type="button"
+                        onClick={() => onDelete(conversation.id, conversation.conversation_key)}
+                        aria-label={`Delete ${conversation.title || "this conversation"}`}
+                        title="Delete"
+                        className="absolute right-1 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 cursor-pointer items-center justify-center rounded-md text-fg-subtle transition-opacity hover:bg-bg hover:text-fg focus-visible:opacity-100 md:opacity-0 md:group-hover:opacity-100"
+                      >
+                        <Trash size={15} aria-hidden="true" />
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ))
+        )}
+      </nav>
+    </aside>
   );
 }
 
@@ -669,7 +868,14 @@ export function DeliaPanel() {
      shopper they have been logged out. */
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
   const [conversations, setConversations] = useState<DeliaConversationSummary[]>([]);
+  /* On a phone the conversation list covers the chat; on a wide screen it is
+     always beside it and this only matters below that width. */
   const [historyOpen, setHistoryOpen] = useState(false);
+  /* Which stored conversation is on screen, so the list can mark it. State
+     rather than the ref alone, because the list has to re-render when it moves. */
+  const [activeKey, setActiveKey] = useState("");
+  const [conversationQuery, setConversationQuery] = useState("");
+  const [searchingConversations, setSearchingConversations] = useState(false);
   /* What the search has actually reached, as it reaches it. */
   const [progress, setProgress] = useState<DeliaProgress | null>(null);
   const [examples, setExamples] = useState<string[]>(FIRST_EXAMPLES);
@@ -682,7 +888,10 @@ export function DeliaPanel() {
   const [feedbackGiven, setFeedbackGiven] = useState<Record<number, boolean>>({});
 
   const dialogRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  /* A textarea, not an input: a question can run to two lines, and Chrome keeps
+     a history dropdown of everything ever typed into an input with this id —
+     it opened over the conversation list the moment the box was clicked. */
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const restoreFocusRef = useRef<HTMLElement | null>(null);
   const historyRef = useRef<DeliaTurn[]>([]);
@@ -692,12 +901,33 @@ export function DeliaPanel() {
      leaving it to be inferred from the raw words again each turn. */
   const missionRef = useRef<unknown>(null);
   const conversationIdRef = useRef<string>("");
+  /*
+   * Which question the panel is still waiting on.
+   *
+   * An answer takes long enough that people move on while it comes — press New
+   * chat, or open an old conversation. Nothing used to notice. The loading flag
+   * stayed on while the pending question was cleared, so the chat drew nothing
+   * at all: no greeting, no messages, an empty white panel. Then the answer
+   * arrived and was appended to whatever was now on screen, which was a
+   * different conversation.
+   *
+   * Every question takes a number, anything that leaves the conversation takes
+   * the next one, and an answer whose number is no longer current is dropped.
+   */
+  const requestSeqRef = useRef(0);
 
   const ask = useCallback(
     async (transcript: string, skipClarification = false) => {
+      const requestId = ++requestSeqRef.current;
+      const stillCurrent = () => requestId === requestSeqRef.current;
       setLoading(true);
       setErrorMsg(null);
       setPendingQuestion(transcript);
+      /* The answer is on its way to the chat, so the chat is what has to be on
+         screen. Leaving the list open is how a question used to seem to vanish. */
+      setHistoryOpen(false);
+      if (!conversationIdRef.current) conversationIdRef.current = newConversationKey();
+      setActiveKey(conversationIdRef.current);
       try {
         const next = await askAssistant(
           transcript,
@@ -711,8 +941,13 @@ export function DeliaPanel() {
                is still about the product the shopper opened Delia from. */
             productId: seedProductId ?? undefined,
           },
-          setProgress,
+          (event) => {
+            if (stillCurrent()) setProgress(event);
+          },
         );
+        /* The shopper has moved on. The exchange is saved on the server and
+           will be in the list; it just does not belong on this screen. */
+        if (!stillCurrent()) return;
         setProgress(null);
         missionRef.current = next.shoppingMission ?? missionRef.current;
         // The backend's `message` is only the lead-in sentence for a
@@ -736,30 +971,45 @@ export function DeliaPanel() {
         ];
         setTurns((prev) => [...prev, next]);
       } catch (error) {
+        /* A failure nobody is waiting for any more is not worth showing. */
+        if (!stillCurrent()) return;
         setErrorMsg(
           error instanceof DeliaError
             ? error.message
             : "Delia could not answer that. Check your connection and try again.",
         );
       } finally {
-        setLoading(false);
-        setPendingQuestion(null);
-        /* The backend has just written this exchange, so the sidebar is one
-           request behind until it is asked again. */
-        if (signedIn) listConversations().then(setConversations);
+        /* Only the question still being waited on may end the wait. A stale one
+           finishing would switch the spinner off under a newer question. */
+        if (stillCurrent()) {
+          setLoading(false);
+          setPendingQuestion(null);
+          /* The backend has just written this exchange, so the sidebar is one
+             request behind until it is asked again. A search in progress is
+             cleared rather than re-run: the conversation just asked is the one
+             the shopper is looking at, and it should be visible in the list.
+             Not for an abandoned question — that would wipe a search somebody
+             is typing into right now; it shows up on the next refresh. */
+          if (signedIn) {
+            setConversationQuery("");
+            listConversations().then(setConversations);
+          }
+        }
       }
     },
     [market, signedIn],
   );
 
-  /* A fresh conversation. Nothing is lost: the one being left has already been
-     written on the server, and is a tap away in the list. */
-  const newConversationKey = () =>
-    typeof crypto !== "undefined" && "randomUUID" in crypto
-      ? crypto.randomUUID()
-      : String(Date.now());
+  /* Leaving the current conversation, for any reason, stops waiting on it. */
+  const abandonPendingQuestion = () => {
+    requestSeqRef.current += 1;
+    setLoading(false);
+    setPendingQuestion(null);
+    setProgress(null);
+  };
 
   const startNewConversation = useCallback(() => {
+    abandonPendingQuestion();
     conversationIdRef.current = newConversationKey();
     historyRef.current = [];
     missionRef.current = null;
@@ -767,6 +1017,8 @@ export function DeliaPanel() {
     setErrorMsg(null);
     setPendingQuestion(null);
     setHistoryOpen(false);
+    setActiveKey("");
+    window.setTimeout(() => inputRef.current?.focus(), 0);
     /* A fresh conversation gets fresh openers: the four that were ignored last
        time are the four least worth showing again. */
     setExamples(pickExamples());
@@ -782,6 +1034,7 @@ export function DeliaPanel() {
   const openConversation = useCallback(async (id: number) => {
     const loaded = await loadConversation(id);
     if (!loaded) return;
+    abandonPendingQuestion();
     if (loaded.key) conversationIdRef.current = loaded.key;
     historyRef.current = loaded.turns.flatMap((turn) => [
       { role: "user" as const, content: turn.transcript },
@@ -791,15 +1044,46 @@ export function DeliaPanel() {
     setTurns(loaded.turns);
     setErrorMsg(null);
     setHistoryOpen(false);
+    setActiveKey(loaded.key || "");
   }, []);
 
-  const removeConversation = useCallback(async (id: number) => {
-    /* Off the list first, so it disappears under the finger. It is one row in
-       a sidebar; putting it back on failure would be more startling than
-       letting it go. */
-    setConversations((current) => current.filter((item) => item.id !== id));
-    await deleteConversation(id);
-  }, []);
+  const removeConversation = useCallback(
+    async (id: number, key: string) => {
+      /* Off the list first, so it disappears under the finger. It is one row in
+         a sidebar; putting it back on failure would be more startling than
+         letting it go. */
+      setConversations((current) => current.filter((item) => item.id !== id));
+      /* Deleting the conversation on screen leaves nothing to show beside the
+         list, so it becomes a new one rather than a transcript of something
+         that no longer exists. */
+      if (key && key === conversationIdRef.current) startNewConversation();
+      await deleteConversation(id);
+    },
+    [startNewConversation],
+  );
+
+  /* Searching the list, a moment after the typing stops, so each keystroke is
+     not its own request. An empty box is the plain list again. */
+  useEffect(() => {
+    if (!signedIn) return;
+    const term = conversationQuery.trim();
+    setSearchingConversations(Boolean(term));
+    const timer = window.setTimeout(() => {
+      listConversations(term).then((found) => {
+        setConversations(found);
+        setSearchingConversations(false);
+      });
+    }, term ? 250 : 0);
+    return () => window.clearTimeout(timer);
+  }, [conversationQuery, signedIn]);
+
+  /* The question box grows with what is typed, up to a limit, then scrolls. */
+  useEffect(() => {
+    const box = inputRef.current;
+    if (!box) return;
+    box.style.height = "auto";
+    box.style.height = `${Math.min(box.scrollHeight, 200)}px`;
+  }, [typed]);
 
   /* Who is here, and what they have asked before. A visitor with no account
      gets neither button, because there is nowhere to keep a conversation that
@@ -883,12 +1167,24 @@ export function DeliaPanel() {
     };
   }, [open, closeDelia]);
 
-  function submitTyped(e: React.FormEvent) {
-    e.preventDefault();
+  function submitTyped(e?: React.FormEvent) {
+    e?.preventDefault();
     const q = typed.trim();
-    if (!q) return;
+    if (!q || loading) return;
     setTyped("");
     ask(q);
+    /* The box moves from the middle of an empty chat to the bottom when the
+       first question goes, which remounts it — put the cursor back. */
+    window.setTimeout(() => inputRef.current?.focus(), 0);
+  }
+
+  /* Enter sends and Shift+Enter starts a new line, as in every chat. Not while
+     an input method is composing — Enter there confirms a word, and sending on
+     it would post half a sentence typed with a Japanese or Chinese keyboard. */
+  function onComposerKey(event: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) return;
+    event.preventDefault();
+    submitTyped();
   }
 
   function giveFeedback(turnIndex: number, type: "helpful" | "not_helpful") {
@@ -903,9 +1199,78 @@ export function DeliaPanel() {
 
   if (!open) return null;
 
+  /*
+   * The question box, drawn in one of two places: centred under the greeting on
+   * an empty chat, and pinned to the bottom once there is a conversation — the
+   * way a new chat opens in the assistants people already use. What has been
+   * typed lives in state, so it survives the move.
+   *
+   * Focus is shown on the whole box rather than as a ring around the field
+   * inside it; see .focus-self in globals.css for why that needed saying.
+   */
+  const composer = (
+    <form onSubmit={submitTyped} className="w-full">
+      <div
+        onClick={() => inputRef.current?.focus()}
+        className="flex cursor-text items-end gap-2 rounded-[28px] border border-border bg-surface py-2 pl-5 pr-2 shadow-card transition-colors focus-within:border-fg-subtle"
+      >
+        <label htmlFor="delia-input" className="sr-only">
+          Ask Delia
+        </label>
+        <textarea
+          id="delia-input"
+          ref={inputRef}
+          rows={1}
+          value={typed}
+          onChange={(e) => setTyped(e.target.value)}
+          onKeyDown={onComposerKey}
+          placeholder="Ask Delia anything"
+          autoComplete="off"
+          className="focus-self max-h-[200px] min-h-10 flex-1 resize-none bg-transparent py-2 text-[0.95rem] leading-6 text-fg outline-none placeholder:text-fg-subtle"
+        />
+        <button
+          type="submit"
+          disabled={!typed.trim() || loading}
+          aria-label="Send question"
+          className="mb-0.5 inline-flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full bg-lime text-ink transition-colors hover:bg-lime-deep disabled:cursor-default disabled:bg-border disabled:text-fg-subtle"
+        >
+          <ArrowUp size={18} weight="bold" aria-hidden="true" />
+        </button>
+      </div>
+    </form>
+  );
+
+  /* Under the box and always on screen, however far the conversation scrolls:
+     the disclosure has to be findable next to the links it describes. */
+  const footnote = (
+    <div className="mt-2 px-2 text-center">
+      <AffiliateNotice market={market} language={language} compact />
+    </div>
+  );
+
+  const showEmpty = turns.length === 0 && !loading && available !== false;
+  const hasSidebar = signedIn === true;
+
+  const sidebar = (onClose?: () => void) => (
+    <ConversationSidebar
+      conversations={conversations}
+      activeKey={activeKey}
+      query={conversationQuery}
+      onQuery={setConversationQuery}
+      searching={searchingConversations}
+      onOpen={openConversation}
+      onDelete={removeConversation}
+      onNew={startNewConversation}
+      onClose={onClose}
+    />
+  );
+
+  const iconButton =
+    "inline-flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-xl text-fg-muted transition-colors hover:bg-bg hover:text-fg";
+
   return (
     <SavedOffersProvider market={market}>
-    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
+    <div className="fixed inset-0 z-50 flex items-stretch justify-center sm:items-center sm:p-4">
       <button
         type="button"
         aria-label="Close Delia"
@@ -919,246 +1284,151 @@ export function DeliaPanel() {
         aria-modal="true"
         aria-labelledby="delia-title"
         className={cn(
-          /* Wider than a plain chat needs: the shortlist is the point of the
-             panel, and a product card with a photo, price, evidence and a
-             call to action does not read well squeezed into a message column. */
-          "rise-in relative flex max-h-[92dvh] w-full max-w-3xl flex-col overflow-hidden",
-          "rounded-t-3xl bg-surface shadow-lift sm:rounded-3xl",
+          /* The whole screen on a phone, where a sheet with a strip of page
+             above it only takes room from the answer; a large window on a
+             desktop, wide enough for the list beside the chat. */
+          "rise-in relative flex w-full overflow-hidden bg-surface shadow-lift",
+          "h-dvh sm:h-[min(880px,92dvh)] sm:rounded-3xl",
+          hasSidebar ? "sm:max-w-6xl" : "sm:max-w-4xl",
         )}
       >
-        {/* header */}
-        <div className="relative shrink-0 overflow-hidden bg-graphite px-5 py-5 sm:px-6 sm:py-6">
-          <div className="relative flex items-center gap-3.5">
-            <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-lime text-ink ring-4 ring-white/10">
-              <Sparkle size={22} weight="fill" aria-hidden="true" />
-            </span>
-            <div className="min-w-0 flex-1">
-              <h2 id="delia-title" className="text-xl font-bold leading-tight text-white">
+        {hasSidebar && <div className="hidden md:flex">{sidebar()}</div>}
+        {hasSidebar && historyOpen && (
+          <div className="absolute inset-0 z-20 flex md:hidden">
+            {sidebar(() => setHistoryOpen(false))}
+          </div>
+        )}
+
+        <div className="flex min-w-0 flex-1 flex-col">
+          {/* A plain bar, not a dark block: the conversation is what the eye
+              should land on, and a heavy header was the loudest thing here. */}
+          <div className="flex h-14 shrink-0 items-center gap-1 px-2 sm:px-3">
+            {hasSidebar && (
+              <button
+                type="button"
+                onClick={() => setHistoryOpen(true)}
+                aria-label="Past conversations"
+                title="Past conversations"
+                className={cn(iconButton, "md:hidden")}
+              >
+                <SidebarSimple size={20} aria-hidden="true" />
+              </button>
+            )}
+            <div className="flex min-w-0 flex-1 items-center gap-2 px-2">
+              <DeliaMark />
+              <h2 id="delia-title" className="truncate text-base font-bold text-fg">
                 Delia
               </h2>
-              <p className="truncate text-xs text-white/65">
-                Ask for what you want. She searches and compares the checked picks.
-              </p>
             </div>
-            {/* History and a fresh start. Shown only to somebody signed in,
-                because there is nowhere to keep a conversation that belongs to
-                no account, and an empty list with no explanation reads as
-                broken. */}
-            {signedIn && (
-              <>
-                <button
-                  type="button"
-                  onClick={startNewConversation}
-                  aria-label="New conversation"
-                  title="New conversation"
-                  className="inline-flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-full text-white/70 transition-colors hover:bg-white/10 hover:text-white"
-                >
-                  <NotePencil size={19} weight="bold" aria-hidden="true" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setHistoryOpen((open) => !open)}
-                  aria-pressed={historyOpen}
-                  aria-label="Past conversations"
-                  title="Past conversations"
-                  className={cn(
-                    "inline-flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-full transition-colors",
-                    historyOpen
-                      ? "bg-white/15 text-white"
-                      : "text-white/70 hover:bg-white/10 hover:text-white",
-                  )}
-                >
-                  <ClockCounterClockwise size={19} weight="bold" aria-hidden="true" />
-                </button>
-              </>
+            {hasSidebar && (
+              <button
+                type="button"
+                onClick={startNewConversation}
+                aria-label="New chat"
+                title="New chat"
+                className={cn(iconButton, "md:hidden")}
+              >
+                <NotePencil size={20} aria-hidden="true" />
+              </button>
             )}
-            <button
-              type="button"
-              onClick={closeDelia}
-              aria-label="Close Delia"
-              className="inline-flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-full text-white/70 transition-colors hover:bg-white/10 hover:text-white"
-            >
-              <X size={20} weight="bold" aria-hidden="true" />
+            <button type="button" onClick={closeDelia} aria-label="Close Delia" className={iconButton}>
+              <X size={20} aria-hidden="true" />
             </button>
           </div>
-        </div>
 
-        <div className="shrink-0 border-b border-border px-5 py-3 sm:px-6">
-          <AffiliateNotice market={market} language={language} />
-        </div>
-
-        {/* body */}
-        {/*
-          * The part that gives way when the window is short.
-          *
-          * The panel is capped at 92% of the viewport, and this body carried a
-          * fixed 420px floor. That fitted until the commission notice was added
-          * above it: header, notice, a 420px body and the question box no longer
-          * fitted in a laptop's window, and because nothing marked the box as
-          * untouchable, it was the box that got clipped — the one control the
-          * panel exists for, cut off at the bottom edge.
-          *
-          * min-h-0 lets this scroll instead, and the floor now yields to a short
-          * window rather than pushing the input off it.
-          */}
-        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-5 py-5 sm:min-h-[min(420px,45dvh)] sm:px-6 sm:py-6">
-          {/* Past conversations take over the panel rather than squeezing in
-              beside it. At this width a permanent rail would leave the offers
-              in a column too narrow to read a product name in, and the list is
-              somewhere you pass through, not somewhere you sit. */}
-          {historyOpen ? (
-            <div className="space-y-2">
-              <p className="text-sm font-semibold text-fg">Your conversations</p>
-              {conversations.length === 0 ? (
-                <p className="pt-2 text-sm leading-relaxed text-fg-muted">
-                  Nothing here yet. Anything you ask from now on is kept with your
-                  account, so you can pick it up again later.
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            {showEmpty ? (
+              <div className="mx-auto flex min-h-full w-full max-w-3xl flex-col items-center justify-center px-4 pb-10 pt-2 sm:px-6">
+                <h3 className="text-balance text-center text-2xl font-bold tracking-tight text-fg sm:text-3xl">
+                  What are you shopping for?
+                </h3>
+                <p className="mt-2 max-w-md text-center text-sm leading-relaxed text-fg-muted">
+                  Tell Delia what you need and your budget.
                 </p>
-              ) : (
-                <ul className="space-y-1.5">
-                  {conversations.map((conversation) => (
-                    <li key={conversation.id} className="flex items-center gap-1">
+
+                <div className="mt-7 w-full">{composer}</div>
+
+                <ul className="mt-4 grid w-full grid-cols-1 gap-2 sm:grid-cols-2">
+                  {examples.map((e) => (
+                    <li key={e}>
                       <button
                         type="button"
-                        onClick={() => openConversation(conversation.id)}
-                        className="min-w-0 flex-1 rounded-xl border border-border px-3 py-2.5 text-left transition-colors hover:border-border-strong hover:bg-surface-2"
+                        disabled={loading}
+                        onClick={() => ask(e)}
+                        className="w-full cursor-pointer rounded-2xl border border-border px-4 py-3 text-left text-sm text-fg-muted transition-colors hover:bg-bg hover:text-fg disabled:cursor-default disabled:opacity-40"
                       >
-                        <span className="block truncate text-sm font-medium text-fg">
-                          {conversation.title || "Untitled conversation"}
-                        </span>
-                        <span className="block text-xs text-fg-muted">
-                          {new Date(conversation.updated_at).toLocaleDateString()}
-                          {conversation.questions > 1 && ` · ${conversation.questions} questions`}
-                        </span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => removeConversation(conversation.id)}
-                        aria-label={`Delete ${conversation.title || "this conversation"}`}
-                        title="Delete"
-                        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-fg-subtle transition-colors hover:bg-surface-2 hover:text-fg"
-                      >
-                        <Trash size={15} aria-hidden="true" />
+                        {e}
                       </button>
                     </li>
                   ))}
                 </ul>
-              )}
-            </div>
-          ) : (
-          <>
-          {available === false && (
-            <p role="alert" className="rounded-2xl bg-surface-2 p-4 text-sm text-fg-muted">
-              Delia isn&apos;t connected right now. Try again shortly.
-            </p>
-          )}
 
-          {turns.length === 0 && !loading && available !== false && (
-            <div className="flex flex-1 flex-col items-center justify-center gap-6 py-6 text-center">
-              <span className="inline-flex h-14 w-14 items-center justify-center rounded-full bg-surface-2 text-lime-deep">
-                <Sparkle size={26} weight="fill" aria-hidden="true" />
-              </span>
-              <p className="max-w-xs text-sm leading-relaxed text-fg-muted">
-                Type what you are looking for.
-              </p>
-              <ul className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2">
-                {examples.map((e) => (
-                  <li key={e}>
-                    <button
-                      type="button"
-                      disabled={loading}
-                      onClick={() => ask(e)}
-                      className="w-full cursor-pointer rounded-2xl border border-border px-4 py-3 text-left text-sm text-fg-muted transition-[transform,border-color,box-shadow] duration-200 hover:-translate-y-0.5 hover:border-border-strong hover:text-fg hover:shadow-card disabled:cursor-default disabled:opacity-40 disabled:hover:translate-y-0 disabled:hover:border-border disabled:hover:shadow-none"
-                    >
-                      {e}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {turns.length > 0 && (
-            <div className="space-y-6" aria-live="polite">
-              {turns.map((result, i) => (
-                <DeliaExchange
-                  key={i}
-                  result={result}
-                  market={market}
-                  onFollowUp={ask}
-                  onAnswerFollowUp={() => inputRef.current?.focus()}
-                  onSkipClarification={() => ask(result.transcript, true)}
-                  onClose={closeDelia}
-                  feedbackGiven={Boolean(feedbackGiven[i])}
-                  onFeedback={(type) => giveFeedback(i, type)}
-                  disabled={loading}
-                />
-              ))}
-            </div>
-          )}
-
-          {loading && pendingQuestion && (
-            <div className={cn("space-y-4", turns.length > 0 && "mt-6")} aria-live="polite">
-              <div className="flex justify-end">
-                <p className="max-w-[85%] wrap-anywhere rounded-2xl rounded-br-md bg-surface-inverse px-4 py-2.5 text-sm font-medium text-fg-on-inverse">
-                  {pendingQuestion}
-                </p>
+                <div className="mt-4">{footnote}</div>
               </div>
-              <div className="flex items-start gap-2.5">
-                <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-lime text-ink">
-                  <Sparkle size={15} weight="fill" aria-hidden="true" />
-                </span>
-                <span className="inline-flex items-center gap-2.5 rounded-2xl rounded-tl-md bg-surface-2 px-4 py-3">
-                  <span className="inline-flex items-center gap-1.5">
-                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-fg-subtle [animation-delay:-0.3s]" />
-                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-fg-subtle [animation-delay:-0.15s]" />
-                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-fg-subtle" />
-                  </span>
-                  <SearchProgress progress={progress} />
-                </span>
+            ) : (
+              <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6">
+                {available === false && (
+                  <p role="alert" className="rounded-2xl bg-bg p-4 text-sm text-fg-muted">
+                    Delia isn&apos;t connected right now. Try again shortly.
+                  </p>
+                )}
+
+                {turns.length > 0 && (
+                  <div className="space-y-8" aria-live="polite">
+                    {turns.map((result, i) => (
+                      <DeliaExchange
+                        key={i}
+                        result={result}
+                        market={market}
+                        onFollowUp={ask}
+                        onAnswerFollowUp={() => inputRef.current?.focus()}
+                        onSkipClarification={() => ask(result.transcript, true)}
+                        onClose={closeDelia}
+                        feedbackGiven={Boolean(feedbackGiven[i])}
+                        onFeedback={(type) => giveFeedback(i, type)}
+                        disabled={loading}
+                      />
+                    ))}
+                  </div>
+                )}
+
+                {loading && pendingQuestion && (
+                  <div className={cn("space-y-5", turns.length > 0 && "mt-8")} aria-live="polite">
+                    <UserBubble>{pendingQuestion}</UserBubble>
+                    <div className="flex items-start gap-3">
+                      <DeliaMark />
+                      <span className="inline-flex items-center gap-2.5 pt-1.5">
+                        <span className="inline-flex items-center gap-1.5">
+                          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-fg-subtle [animation-delay:-0.3s]" />
+                          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-fg-subtle [animation-delay:-0.15s]" />
+                          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-fg-subtle" />
+                        </span>
+                        <SearchProgress progress={progress} />
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {errorMsg && !loading && (
+                  <p role="alert" className="mt-4 rounded-2xl bg-bg p-4 text-sm text-fg-muted">
+                    {errorMsg}
+                  </p>
+                )}
+
+                <div ref={bottomRef} />
+              </div>
+            )}
+          </div>
+
+          {!showEmpty && (
+            <div className="shrink-0 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 sm:px-6">
+              <div className="mx-auto w-full max-w-3xl">
+                {composer}
+                {footnote}
               </div>
             </div>
-          )}
-
-          {errorMsg && !loading && (
-            <p role="alert" className="mt-3 rounded-2xl bg-surface-2 p-4 text-sm text-fg-muted">
-              {errorMsg}
-            </p>
-          )}
-
-          <div ref={bottomRef} />
-          </>
           )}
         </div>
-
-        {/* input row */}
-        <form
-          onSubmit={submitTyped}
-          /* Never squeezed, and clear of a phone's home indicator, where this
-             panel sits flush against the bottom of the screen. */
-          className="flex shrink-0 items-center gap-2 border-t border-border px-5 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:pb-5"
-        >
-          <label htmlFor="delia-input" className="sr-only">
-            Ask Delia a question
-          </label>
-          <input
-            id="delia-input"
-            ref={inputRef}
-            value={typed}
-            onChange={(e) => setTyped(e.target.value)}
-            placeholder="Type your question"
-            className="h-12 min-w-0 flex-1 rounded-full border border-border bg-bg px-4 text-[0.95rem] text-fg outline-none transition-colors placeholder:text-fg-subtle focus:border-border-strong"
-          />
-
-          <button
-            type="submit"
-            disabled={!typed.trim() || loading}
-            aria-label="Send question"
-            className="inline-flex h-12 w-12 shrink-0 cursor-pointer items-center justify-center rounded-full bg-lime text-ink transition-opacity hover:opacity-85 disabled:opacity-40"
-          >
-            <PaperPlaneRight size={20} weight="fill" aria-hidden="true" />
-          </button>
-        </form>
       </div>
 
       <SaveNeedsAccount />
@@ -1191,7 +1461,7 @@ function SaveNeedsAccount() {
         * until the change above, threw the conversation away. An invitation to
         * make an account should not be standing in the doorway.
         */
-      className="fade-in absolute inset-x-4 bottom-24 z-10 mx-auto max-w-md rounded-2xl border border-border bg-surface p-4 shadow-card sm:inset-x-auto"
+      className="fade-in absolute inset-x-4 bottom-44 z-10 mx-auto max-w-md rounded-2xl border border-border bg-surface p-4 shadow-card sm:inset-x-auto"
     >
       <p className="text-sm font-semibold text-fg">Sign in to keep this</p>
       <p className="mt-1 text-sm leading-relaxed text-fg-muted">
