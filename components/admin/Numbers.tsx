@@ -60,6 +60,30 @@ type Overview = {
     shops: { shop: string; listings: number; canBeScored: number; canStateASaving: number }[];
   };
   notMeasuredHere: string[];
+  /* This window and the one before it. Optional for an older backend. */
+  compare?: { current: Period; previous: Period };
+};
+
+/* The same counts for any stretch of time (src/growthMetrics.js). */
+export type Period = {
+  from: string;
+  to: string;
+  visitorsCounted: boolean;
+  visitors: number;
+  pageViews: number;
+  liveVisitors: number;
+  peopleToShop: number;
+  subscribers: number;
+  subscribersJoined: number;
+  subscribersLeft: number;
+  accounts: number;
+  accountsJoined: number;
+  dropPagePeople: number;
+  dropSawPrice: number;
+  dropPressedBuy: number;
+  reminderPeople: number;
+  productsSaved: number;
+  priceWatches: number;
 };
 
 const count = (value: number) => value.toLocaleString("en-US");
@@ -97,6 +121,17 @@ export function Numbers({ adminKey }: { adminKey: string }) {
   if (!data) return <p className="mt-4 text-sm text-fg-subtle">Loading…</p>;
 
   const { audience, intent, outbound, live, catalogue } = data;
+  /* This window against the one before it, for the cards that grow. */
+  const trend = (key: keyof Period, options: { upIsBad?: boolean; visitors?: boolean } = {}): Change | undefined =>
+    data.compare
+      ? {
+          now: data.compare.current[key] as number,
+          before: data.compare.previous[key] as number,
+          days,
+          known: options.visitors ? data.compare.previous.visitorsCounted : true,
+          upIsBad: options.upIsBad,
+        }
+      : undefined;
 
   return (
     <div className="mt-5">
@@ -131,6 +166,7 @@ export function Numbers({ adminKey }: { adminKey: string }) {
               label="Visitors"
               value={count(data.visits.visitors)}
               note={`in ${days} days · ${count(data.visits.pageViews)} pages opened · one browser tab counts once`}
+              change={trend("visitors", { visitors: true })}
             />
             <Stat
               label="Opened the Live Drop page"
@@ -140,6 +176,7 @@ export function Numbers({ adminKey }: { adminKey: string }) {
                   ? `${Math.round((data.visits.liveVisitors / data.visits.visitors) * 100)}% of visitors`
                   : "no visitors yet"
               }
+              change={trend("liveVisitors", { visitors: true })}
             />
             <Stat
               label="Counting since"
@@ -183,6 +220,7 @@ export function Numbers({ adminKey }: { adminKey: string }) {
           label="Want every drop"
           value={count(audience.subscribers)}
           note={`+${count(audience.subscribedInWindow)} joined in ${days} days`}
+          change={trend("subscribers")}
         />
         <Stat
           label="Unsubscribed"
@@ -192,6 +230,7 @@ export function Numbers({ adminKey }: { adminKey: string }) {
               ? "all time"
               : `all time · ${count(audience.unsubscribedInWindow)} in ${days} days`
           }
+          change={trend("subscribersLeft", { upIsBad: true })}
         />
         <Stat
           label="Asked about one drop only"
@@ -205,11 +244,13 @@ export function Numbers({ adminKey }: { adminKey: string }) {
           label="People who went to a shop"
           value={count(data.engagedSessions)}
           note={`in ${days} days · ${count(outbound.unattributed)} more clicks came from bots`}
+          change={trend("peopleToShop")}
         />
         <Stat
           label="Accounts"
           value={count(audience.accounts)}
           note={`${count(audience.accountsInWindow)} new · ${count(audience.accountsViaGoogle)} by Google`}
+          change={trend("accounts")}
         />
       </Group>
 
@@ -360,12 +401,47 @@ function MiniTable({ title, hint, rows }: { title: string; hint: string; rows: [
   );
 }
 
-function Stat({ label, value, note }: { label: string; value: string; note: string }) {
+type Change = { now: number; before: number; days: number; known?: boolean; upIsBad?: boolean };
+
+/*
+ * Whether a number went up, against the same length of time just before.
+ *
+ * Growth is a comparison, and the cards used to show only the present. A
+ * percentage against nothing is not a number, so "nothing before" and
+ * "not counted before" are said in words.
+ */
+function ChangeLine({ change }: { change: Change }) {
+  const { now, before, days, known = true, upIsBad = false } = change;
+  let text: string;
+  let tone: "up" | "down" | "flat" = "flat";
+  if (!known) text = `not counted in the ${days} days before`;
+  else if (before === 0 && now === 0) text = `same as the ${days} days before`;
+  else if (before === 0) {
+    text = `▲ new · 0 in the ${days} days before`;
+    tone = "up";
+  } else if (now === before) text = `same as the ${days} days before`;
+  else {
+    const percent = Math.round(((now - before) / before) * 100);
+    tone = percent > 0 ? "up" : "down";
+    text = `${percent > 0 ? "▲" : "▼"} ${Math.abs(percent)}% vs ${count(before)} in the ${days} days before`;
+  }
+  const good = tone === "flat" ? null : (tone === "up") !== upIsBad;
+  return (
+    <p
+      className={`mt-1 text-xs font-semibold ${good === null ? "text-fg-subtle" : good ? "text-[#2f8a3e]" : "text-danger"}`}
+    >
+      {text}
+    </p>
+  );
+}
+
+function Stat({ label, value, note, change }: { label: string; value: string; note: string; change?: Change }) {
   return (
     <div className="rounded-2xl border border-border p-4">
       <dt className="text-xs text-fg-muted">{label}</dt>
       <dd className="mt-1 text-2xl font-bold text-fg tnum">{value}</dd>
       <p className="mt-0.5 text-xs text-fg-subtle">{note}</p>
+      {change && <ChangeLine change={change} />}
     </div>
   );
 }

@@ -71,6 +71,10 @@ const { readEbayStock, refreshDropStock, ebayItemIdFrom } = require("./liveStock
 const { checkAmazonLinks } = require("./amazonLinkHealth");
 const { overview } = require("./overview");
 const { pageViewRow, recordPageView } = require("./pageViews");
+const {
+  ensureWeeklySnapshot, listWeeklySnapshots, nextWeekClose, notInternal, periodMetrics,
+  REPORT_TIMEZONE, lastCompletedWeek,
+} = require("./growthMetrics");
 const { PUBLIC_PREFIX: PUBLIC_MEDIA_PREFIX, mediaDirectory, saveUpload } = require("./dropMedia");
 const {
   normalizeAction,
@@ -2473,6 +2477,24 @@ app.get("/api/admin/overview", admin, (req, res) => {
   const days = Number.isFinite(requestedDays) ? Math.min(90, Math.max(1, Math.round(requestedDays))) : 30;
   res.json(overview(db, {days}));
 });
+
+/* Every frozen week, newest first, with the week in progress on top so the
+   latest row is never a week old. See src/growthMetrics.js. */
+app.get("/api/admin/weekly", admin, (req, res) => {
+  const now = Date.now();
+  try {
+    ensureWeeklySnapshot(db, now);
+  } catch (error) {
+    console.error(`[weekly] snapshot failed: ${error.message}`);
+  }
+  const thisWeekStart = lastCompletedWeek(now).end;
+  res.json({
+    timezone: REPORT_TIMEZONE,
+    next_snapshot_at: nextWeekClose(now),
+    this_week: periodMetrics(db, thisWeekStart, new Date(now).toISOString()),
+    weeks: listWeeklySnapshots(db),
+  });
+});
 app.get("/api/admin/click-analytics", admin, (req, res) => {
   const requestedDays = Number(req.query.days || 30);
   const days = Number.isFinite(requestedDays) ? Math.min(90, Math.max(1, Math.round(requestedDays))) : 30;
@@ -3352,7 +3374,8 @@ app.get("/api/admin/live-drops", admin, (req, res) => {
   const rows = db.prepare("SELECT * FROM live_drops ORDER BY start_at DESC LIMIT 50").all();
   /* The funnel alongside each drop, because "did it work" is the only question
      worth asking afterwards and it should not need a second screen. */
-  const funnel = db.prepare("SELECT event_type, COUNT(*) AS total FROM live_drop_events WHERE drop_id=? GROUP BY event_type");
+  /* The owner's own visits to a drop are not the audience (src/growthMetrics.js). */
+  const funnel = db.prepare(`SELECT event_type, COUNT(*) AS total FROM live_drop_events WHERE drop_id=? AND ${notInternal("session_id")} GROUP BY event_type`);
   /*
    * How many people the drop reached at all, which none of the event counts
    * answers on its own.
@@ -3364,7 +3387,7 @@ app.get("/api/admin/live-drops", admin, (req, res) => {
    * honest answer to "how many people saw this".
    */
   const reached = db.prepare(
-    "SELECT COUNT(DISTINCT session_id) AS people FROM live_drop_events WHERE drop_id=? AND session_id<>''",
+    `SELECT COUNT(DISTINCT session_id) AS people FROM live_drop_events WHERE drop_id=? AND session_id<>'' AND ${notInternal("session_id")}`,
   );
   /*
    * Asked for, and actually delivered, as two separate numbers.
@@ -3393,7 +3416,7 @@ app.get("/api/admin/live-drops", admin, (req, res) => {
      notices anyone leaving; "watching now" is a different question and needs
      a row that expires. Sixty seconds, matching the page heartbeat. */
   const watchingNow = db.prepare(
-    "SELECT COUNT(*) AS people FROM live_drop_presence WHERE drop_id=? AND seen_at>=?",
+    `SELECT COUNT(*) AS people FROM live_drop_presence WHERE drop_id=? AND seen_at>=? AND ${notInternal("session_id")}`,
   );
 
   res.json({
@@ -4090,6 +4113,17 @@ const stockPoll = setInterval(async () => {
   }
 }, LIVE_STOCK_POLL_MS);
 stockPoll.unref?.();
+
+/* The weekly snapshot. Hourly rather than at the exact minute the week
+   closes: a restart or a sleeping instance at that minute would otherwise
+   skip a week for good, and taking one is a no-op once it exists. */
+cron.schedule("7 * * * *", () => {
+  try {
+    if (ensureWeeklySnapshot(db)) console.log("[weekly] snapshot taken");
+  } catch (error) {
+    console.error(`[weekly] snapshot failed: ${error.message}`);
+  }
+});
 let reminderSweepRunning = false;
 cron.schedule(
   "* * * * *",

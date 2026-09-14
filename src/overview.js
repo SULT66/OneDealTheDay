@@ -20,6 +20,7 @@
 
 const { MEANINGFUL_REVIEW_COUNT } = require("./productPresentation");
 const { visitorNumbers } = require("./pageViews");
+const { notInternal, periodMetrics } = require("./growthMetrics");
 
 const sinceIso = (days, now = Date.now()) =>
   new Date(now - days * 24 * 60 * 60 * 1000).toISOString();
@@ -84,7 +85,7 @@ function overview(db, { days = 30, now = Date.now() } = {}) {
   const clicks = one(
     `SELECT
        COUNT(*) AS total,
-       COUNT(DISTINCT NULLIF(session_id, '')) AS sessions,
+       COUNT(DISTINCT CASE WHEN ${notInternal("session_id")} THEN NULLIF(session_id, '') END) AS sessions,
        SUM(CASE WHEN COALESCE(session_id, '') = '' THEN 1 ELSE 0 END) AS unattributed,
        SUM(CASE WHEN action_type = 'shop_all' THEN 1 ELSE 0 END) AS to_a_shop,
        SUM(CASE WHEN action_type = 'view_deal' THEN 1 ELSE 0 END) AS to_a_product
@@ -118,8 +119,14 @@ function overview(db, { days = 30, now = Date.now() } = {}) {
        COUNT(DISTINCT CASE WHEN event_type = 'reveal' THEN session_id END) AS saw_the_price,
        COUNT(DISTINCT CASE WHEN event_type = 'buy_click' THEN session_id END) AS went_to_buy
      FROM live_drop_events
-     WHERE session_id <> ''`,
+     WHERE session_id <> '' AND ${notInternal("session_id")}`,
   );
+
+  /* The same numbers for this window and the one before it, so every card can
+     say whether it went up. See src/growthMetrics.js. */
+  const windowMs = days * 24 * 60 * 60 * 1000;
+  const current = periodMetrics(db, since, new Date(now).toISOString());
+  const previous = periodMetrics(db, new Date(now - 2 * windowMs).toISOString(), since);
 
   const reminders = one(
     `SELECT
@@ -177,6 +184,7 @@ function overview(db, { days = 30, now = Date.now() } = {}) {
     engagedSessions: number(clicks.sessions),
     /* Visitors, counted from pages that actually ran in a browser. */
     visits: visitorNumbers(db, since),
+    compare: { current, previous },
     audience: {
       subscribers: number(audience.active),
       unsubscribed: number(audience.unsubscribed),

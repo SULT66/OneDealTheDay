@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { ShopIcons } from "./ShopIcons";
 import { Numbers } from "./Numbers";
+import { Weekly } from "./Weekly";
+import { isInternalBrowser, setInternalBrowser } from "@/lib/analyticsSession";
 import { AmazonPicks } from "./AmazonPicks";
 import { MediaUpload } from "./MediaUpload";
 
@@ -219,6 +221,19 @@ export function AdminConsole() {
   const unlocked = drops !== null;
 
   /*
+   * This browser stops counting as a visitor once the key is accepted.
+   *
+   * While real visitors are few, the owner testing the site is most of the
+   * numbers. Only a flag is kept, never the key, and it can be turned off.
+   */
+  const [ownVisitsHidden, setOwnVisitsHidden] = useState(false);
+  useEffect(() => {
+    if (!unlocked) return;
+    setInternalBrowser(true);
+    setOwnVisitsHidden(isInternalBrowser());
+  }, [unlocked]);
+
+  /*
    * One job per tab.
    *
    * Everything used to be one long page — numbers, email, the drop form, the
@@ -268,6 +283,23 @@ export function AdminConsole() {
         </label>
       </div>
       <p className="mt-2 text-xs text-fg-subtle">ADMIN_KEY from the environment. Kept in this tab only, never stored.</p>
+      {unlocked && (
+        <p className="mt-1 text-xs text-fg-subtle">
+          {ownVisitsHidden
+            ? "Your visits from this browser are not counted in the numbers."
+            : "Your visits from this browser are counted in the numbers until you unlock the admin again."}{" "}
+          <button
+            type="button"
+            onClick={() => {
+              setInternalBrowser(!ownVisitsHidden);
+              setOwnVisitsHidden(!ownVisitsHidden);
+            }}
+            className="cursor-pointer font-semibold underline underline-offset-4 hover:text-fg"
+          >
+            {ownVisitsHidden ? "Count them" : "Stop counting them"}
+          </button>
+        </p>
+      )}
 
       <div
         role="tablist"
@@ -337,6 +369,16 @@ export function AdminConsole() {
         * The console used to say "not configured" and stop there, which named
         * the last of four steps and none of the three before it.
         */}
+      <TabPanel id="weekly" active={tab}>
+      <Card className="mt-6">
+        <Legend>Week by week</Legend>
+        <p className="mt-1 max-w-prose text-sm leading-relaxed text-fg-muted">
+          The numbers saved at the end of every week, so you can see whether things are growing.
+        </p>
+        <Weekly adminKey={adminKey} />
+      </Card>
+      </TabPanel>
+
       <TabPanel id="email" active={tab}>
       <Card className="mt-6">
         <Legend>Email delivery</Legend>
@@ -550,6 +592,7 @@ export function AdminConsole() {
 
 const TABS = [
   { id: "numbers", label: "Numbers" },
+  { id: "weekly", label: "Weekly" },
   { id: "drops", label: "Live Drops" },
   { id: "email", label: "Email" },
   { id: "amazon", label: "Amazon picks" },
