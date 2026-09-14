@@ -5,8 +5,20 @@ const {
   measurementSizeMatch,
   namesUnshownProduct,
   outcomeCounts,
+  shortlistPriceFacts,
   stripCitationDomains,
 } = require("./deliaAnswerShape");
+const {
+  DISCUSSION_RESPONSE_FORMAT,
+  SHORTLIST_SUMMARY_FORMAT,
+  discussionInstructions,
+  normalizeDiscussion,
+  normalizeSummary,
+  referencedPositions,
+  sanitizeShortlist,
+  shortlistQuestionIntent,
+  shortlistSummaryInstructions,
+} = require("./deliaConversation");
 const { presentProduct, PUBLIC_SCORE_FLOOR } = require("./productPresentation");
 
 const OpenAI = OpenAIExport.default || OpenAIExport;
@@ -383,6 +395,18 @@ const SHOPPING_SCOPE_RESPONSE_FORMAT = {
         description:
           "True only when the shopper clearly changes to a different product category.",
       },
+      turn_intent: {
+        type: "string",
+        enum: ["new_request", "refine", "more_options", "about_shown"],
+        description:
+          "What the latest message wants, relative to shown_products: about_shown to compare, explain, verify or choose among products already shown; more_options for different products; refine for a changed constraint that needs a new search; new_request for a different product or when nothing has been shown.",
+      },
+      referenced_positions: {
+        type: "array",
+        maxItems: 8,
+        description: "One-based positions in shown_products the latest message refers to, or an empty array.",
+        items: { type: "integer" },
+      },
       mission_patch: {
         type: "object",
         description:
@@ -416,6 +440,8 @@ const SHOPPING_SCOPE_RESPONSE_FORMAT = {
       "language",
       "social_reply",
       "starts_new_mission",
+      "turn_intent",
+      "referenced_positions",
       "mission_patch",
     ],
     additionalProperties: false,
@@ -2317,6 +2343,17 @@ function responseLanguage(message, fallback = "en") {
   return ["en", "ru", "az", "es", "fr", "de"].includes(fallback) ? fallback : "en";
 }
 
+/* When a question about the shown products could not be answered in time. It
+   says what happened and keeps the list where it is, rather than searching. */
+const DISCUSSION_UNAVAILABLE = {
+  en: "Sorry, I couldn't check that properly just now. Ask me again, and the products above are still right where they are.",
+  ru: "Прости, сейчас не получилось толком это проверить. Спроси ещё раз, товары выше никуда не делись.",
+  az: "Bağışlayın, bunu indi düzgün yoxlaya bilmədim. Yenidən soruşun, yuxarıdakı məhsullar yerindədir.",
+  es: "Perdona, no he podido comprobarlo bien ahora. Pregúntame otra vez; los productos de arriba siguen ahí.",
+  fr: "Désolée, je n'ai pas pu vérifier ça correctement. Redemandez-moi, les produits ci-dessus sont toujours là.",
+  de: "Tut mir leid, das konnte ich gerade nicht richtig prüfen. Frag mich noch einmal, die Produkte oben bleiben, wo sie sind.",
+};
+
 const RESPONSE_COPY = {
   en: {
     malformed:
@@ -3319,12 +3356,21 @@ async function classifyShoppingScope(
   messages,
   language,
   signal,
+  shortlist = [],
 ) {
   const context = safeHistory(messages)
     .slice(-2)
     .map((item) => `${item.role}: ${item.content}`)
     .join("\n")
     .slice(0, 800);
+  /* What the shopper is looking at, so "which one is better?" can be read as a
+     question about it rather than as a request with no product in it. */
+  const shownProducts = (shortlist || []).map((item, index) => ({
+    position: index + 1,
+    title: item.title,
+    retailer: item.retailer,
+    price: item.price_value,
+  }));
   const response = await openai.responses.create(
     {
       model,
@@ -3333,10 +3379,13 @@ async function classifyShoppingScope(
       max_output_tokens: 700,
       instructions: `${shoppingScopeInstructions(language)}
 
-For a shopping request, decide whether Delia should clarify before searching. Use discovery when a broad or vague request would otherwise produce arbitrary low-quality products. Ask no more than two short, non-overlapping questions and provide two to four short, mutually exclusive answer options for each in clarification_prompts. The questions must be specific to the requested product, not a reusable generic template. Ask budget first only when it is unknown. After asking budget, never ask whether the shopper wants the lowest price, affordability, value, quality, or generic "features"; that repeats the budget decision. The second question must address the category decision that most changes the product. For shoes ask about activity, terrain, support, cushioning, or fit. For furniture ask about room size, seating capacity, material, or sleeper requirement. For phones ask about operating system, camera, battery, size, or storage. For headphones ask earbuds versus over-ear or the main use. For TVs ask screen size or room conditions. Never ask what product type or brand they want when the latest request already states it. Compatibility, fit, and safety remain blocking reasons when every result could otherwise be unusable. Do not clarify a short follow-up that is understandable from recent context. clarifying_questions and clarification_prompts must contain the same questions in the same order. Detect the latest request's language as en, ru, az, es, fr, or de and use it for every question and option. Azerbaijani must be returned as az. For social and off_topic requests, needs_clarification must be false, clarification_reason must be none, and both clarification arrays must be empty.`,
+For a shopping request, decide whether Delia should clarify before searching. Use discovery when a broad or vague request would otherwise produce arbitrary low-quality products. Ask no more than two short, non-overlapping questions and provide two to four short, mutually exclusive answer options for each in clarification_prompts. The questions must be specific to the requested product, not a reusable generic template. Ask budget first only when it is unknown. After asking budget, never ask whether the shopper wants the lowest price, affordability, value, quality, or generic "features"; that repeats the budget decision. The second question must address the category decision that most changes the product. For shoes ask about activity, terrain, support, cushioning, or fit. For furniture ask about room size, seating capacity, material, or sleeper requirement. For phones ask about operating system, camera, battery, size, or storage. For headphones ask earbuds versus over-ear or the main use. For TVs ask screen size or room conditions. Never ask what product type or brand they want when the latest request already states it. Compatibility, fit, and safety remain blocking reasons when every result could otherwise be unusable. Do not clarify a short follow-up that is understandable from recent context. clarifying_questions and clarification_prompts must contain the same questions in the same order. Detect the latest request's language as en, ru, az, es, fr, or de and use it for every question and option. Azerbaijani must be returned as az. For social and off_topic requests, needs_clarification must be false, clarification_reason must be none, and both clarification arrays must be empty.
+
+Set turn_intent. When shown_products is empty it is new_request. When the shopper has products on screen, a question comparing, explaining, verifying or choosing among them is about_shown and is shopping scope: "which is better?", "why this one?", "number 2 or 3?", "does it have X?", "is the first one good for Y?", "use only verified features", in any language and for any product. For about_shown, needs_clarification is false and mission_patch keeps only new facts about the shopper's needs (such as use_case); it never changes product_type. Asking to see different, more or cheaper products is more_options. A changed constraint that the shown products may not meet ("under $150", "only new", "in black") is refine. Only a different kind of product is new_request.`,
       text: { format: SHOPPING_SCOPE_RESPONSE_FORMAT },
       input: JSON.stringify({
         recent_context_for_pronouns_only: context,
+        shown_products: shownProducts,
         latest_message: userMessage,
       }),
     },
@@ -3390,6 +3439,12 @@ For a shopping request, decide whether Delia should clarify before searching. Us
       : responseLanguage(userMessage, language),
     social_reply: cleanDisplayText(parsed?.social_reply).slice(0, 320),
     starts_new_mission: Boolean(parsed?.starts_new_mission),
+    turn_intent: ["new_request", "refine", "more_options", "about_shown"].includes(parsed?.turn_intent)
+      ? parsed.turn_intent
+      : "",
+    referenced_positions: (Array.isArray(parsed?.referenced_positions) ? parsed.referenced_positions : [])
+      .map(Number)
+      .filter((position) => Number.isInteger(position) && position >= 1 && position <= 8),
     mission_patch:
       parsed?.mission_patch && typeof parsed.mission_patch === "object"
         ? parsed.mission_patch
@@ -5013,6 +5068,182 @@ function providerFirstResponse({
   };
 }
 
+/*
+ * A question about the products already on the screen, answered from them.
+ *
+ * See src/deliaConversation.js for why this exists. It may look a fact up on
+ * the shown model's own page, and it may not go shopping: the answer carries no
+ * cards, so the list the shopper is looking at stays the list they are asking
+ * about.
+ */
+async function answerAboutShortlist({
+  openai,
+  model,
+  userMessage,
+  messages,
+  shortlist,
+  mission,
+  positions,
+  marketCode,
+  currency,
+  shopperLanguage,
+  signal,
+  timeoutMs,
+}) {
+  const { products, facts } = shortlistPriceFacts(shortlist, (item) => item.price_value, {
+    currency: shortlist.find((item) => item.currency)?.currency || currency,
+  });
+  const request = (canBrowse) => ({
+    model,
+    store: false,
+    reasoning: { effort: "low" },
+    max_output_tokens: 900,
+    instructions: discussionInstructions({ shopperLanguage, canBrowse }),
+    text: { format: DISCUSSION_RESPONSE_FORMAT },
+    ...(canBrowse ? { tools: [webSearchTool(marketCode, { images: false })], tool_choice: "auto" } : {}),
+    input: JSON.stringify({
+      shopper_question: userMessage,
+      recent_conversation: safeHistory(messages).slice(-6),
+      shopping_goal: shoppingMissionText(mission, ""),
+      shown_products: products,
+      price_facts: facts,
+      referenced_positions: positions,
+    }),
+  });
+  const cleanText = (value) => stripCitationDomains(cleanDisplayText(value));
+  const attempt = async (canBrowse, limitMs) => {
+    const response = await withRequestTimeout(
+      (requestSignal) => openai.responses.create(request(canBrowse), { signal: requestSignal }),
+      signal,
+      limitMs,
+    );
+    return normalizeDiscussion(parseStructuredObject(response?.output_text), shortlist.length, cleanText);
+  };
+  /* Checking a feature on the maker's page is worth waiting for; not worth
+     failing over. If the look-up runs long she answers from what she has. */
+  const browseBudget = Math.max(0, timeoutMs - 12000);
+  try {
+    if (browseBudget >= 8000) {
+      const answer = await attempt(true, browseBudget);
+      if (answer) return answer;
+    }
+  } catch (error) {
+    if (signal?.aborted) throw error;
+  }
+  try {
+    return await attempt(false, Math.min(12000, timeoutMs));
+  } catch (error) {
+    if (signal?.aborted) throw error;
+    return null;
+  }
+}
+
+/*
+ * The few sentences above a fresh shortlist, written once it is final.
+ *
+ * Her summary used to be written during the search, before the shortlist
+ * settled, so it named products that were then filtered out and was thrown
+ * away in favour of "I found 5 options at 5 shops" nearly every time. Written
+ * after, about exactly the products on the screen, it can say which one she
+ * would take and why, what the cheaper one gives up, and where a pre-owned
+ * listing or a different edition could catch the shopper out.
+ *
+ * Returns null whenever it cannot be trusted, and the template stands.
+ */
+async function summarizeShortlist({
+  openai,
+  model,
+  userMessage,
+  messages,
+  items,
+  mission,
+  currency,
+  shopperLanguage,
+  lowerPriceRequested,
+  signal,
+  timeoutMs,
+}) {
+  if (!items.length || timeoutMs < 2500) return null;
+  const { products, facts } = shortlistPriceFacts(items, landedPrice, { currency });
+  const cleanText = (value) => stripCitationDomains(cleanDisplayText(value));
+  try {
+    const response = await withRequestTimeout(
+      (requestSignal) =>
+        openai.responses.create(
+          {
+            model,
+            store: false,
+            reasoning: { effort: "low" },
+            max_output_tokens: 900,
+            instructions: shortlistSummaryInstructions({ shopperLanguage, lowerPriceRequested }),
+            text: { format: SHORTLIST_SUMMARY_FORMAT },
+            input: JSON.stringify({
+              shopper_request: userMessage,
+              recent_conversation: safeHistory(messages).slice(-4),
+              shopping_goal: shoppingMissionText(mission, ""),
+              shown_products: products,
+              price_facts: facts,
+            }),
+          },
+          { signal: requestSignal },
+        ),
+      signal,
+      timeoutMs,
+    );
+    const summary = normalizeSummary(parseStructuredObject(response?.output_text), items.length, cleanText);
+    if (!summary) {
+      trace("summary: unreadable reply");
+      return null;
+    }
+    /* The same guard her search-time summary answers to: a name that is not
+       on the screen sends the shopper looking for something that is not there. */
+    const shown = { shown: items };
+    if (namesUnshownProduct(summary.answer, shown) || namesUnshownProduct(summary.pick_reason, shown)) {
+      trace("summary: names something not on screen:", summary.answer, "|", summary.pick_reason);
+      return null;
+    }
+    if (namesUnshownProduct(summary.follow_up, shown)) summary.follow_up = "";
+    for (const [position, note] of summary.notes) {
+      if (namesUnshownProduct(note, shown)) summary.notes.delete(position);
+    }
+    return summary;
+  } catch (error) {
+    if (signal?.aborted) throw error;
+    trace("summary: failed:", error.message);
+    return null;
+  }
+}
+
+/* The summary is written in the last seconds before the server gives up on the
+   whole answer (58s, src/server.js), so it has its own ceiling and its own
+   deadline, and a slow one simply leaves the template in place. */
+const SUMMARY_TIMEOUT_MS = 12000;
+const SUMMARY_DEADLINE_MS = 55000;
+
+/**
+ * The shortlist rearranged around the pick her summary made, with her notes
+ * on the cards they belong to.
+ *
+ * Positions in the summary are positions in `arranged`, the list she was
+ * shown; they are matched back to the ranked list by link and title so the
+ * cheaper option is still chosen in ranking order.
+ */
+function withSummary(ranked, arranged, summary, arrange) {
+  const sameOffer = (left, right) => left.url === right.url && left.title === right.title;
+  const chosen = summary.pick_position ? arranged[summary.pick_position - 1] : null;
+  const pickIndex = chosen ? ranked.findIndex((item) => sameOffer(item, chosen)) : -1;
+  const noted = ranked.map((item) => {
+    const position = arranged.findIndex((shown) => sameOffer(shown, item)) + 1;
+    const note = summary.notes.get(position);
+    return note ? { ...item, note } : item;
+  });
+  return arrange(noted, pickIndex).map((item) =>
+    item.position_role === "best_overall" && pickIndex >= 0 && summary.pick_reason
+      ? { ...item, pick_reason: summary.pick_reason }
+      : item,
+  );
+}
+
 function createShoppingAssistant({
   db,
   sourceSql,
@@ -5068,6 +5299,9 @@ function createShoppingAssistant({
       /* Set by the "just show me options" button, so a broad request can be
          searched without answering anything first. */
       skipClarification = false,
+      /* The products the panel is showing from the last search, so a question
+         about them is answered about them. See src/deliaConversation.js. */
+      shortlist: shortlistInput = [],
       signal,
       /*
        * Called as each real milestone is reached, so the panel can say what is
@@ -5150,6 +5384,7 @@ function createShoppingAssistant({
         error.statusCode = 503;
         throw error;
       }
+      const shortlist = sanitizeShortlist(shortlistInput);
       let classification;
       try {
         classification = await withRequestTimeout(
@@ -5161,6 +5396,7 @@ function createShoppingAssistant({
               messages,
               language,
               requestSignal,
+              shortlist,
             ),
           signal,
           scopeTimeoutMs,
@@ -5195,6 +5431,101 @@ function createShoppingAssistant({
         messages,
         shoppingContext,
       );
+
+      /*
+       * Is this about what is already on the screen?
+       *
+       * The router's reading decides, with the wording as a check on it in both
+       * directions: it can miss "number 2 or 3?" when it times out, and it is a
+       * model, so a message that plainly asks for other products is never
+       * answered from the old list, and one that names a different kind of
+       * product than anything shown is a new search whatever it says.
+       */
+      const wordingIntent = shortlist.length ? shortlistQuestionIntent(userMessage) : "";
+      const namedProductType = missionFromText(userMessage).product_type;
+      const namesSomethingElse = Boolean(
+        namedProductType &&
+          !shortlist.some((item) =>
+            normalizedIntentTokens(item.title).some((token) =>
+              normalizedIntentTokens(namedProductType).includes(token),
+            ),
+          ) &&
+          !normalizedIntentTokens(shoppingMissionText(normalizeShoppingMission(shoppingMission || shoppingContext), ""))
+            .some((token) => normalizedIntentTokens(namedProductType).includes(token)),
+      );
+      const turnIntent = !shortlist.length
+        ? classification.turn_intent || ""
+        : wordingIntent === "more_options"
+          ? "more_options"
+          : classification.turn_intent === "about_shown" && !namesSomethingElse
+            ? "about_shown"
+            : wordingIntent === "about_shown" &&
+                !namesSomethingElse &&
+                !["more_options", "new_request"].includes(classification.turn_intent)
+              ? "about_shown"
+              : namesSomethingElse
+                ? "new_request"
+                : classification.turn_intent === "about_shown"
+                  ? ""
+                  : classification.turn_intent || wordingIntent;
+
+      /* "Show me other ones" is a search that leaves out what was just shown.
+         By name, because the panel's copy of the list carries no links. */
+      const alreadyShownTitles = new Set(
+        turnIntent === "more_options"
+          ? shortlist.map((item) => recommendationTitleKey(item.title)).filter(Boolean)
+          : [],
+      );
+
+      if (turnIntent === "about_shown") {
+        const heldMission = normalizeShoppingMission(shoppingMission || shoppingContext);
+        progress("checking", { products: shortlist.length });
+        const positions = [
+          ...new Set([
+            ...referencedPositions(userMessage, shortlist.length),
+            ...(classification.referenced_positions || []).filter((position) => position <= shortlist.length),
+          ]),
+        ].sort((left, right) => left - right);
+        const discussion = await answerAboutShortlist({
+          openai,
+          model,
+          userMessage,
+          messages,
+          shortlist,
+          mission: heldMission,
+          positions,
+          marketCode,
+          currency: market(marketCode).currency,
+          shopperLanguage,
+          signal,
+          timeoutMs: Math.max(0, TOTAL_RESPONSE_BUDGET_MS - (Date.now() - startedAt)),
+        });
+        return {
+          message: discussion?.answer || DISCUSSION_UNAVAILABLE[shopperLanguage] || DISCUSSION_UNAVAILABLE.en,
+          message_source: discussion ? "delia" : "template",
+          turn_kind: "discussion",
+          referenced_positions: discussion?.referenced_positions?.length
+            ? discussion.referenced_positions
+            : positions,
+          follow_up: discussion?.follow_up || "",
+          recommendations: [],
+          partial_offers: [],
+          comparison_notes: [],
+          comparison: [],
+          products: [],
+          sources: [],
+          clarifying_questions: [],
+          clarification_prompts: [],
+          needs_clarification: false,
+          model,
+          scope: "shopping",
+          language: shopperLanguage,
+          conversation_title: "",
+          /* Not a search, so not a verdict on one. */
+          result_state: "exact_matches",
+          shopping_mission: heldMission,
+        };
+      }
       if (classification.scope === "social" && !activeShoppingContinuation) {
         return {
           message:
@@ -5250,7 +5581,10 @@ function createShoppingAssistant({
         currentMissionValue,
         classification.mission_patch,
         userMessage,
-        classification.starts_new_mission,
+        /* "Something cheaper" and "only under $150" keep everything else the
+           shopper said: the laptop is still for school and still 15 inches. */
+        classification.starts_new_mission &&
+          !(shortlist.length && ["refine", "more_options"].includes(turnIntent)),
       );
       const resolvedRequest = shoppingMissionText(
         activeMission,
@@ -5961,7 +6295,9 @@ function createShoppingAssistant({
             })
           : displayableCandidates;
       const freshCandidates = budgetFilteredCandidates.filter(
-        (recommendation) => !excludedUrls.has(comparableUrl(recommendation.url)),
+        (recommendation) =>
+          !excludedUrls.has(comparableUrl(recommendation.url)) &&
+          !alreadyShownTitles.has(recommendationTitleKey(recommendation.title)),
       );
       /*
        * A price far below everything else in the same shortlist is a spare
@@ -6176,6 +6512,35 @@ function createShoppingAssistant({
         isComparison: comparisonRequest,
         lowerPriceRequested: isLowerPriceRequest(userMessage),
       });
+      /* Her words about the final list, when there is time to write them. The
+         exact-shop price comparison stays with the template, which does that
+         sum against the screen. */
+      const summary = !preferredRetailer && arrangedRecommendations.length
+        ? await summarizeShortlist({
+            openai,
+            model,
+            userMessage,
+            messages,
+            items: arrangedRecommendations,
+            mission: activeMission,
+            currency: selectedMarket.currency,
+            shopperLanguage,
+            lowerPriceRequested: isLowerPriceRequest(userMessage),
+            signal,
+            timeoutMs: Math.min(SUMMARY_TIMEOUT_MS, SUMMARY_DEADLINE_MS - (Date.now() - startedAt)),
+          })
+        : null;
+      const shownRecommendations = summary
+        ? withSummary(recommendations, arrangedRecommendations, summary, (items, pickIndex) =>
+            arrangeRecommendations(items, {
+              request: userMessage,
+              landedPrice,
+              isComparison: comparisonRequest,
+              lowerPriceRequested: isLowerPriceRequest(userMessage),
+              pickIndex,
+            }),
+          )
+        : arrangedRecommendations;
       return {
         /*
          * Delia gets to say it in her own words when she has something to show.
@@ -6199,6 +6564,8 @@ function createShoppingAssistant({
         message:
           structured.malformed && !visibleOfferCount
             ? copy.malformed
+            : summary
+              ? summary.answer
             : inHerOwnWords
               ? structured.answer
               : regionalOutcomeMessage({
@@ -6214,9 +6581,9 @@ function createShoppingAssistant({
         /* Whose words the message is. The panel adds its own "nothing matched
            exactly" line only to hers: the template already says it, and the
            shopper was reading the same sentence twice. */
-        message_source: inHerOwnWords ? "delia" : "template",
-        follow_up: finalFollowUp,
-        recommendations: arrangedRecommendations.map(
+        message_source: summary || inHerOwnWords ? "delia" : "template",
+        follow_up: summary ? summary.follow_up || usefulFollowUp : finalFollowUp,
+        recommendations: shownRecommendations.map(
           ({ _recommendation_index, product_key, ...recommendation }) =>
             recommendation,
         ),

@@ -19,7 +19,7 @@ const MAX_ROWS = 500;
  * an answer produced by the previous rules for another six hours. Increment
  * this whenever the shape or acceptance rules of a Delia answer change.
  */
-const CACHE_VERSION = "v2";
+const CACHE_VERSION = "v3";
 
 /**
  * The question, reduced to what it is actually asking.

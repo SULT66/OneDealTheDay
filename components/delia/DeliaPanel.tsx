@@ -28,6 +28,7 @@ import {
   listConversations,
   loadConversation,
   sendFeedback,
+  shortlistFromTurns,
   type DeliaConversationSummary,
   type DeliaRecommendation,
   type DeliaResult,
@@ -267,15 +268,24 @@ function OfferRow({
               pick is also the cheapest, and that it is not new. */}
           {rec.position_role === "best_overall" && rec.lowest_price && (
             <span className="shrink-0 rounded-full bg-bg px-1.5 py-px text-[0.65rem] font-semibold text-fg-muted">
-              Lowest price
+              {rec.lowest_new ? "Lowest new price" : "Lowest price"}
             </span>
           )}
-          {rec.condition === "refurbished" && (
+          {rec.condition && CONDITION_LABEL[rec.condition] && (
             <span className="shrink-0 rounded-full border border-border px-1.5 py-px text-[0.65rem] font-semibold text-fg-muted">
-              Refurbished
+              {CONDITION_LABEL[rec.condition]}
             </span>
           )}
         </span>
+        {/* Her reason on her pick, and anything about a card worth knowing
+            before the click: a different edition, a bundle, a size the page
+            does not state. */}
+        {(rec.pick_reason || rec.note) && (
+          <span className="mt-1 block text-xs leading-snug text-fg-muted">
+            {rec.pick_reason || rec.note}
+            {rec.pick_reason && rec.note ? ` · ${rec.note}` : ""}
+          </span>
+        )}
       </span>
       <span className="flex shrink-0 items-center gap-1 pt-0.5 text-sm font-bold text-fg tnum">
         {price || (
@@ -353,11 +363,29 @@ function OfferRow({
  * questions and a follow-up at once was a wall on a phone, and the three that
  * answer "which one" are what most people need.
  */
-const GROUP_HEADING: Record<string, string> = {
-  best_overall: "Delia’s pick",
-  cheaper_option: "Cheaper option",
-  lowest_price: "Lowest price",
+const CONDITION_LABEL: Record<string, string> = {
+  refurbished: "Refurbished",
+  pre_owned: "Pre-owned",
+  open_box: "Open box",
 };
+
+/* "Lowest price" is only said where it is true: over a list that also holds
+   something cheaper and second-hand, it is the lowest new price, and the
+   second-hand one gets a group named for what it is. */
+function groupHeading(rec: DeliaRecommendation): string {
+  switch (rec.position_role) {
+    case "best_overall":
+      return "Delia’s pick";
+    case "cheaper_option":
+      return "Cheaper option";
+    case "lowest_price":
+      return rec.lowest_new ? "Lowest new price" : "Lowest price";
+    case "lowest_used_price":
+      return `Lowest ${(CONDITION_LABEL[rec.condition || ""] || "used").toLowerCase()} price`;
+    default:
+      return "Other options";
+  }
+}
 const FIRST_SHOWN = 3;
 
 function OfferGroups({
@@ -378,7 +406,7 @@ function OfferGroups({
     <div className="space-y-2">
       <ul className="space-y-2">
         {shown.map((rec, i) => {
-          const heading = GROUP_HEADING[rec.position_role || ""] || "Other options";
+          const heading = groupHeading(rec);
           const startsGroup = heading !== previousHeading;
           previousHeading = heading;
           return (
@@ -1005,6 +1033,13 @@ export function DeliaPanel() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const restoreFocusRef = useRef<HTMLElement | null>(null);
   const historyRef = useRef<DeliaTurn[]>([]);
+  /* The answers on screen, readable from inside `ask` without making it change
+     on every turn. "Which one is better?" has to be sent with the list it is
+     about. */
+  const turnsRef = useRef<DeliaResult[]>([]);
+  useEffect(() => {
+    turnsRef.current = turns;
+  }, [turns]);
   /* The backend's structured read of what this thread is shopping for. It
      returns one with every reply and accepts it back on the next request, so
      carrying it keeps the subject of the conversation explicit rather than
@@ -1050,6 +1085,7 @@ export function DeliaPanel() {
             /* Stays for the whole conversation: "does it charge wirelessly?"
                is still about the product the shopper opened Delia from. */
             productId: seedProductId ?? undefined,
+            shortlist: shortlistFromTurns(turnsRef.current),
           },
           (event) => {
             if (stillCurrent()) setProgress(event);

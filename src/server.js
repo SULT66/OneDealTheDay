@@ -412,6 +412,7 @@ app.post("/api/shopping-assistant/stream", shoppingAssistantRateLimit, async (re
       shoppingMission: req.body?.shopping_mission,
       excludedOfferUrls: req.body?.excluded_offer_urls,
       skipClarification: Boolean(req.body?.skip_clarification),
+      shortlist: req.body?.shortlist,
       productId: req.body?.product_id,
       marketCode: selectedMarket.code,
       language,
@@ -509,6 +510,7 @@ app.post("/api/shopping-assistant", shoppingAssistantRateLimit, async (req, res)
       shoppingMission:req.body?.shopping_mission,
       excludedOfferUrls:req.body?.excluded_offer_urls,
       skipClarification:Boolean(req.body?.skip_clarification),
+      shortlist:req.body?.shortlist,
       /* Sent when the question came from a product page, so the assistant can
          look that product up rather than search for it by its retailer
          title. */

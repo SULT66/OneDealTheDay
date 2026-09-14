@@ -1594,10 +1594,16 @@ const client = {
     language: "en",
     signal: requestController.signal,
   });
+  /* The summary written over the final shortlist is a third call, and a small
+     one: no tools, no search. What must stay single is the live search. */
   assert.strictEqual(
-    calls.length,
+    calls.filter((call) => call.text?.format?.name !== "delia_shortlist_summary").length,
     2,
     "Assistant did not collapse discovery and rendering into one live-search call",
+  );
+  assert(
+    calls.slice(2).every((call) => call.text?.format?.name === "delia_shortlist_summary" && !call.tools),
+    "Something other than the tool-free summary ran after the live search",
   );
   assert(
     requestOptions.every((options) => options?.signal instanceof AbortSignal),
@@ -1886,7 +1892,7 @@ const client = {
     language: "en",
   });
   assert.strictEqual(
-    emptyCatalogCalls.length,
+    emptyCatalogCalls.filter((call) => call.text?.format?.name !== "delia_shortlist_summary").length,
     2,
     "The empty-catalog flow used more than one live-search response",
   );
