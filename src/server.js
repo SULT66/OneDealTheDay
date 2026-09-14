@@ -2387,7 +2387,9 @@ const secretMatches = (provided, expected) => {
 };
 const admin = (req,res,next) => {
   if (!c.adminKey) return res.status(503).json({error:"Admin access is not configured."});
-  return secretMatches(req.headers["x-admin-key"], c.adminKey)
+  /* Trimmed the same way the configured key is (src/config.js), so a pasted
+     trailing space is not the difference between the two. */
+  return secretMatches(String(req.headers["x-admin-key"] || "").trim(), c.adminKey)
     ? next()
     : res.status(401).json({error:"Unauthorized"});
 };
