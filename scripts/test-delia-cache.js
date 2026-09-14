@@ -30,7 +30,7 @@ assert.strictEqual(
   "the same question written differently produced two keys",
 );
 assert(
-  cacheKey({ message: "candles", marketCode: "us", language: "en" }).startsWith("v2:"),
+  cacheKey({ message: "candles", marketCode: "us", language: "en" }).startsWith("v3:"),
   "A Delia behaviour change did not invalidate answers produced by older rules",
 );
 

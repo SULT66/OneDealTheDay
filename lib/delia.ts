@@ -43,12 +43,20 @@ export type DeliaRecommendation = {
   /* Which offer this is within the shortlist. The backend has worked this out
      all along and nothing was reading it, so a shopper scanning six shops had
      no idea which one Delia would take or which one was simply cheapest. */
-  position_role?: "best_overall" | "cheaper_option" | "lowest_price" | "alternative";
+  position_role?: "best_overall" | "cheaper_option" | "lowest_price" | "lowest_used_price" | "alternative";
   /* Delia's pick that also happens to be the cheapest: one card, two labels. */
   lowest_price?: boolean;
-  /* Restored, renewed or open-box stock, which is never the lowest price unless
-     the shopper asked for it. */
-  condition?: "refurbished";
+  /* The lowest price among new stock only, because something second-hand on
+     the list costs less. The label has to say so to be true. */
+  lowest_new?: boolean;
+  /* Not new, and which kind: they are different promises. Never the lowest
+     price unless the shopper asked for it. */
+  condition?: "refurbished" | "pre_owned" | "open_box";
+  /* Why she would take this one, in a line. Only on her pick. */
+  pick_reason?: string;
+  /* What differs from what was asked, or is worth knowing before clicking:
+     "Digital edition, not disc". */
+  note?: string;
   /* The same product at other shops, folded into this card by the backend's
      duplicate check rather than shown as a second product. */
   other_offers?: {
@@ -81,6 +89,10 @@ export type DeliaResult = {
   /* Whether `message` is Delia's own sentence or the plain template. Absent on
      answers stored before this existed. */
   messageSource?: "delia" | "template";
+  /* An answer about products already shown rather than a new search. It
+     carries no cards: the list it talks about is the one above it. */
+  turnKind?: "discussion";
+  referencedPositions?: number[];
   resultState: "exact_matches" | "closest_alternatives" | "no_match";
   followUp: string;
   recommendations: DeliaRecommendation[];
@@ -142,6 +154,8 @@ export type DeliaProgress = {
 type AssistantResponse = {
   message?: string;
   message_source?: "delia" | "template";
+  turn_kind?: "discussion";
+  referenced_positions?: number[];
   result_state?: DeliaResult["resultState"];
   follow_up?: string;
   recommendations?: DeliaRecommendation[];
@@ -155,6 +169,38 @@ type AssistantResponse = {
 };
 
 export class DeliaError extends Error {}
+
+/** What the panel tells Delia about a product on screen. No links: she talks
+ *  about the list, she does not hand it back. */
+export type DeliaShortlistItem = Pick<
+  DeliaRecommendation,
+  "title" | "retailer" | "price_value" | "currency" | "condition" | "position_role"
+> & { other_offers: { retailer: string; price_value: number | null }[] };
+
+/**
+ * The list the shopper is looking at: the most recent answer that showed
+ * products, in the order shown. A discussion answer has no cards of its own,
+ * so a second "and why not the cheaper one?" still refers to the same list.
+ */
+export function shortlistFromTurns(turns: DeliaResult[]): DeliaShortlistItem[] {
+  for (let index = turns.length - 1; index >= 0; index -= 1) {
+    const shown = [...turns[index].recommendations, ...turns[index].partialOffers];
+    if (!shown.length) continue;
+    return shown.slice(0, 8).map((item) => ({
+      title: item.title,
+      retailer: item.retailer,
+      price_value: item.price_value ?? null,
+      currency: item.currency,
+      condition: item.condition,
+      position_role: item.position_role,
+      other_offers: (item.other_offers || []).map((offer) => ({
+        retailer: offer.retailer,
+        price_value: offer.price_value ?? null,
+      })),
+    }));
+  }
+  return [];
+}
 
 export async function askAssistant(
   transcript: string,
@@ -189,6 +235,12 @@ export async function askAssistant(
      * her. The same product asked for in ordinary words came back first.
      */
     productId?: number | string;
+    /**
+     * The products the conversation is currently looking at, so "which one is
+     * better?" is answered about them instead of starting a new search. See
+     * `shortlistFromTurns`.
+     */
+    shortlist?: DeliaShortlistItem[];
   },
   /*
    * Called as the search reaches each milestone. Optional, and the request
@@ -213,6 +265,7 @@ export async function askAssistant(
       skip_clarification: opts.skipClarification || undefined,
       conversation_id: opts.conversationId || undefined,
       product_id: opts.productId || undefined,
+      shortlist: opts.shortlist?.length ? opts.shortlist : undefined,
     }),
   });
 
@@ -256,6 +309,7 @@ async function askAssistantStreaming(
         skip_clarification: opts.skipClarification || undefined,
         conversation_id: opts.conversationId || undefined,
         product_id: opts.productId || undefined,
+        shortlist: opts.shortlist?.length ? opts.shortlist : undefined,
       }),
     });
   } catch {
@@ -312,6 +366,8 @@ function toResult(transcript: string, data: AssistantResponse): DeliaResult {
     transcript,
     message: data.message || "",
     messageSource: data.message_source,
+    turnKind: data.turn_kind,
+    referencedPositions: data.referenced_positions || [],
     resultState: data.result_state || "no_match",
     followUp: data.follow_up || "",
     recommendations: data.recommendations || [],

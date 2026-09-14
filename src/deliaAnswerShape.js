@@ -123,7 +123,9 @@ function namesUnshownProduct(text, { shown = [], withheld = [] } = {}) {
       const raw = words[index].replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9]+$/g, "");
       /* A name starts with a capital, or is a model number mixing letters and
          digits. Hyphenated names are judged by their parts. */
-      for (const part of raw.replace(/['’]s$/i, "").split(/[-/&]+/)) {
+      /* "I'd", "I'll" and "Sony's" are not names; "BLACK+DECKER" is judged as
+         BLACK and DECKER, the way a title's words are counted. */
+      for (const part of raw.replace(/['’](?:s|d|ll|m|re|ve)$/i, "").split(/[^A-Za-z0-9]+/)) {
         if (part.length < 2) continue;
         const looksLikeName = /^[A-Z]/.test(part) || (/[A-Za-z]/.test(part) && /\d/.test(part));
         if (!looksLikeName) continue;
@@ -189,15 +191,29 @@ function pickFromNarrative(text, items) {
  * it was shown between new consoles with nothing to say it was not new — as the
  * second-cheapest answer to "cheapest PS5".
  */
-function isRefurbishedOffer(item) {
+/*
+ * Which kind of not-new it is. "Pre-owned" was labelled "Refurbished", and they
+ * are different promises: a refurbished console has been checked and usually
+ * carries a warranty, a pre-owned one is simply second-hand.
+ *
+ * @returns {"" | "refurbished" | "pre_owned" | "open_box"}
+ */
+function offerCondition(item) {
   const title = String(item?.title || "");
-  const condition = String(item?.condition || "");
-  if (/\b(refurbished|renewed|restored|reconditioned|pre-?owned|open[\s-]?box)\b/i.test(`${title} ${condition}`)) {
-    return true;
-  }
+  const stated = String(item?.condition || "");
+  const text = `${title} ${stated}`;
+  if (/\bopen[\s_-]?box\b/i.test(text)) return "open_box";
+  if (/\b(refurbished|renewed|restored|reconditioned)\b/i.test(text)) return "refurbished";
+  if (/\b(pre[\s_-]?owned|second[\s-]?hand)\b/i.test(text)) return "pre_owned";
   /* "Used" only where it describes the item, not "used for gaming". */
-  return /^used\b/i.test(title) || /[(\-–—:]\s*used\s*[)\-–—:]?\s*$/i.test(title) ||
-    /\bused\b/i.test(condition);
+  if (/^used\b/i.test(title) || /[(\-–—:,]\s*used\s*[)\-–—:]?\s*$/i.test(title) || /\bused\b/i.test(stated)) {
+    return "pre_owned";
+  }
+  return "";
+}
+
+function isRefurbishedOffer(item) {
+  return offerCondition(item) !== "";
 }
 
 function wantsUsedCondition(request) {
@@ -234,14 +250,27 @@ function wantsUsedCondition(request) {
 function arrangeRecommendations(items, options) {
   const list = [...(items || [])];
   if (!list.length) return [];
-  const { request = "", narrative = "", landedPrice, isComparison = false, lowerPriceRequested = false } = options;
+  const {
+    request = "",
+    narrative = "",
+    landedPrice,
+    isComparison = false,
+    lowerPriceRequested = false,
+    /* Set when Delia has already said which one she would take, by position in
+       `items`. Wins over reading it out of her sentence. */
+    pickIndex: chosenIndex = -1,
+  } = options;
   const priceOf = (item) => {
     const price = Number(landedPrice(item));
     return Number.isFinite(price) && price > 0 ? price : 0;
   };
   const allowUsed = wantsUsedCondition(request);
   const eligibleForPriceRoles = (item) => allowUsed || !isRefurbishedOffer(item);
-  const withCondition = (item) => (isRefurbishedOffer(item) ? { ...item, condition: "refurbished" } : item);
+  const withCondition = (item) => {
+    const condition = offerCondition(item);
+    return condition ? { ...item, condition } : item;
+  };
+  const anyNotNew = !allowUsed && list.some(isRefurbishedOffer);
 
   const cheapestIndex = () => {
     let found = -1;
@@ -260,9 +289,22 @@ function arrangeRecommendations(items, options) {
     }));
   }
 
-  const named = narrative ? pickFromNarrative(narrative, list) : -1;
+  const named = Number.isInteger(chosenIndex) && chosenIndex >= 0 && chosenIndex < list.length
+    ? chosenIndex
+    : narrative ? pickFromNarrative(narrative, list) : -1;
   const pickIndex = named >= 0 ? named : lowerPriceRequested ? -1 : 0;
   const lowestIndex = cheapestIndex();
+  /* A pre-owned console at $589 under a new one at $649 is the real lowest
+     price, and hiding it among "Other options" made the new one look like a
+     mistake. It gets its own group, named for what it is. */
+  const lowestNewPrice = lowestIndex >= 0 ? priceOf(list[lowestIndex]) : Infinity;
+  let lowestUsedIndex = -1;
+  if (anyNotNew) {
+    list.forEach((item, index) => {
+      if (!isRefurbishedOffer(item) || !priceOf(item) || priceOf(item) >= lowestNewPrice) return;
+      if (lowestUsedIndex < 0 || priceOf(item) < priceOf(list[lowestUsedIndex])) lowestUsedIndex = index;
+    });
+  }
   const pickPrice = pickIndex >= 0 ? priceOf(list[pickIndex]) : 0;
   const cheaperIndex = pickIndex >= 0 && pickPrice
     ? list.findIndex(
@@ -275,7 +317,7 @@ function arrangeRecommendations(items, options) {
       )
     : -1;
 
-  const leading = [pickIndex, cheaperIndex, lowestIndex].filter(
+  const leading = [pickIndex, cheaperIndex, lowestIndex, lowestUsedIndex].filter(
     (index, position, all) => index >= 0 && all.indexOf(index) === position,
   );
   const rest = list
@@ -286,13 +328,91 @@ function arrangeRecommendations(items, options) {
 
   return [...leading, ...rest].map((index) => {
     const item = withCondition(list[index]);
+    /* "Lowest price" over a list that also holds cheaper second-hand stock is
+       not true, so it says new. */
+    const newOnly = anyNotNew ? { lowest_new: true } : {};
     if (index === pickIndex) {
-      return { ...item, position_role: "best_overall", lowest_price: index === lowestIndex };
+      return {
+        ...item,
+        position_role: "best_overall",
+        lowest_price: index === lowestIndex,
+        ...(index === lowestIndex ? newOnly : {}),
+      };
     }
     if (index === cheaperIndex) return { ...item, position_role: "cheaper_option" };
-    if (index === lowestIndex) return { ...item, position_role: "lowest_price" };
+    if (index === lowestIndex) return { ...item, position_role: "lowest_price", ...newOnly };
+    if (index === lowestUsedIndex) return { ...item, position_role: "lowest_used_price" };
     return { ...item, position_role: "alternative" };
   });
+}
+
+/* -------------------------------------------------------- price facts */
+
+/**
+ * The arithmetic about a shortlist, done here rather than by the model.
+ *
+ * "Walmart is $24 cheaper, about 9.6% less" is what a shopper comparing prices
+ * wants to read, and a language model asked to subtract two prices will now
+ * and then get it wrong. So every number Delia says about prices is worked out
+ * here and handed to her as a fact to repeat.
+ *
+ * @param {object[]} items in the order the shopper sees them
+ * @param {(item: object) => number} landedPrice
+ * @returns {{products: object[], facts: string[]}}
+ */
+function shortlistPriceFacts(items, landedPrice, { currency = "USD" } = {}) {
+  const list = items || [];
+  const money = (value) => {
+    const amount = Number(value).toFixed(2);
+    return currency === "USD" ? `$${amount}` : `${amount} ${currency}`;
+  };
+  const priceOf = (item) => {
+    const price = Number(landedPrice(item));
+    return Number.isFinite(price) && price > 0 ? price : 0;
+  };
+  const products = list.map((item, index) => ({
+    position: index + 1,
+    title: String(item?.title || "").slice(0, 160),
+    retailer: String(item?.retailer || "").slice(0, 60),
+    price: priceOf(item) ? money(priceOf(item)) : "price not shown",
+    condition: offerCondition(item) || "new",
+    group: item?.position_role || "",
+    also_at: (item?.other_offers || [])
+      .slice(0, 3)
+      .map((offer) =>
+        [offer?.retailer, Number(offer?.price_value) > 0 ? money(offer.price_value) : ""].filter(Boolean).join(" "),
+      ),
+  }));
+  const facts = [];
+  const priceAt = (product) => priceOf(list[product.position - 1]);
+  const priced = products.filter((product) => priceAt(product));
+  const byPrice = [...priced].sort((left, right) => priceAt(left) - priceAt(right));
+  const cheapestNew = byPrice.find((product) => product.condition === "new");
+  const cheapestUsed = byPrice.find((product) => product.condition !== "new");
+  if (cheapestNew) {
+    facts.push(`Lowest new price: #${cheapestNew.position} at ${cheapestNew.retailer}, ${cheapestNew.price}.`);
+  }
+  if (cheapestUsed && (!cheapestNew || priceAt(cheapestUsed) < priceAt(cheapestNew))) {
+    facts.push(
+      `Lowest price overall is not new: #${cheapestUsed.position} (${cheapestUsed.condition.replace("_", "-")}) at ${cheapestUsed.retailer}, ${cheapestUsed.price}.`,
+    );
+  }
+  for (let left = 0; left < priced.length; left += 1) {
+    for (let right = left + 1; right < priced.length; right += 1) {
+      const [a, b] = [priced[left], priced[right]];
+      if (priceAt(a) === priceAt(b)) {
+        facts.push(`#${a.position} and #${b.position} cost the same.`);
+        continue;
+      }
+      const [cheap, dear] = priceAt(a) < priceAt(b) ? [a, b] : [b, a];
+      const gap = priceAt(dear) - priceAt(cheap);
+      const percent = (gap / priceAt(dear)) * 100;
+      facts.push(
+        `#${cheap.position} is ${money(gap)} cheaper than #${dear.position} (about ${percent.toFixed(percent < 10 ? 1 : 0)}% less).`,
+      );
+    }
+  }
+  return { products, facts: facts.slice(0, 24) };
 }
 
 /* ------------------------------------------------------------- counts */
@@ -380,6 +500,8 @@ module.exports = {
   arrangeRecommendations,
   isRefurbishedOffer,
   measurementSizeMatch,
+  offerCondition,
+  shortlistPriceFacts,
   namesUnshownProduct,
   outcomeCounts,
   pickFromNarrative,
