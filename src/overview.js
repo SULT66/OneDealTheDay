@@ -34,10 +34,17 @@ function overview(db, { days = 30, now = Date.now() } = {}) {
        COUNT(*) AS total,
        SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) AS active,
        SUM(CASE WHEN status = 'unsubscribed' THEN 1 ELSE 0 END) AS unsubscribed,
-       SUM(CASE WHEN created_at >= ? THEN 1 ELSE 0 END) AS joined_in_window
+       SUM(CASE WHEN created_at >= ? THEN 1 ELSE 0 END) AS joined_in_window,
+       SUM(CASE WHEN status = 'unsubscribed' AND unsubscribed_at >= ? THEN 1 ELSE 0 END) AS left_in_window
      FROM subscribers`,
     since,
+    since,
   );
+
+  /* People who asked to be reminded about one particular drop, from its own
+     page. A different promise from the subscriber list, which is told about
+     every drop, so it is counted separately and by person, not by drop. */
+  const oneDropReminders = one("SELECT COUNT(DISTINCT lower(email)) AS people FROM live_drop_reminders");
 
   const accounts = one(
     `SELECT
@@ -174,6 +181,10 @@ function overview(db, { days = 30, now = Date.now() } = {}) {
       subscribers: number(audience.active),
       unsubscribed: number(audience.unsubscribed),
       subscribedInWindow: number(audience.joined_in_window),
+      /* Left within the window. Unsubscribes from before the date was
+         recorded carry no date and appear only in the total. */
+      unsubscribedInWindow: number(audience.left_in_window),
+      oneDropReminderPeople: number(oneDropReminders.people),
       accounts: number(accounts.total),
       accountsInWindow: number(accounts.joined_in_window),
       accountsViaGoogle: number(accounts.via_google),

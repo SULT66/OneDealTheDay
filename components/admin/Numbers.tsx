@@ -35,6 +35,9 @@ type Overview = {
     subscribers: number;
     unsubscribed: number;
     subscribedInWindow: number;
+    /* Optional: absent on a backend deployed before they were counted. */
+    unsubscribedInWindow?: number;
+    oneDropReminderPeople?: number;
     accounts: number;
     accountsInWindow: number;
     accountsViaGoogle: number;
@@ -166,16 +169,42 @@ export function Numbers({ adminKey }: { adminKey: string }) {
         </>
       )}
 
+      {/*
+        * Who will hear about the next drop.
+        *
+        * This was one card called "Email subscribers", which did not say what
+        * those people receive. The list gets exactly two things: a welcome, and
+        * an announcement of every Live Drop. So it is named for that, beside
+        * the people who have left it and the people who asked about just one
+        * drop, which are different promises and were easy to mix up.
+        */}
+      <Group title="Told about every Live Drop">
+        <Stat
+          label="Want every drop"
+          value={count(audience.subscribers)}
+          note={`+${count(audience.subscribedInWindow)} joined in ${days} days`}
+        />
+        <Stat
+          label="Unsubscribed"
+          value={count(audience.unsubscribed)}
+          note={
+            audience.unsubscribedInWindow == null
+              ? "all time"
+              : `all time · ${count(audience.unsubscribedInWindow)} in ${days} days`
+          }
+        />
+        <Stat
+          label="Asked about one drop only"
+          value={audience.oneDropReminderPeople == null ? "—" : count(audience.oneDropReminderPeople)}
+          note="pressed Remind me on a drop page"
+        />
+      </Group>
+
       <Group title="People">
         <Stat
           label="People we could recognise"
           value={count(data.engagedSessions)}
           note={`in ${days} days · ${count(outbound.unattributed)} clicks had no one attached`}
-        />
-        <Stat
-          label="Email subscribers"
-          value={count(audience.subscribers)}
-          note={`${count(audience.subscribedInWindow)} new · ${count(audience.unsubscribed)} left`}
         />
         <Stat
           label="Accounts"
