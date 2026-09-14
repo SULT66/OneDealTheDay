@@ -1,5 +1,15 @@
 /** Short disclosure shared by pages and the independently scrolling chat. */
-export function AffiliateNotice({ market, language = "en" }: { market: string; language?: string }) {
+export function AffiliateNotice({
+  market,
+  language = "en",
+  compact = false,
+}: {
+  market: string;
+  language?: string;
+  /* Smaller, for a footnote under Delia's composer, where it stays on screen
+     however far the conversation scrolls. */
+  compact?: boolean;
+}) {
   const copy: Record<string, [string, string]> = {
     en: ["We may earn a commission when you click some retailer links or make a purchase, at no extra cost to you.", "How we earn"],
     es: ["Podemos recibir una comisión cuando haces clic en algunos enlaces de tiendas o compras, sin coste adicional para ti.", "Cómo ganamos dinero"],
@@ -8,7 +18,7 @@ export function AffiliateNotice({ market, language = "en" }: { market: string; l
   };
   const [text, label] = copy[language] ?? copy.en;
   return (
-    <p className="text-sm leading-relaxed text-fg-muted">
+    <p className={compact ? "text-xs leading-relaxed text-fg-subtle" : "text-sm leading-relaxed text-fg-muted"}>
       {text}{" "}
       <a href={`/${market}/affiliate-disclosure`} className="font-medium underline underline-offset-4 hover:text-fg">{label}</a>
     </p>

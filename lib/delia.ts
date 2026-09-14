@@ -314,6 +314,9 @@ export type DeliaConversationSummary = {
   market: string;
   updated_at: string;
   questions: number;
+  /* Present only in search results: the words around the match, when the match
+     was in the conversation rather than in its title. */
+  snippet?: string;
 };
 
 /**
@@ -322,9 +325,14 @@ export type DeliaConversationSummary = {
  * Returns nothing for a visitor with no account rather than throwing: not
  * being signed in is the ordinary case, not a failure, and the sidebar simply
  * has nothing to show.
+ *
+ * With a query, only the conversations that mention it — in the title or
+ * anywhere in what was said.
  */
-export async function listConversations(): Promise<DeliaConversationSummary[]> {
-  const res = await fetch("/api/delia/conversations").catch(() => null);
+export async function listConversations(query = ""): Promise<DeliaConversationSummary[]> {
+  const term = query.trim();
+  const url = term ? `/api/delia/conversations?q=${encodeURIComponent(term)}` : "/api/delia/conversations";
+  const res = await fetch(url).catch(() => null);
   if (!res || !res.ok) return [];
   const data = (await res.json().catch(() => ({}))) as {
     conversations?: DeliaConversationSummary[];

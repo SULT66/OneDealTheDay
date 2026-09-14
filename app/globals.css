@@ -180,6 +180,21 @@ body {
   border-radius: 4px;
 }
 
+/*
+ * The one exception: a text field that shows its focus on the box around it.
+ *
+ * The rule above is unlayered, so it beats every Tailwind utility no matter how
+ * specific — outline-none on a field did nothing at all. On Delia's composer
+ * that meant a heavy black ring around the whole box the moment you clicked
+ * into it, on top of the caret that already says where you are typing.
+ *
+ * Focus is not removed, it is moved: anything using this class must style its
+ * container with focus-within, and visibly so. It is not a way to hide focus.
+ */
+.focus-self:focus-visible {
+  outline: none;
+}
+
 /* Long product titles and eBay seller handles must reflow, not overflow. */
 .wrap-anywhere {
   overflow-wrap: anywhere;

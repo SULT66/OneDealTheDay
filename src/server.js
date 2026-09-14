@@ -78,6 +78,7 @@ const {
 } = require("./retailerLinks");
 const { storefrontUrl } = require("./storefrontLinks");
 const { hostLabel, verifyOutbound, withSignedLinks } = require("./outboundLinks");
+const { matchConversations, normalizeQuery: normalizeConversationQuery } = require("./deliaConversationSearch");
 const { labelClick, liveDropLabel } = require("./clickLabels");
 const {
   challengeResponse: ebayChallengeResponse,
@@ -1077,7 +1078,16 @@ app.get("/api/delia/conversations", requireUser, (req, res) => {
       (SELECT COUNT(*) FROM delia_messages m WHERE m.conversation_id=c.id AND m.role='user') AS questions
     FROM delia_conversations c
     WHERE c.user_id=? ORDER BY c.updated_at DESC, c.id DESC LIMIT ?`).all(req.user.id, KEPT_CONVERSATIONS);
-  res.json({conversations: rows});
+
+  /* ?q= searches what was said, not only the title. The message text is read
+     only when there is a query, and only for the conversations already listed,
+     which are this user's own. See src/deliaConversationSearch.js. */
+  const query = normalizeConversationQuery(req.query.q);
+  if (!query || !rows.length) return res.json({conversations: rows});
+  const messages = db.prepare(`SELECT conversation_id, content FROM delia_messages
+    WHERE conversation_id IN (${rows.map(() => "?").join(",")}) ORDER BY conversation_id, id`)
+    .all(...rows.map(row => row.id));
+  res.json({conversations: matchConversations(rows, messages, query)});
 });
 
 app.get("/api/delia/conversations/:id", requireUser, (req, res) => {
