@@ -15,7 +15,7 @@ const { refreshProducts, localDate } = require("./refresh");
 const { runLinkHealthCheck } = require("./linkHealth");
 const {
   dropState, hostGreeting, hostRevealLine, presentDrop,
-  sendDueReminders, sendStagedReminders, announceDropToSubscribers,
+  sendDueReminders, sendStagedReminders, announceDropToSubscribers, sendLiveNowNotices,
 } = require("./liveDrop");
 const { sendDuePriceDrops } = require("./priceWatches");
 const { cacheKey, readCachedAnswer, writeCachedAnswer } = require("./deliaCache");
@@ -61,7 +61,7 @@ const {
 const renderShoppingAssistantPanel = require("./shoppingAssistantPanel");
 const {
   welcomeEmail,
-  liveDropSaveTheDateEmail, liveDropStartingSoonEmail, liveDropAnnouncementEmail, priceDropEmail,
+  liveDropSaveTheDateEmail, liveDropStartingSoonEmail, liveDropAnnouncementEmail, liveDropLiveNowEmail, priceDropEmail,
   priceWatchStartedEmail,
   passwordResetEmail, subscriptionEmail, clubWaitlistEmail, liveDropReminderEmail, deliveryTestEmail } = require("./mailer");
 const { emailHealth } = require("./emailHealth");
@@ -4315,6 +4315,16 @@ cron.schedule(
           : ""),
       });
       if (announced) console.log(`[live-drop] announced to ${announced} subscriber${announced === 1 ? "" : "s"}`);
+
+      /* The moment it opens: everyone who asked, and the subscriber list. */
+      const liveNow = await sendLiveNowNotices({
+        db,
+        sendLiveNow: liveDropLiveNowEmail,
+        unsubscribeUrlFor: (subscriber) => (subscriber?.unsubscribe_token
+          ? `${SITE}/unsubscribe?token=${encodeURIComponent(subscriber.unsubscribe_token)}`
+          : ""),
+      });
+      if (liveNow) console.log(`[live-drop] told ${liveNow} people the drop is live`);
 
       /* Watched prices, on the same minute. The refresh has already written
          today's prices by the time this runs; nothing else reads them for

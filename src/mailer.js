@@ -268,6 +268,31 @@ const unsubscribeFooter = (unsubscribeUrl, because) => (unsubscribeUrl
   ? `${escapeHtml(because)} <a href="${escapeHtml(unsubscribeUrl)}" style="color:#9ca3af">Unsubscribe</a> — one click, no sign-in.`
   : "");
 
+/*
+ * The drop is open right now. Sent in its first minutes to everyone who asked
+ * about it and to the subscriber list: see sendLiveNowNotices.
+ *
+ * The price is not in it, even though it is public by now. The page shows it
+ * with the clock beside it, and an email read ten minutes later would quote a
+ * price that has already gone.
+ */
+const liveDropLiveNowEmail = ({ email, title, market, asked, unsubscribeUrl, brand, retailerName, retailPrice, currency, imageUrl }) => sendEmail({
+  to: email,
+  subject: `Live now: ${title}`,
+  unsubscribeUrl,
+  html: dropEmailLayout({
+    eyebrow: "Live now",
+    heading: "The Live Drop is open",
+    title, brand, retailerName, retailPrice, currency, imageUrl,
+    line: "The price is revealed on the page right now, and it stays live for ten minutes only.",
+    ctaLabel: "Open the drop now",
+    ctaHref: dropUrl(market),
+    footer: asked
+      ? "You asked to be reminded about this drop. There is nothing else to unsubscribe from."
+      : unsubscribeFooter(unsubscribeUrl, "You are receiving this because you signed up to hear about every Live Drop."),
+  }),
+});
+
 const liveDropSaveTheDateEmail = ({ email, title, market, startsAt, unsubscribeUrl, brand, retailerName, retailPrice, currency, imageUrl }) => sendEmail({
   to: email,
   subject: `Tomorrow: ${title}`,
@@ -372,4 +397,4 @@ const priceDropEmail = ({ email, title, market, dealPath, was, now, currency, un
     </div>`
 });
 
-module.exports = { welcomeEmail, liveDropSaveTheDateEmail, liveDropStartingSoonEmail, liveDropAnnouncementEmail, priceDropEmail, priceWatchStartedEmail, passwordResetEmail, subscriptionEmail, clubWaitlistEmail, liveDropReminderEmail, deliveryTestEmail };
+module.exports = { welcomeEmail, liveDropLiveNowEmail, liveDropSaveTheDateEmail, liveDropStartingSoonEmail, liveDropAnnouncementEmail, priceDropEmail, priceWatchStartedEmail, passwordResetEmail, subscriptionEmail, clubWaitlistEmail, liveDropReminderEmail, deliveryTestEmail };
