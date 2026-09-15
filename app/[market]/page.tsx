@@ -9,7 +9,7 @@ import {
 import { countryName, getLanguage, t } from "@/lib/i18n";
 import { CategoryIcon } from "@/components/ui/CategoryIcon";
 import { SectionHeader } from "@/components/site/SectionHeader";
-import { InterestSignup } from "@/components/site/InterestSignup";
+import { LiveDropSignup } from "@/components/site/LiveDropSignup";
 import { DeliaTrigger } from "@/components/delia/DeliaTrigger";
 import { DealCard } from "@/components/deal/DealCard";
 import { NextLiveDrop } from "@/components/live/NextLiveDrop";
@@ -229,7 +229,7 @@ export default async function MarketHome({ params }: PageProps<"/[market]">) {
           #subscribe, on any other page it's a normal navigation that lands
           here already scrolled into view. */}
       <section id="subscribe" className="mt-20 scroll-mt-32">
-        <InterestSignup categories={categories} market={market} />
+        <LiveDropSignup market={market} source="homepage" />
       </section>
 
       {/* Follows the visitor down every page now — the large hero circle that

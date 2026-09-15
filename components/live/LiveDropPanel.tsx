@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { formatPrice } from "@/lib/format";
 import { DeliaTrigger } from "@/components/delia/DeliaTrigger";
+import { LiveDropSignup } from "@/components/site/LiveDropSignup";
 import { analyticsSessionId, recordLiveDropEvent } from "@/lib/analyticsSession";
 import { BroadcastVideo, useLiveBroadcast } from "./LiveBroadcast";
 
@@ -222,9 +223,14 @@ export function LiveDropPanel({
         <h1 className="text-2xl font-bold text-fg sm:text-3xl">No drop scheduled</h1>
         <p className="mt-3 max-w-prose text-sm leading-relaxed text-fg-muted">
           A Live Drop is one product, at one price, for ten minutes. There is not one
-          on the calendar right now. The daily drop is still worth a look while you
-          wait.
+          on the calendar right now.
         </p>
+        {/* Somebody who followed a link here between drops is the person most
+            likely to want the next one, and this page used to let them leave
+            with nothing. */}
+        <div className="mt-6 max-w-2xl">
+          <LiveDropSignup market={market} variant="inline" source="live-page" />
+        </div>
       </Frame>
     );
   }
@@ -352,6 +358,14 @@ export function LiveDropPanel({
           </div>
 
           {drop.terms && <p className="mt-5 text-xs leading-relaxed text-fg-subtle">{drop.terms}</p>}
+
+          {/* Arrived after it closed: the next one is the only thing left to
+              offer, and it is worth offering. */}
+          {finished && (
+            <div className="mt-6">
+              <LiveDropSignup market={market} variant="inline" source="live-page" />
+            </div>
+          )}
         </div>
       </div>
     </Frame>

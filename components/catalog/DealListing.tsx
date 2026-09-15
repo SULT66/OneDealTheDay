@@ -8,7 +8,7 @@ import { DealCard } from "@/components/deal/DealCard";
 import { DeliaTrigger } from "@/components/delia/DeliaTrigger";
 import { FilterPanel, type FilterCopy } from "./FilterPanel";
 import { FilterShell } from "./FilterShell";
-import { InterestSignup } from "@/components/site/InterestSignup";
+import { LiveDropSignup } from "@/components/site/LiveDropSignup";
 import { Pagination } from "./Pagination";
 
 /* Two dozen fits three rows on a laptop and reaches the bottom on a phone
@@ -206,7 +206,7 @@ export async function DealListing({
               row of cards it read as one more card. */}
           {deals.length > 0 && (
             <div className="mt-12">
-              <InterestSignup categories={[]} market={market} />
+              <LiveDropSignup market={market} source="listing" />
             </div>
           )}
 

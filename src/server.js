@@ -3030,6 +3030,9 @@ app.post("/api/subscribe", authRateLimit, async (req,res) => {
     return res.status(400).json({error:"Enter a valid email address."});
   }
   const now = new Date().toISOString();
+  /* Which form it came from, so the one that works can be told from the one
+     that does not. A short fixed list; anything else is the homepage. */
+  const signupSource = ["homepage", "listing", "live-page"].includes(req.body?.source) ? req.body.source : "homepage";
   /* Minted once and kept, so every email this address ever receives carries
      the same working link — including the ones sent after they resubscribe. */
   const unsubscribeToken = crypto.randomBytes(24).toString("base64url");
@@ -3037,9 +3040,12 @@ app.post("/api/subscribe", authRateLimit, async (req,res) => {
     INSERT INTO subscribers(email,categories,status,source,market,unsubscribe_token,created_at,updated_at)
     VALUES(?,?,?,?,?,?,?,?)
     ON CONFLICT(email) DO UPDATE SET
-      categories=excluded.categories,status='active',market=excluded.market,updated_at=excluded.updated_at,
+      /* The Live Drop form sends no categories, and signing up again from it
+         must not wipe the ones an earlier form recorded. */
+      categories=CASE WHEN excluded.categories='[]' THEN subscribers.categories ELSE excluded.categories END,
+      status='active',market=excluded.market,updated_at=excluded.updated_at,
       unsubscribe_token=CASE WHEN subscribers.unsubscribe_token='' THEN excluded.unsubscribe_token ELSE subscribers.unsubscribe_token END
-  `).run(email, JSON.stringify(categories), "active", "homepage", selectedMarket.code, unsubscribeToken, now, now);
+  `).run(email, JSON.stringify(categories), "active", signupSource, selectedMarket.code, unsubscribeToken, now, now);
   const storedToken = db.prepare("SELECT unsubscribe_token AS token FROM subscribers WHERE email=?").get(email)?.token;
   let emailSent = false;
   try {
