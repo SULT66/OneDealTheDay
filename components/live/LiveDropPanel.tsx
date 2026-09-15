@@ -747,84 +747,116 @@ function ProductStillMissing({ inUse }: { inUse?: boolean }) {
   );
 }
 
-type TavusConversation = {
-  conversation_id: string;
-  conversation_url: string;
-};
-
-type HostChatMessage = {
+type SharedChatMessage = {
   id: string;
-  role: "viewer" | "chloe";
+  kind: "viewer" | "chloe";
+  author: string;
   text: string;
+  at: number;
+  sent?: boolean;
 };
 
+type ServerChatMessage = { id: number; author: string; text: string; status: string; created_at: string };
+
+/*
+ * Chloe, shared by everybody watching, and the chat they share.
+ *
+ * She used to be a private call per viewer, which made ten viewers ten
+ * different shows. Now every viewer joins the same conversation to watch,
+ * with no camera or microphone, and questions go into one chat on this site
+ * that everybody sees. They reach Chloe through the host console, never from
+ * a viewer's browser: see src/liveHost.js.
+ *
+ * The chat is readable before joining, so somebody deciding whether to watch
+ * can see what people are asking.
+ */
 function TavusHost({ market, drop }: { market: string; drop: LiveDropView }) {
-  const [conversation, setConversation] = useState<TavusConversation | null>(null);
+  const [conversationUrl, setConversationUrl] = useState("");
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState("");
   const [joined, setJoined] = useState(false);
   const [needsPlay, setNeedsPlay] = useState(false);
   const [question, setQuestion] = useState("");
-  const [messages, setMessages] = useState<HostChatMessage[]>([]);
-  const conversationRef = useRef<TavusConversation | null>(null);
+  const [postError, setPostError] = useState("");
+  const [posting, setPosting] = useState(false);
+  const [chat, setChat] = useState<SharedChatMessage[]>([]);
   const callRef = useRef<ReturnType<typeof DailyIframe.createCallObject> | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const seenEventsRef = useRef(new Set<string>());
-  const messageCounterRef = useRef(0);
+  const lastIdRef = useRef(0);
+  const listRef = useRef<HTMLDivElement | null>(null);
 
-  const end = useCallback(async () => {
-    const active = conversationRef.current;
-    if (!active) return;
-    conversationRef.current = null;
-    setConversation(null);
-    await fetch(`/api/integrations/tavus/conversations/${encodeURIComponent(active.conversation_id)}/end`, {
-      method:"POST",
-      keepalive:true,
-    }).catch(() => null);
+  const addMessages = useCallback((incoming: SharedChatMessage[]) => {
+    if (!incoming.length) return;
+    setChat((current) => {
+      const known = new Set(current.map((message) => message.id));
+      const merged = [...current, ...incoming.filter((message) => !known.has(message.id))];
+      return merged.sort((left, right) => left.at - right.at).slice(-80);
+    });
   }, []);
 
-  useEffect(() => () => {
-    const active = conversationRef.current;
-    if (!active) return;
-    conversationRef.current = null;
-    fetch(`/api/integrations/tavus/conversations/${encodeURIComponent(active.conversation_id)}/end`, {
-      method:"POST",
-      keepalive:true,
-    }).catch(() => null);
-  }, []);
-
-  /*
-   * Receive-only CVI: the viewer never publishes a camera or microphone track.
-   * Typed questions go over Daily's data channel as Tavus
-   * conversation.respond interactions, while Chloe's remote audio/video is the
-   * only media rendered. This is the live-shopping shape: watch and type, not
-   * a two-way video call.
-   */
+  /* Everybody's questions, every few seconds, for as long as the drop is on. */
   useEffect(() => {
-    if (!conversation) return;
+    let cancelled = false;
+    const poll = async () => {
+      const response = await fetch(
+        `/api/live/chat?drop_key=${encodeURIComponent(drop.drop_key)}&after=${lastIdRef.current}`,
+      ).catch(() => null);
+      if (cancelled || !response?.ok) return;
+      const body = (await response.json().catch(() => ({}))) as { messages?: ServerChatMessage[] };
+      const rows = body.messages || [];
+      if (!rows.length) {
+        /* Status changes (sent to Chloe) arrive on the next full read. */
+        return;
+      }
+      lastIdRef.current = Math.max(lastIdRef.current, ...rows.map((row) => row.id));
+      addMessages(
+        rows.map((row) => ({
+          id: `m${row.id}`,
+          kind: "viewer",
+          author: row.author,
+          text: row.text,
+          at: Date.parse(row.created_at),
+          sent: row.status === "sent",
+        })),
+      );
+    };
+    void poll();
+    const timer = setInterval(poll, 3000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [drop.drop_key, addMessages]);
 
+  useEffect(() => {
+    const list = listRef.current;
+    if (list) list.scrollTop = list.scrollHeight;
+  }, [chat.length]);
+
+  /* Receive-only: this browser never publishes a camera or a microphone, and
+     never sends Chloe anything. It only watches and reads her captions. */
+  useEffect(() => {
+    if (!conversationUrl) return;
     setJoined(false);
     setNeedsPlay(false);
     seenEventsRef.current.clear();
-    const call = DailyIframe.createCallObject({
-      audioSource:false,
-      videoSource:false,
-    });
+    const call = DailyIframe.createCallObject({ audioSource: false, videoSource: false });
     callRef.current = call;
 
     const syncRemoteMedia = () => {
-      const remote = Object.values(call.participants()).find((participant) => !participant.local);
-      const videoTrack = remote?.tracks.video?.persistentTrack;
-      const audioTrack = remote?.tracks.audio?.persistentTrack;
-      const tracks = [videoTrack, audioTrack].filter(
+      /* The host console joins the same room without media; Chloe is the one
+         participant publishing video. */
+      const presenter = Object.values(call.participants()).find(
+        (participant) => !participant.local && participant.tracks.video?.persistentTrack,
+      );
+      const tracks = [presenter?.tracks.video?.persistentTrack, presenter?.tracks.audio?.persistentTrack].filter(
         (track): track is MediaStreamTrack => Boolean(track),
       );
       const element = videoRef.current;
       if (!element || !tracks.length) return;
       const currentIds = new Set(
-        element.srcObject instanceof MediaStream
-          ? element.srcObject.getTracks().map((track) => track.id)
-          : [],
+        element.srcObject instanceof MediaStream ? element.srcObject.getTracks().map((track) => track.id) : [],
       );
       if (tracks.every((track) => currentIds.has(track.id))) return;
       element.srcObject = new MediaStream(tracks);
@@ -841,10 +873,12 @@ function TavusHost({ market, drop }: { market: string; drop: LiveDropView }) {
       const role = String(payload.properties?.role || "").toLowerCase();
       const text = String(payload.properties?.speech || payload.properties?.text || "").trim();
       if (!text || !["pal", "replica"].includes(role)) return;
-      const id = String(payload.seq ?? `${role}:${text}`);
+      const id = `c${String(payload.seq ?? text)}`;
       if (seenEventsRef.current.has(id)) return;
       seenEventsRef.current.add(id);
-      setMessages((current) => [...current.slice(-7), {id, role:"chloe", text}]);
+      /* The arrival time only places her caption among the chat lines. Nothing
+         about the drop's state is ever read from this browser's clock. */
+      addMessages([{ id, kind: "chloe", author: "Chloe", text, at: new Date().getTime() }]);
     };
 
     call.on("joined-meeting", () => {
@@ -855,90 +889,95 @@ function TavusHost({ market, drop }: { market: string; drop: LiveDropView }) {
     call.on("participant-updated", syncRemoteMedia);
     call.on("app-message", receiveMessage);
     call.on("error", () => setError("Chloe's video connection was interrupted."));
-    void call.join({
-      url:conversation.conversation_url,
-      startAudioOff:true,
-      startVideoOff:true,
-      userName:"OneDailyDrop viewer",
-    }).catch(() => setError("Chloe's video connection was interrupted."));
+    void call
+      .join({ url: conversationUrl, startAudioOff: true, startVideoOff: true, userName: "OneDailyDrop viewer" })
+      .catch(() => setError("Chloe's video connection was interrupted."));
 
     return () => {
       callRef.current = null;
       void call.leave().catch(() => undefined).finally(() => call.destroy());
     };
-  }, [conversation]);
+  }, [conversationUrl, addMessages]);
 
   const start = async () => {
-    if (starting || conversationRef.current) return;
+    if (starting || conversationUrl) return;
     setStarting(true);
     setError("");
-    const response = await fetch("/api/integrations/tavus/conversations", {
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({market, drop_key:drop.drop_key}),
-    }).catch(() => null);
+    const response = await fetch(`/api/live/host?market=${encodeURIComponent(market)}`).catch(() => null);
     const body = await response?.json().catch(() => ({}));
     setStarting(false);
     if (!response?.ok || !body?.conversation_url) {
       setError(body?.error || "Chloe could not join. Please try again.");
       return;
     }
-    const next = body as TavusConversation;
-    conversationRef.current = next;
-    setConversation(next);
+    setConversationUrl(body.conversation_url);
     recordLiveDropEvent(drop.drop_key, "host_started");
   };
 
-  const tell = (text: string) => {
-    const call = callRef.current;
-    const active = conversationRef.current;
-    if (!text || !call || !active || !joined) return false;
-    call.sendAppMessage({
-      message_type:"conversation",
-      event_type:"conversation.respond",
-      conversation_id:active.conversation_id,
-      properties:{text},
-    }, "*");
-    return true;
-  };
+  const leave = () => setConversationUrl("");
 
-  /*
-   * The moment the price opens, said out loud.
-   *
-   * A greeting is fixed when the conversation is created, so somebody who
-   * started chatting in the waiting room and stayed through the reveal heard
-   * "the price opens in a moment" while the price was already on the screen
-   * beside her. The opening is the one moment of a Live Drop a host cannot
-   * miss.
-   *
-   * Sent as the same conversation.respond the typed questions use, because
-   * that is the one interaction this code has watched work. Once per
-   * conversation: a poll every five seconds would otherwise have her announce
-   * the same reveal for the rest of the drop.
-   */
-  const revealLine = drop.host_reveal_line;
-  const announced = useRef("");
-  useEffect(() => {
-    if (!revealLine || !joined) return;
-    const active = conversationRef.current;
-    if (!active || announced.current === active.conversation_id) return;
-    announced.current = active.conversation_id;
-    tell(revealLine);
-    /* tell reads refs and `joined`; re-running on the line and the join is
-       what this needs and nothing more. */
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [revealLine, joined]);
-
-  const sendQuestion = (event: React.FormEvent) => {
+  const ask = async (event: React.FormEvent) => {
     event.preventDefault();
-    const text = question.trim().slice(0, 500);
-    if (!tell(text)) return;
-    const id = `viewer-${++messageCounterRef.current}`;
-    setMessages((current) => [...current.slice(-7), {id, role:"viewer", text}]);
+    const text = question.trim();
+    if (!text || posting) return;
+    setPosting(true);
+    setPostError("");
+    const response = await fetch("/api/live/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ drop_key: drop.drop_key, session_id: analyticsSessionId(), text }),
+    }).catch(() => null);
+    const body = await response?.json().catch(() => ({}));
+    setPosting(false);
+    if (!response?.ok) {
+      setPostError(body?.error || "That didn't send. Try again.");
+      return;
+    }
     setQuestion("");
   };
 
-  if (conversation) {
+  const chatPanel = (
+    <div className="relative z-20 border-t border-white/10 bg-[#07101e]/95 p-3 backdrop-blur">
+      <div ref={listRef} className="mb-2 max-h-32 space-y-1.5 overflow-y-auto" aria-live="polite">
+        {chat.length ? (
+          chat.map((message) => (
+            <p key={message.id} className="text-xs leading-relaxed text-white/80">
+              <span className={message.kind === "chloe" ? "font-black text-lime" : "font-bold text-white"}>
+                {message.author}:
+              </span>{" "}
+              {message.text}
+              {message.sent ? <span className="ml-1 text-[10px] text-white/40">· asked</span> : null}
+            </p>
+          ))
+        ) : (
+          <p className="text-xs text-white/50">No questions yet. Ask Chloe anything about this deal.</p>
+        )}
+      </div>
+      <form onSubmit={ask} className="flex gap-2">
+        <input
+          type="text"
+          value={question}
+          onChange={(event) => setQuestion(event.target.value)}
+          maxLength={200}
+          placeholder="Ask Chloe a question..."
+          aria-label="Question for Chloe"
+          className="h-10 min-w-0 flex-1 rounded-full border border-white/15 bg-white/10 px-4 text-sm text-white outline-none placeholder:text-white/40 focus:border-white/35"
+        />
+        <button
+          type="submit"
+          disabled={!question.trim() || posting}
+          className="h-10 rounded-full bg-accent px-4 text-xs font-black text-white disabled:opacity-40"
+        >
+          Send
+        </button>
+      </form>
+      <p className="mt-1.5 text-[10px] text-white/40">
+        {postError || "Everyone watching sees the chat · Chloe picks questions to answer live"}
+      </p>
+    </div>
+  );
+
+  if (conversationUrl) {
     return (
       <div className="relative flex w-full min-w-0 flex-col bg-[#07172b]">
         <div className="relative aspect-[4/3] w-full overflow-hidden bg-black">
@@ -972,68 +1011,41 @@ function TavusHost({ market, drop }: { market: string; drop: LiveDropView }) {
         </div>
         <button
           type="button"
-          onClick={end}
+          onClick={leave}
           className="absolute right-3 top-3 z-20 rounded-full border border-white/20 bg-black/70 px-3 py-1.5 text-xs font-bold text-white backdrop-blur hover:bg-black"
         >
-          End
+          Leave
         </button>
-        <div className="relative z-20 border-t border-white/10 bg-[#07101e]/95 p-3 backdrop-blur">
-          <div className="mb-2 max-h-24 space-y-1.5 overflow-y-auto" aria-live="polite">
-            {messages.length ? messages.map((message) => (
-              <p key={message.id} className="text-xs leading-relaxed text-white/80">
-                <span className="font-black text-white">{message.role === "chloe" ? "Chloe" : "You"}:</span>{" "}
-                {message.text}
-              </p>
-            )) : (
-              <p className="text-xs text-white/50">Type a question about today's live deal.</p>
-            )}
-          </div>
-          <form onSubmit={sendQuestion} className="flex gap-2">
-            <input
-              type="text"
-              value={question}
-              onChange={(event) => setQuestion(event.target.value)}
-              maxLength={500}
-              disabled={!joined}
-              placeholder={joined ? "Ask Chloe about this deal..." : "Connecting..."}
-              aria-label="Question for Chloe"
-              className="h-10 min-w-0 flex-1 rounded-full border border-white/15 bg-white/10 px-4 text-sm text-white outline-none placeholder:text-white/40 focus:border-white/35 disabled:opacity-50"
-            />
-            <button
-              type="submit"
-              disabled={!joined || !question.trim()}
-              className="h-10 rounded-full bg-accent px-4 text-xs font-black text-white disabled:opacity-40"
-            >
-              Send
-            </button>
-          </form>
-          <p className="mt-1.5 text-[10px] text-white/40">Text chat only · Your camera and microphone stay off</p>
-        </div>
+        {error ? <p className="px-3 pt-2 text-xs font-semibold text-red-300">{error}</p> : null}
+        {chatPanel}
       </div>
     );
   }
 
   return (
-    <div className="flex aspect-[4/3] w-full flex-col items-center justify-center px-8 text-center">
-      {drop.image_url ? (
-        <div className="relative mb-5 h-32 w-32 overflow-hidden rounded-full border border-white/15 bg-white/95 p-3 shadow-2xl">
-          <Image src={drop.image_url} alt="" fill sizes="128px" className="object-contain p-3" unoptimized />
-        </div>
-      ) : null}
-      <p className="text-xl font-black text-white">Chloe is ready</p>
-      <p className="mt-2 max-w-sm text-sm leading-relaxed text-white/65">
-        Watch the OneDailyDrop AI host and ask questions by text chat.
-      </p>
-      <button
-        type="button"
-        onClick={start}
-        disabled={starting}
-        className="relative z-20 mt-5 rounded-full bg-accent px-6 py-3 text-sm font-black text-white shadow-lg transition hover:brightness-110 disabled:cursor-wait disabled:opacity-60"
-      >
-        {starting ? "Connecting Chloe..." : "Watch & chat with Chloe"}
-      </button>
-      {error ? <p className="relative z-20 mt-3 text-xs font-semibold text-red-300">{error}</p> : null}
-      <p className="mt-3 text-[11px] text-white/45">Text chat only · No camera or microphone access</p>
+    <div className="relative flex w-full min-w-0 flex-col">
+      <div className="flex aspect-[4/3] w-full flex-col items-center justify-center px-8 text-center">
+        {drop.image_url ? (
+          <div className="relative mb-5 h-32 w-32 overflow-hidden rounded-full border border-white/15 bg-white/95 p-3 shadow-2xl">
+            <Image src={drop.image_url} alt="" fill sizes="128px" className="object-contain p-3" unoptimized />
+          </div>
+        ) : null}
+        <p className="text-xl font-black text-white">Chloe is presenting live</p>
+        <p className="mt-2 max-w-sm text-sm leading-relaxed text-white/65">
+          Watch with everyone else and ask your questions in the chat.
+        </p>
+        <button
+          type="button"
+          onClick={start}
+          disabled={starting}
+          className="relative z-20 mt-5 rounded-full bg-accent px-6 py-3 text-sm font-black text-white shadow-lg transition hover:brightness-110 disabled:cursor-wait disabled:opacity-60"
+        >
+          {starting ? "Connecting Chloe..." : "Watch Chloe live"}
+        </button>
+        {error ? <p className="relative z-20 mt-3 text-xs font-semibold text-red-300">{error}</p> : null}
+        <p className="mt-3 text-[11px] text-white/45">No camera or microphone access</p>
+      </div>
+      {chatPanel}
     </div>
   );
 }

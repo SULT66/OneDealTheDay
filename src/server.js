@@ -72,6 +72,10 @@ const { checkAmazonLinks } = require("./amazonLinkHealth");
 const { overview } = require("./overview");
 const { pageViewRow, recordPageView } = require("./pageViews");
 const {
+  chatMessageInput, chatMessages, endFinishedBroadcasts, ensureBroadcast,
+  hostInstructionCue, idleCue, postChatMessage, questionsCue, revealCue, takeNextQuestions,
+} = require("./liveHost");
+const {
   ensureWeeklySnapshot, listWeeklySnapshots, nextWeekClose, notInternal, periodMetrics,
   REPORT_TIMEZONE, lastCompletedWeek,
 } = require("./growthMetrics");
@@ -1223,6 +1227,86 @@ app.get("/api/live/current", (req, res) => {
  * an unbounded spend path during the MVP.
  */
 const tavusConversations = new Map();
+
+/* What Chloe is told about the drop, whether she is talking to one viewer or
+   presenting to all of them. */
+const chloeContext = (selectedMarket, view) => [
+  `This session is the OneDailyDrop Live event for market ${String(selectedMarket).toUpperCase()}.`,
+  `The current published drop key is ${view.drop_key}.`,
+  "Use get_product_details before stating any product, price, discount, stock or purchase fact.",
+  "Never ask the shopper for a product ID. Keep answers brief and suitable for a live shopping broadcast.",
+  /* Urgency is the format and she should sell it. What she may not sell is
+     scarcity: she closed a rehearsal with "grab yours before they are gone",
+     a claim about a shelf we cannot see. The shop holds the stock and reports
+     none of it to us, so that sentence is invented — and inventing it is what
+     affiliate programmes reject applications over. The countdown does the
+     same work honestly. */
+  "Be urgent about the countdown: the price is live for a few minutes only and you should say so. Never say or imply how many are left, how fast they are selling, or that they will run out — you cannot see the retailer's stock, and this offer ends when the clock does, not when it sells out.",
+].join(" ");
+
+/* ----------------------------------------------------------------------
+ * The shared broadcast: one Chloe for every viewer, and one chat.
+ * See src/liveHost.js for why questions reach her through the host console.
+ * The admin half of it is registered after the admin guard, further down.
+ * -------------------------------------------------------------------- */
+const broadcastsBeingCreated = new Map();
+const chloeConfigured = (marketCode) =>
+  Boolean(c.liveHostChatEnabled && c.tavusApiKey && c.tavusPalId && marketCode === "us");
+
+/* Opens the drop's shared conversation when the waiting room or the drop is on. */
+const openBroadcast = async (drop) => {
+  const view = presentDrop(drop, Date.now());
+  if (!view || !["waiting", "live"].includes(view.state) || !chloeConfigured(drop.market)) return null;
+  return ensureBroadcast(db, {
+    drop,
+    view,
+    apiKey: c.tavusApiKey,
+    palId: c.tavusPalId,
+    conversationalContext: chloeContext(drop.market, view),
+    greeting: hostGreeting(view),
+    maxViewers: Number(process.env.LIVE_HOST_MAX_VIEWERS) || 150,
+    creating: broadcastsBeingCreated,
+  });
+};
+
+/* A viewer joining: the shared conversation's address, nothing else. The
+   marker that lets a message through to her never leaves the admin side. */
+app.get("/api/live/host", async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  const selectedMarket = normalizeMarket(req.query?.market) || "us";
+  const drop = currentLiveDrop(selectedMarket);
+  if (!drop) return res.status(404).json({error:"There is no Live Drop right now."});
+  try {
+    const broadcast = await openBroadcast(drop);
+    if (!broadcast) return res.status(409).json({error:"Chloe joins when the waiting room opens."});
+    return res.json({conversation_url:broadcast.conversation_url, drop_key:drop.drop_key});
+  } catch (error) {
+    console.error(`[live-host] broadcast could not start: ${error.message}`);
+    return res.status(503).json({error:"Chloe could not join. Please try again in a moment."});
+  }
+});
+
+app.get("/api/live/chat", (req, res) => {
+  res.set("Cache-Control", "no-store");
+  const drop = db.prepare("SELECT id FROM live_drops WHERE drop_key=? AND published=1").get(String(req.query?.drop_key || ""));
+  if (!drop) return res.json({messages:[]});
+  res.json({messages:chatMessages(db, drop.id, {afterId:Number(req.query?.after) || 0})});
+});
+
+app.post("/api/live/chat", (req, res) => {
+  const drop = db.prepare("SELECT * FROM live_drops WHERE drop_key=? AND published=1").get(String(req.body?.drop_key || ""));
+  const view = presentDrop(drop, Date.now());
+  if (!view || !["waiting", "live"].includes(view.state)) {
+    return res.status(409).json({error:"The chat opens with the waiting room."});
+  }
+  const sessionId = analyticsToken(req.body?.session_id);
+  if (!sessionId) return res.status(400).json({error:"Refresh the page and try again."});
+  const input = chatMessageInput(req.body?.text);
+  if (input.error) return res.status(400).json({error:input.error});
+  const posted = postChatMessage(db, {dropId:drop.id, sessionId, text:input.text});
+  if (posted.error) return res.status(429).json({error:posted.error});
+  return res.status(201).json({ok:true, id:posted.id});
+});
 const endTavusConversation = async conversationId => {
   if (!c.tavusApiKey || !/^c[a-zA-Z0-9_-]{4,100}$/.test(conversationId)) return false;
   const response = await fetch(`https://tavusapi.com/v2/conversations/${conversationId}/end`, {
@@ -1281,19 +1365,7 @@ app.post("/api/integrations/tavus/conversations", authRateLimit, async (req, res
       body:JSON.stringify({
         pal_id:c.tavusPalId,
         conversation_name:`OneDailyDrop Live · ${view.drop_key}`,
-        conversational_context:[
-          `This session is the OneDailyDrop Live event for market ${selectedMarket.toUpperCase()}.`,
-          `The current published drop key is ${view.drop_key}.`,
-          "Use get_product_details before stating any product, price, discount, stock or purchase fact.",
-          "Never ask the shopper for a product ID. Keep answers brief and suitable for a live shopping broadcast.",
-          /* Urgency is the format and she should sell it. What she may not
-             sell is scarcity: she closed a rehearsal with "grab yours before
-             they are gone", a claim about a shelf we cannot see. The shop
-             holds the stock and reports none of it to us, so that sentence is
-             invented — and inventing it is what affiliate programmes reject
-             applications over. The countdown does the same work honestly. */
-          "Be urgent about the countdown: the price is live for a few minutes only and you should say so. Never say or imply how many are left, how fast they are selling, or that they will run out — you cannot see the retailer's stock, and this offer ends when the clock does, not when it sells out.",
-        ].join(" "),
+        conversational_context:chloeContext(selectedMarket, view),
         /* Built from the drop she is actually presenting. One sentence at every
            drop, naming nothing, left a shopper who came to see a monitor with a
            host who appeared not to know what she was there for, and made them
@@ -3623,6 +3695,61 @@ app.patch("/api/admin/live-drops/:key/media", admin, express.json({limit:"8kb"})
   return res.json({ok:true, ...fields});
 });
 
+/* The host console: what only the admin side may see and do. See src/liveHost.js. */
+app.get("/api/admin/live-host/:key", admin, async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  const drop = db.prepare("SELECT * FROM live_drops WHERE drop_key=?").get(String(req.params.key || ""));
+  if (!drop) return res.status(404).json({error:"No such drop."});
+  const view = presentDrop(drop, Date.now());
+  if (!chloeConfigured(drop.market)) {
+    return res.status(503).json({error:"Chloe is not connected: TAVUS_API_KEY is not set, or this drop is not in the US market."});
+  }
+  let broadcast = null;
+  try {
+    broadcast = await openBroadcast(drop);
+  } catch (error) {
+    return res.status(503).json({error:`Tavus refused to start Chloe: ${error.message}`});
+  }
+  const queued = db.prepare("SELECT COUNT(*) AS n FROM live_chat_messages WHERE drop_id=? AND status='queued'").get(drop.id).n;
+  res.json({
+    state:view?.state || "ended",
+    conversation_url:broadcast?.conversation_url || "",
+    conversation_id:broadcast?.conversation_id || "",
+    reveal_cue:broadcast && view?.state === "live" ? revealCue(broadcast.secret, hostRevealLine(view)) : "",
+    idle_cue:broadcast ? idleCue(broadcast.secret) : "",
+    queued,
+    messages:chatMessages(db, drop.id, {limit:30}),
+  });
+});
+
+/* Hands Chloe the next few questions, and says what to send her. */
+app.post("/api/admin/live-host/:key/next", admin, (req, res) => {
+  const drop = db.prepare("SELECT * FROM live_drops WHERE drop_key=?").get(String(req.params.key || ""));
+  if (!drop) return res.status(404).json({error:"No such drop."});
+  const broadcast = db.prepare("SELECT * FROM live_host_broadcasts WHERE drop_id=? AND ended_at IS NULL ORDER BY id DESC LIMIT 1").get(drop.id);
+  if (!broadcast) return res.status(409).json({error:"Chloe is not on air for this drop."});
+  const questions = takeNextQuestions(db, drop.id);
+  res.json({cue:questions.length ? questionsCue(broadcast.secret, questions) : "", questions});
+});
+
+/* Your own instruction to Chloe, typed in the host console. Wrapped in the
+   drop's marker here so the marker itself never reaches the browser. */
+app.post("/api/admin/live-host/:key/instruction", admin, express.json({limit:"4kb"}), (req, res) => {
+  const drop = db.prepare("SELECT * FROM live_drops WHERE drop_key=?").get(String(req.params.key || ""));
+  if (!drop) return res.status(404).json({error:"No such drop."});
+  const broadcast = db.prepare("SELECT * FROM live_host_broadcasts WHERE drop_id=? AND ended_at IS NULL ORDER BY id DESC LIMIT 1").get(drop.id);
+  if (!broadcast) return res.status(409).json({error:"Chloe is not on air for this drop."});
+  const text = String(req.body?.text || "").replace(/\s+/g, " ").trim().slice(0, 1000);
+  if (!text) return res.status(400).json({error:"Type something for Chloe first."});
+  res.json({cue:hostInstructionCue(broadcast.secret, text)});
+});
+
+app.post("/api/admin/live-host/:key/hide/:id", admin, (req, res) => {
+  db.prepare("UPDATE live_chat_messages SET status='hidden' WHERE id=? AND drop_id=(SELECT id FROM live_drops WHERE drop_key=?)")
+    .run(Number(req.params.id) || 0, String(req.params.key || ""));
+  res.json({ok:true});
+});
+
 app.delete("/api/admin/live-drops/:key", admin, (req, res) => {
   const drop = db.prepare("SELECT * FROM live_drops WHERE drop_key=?").get(String(req.params.key || ""));
   if (!drop) return res.status(404).json({error:"No such drop."});
@@ -4123,6 +4250,14 @@ cron.schedule("7 * * * *", () => {
   } catch (error) {
     console.error(`[weekly] snapshot failed: ${error.message}`);
   }
+});
+
+/* The shared Chloe stops being billed once her drop is over. */
+cron.schedule("* * * * *", () => {
+  if (!c.tavusApiKey) return;
+  endFinishedBroadcasts(db, { apiKey: c.tavusApiKey })
+    .then((ended) => ended.length && console.log(`[live-host] ended ${ended.length} broadcast(s)`))
+    .catch((error) => console.error(`[live-host] could not end broadcasts: ${error.message}`));
 });
 let reminderSweepRunning = false;
 cron.schedule(

@@ -8,6 +8,7 @@ import { Weekly } from "./Weekly";
 import { isInternalBrowser, setInternalBrowser } from "@/lib/analyticsSession";
 import { AmazonPicks } from "./AmazonPicks";
 import { MediaUpload } from "./MediaUpload";
+import { LiveHostConsole } from "./LiveHostConsole";
 
 /**
  * The admin console: scheduling a Live Drop, and the catalogue refresh.
@@ -683,6 +684,7 @@ function DropRow({
 }) {
   const [stock, setStock] = useState(String(drop.quantity_remaining));
   const [rowMessage, setRowMessage] = useState("");
+  const [hostOpen, setHostOpen] = useState(false);
   /* Editing what a published drop shows. Deleting one that was ever public is
      refused — rightly — so without this a wrong picture or a missing video was
      permanent. */
@@ -889,7 +891,21 @@ function DropRow({
         >
           Open the page
         </a>
+
+        {/* Chloe takes the chat's questions only through this console, so it
+            is offered for any drop that has not finished. */}
+        {drop.published && !["ended", "sold_out"].includes(drop.state) && (
+          <button
+            type="button"
+            onClick={() => setHostOpen((open) => !open)}
+            className="inline-flex h-9 cursor-pointer items-center rounded-full bg-lime px-4 text-xs font-bold text-ink transition-opacity hover:opacity-88"
+          >
+            {hostOpen ? "Close host console" : "Open host console"}
+          </button>
+        )}
       </div>
+
+      {hostOpen && <LiveHostConsole adminKey={adminKey} dropKey={drop.drop_key} />}
 
       {/* What the drop shows, editable after it is published. The offer
           itself — price, quantity, hour — is deliberately not here: people
