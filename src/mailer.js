@@ -19,8 +19,12 @@ const escapeHtml = value => String(value ?? "").replace(/[&<>"']/g, character =>
  * List-Unsubscribe-Post is RFC 8058 one-click. Gmail and Outlook then show an
  * Unsubscribe button of their own and POST to the URL; the route accepts that
  * as well as a plain visit.
+ *
+ * Every message also carries a plain-text part. HTML-only mail is one of the
+ * clearest signals of a bulk campaign, and the drop emails were landing in
+ * Gmail's Promotions tab.
  */
-const sendEmail = async ({to, toName, subject, html, unsubscribeUrl}) => {
+const sendEmail = async ({to, toName, subject, html, text, unsubscribeUrl, fromName = "OneDailyDrop"}) => {
   const apiKey = String(process.env.SENDGRID_API_KEY || "").trim();
   const fromEmail = String(process.env.EMAIL_FROM || process.env.PASSWORD_RESET_FROM_EMAIL || "account@onedailydrop.com").trim();
   const replyTo = String(process.env.EMAIL_REPLY_TO || "info@onedailydrop.com").trim();
@@ -38,8 +42,8 @@ const sendEmail = async ({to, toName, subject, html, unsubscribeUrl}) => {
     },
     body: JSON.stringify({
       personalizations: [{to: [{email: to, name: toName || undefined}]}],
-      from: {email: fromEmail, name: "OneDailyDrop"},
-      reply_to: {email: replyTo, name: "OneDailyDrop Support"},
+      from: {email: fromEmail, name: fromName},
+      reply_to: {email: replyTo, name: "OneDailyDrop"},
       subject,
       ...(unsubscribeUrl
         ? {
@@ -49,7 +53,11 @@ const sendEmail = async ({to, toName, subject, html, unsubscribeUrl}) => {
           }
         }
         : {}),
-      content: [{type: "text/html", value: html}]
+      /* SendGrid requires text/plain before text/html. */
+      content: [
+        {type: "text/plain", value: text || plainTextFrom(html)},
+        {type: "text/html", value: html},
+      ]
     })
   });
 
@@ -62,347 +70,412 @@ const sendEmail = async ({to, toName, subject, html, unsubscribeUrl}) => {
   }
 };
 
-const passwordResetEmail = ({name, email, token}) => sendEmail({
-  to: email,
-  toName: name,
-  subject: "Reset your OneDailyDrop password",
-  html: `
-    <div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;color:#17191d">
-      <h1 style="font-size:24px">Reset your password</h1>
-      <p>Hi ${escapeHtml(name)},</p>
-      <p>We received a request to reset your OneDailyDrop password. This secure link expires in one hour.</p>
-      <p style="margin:28px 0"><a href="${SITE}/reset-password?token=${encodeURIComponent(token)}" style="background:#ff6b00;color:#fff;text-decoration:none;padding:13px 20px;border-radius:10px;font-weight:bold">Choose a new password</a></p>
-      <p>If you did not request this, you can safely ignore this email.</p>
-    </div>`
-});
+/* A readable text version of an HTML email, for when none was written. */
+function plainTextFrom(html) {
+  return String(html || "")
+    .replace(/<a [^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi, (_match, href, label) => `${label.replace(/<[^>]+>/g, "").trim()} (${href})`)
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(p|div|h1|h2|tr|li)>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&rsquo;/g, "’")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n\s*\n\s*\n+/g, "\n\n")
+    .trim();
+}
 
-/*
- * The welcome for the Live Drop list.
+/* ------------------------------------------------------------------------
+ * One design for every email.
  *
- * It promised "your Daily Drop is on the way", and no Daily Drop email has
- * ever been sent: this list gets an announcement before each Live Drop and
- * nothing else. It now says exactly that, and sends them to the page the
- * drops happen on.
+ * They were a dozen blocks of ad-hoc HTML, some orange on a site whose accent
+ * is lime, and the drop emails were built like a sale banner: a dark header,
+ * a full-width product photo, a struck-through price. That is exactly the
+ * shape mailbox providers file under Promotions.
+ *
+ * So every email is now a well set letter: a small wordmark, a clear heading,
+ * a few sentences written to one person, the product as a compact card rather
+ * than a hero image, one button, and a signature. It still looks like
+ * OneDailyDrop, and it reads like something a person sent.
+ *
+ * Table-based and inline-styled because that is what mail clients render;
+ * Outlook has no flexbox and Gmail strips a stylesheet.
+ * ---------------------------------------------------------------------- */
+const LIME = "#b8ec44";
+const INK = "#010101";
+const MUTED = "#5f6368";
+const FAINT = "#9aa0a6";
+const OLIVE = "#557a00";
+
+const paragraphHtml = (text) =>
+  `<p style="margin:0 0 14px;font-size:16px;line-height:1.65;color:#2b2f33">${text}</p>`;
+
+/**
+ * @param {object} message
+ * @param {string} message.preheader  the grey line an inbox shows after the subject
+ * @param {string} [message.eyebrow]
+ * @param {string} message.heading
+ * @param {string[]} message.paragraphs  HTML allowed; escape anything user-supplied
+ * @param {object} [message.product]  { title, brand, retailerName, retailPrice, currency, imageUrl }
+ * @param {{label: string, href: string}} [message.cta]
+ * @param {string} [message.after]  a sentence under the button
+ * @param {string} [message.signature]
+ * @param {string} [message.tip]
+ * @param {string} [message.footer]  HTML
+ * @param {boolean} [message.live]  the LIVE mark beside the wordmark
  */
-const subscriptionEmail = ({email, market = "us", unsubscribeUrl}) => sendEmail({
-  to: email,
-  subject: "You’re on the OneDailyDrop Live list",
-  unsubscribeUrl,
-  html: `
-    <div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;color:#17191d">
-      <h1 style="font-size:24px">You won’t miss a Live Drop</h1>
-      <p>A Live Drop is one product, at one price, for ten minutes. The price is revealed when it starts.</p>
-      <p>We’ll email <strong>${escapeHtml(email)}</strong> before each drop, so you are there when it opens. That is the only email this list sends.</p>
-      <p style="margin:28px 0"><a href="${SITE}/${encodeURIComponent(market)}/live" style="background:#ff6b00;color:#fff;text-decoration:none;padding:13px 20px;border-radius:10px;font-weight:bold">See the next drop</a></p>
-      ${unsubscribeUrl ? `<p style="margin-top:28px;font-size:13px;color:#6b7280">
-        You are receiving this because you subscribed at OneDailyDrop.
-        <a href="${escapeHtml(unsubscribeUrl)}" style="color:#6b7280">Unsubscribe</a> — one click, no sign-in.
-      </p>` : ""}
-    </div>`
-});
+function composeEmail({ preheader, eyebrow, heading, paragraphs = [], product, cta, after, signature, tip, footer, live = false }) {
+  const productCard = product && product.title ? `
+      <tr><td style="padding:6px 32px 4px">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f6f7f2;border-radius:16px">
+          <tr>
+            ${product.imageUrl ? `<td width="112" style="padding:14px 0 14px 14px;vertical-align:middle">
+              <img src="${escapeHtml(product.imageUrl)}" alt="${escapeHtml(product.title)}" width="98" height="98"
+                style="display:block;width:98px;height:98px;object-fit:contain;border-radius:12px;background:#ffffff;border:0">
+            </td>` : ""}
+            <td style="padding:16px 18px;vertical-align:middle">
+              ${product.brand ? `<div style="font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:${FAINT};margin-bottom:4px">${escapeHtml(product.brand)}</div>` : ""}
+              <div style="font-size:16px;line-height:1.35;font-weight:bold;color:${INK}">${escapeHtml(product.title)}</div>
+              ${product.retailerName ? `<div style="font-size:13px;color:${MUTED};margin-top:5px">Available on ${escapeHtml(product.retailerName)}</div>` : ""}
+              ${product.retailPrice ? `<div style="font-size:13px;color:${MUTED};margin-top:5px"><span style="text-decoration:line-through">${escapeHtml(product.currency || "")} ${escapeHtml(product.retailPrice)}</span> usual price</div>` : ""}
+            </td>
+          </tr>
+        </table>
+      </td></tr>` : "";
 
-const clubWaitlistEmail = ({email}) => sendEmail({
-  to: email,
-  subject: "You’re on the OneDailyDrop Club waitlist",
-  html: `
-    <div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;color:#17191d">
-      <h1 style="font-size:24px">You’re on the Club waitlist</h1>
-      <p>We’ll let <strong>${escapeHtml(email)}</strong> know when OneDailyDrop Club is ready.</p>
-      <p>Until then, the Daily Drop and all public product picks remain free.</p>
-      <p><a href="${SITE}" style="color:#d95600;font-weight:bold">Visit OneDailyDrop</a></p>
-    </div>`
-});
+  const html = `
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent">${escapeHtml(preheader || "")}</div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f2f3ee;padding:28px 12px;font-family:Helvetica,Arial,sans-serif">
+    <tr><td align="center">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;background:#ffffff;border-radius:22px;border:1px solid #e6e8df">
+        <tr><td style="padding:28px 32px 0">
+          <span style="font-size:17px;font-weight:bold;letter-spacing:-.01em;color:${INK}">OneDailyDrop</span>
+          ${live ? `<span style="display:inline-block;margin-left:6px;padding:2px 8px;border-radius:6px;background:${LIME};color:${INK};font-size:12px;font-weight:bold;letter-spacing:.06em;vertical-align:2px">LIVE</span>` : ""}
+        </td></tr>
 
-/*
- * The reminder somebody asked for when they could not stay on the page.
- *
- * The price is not in it, and is not available to the sender either: the drop
- * price is withheld until the drop opens. An email that gave it away would
- * remove the only reason to arrive on time.
- *
- * Sent ahead of the start rather than at it, so there is time to open it. The
- * link goes to the market the reminder was asked for from — a shopper in
- * Germany sent to the American page would see the wrong currency for a product
- * they cannot buy.
- */
-const liveDropReminderEmail = ({ email, title, market, minutes }) => sendEmail({
-  to: email,
-  subject: `Your Live Drop opens in ${minutes} minutes`,
-  html: `
-    <div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;color:#17191d">
-      <h1 style="font-size:24px">It opens in ${minutes} minutes</h1>
-      <p><strong>${escapeHtml(title)}</strong></p>
-      <p>Limited stock, ten minutes, one price. The price is revealed the moment it opens.</p>
-      <p style="margin:28px 0"><a href="${SITE}/${encodeURIComponent(market)}/live" style="background:#ff6b00;color:#fff;text-decoration:none;padding:13px 20px;border-radius:10px;font-weight:bold">Open the drop</a></p>
-      <p>You asked us for this one reminder. There is nothing else to unsubscribe from.</p>
-    </div>`
-});
+        <tr><td style="padding:26px 32px 6px">
+          ${eyebrow ? `<div style="font-size:12px;font-weight:bold;letter-spacing:.14em;text-transform:uppercase;color:${OLIVE};margin-bottom:10px">${escapeHtml(eyebrow)}</div>` : ""}
+          <h1 style="margin:0 0 16px;font-size:26px;line-height:1.2;letter-spacing:-.01em;color:${INK}">${escapeHtml(heading)}</h1>
+          ${paragraphs.map(paragraphHtml).join("")}
+        </td></tr>
 
-/*
- * A message whose only job is to prove the pipe works.
- *
- * Mail delivery was unconfigured for weeks and the only way to find out was to
- * schedule a drop, collect a reminder, and notice nothing arrived — by which
- * point the drop had happened. This fails in ten seconds instead, and the
- * caller passes the provider's own words back rather than a shrug.
- */
-const deliveryTestEmail = ({ to }) => sendEmail({
-  to,
-  subject: "OneDailyDrop delivery test",
-  html: `
-    <div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;color:#17191d">
-      <h1 style="font-size:20px">Delivery works</h1>
-      <p>This message was sent from the OneDailyDrop admin console to prove that
-      mail leaves the site and arrives. Nobody was subscribed to anything.</p>
-      <p style="color:#6b7280;font-size:13px">Check the headers: DKIM and DMARC
-      should both pass, and the signing domain should be onedailydrop.com rather
-      than sendgrid.net.</p>
-    </div>`
-});
+        ${productCard}
+
+        ${cta ? `<tr><td style="padding:22px 32px 4px">
+          <a href="${cta.href}" style="display:inline-block;background:${LIME};color:${INK};text-decoration:none;padding:15px 30px;border-radius:999px;font-weight:bold;font-size:16px">${escapeHtml(cta.label)}</a>
+          ${after ? `<div style="font-size:13px;color:${MUTED};margin-top:12px">${after}</div>` : ""}
+        </td></tr>` : ""}
+
+        ${signature ? `<tr><td style="padding:22px 32px 0;font-size:15px;line-height:1.5;color:#2b2f33">${signature}</td></tr>` : ""}
+
+        ${tip ? `<tr><td style="padding:20px 32px 0">
+          <div style="background:#f6f7f2;border-radius:12px;padding:12px 14px;font-size:13px;line-height:1.55;color:${MUTED}">${tip}</div>
+        </td></tr>` : ""}
+
+        <tr><td style="padding:24px 32px 28px;font-size:12px;line-height:1.6;color:${FAINT}">
+          ${footer ? `${footer}<br>` : ""}
+          OneDailyDrop · <a href="${SITE}" style="color:${FAINT}">onedailydrop.com</a>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>`;
+
+  return { html, text: plainTextFrom(html) };
+}
+
+const CHLOE = `Chloe<br><span style="font-size:13px;color:${MUTED}">Your host at OneDailyDrop Live</span>`;
+const PRIMARY_TIP = "To be sure the next drop reaches you, move this email to your <strong>Primary</strong> inbox or add us to your contacts.";
+
+const dropUrl = (market) => `${SITE}/${encodeURIComponent(market || "us")}/live`;
+
+/* The unsubscribe line. A reminder was asked for and has nothing to leave; an
+   announcement is marketing and must always carry the way out. */
+const unsubscribeFooter = (unsubscribeUrl, because) => (unsubscribeUrl
+  ? `${escapeHtml(because)} <a href="${escapeHtml(unsubscribeUrl)}" style="color:${FAINT}">Unsubscribe</a> in one click.`
+  : "");
+
+/* "Thursday, September 17 at 8:00 PM ET" rather than "Thu, 17 Sep 2026 00:00:00 GMT". */
+function dropTime(startsAt, market = "us") {
+  const time = Date.parse(String(startsAt || ""));
+  if (!Number.isFinite(time)) return String(startsAt || "");
+  const zones = { us: ["America/New_York", "ET"], ca: ["America/Toronto", "ET"], uk: ["Europe/London", "UK time"], fr: ["Europe/Paris", "Paris time"], de: ["Europe/Berlin", "Berlin time"] };
+  const [timeZone, label] = zones[market] || ["UTC", "UTC"];
+  const formatted = new Intl.DateTimeFormat("en-US", {
+    timeZone, weekday: "long", month: "long", day: "numeric", hour: "numeric", minute: "2-digit",
+  }).format(new Date(time));
+  return `${formatted.replace(/, (\d{1,2}:\d{2})/, " at $1")} ${label}`;
+}
+
+const productOf = ({ title, brand, retailerName, retailPrice, currency, imageUrl }) =>
+  ({ title, brand, retailerName, retailPrice, currency, imageUrl });
+
+/* ------------------------------------------------------------ accounts */
+
+const passwordResetEmail = ({name, email, token}) => {
+  const message = composeEmail({
+    preheader: "This link works for one hour.",
+    heading: "Reset your password",
+    paragraphs: [
+      `Hi ${escapeHtml(name || "there")},`,
+      "Somebody asked to reset the password for your OneDailyDrop account. If that was you, choose a new one below. The link works for one hour.",
+    ],
+    cta: { label: "Choose a new password", href: `${SITE}/reset-password?token=${encodeURIComponent(token)}` },
+    after: "If you did not ask for this, ignore this email and nothing will change.",
+  });
+  return sendEmail({ to: email, toName: name, subject: "Reset your OneDailyDrop password", ...message });
+};
 
 /*
  * The one email a new account gets, and the only moment the site has their
- * attention with nothing to sell yet.
+ * attention with nothing to sell yet. It proves the address is real on the
+ * day it is given, and it asks the one question worth asking: do you want to
+ * hear about Live Drops?
  *
- * Registration used to send nothing at all — not through Google, not through
- * the form — so a typo in an address went unnoticed until somebody tried to
- * reset a password they could never receive. That is the first job here:
- * proving the address is real, on the day it is given.
- *
- * The second is that signing up and subscribing are different things, and the
- * site had no way to turn one into the other. Somebody who made an account is
- * the warmest person it will ever have; asking them here costs nothing and is
- * the only place the question gets asked at all.
- *
- * Transactional, so it carries no unsubscribe of its own — there is nothing
- * to unsubscribe from until they say yes.
+ * Transactional, so no unsubscribe of its own: there is nothing to
+ * unsubscribe from until they say yes.
  */
 const welcomeEmail = ({ name, email, market = "us" }) => sendEmail({
   to: email,
   toName: name,
-  subject: "Your OneDailyDrop account is ready",
-  html: `
-    <div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;color:#17191d">
-      <h1 style="font-size:24px">Welcome${name ? `, ${escapeHtml(name)}` : ""}</h1>
-      <p>Your account at <strong>${escapeHtml(email)}</strong> is ready. Anything you save
-      now stays with it, so it is still there on your phone tomorrow.</p>
-
-      <p style="margin-top:24px">Two things worth knowing:</p>
-      <ul style="padding-left:18px;line-height:1.7">
-        <li>Every listing is checked before it is shown, and where a signal is
-        missing we say so rather than filling the gap.</li>
-        <li>A <strong>Live Drop</strong> is one product at one price for ten
-        minutes. There is no way to hear about one unless you ask.</li>
-      </ul>
-
-      <p style="margin:28px 0"><a href="${SITE}/${encodeURIComponent(market)}#subscribe" style="background:#ff6b00;color:#fff;text-decoration:none;padding:13px 20px;border-radius:10px;font-weight:bold">Get told before every Live Drop</a></p>
-
-      <p style="color:#6b7280;font-size:13px">You are getting this because an
-      account was created at OneDailyDrop with this address. If that was not
-      you, ignore this and nothing else will be sent.</p>
-    </div>`
-});
-
-/*
- * The two reminders that come before the ten-minute one.
- *
- * A drop lasts ten minutes on a fixed clock. A single warning ten minutes
- * ahead reaches whoever happens to be holding their phone; it cannot reach
- * somebody who would have arranged an evening around it. The day before is
- * when a plan gets made and the hour before is when it gets kept.
- *
- * The price is in none of them, and is not available to the sender either:
- * it is revealed when the drop opens, and giving it away removes the only
- * reason to arrive on time.
- */
-/*
- * One shape for every Live Drop email.
- *
- * They were four separate blocks of ad-hoc HTML: a heading, the product's
- * name as bare text, and an orange button — orange, on a site whose accent
- * has been lime for months. Nothing showed the thing being sold. An email
- * announcing a ten minute event for one product, with no picture of the
- * product, is asking somebody to care on trust.
- *
- * Table-based and inline-styled because that is what mail clients render;
- * Outlook has no flexbox and Gmail strips a stylesheet.
- */
-const LIME = "#b8ec44";
-const INK = "#010101";
-const GRAPHITE = "#434343";
-
-const dropEmailLayout = ({ eyebrow, heading, title, brand, retailerName, retailPrice, currency, imageUrl, line, ctaLabel, ctaHref, footer }) => `
-  <div style="font-family:Arial,Helvetica,sans-serif;background:#f6f6f6;padding:24px 12px">
-    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:560px;margin:auto;background:#ffffff;border-radius:16px;overflow:hidden">
-      <tr><td style="background:${GRAPHITE};padding:18px 24px">
-        <span style="color:#ffffff;font-size:15px;font-weight:bold;letter-spacing:.02em">OneDailyDrop</span>
-        <span style="color:${LIME};font-size:15px;font-weight:bold"> LIVE</span>
-        ${eyebrow ? `<div style="color:rgba(255,255,255,.72);font-size:11px;letter-spacing:.14em;text-transform:uppercase;margin-top:6px">${escapeHtml(eyebrow)}</div>` : ""}
-      </td></tr>
-
-      ${imageUrl ? `<tr><td style="padding:0">
-        <img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(title)}" width="560"
-          style="display:block;width:100%;max-width:560px;height:auto;border:0;background:#f6f6f6">
-      </td></tr>` : ""}
-
-      <tr><td style="padding:24px">
-        <h1 style="margin:0 0 14px;font-size:24px;line-height:1.2;color:${INK}">${escapeHtml(heading)}</h1>
-        ${brand ? `<div style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#6b7280;margin-bottom:4px">${escapeHtml(brand)}</div>` : ""}
-        <div style="font-size:17px;font-weight:bold;color:${INK}">${escapeHtml(title)}</div>
-        ${retailerName ? `<div style="font-size:13px;color:#6b7280;margin-top:4px">Available on ${escapeHtml(retailerName)}</div>` : ""}
-
-        ${retailPrice ? `<div style="margin-top:14px">
-          <span style="font-size:15px;color:#6b7280;text-decoration:line-through">${escapeHtml(currency || "")} ${escapeHtml(retailPrice)}</span>
-          <span style="font-size:13px;color:#6b7280;margin-left:8px">usual price</span>
-        </div>` : ""}
-
-        <p style="margin:16px 0 0;font-size:15px;line-height:1.6;color:#374151">${line}</p>
-
-        <p style="margin:24px 0 0">
-          <a href="${ctaHref}" style="background:${LIME};color:${INK};text-decoration:none;padding:14px 24px;border-radius:999px;font-weight:bold;font-size:15px;display:inline-block">${escapeHtml(ctaLabel)}</a>
-        </p>
-      </td></tr>
-
-      ${footer ? `<tr><td style="padding:0 24px 22px;font-size:12px;line-height:1.6;color:#9ca3af">${footer}</td></tr>` : ""}
-    </table>
-  </div>`;
-
-const dropUrl = (market) => `${SITE}/${encodeURIComponent(market)}/live`;
-
-/* The unsubscribe line, in the two forms these emails need. A reminder was
-   asked for and has nothing to leave; an announcement is marketing and must
-   always carry the way out. */
-const unsubscribeFooter = (unsubscribeUrl, because) => (unsubscribeUrl
-  ? `${escapeHtml(because)} <a href="${escapeHtml(unsubscribeUrl)}" style="color:#9ca3af">Unsubscribe</a> — one click, no sign-in.`
-  : "");
-
-/*
- * The drop is open right now. Sent in its first minutes to everyone who asked
- * about it and to the subscriber list: see sendLiveNowNotices.
- *
- * The price is not in it, even though it is public by now. The page shows it
- * with the clock beside it, and an email read ten minutes later would quote a
- * price that has already gone.
- */
-const liveDropLiveNowEmail = ({ email, title, market, asked, unsubscribeUrl, brand, retailerName, retailPrice, currency, imageUrl }) => sendEmail({
-  to: email,
-  subject: `Live now: ${title}`,
-  unsubscribeUrl,
-  html: dropEmailLayout({
-    eyebrow: "Live now",
-    heading: "The Live Drop is open",
-    title, brand, retailerName, retailPrice, currency, imageUrl,
-    line: "The price is revealed on the page right now, and it stays live for ten minutes only.",
-    ctaLabel: "Open the drop now",
-    ctaHref: dropUrl(market),
-    footer: asked
-      ? "You asked to be reminded about this drop. There is nothing else to unsubscribe from."
-      : unsubscribeFooter(unsubscribeUrl, "You are receiving this because you signed up to hear about every Live Drop."),
+  subject: `Welcome to OneDailyDrop${name ? `, ${name}` : ""}`,
+  ...composeEmail({
+    preheader: "Your account is ready. Here is what it gets you.",
+    eyebrow: "You're in",
+    heading: `Welcome${name ? `, ${escapeHtml(name)}` : ""}!`,
+    paragraphs: [
+      `Your account for <strong>${escapeHtml(email)}</strong> is ready. Anything you save now stays with it, on your phone and your laptop.`,
+      "The best part of OneDailyDrop is Live: one product, one price, revealed live for ten minutes. You can only buy in a Live Drop with an account, and now you have one.",
+      "Want to be told before each one starts?",
+    ],
+    cta: { label: "Tell me before every Live Drop", href: `${SITE}/${encodeURIComponent(market)}#subscribe` },
+    signature: "See you at the next drop,<br>The OneDailyDrop team",
+    tip: PRIMARY_TIP,
+    footer: "You are getting this because an account was created at OneDailyDrop with this address. If that was not you, ignore it and nothing else will be sent.",
   }),
 });
 
-const liveDropSaveTheDateEmail = ({ email, title, market, startsAt, unsubscribeUrl, brand, retailerName, retailPrice, currency, imageUrl }) => sendEmail({
+/* Joining the Live Drop list, from any of its forms. */
+const subscriptionEmail = ({email, market = "us", unsubscribeUrl}) => sendEmail({
   to: email,
-  subject: `Tomorrow: ${title}`,
+  subject: "You're on the list for OneDailyDrop Live",
   unsubscribeUrl,
-  html: dropEmailLayout({
+  fromName: "Chloe from OneDailyDrop",
+  ...composeEmail({
+    live: true,
+    preheader: "One product, one price, ten minutes. I'll let you know before each one.",
+    eyebrow: "You're on the list",
+    heading: "You won't miss a Live Drop",
+    paragraphs: [
+      "Hi, I'm Chloe, and I host OneDailyDrop Live.",
+      "Every drop is one great product at one price, revealed live on the page and open for just ten minutes. I'll email you before each one, so you're there when the price appears.",
+      "That's the only email this list sends. No daily newsletters, no noise.",
+    ],
+    cta: { label: "See the next drop", href: dropUrl(market) },
+    signature: `See you there,<br>${CHLOE}`,
+    tip: PRIMARY_TIP,
+    footer: unsubscribeFooter(unsubscribeUrl, "You are receiving this because you signed up for Live Drop emails."),
+  }),
+});
+
+const clubWaitlistEmail = ({email}) => sendEmail({
+  to: email,
+  subject: "You're on the OneDailyDrop Club waitlist",
+  ...composeEmail({
+    preheader: "We'll email you once when Club opens.",
+    heading: "You're on the Club waitlist",
+    paragraphs: [
+      `We'll let <strong>${escapeHtml(email)}</strong> know when OneDailyDrop Club is ready.`,
+      "Until then, Live Drops and every public pick stay free.",
+    ],
+    cta: { label: "Visit OneDailyDrop", href: SITE },
+  }),
+});
+
+/* ---------------------------------------------------------- Live Drops */
+
+/*
+ * The drop price is in none of these before the drop opens, and is not
+ * available to the sender either: giving it away removes the only reason to
+ * arrive on time.
+ */
+
+/* To the subscriber list, one to three days ahead. Marketing: carries a way out. */
+const liveDropAnnouncementEmail = ({ email, title, market, startsAt, unsubscribeUrl, ...product }) => sendEmail({
+  to: email,
+  subject: `Live Drop ${dropTime(startsAt, market).replace(/ at .*/, "")}: ${title}`,
+  unsubscribeUrl,
+  fromName: "Chloe from OneDailyDrop",
+  ...composeEmail({
+    live: true,
+    preheader: `The price is revealed live on ${dropTime(startsAt, market)}. Ten minutes only.`,
+    eyebrow: "Coming up on Live",
+    heading: "Our next Live Drop is set",
+    paragraphs: [
+      `Hi, it's Chloe. I've got something good lined up, and I wanted you to hear first.`,
+      `On <strong>${escapeHtml(dropTime(startsAt, market))}</strong> I'll go live and reveal the drop price for this one. It stays open for ten minutes, and then it's gone.`,
+    ],
+    product: productOf({ title, ...product }),
+    cta: { label: "Remind me when it starts", href: dropUrl(market) },
+    after: "Tap the button, then press Remind me on the page.",
+    signature: `See you there,<br>${CHLOE}`,
+    footer: unsubscribeFooter(unsubscribeUrl, "You are receiving this because you signed up for Live Drop emails."),
+  }),
+});
+
+/* To people who pressed Remind me, the day before. */
+const liveDropSaveTheDateEmail = ({ email, title, market, startsAt, unsubscribeUrl, ...product }) => sendEmail({
+  to: email,
+  subject: `Tomorrow on Live: ${title}`,
+  unsubscribeUrl,
+  fromName: "Chloe from OneDailyDrop",
+  ...composeEmail({
+    live: true,
+    preheader: `${dropTime(startsAt, market)}. Put it in your calendar.`,
     eyebrow: "Tomorrow",
     heading: "Your Live Drop is tomorrow",
-    title, brand, retailerName, retailPrice, currency, imageUrl,
-    line: `One product, one price, ten minutes. It opens <strong>${escapeHtml(startsAt)}</strong>. The price is revealed when it opens, not before.`,
-    ctaLabel: "See the drop page",
-    ctaHref: dropUrl(market),
+    paragraphs: [
+      `Hi, it's Chloe. Just a heads-up: the drop you asked about goes live on <strong>${escapeHtml(dropTime(startsAt, market))}</strong>.`,
+      "I'll reveal the price the moment we start, and it's only open for ten minutes, so it's worth putting in your calendar now.",
+    ],
+    product: productOf({ title, ...product }),
+    cta: { label: "See the drop page", href: dropUrl(market) },
+    signature: `See you tomorrow,<br>${CHLOE}`,
     footer: unsubscribeFooter(unsubscribeUrl, "You asked to be reminded about this drop."),
   }),
 });
 
-const liveDropStartingSoonEmail = ({ email, title, market, minutes, brand, retailerName, retailPrice, currency, imageUrl }) => sendEmail({
+/* To people who pressed Remind me, about an hour before. Asked for: no unsubscribe. */
+const liveDropStartingSoonEmail = ({ email, title, market, minutes, ...product }) => sendEmail({
   to: email,
-  subject: `Opens in ${minutes} minutes: ${title}`,
-  html: dropEmailLayout({
+  subject: `We go live in ${minutes} minutes`,
+  fromName: "Chloe from OneDailyDrop",
+  ...composeEmail({
+    live: true,
+    preheader: `${title}. The price is revealed when we start.`,
     eyebrow: `In ${minutes} minutes`,
-    heading: `It opens in ${minutes} minutes`,
-    title, brand, retailerName, retailPrice, currency, imageUrl,
-    line: "Ten minutes, then it is gone. The price appears the moment it opens.",
-    ctaLabel: "Open the drop",
-    ctaHref: dropUrl(market),
-    /* Nothing to unsubscribe from: this is the thing they asked for, and
-       offering an exit from a one-off they requested reads as a mistake. */
-    footer: "You asked us for this one. There is nothing else to unsubscribe from.",
+    heading: `We go live in ${minutes} minutes`,
+    paragraphs: [
+      "Hi, it's Chloe. Almost time!",
+      "When we start, I'll reveal today's price right on the page, and you'll have ten minutes to grab it. Come a little early and ask me anything in the chat while we wait.",
+    ],
+    product: productOf({ title, ...product }),
+    cta: { label: "Open the drop", href: dropUrl(market) },
+    signature: `See you in a bit,<br>${CHLOE}`,
+    footer: "You asked us for this reminder. There is nothing to unsubscribe from.",
+  }),
+});
+
+/* To people who pressed Remind me, ten minutes before. */
+const liveDropReminderEmail = ({ email, title, market, minutes }) => sendEmail({
+  to: email,
+  subject: `Starting in ${minutes} minutes: ${title}`,
+  fromName: "Chloe from OneDailyDrop",
+  ...composeEmail({
+    live: true,
+    preheader: "Grab your spot. The price is revealed when we start.",
+    eyebrow: `In ${minutes} minutes`,
+    heading: "We're about to start",
+    paragraphs: [
+      `Hi, it's Chloe. <strong>${escapeHtml(title)}</strong> goes live in ${minutes} minutes.`,
+      "Open the page now so you're there the second the price appears. It's only open for ten minutes.",
+    ],
+    cta: { label: "Join the Live Drop", href: dropUrl(market) },
+    signature: CHLOE,
+    footer: "You asked us for this reminder. There is nothing to unsubscribe from.",
   }),
 });
 
 /*
- * The announcement to the subscriber list.
+ * The drop is open right now, in its first minutes, to everyone who asked
+ * about it and to the subscriber list: see sendLiveNowNotices.
  *
- * Different from a reminder in the one way that matters: these people never
- * asked about this drop. They subscribed to the site, so this is marketing and
- * carries a way out — and it is sent once, well ahead, never chased.
+ * The price is not in it even though it is public by now: an email read ten
+ * minutes later would quote a price that has already gone.
  */
-const liveDropAnnouncementEmail = ({ email, title, market, startsAt, unsubscribeUrl, brand, retailerName, retailPrice, currency, imageUrl }) => sendEmail({
+const liveDropLiveNowEmail = ({ email, title, market, asked, unsubscribeUrl, ...product }) => sendEmail({
   to: email,
-  subject: `A Live Drop is coming: ${title}`,
+  subject: `We're live now: ${title}`,
   unsubscribeUrl,
-  html: dropEmailLayout({
-    eyebrow: "One product. One price. Ten minutes.",
-    heading: "A Live Drop is coming",
-    title, brand, retailerName, retailPrice, currency, imageUrl,
-    line: `Opens <strong>${escapeHtml(startsAt)}</strong>. The price is revealed the moment it does — press the button and we will remind you.`,
-    ctaLabel: "Remind me when it opens",
-    ctaHref: dropUrl(market),
-    footer: unsubscribeFooter(unsubscribeUrl, "You are receiving this because you subscribed at OneDailyDrop."),
+  fromName: "Chloe from OneDailyDrop",
+  ...composeEmail({
+    live: true,
+    preheader: "The price is on the page right now. Ten minutes only.",
+    eyebrow: "Live now",
+    heading: "We're live!",
+    paragraphs: [
+      "Hi, it's Chloe. The Live Drop just started and the price is revealed on the page right now.",
+      "It's open for ten minutes only. Jump in, and ask me anything in the chat.",
+    ],
+    product: productOf({ title, ...product }),
+    cta: { label: "Watch and buy now", href: dropUrl(market) },
+    signature: CHLOE,
+    footer: asked
+      ? "You asked to be reminded about this drop. There is nothing to unsubscribe from."
+      : unsubscribeFooter(unsubscribeUrl, "You are receiving this because you signed up for Live Drop emails."),
   }),
 });
+
+/* ------------------------------------------------------- price watches */
+
 /*
- * A price this person was watching has fallen.
- *
- * Both numbers are in it, because "cheaper" without them is an advertisement
- * and this is supposed to be information. The comparison is against the price
- * on the day they asked, not against a reference price somebody else set.
- */
-/*
- * Confirmation that we are now watching a price.
- *
- * Leaving a form and receiving nothing reads as a form that did not work.
- * The watch was being saved correctly and silently, which is the same thing
- * as broken from the other side of the screen: the first person to use it
- * assumed it had failed, and was right to.
- *
- * It also says the price it will compare against, because "we will tell you
- * if it gets cheaper" is only a promise if the number it is measured from
- * is written down somewhere the person can see.
+ * Confirmation that we are now watching a price, with the number it is
+ * measured against written down where the person can see it.
  */
 const priceWatchStartedEmail = ({ email, title, market, dealPath, price, currency, unsubscribeUrl }) => sendEmail({
   to: email,
-  subject: `Watching the price of ${title}`,
+  subject: `We're watching the price of ${title}`,
   unsubscribeUrl,
-  html: `
-    <div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;color:#17191d">
-      <h1 style="font-size:24px">We are watching it</h1>
-      <p><strong>${escapeHtml(title)}</strong></p>
-      <p style="font-size:20px"><strong>${escapeHtml(currency)} ${escapeHtml(price)}</strong></p>
-      <p style="color:#6b7280;font-size:14px">That is today&rsquo;s price, and the one we will measure against.
-      If it drops, you get one email. If it does not, you hear nothing more about it.</p>
-      <p style="margin:28px 0"><a href="${SITE}${escapeHtml(dealPath)}" style="background:#ff6b00;color:#fff;text-decoration:none;padding:13px 20px;border-radius:10px;font-weight:bold">See the listing</a></p>
-      <p style="color:#6b7280;font-size:13px">No account was created and you are not on any mailing list.</p>
-      ${unsubscribeUrl ? `<p style="margin-top:20px;font-size:13px;color:#6b7280"><a href="${escapeHtml(unsubscribeUrl)}" style="color:#6b7280">Stop watching this</a></p>` : ""}
-    </div>`
+  ...composeEmail({
+    preheader: "If it drops, you get one email. If not, you hear nothing more.",
+    eyebrow: "Price watch",
+    heading: "We're watching it for you",
+    paragraphs: [
+      `<strong>${escapeHtml(title)}</strong> is <strong>${escapeHtml(currency)} ${escapeHtml(price)}</strong> today. That's the price we'll measure against.`,
+      "If it drops, you'll get one email. If it doesn't, you won't hear anything more about it.",
+    ],
+    cta: { label: "See the listing", href: `${SITE}${escapeHtml(dealPath)}` },
+    footer: unsubscribeUrl
+      ? `No account was created and you are not on any mailing list. <a href="${escapeHtml(unsubscribeUrl)}" style="color:${FAINT}">Stop watching this</a>.`
+      : "No account was created and you are not on any mailing list.",
+  }),
 });
+
+/* A price this person was watching has fallen: both numbers, against the day they asked. */
 const priceDropEmail = ({ email, title, market, dealPath, was, now, currency, unsubscribeUrl }) => sendEmail({
   to: email,
-  subject: `${title} is cheaper than when you looked`,
+  subject: `Good news: ${title} just got cheaper`,
   unsubscribeUrl,
-  html: `
-    <div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;color:#17191d">
-      <h1 style="font-size:24px">The price dropped</h1>
-      <p><strong>${escapeHtml(title)}</strong></p>
-      <p style="font-size:20px"><strong>${escapeHtml(currency)} ${escapeHtml(now)}</strong>
-      <span style="color:#6b7280;text-decoration:line-through;margin-left:8px">${escapeHtml(currency)} ${escapeHtml(was)}</span></p>
-      <p style="color:#6b7280;font-size:14px">That is against the price on the day you asked us to watch it.</p>
-      <p style="margin:28px 0"><a href="${SITE}${escapeHtml(dealPath)}" style="background:#ff6b00;color:#fff;text-decoration:none;padding:13px 20px;border-radius:10px;font-weight:bold">See it</a></p>
-      <p style="color:#6b7280;font-size:13px">Prices move. Check the current one at the shop before buying.</p>
-      ${unsubscribeUrl ? `<p style="margin-top:20px;font-size:13px;color:#6b7280"><a href="${escapeHtml(unsubscribeUrl)}" style="color:#6b7280">Stop watching this</a></p>` : ""}
-    </div>`
+  ...composeEmail({
+    preheader: "The price you were watching went down.",
+    eyebrow: "Price drop",
+    heading: "The price just dropped",
+    paragraphs: [
+      `<strong>${escapeHtml(title)}</strong> is now <strong>${escapeHtml(currency)} ${escapeHtml(now)}</strong>, down from ${escapeHtml(currency)} ${escapeHtml(was)} when you asked us to watch it.`,
+      "Prices move, so check the current one at the shop before you buy.",
+    ],
+    cta: { label: "See it now", href: `${SITE}${escapeHtml(dealPath)}` },
+    footer: unsubscribeUrl ? `<a href="${escapeHtml(unsubscribeUrl)}" style="color:${FAINT}">Stop watching this</a>` : "",
+  }),
+});
+
+/* --------------------------------------------------------------- admin */
+
+/* A message whose only job is to prove the pipe works. */
+const deliveryTestEmail = ({ to }) => sendEmail({
+  to,
+  subject: "OneDailyDrop delivery test",
+  ...composeEmail({
+    preheader: "If you can read this, email delivery works.",
+    heading: "Delivery works",
+    paragraphs: [
+      "This message was sent from the OneDailyDrop admin console to prove that mail leaves the site and arrives. Nobody was subscribed to anything.",
+      "Check the headers: DKIM and DMARC should both pass, and the signing domain should be onedailydrop.com rather than sendgrid.net.",
+    ],
+  }),
 });
 
 module.exports = { welcomeEmail, liveDropLiveNowEmail, liveDropSaveTheDateEmail, liveDropStartingSoonEmail, liveDropAnnouncementEmail, priceDropEmail, priceWatchStartedEmail, passwordResetEmail, subscriptionEmail, clubWaitlistEmail, liveDropReminderEmail, deliveryTestEmail };
