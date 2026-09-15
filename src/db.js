@@ -492,6 +492,31 @@ db.exec(`
   CREATE UNIQUE INDEX IF NOT EXISTS idx_live_drop_events_unique
     ON live_drop_events(drop_id, event_type, session_id);
 
+  /* One shared Chloe per drop, and the chat everybody watching shares.
+     See src/liveHost.js. */
+  CREATE TABLE IF NOT EXISTS live_host_broadcasts(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    drop_id INTEGER NOT NULL,
+    conversation_id TEXT NOT NULL UNIQUE,
+    conversation_url TEXT NOT NULL,
+    secret TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    ended_at TEXT,
+    FOREIGN KEY(drop_id) REFERENCES live_drops(id)
+  );
+  CREATE TABLE IF NOT EXISTS live_chat_messages(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    drop_id INTEGER NOT NULL,
+    session_id TEXT NOT NULL,
+    author TEXT NOT NULL,
+    text TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'queued',
+    created_at TEXT NOT NULL,
+    sent_at TEXT,
+    FOREIGN KEY(drop_id) REFERENCES live_drops(id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_live_chat_drop ON live_chat_messages(drop_id, id);
+
   /* Last week's numbers, frozen when the week closed. See src/growthMetrics.js. */
   CREATE TABLE IF NOT EXISTS weekly_snapshots(
     week_end TEXT PRIMARY KEY,
