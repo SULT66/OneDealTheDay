@@ -48,7 +48,11 @@ const product = {
 /* The number that must never leave the server before the reveal. */
 const DROP_PRICE = "59.99";
 
-const bodyOf = (message) => String(message.content[0].value);
+/* The HTML part. Every message also carries a plain-text part first, which
+   SendGrid requires in that order and HTML-only bulk mail is filed as
+   promotional without. */
+const bodyOf = (message) => String(message.content.find((part) => part.type === "text/html").value);
+const textOf = (message) => String(message.content.find((part) => part.type === "text/plain")?.value || "");
 
 (async () => {
   await liveDropAnnouncementEmail({
@@ -69,6 +73,15 @@ const bodyOf = (message) => String(message.content[0].value);
 
   for (const message of sent) {
     const html = bodyOf(message);
+
+    /* A readable plain-text part, first, naming the product and the link. */
+    assert.strictEqual(message.content[0].type, "text/plain", "no plain-text part, or not first");
+    assert.match(textOf(message), /Pet Lodge Automatic Dog Feeder/);
+    assert.match(textOf(message), /https:\/\/www\.onedailydrop\.com\/us\/live/, "the text part lost the link");
+    assert.doesNotMatch(textOf(message), /<[a-z]/i, "HTML leaked into the text part");
+    /* From a person, which reads less like a campaign. */
+    assert.strictEqual(message.from.name, "Chloe from OneDailyDrop");
+    assert.doesNotMatch(message.subject, /\$|%|\bsave\b|\bdeal\b/i, "a subject that reads like an advert");
 
     /* The product, visible. */
     assert.match(html, /Pet Lodge Automatic Dog Feeder/, "the product is named");

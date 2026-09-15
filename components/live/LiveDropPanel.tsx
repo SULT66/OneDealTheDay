@@ -102,6 +102,15 @@ export function LiveDropPanel({
   );
   const [untilEnd, setUntilEnd] = useState<number | null>(initialDrop?.seconds_until_end ?? null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /* Buying in a drop takes a free account. Null until /api/me answers, so a
+     signed-in shopper never sees the sign-up button flash in place of Buy. */
+  const [signedIn, setSignedIn] = useState<boolean | null>(null);
+  useEffect(() => {
+    fetch("/api/me")
+      .then((response) => response.json())
+      .then((body) => setSignedIn(Boolean(body?.user)))
+      .catch(() => setSignedIn(false));
+  }, []);
 
   const load = useCallback(async () => {
     const response = await fetch(`/api/live/current?market=${encodeURIComponent(market)}`).catch(
@@ -196,8 +205,23 @@ export function LiveDropPanel({
       }).catch(() => {});
     };
     beat();
-    const timer = setInterval(beat, 30000);
-    return () => clearInterval(timer);
+    const timer = setInterval(beat, 20000);
+    /* Leaving says so. A closed tab used to stay counted until its last
+       heartbeat aged out, so somebody who shut the page still showed as
+       watching for a minute and a half. sendBeacon, because it is the one
+       request a closing page reliably finishes. */
+    const leave = () => {
+      const body = JSON.stringify({ drop_key: dropKey, session_id: analyticsSessionId(), leaving: true });
+      if (!navigator.sendBeacon?.("/api/live/watching", new Blob([body], { type: "application/json" }))) {
+        void fetch("/api/live/watching", { method: "POST", headers: { "Content-Type": "application/json" }, body, keepalive: true }).catch(() => {});
+      }
+    };
+    window.addEventListener("pagehide", leave);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener("pagehide", leave);
+      leave();
+    };
   }, [dropKey, onAir]);
 
   /* The local second hand between polls. */
@@ -255,8 +279,13 @@ export function LiveDropPanel({
     <Frame>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <p className="text-lg font-black tracking-tight text-fg sm:text-xl">
-            OneDailyDrop <span className="text-accent">LIVE</span>
+          {/* The show's name, sized like one. LIVE sits on lime rather than
+              being lime: lime type on a white card all but disappears. */}
+          <p className="flex items-center gap-2 text-2xl font-black tracking-tight text-fg sm:text-3xl">
+            OneDailyDrop
+            <span className="rounded-lg bg-lime px-2.5 py-0.5 text-xl font-black tracking-wide text-ink sm:text-2xl">
+              LIVE
+            </span>
           </p>
           <StateBadge state={drop.state} />
           {/* Only while the drop is on, and only once there is somebody to
@@ -331,7 +360,16 @@ export function LiveDropPanel({
                 {isLive ? ` of ${drop.quantity_total}` : " at this price"}
               </Metric>
             )}
-            {isLive && drop.affiliate_url && (
+            {isLive && drop.affiliate_url && signedIn === false && (
+              <a
+                href={`/${market}/account?next=${encodeURIComponent(`/${market}/live`)}`}
+                className="ml-auto inline-flex min-w-[9rem] flex-1 flex-col items-center justify-center rounded-xl bg-accent px-6 py-2 text-center text-white transition-opacity hover:opacity-88 sm:flex-none"
+              >
+                <span className="text-base font-bold">Sign up to buy</span>
+                <span className="text-[11px] font-medium opacity-85">Free account · takes seconds</span>
+              </a>
+            )}
+            {isLive && drop.affiliate_url && signedIn === true && (
               <a
                 /* Through the server, so the drop's state is read at the moment
                    of the click rather than when this page was drawn, and so the
@@ -685,7 +723,15 @@ function BroadcastStage({ market, drop }: { market: string; drop: LiveDropView }
       </div>
 
       {showsProduct && (
-        <div className="grid h-32 grid-cols-2 border-t border-white/10 bg-black sm:h-auto sm:grid-cols-1 sm:grid-rows-2 sm:border-l sm:border-t-0">
+        /* On a phone the footage gets a whole 16:9 frame under Chloe and is
+           shown uncropped: squeezed into a strip and cropped to fill it, it
+           was a grey close-up of nothing. Stills keep a shorter two-up row. */
+        <div
+          className={cn(
+            "grid border-t border-white/10 bg-black sm:h-auto sm:grid-cols-1 sm:grid-rows-2 sm:border-l sm:border-t-0",
+            hasDemo ? "aspect-video grid-cols-1 sm:aspect-auto" : "h-40 grid-cols-2",
+          )}
+        >
           {hasDemo ? (
             <video
               src={drop.video_url}
@@ -694,7 +740,7 @@ function BroadcastStage({ market, drop }: { market: string; drop: LiveDropView }
               muted
               loop
               playsInline
-              className="col-span-2 h-full w-full object-cover sm:col-span-1 sm:row-span-2"
+              className="h-full w-full bg-black object-contain sm:row-span-2 sm:object-cover"
             />
           ) : (
             <>

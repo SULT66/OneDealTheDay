@@ -979,6 +979,14 @@ const sendWelcome = (user) => {
 
 app.get("/api/auth/providers", (req, res) => res.json({google: googleAuth.configured}));
 
+const AFTER_SIGN_IN_COOKIE = "odd_after_sign_in";
+/* A path on this site and nothing else: "/us/live" yes, "//evil.example" and
+   "https://..." no. */
+const safeReturnPath = (value) => {
+  const text = String(value || "").trim();
+  return /^\/(?!\/)[A-Za-z0-9/_\-.?=&%#]{0,200}$/.test(text) && !text.includes("\\") ? text : "";
+};
+
 app.get("/api/auth/google", authRateLimit, (req, res) => {
   if (!googleAuth.configured) return res.redirect("/account?error=google_unavailable");
   const state = createState();
@@ -988,6 +996,13 @@ app.get("/api/auth/google", authRateLimit, (req, res) => {
     secure: process.env.NODE_ENV === "production",
     maxAge: 10 * 60 * 1000
   });
+  /* Where to land afterwards, such as the Live Drop that asked them to sign
+     in. Only a path on this site: anything else would make sign-in an open
+     redirect. */
+  const next = safeReturnPath(req.query?.next);
+  if (next) {
+    res.cookie(AFTER_SIGN_IN_COOKIE, next, { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", maxAge: 10 * 60 * 1000 });
+  }
   res.redirect(authorizationUrl(googleAuth, state));
 });
 
@@ -1006,7 +1021,9 @@ app.get("/api/auth/google/callback", authRateLimit, async (req, res) => {
     if (account.created) {
       sendWelcome({name: profile.name, email: profile.email, market: marketFromIp(req).code});
     }
-    return res.redirect("/account?signed_in=google");
+    const next = safeReturnPath(parseCookies(req)[AFTER_SIGN_IN_COOKIE]);
+    res.clearCookie(AFTER_SIGN_IN_COOKIE);
+    return res.redirect(next || "/account?signed_in=google");
   } catch (error) {
     /* Loudly, because a broken sign-in is invisible from the outside: the
        shopper simply gives up, and nothing in the logs says why. */
@@ -1581,7 +1598,10 @@ const LIVE_DROP_EVENTS = new Set(["arrived", "waiting_room", "reveal", "host_sta
  * from a phone that dipped through a tunnel does not remove somebody who is
  * still there.
  */
-const WATCHING_WINDOW_MS = 90 * 1000;
+/* Two heartbeats of twenty seconds, plus a little: a phone that misses one ping
+   stays counted, and a page that died without saying goodbye drops out in
+   under a minute. */
+const WATCHING_WINDOW_MS = 50 * 1000;
 const watchingNow = dropId => db
   .prepare("SELECT COUNT(*) AS total FROM live_drop_presence WHERE drop_id=? AND seen_at >= ?")
   .get(dropId, new Date(Date.now() - WATCHING_WINDOW_MS).toISOString()).total;
@@ -1594,6 +1614,11 @@ app.post("/api/live/watching", (req, res) => {
     .prepare("SELECT id FROM live_drops WHERE drop_key=? AND published=1")
     .get(String(req.body?.drop_key || "").trim().slice(0, 80));
   if (!drop) return res.sendStatus(204);
+  /* The page closing: out of the count now, not when the heartbeat ages out. */
+  if (req.body?.leaving === true) {
+    db.prepare("DELETE FROM live_drop_presence WHERE drop_id=? AND session_id=?").run(drop.id, sessionId);
+    return res.json({watching: watchingNow(drop.id)});
+  }
   db.prepare(`
     INSERT INTO live_drop_presence(drop_id,session_id,seen_at) VALUES(?,?,?)
     ON CONFLICT(drop_id,session_id) DO UPDATE SET seen_at=excluded.seen_at
@@ -3346,6 +3371,11 @@ app.get("/live/go/:key", (req, res) => {
   if (!drop) return res.sendStatus(404);
   const livePage = `/${drop.market}/live`;
   if (dropState(drop, Date.now()) !== "live") return res.redirect(302, livePage);
+  /* Buying in a Live Drop takes a free account. The page hides the button
+     from visitors, and this is what holds if somebody has the link anyway. */
+  if (!currentUser(req)) {
+    return res.redirect(302, `/${drop.market}/account?next=${encodeURIComponent(livePage)}`);
+  }
 
   let destination;
   try {

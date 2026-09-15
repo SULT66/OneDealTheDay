@@ -71,6 +71,9 @@ export function AccountPanel({ market }: { market: string }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("Free forever. Club is optional.");
   const [failed, setFailed] = useState(false);
+  /* Where to go once signed in, such as the Live Drop that sent them here.
+     A path on this site only. */
+  const [returnTo, setReturnTo] = useState("");
 
   const say = useCallback((text: string, isFailure = false) => {
     setMessage(text);
@@ -86,12 +89,27 @@ export function AccountPanel({ market }: { market: string }) {
     } else if (params.get("mode") === "login") {
       setMode("login");
     }
+    const next = params.get("next") || "";
+    if (/^\/(?!\/)[A-Za-z0-9/_\-.?=&%#]{0,200}$/.test(next)) {
+      setReturnTo(next);
+      if (!token && params.get("mode") !== "login") setMode("register");
+      say("Create a free account to buy in the Live Drop. It takes a few seconds.");
+    }
     const failure = GOOGLE_FAILURES[params.get("error") || ""];
     if (failure) say(failure, true);
 
     fetch("/api/me")
       .then((response) => response.json())
-      .then((body) => setAccount(body?.user || null))
+      .then((body) => {
+        const user = body?.user || null;
+        const back = new URLSearchParams(window.location.search).get("next") || "";
+        /* Already signed in and sent here to sign in: just go back. */
+        if (user && /^\/(?!\/)[A-Za-z0-9/_\-.?=&%#]{0,200}$/.test(back)) {
+          window.location.replace(back);
+          return;
+        }
+        setAccount(user);
+      })
       .catch(() => {})
       .finally(() => setChecked(true));
 
@@ -148,6 +166,8 @@ export function AccountPanel({ market }: { market: string }) {
       } else if (mode === "reset") {
         say("Password changed. You can sign in now.");
         switchTo("login");
+      } else if (returnTo) {
+        window.location.assign(returnTo);
       } else {
         setAccount(body?.user || null);
         say("");
@@ -260,7 +280,7 @@ export function AccountPanel({ market }: { market: string }) {
         {showTabs && googleReady && (
           <>
             <a
-              href="/api/auth/google"
+              href={returnTo ? `/api/auth/google?next=${encodeURIComponent(returnTo)}` : "/api/auth/google"}
               className="mt-4 flex h-12 items-center justify-center gap-2.5 rounded-full border border-border text-sm font-semibold text-fg transition-colors hover:bg-surface-2"
             >
               <svg viewBox="0 0 18 18" width="17" height="17" aria-hidden="true">

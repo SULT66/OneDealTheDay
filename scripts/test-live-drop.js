@@ -514,17 +514,21 @@ async function main() {
     "a heartbeat inserts instead of refreshing, so leaving never lowers the count",
   );
   assert(
-    /seen_at >= \?/.test(serverSource) && /WATCHING_WINDOW_MS = 90 \* 1000/.test(serverSource),
+    /seen_at >= \?/.test(serverSource) && /WATCHING_WINDOW_MS = (\d+) \* 1000/.test(serverSource),
     "the count no longer has a window, so it counts everybody who ever arrived",
   );
-  /* Longer than the heartbeat, or a phone that dipped through a tunnel drops
-     out of a count it belongs in. */
+  const windowSeconds = Number(/WATCHING_WINDOW_MS = (\d+) \* 1000/.exec(serverSource)[1]);
+  /* Comfortably longer than the heartbeat, or a phone that dipped through a
+     tunnel drops out of a count it belongs in. */
   const heartbeat = /setInterval\(beat, (\d+)\)/.exec(panel);
   assert(heartbeat, "the presence heartbeat is gone");
   assert(
-    Number(heartbeat[1]) < 90 * 1000,
-    "the heartbeat is slower than the window it feeds, so watchers flicker in and out",
+    Number(heartbeat[1]) * 2 <= windowSeconds * 1000,
+    "the heartbeat is too slow for the window it feeds, so watchers flicker in and out",
   );
+  /* And a closed page leaves at once rather than when its heartbeat ages out. */
+  assert(/leaving: true/.test(panel) && /pagehide/.test(panel), "closing the page no longer takes the viewer out of the count");
+  assert(/req\.body\?\.leaving === true/.test(serverSource), "the server ignores a page saying it left");
   assert(
     /onAir && drop\.watching > 0/.test(panel),
     "the viewer count shows outside the drop, or shows a zero nobody needed to read",
