@@ -2,12 +2,12 @@
 
 import Image from "next/image";
 import { Eye } from "@phosphor-icons/react";
-import DailyIframe from "@daily-co/daily-js";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { formatPrice } from "@/lib/format";
 import { DeliaTrigger } from "@/components/delia/DeliaTrigger";
 import { analyticsSessionId, recordLiveDropEvent } from "@/lib/analyticsSession";
+import { BroadcastVideo, useLiveBroadcast } from "./LiveBroadcast";
 
 /**
  * The Live Drop, as a shopper sees it.
@@ -246,7 +246,7 @@ export function LiveDropPanel({
      * nothing in it, which is what it looked like: a stray shape, not a
      * background.
      */
-    <Frame lit={drop.state === "waiting" || drop.state === "live"}>
+    <Frame>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <p className="text-lg font-black tracking-tight text-fg sm:text-xl">
@@ -316,10 +316,13 @@ export function LiveDropPanel({
               ten minutes it exists for. */}
           <div className="mt-4 flex flex-wrap items-stretch gap-3">
             <Countdown state={drop.state} untilStart={untilStart} untilEnd={untilEnd} />
-            {/* Only a recent, exact retailer observation supports a stock count. */}
-            {isLive && drop.stock_is_live && (
-              <Metric label="Stock">
-                <span className="tnum">{drop.quantity_remaining}</span> left
+            {/* How many are offered at this price. The number the host set,
+                corrected with Set stock while the drop runs, or the shop's own
+                count when it reports one; a real cap, never decoration. */}
+            {drop.quantity_total > 0 && !finished && (
+              <Metric label={isLive ? "Left" : "Units"}>
+                <span className="tnum">{isLive ? drop.quantity_remaining : drop.quantity_total}</span>
+                {isLive ? ` of ${drop.quantity_total}` : " at this price"}
               </Metric>
             )}
             {isLive && drop.affiliate_url && (
@@ -355,7 +358,7 @@ export function LiveDropPanel({
   );
 }
 
-function Frame({ children, lit = false }: { children: React.ReactNode; lit?: boolean }) {
+function Frame({ children }: { children: React.ReactNode }) {
   return (
     /*
      * A stage, but only while something is on it.
@@ -375,18 +378,7 @@ function Frame({ children, lit = false }: { children: React.ReactNode; lit?: boo
      * carries meaning. The countdown and the stock are the page; this is the
      * room they stand in, and an empty room needs no lighting.
      */
-    <section className="relative mx-auto w-full max-w-6xl px-3 py-6 sm:px-6 sm:py-10">
-      {lit && (
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-56 overflow-hidden rounded-b-[2rem] bg-graphite sm:h-64"
-        >
-          {/* A single soft light above the stage. One accent, kept faint: the
-              lime is the buy button's colour and it should not have to compete
-              with the wall behind it. */}
-          <div className="absolute -top-24 left-1/2 h-56 w-[36rem] -translate-x-1/2 rounded-full bg-lime/20 blur-3xl" />
-        </div>
-      )}
+    <section className="relative mx-auto w-full max-w-5xl px-3 py-4 sm:px-6 sm:py-8">
       <div className="rounded-3xl border border-border bg-surface p-4 shadow-lg sm:p-6">{children}</div>
     </section>
   );
@@ -591,7 +583,7 @@ function BroadcastStage({ market, drop }: { market: string; drop: LiveDropView }
         /* Side by side at every width, phone included: the presenter and the
            product are the two halves of a shopping channel, and stacking them
            on a phone would push the product below the fold. */
-        showsProduct && "grid-cols-[1.05fr_0.95fr] sm:grid-cols-[1.2fr_0.8fr]",
+        showsProduct && "grid-cols-1 sm:grid-cols-[1.3fr_0.7fr]",
       )}
     >
       <div className="relative min-w-0 overflow-hidden bg-[radial-gradient(circle_at_50%_20%,#123b69_0%,#07172b_48%,#030914_100%)]">
@@ -611,7 +603,7 @@ function BroadcastStage({ market, drop }: { market: string; drop: LiveDropView }
              player. An iframe pointed at an .mp4 shows a bare browser player,
              or nothing; a video element is what a file needs. Muted so the
              browser will start it, with controls to turn the sound on. */
-          <div className="relative aspect-[4/3] w-full">
+          <div className="relative aspect-video w-full">
             <video
               src={drop.stream_embed_url}
               controls
@@ -623,7 +615,7 @@ function BroadcastStage({ market, drop }: { market: string; drop: LiveDropView }
             />
           </div>
         ) : hasStream ? (
-          <div className="relative aspect-[4/3] w-full">
+          <div className="relative aspect-video w-full">
             <iframe
               src={drop.stream_embed_url}
               title={`${drop.title} AI host stream`}
@@ -644,7 +636,7 @@ function BroadcastStage({ market, drop }: { market: string; drop: LiveDropView }
              because a drop runs for ten minutes and a clip that ends leaves a
              black rectangle for the rest of them. Muted so the browser will
              actually start it — an autoplaying video with sound is blocked. */
-          <div className="relative aspect-[4/3] w-full">
+          <div className="relative aspect-video w-full">
             <video
               src={drop.video_url}
               controls
@@ -656,7 +648,7 @@ function BroadcastStage({ market, drop }: { market: string; drop: LiveDropView }
             />
           </div>
         ) : (
-          <div className="flex aspect-[4/3] w-full flex-col items-center justify-center px-8 text-center">
+          <div className="flex aspect-video w-full flex-col items-center justify-center px-8 text-center">
             {drop.image_url ? (
               <div className="relative mb-5 h-32 w-32 overflow-hidden rounded-full border border-white/15 bg-white/95 p-3 shadow-2xl">
                 <Image src={drop.image_url} alt="" fill sizes="128px" className="object-contain p-3" unoptimized />
@@ -679,7 +671,7 @@ function BroadcastStage({ market, drop }: { market: string; drop: LiveDropView }
       </div>
 
       {showsProduct && (
-        <div className="grid grid-rows-2 border-l border-white/10 bg-black">
+        <div className="grid h-32 grid-cols-2 border-t border-white/10 bg-black sm:h-auto sm:grid-cols-1 sm:grid-rows-2 sm:border-l sm:border-t-0">
           {hasDemo ? (
             <video
               src={drop.video_url}
@@ -688,7 +680,7 @@ function BroadcastStage({ market, drop }: { market: string; drop: LiveDropView }
               muted
               loop
               playsInline
-              className="row-span-2 h-full w-full object-cover"
+              className="col-span-2 h-full w-full object-cover sm:col-span-1 sm:row-span-2"
             />
           ) : (
             <>
@@ -761,39 +753,27 @@ type ServerChatMessage = { id: number; author: string; text: string; status: str
 /*
  * Chloe, shared by everybody watching, and the chat they share.
  *
- * She used to be a private call per viewer, which made ten viewers ten
- * different shows. Now every viewer joins the same conversation to watch,
- * with no camera or microphone, and questions go into one chat on this site
- * that everybody sees. They reach Chloe through the host console, never from
- * a viewer's browser: see src/liveHost.js.
+ * Every viewer joins the same conversation to watch, with no camera or
+ * microphone, and questions go into one chat on this site that everybody
+ * sees. They reach Chloe through the host console, never from a viewer's
+ * browser: see src/liveHost.js.
  *
- * The chat is readable before joining, so somebody deciding whether to watch
- * can see what people are asking.
+ * The call itself is held by LiveBroadcastProvider in the layout, so leaving
+ * this page for a category does not hang up on her; she moves to a small
+ * player in the corner instead.
  */
 function TavusHost({ market, drop }: { market: string; drop: LiveDropView }) {
-  const [conversationUrl, setConversationUrl] = useState("");
+  const live = useLiveBroadcast();
+  const watching = live.session?.dropKey === drop.drop_key;
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState("");
-  const [joined, setJoined] = useState(false);
   const [needsPlay, setNeedsPlay] = useState(false);
   const [question, setQuestion] = useState("");
   const [postError, setPostError] = useState("");
   const [posting, setPosting] = useState(false);
   const [chat, setChat] = useState<SharedChatMessage[]>([]);
-  const callRef = useRef<ReturnType<typeof DailyIframe.createCallObject> | null>(null);
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const seenEventsRef = useRef(new Set<string>());
   const lastIdRef = useRef(0);
   const listRef = useRef<HTMLDivElement | null>(null);
-
-  const addMessages = useCallback((incoming: SharedChatMessage[]) => {
-    if (!incoming.length) return;
-    setChat((current) => {
-      const known = new Set(current.map((message) => message.id));
-      const merged = [...current, ...incoming.filter((message) => !known.has(message.id))];
-      return merged.sort((left, right) => left.at - right.at).slice(-80);
-    });
-  }, []);
 
   /* Everybody's questions, every few seconds, for as long as the drop is on. */
   useEffect(() => {
@@ -805,21 +785,22 @@ function TavusHost({ market, drop }: { market: string; drop: LiveDropView }) {
       if (cancelled || !response?.ok) return;
       const body = (await response.json().catch(() => ({}))) as { messages?: ServerChatMessage[] };
       const rows = body.messages || [];
-      if (!rows.length) {
-        /* Status changes (sent to Chloe) arrive on the next full read. */
-        return;
-      }
+      if (!rows.length) return;
       lastIdRef.current = Math.max(lastIdRef.current, ...rows.map((row) => row.id));
-      addMessages(
-        rows.map((row) => ({
-          id: `m${row.id}`,
-          kind: "viewer",
-          author: row.author,
-          text: row.text,
-          at: Date.parse(row.created_at),
-          sent: row.status === "sent",
-        })),
-      );
+      setChat((current) => {
+        const known = new Set(current.map((message) => message.id));
+        const incoming = rows
+          .map((row) => ({
+            id: `m${row.id}`,
+            kind: "viewer" as const,
+            author: row.author,
+            text: row.text,
+            at: Date.parse(row.created_at),
+            sent: row.status === "sent",
+          }))
+          .filter((message) => !known.has(message.id));
+        return [...current, ...incoming].slice(-80);
+      });
     };
     void poll();
     const timer = setInterval(poll, 3000);
@@ -827,80 +808,25 @@ function TavusHost({ market, drop }: { market: string; drop: LiveDropView }) {
       cancelled = true;
       clearInterval(timer);
     };
-  }, [drop.drop_key, addMessages]);
+  }, [drop.drop_key]);
+
+  /* The chat and Chloe's captions, in the order they happened. */
+  const lines = [
+    ...chat,
+    ...(watching
+      ? live.captions.map((caption) => ({ id: caption.id, kind: "chloe" as const, author: "Chloe", text: caption.text, at: caption.at }))
+      : []),
+  ]
+    .sort((left, right) => left.at - right.at)
+    .slice(-60);
 
   useEffect(() => {
     const list = listRef.current;
     if (list) list.scrollTop = list.scrollHeight;
-  }, [chat.length]);
-
-  /* Receive-only: this browser never publishes a camera or a microphone, and
-     never sends Chloe anything. It only watches and reads her captions. */
-  useEffect(() => {
-    if (!conversationUrl) return;
-    setJoined(false);
-    setNeedsPlay(false);
-    seenEventsRef.current.clear();
-    const call = DailyIframe.createCallObject({ audioSource: false, videoSource: false });
-    callRef.current = call;
-
-    const syncRemoteMedia = () => {
-      /* The host console joins the same room without media; Chloe is the one
-         participant publishing video. */
-      const presenter = Object.values(call.participants()).find(
-        (participant) => !participant.local && participant.tracks.video?.persistentTrack,
-      );
-      const tracks = [presenter?.tracks.video?.persistentTrack, presenter?.tracks.audio?.persistentTrack].filter(
-        (track): track is MediaStreamTrack => Boolean(track),
-      );
-      const element = videoRef.current;
-      if (!element || !tracks.length) return;
-      const currentIds = new Set(
-        element.srcObject instanceof MediaStream ? element.srcObject.getTracks().map((track) => track.id) : [],
-      );
-      if (tracks.every((track) => currentIds.has(track.id))) return;
-      element.srcObject = new MediaStream(tracks);
-      void element.play().then(() => setNeedsPlay(false)).catch(() => setNeedsPlay(true));
-    };
-
-    const receiveMessage = (event: { data?: unknown }) => {
-      const payload = event.data as {
-        event_type?: string;
-        seq?: number | string;
-        properties?: { role?: string; speech?: string; text?: string };
-      } | null;
-      if (!payload || payload.event_type !== "conversation.utterance") return;
-      const role = String(payload.properties?.role || "").toLowerCase();
-      const text = String(payload.properties?.speech || payload.properties?.text || "").trim();
-      if (!text || !["pal", "replica"].includes(role)) return;
-      const id = `c${String(payload.seq ?? text)}`;
-      if (seenEventsRef.current.has(id)) return;
-      seenEventsRef.current.add(id);
-      /* The arrival time only places her caption among the chat lines. Nothing
-         about the drop's state is ever read from this browser's clock. */
-      addMessages([{ id, kind: "chloe", author: "Chloe", text, at: new Date().getTime() }]);
-    };
-
-    call.on("joined-meeting", () => {
-      setJoined(true);
-      syncRemoteMedia();
-    });
-    call.on("participant-joined", syncRemoteMedia);
-    call.on("participant-updated", syncRemoteMedia);
-    call.on("app-message", receiveMessage);
-    call.on("error", () => setError("Chloe's video connection was interrupted."));
-    void call
-      .join({ url: conversationUrl, startAudioOff: true, startVideoOff: true, userName: "OneDailyDrop viewer" })
-      .catch(() => setError("Chloe's video connection was interrupted."));
-
-    return () => {
-      callRef.current = null;
-      void call.leave().catch(() => undefined).finally(() => call.destroy());
-    };
-  }, [conversationUrl, addMessages]);
+  }, [lines.length]);
 
   const start = async () => {
-    if (starting || conversationUrl) return;
+    if (starting || watching) return;
     setStarting(true);
     setError("");
     const response = await fetch(`/api/live/host?market=${encodeURIComponent(market)}`).catch(() => null);
@@ -910,11 +836,9 @@ function TavusHost({ market, drop }: { market: string; drop: LiveDropView }) {
       setError(body?.error || "Chloe could not join. Please try again.");
       return;
     }
-    setConversationUrl(body.conversation_url);
+    live.join({ conversationUrl: body.conversation_url, dropKey: drop.drop_key, title: drop.title, market });
     recordLiveDropEvent(drop.drop_key, "host_started");
   };
-
-  const leave = () => setConversationUrl("");
 
   const ask = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -938,15 +862,15 @@ function TavusHost({ market, drop }: { market: string; drop: LiveDropView }) {
 
   const chatPanel = (
     <div className="relative z-20 border-t border-white/10 bg-[#07101e]/95 p-3 backdrop-blur">
-      <div ref={listRef} className="mb-2 max-h-32 space-y-1.5 overflow-y-auto" aria-live="polite">
-        {chat.length ? (
-          chat.map((message) => (
+      <div ref={listRef} className="mb-2 max-h-28 space-y-1.5 overflow-y-auto sm:max-h-32" aria-live="polite">
+        {lines.length ? (
+          lines.map((message) => (
             <p key={message.id} className="text-xs leading-relaxed text-white/80">
               <span className={message.kind === "chloe" ? "font-black text-lime" : "font-bold text-white"}>
                 {message.author}:
               </span>{" "}
               {message.text}
-              {message.sent ? <span className="ml-1 text-[10px] text-white/40">· asked</span> : null}
+              {"sent" in message && message.sent ? <span className="ml-1 text-[10px] text-white/40">· asked</span> : null}
             </p>
           ))
         ) : (
@@ -977,18 +901,17 @@ function TavusHost({ market, drop }: { market: string; drop: LiveDropView }) {
     </div>
   );
 
-  if (conversationUrl) {
+  if (watching) {
     return (
       <div className="relative flex w-full min-w-0 flex-col bg-[#07172b]">
-        <div className="relative aspect-[4/3] w-full overflow-hidden bg-black">
-          <video
-            ref={videoRef}
-            autoPlay
-            playsInline
+        <div className="relative aspect-video w-full overflow-hidden bg-black">
+          <BroadcastVideo
+            stream={live.stream}
             className="h-full w-full object-contain"
-            aria-label="Chloe, OneDailyDrop AI shopping host"
+            label="Chloe, OneDailyDrop AI shopping host"
+            onNeedsPlay={setNeedsPlay}
           />
-          {!joined ? (
+          {!live.joined ? (
             <div className="absolute inset-0 flex items-center justify-center bg-[#07172b] text-sm font-bold text-white/75">
               Connecting Chloe...
             </div>
@@ -996,27 +919,28 @@ function TavusHost({ market, drop }: { market: string; drop: LiveDropView }) {
           {needsPlay ? (
             <button
               type="button"
-              onClick={() => {
-                void videoRef.current?.play().then(() => setNeedsPlay(false));
+              onClick={(event) => {
+                const video = event.currentTarget.parentElement?.querySelector("video") as HTMLVideoElement | null;
+                void video?.play().then(() => setNeedsPlay(false));
               }}
               className="absolute inset-0 z-10 m-auto h-12 w-fit rounded-full bg-accent px-6 text-sm font-black text-white"
             >
               Play Chloe
             </button>
           ) : null}
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-4 pb-4 pt-16">
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/60">Now presenting</p>
-            <p className="mt-1 line-clamp-2 text-lg font-bold text-white">{drop.title}</p>
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-3 pb-3 pt-10 sm:px-4 sm:pb-4">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/60">Now presenting</p>
+            <p className="mt-0.5 line-clamp-1 text-sm font-bold text-white sm:text-base">{drop.title}</p>
           </div>
         </div>
         <button
           type="button"
-          onClick={leave}
+          onClick={live.leave}
           className="absolute right-3 top-3 z-20 rounded-full border border-white/20 bg-black/70 px-3 py-1.5 text-xs font-bold text-white backdrop-blur hover:bg-black"
         >
           Leave
         </button>
-        {error ? <p className="px-3 pt-2 text-xs font-semibold text-red-300">{error}</p> : null}
+        {error || live.error ? <p className="px-3 pt-2 text-xs font-semibold text-red-300">{error || live.error}</p> : null}
         {chatPanel}
       </div>
     );
@@ -1024,26 +948,21 @@ function TavusHost({ market, drop }: { market: string; drop: LiveDropView }) {
 
   return (
     <div className="relative flex w-full min-w-0 flex-col">
-      <div className="flex aspect-[4/3] w-full flex-col items-center justify-center px-8 text-center">
-        {drop.image_url ? (
-          <div className="relative mb-5 h-32 w-32 overflow-hidden rounded-full border border-white/15 bg-white/95 p-3 shadow-2xl">
-            <Image src={drop.image_url} alt="" fill sizes="128px" className="object-contain p-3" unoptimized />
-          </div>
-        ) : null}
-        <p className="text-xl font-black text-white">Chloe is presenting live</p>
-        <p className="mt-2 max-w-sm text-sm leading-relaxed text-white/65">
+      <div className="flex aspect-video w-full flex-col items-center justify-center px-6 text-center">
+        <p className="text-lg font-black text-white sm:text-xl">Chloe is presenting live</p>
+        <p className="mt-1.5 max-w-sm text-xs leading-relaxed text-white/65 sm:text-sm">
           Watch with everyone else and ask your questions in the chat.
         </p>
         <button
           type="button"
           onClick={start}
           disabled={starting}
-          className="relative z-20 mt-5 rounded-full bg-accent px-6 py-3 text-sm font-black text-white shadow-lg transition hover:brightness-110 disabled:cursor-wait disabled:opacity-60"
+          className="relative z-20 mt-4 rounded-full bg-accent px-6 py-2.5 text-sm font-black text-white shadow-lg transition hover:brightness-110 disabled:cursor-wait disabled:opacity-60"
         >
           {starting ? "Connecting Chloe..." : "Watch Chloe live"}
         </button>
-        {error ? <p className="relative z-20 mt-3 text-xs font-semibold text-red-300">{error}</p> : null}
-        <p className="mt-3 text-[11px] text-white/45">No camera or microphone access</p>
+        {error ? <p className="relative z-20 mt-2 text-xs font-semibold text-red-300">{error}</p> : null}
+        <p className="mt-2 text-[11px] text-white/45">No camera or microphone access</p>
       </div>
       {chatPanel}
     </div>

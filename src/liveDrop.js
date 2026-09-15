@@ -442,8 +442,79 @@ async function announceDropToSubscribers({
   return sent;
 }
 
+/*
+ * "It's live now", the moment the price opens.
+ *
+ * There was no such email. A shopper who asked to be reminded heard ten
+ * minutes before and then nothing, and the subscriber list heard once, a day
+ * or more ahead, and never again, so the one moment the format rests on was
+ * announced to nobody. This goes to both, once each, as the drop opens.
+ *
+ * Only in the first few minutes: an email saying a ten-minute drop is on,
+ * delivered seven minutes in, is a message about something nearly over. And
+ * one email per address per drop, however many lists the address is on.
+ */
+async function sendLiveNowNotices({
+  db,
+  sendLiveNow,
+  unsubscribeUrlFor = () => "",
+  now = Date.now(),
+  withinMinutes = 4,
+  batch = 500,
+  logger = console,
+}) {
+  const drops = db.prepare(`
+    SELECT id, title, market, start_at, end_at, brand, retailer_name, image_url, retail_price, currency
+    FROM live_drops
+    WHERE published = 1 AND start_at <= ? AND start_at > ? AND end_at > ?
+  `).all(
+    new Date(now).toISOString(),
+    new Date(now - withinMinutes * 60000).toISOString(),
+    new Date(now).toISOString(),
+  );
+
+  const told = db.prepare("SELECT 1 FROM live_drop_live_notices WHERE drop_id=? AND email=?");
+  const mark = db.prepare("INSERT OR IGNORE INTO live_drop_live_notices(drop_id,email,sent_at) VALUES(?,?,?)");
+  let sent = 0;
+  for (const drop of drops) {
+    /* People who asked about this drop, then the subscriber list; the first
+       occurrence of an address wins, so a subscriber who also pressed Remind
+       me gets the one without marketing wording. */
+    const reminded = db.prepare("SELECT lower(email) AS email FROM live_drop_reminders WHERE drop_id=?").all(drop.id);
+    const subscribers = db.prepare(`
+      SELECT lower(email) AS email, unsubscribe_token FROM subscribers WHERE status='active' AND market=?
+    `).all(drop.market);
+    const recipients = new Map();
+    for (const row of reminded) if (!recipients.has(row.email)) recipients.set(row.email, { asked: true });
+    for (const row of subscribers) if (!recipients.has(row.email)) recipients.set(row.email, { asked: false, subscriber: row });
+
+    let count = 0;
+    for (const [email, who] of recipients) {
+      if (count >= batch) break;
+      if (told.get(drop.id, email)) continue;
+      count += 1;
+      try {
+        await sendLiveNow({
+          email,
+          title: drop.title,
+          market: drop.market,
+          asked: who.asked,
+          unsubscribeUrl: who.asked ? "" : unsubscribeUrlFor(who.subscriber),
+          ...emailProduct(drop),
+        });
+        mark.run(drop.id, email, new Date(now).toISOString());
+        sent += 1;
+      } catch (error) {
+        logger.error(`[live-drop] live-now email to ${email} failed: ${error.message}`);
+      }
+    }
+  }
+  return sent;
+}
+
 module.exports = {
   REMINDER_LEAD_MINUTES,
+  sendLiveNowNotices,
   WAITING_ROOM_SECONDS,
   dropSaving,
   hostGreeting,

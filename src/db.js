@@ -517,6 +517,15 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_live_chat_drop ON live_chat_messages(drop_id, id);
 
+  /* "It's live now", once per address per drop. See sendLiveNowNotices. */
+  CREATE TABLE IF NOT EXISTS live_drop_live_notices(
+    drop_id INTEGER NOT NULL,
+    email TEXT NOT NULL,
+    sent_at TEXT NOT NULL,
+    PRIMARY KEY(drop_id, email),
+    FOREIGN KEY(drop_id) REFERENCES live_drops(id)
+  );
+
   /* Last week's numbers, frozen when the week closed. See src/growthMetrics.js. */
   CREATE TABLE IF NOT EXISTS weekly_snapshots(
     week_end TEXT PRIMARY KEY,

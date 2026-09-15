@@ -8,6 +8,7 @@ import { DeliaProvider } from "@/components/delia/DeliaContext";
 import { ClickAttribution } from "@/components/site/ClickAttribution";
 import { PageViews } from "@/components/site/PageViews";
 import { LiveDropBar } from "@/components/live/LiveDropBar";
+import { LiveBroadcastProvider } from "@/components/live/LiveBroadcast";
 
 /**
  * Everything lives under a market segment, mirroring the live site's /us URLs
@@ -28,6 +29,8 @@ export default async function MarketLayout({
 
   return (
     <DeliaProvider market={market} language={language}>
+      {/* Holds Chloe's call above the pages, so she follows the viewer. */}
+      <LiveBroadcastProvider market={market}>
       {/* Stamps the visitor's session onto outbound links in the browser.
           Must not be rendered into the href on the server: these pages are
           cached, and a baked-in id would be shared by every later visitor. */}
@@ -44,6 +47,7 @@ export default async function MarketLayout({
         {children}
       </main>
       <Footer market={market} />
+      </LiveBroadcastProvider>
     </DeliaProvider>
   );
 }
