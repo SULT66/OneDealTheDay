@@ -1262,8 +1262,13 @@ const openBroadcast = async (drop) => {
     view,
     apiKey: c.tavusApiKey,
     palId: c.tavusPalId,
-    conversationalContext: chloeContext(drop.market, view),
-    greeting: hostGreeting(view),
+    /* With a script, she opens with one short line and the console reads the
+       host's words next; without one, her own greeting names the product.
+       The script is also her briefing, so her answers agree with it. */
+    conversationalContext: drop.host_script_intro
+      ? `${chloeContext(drop.market, view)} The host wrote this opening script, which you will read first; keep your answers consistent with it and never state a price before the price opens: ${String(drop.host_script_intro).slice(0, 2000)}`
+      : chloeContext(drop.market, view),
+    greeting: drop.host_script_intro ? "Hi everyone, welcome to OneDailyDrop Live!" : hostGreeting(view),
     maxViewers: Number(process.env.LIVE_HOST_MAX_VIEWERS) || 150,
     creating: broadcastsBeingCreated,
   });
@@ -3437,6 +3442,8 @@ const liveDropInput = (body) => {
       video_url: text(body.video_url, 1000),
       stream_embed_url: text(body.stream_embed_url, 1000),
       terms: text(body.terms, 2000),
+      host_script_intro: text(body.host_script_intro, 4000),
+      host_script_reveal: text(body.host_script_reveal, 2000),
     },
   };
 };
@@ -3533,6 +3540,8 @@ app.get("/api/admin/live-drops", admin, (req, res) => {
       secondary_image_url: row.secondary_image_url || "",
       video_url: row.video_url || "",
       stream_embed_url: row.stream_embed_url || "",
+      host_script_intro: row.host_script_intro || "",
+      host_script_reveal: row.host_script_reveal || "",
       stock_is_live: Boolean(row.stock_verified_at && now - Date.parse(row.stock_verified_at) <= 2 * 60 * 1000),
       click_label: liveDropLabel(row.drop_key),
       };
@@ -3549,11 +3558,11 @@ app.post("/api/admin/live-drops", admin, (req, res) => {
   db.prepare(`INSERT INTO live_drops(
     drop_key,market,title,brand,retailer_name,image_url,secondary_image_url,retail_price,drop_price,currency,
     quantity_total,quantity_remaining,start_at,end_at,member_early_access_seconds,
-    affiliate_url,video_url,stream_embed_url,terms,published,created_at,updated_at
+    affiliate_url,video_url,stream_embed_url,terms,host_script_intro,host_script_reveal,published,created_at,updated_at
   ) VALUES(
     @drop_key,@market,@title,@brand,@retailer_name,@image_url,@secondary_image_url,@retail_price,@drop_price,@currency,
     @quantity_total,@quantity_remaining,@start_at,@end_at,@member_early_access_seconds,
-    @affiliate_url,@video_url,@stream_embed_url,@terms,0,@created_at,@updated_at
+    @affiliate_url,@video_url,@stream_embed_url,@terms,@host_script_intro,@host_script_reveal,0,@created_at,@updated_at
   )`).run({...drop, drop_key:dropKey, created_at:nowIso, updated_at:nowIso});
 
   /* Drafted, not announced. Writing a drop and advertising it are separate
@@ -3717,6 +3726,10 @@ app.get("/api/admin/live-host/:key", admin, async (req, res) => {
     conversation_id:broadcast?.conversation_id || "",
     reveal_cue:broadcast && view?.state === "live" ? revealCue(broadcast.secret, hostRevealLine(view)) : "",
     idle_cue:broadcast ? idleCue(broadcast.secret) : "",
+    /* The host's own words, read out by the console: the opening when she
+       goes on air, and the reveal when the price opens. */
+    intro_script:drop.host_script_intro || "",
+    reveal_script:view?.state === "live" ? (drop.host_script_reveal || "") : "",
     queued,
     messages:chatMessages(db, drop.id, {limit:30}),
   });
@@ -3730,6 +3743,18 @@ app.post("/api/admin/live-host/:key/next", admin, (req, res) => {
   if (!broadcast) return res.status(409).json({error:"Chloe is not on air for this drop."});
   const questions = takeNextQuestions(db, drop.id);
   res.json({cue:questions.length ? questionsCue(broadcast.secret, questions) : "", questions});
+});
+
+/* Chloe's script for a drop, editable at any time: it is what she will say,
+   not something anybody has been told yet. */
+app.patch("/api/admin/live-drops/:key/script", admin, express.json({limit:"16kb"}), (req, res) => {
+  const drop = db.prepare("SELECT id FROM live_drops WHERE drop_key=?").get(String(req.params.key || ""));
+  if (!drop) return res.status(404).json({error:"No such drop."});
+  const intro = String(req.body?.host_script_intro ?? "").trim().slice(0, 4000);
+  const reveal = String(req.body?.host_script_reveal ?? "").trim().slice(0, 2000);
+  db.prepare("UPDATE live_drops SET host_script_intro=?, host_script_reveal=?, updated_at=? WHERE id=?")
+    .run(intro, reveal, new Date().toISOString(), drop.id);
+  res.json({ok:true});
 });
 
 /* Your own instruction to Chloe, typed in the host console. Wrapped in the
