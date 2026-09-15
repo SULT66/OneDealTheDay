@@ -8,7 +8,7 @@ import { formatPrice } from "@/lib/format";
 import { DeliaTrigger } from "@/components/delia/DeliaTrigger";
 import { LiveDropSignup } from "@/components/site/LiveDropSignup";
 import { analyticsSessionId, recordLiveDropEvent } from "@/lib/analyticsSession";
-import { BroadcastVideo, useLiveBroadcast } from "./LiveBroadcast";
+import { BroadcastVideo, MusicToggle, SwapStage, useLiveBroadcast } from "./LiveBroadcast";
 
 /**
  * The Live Drop, as a shopper sees it.
@@ -193,6 +193,12 @@ export function LiveDropPanel({
    * closing the tab stops it without anybody having to say goodbye.
    */
   const dropKey = drop?.drop_key;
+  /* Somebody watching Chloe keeps being counted by the broadcast itself when
+     they leave this page for a category, so this page must not say goodbye
+     for them. */
+  const broadcast = useLiveBroadcast();
+  const broadcastDropRef = useRef("");
+  broadcastDropRef.current = broadcast.session?.dropKey || "";
   const onAir = drop?.state === "waiting" || drop?.state === "live";
   useEffect(() => {
     if (!dropKey || !onAir) return;
@@ -220,7 +226,7 @@ export function LiveDropPanel({
     return () => {
       clearInterval(timer);
       window.removeEventListener("pagehide", leave);
-      leave();
+      if (broadcastDropRef.current !== dropKey) leave();
     };
   }, [dropKey, onAir]);
 
@@ -622,11 +628,21 @@ function BroadcastStage({ market, drop }: { market: string; drop: LiveDropView }
   /* Whether anything at all holds the stage. Not used to pick what — each
      branch below tests its own source, which is what went wrong when this was
      doing both jobs. */
-  const hasDemo = hasPresentation && (hasStream || drop.tavus_available);
+  const hasDemo = hasPresentation && hasStream;
   /* The product panel earns its place whenever there is anything to put in it,
      which is nearly always: a drop without a photograph is a drop nobody would
      publish. */
   const showsProduct = hasDemo || Boolean(drop.image_url);
+
+  /* A live stream outranks Chloe; with none, she has the whole stage and
+     shares it with the product herself — see SwapStage. */
+  if (!hasStream && drop.tavus_available) {
+    return (
+      <div className="mt-4 overflow-hidden rounded-2xl border border-white/10 bg-[#061224] shadow-2xl">
+        <TavusHost market={market} drop={drop} />
+      </div>
+    );
+  }
 
   return (
     <div
@@ -676,12 +692,6 @@ function BroadcastStage({ market, drop }: { market: string; drop: LiveDropView }
               className="absolute inset-0 h-full w-full border-0"
             />
           </div>
-        ) : drop.tavus_available ? (
-          /* A live host outranks a recording. She answers questions and a file
-             cannot, and with her on the stage the footage moves to the panel
-             beside her, which is where a presenter who cannot hold anything up
-             needs it to be. */
-          <TavusHost market={market} drop={drop} />
         ) : hasPresentation ? (
           /* The same recording for everybody, which is what makes it a
              broadcast: no ceiling, no per-viewer cost, one message. Looping,
@@ -714,12 +724,10 @@ function BroadcastStage({ market, drop }: { market: string; drop: LiveDropView }
             </p>
           </div>
         )}
-        {!drop.tavus_available ? (
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-4 pb-4 pt-16">
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/60">Now presenting</p>
-            <p className="mt-1 line-clamp-2 text-lg font-bold text-white">{drop.title}</p>
-          </div>
-        ) : null}
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-4 pb-4 pt-16">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/60">Now presenting</p>
+          <p className="mt-1 line-clamp-2 text-lg font-bold text-white">{drop.title}</p>
+        </div>
       </div>
 
       {showsProduct && (
@@ -801,14 +809,19 @@ function ProductStillMissing({ inUse }: { inUse?: boolean }) {
 
 type SharedChatMessage = {
   id: string;
-  kind: "viewer" | "chloe";
+  kind: "viewer" | "chloe" | "note";
   author: string;
   text: string;
   at: number;
   sent?: boolean;
+  mine?: boolean;
 };
 
 type ServerChatMessage = { id: number; author: string; text: string; status: string; created_at: string };
+
+/* What the host console says Chloe is doing: reading the script, or taking
+   questions. Empty when no console has said anything yet. */
+type HostPhase = "presenting" | "answering" | "";
 
 /*
  * Chloe, shared by everybody watching, and the chat they share.
@@ -821,6 +834,12 @@ type ServerChatMessage = { id: number; author: string; text: string; status: str
  * The call itself is held by LiveBroadcastProvider in the layout, so leaving
  * this page for a category does not hang up on her; she moves to a small
  * player in the corner instead.
+ *
+ * Questions wait while she presents. A chat where nothing is answered looks
+ * dead and people leave, so the wait is said out loud: the chat shows what
+ * she is doing and how many questions are in line, a question posted during
+ * the presentation gets its place in the line straight back, and the console
+ * has her acknowledge the questions between script lines.
  */
 function TavusHost({ market, drop }: { market: string; drop: LiveDropView }) {
   const live = useLiveBroadcast();
@@ -832,7 +851,10 @@ function TavusHost({ market, drop }: { market: string; drop: LiveDropView }) {
   const [postError, setPostError] = useState("");
   const [posting, setPosting] = useState(false);
   const [chat, setChat] = useState<SharedChatMessage[]>([]);
+  const [phase, setPhase] = useState<HostPhase>("");
+  const [queued, setQueued] = useState(0);
   const lastIdRef = useRef(0);
+  const mineRef = useRef(new Set<string>());
   const listRef = useRef<HTMLDivElement | null>(null);
 
   /* Everybody's questions, every few seconds, for as long as the drop is on. */
@@ -843,23 +865,32 @@ function TavusHost({ market, drop }: { market: string; drop: LiveDropView }) {
         `/api/live/chat?drop_key=${encodeURIComponent(drop.drop_key)}&after=${lastIdRef.current}`,
       ).catch(() => null);
       if (cancelled || !response?.ok) return;
-      const body = (await response.json().catch(() => ({}))) as { messages?: ServerChatMessage[] };
+      const body = (await response.json().catch(() => ({}))) as {
+        messages?: ServerChatMessage[];
+        phase?: HostPhase;
+        queued?: number;
+        sent_ids?: number[];
+      };
+      setPhase(body.phase === "presenting" || body.phase === "answering" ? body.phase : "");
+      setQueued(Math.max(0, Number(body.queued) || 0));
+      const sentIds = new Set((body.sent_ids || []).map((id) => `m${id}`));
       const rows = body.messages || [];
-      if (!rows.length) return;
-      lastIdRef.current = Math.max(lastIdRef.current, ...rows.map((row) => row.id));
+      if (rows.length) lastIdRef.current = Math.max(lastIdRef.current, ...rows.map((row) => row.id));
       setChat((current) => {
         const known = new Set(current.map((message) => message.id));
+        const updated = current.map((message) => (sentIds.has(message.id) ? { ...message, sent: true } : message));
         const incoming = rows
           .map((row) => ({
             id: `m${row.id}`,
             kind: "viewer" as const,
-            author: row.author,
+            author: mineRef.current.has(`m${row.id}`) ? "You" : row.author,
             text: row.text,
             at: Date.parse(row.created_at),
             sent: row.status === "sent",
+            mine: mineRef.current.has(`m${row.id}`),
           }))
           .filter((message) => !known.has(message.id));
-        return [...current, ...incoming].slice(-80);
+        return [...updated, ...incoming].slice(-80);
       });
     };
     void poll();
@@ -896,7 +927,14 @@ function TavusHost({ market, drop }: { market: string; drop: LiveDropView }) {
       setError(body?.error || "Chloe could not join. Please try again.");
       return;
     }
-    live.join({ conversationUrl: body.conversation_url, dropKey: drop.drop_key, title: drop.title, market });
+    live.join({
+      conversationUrl: body.conversation_url,
+      dropKey: drop.drop_key,
+      title: drop.title,
+      market,
+      productVideo: drop.video_url,
+      productImage: drop.image_url,
+    });
     recordLiveDropEvent(drop.drop_key, "host_started");
   };
 
@@ -918,21 +956,61 @@ function TavusHost({ market, drop }: { market: string; drop: LiveDropView }) {
       return;
     }
     setQuestion("");
+    const id = `m${body.id}`;
+    mineRef.current.add(id);
+    const position = Number(body.position) || 0;
+    const presenting = body.phase === "presenting";
+    /* Straight back, so nobody sits wondering whether anybody saw it. */
+    setChat((current) => [
+      ...current.map((message) => (message.id === id ? { ...message, author: "You", mine: true } : message)),
+      {
+        id: `note-${body.id}`,
+        kind: "note" as const,
+        author: "",
+        text: presenting
+          ? `Got it! You're #${position || 1} in line. Chloe answers questions right after she finishes showing the product.`
+          : `Got it! You're #${position || 1} in line for Chloe.`,
+        at: new Date().getTime() + 1,
+      },
+    ].slice(-80));
   };
+
+  const status =
+    phase === "presenting"
+      ? { tone: "bg-white/10 text-white", dot: "bg-lime", text: `Chloe is presenting · Q&A right after${queued ? ` · ${queued} question${queued === 1 ? "" : "s"} in line` : ""}` }
+      : phase === "answering"
+        ? { tone: "bg-lime text-ink", dot: "bg-ink", text: queued ? `Q&A is open · ${queued} question${queued === 1 ? "" : "s"} in line` : "Q&A is open · ask Chloe anything" }
+        : null;
 
   const chatPanel = (
     <div className="relative z-20 border-t border-white/10 bg-[#07101e]/95 p-3 backdrop-blur">
-      <div ref={listRef} className="mb-2 max-h-28 space-y-1.5 overflow-y-auto sm:max-h-32" aria-live="polite">
+      {status ? (
+        <p className={cn("mb-2 inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-bold", status.tone)}>
+          <span className={cn("h-1.5 w-1.5 animate-pulse rounded-full", status.dot)} aria-hidden="true" />
+          {status.text}
+        </p>
+      ) : null}
+      <div ref={listRef} className="mb-2 max-h-32 space-y-1.5 overflow-y-auto sm:max-h-40" aria-live="polite">
         {lines.length ? (
-          lines.map((message) => (
-            <p key={message.id} className="text-xs leading-relaxed text-white/80">
-              <span className={message.kind === "chloe" ? "font-black text-lime" : "font-bold text-white"}>
-                {message.author}:
-              </span>{" "}
-              {message.text}
-              {"sent" in message && message.sent ? <span className="ml-1 text-[10px] text-white/40">· asked</span> : null}
-            </p>
-          ))
+          lines.map((message) =>
+            message.kind === "note" ? (
+              <p key={message.id} className="rounded-lg bg-lime/10 px-2 py-1 text-xs leading-relaxed text-lime">
+                {message.text}
+              </p>
+            ) : (
+              <p key={message.id} className="text-xs leading-relaxed text-white/80">
+                <span className={message.kind === "chloe" ? "font-black text-lime" : "font-bold text-white"}>
+                  {message.author}:
+                </span>{" "}
+                {message.text}
+                {"sent" in message && message.sent ? (
+                  <span className="ml-1 text-[10px] text-lime/80">· Chloe has it</span>
+                ) : "mine" in message && message.mine ? (
+                  <span className="ml-1 text-[10px] text-white/40">· in line</span>
+                ) : null}
+              </p>
+            ),
+          )
         ) : (
           <p className="text-xs text-white/50">No questions yet. Ask Chloe anything about this deal.</p>
         )}
@@ -956,7 +1034,7 @@ function TavusHost({ market, drop }: { market: string; drop: LiveDropView }) {
         </button>
       </form>
       <p className="mt-1.5 text-[10px] text-white/40">
-        {postError || "Everyone watching sees the chat · Chloe picks questions to answer live"}
+        {postError || "Everyone watching sees the chat · Chloe answers questions after she presents the product"}
       </p>
     </div>
   );
@@ -964,42 +1042,52 @@ function TavusHost({ market, drop }: { market: string; drop: LiveDropView }) {
   if (watching) {
     return (
       <div className="relative flex w-full min-w-0 flex-col bg-[#07172b]">
-        <div className="relative aspect-video w-full overflow-hidden bg-black">
-          <BroadcastVideo
-            stream={live.stream}
-            className="h-full w-full object-contain"
-            label="Chloe, OneDailyDrop AI shopping host"
-            onNeedsPlay={setNeedsPlay}
+        <div className="relative">
+          <SwapStage
+            talking={live.talking}
+            productVideo={drop.video_url}
+            productImage={drop.image_url}
+            productAlt={drop.title}
+            host={
+              <>
+                <BroadcastVideo
+                  stream={live.stream}
+                  className="h-full w-full object-cover"
+                  label="Chloe, OneDailyDrop AI shopping host"
+                  onNeedsPlay={setNeedsPlay}
+                />
+                {!live.joined ? (
+                  <div className="absolute inset-0 flex items-center justify-center bg-[#07172b] text-sm font-bold text-white/75">
+                    Connecting Chloe...
+                  </div>
+                ) : null}
+              </>
+            }
           />
-          {!live.joined ? (
-            <div className="absolute inset-0 flex items-center justify-center bg-[#07172b] text-sm font-bold text-white/75">
-              Connecting Chloe...
-            </div>
-          ) : null}
           {needsPlay ? (
             <button
               type="button"
               onClick={(event) => {
-                const video = event.currentTarget.parentElement?.querySelector("video") as HTMLVideoElement | null;
+                const video = event.currentTarget.parentElement?.querySelector("video[aria-label^='Chloe']") as HTMLVideoElement | null;
                 void video?.play().then(() => setNeedsPlay(false));
               }}
-              className="absolute inset-0 z-10 m-auto h-12 w-fit rounded-full bg-accent px-6 text-sm font-black text-white"
+              className="absolute inset-0 z-30 m-auto h-12 w-fit rounded-full bg-accent px-6 text-sm font-black text-white"
             >
               Play Chloe
             </button>
           ) : null}
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-3 pb-3 pt-10 sm:px-4 sm:pb-4">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/60">Now presenting</p>
-            <p className="mt-0.5 line-clamp-1 text-sm font-bold text-white sm:text-base">{drop.title}</p>
+          <StageLabel>AI host</StageLabel>
+          <div className="absolute right-3 top-3 z-30 flex gap-1.5">
+            <MusicToggle on={live.musicOn} onChange={live.setMusicOn} />
+            <button
+              type="button"
+              onClick={live.leave}
+              className="rounded-full border border-white/20 bg-black/70 px-3 py-1.5 text-xs font-bold text-white backdrop-blur hover:bg-black"
+            >
+              Leave
+            </button>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={live.leave}
-          className="absolute right-3 top-3 z-20 rounded-full border border-white/20 bg-black/70 px-3 py-1.5 text-xs font-bold text-white backdrop-blur hover:bg-black"
-        >
-          Leave
-        </button>
         {error || live.error ? <p className="px-3 pt-2 text-xs font-semibold text-red-300">{error || live.error}</p> : null}
         {chatPanel}
       </div>
@@ -1008,21 +1096,32 @@ function TavusHost({ market, drop }: { market: string; drop: LiveDropView }) {
 
   return (
     <div className="relative flex w-full min-w-0 flex-col">
-      <div className="flex aspect-video w-full flex-col items-center justify-center px-6 text-center">
-        <p className="text-lg font-black text-white sm:text-xl">Chloe is presenting live</p>
-        <p className="mt-1.5 max-w-sm text-xs leading-relaxed text-white/65 sm:text-sm">
-          Watch with everyone else and ask your questions in the chat.
-        </p>
-        <button
-          type="button"
-          onClick={start}
-          disabled={starting}
-          className="relative z-20 mt-4 rounded-full bg-accent px-6 py-2.5 text-sm font-black text-white shadow-lg transition hover:brightness-110 disabled:cursor-wait disabled:opacity-60"
-        >
-          {starting ? "Connecting Chloe..." : "Watch Chloe live"}
-        </button>
-        {error ? <p className="relative z-20 mt-2 text-xs font-semibold text-red-300">{error}</p> : null}
-        <p className="mt-2 text-[11px] text-white/45">No camera or microphone access</p>
+      <div className="relative">
+        <SwapStage
+          talking
+          productVideo={drop.video_url}
+          productImage={drop.image_url}
+          productAlt={drop.title}
+          host={
+            <div className="flex h-full w-full flex-col items-center justify-center bg-[radial-gradient(circle_at_50%_20%,#123b69_0%,#07172b_48%,#030914_100%)] px-4 text-center">
+              <p className="text-base font-black text-white sm:text-xl">Chloe is presenting live</p>
+              <p className="mt-1.5 hidden max-w-xs text-xs leading-relaxed text-white/65 sm:block sm:text-sm">
+                Watch with everyone else and ask your questions in the chat.
+              </p>
+              <button
+                type="button"
+                onClick={start}
+                disabled={starting}
+                className="relative z-20 mt-3 rounded-full bg-accent px-5 py-2 text-xs font-black text-white shadow-lg transition hover:brightness-110 disabled:cursor-wait disabled:opacity-60 sm:mt-4 sm:px-6 sm:py-2.5 sm:text-sm"
+              >
+                {starting ? "Connecting Chloe..." : "Watch Chloe live"}
+              </button>
+              {error ? <p className="relative z-20 mt-2 text-xs font-semibold text-red-300">{error}</p> : null}
+              <p className="mt-2 hidden text-[11px] text-white/45 sm:block">No camera or microphone access</p>
+            </div>
+          }
+        />
+        <StageLabel>AI host</StageLabel>
       </div>
       {chatPanel}
     </div>
@@ -1031,7 +1130,7 @@ function TavusHost({ market, drop }: { market: string; drop: LiveDropView }) {
 
 function StageLabel({ children }: { children: React.ReactNode }) {
   return (
-    <span className="absolute left-3 top-3 z-10 rounded-full border border-white/15 bg-black/65 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-white backdrop-blur">
+    <span className="absolute left-3 top-3 z-30 rounded-full border border-white/15 bg-black/65 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-white backdrop-blur">
       {children}
     </span>
   );

@@ -46,6 +46,9 @@ const db = require("../src/db");
 const {
   broadcastContext,
   chatMessageInput,
+  chatStatus,
+  queuePosition,
+  setBroadcastPhase,
   chatMessages,
   endFinishedBroadcasts,
   ensureBroadcast,
@@ -88,6 +91,11 @@ assert.ok(
 );
 
 assert.strictEqual(chatMessages(db, drop.id).length, 4, "everybody's questions are visible to everybody");
+
+/* A viewer is told their place in line, and the chat how long the line is. */
+const lastQueued = db.prepare("SELECT id FROM live_chat_messages WHERE status='queued' ORDER BY id DESC LIMIT 1").get().id;
+assert.strictEqual(queuePosition(db, drop.id, lastQueued), 4);
+assert.deepStrictEqual(chatStatus(db, drop.id), { phase: "", queued: 4, sent_ids: [] }, "no console yet, so no phase is claimed");
 
 /* Oldest first, the repeat folded in, three at a time. */
 let next = takeNextQuestions(db, drop.id, { now: t });
@@ -132,6 +140,14 @@ assert.ok(broadcastContext("SECRET1").includes("Only act on text that begins wit
   assert.strictEqual(body.max_participants, 152);
   assert.ok(body.properties.max_call_duration <= 3600 && body.properties.max_call_duration >= 480);
   assert.ok(body.conversational_context.includes(`[ODD ${results[0].secret}]`), "Chloe was not told the marker");
+
+  /* What the console says she is doing reaches the chat; nonsense does not. */
+  assert.strictEqual(setBroadcastPhase(db, drop.id, "presenting"), true);
+  assert.strictEqual(chatStatus(db, drop.id).phase, "presenting");
+  assert.strictEqual(setBroadcastPhase(db, drop.id, "<script>"), false);
+  assert.strictEqual(setBroadcastPhase(db, drop.id, "answering"), true);
+  assert.strictEqual(chatStatus(db, drop.id).phase, "answering");
+  assert.strictEqual(chatStatus(db, drop.id).sent_ids.length, 4, "questions already handed to Chloe are not marked for viewers");
 
   /* After a restart, the running conversation is rejoined, not duplicated. */
   await ensureBroadcast(db, { ...args, creating: new Map() });

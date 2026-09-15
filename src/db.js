@@ -650,6 +650,12 @@ for (const column of ["video_url", "stream_embed_url", "secondary_image_url", "h
   if (!liveDropColumns.has(column)) db.exec(`ALTER TABLE live_drops ADD COLUMN ${column} TEXT NOT NULL DEFAULT ""`);
 }
 
+/* phase: what the host console last said Chloe is doing — "presenting" the
+   script or "answering" questions — so the chat can tell viewers why their
+   question is waiting. */
+const liveHostBroadcastColumns = new Set(db.prepare("PRAGMA table_info(live_host_broadcasts)").all().map(column => column.name));
+if (!liveHostBroadcastColumns.has("phase")) db.exec(`ALTER TABLE live_host_broadcasts ADD COLUMN phase TEXT NOT NULL DEFAULT ""`);
+
 const retailerIconColumns = new Set(db.prepare("PRAGMA table_info(retailer_icons)").all().map(column => column.name));
 if (!retailerIconColumns.has("pinned")) db.exec("ALTER TABLE retailer_icons ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0");
 
