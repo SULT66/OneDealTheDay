@@ -464,9 +464,14 @@ async function main() {
   const stage = /function BroadcastStage\([\s\S]*?\n\}/.exec(panel);
   assert(stage, "BroadcastStage moved out of the Live panel");
   assert(
-    stage[0].indexOf("hasHost ?") < stage[0].indexOf("drop.tavus_available ?"),
-    "the per-viewer host now outranks the broadcast everyone could watch",
+    stage[0].includes("if (!hasStream && drop.tavus_available)"),
+    "a live stream no longer outranks Chloe, or Chloe no longer gets the stage",
   );
+  /* Watching in the small player still counts, and only the Live page's own
+     leaving is skipped for it. */
+  const broadcastSource = fs.readFileSync(path.join(__dirname, "..", "components", "live", "LiveBroadcast.tsx"), "utf8");
+  assert(broadcastSource.includes("sendPresence(presenceKey)") && /pagehide/.test(broadcastSource), "the small player stopped counting as watching");
+  assert(panel.includes("broadcastDropRef.current !== dropKey) leave()"), "leaving the Live page for a category takes a watching viewer out of the count");
 
   /*
    * "Asked to be reminded" and "was reminded" are different numbers.

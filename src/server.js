@@ -74,6 +74,7 @@ const { pageViewRow, recordPageView } = require("./pageViews");
 const {
   chatMessageInput, chatMessages, endFinishedBroadcasts, ensureBroadcast,
   hostInstructionCue, idleCue, postChatMessage, questionsCue, revealCue, takeNextQuestions,
+  HOST_PHASES, chatStatus, queuePosition, setBroadcastPhase,
 } = require("./liveHost");
 const {
   ensureWeeklySnapshot, listWeeklySnapshots, nextWeekClose, notInternal, periodMetrics,
@@ -1312,7 +1313,10 @@ app.get("/api/live/chat", (req, res) => {
   res.set("Cache-Control", "no-store");
   const drop = db.prepare("SELECT id FROM live_drops WHERE drop_key=? AND published=1").get(String(req.query?.drop_key || ""));
   if (!drop) return res.json({messages:[]});
-  res.json({messages:chatMessages(db, drop.id, {afterId:Number(req.query?.after) || 0})});
+  res.json({
+    messages:chatMessages(db, drop.id, {afterId:Number(req.query?.after) || 0}),
+    ...chatStatus(db, drop.id),
+  });
 });
 
 app.post("/api/live/chat", (req, res) => {
@@ -1327,7 +1331,12 @@ app.post("/api/live/chat", (req, res) => {
   if (input.error) return res.status(400).json({error:input.error});
   const posted = postChatMessage(db, {dropId:drop.id, sessionId, text:input.text});
   if (posted.error) return res.status(429).json({error:posted.error});
-  return res.status(201).json({ok:true, id:posted.id});
+  return res.status(201).json({
+    ok:true,
+    id:posted.id,
+    position:queuePosition(db, drop.id, posted.id),
+    phase:chatStatus(db, drop.id).phase,
+  });
 });
 const endTavusConversation = async conversationId => {
   if (!c.tavusApiKey || !/^c[a-zA-Z0-9_-]{4,100}$/.test(conversationId)) return false;
@@ -3803,6 +3812,14 @@ app.post("/api/admin/live-host/:key/instruction", admin, express.json({limit:"4k
   const text = String(req.body?.text || "").replace(/\s+/g, " ").trim().slice(0, 1000);
   if (!text) return res.status(400).json({error:"Type something for Chloe first."});
   res.json({cue:hostInstructionCue(broadcast.secret, text)});
+});
+
+/* The console saying what Chloe is doing, for the chat to show viewers. */
+app.post("/api/admin/live-host/:key/phase", admin, express.json({limit:"1kb"}), (req, res) => {
+  const drop = db.prepare("SELECT id FROM live_drops WHERE drop_key=?").get(String(req.params.key || ""));
+  if (!drop) return res.status(404).json({error:"No such drop."});
+  if (!HOST_PHASES.includes(req.body?.phase)) return res.status(400).json({error:"Unknown phase."});
+  res.json({ok:setBroadcastPhase(db, drop.id, req.body.phase)});
 });
 
 app.post("/api/admin/live-host/:key/hide/:id", admin, (req, res) => {

@@ -114,6 +114,42 @@ function takeNextQuestions(db, dropId, { now = Date.now(), limit = QUESTIONS_PER
   return picked;
 }
 
+/* Where a question stands: its place among those still waiting. */
+function queuePosition(db, dropId, messageId) {
+  return db
+    .prepare("SELECT COUNT(*) AS n FROM live_chat_messages WHERE drop_id=? AND status='queued' AND id<=?")
+    .get(dropId, messageId).n;
+}
+
+/*
+ * What viewers are told about the wait.
+ *
+ * Chloe reads her script before she takes questions, and a chat where nothing
+ * gets answered looks abandoned. So the chat says what she is doing and how
+ * many questions are in line, and which questions have already reached her.
+ */
+const HOST_PHASES = ["presenting", "answering"];
+
+function setBroadcastPhase(db, dropId, phase) {
+  if (!HOST_PHASES.includes(phase)) return false;
+  const result = db
+    .prepare("UPDATE live_host_broadcasts SET phase=? WHERE drop_id=? AND ended_at IS NULL")
+    .run(phase, dropId);
+  return result.changes > 0;
+}
+
+function chatStatus(db, dropId) {
+  const broadcast = db
+    .prepare("SELECT phase FROM live_host_broadcasts WHERE drop_id=? AND ended_at IS NULL ORDER BY id DESC LIMIT 1")
+    .get(dropId);
+  const queued = db.prepare("SELECT COUNT(*) AS n FROM live_chat_messages WHERE drop_id=? AND status='queued'").get(dropId).n;
+  const sentIds = db
+    .prepare("SELECT id FROM live_chat_messages WHERE drop_id=? AND status='sent' ORDER BY id DESC LIMIT 60")
+    .all(dropId)
+    .map((row) => row.id);
+  return { phase: HOST_PHASES.includes(broadcast?.phase) ? broadcast.phase : "", queued, sent_ids: sentIds };
+}
+
 /* ------------------------------------------------ what Chloe is handed */
 
 function newBroadcastSecret() {
@@ -237,7 +273,9 @@ async function endFinishedBroadcasts(db, { apiKey, fetchImpl = fetch, now = Date
 
 module.exports = {
   CHAT_MAX_LENGTH,
+  HOST_PHASES,
   broadcastContext,
+  chatStatus,
   chatMessageInput,
   chatMessages,
   endFinishedBroadcasts,
@@ -245,8 +283,10 @@ module.exports = {
   hostInstructionCue,
   idleCue,
   postChatMessage,
+  queuePosition,
   questionsCue,
   revealCue,
+  setBroadcastPhase,
   takeNextQuestions,
   viewerTag,
 };

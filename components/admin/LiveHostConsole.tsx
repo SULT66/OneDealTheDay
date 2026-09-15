@@ -49,6 +49,17 @@ function splitScript(script: string): string[] {
 }
 
 const IDLE_SECONDS = 75;
+/* How long she must have been quiet before the next piece of script: long
+   enough to be sure she finished, short enough not to sound like a stall. */
+const TURN_GAP_MS = 1500;
+/* Between two pieces of script, at most this often, she says she has seen the
+   questions coming in — so a viewer whose question waits knows it was seen. */
+const ACK_EVERY_MS = 90 * 1000;
+const ACKNOWLEDGEMENTS = [
+  "I can see your questions coming in, keep them coming, I'll answer them right after I show you this.",
+  "Love all the questions in the chat, stay with me, I'm answering every one of them in just a moment.",
+  "Your questions are in line and I haven't forgotten them, let me finish showing you this and they're next.",
+];
 const FALLBACK_TURN_SECONDS = 25;
 
 export function LiveHostConsole({ adminKey, dropKey }: { adminKey: string; dropKey: string }) {
@@ -65,6 +76,10 @@ export function LiveHostConsole({ adminKey, dropKey }: { adminKey: string; dropK
   const sawSpeakingEventsRef = useRef(false);
   const revealSentRef = useRef(false);
   const busyRef = useRef(false);
+  const lastKindRef = useRef<"script" | "other">("other");
+  const phaseRef = useRef("");
+  const lastAckRef = useRef(0);
+  const ackCountRef = useRef(0);
 
   const headers = useCallback(() => ({ "X-Admin-Key": adminKey }), [adminKey]);
   const note = (line: string) =>
@@ -172,6 +187,22 @@ export function LiveHostConsole({ adminKey, dropKey }: { adminKey: string; dropK
     }
   }, [dropKey, headers, send, load]);
 
+  /* Tells the chat what she is doing, only when it changes. */
+  const reportPhase = useCallback(
+    (phase: "presenting" | "answering") => {
+      if (phaseRef.current === phase) return;
+      phaseRef.current = phase;
+      void fetch(`/api/admin/live-host/${encodeURIComponent(dropKey)}/phase`, {
+        method: "POST",
+        headers: { ...headers(), "Content-Type": "application/json" },
+        body: JSON.stringify({ phase }),
+      }).catch(() => {
+        phaseRef.current = "";
+      });
+    },
+    [dropKey, headers],
+  );
+
   /* Word for word: Tavus's echo, no model in between. */
   const echo = useCallback(
     (text: string, label: string) => {
@@ -222,14 +253,25 @@ export function LiveHostConsole({ adminKey, dropKey }: { adminKey: string; dropK
         }
       }
       const finishedTurn = sawSpeakingEventsRef.current
-        ? !speaking && now - lastStoppedRef.current > 3000 && lastStoppedRef.current >= lastSentRef.current
+        ? !speaking && now - lastStoppedRef.current > TURN_GAP_MS && lastStoppedRef.current >= lastSentRef.current
         : now - lastSentRef.current > FALLBACK_TURN_SECONDS * 1000;
+      const presenting =
+        scriptLinesRef.current.length > 0 || (lastKindRef.current === "script" && !finishedTurn && Boolean(lastSentRef.current));
+      reportPhase(presenting ? "presenting" : "answering");
       if (!finishedTurn && lastSentRef.current) return;
       if (scriptLinesRef.current.length) {
+        lastKindRef.current = "script";
+        if (host.queued > 0 && now - lastAckRef.current > ACK_EVERY_MS) {
+          lastAckRef.current = now;
+          const line = ACKNOWLEDGEMENTS[ackCountRef.current++ % ACKNOWLEDGEMENTS.length];
+          echo(line, "Told viewers their questions are next");
+          return;
+        }
         const line = scriptLinesRef.current.shift() as string;
         echo(line, `Script: ${line.slice(0, 60)}`);
         return;
       }
+      lastKindRef.current = "other";
       if (host.queued > 0) {
         void sendNextQuestions();
         return;
@@ -241,7 +283,7 @@ export function LiveHostConsole({ adminKey, dropKey }: { adminKey: string; dropK
     return () => clearInterval(tick);
     // queueScript only writes a ref.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autopilot, joined, host, speaking, send, echo, sendNextQuestions]);
+  }, [autopilot, joined, host, speaking, send, echo, sendNextQuestions, reportPhase]);
 
   /*
    * Talking to Chloe yourself.
