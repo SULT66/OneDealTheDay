@@ -73,7 +73,7 @@ const { overview } = require("./overview");
 const { pageViewRow, recordPageView } = require("./pageViews");
 const {
   chatMessageInput, chatMessages, endFinishedBroadcasts, ensureBroadcast,
-  idleCue, postChatMessage, questionsCue, revealCue, takeNextQuestions,
+  hostInstructionCue, idleCue, postChatMessage, questionsCue, revealCue, takeNextQuestions,
 } = require("./liveHost");
 const {
   ensureWeeklySnapshot, listWeeklySnapshots, nextWeekClose, notInternal, periodMetrics,
@@ -3730,6 +3730,18 @@ app.post("/api/admin/live-host/:key/next", admin, (req, res) => {
   if (!broadcast) return res.status(409).json({error:"Chloe is not on air for this drop."});
   const questions = takeNextQuestions(db, drop.id);
   res.json({cue:questions.length ? questionsCue(broadcast.secret, questions) : "", questions});
+});
+
+/* Your own instruction to Chloe, typed in the host console. Wrapped in the
+   drop's marker here so the marker itself never reaches the browser. */
+app.post("/api/admin/live-host/:key/instruction", admin, express.json({limit:"4kb"}), (req, res) => {
+  const drop = db.prepare("SELECT * FROM live_drops WHERE drop_key=?").get(String(req.params.key || ""));
+  if (!drop) return res.status(404).json({error:"No such drop."});
+  const broadcast = db.prepare("SELECT * FROM live_host_broadcasts WHERE drop_id=? AND ended_at IS NULL ORDER BY id DESC LIMIT 1").get(drop.id);
+  if (!broadcast) return res.status(409).json({error:"Chloe is not on air for this drop."});
+  const text = String(req.body?.text || "").replace(/\s+/g, " ").trim().slice(0, 1000);
+  if (!text) return res.status(400).json({error:"Type something for Chloe first."});
+  res.json({cue:hostInstructionCue(broadcast.secret, text)});
 });
 
 app.post("/api/admin/live-host/:key/hide/:id", admin, (req, res) => {

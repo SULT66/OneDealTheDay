@@ -177,6 +177,51 @@ export function LiveHostConsole({ adminKey, dropKey }: { adminKey: string; dropK
     return () => clearInterval(tick);
   }, [autopilot, joined, host, speaking, send, sendNextQuestions]);
 
+  /*
+   * Talking to Chloe yourself.
+   *
+   * "Say exactly" is Tavus's echo: she speaks the text word for word, with no
+   * model in between, which is the one to use for anything that must be said
+   * precisely. "Tell her" is an instruction she carries out in her own words,
+   * wrapped in the drop's marker on the server so she acts on it.
+   */
+  const [ownText, setOwnText] = useState("");
+  const say = (text: string) => {
+    const call = callRef.current;
+    if (!call || !host?.conversation_id || !text.trim()) return;
+    call.sendAppMessage(
+      {
+        message_type: "conversation",
+        event_type: "conversation.echo",
+        conversation_id: host.conversation_id,
+        properties: { modality: "text", text: text.trim(), done: true },
+      },
+      "*",
+    );
+    lastSentRef.current = Date.now();
+    note(`Said: ${text.trim().slice(0, 60)}`);
+  };
+  const instruct = async (text: string) => {
+    if (!text.trim()) return;
+    const response = await fetch(`/api/admin/live-host/${encodeURIComponent(dropKey)}/instruction`, {
+      method: "POST",
+      headers: { ...headers(), "Content-Type": "application/json" },
+      body: JSON.stringify({ text }),
+    }).catch(() => null);
+    const body = await response?.json().catch(() => ({}));
+    if (!response?.ok || !body?.cue) {
+      setError(body?.error || "That instruction did not go through.");
+      return;
+    }
+    send(body.cue, `Told her: ${text.trim().slice(0, 60)}`);
+  };
+  const QUICK = [
+    "Welcome everyone who just joined and say what today's drop is.",
+    "Remind viewers to press Remind me and ask their questions in the chat.",
+    "Say how many minutes are left and that the price ends when the clock does.",
+    "Thank everyone for watching and say the next drop is next Thursday at 8 PM Eastern.",
+  ];
+
   const hide = async (id: number) => {
     await fetch(`/api/admin/live-host/${encodeURIComponent(dropKey)}/hide/${id}`, { method: "POST", headers: headers() }).catch(() => null);
     void load();
@@ -213,6 +258,58 @@ export function LiveHostConsole({ adminKey, dropKey }: { adminKey: string; dropK
         >
           Send next questions now
         </button>
+      </div>
+
+      <div className="mt-3 rounded-xl border border-border bg-surface p-3">
+        <p className="text-xs font-semibold text-fg">Talk to Chloe</p>
+        <textarea
+          rows={2}
+          value={ownText}
+          onChange={(event) => setOwnText(event.target.value)}
+          maxLength={1000}
+          placeholder="Type what Chloe should say or do…"
+          className="mt-2 w-full rounded-xl border border-border bg-surface-2 px-3 py-2 text-sm text-fg outline-none focus:border-border-strong"
+        />
+        <div className="mt-2 flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={!joined || !ownText.trim()}
+            onClick={() => {
+              say(ownText);
+              setOwnText("");
+            }}
+            className="inline-flex h-8 cursor-pointer items-center rounded-full bg-surface-inverse px-3 text-xs font-semibold text-fg-on-inverse disabled:opacity-50"
+          >
+            Say exactly
+          </button>
+          <button
+            type="button"
+            disabled={!joined || !ownText.trim()}
+            onClick={() => {
+              void instruct(ownText);
+              setOwnText("");
+            }}
+            className="inline-flex h-8 cursor-pointer items-center rounded-full border border-border px-3 text-xs font-semibold text-fg disabled:opacity-50"
+          >
+            Tell her (she says it her way)
+          </button>
+        </div>
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {QUICK.map((line) => (
+            <button
+              key={line}
+              type="button"
+              disabled={!joined}
+              onClick={() => void instruct(line)}
+              className="cursor-pointer rounded-full border border-border px-2.5 py-1 text-[0.7rem] text-fg-muted hover:bg-surface-2 hover:text-fg disabled:opacity-50"
+            >
+              {line}
+            </button>
+          ))}
+        </div>
+        {!joined && (
+          <p className="mt-2 text-xs text-fg-subtle">Available once Chloe is on air (5 minutes before the drop).</p>
+        )}
       </div>
 
       <div className="mt-3 grid gap-3 md:grid-cols-[200px_1fr_1fr]">

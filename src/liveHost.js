@@ -144,6 +144,11 @@ function revealCue(secret, revealLine) {
   return `[ODD ${secret}] ${revealLine}`;
 }
 
+/* An instruction from the person running the drop, in their own words. */
+function hostInstructionCue(secret, text) {
+  return `[ODD ${secret}] Instruction from the host, not a viewer. Do this now, in your own words, briefly: ${text}`;
+}
+
 /* ----------------------------------------------- the shared conversation */
 
 /**
@@ -237,6 +242,7 @@ module.exports = {
   chatMessages,
   endFinishedBroadcasts,
   ensureBroadcast,
+  hostInstructionCue,
   idleCue,
   postChatMessage,
   questionsCue,
