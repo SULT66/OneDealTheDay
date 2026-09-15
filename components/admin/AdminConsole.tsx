@@ -505,6 +505,12 @@ export function AdminConsole() {
               <Field label="Normal price" type="number" step="0.01" value={form.retail_price} onChange={(v) => setForm({ ...form, retail_price: v })} />
               <Field label="Drop price" type="number" step="0.01" value={form.drop_price} onChange={(v) => setForm({ ...form, drop_price: v })} />
               <Field label="Units" type="number" required value={form.quantity_total} onChange={(v) => setForm({ ...form, quantity_total: v })} />
+              {/* Shoppers see this number, so it has to be a real one. */}
+              <p className="self-end pb-3 text-xs leading-relaxed text-fg-subtle sm:col-span-2 lg:col-span-3">
+                Shoppers see Units as &ldquo;15 units at this price&rdquo;, then &ldquo;12 left of 15&rdquo; while it runs.
+                Use a real number you can sell at the drop price, and lower it with Set stock as they go.
+                Drop price must be the price the shop will actually charge.
+              </p>
             </FormGroup>
 
             <FormGroup title="When">
