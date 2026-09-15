@@ -48,6 +48,8 @@ type AdminDrop = {
   stock_checked_at: string | null;
   image_url: string;
   secondary_image_url?: string;
+  host_script_intro?: string;
+  host_script_reveal?: string;
   video_url: string;
   stream_embed_url: string;
   click_label: string;
@@ -71,6 +73,8 @@ const BLANK = {
   video_url: "",
   stream_embed_url: "",
   terms: "",
+  host_script_intro: "",
+  host_script_reveal: "",
 };
 
 type EmailStep = { step: string; done: boolean | null; detail: string };
@@ -509,14 +513,35 @@ export function AdminConsole() {
               <Field label="Member head start (seconds)" type="number" value={form.member_early_access_seconds} onChange={(v) => setForm({ ...form, member_early_access_seconds: v })} />
             </FormGroup>
 
-            {/* Files, not links. Two panels, named for what each shows: a
-                presenter cannot hold up a monitor, so one panel is whoever is
-                talking and the other is where the product is actually seen. */}
+            {/* Files, not links. Chloe presents live on the left, so there is
+                no presenter video to upload here: the right panel is where the
+                product is actually seen. */}
             <FormGroup title="What people see" columns={2}>
               <MediaUpload adminKey={adminKey} kind="image" label="Product photo" hint="The product on its own, clean background." value={form.image_url} onChange={(v) => setForm({ ...form, image_url: v })} disabled={!unlocked || busy} />
               <MediaUpload adminKey={adminKey} kind="image" label="Product in use — photo" hint="Somebody using it. Optional." value={form.secondary_image_url} onChange={(v) => setForm({ ...form, secondary_image_url: v })} disabled={!unlocked || busy} />
-              <MediaUpload adminKey={adminKey} kind="video" label="Presenter video" hint="Chloe's recording. Plays on the left." value={form.stream_embed_url} onChange={(v) => setForm({ ...form, stream_embed_url: v })} allowLink disabled={!unlocked || busy} />
-              <MediaUpload adminKey={adminKey} kind="video" label="Product footage" hint="The product up close. Plays beside the presenter." value={form.video_url} onChange={(v) => setForm({ ...form, video_url: v })} disabled={!unlocked || busy} />
+              <MediaUpload adminKey={adminKey} kind="video" label="Product footage" hint="The product up close. Plays beside Chloe." value={form.video_url} onChange={(v) => setForm({ ...form, video_url: v })} disabled={!unlocked || busy} />
+            </FormGroup>
+
+            {/* What Chloe says, in the host's words. Read out by the host
+                console: the opening when she goes on air, the second part the
+                moment the price opens. */}
+            <FormGroup title="Chloe's script" columns={2}>
+              <ScriptField
+                label="Opening"
+                hint="She reads this word for word when she goes on air, 5 minutes before the drop. Don't put the drop price here — it is still hidden."
+                value={form.host_script_intro}
+                onChange={(v) => setForm({ ...form, host_script_intro: v })}
+                rows={6}
+                max={4000}
+              />
+              <ScriptField
+                label="When the price opens"
+                hint="Read the moment the price is revealed. The price can go here. Leave empty and she announces it herself."
+                value={form.host_script_reveal}
+                onChange={(v) => setForm({ ...form, host_script_reveal: v })}
+                rows={6}
+                max={2000}
+              />
             </FormGroup>
 
             <label className="mt-2 block py-2">
@@ -624,6 +649,39 @@ function Legend({ children }: { children: React.ReactNode }) {
   return <h2 className="text-lg font-bold text-fg">{children}</h2>;
 }
 
+function ScriptField({
+  label,
+  hint,
+  value,
+  onChange,
+  rows,
+  max,
+}: {
+  label: string;
+  hint: string;
+  value: string;
+  onChange: (value: string) => void;
+  rows: number;
+  max: number;
+}) {
+  return (
+    <label className="block py-2">
+      <span className="text-xs font-semibold uppercase tracking-[0.1em] text-fg-subtle">{label}</span>
+      <span className="mt-0.5 block text-xs text-fg-muted">{hint}</span>
+      <textarea
+        rows={rows}
+        maxLength={max}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="mt-1.5 w-full rounded-xl border border-border bg-surface-2 px-3 py-2.5 text-sm text-fg outline-none focus:border-border-strong"
+      />
+      <span className="block text-right text-[0.65rem] text-fg-subtle tnum">
+        {value.length}/{max}
+      </span>
+    </label>
+  );
+}
+
 function FormGroup({
   title,
   children,
@@ -685,6 +743,10 @@ function DropRow({
   const [stock, setStock] = useState(String(drop.quantity_remaining));
   const [rowMessage, setRowMessage] = useState("");
   const [hostOpen, setHostOpen] = useState(false);
+  const [script, setScript] = useState({
+    host_script_intro: drop.host_script_intro || "",
+    host_script_reveal: drop.host_script_reveal || "",
+  });
   /* Editing what a published drop shows. Deleting one that was ever public is
      refused — rightly — so without this a wrong picture or a missing video was
      permanent. */
@@ -913,8 +975,12 @@ function DropRow({
       <div className="mt-3 grid gap-x-4 sm:grid-cols-2">
         <MediaUpload adminKey={adminKey} kind="image" label="Product photo" value={media.image_url} onChange={(v) => setMedia({ ...media, image_url: v })} disabled={busy} />
         <MediaUpload adminKey={adminKey} kind="image" label="Product in use — photo" value={media.secondary_image_url} onChange={(v) => setMedia({ ...media, secondary_image_url: v })} disabled={busy} />
-        <MediaUpload adminKey={adminKey} kind="video" label="Presenter video" value={media.stream_embed_url} onChange={(v) => setMedia({ ...media, stream_embed_url: v })} allowLink disabled={busy} />
         <MediaUpload adminKey={adminKey} kind="video" label="Product footage" value={media.video_url} onChange={(v) => setMedia({ ...media, video_url: v })} disabled={busy} />
+        {/* Only shown to take one away: a presenter video replaces live Chloe
+            on the page, and an old drop may still carry one. */}
+        {media.stream_embed_url ? (
+          <MediaUpload adminKey={adminKey} kind="video" label="Presenter video (replaces live Chloe — remove it to use her)" value={media.stream_embed_url} onChange={(v) => setMedia({ ...media, stream_embed_url: v })} disabled={busy} />
+        ) : null}
       </div>
       <button
         type="button"
@@ -927,6 +993,38 @@ function DropRow({
         className="mt-2 inline-flex h-9 cursor-pointer items-center rounded-full border border-border px-4 text-xs font-semibold text-fg transition-colors hover:bg-surface-2 disabled:opacity-55"
       >
         Save media
+      </button>
+
+      {/* Chloe's script, editable until the drop is over. */}
+      <div className="mt-4 grid gap-x-4 sm:grid-cols-2">
+        <ScriptField
+          label="Chloe's opening"
+          hint="Read word for word when she goes on air. No drop price here."
+          value={script.host_script_intro}
+          onChange={(v) => setScript({ ...script, host_script_intro: v })}
+          rows={4}
+          max={4000}
+        />
+        <ScriptField
+          label="When the price opens"
+          hint="Read at the reveal. Empty: she announces the price herself."
+          value={script.host_script_reveal}
+          onChange={(v) => setScript({ ...script, host_script_reveal: v })}
+          rows={4}
+          max={2000}
+        />
+      </div>
+      <button
+        type="button"
+        disabled={busy}
+        onClick={async () =>
+          setRowMessage(
+            (await act(`/api/admin/live-drops/${drop.drop_key}/script`, script, "PATCH")) || "Script saved.",
+          )
+        }
+        className="mt-2 inline-flex h-9 cursor-pointer items-center rounded-full border border-border px-4 text-xs font-semibold text-fg transition-colors hover:bg-surface-2 disabled:opacity-55"
+      >
+        Save script
       </button>
 
       {/* Beside the button that was pressed. A refusal printed at the top of a

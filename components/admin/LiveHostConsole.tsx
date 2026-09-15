@@ -23,9 +23,30 @@ type HostState = {
   conversation_id: string;
   reveal_cue: string;
   idle_cue: string;
+  intro_script?: string;
+  reveal_script?: string;
   queued: number;
   messages: { id: number; author: string; text: string; status: string }[];
 };
+
+/* A script in pieces short enough to read in one breath: paragraphs, and any
+   long paragraph cut at sentence ends. A pause between pieces is where the
+   console checks she has finished before handing her the next. */
+function splitScript(script: string): string[] {
+  const pieces: string[] = [];
+  for (const paragraph of script.split(/\n\s*\n/).map((part) => part.replace(/\s+/g, " ").trim()).filter(Boolean)) {
+    let current = "";
+    for (const sentence of paragraph.match(/[^.!?]+[.!?]*\s*/g) || [paragraph]) {
+      if (current && (current + sentence).length > 350) {
+        pieces.push(current.trim());
+        current = "";
+      }
+      current += sentence;
+    }
+    if (current.trim()) pieces.push(current.trim());
+  }
+  return pieces;
+}
 
 const IDLE_SECONDS = 75;
 const FALLBACK_TURN_SECONDS = 25;
@@ -151,21 +172,64 @@ export function LiveHostConsole({ adminKey, dropKey }: { adminKey: string; dropK
     }
   }, [dropKey, headers, send, load]);
 
-  /* Autopilot: the reveal, then questions between her answers, then a nudge
-     when the chat is quiet. */
+  /* Word for word: Tavus's echo, no model in between. */
+  const echo = useCallback(
+    (text: string, label: string) => {
+      const call = callRef.current;
+      if (!call || !host?.conversation_id || !text.trim()) return false;
+      call.sendAppMessage(
+        {
+          message_type: "conversation",
+          event_type: "conversation.echo",
+          conversation_id: host.conversation_id,
+          properties: { modality: "text", text: text.trim(), done: true },
+        },
+        "*",
+      );
+      lastSentRef.current = Date.now();
+      note(label);
+      return true;
+    },
+    [host?.conversation_id],
+  );
+
+  /* The host's script, a paragraph at a time, each after she finishes the last. */
+  const scriptLinesRef = useRef<string[]>([]);
+  const introQueuedRef = useRef(false);
+  const queueScript = (script: string, replace = false) => {
+    const lines = splitScript(script);
+    scriptLinesRef.current = replace ? lines : [...scriptLinesRef.current, ...lines];
+  };
+
+  /* Autopilot: the opening script, the reveal, then questions between her
+     answers, then a nudge when the chat is quiet. */
   useEffect(() => {
     if (!autopilot || !joined || !host) return;
     const tick = setInterval(() => {
       const now = Date.now();
-      if (host.reveal_cue && !revealSentRef.current) {
+      if (!introQueuedRef.current && host.intro_script && ["waiting", "live"].includes(host.state)) {
+        introQueuedRef.current = true;
+        queueScript(host.intro_script);
+      }
+      if (host.state === "live" && !revealSentRef.current) {
         revealSentRef.current = true;
-        send(host.reveal_cue, "Told Chloe the price is open");
-        return;
+        if (host.reveal_script) {
+          /* The price opening outranks whatever was left of the opening. */
+          queueScript(host.reveal_script, true);
+        } else if (host.reveal_cue) {
+          send(host.reveal_cue, "Told Chloe the price is open");
+          return;
+        }
       }
       const finishedTurn = sawSpeakingEventsRef.current
         ? !speaking && now - lastStoppedRef.current > 3000 && lastStoppedRef.current >= lastSentRef.current
         : now - lastSentRef.current > FALLBACK_TURN_SECONDS * 1000;
       if (!finishedTurn && lastSentRef.current) return;
+      if (scriptLinesRef.current.length) {
+        const line = scriptLinesRef.current.shift() as string;
+        echo(line, `Script: ${line.slice(0, 60)}`);
+        return;
+      }
       if (host.queued > 0) {
         void sendNextQuestions();
         return;
@@ -175,7 +239,9 @@ export function LiveHostConsole({ adminKey, dropKey }: { adminKey: string; dropK
       }
     }, 2000);
     return () => clearInterval(tick);
-  }, [autopilot, joined, host, speaking, send, sendNextQuestions]);
+    // queueScript only writes a ref.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autopilot, joined, host, speaking, send, echo, sendNextQuestions]);
 
   /*
    * Talking to Chloe yourself.
@@ -186,21 +252,7 @@ export function LiveHostConsole({ adminKey, dropKey }: { adminKey: string; dropK
    * wrapped in the drop's marker on the server so she acts on it.
    */
   const [ownText, setOwnText] = useState("");
-  const say = (text: string) => {
-    const call = callRef.current;
-    if (!call || !host?.conversation_id || !text.trim()) return;
-    call.sendAppMessage(
-      {
-        message_type: "conversation",
-        event_type: "conversation.echo",
-        conversation_id: host.conversation_id,
-        properties: { modality: "text", text: text.trim(), done: true },
-      },
-      "*",
-    );
-    lastSentRef.current = Date.now();
-    note(`Said: ${text.trim().slice(0, 60)}`);
-  };
+  const say = (text: string) => echo(text, `Said: ${text.trim().slice(0, 60)}`);
   const instruct = async (text: string) => {
     if (!text.trim()) return;
     const response = await fetch(`/api/admin/live-host/${encodeURIComponent(dropKey)}/instruction`, {
@@ -250,6 +302,20 @@ export function LiveHostConsole({ adminKey, dropKey }: { adminKey: string; dropK
           <input type="checkbox" checked={autopilot} onChange={(event) => setAutopilot(event.target.checked)} />
           Autopilot
         </label>
+        {host?.intro_script ? (
+          <button
+            type="button"
+            disabled={!joined}
+            onClick={() => {
+              introQueuedRef.current = true;
+              queueScript(host.intro_script || "", true);
+              note("Reading the opening script again");
+            }}
+            className="inline-flex h-8 cursor-pointer items-center rounded-full border border-border px-3 text-xs font-semibold text-fg hover:bg-surface disabled:opacity-50"
+          >
+            Read opening script
+          </button>
+        ) : null}
         <button
           type="button"
           disabled={!joined}

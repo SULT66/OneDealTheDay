@@ -635,7 +635,9 @@ db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_google_sub ON users(google_
    Two — the product itself, and the product in use — is what a shopping
    channel actually shows. */
 const liveDropColumns = new Set(db.prepare("PRAGMA table_info(live_drops)").all().map(column => column.name));
-for (const column of ["video_url", "stream_embed_url", "secondary_image_url"]) {
+/* host_script_intro and host_script_reveal: what Chloe reads when she goes on
+   air, and when the price opens. Written by the host; see src/liveHost.js. */
+for (const column of ["video_url", "stream_embed_url", "secondary_image_url", "host_script_intro", "host_script_reveal"]) {
   if (!liveDropColumns.has(column)) db.exec(`ALTER TABLE live_drops ADD COLUMN ${column} TEXT NOT NULL DEFAULT ""`);
 }
 
