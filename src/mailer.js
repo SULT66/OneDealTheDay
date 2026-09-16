@@ -53,6 +53,19 @@ const sendEmail = async ({to, toName, subject, html, text, unsubscribeUrl, fromN
           }
         }
         : {}),
+      /*
+       * No tracking. SendGrid's defaults rewrite every link through a
+       * redirect and add an invisible open pixel, and both are what bulk
+       * marketing looks like to Gmail: the letter from Chloe went to
+       * Promotions with them. Our own links already record the click
+       * (/live/go, /go) on arrival, so nothing is lost.
+       */
+      tracking_settings: {
+        click_tracking: {enable: false, enable_text: false},
+        open_tracking: {enable: false},
+        subscription_tracking: {enable: false},
+        ganalytics: {enable: false},
+      },
       /* SendGrid requires text/plain before text/html. */
       content: [
         {type: "text/plain", value: text || plainTextFrom(html)},
