@@ -79,6 +79,9 @@ const textOf = (message) => String(message.content.find((part) => part.type === 
     assert.match(textOf(message), /Pet Lodge Automatic Dog Feeder/);
     assert.match(textOf(message), /https:\/\/www\.onedailydrop\.com\/us\/live/, "the text part lost the link");
     assert.doesNotMatch(textOf(message), /<[a-z]/i, "HTML leaked into the text part");
+    /* No link rewriting and no open pixel: both read as a campaign. */
+    assert.strictEqual(message.tracking_settings?.click_tracking?.enable, false, "SendGrid click tracking is on");
+    assert.strictEqual(message.tracking_settings?.open_tracking?.enable, false, "SendGrid open tracking is on");
     /* From a person, which reads less like a campaign. */
     assert.strictEqual(message.from.name, "Chloe from OneDailyDrop");
     assert.doesNotMatch(message.subject, /\$|%|\bsave\b|\bdeal\b/i, "a subject that reads like an advert");
