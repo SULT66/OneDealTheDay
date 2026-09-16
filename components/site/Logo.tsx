@@ -14,13 +14,19 @@ export function Logo({ market }: { market: string }) {
       aria-label="OneDailyDrop home"
     >
       {/* Sized to the wordmark rather than to itself, so the tag sits level
-          with the two lines of type instead of hanging below them. */}
+          with the two lines of type instead of hanging below them.
+
+          Served whole, not resized. With sizes="30px" the optimiser sent a
+          32-pixel copy, which is right at 100% and a smear the moment
+          anybody zooms the page or looks at it on a sharper screen. The
+          full-size file is 16 KB, less than one product photo. */}
       <Image
-        src="/brand/onedailydrop-tag-v2.png"
+        src="/brand/onedailydrop-tag-v2.webp"
         alt=""
         width={384}
         height={512}
-        sizes="30px"
+        unoptimized
+        priority
         className="h-[2.4rem] w-auto shrink-0 object-contain"
       />
       {/* A column, so the lime line inherits its width from the badge above it
