@@ -16,7 +16,16 @@ import { BellRinging } from "@phosphor-icons/react";
  * about a price is asking for the thing they came here to avoid, and the
  * address alone is enough to keep the only promise being made.
  */
-export function WatchPrice({ dealId, price }: { dealId: string; price: string }) {
+export function WatchPrice({
+  dealId,
+  price,
+  inputId = "watch-price-email",
+}: {
+  dealId: string;
+  price: string;
+  /* The form appears twice on a product page, and an id must not. */
+  inputId?: string;
+}) {
   const [email, setEmail] = useState("");
   const [state, setState] = useState<"idle" | "sending" | "done" | "failed">("idle");
   const [message, setMessage] = useState("");
@@ -60,11 +69,11 @@ export function WatchPrice({ dealId, price }: { dealId: string; price: string })
         We will watch it against today&rsquo;s {price} and email you once, if it drops.
       </p>
       <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-        <label htmlFor="watch-price-email" className="sr-only">
+        <label htmlFor={inputId} className="sr-only">
           Email address
         </label>
         <input
-          id="watch-price-email"
+          id={inputId}
           type="email"
           required
           value={email}
