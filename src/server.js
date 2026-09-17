@@ -667,6 +667,10 @@ app.use((req, res, next) => {
   if (req.method !== "GET" || req.market) return next();
   const regionalPages = /^\/(?:about|contact|privacy|terms|affiliate-disclosure|editorial-policy|how-we-select-deals|price-disclaimer|archive|brands|search|deal\/[^/]+|category\/[^/]+|brand\/[^/]+)\/?$/;
   if (!regionalPages.test(req.path)) return next();
+  /* A file is not a page. /brand/<slug> is a brand page, but the logo lives
+     at /brand/onedailydrop-tag-v2.webp, and every page load was bouncing it
+     through /us/brand/... first. Slugs never contain a dot. */
+  if (/\.[a-z0-9]{2,5}$/i.test(req.path)) return next();
   const destination = marketPath(marketFromIp(req).code, req.path);
   const queryIndex = String(req.originalUrl || "").indexOf("?");
   return res.redirect(301, `${destination}${queryIndex >= 0 ? req.originalUrl.slice(queryIndex) : ""}`);
