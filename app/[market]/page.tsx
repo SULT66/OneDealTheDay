@@ -50,8 +50,12 @@ export default async function MarketHome({ params }: PageProps<"/[market]">) {
   /* The homepage is the catalog now, not the daily drop: it leads with search
      and the best-scoring picks. The drop still runs on its own schedule and
      lives at /[market]/daily-drop — one feature here, not the whole product. */
-  const picks = await getTopPicks(market, 12);
-  const categories = await getCategoriesWithCounts(market, language);
+  /* Together, not one after the other: they ask different endpoints and
+     neither needs the other's answer. */
+  const [picks, categories] = await Promise.all([
+    getTopPicks(market, 12),
+    getCategoriesWithCounts(market, language),
+  ]);
 
   /* Honest empty state rather than a crash — no sample prices or products are
      invented while the catalog for this market is empty (a source outage, or

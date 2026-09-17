@@ -36,6 +36,8 @@ export type Deal = {
   category: string;
   retailer: Retailer;
   image: string;
+  /* The same photograph at the size a grid card draws it. */
+  thumbnail: string;
   images: string[];
   price: number;
   /** Retailer's own reference/list price, when one is verified. */
