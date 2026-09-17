@@ -41,7 +41,7 @@ export async function FeaturedDeal({
             className="p-8"
           />
           <div className="absolute left-5 top-5 flex flex-wrap gap-2">
-            <Pill tone="solid">Today&apos;s #1 pick</Pill>
+            <Pill tone="solid">{t(language, "app.deal.todaysPick")}</Pill>
             {deal.seller.positivePct >= 98 && (
               <Pill tone="accent">{t(language, "product.establishedSeller")}</Pill>
             )}

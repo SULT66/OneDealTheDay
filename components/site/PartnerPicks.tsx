@@ -1,4 +1,5 @@
 import { ArrowUpRight } from "@phosphor-icons/react/ssr";
+import { getLanguage, t } from "@/lib/i18n";
 
 /*
  * Products from shops we reach through Sovrn Commerce, chosen by a person.
@@ -42,18 +43,19 @@ const PICKS: Record<string, PartnerPick[]> = {
   ],
 };
 
-export function PartnerPicks({ market }: { market: string }) {
+export async function PartnerPicks({ market }: { market: string }) {
   const picks = PICKS[market] ?? [];
   if (!picks.length) return null;
+  const language = await getLanguage(market);
 
   return (
     <section id="partners" className="mt-10 scroll-mt-32">
-      <h2 className="text-lg font-bold text-fg">Featured at other retailers</h2>
+      <h2 className="text-lg font-bold text-fg">{t(language, "app.partner.title")}</h2>
       {/* Stated as a fact about where the price lives, not as an apology for
           what this card lacks: that it carries no score is visible, and does
           not need announcing ahead of the product. */}
       <p className="mt-1 max-w-prose text-sm leading-relaxed text-fg-muted">
-        Selected by OneDailyDrop. Prices and availability are set by each retailer.
+        {t(language, "app.partner.lede")}
       </p>
 
       <ul className="mt-5 grid gap-2 sm:grid-cols-2">
@@ -71,8 +73,8 @@ export function PartnerPicks({ market }: { market: string }) {
                   <span className="mt-1 block text-xs leading-relaxed text-fg-muted">{pick.note}</span>
                 ) : null}
                 <span className="mt-1.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                  <span className="text-sm font-semibold text-fg">View deal</span>
-                  <span className="text-xs text-fg-subtle">See price at {pick.retailer}</span>
+                  <span className="text-sm font-semibold text-fg">{t(language, "app.partner.viewDeal")}</span>
+                  <span className="text-xs text-fg-subtle">{t(language, "app.partner.seePriceAt", { store: pick.retailer })}</span>
                 </span>
               </span>
               <ArrowUpRight
@@ -87,8 +89,7 @@ export function PartnerPicks({ market }: { market: string }) {
       </ul>
 
       <p className="mt-4 text-xs text-fg-subtle">
-        We may earn a commission when you click or buy through these links, at no
-        extra cost to you.
+        {t(language, "app.partner.disclosure")}
       </p>
     </section>
   );

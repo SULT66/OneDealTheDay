@@ -5,6 +5,7 @@ import { DealCard } from "@/components/deal/DealCard";
 import { SectionHeader } from "@/components/site/SectionHeader";
 import type { Deal } from "@/lib/types";
 import { formatPrice } from "@/lib/format";
+import { getLanguage, t } from "@/lib/i18n";
 
 /**
  * The Live Drop page.
@@ -55,10 +56,10 @@ export async function generateMetadata({
   params: Promise<{ market: string }>;
 }): Promise<Metadata> {
   const { market } = await params;
+  const language = await getLanguage(market);
   return {
     title: "OneDailyDrop Live",
-    description:
-      "Watch OneDailyDrop Live, see the product demonstration and shop the current limited-time offer.",
+    description: t(language, "app.live.metaDescription"),
     /* Indexable, but with no static description of the offer: the offer changes
        every drop and the price is not knowable until it opens. */
     alternates: { canonical: `/${market}/live` },
@@ -71,6 +72,7 @@ export default async function LivePage({
   params: Promise<{ market: string }>;
 }) {
   const { market } = await params;
+  const language = await getLanguage(market);
   const [answered, shelf] = await Promise.all([
     currentDrop(market),
     /* A shelf that fails to load is left out; the drop is the page. */
@@ -87,9 +89,11 @@ export default async function LivePage({
         <section aria-labelledby="impulse-title" className="mx-auto w-full max-w-5xl px-3 pb-12 pt-4 sm:px-6">
           <SectionHeader
             id="impulse-title"
-            eyebrow="While you watch"
-            title={`Checked picks under ${formatPrice(shelf.ceiling, shelf.deals[0].currency, market).replace(/[.,]00$/, "")}`}
-            action={{ href: `/${market}/search`, label: "See all deals" }}
+            eyebrow={t(language, "app.live.whileYouWatch")}
+            title={t(language, "app.live.picksUnder", {
+              price: formatPrice(shelf.ceiling, shelf.deals[0].currency, market).replace(/[.,]00$/, ""),
+            })}
+            action={{ href: `/${market}/search`, label: t(language, "app.live.seeAllDeals") }}
           />
           <ul className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
             {shelf.deals.map((deal, index) => (

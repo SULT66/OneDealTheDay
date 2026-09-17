@@ -2,6 +2,7 @@ import { formatDate, formatPrice } from "@/lib/format";
 import { dailyPrices, daysBetween, priceVerdict } from "@/lib/priceTrend";
 import type { PricePoint } from "@/lib/types";
 import { WatchPrice } from "@/components/deal/WatchPrice";
+import { getLanguage, t } from "@/lib/i18n";
 
 /**
  * Tracked price over time, drawn as inline SVG — no chart library for one
@@ -16,7 +17,7 @@ import { WatchPrice } from "@/components/deal/WatchPrice";
  * visually but read by screen readers: a path element on its own tells a
  * non-sighted visitor nothing about what the price actually did.
  */
-export function PriceHistory({
+export async function PriceHistory({
   history,
   currency = "USD",
   market,
@@ -31,18 +32,20 @@ export function PriceHistory({
   /* When given, a price that is not at its low offers to watch it. */
   dealId?: string;
 }) {
+  const language = await getLanguage(market ?? "us");
+  const tr = (key: string, variables?: Record<string, string | number>) => t(language, key, variables);
   const days = dailyPrices(history);
   if (days.length === 0) {
     return (
       <p className="rounded-2xl bg-surface-2 p-5 text-sm text-fg-muted">
-        No tracked price observations yet for this listing.
+        {tr("app.history.none")}
       </p>
     );
   }
 
   const money = (price: number) => formatPrice(price, currency, market);
   const day = (date: string) => formatDate(date, market);
-  const verdict = priceVerdict(days, money, day, { priceIsCurrent });
+  const verdict = priceVerdict(days, money, day, { priceIsCurrent, tr });
 
   const prices = days.map((p) => p.price);
   const min = Math.min(...prices);
@@ -85,10 +88,14 @@ export function PriceHistory({
       <figure className="rounded-2xl border border-border bg-surface p-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <span className="rounded-full bg-surface-2 px-3 py-1 text-xs font-semibold text-fg-muted">
-            Tracking since {day(first.date)} · {trackedDays} day{trackedDays === 1 ? "" : "s"}
+            {tr("app.history.trackingSince", {
+              date: day(first.date),
+              days: trackedDays,
+              dayWord: tr(trackedDays === 1 ? "app.trend.day" : "app.trend.days"),
+            })}
           </span>
           <span className="tnum text-xs text-fg-muted">
-            {priceIsCurrent ? "Today" : `Last seen ${day(last.date)}`}{" "}
+            {priceIsCurrent ? tr("app.history.today") : tr("app.history.lastSeen", { date: day(last.date) })}{" "}
             <span className="font-semibold text-fg">{money(last.price)}</span>
           </span>
         </div>
@@ -104,8 +111,8 @@ export function PriceHistory({
             an empty box the height of a phone screen. */}
         {days.length < 2 ? (
           <p className="mt-4 rounded-xl bg-surface-2 px-4 py-3 text-sm text-fg-muted">
-            One price so far: <span className="font-semibold text-fg tnum">{money(last.price)}</span> on {day(last.date)}.
-            The chart appears once we have a second day.
+            {tr("app.history.onePrice")} <span className="font-semibold text-fg tnum">{money(last.price)}</span>{" "}
+            {tr("app.history.onePriceOn", { date: day(last.date) })}
           </p>
         ) : (
         <>
@@ -167,13 +174,13 @@ export function PriceHistory({
         <div className="mt-3 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 text-xs text-fg-muted">
           <span className="tnum">{day(first.date)}</span>
           <span className="tnum">
-            Low {money(min)} · High {money(max)}
+            {tr("app.history.lowHigh", { low: money(min), high: money(max) })}
           </span>
           <span className="tnum">{day(last.date)}</span>
         </div>
 
         <figcaption className="mt-3 text-xs text-fg-subtle">
-          One point per day: the last price we saw that day.
+          {tr("app.history.caption")}
         </figcaption>
         </>
         )}
@@ -181,14 +188,14 @@ export function PriceHistory({
         {/* Same series as data, for screen readers and anyone who wants exact values. */}
         <details className="mt-3">
           <summary className="cursor-pointer text-sm font-semibold text-fg-muted transition-colors hover:text-fg">
-            View tracked prices as a table
+            {tr("app.history.viewTable")}
           </summary>
           <table className="mt-3 w-full text-left text-sm">
-            <caption className="sr-only">Tracked price by date</caption>
+            <caption className="sr-only">{tr("app.history.tableCaption")}</caption>
             <thead>
               <tr className="text-xs uppercase tracking-wide text-fg-subtle">
-                <th scope="col" className="pb-2 font-semibold">Date</th>
-                <th scope="col" className="pb-2 font-semibold">Price</th>
+                <th scope="col" className="pb-2 font-semibold">{tr("app.history.date")}</th>
+                <th scope="col" className="pb-2 font-semibold">{tr("app.history.price")}</th>
               </tr>
             </thead>
             <tbody className="text-fg-muted">

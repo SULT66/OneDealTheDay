@@ -17,6 +17,12 @@ const mod = new Module("priceTrend");
 mod._compile(outputText, "priceTrend.js");
 const { dailyPrices, priceVerdict, recentChange } = mod.exports;
 
+const { appCopy } = require("../src/i18n-app");
+const tr = (key, vars = {}) => {
+  assert(appCopy.en[key], `missing English copy for ${key}`);
+  assert(appCopy.es[key], `missing Spanish copy for ${key}`);
+  return appCopy.en[key].replace(/\{(\w+)\}/g, (_, name) => String(vars[name] ?? ""));
+};
 const money = (value) => `$${value.toFixed(2)}`;
 const day = (date) => date;
 const series = (pairs) => pairs.map(([date, price]) => ({ date, price }));
@@ -31,41 +37,41 @@ assert.deepStrictEqual(days, series([["2026-09-13", 138.09], ["2026-09-15", 124.
 assert.deepStrictEqual(dailyPrices(series([["bad", 5], ["2026-09-16", 0]])), [], "junk points reached the chart");
 
 /* Too new to judge, whatever the numbers say. */
-let verdict = priceVerdict(series([["2026-09-15", 50], ["2026-09-16", 40]]), money, day);
+let verdict = priceVerdict(series([["2026-09-15", 50], ["2026-09-16", 40]]), money, day, { tr });
 assert.strictEqual(verdict.tone, "neutral");
 assert.match(verdict.headline, /started tracking this price on 2026-09-15/);
 assert.doesNotMatch(`${verdict.headline} ${verdict.detail}`, /lowest/i, "two days of history called a low");
 
 /* At the low. */
-verdict = priceVerdict(days, money, day);
+verdict = priceVerdict(days, money, day, { tr });
 assert.strictEqual(verdict.tone, "good");
 assert.match(verdict.headline, /lowest price since we started tracking on 2026-09-13/);
 assert.strictEqual(verdict.suggestWatch, false);
 assert.match(verdict.detail, /Down \$14\.10 \(10%\) in the last 3 days/);
 
 /* At the high: say so, and name the low. */
-verdict = priceVerdict(series([["2026-09-01", 100], ["2026-09-05", 80], ["2026-09-10", 110]]), money, day);
+verdict = priceVerdict(series([["2026-09-01", 100], ["2026-09-05", 80], ["2026-09-10", 110]]), money, day, { tr });
 assert.strictEqual(verdict.tone, "high");
 assert.match(verdict.headline, /highest price/);
 assert.match(verdict.detail, /\$80\.00 on 2026-09-05, 38% less than today/);
 assert.strictEqual(verdict.suggestWatch, true);
 
 /* In between. */
-verdict = priceVerdict(series([["2026-09-01", 100], ["2026-09-05", 80], ["2026-09-10", 88]]), money, day);
+verdict = priceVerdict(series([["2026-09-01", 100], ["2026-09-05", 80], ["2026-09-10", 88]]), money, day, { tr });
 assert.match(verdict.headline, /^10% above the lowest price/);
 
 /* Flat. */
-verdict = priceVerdict(series([["2026-09-01", 20], ["2026-09-09", 20]]), money, day);
+verdict = priceVerdict(series([["2026-09-01", 20], ["2026-09-09", 20]]), money, day, { tr });
 assert.match(verdict.headline, /hasn't changed in 9 days/);
 
 /* The change compares against a week back, not the day before. */
 const change = recentChange(series([["2026-09-01", 100], ["2026-09-08", 90], ["2026-09-15", 81]]), 7);
 assert.deepStrictEqual(change, { amount: -9, percent: -10, days: 7 });
 
-assert.strictEqual(priceVerdict([], money, day), null);
+assert.strictEqual(priceVerdict([], money, day, { tr }), null);
 
 /* A price we could not recheck is reported as old, never judged. */
-verdict = priceVerdict(days, money, day, { priceIsCurrent: false });
+verdict = priceVerdict(days, money, day, { priceIsCurrent: false, tr });
 assert.match(verdict.headline, /last saw this price on 2026-09-16/);
 assert.doesNotMatch(`${verdict.headline} ${verdict.detail}`, /lowest|highest|above/i, "a stale price was judged");
 assert.strictEqual(verdict.suggestWatch, false);

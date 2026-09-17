@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { LiveDropView } from "./LiveDropPanel";
+import { useCopy } from "@/components/site/CopyProvider";
 
 /**
  * The teaser on the home page.
@@ -16,6 +17,7 @@ import type { LiveDropView } from "./LiveDropPanel";
  * response until the drop opens, which is the mechanic the format rests on.
  */
 export function NextLiveDrop({ market }: { market: string }) {
+  const tr = useCopy();
   const [drop, setDrop] = useState<LiveDropView | null>(null);
   const [seconds, setSeconds] = useState<number | null>(null);
 
@@ -77,7 +79,7 @@ export function NextLiveDrop({ market }: { market: string }) {
           {live && (
             <span className="h-2 w-2 animate-pulse rounded-full bg-danger" aria-hidden="true" />
           )}
-          {live ? "Live now" : "Next live drop"}
+          {live ? tr("app.live.stateLive") : tr("app.live.stateUpcoming")}
         </span>
 
         <span id="live-drop-title" className="min-w-0 flex-1 truncate text-sm font-semibold text-fg">
@@ -86,7 +88,7 @@ export function NextLiveDrop({ market }: { market: string }) {
 
         <span className="flex items-baseline gap-2">
           <span className="text-xs uppercase tracking-[0.12em] text-fg-subtle">
-            {live ? "Closes in" : "Opens in"}
+            {live ? tr("app.live.closesIn") : tr("app.live.opensIn")}
           </span>
           <span className="text-lg font-black text-fg tnum">{countdown}</span>
         </span>
@@ -105,7 +107,7 @@ export function NextLiveDrop({ market }: { market: string }) {
           * supposed to pass on.
           */}
         <span className="inline-flex shrink-0 items-center rounded-full bg-lime px-4 py-1.5 text-xs font-bold text-ink">
-          {live ? "Join the drop" : "Remind me — one email when it opens"}
+          {live ? tr("app.next.joinDrop") : tr("app.next.remindOneEmail")}
         </span>
       </Link>
     </section>

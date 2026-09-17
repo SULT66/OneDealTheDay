@@ -9,6 +9,7 @@ import { ClickAttribution } from "@/components/site/ClickAttribution";
 import { PageViews } from "@/components/site/PageViews";
 import { LiveDropBar } from "@/components/live/LiveDropBar";
 import { LiveBroadcastProvider } from "@/components/live/LiveBroadcast";
+import { CopyProvider } from "@/components/site/CopyProvider";
 
 /**
  * Everything lives under a market segment, mirroring the live site's /us URLs
@@ -28,6 +29,8 @@ export default async function MarketLayout({
   const language = await getLanguage(market);
 
   return (
+    /* The language for components that run in the browser. See CopyProvider. */
+    <CopyProvider language={language}>
     <DeliaProvider market={market} language={language}>
       {/* Holds Chloe's call above the pages, so she follows the viewer. */}
       <LiveBroadcastProvider market={market}>
@@ -49,5 +52,6 @@ export default async function MarketLayout({
       <Footer market={market} />
       </LiveBroadcastProvider>
     </DeliaProvider>
+    </CopyProvider>
   );
 }

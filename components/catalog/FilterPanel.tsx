@@ -6,6 +6,7 @@ import { cn } from "@/lib/cn";
 import { formatPrice, retailerLabel } from "@/lib/format";
 import { searchParamsFromFilter } from "@/lib/filter";
 import type { DealFilter, SortKey } from "@/lib/types";
+import { useCopy } from "@/components/site/CopyProvider";
 
 /**
  * Filters live in the URL, not in component state.
@@ -96,6 +97,7 @@ export function FilterPanel({
   bounds: { min: number; max: number };
   copy: FilterCopy;
 }) {
+  const tr = useCopy();
   const router = useRouter();
 
   function go(next: DealFilter) {
@@ -278,7 +280,7 @@ export function FilterPanel({
             selected={!filter.retailer}
             onClick={() => update({ retailer: undefined })}
           >
-            All
+            {tr("app.filter.all")}
           </ChoiceButton>
           {retailers.map((r) => (
             <ChoiceButton
@@ -306,7 +308,7 @@ export function FilterPanel({
               selected={filter.minRating === s.value}
               onClick={() => update({ minRating: s.value })}
             >
-              {s.label || copy.any}
+              {s.value === 4 ? tr("app.filter.ratingFour") : s.value === 4.5 ? tr("app.filter.ratingFourHalf") : copy.any}
             </ChoiceButton>
           ))}
         </div>
@@ -324,7 +326,7 @@ export function FilterPanel({
               selected={filter.minScore === s.value}
               onClick={() => update({ minScore: s.value })}
             >
-              {s.label || copy.any}
+              {s.value === 1 ? tr("app.filter.scored") : s.label || copy.any}
             </ChoiceButton>
           ))}
         </div>
@@ -346,7 +348,7 @@ export function FilterPanel({
               {copy.belowReferenceOnly}
             </span>
             <span className="mt-0.5 block text-xs text-fg-subtle">
-              Hides listings with no verified reference price to compare against.
+              {tr("app.filter.belowReferenceHint")}
             </span>
           </span>
         </label>

@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { getLanguage } from "@/lib/i18n";
+import { SpanishEditorial, spanishMeta } from "@/components/site/SpanishPages";
 import { Prose } from "@/components/site/Prose";
 
 /**
@@ -20,6 +22,7 @@ export async function generateMetadata({
   return {
     title: "Editorial Policy",
     description: "How OneDailyDrop keeps deal recommendations useful, understandable and independent.",
+    ...((await getLanguage(market)) === "es" ? { title: spanishMeta.editorial.title, description: spanishMeta.editorial.description } : {}),
     /* The same words live at five market prefixes; this says which one is the
        original rather than leaving search engines to pick. */
     alternates: { canonical: `/${market}/editorial-policy` },
@@ -32,6 +35,7 @@ export default async function EditorialPolicyPage({
   params: Promise<{ market: string }>;
 }) {
   const { market } = await params;
+  if ((await getLanguage(market)) === "es") return <SpanishEditorial market={market} />;
 
   return (
     <Prose

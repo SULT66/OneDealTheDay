@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { getLanguage } from "@/lib/i18n";
+import { SpanishPrivacy, spanishMeta } from "@/components/site/SpanishPages";
 import { Prose } from "@/components/site/Prose";
 
 /**
@@ -20,6 +22,7 @@ export async function generateMetadata({
   return {
     title: "Privacy Policy",
     description: "What information OneDailyDrop may collect and how it is used.",
+    ...((await getLanguage(market)) === "es" ? { title: spanishMeta.privacy.title, description: spanishMeta.privacy.description } : {}),
     /* The same words live at five market prefixes; this says which one is the
        original rather than leaving search engines to pick. */
     alternates: { canonical: `/${market}/privacy` },
@@ -32,6 +35,7 @@ export default async function PrivacyPage({
   params: Promise<{ market: string }>;
 }) {
   const { market } = await params;
+  if ((await getLanguage(market)) === "es") return <SpanishPrivacy market={market} />;
 
   return (
     <Prose

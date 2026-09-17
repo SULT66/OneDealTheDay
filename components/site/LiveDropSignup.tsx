@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/cn";
+import { useCopy, useLanguage } from "@/components/site/CopyProvider";
 
 /*
  * Get told before every Live Drop.
@@ -33,6 +34,8 @@ export function LiveDropSignup({
   variant?: "band" | "inline";
   source?: string;
 }) {
+  const tr = useCopy();
+  const language = useLanguage();
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<"idle" | "sending" | "done" | "error">("idle");
   const [message, setMessage] = useState<string | null>(null);
@@ -64,21 +67,21 @@ export function LiveDropSignup({
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
         setStatus("error");
-        setMessage(data.error || "Something went wrong. Try again.");
+        setMessage(data.error || tr("app.signup.wentWrong"));
         return;
       }
       setStatus("done");
-      setMessage("You're on the list. We'll email you before every Live Drop.");
+      setMessage(tr("app.signup.onList"));
     } catch {
       setStatus("error");
-      setMessage("Something went wrong. Try again.");
+      setMessage(tr("app.signup.wentWrong"));
     }
   }
 
   const when = next
     ? next.state === "live"
-      ? "on right now"
-      : new Date(next.start_at).toLocaleString(undefined, {
+      ? tr("app.signup.onNow")
+      : new Date(next.start_at).toLocaleString(`${language}-${market.toUpperCase()}`, {
           weekday: "long",
           hour: "numeric",
           minute: "2-digit",
@@ -96,19 +99,18 @@ export function LiveDropSignup({
       )}
     >
       <p className={cn("text-[0.7rem] font-semibold uppercase tracking-[0.18em]", dark ? "opacity-60" : "text-fg-subtle")}>
-        OneDailyDrop Live
+        {tr("app.signup.eyebrow")}
       </p>
       <h2 className={cn("mt-2 max-w-xl font-bold tracking-tight", dark ? "text-2xl sm:text-3xl" : "text-xl")}>
-        Never miss a Live Drop.
+        {tr("app.signup.title")}
       </h2>
       <p className={cn("mt-3 max-w-xl text-sm", dark ? "opacity-70" : "text-fg-muted")}>
-        One product, one price, ten minutes. We email you before each drop so you are there when the
-        price is revealed. Nothing else, and one click to leave.
+        {tr("app.signup.lede")}
       </p>
 
       {next && (
         <p className={cn("mt-4 text-sm", dark ? "" : "text-fg")}>
-          <span className="font-semibold">Next drop:</span> {next.title} ·{" "}
+          <span className="font-semibold">{tr("app.signup.nextDrop")}</span> {next.title} ·{" "}
           <Link href={`/${market}/live`} className="font-semibold underline underline-offset-4">
             {when}
           </Link>
@@ -124,7 +126,7 @@ export function LiveDropSignup({
           <div className="mt-6 flex flex-col gap-3 sm:max-w-lg sm:flex-row">
             <div className="flex-1">
               <label htmlFor={`live-signup-${variant}`} className="sr-only">
-                Email address
+                {tr("app.signup.email")}
               </label>
               <input
                 id={`live-signup-${variant}`}
@@ -133,7 +135,7 @@ export function LiveDropSignup({
                 autoComplete="email"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
-                placeholder="Email address"
+                placeholder={tr("app.signup.email")}
                 className={cn(
                   "h-14 w-full rounded-full border bg-transparent px-5 text-base outline-none transition-colors",
                   dark
@@ -147,11 +149,11 @@ export function LiveDropSignup({
               disabled={status === "sending"}
               className="inline-flex h-14 cursor-pointer items-center justify-center rounded-full bg-lime px-7 text-base font-semibold text-ink transition-opacity hover:opacity-88 active:scale-[0.98] disabled:opacity-60"
             >
-              {status === "sending" ? "Sending…" : "Tell me before every drop"}
+              {status === "sending" ? tr("app.signup.sending") : tr("app.signup.submit")}
             </button>
           </div>
           <p className={cn("mt-3 text-xs", dark ? "opacity-60" : "text-fg-subtle")} role="status">
-            {message ?? "Only Live Drop emails. Unsubscribe in one click."}
+            {message ?? tr("app.signup.fineprint")}
           </p>
         </>
       )}
