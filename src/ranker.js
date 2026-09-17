@@ -118,6 +118,78 @@ const SEARCH_STOP_WORDS = new Set([
   "find", "show", "looking", "want", "need", "please"
 ]);
 
+/*
+ * The thing being asked for, and the words that only describe it.
+ *
+ * "wireless earbuds under 50" was scored by matching any one of its words, so
+ * "wireless" alone pulled in speakers, router antennas, printer cables and
+ * replacement batteries: every one of them wireless, none of them earbuds. The
+ * last word that names a thing is the one a shopper actually asked for, and it
+ * has to appear.
+ */
+const MODIFIER_WORDS = new Set([
+  "wireless", "bluetooth", "portable", "rechargeable", "gaming", "smart", "mini", "compact", "noise",
+  "cancelling", "canceling", "waterproof", "cordless", "usb", "wired", "digital", "electric", "automatic",
+  "black", "white", "silver", "cheap", "budget", "premium", "professional", "heavy", "duty", "large", "small",
+]);
+
+/* Things sold alongside a product rather than being it. A search that does not
+   ask for one should not be filled with them. */
+const ACCESSORY_WORDS = [
+  "case", "cover", "cable", "charger", "adapter", "adaptor", "replacement", "battery", "batteries",
+  "stand", "mount", "holder", "antenna", "protector", "strap", "sleeve", "dock", "hanger", "bracket",
+];
+
+function singularForm(word) {
+  if (word.length > 4 && word.endsWith("ies")) return `${word.slice(0, -3)}y`;
+  if (word.length > 4 && word.endsWith("es")) return word.slice(0, -2);
+  if (word.length > 3 && word.endsWith("s") && !word.endsWith("ss")) return word.slice(0, -1);
+  return word;
+}
+
+function headTerm(query) {
+  const tokens = searchTokens(query);
+  if (!tokens.length) return "";
+  for (let index = tokens.length - 1; index >= 0; index -= 1) {
+    if (!MODIFIER_WORDS.has(tokens[index])) return tokens[index];
+  }
+  return tokens[tokens.length - 1];
+}
+
+/* Plurals, because a catalogue writes "Earbud" as often as "Earbuds". */
+function headVariants(head) {
+  const stem = singularForm(head);
+  return [...new Set([head, stem, `${stem}s`, `${stem}es`])].filter(Boolean);
+}
+
+/*
+ * Somewhere in the listing, the thing itself.
+ *
+ * The description counts, because a listing titled "Manfrotto Befree Advanced
+ * aluminium support" is a real answer for "tripod" and says so in its second
+ * line. It counts for less than the title, which is textMatchScore's job:
+ * this decides whether a listing can be an answer at all, not how good one.
+ */
+function matchesHeadTerm(product, head) {
+  if (!head) return true;
+  const haystack = `${normalizedTitle(product?.title)} ${normalizedTitle(product?.brand)} ${normalizedTitle(product?.normalized_category || product?.category)} ${normalizedTitle(product?.description)}`;
+  return headVariants(head).some(variant => haystack.includes(variant));
+}
+
+/* Named in the title, the brand or the category — where a shopper reading a
+   grid would see it. Used for ranking, not for filtering. */
+function headInHeadline(product, head) {
+  if (!head) return true;
+  const haystack = `${normalizedTitle(product?.title)} ${normalizedTitle(product?.brand)} ${normalizedTitle(product?.normalized_category || product?.category)}`;
+  return headVariants(head).some(variant => haystack.includes(variant));
+}
+
+function looksLikeAccessory(product, query) {
+  const asked = normalizedTitle(query);
+  const title = normalizedTitle(product?.title);
+  return ACCESSORY_WORDS.some(word => title.includes(word) && !asked.includes(word));
+}
+
 function roundScore(value) {
   return Math.round(number(value) * 1000) / 1000;
 }
@@ -190,6 +262,11 @@ function textMatchScore(product, query, intent = {}) {
     : 1;
   const phrase = normalizedTitle(query);
   if (phrase && fields.title.includes(phrase)) relevance = Math.min(1, relevance + 0.12);
+  /* The thing itself, not merely one of its adjectives. */
+  const head = headTerm(query) || headTerm(intent.product || intent.productType || intent.product_type || "");
+  if (head && !headInHeadline(product, head)) relevance *= matchesHeadTerm(product, head) ? 0.6 : 0.15;
+  /* And the thing, not a case for it — unless a case is what was asked for. */
+  if (query && looksLikeAccessory(product, query)) relevance *= 0.35;
   if (requestedCategory && fields.category && !fields.category.includes(requestedCategory) && !requestedCategory.includes(fields.category)) relevance *= 0.35;
   if (requestedBrand && fields.brand && fields.brand !== requestedBrand) relevance *= 0.25;
   const budget = queryBudget(query, intent);
@@ -792,6 +869,10 @@ exports.exactMatchKey = exactMatchKey;
 exports.searchTokens = searchTokens;
 exports.normalizedTitle = normalizedTitle;
 exports.matchesAnySearchTerm = matchesAnySearchTerm;
+exports.matchesHeadTerm = matchesHeadTerm;
+exports.headTerm = headTerm;
+exports.looksLikeAccessory = looksLikeAccessory;
+exports.queryBudget = queryBudget;
 exports.landedCost = landedCost;
 exports.paidShippingCost = paidShippingCost;
 exports.SCORE_MODEL = SCORE_MODEL;
