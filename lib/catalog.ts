@@ -374,6 +374,42 @@ export async function getTopPicks(
   return picked.sort((left, right) => (right.score ?? -1) - (left.score ?? -1));
 }
 
+/**
+ * Small things to add while the Live Drop is on.
+ *
+ * Somebody watching a drop is in a buying frame of mind and usually has a few
+ * minutes before the price opens, or has just missed the units. Under the
+ * stage they get a short shelf of checked listings at an easy price: scored,
+ * priced recently, spread across categories (two at most from any one; nearly
+ * every listing is from eBay, so a per-shop cap left three cards). When there
+ * are too few under a ceiling it widens rather than showing a thin shelf, and
+ * never pads with unscored listings.
+ */
+export async function getImpulsePicks(
+  marketCode: string,
+  { limit = 8, ceilings = [50, 100, 200] }: { limit?: number; ceilings?: number[] } = {},
+): Promise<{ deals: Deal[]; ceiling: number }> {
+  const deals = await fetchMarketCatalog(marketCode, 300);
+  let picked: Deal[] = [];
+  let ceiling = ceilings[0];
+  for (const max of ceilings) {
+    ceiling = max;
+    picked = [];
+    const perCategory = new Map<string, number>();
+    for (const deal of deals) {
+      if (picked.length >= limit) break;
+      if (deal.score == null || !deal.priceIsCurrent || !(deal.price > 0) || deal.price > max) continue;
+      if ((perCategory.get(deal.category) ?? 0) >= 2) continue;
+      picked.push(deal);
+      perCategory.set(deal.category, (perCategory.get(deal.category) ?? 0) + 1);
+    }
+    if (picked.length >= Math.min(4, limit)) break;
+  }
+  /* An even count, so the two-column phone grid has no lone card at the end. */
+  if (picked.length > 2 && picked.length % 2) picked = picked.slice(0, -1);
+  return { deals: picked.sort((left, right) => (right.score ?? -1) - (left.score ?? -1)), ceiling };
+}
+
 /** Everything except today's drop, in rank order. */
 export async function getMorePicks(marketCode: string, limit?: number): Promise<Deal[]> {
   const deals = await fetchMarketCatalog(marketCode, limit ? limit + 1 : undefined);

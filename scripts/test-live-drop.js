@@ -461,7 +461,15 @@ async function main() {
     !/tavusConversations\.size >= 10/.test(serverSource),
     "the bare 10 is back in the conversation endpoint",
   );
-  const stage = /function BroadcastStage\([\s\S]*?\n\}/.exec(panel);
+  /* The price band prints the drop price only once the drop is live and the
+     server has sent it, and it sits under whichever presenter has the stage. */
+  const board = fs.readFileSync(path.join(__dirname, "..", "components", "live", "PriceBoard.tsx"), "utf8");
+  assert(
+    /const revealed = live && drop\.drop_price != null;/.test(board) && /\{revealed \? \(\s*<p[\s\S]*?money\(drop\.drop_price as number\)/.test(board),
+    "the price band can show the drop price before the reveal",
+  );
+  /* To the closing brace on a line of its own: the props now span lines. */
+  const stage = /function BroadcastStage\([\s\S]*?\r?\n\}\r?\n/.exec(panel);
   assert(stage, "BroadcastStage moved out of the Live panel");
   assert(
     stage[0].includes("if (!hasStream && drop.tavus_available)"),
