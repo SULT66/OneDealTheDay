@@ -76,14 +76,19 @@ export function DeliaTrigger({
     variant === "header"
       ? "border border-border-strong text-fg hover:bg-surface-2"
       : "bg-lime text-ink hover:bg-lime-deep";
+  const sizing =
+    variant === "header"
+      ? "h-10 gap-1.5 px-2.5 text-[0.7rem] min-[360px]:px-4 min-[360px]:text-xs sm:h-11 sm:gap-2 sm:px-5 sm:text-sm"
+      : "h-11 gap-2 px-5 text-sm";
 
   return (
     <button
       type="button"
       onClick={onClick}
       className={cn(
-        "inline-flex h-11 cursor-pointer items-center gap-2 rounded-full px-5",
-        "text-sm font-semibold transition-colors",
+        "inline-flex shrink-0 cursor-pointer items-center whitespace-nowrap rounded-full",
+        "font-semibold transition-colors",
+        sizing,
         tone,
         className,
       )}
