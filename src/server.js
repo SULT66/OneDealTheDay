@@ -51,7 +51,7 @@ const { parseSearchOptions, searchCatalogProducts } = require("./catalogSearch")
 const { applySearchIntent } = require("./searchIntent");
 const { offerIdentity, offerSummary, sourceKey } = require("./productOffers");
 const { rankingValidationReport } = require("./rankingValidation");
-const { methodology, methodologyMain } = require("./methodology");
+const { methodology } = require("./methodology");
 const { createEditorialBrief } = require("./editorialBrief");
 const {
   createShoppingAssistant,
@@ -141,7 +141,6 @@ const shoppingAssistant = createShoppingAssistant({
 app.set("trust proxy", 1);
 app.disable("x-powered-by");
 const publicDir = path.join(__dirname, "..", "public");
-const pagesDir = path.join(publicDir, "pages");
 const SITE = "https://www.onedailydrop.com";
 const stripeSecretKey = String(process.env.STRIPE_SECRET_KEY || "").trim();
 const stripeWebhookSecret = String(process.env.STRIPE_WEBHOOK_SECRET || "").trim();
@@ -819,91 +818,17 @@ const startSession = (res, userId) => {
   res.cookie("odd_session", token, {httpOnly:true, sameSite:"lax", secure:process.env.NODE_ENV === "production", maxAge:30 * 86400000});
 };
 
-const trustPages = {"/about":"about.html","/contact":"contact.html","/privacy":"privacy.html","/terms":"terms.html","/affiliate-disclosure":"affiliate-disclosure.html","/editorial-policy":"editorial-policy.html","/how-we-select-deals":"how-we-select-deals.html","/price-disclaimer":"price-disclaimer.html"};
-const trustTitles = {
-  "/about": "About | OneDailyDrop",
-  "/contact": "Contact | OneDailyDrop",
-  "/privacy": "Privacy Policy | OneDailyDrop",
-  "/terms": "Terms of Use | OneDailyDrop",
-  "/affiliate-disclosure": "Affiliate Disclosure | OneDailyDrop",
-  "/editorial-policy": "Editorial Policy | OneDailyDrop",
-  "/how-we-select-deals": "How We Select Deals | OneDailyDrop",
-  "/price-disclaimer": "Price Disclaimer | OneDailyDrop"
-};
-Object.entries(trustPages).forEach(([route, file]) => app.get(route, (req, res) => {
-  const selectedMarket = req.market ? market(req.market) : marketFromIp(req);
-  const language = req.language || resolveLanguage(req, res, selectedMarket.code);
-  const locale = languageTag(selectedMarket.code, language);
-  const home = marketPath(selectedMarket.code);
-  let html = fs.readFileSync(path.join(pagesDir, file), "utf8")
-    .replace(/<title>[^<]*<\/title>/, `<title>${trustTitles[route]}</title>`);
-  let pageTitle = trustTitles[route];
-  let pageDescription = html.match(/<meta name="description" content="([^"]+)">/)?.[1] || "";
-  if (route === "/how-we-select-deals") {
-    const method = methodology(language);
-    pageTitle = `${method.title} | OneDailyDrop`;
-    pageDescription = method.description;
-    html = html
-      .replace(/<title>[^<]*<\/title>/, `<title>${pageTitle}</title>`)
-      .replace(/<meta name="description" content="[^"]*">/, `<meta name="description" content="${method.description}">`)
-      .replace(/<main class="page-main">[\s\S]*?<\/main>/, methodologyMain(language));
-  }
-  const canonical = `${SITE}${marketPath(selectedMarket.code, route)}`;
-  const robotsContent = language === defaultLanguages[selectedMarket.code]
-    ? "index,follow,max-image-preview:large"
-    : "noindex,follow";
-  html = html.replace(
-    /<link rel="canonical" href="[^"]+">/,
-    `<link rel="canonical" href="${canonical}">${alternateLinks(route)}`
-  );
-  const pageSchema = {
-    "@context": "https://schema.org",
-    "@graph": [
-      {
-        "@type": "Organization",
-        "@id": `${SITE}/#organization`,
-        name: "OneDailyDrop",
-        url: SITE,
-        logo: { "@type": "ImageObject", url: `${SITE}/favicon.svg` }
-      },
-      {
-        "@type": "WebSite",
-        "@id": `${SITE}/#website`,
-        url: SITE,
-        name: "OneDailyDrop",
-        publisher: { "@id": `${SITE}/#organization` }
-      },
-      {
-        "@type": "WebPage",
-        "@id": `${canonical}#webpage`,
-        url: canonical,
-        name: pageTitle,
-        description: pageDescription,
-        inLanguage: locale,
-        isPartOf: { "@id": `${SITE}/#website` }
-      }
-    ]
-  };
-  html = html.replace(
-    "</head>",
-    `<link rel="icon" href="/favicon.svg" type="image/svg+xml"><meta name="robots" content="${robotsContent}"><meta property="og:type" content="website"><meta property="og:site_name" content="OneDailyDrop"><meta property="og:locale" content="${locale.replace("-", "_")}"><meta property="og:title" content="${esc(pageTitle)}"><meta property="og:description" content="${esc(pageDescription)}"><meta property="og:url" content="${canonical}"><meta name="twitter:card" content="summary"><meta name="twitter:title" content="${esc(pageTitle)}"><meta name="twitter:description" content="${esc(pageDescription)}"><script type="application/ld+json">${JSON.stringify(pageSchema).replace(/</g, "\\u003c")}</script><script>window.__ODD_LANGUAGE__=${JSON.stringify(language)};window.__ODD_LOCALE__=${JSON.stringify(locale)};window.__ODD_TEXT__=${JSON.stringify(clientCopy(language)).replace(/</g, "\\u003c")};</script></head>`
-  );
-  html = localizeHtml(html, language)
-    .replace(/<html lang="[^"]+">/, `<html lang="${locale}">`)
-    .replace(/href="\/"/g, `href="${home}"`)
-    .replace(
-      '<button id="themeToggle"',
-      `${languageSwitcher(req, selectedMarket.code, language)}<button id="themeToggle"`
-    )
-    .replace("</head>", '<link rel="stylesheet" href="/i18n.css?v=20260808-assistant"><link rel="stylesheet" href="/cookie-consent.css?v=20260730"></head>')
-    .replace("</body>", '<script src="/cookie-consent.js?v=20260730"></script></body>');
-  res.set(
-    "Cache-Control",
-    language === defaultLanguages[selectedMarket.code]
-      ? "public, max-age=0, s-maxage=300, stale-while-revalidate=3600"
-      : "private, no-cache"
-  ).type("html").send(html);
-}));
+/*
+ * The text pages, as addresses only.
+ *
+ * Express used to render each of these from a static file in public/pages —
+ * and stopped being able to: every one of them is a Next.js page at its
+ * market-prefixed URL (see nextOwnedPath above), so those routes had been
+ * unreachable for months while their eight HTML files carried a second,
+ * older copy of the same wording. The list survives because the sitemap is
+ * built from it.
+ */
+const TEXT_PAGES = ["/about", "/contact", "/privacy", "/terms", "/affiliate-disclosure", "/editorial-policy", "/how-we-select-deals", "/price-disclaimer"];
 app.get("/club", (req, res) => res.sendFile(path.join(publicDir, "club.html")));
 /*
  * The account page now lives on the site's own design at /:market/account.
@@ -2514,7 +2439,7 @@ app.get("/sitemap.xml", (req, res) => {
      following a link, while the old server-rendered pages it *did* know about
      are the ones now returning 410. Listing the current set is half of getting
      the index to match the site. */
-  const staticPages = [...Object.keys(trustPages), "/daily-drop", "/for-retailers", "/stores"];
+  const staticPages = [...TEXT_PAGES, "/daily-drop", "/for-retailers", "/stores"];
   for (const code of marketCodes) {
     staticPages.forEach(pathname => urls.push({
       loc: SITE + marketPath(code, pathname),

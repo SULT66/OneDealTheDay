@@ -26,8 +26,9 @@ assert(appEntry.includes('app.disable("x-powered-by")'), "Early homepage/status 
 assert(appEntry.includes("app.use(helmet(SECURITY_HEADERS))"), "Early homepage/status routes bypass security headers");
 assert(appEntry.includes('res.set("X-Robots-Tag", "noindex, nofollow")'), "Early status route is crawlable");
 assert(ignore.split(/\r?\n/).includes("data/"), "Runtime database directory is not ignored");
-assert(server.includes("cookie-consent.css?v="), "Legal pages do not load consent styles");
-assert(server.includes("cookie-consent.js?v="), "Legal pages do not load the consent controller");
+/* The legal pages are Next routes now — Express served a second, older copy
+   of them out of public/pages until that dead code was removed — so the
+   consent banner is asserted on the layout every page shares, below. */
 /* The version on the end of these changes whenever the script does — pinning
    it here failed the build for a cache-busting edit that was entirely
    correct. What matters is that the page still loads them at all. */
