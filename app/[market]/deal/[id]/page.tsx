@@ -417,6 +417,7 @@ export default async function DealPage({
           history={deal.priceHistory}
           currency={deal.currency}
           market={market}
+          dealId={deal.id}
         />
 
         <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
