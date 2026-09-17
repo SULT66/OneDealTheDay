@@ -59,7 +59,7 @@ export async function DealCard({
       >
         <div className="relative aspect-[4/3] shrink-0 overflow-hidden bg-white">
           <ProductImage
-            src={deal.image}
+            src={deal.thumbnail || deal.image}
             alt={deal.title}
             categoryIcon={category?.icon ?? "Package"}
             sizes="(max-width: 640px) 90vw, (max-width: 1024px) 45vw, 300px"
