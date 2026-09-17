@@ -372,7 +372,10 @@ export function SwapStage({
   const hostStyle: React.CSSProperties = !hasProduct
     ? { left: 0, top: 0, width: "100%", height: "100%" }
     : productFull
-      ? { left: compact ? "3%" : "2.5%", top: compact ? "60%" : "71%", width: compact ? "37%" : "26%", height: compact ? "37%" : "26%", borderRadius: compact ? 8 : 14 }
+      ? compact
+        ? { left: "3%", top: "60%", width: "37%", height: "37%", borderRadius: 8 }
+        : /* Top right, under the controls: the lower left is the chat's. */
+          { left: "71.5%", top: "14%", width: "26%", height: "26%", borderRadius: 14 }
       : { left: 0, top: 0, width: "62%", height: "100%", borderRadius: 0 };
   const productStyle: React.CSSProperties = productFull
     ? { left: 0, top: 0, width: "100%", height: "100%" }

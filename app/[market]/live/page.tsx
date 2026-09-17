@@ -1,6 +1,10 @@
 import type { Metadata } from "next";
-import { BACKEND_URL } from "@/lib/catalog";
+import { BACKEND_URL, getImpulsePicks } from "@/lib/catalog";
 import { LiveDropPanel, type LiveDropView } from "@/components/live/LiveDropPanel";
+import { DealCard } from "@/components/deal/DealCard";
+import { SectionHeader } from "@/components/site/SectionHeader";
+import type { Deal } from "@/lib/types";
+import { formatPrice } from "@/lib/format";
 
 /**
  * The Live Drop page.
@@ -67,12 +71,35 @@ export default async function LivePage({
   params: Promise<{ market: string }>;
 }) {
   const { market } = await params;
-  const answered = await currentDrop(market);
+  const [answered, shelf] = await Promise.all([
+    currentDrop(market),
+    /* A shelf that fails to load is left out; the drop is the page. */
+    getImpulsePicks(market).catch(() => ({ deals: [] as Deal[], ceiling: 0 })),
+  ]);
   return (
-    <LiveDropPanel
-      market={market}
-      initialDrop={answered?.drop ?? null}
-      serverChecked={answered !== null}
-    />
+    <>
+      <LiveDropPanel
+        market={market}
+        initialDrop={answered?.drop ?? null}
+        serverChecked={answered !== null}
+      />
+      {shelf.deals.length > 0 && (
+        <section aria-labelledby="impulse-title" className="mx-auto w-full max-w-5xl px-3 pb-12 pt-4 sm:px-6">
+          <SectionHeader
+            id="impulse-title"
+            eyebrow="While you watch"
+            title={`Checked picks under ${formatPrice(shelf.ceiling, shelf.deals[0].currency, market).replace(/[.,]00$/, "")}`}
+            action={{ href: `/${market}/search`, label: "See all deals" }}
+          />
+          <ul className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+            {shelf.deals.map((deal, index) => (
+              <li key={deal.id}>
+                <DealCard deal={deal} market={market} index={index} />
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+    </>
   );
 }

@@ -9,6 +9,7 @@ import { DeliaTrigger } from "@/components/delia/DeliaTrigger";
 import { LiveDropSignup } from "@/components/site/LiveDropSignup";
 import { analyticsSessionId, recordLiveDropEvent } from "@/lib/analyticsSession";
 import { BroadcastVideo, MusicToggle, SwapStage, useLiveBroadcast } from "./LiveBroadcast";
+import { PriceBoard } from "./PriceBoard";
 
 /**
  * The Live Drop, as a shopper sees it.
@@ -311,7 +312,7 @@ export function LiveDropPanel({
         </span>
       </div>
 
-      <BroadcastStage market={market} drop={drop} />
+      <BroadcastStage market={market} drop={drop} untilStart={untilStart} untilEnd={untilEnd} />
 
       {/* No product photograph in here any more: the stage above shows the
           product twice, and a third copy pushed the price and the button
@@ -331,7 +332,11 @@ export function LiveDropPanel({
           )}
 
           {/* Before it opens the price is not merely hidden on screen: the
-              server has not sent it. There is nothing here to find. */}
+              server has not sent it. There is nothing here to find.
+              While the drop is on air the price band on the stage shows the
+              price, the clock and the units, so this card keeps only what the
+              band cannot: the buttons. */}
+          {!onAir && (
           <div className="mt-4 flex flex-wrap items-baseline gap-x-3 gap-y-1">
             {price ? (
               <span className="text-3xl font-black text-fg tnum">{price}</span>
@@ -351,16 +356,17 @@ export function LiveDropPanel({
               </span>
             )}
           </div>
+          )}
 
           {/* The clock and the way out, on one line with the price. These were
               stacked, so on a phone the button sat below the fold during the
               ten minutes it exists for. */}
           <div className="mt-4 flex flex-wrap items-stretch gap-3">
-            <Countdown state={drop.state} untilStart={untilStart} untilEnd={untilEnd} />
+            {!onAir && <Countdown state={drop.state} untilStart={untilStart} untilEnd={untilEnd} />}
             {/* How many are offered at this price. The number the host set,
                 corrected with Set stock while the drop runs, or the shop's own
                 count when it reports one; a real cap, never decoration. */}
-            {drop.quantity_total > 0 && !finished && (
+            {drop.quantity_total > 0 && !finished && !onAir && (
               <Metric label={isLive ? "Left" : "Units"}>
                 <span className="tnum">{isLive ? drop.quantity_remaining : drop.quantity_total}</span>
                 {isLive ? ` of ${drop.quantity_total}` : " at this price"}
@@ -369,7 +375,7 @@ export function LiveDropPanel({
             {isLive && drop.affiliate_url && signedIn === false && (
               <a
                 href={`/${market}/account?next=${encodeURIComponent(`/${market}/live`)}`}
-                className="ml-auto inline-flex min-w-[9rem] flex-1 flex-col items-center justify-center rounded-xl bg-accent px-6 py-2 text-center text-white transition-opacity hover:opacity-88 sm:flex-none"
+                className="inline-flex min-h-14 w-full flex-col items-center justify-center rounded-xl bg-lime px-6 py-2 text-center text-ink transition-opacity hover:opacity-88"
               >
                 <span className="text-base font-bold">Sign up to buy</span>
                 <span className="text-[11px] font-medium opacity-85">Free account · takes seconds</span>
@@ -384,9 +390,9 @@ export function LiveDropPanel({
                 target="_blank"
                 rel="sponsored noopener"
                 onClick={() => recordLiveDropEvent(drop.drop_key, "buy_click")}
-                className="ml-auto inline-flex min-w-[9rem] flex-1 items-center justify-center rounded-xl bg-accent px-6 text-base font-bold text-white transition-opacity hover:opacity-88 sm:flex-none"
+                className="inline-flex min-h-14 w-full items-center justify-center rounded-xl bg-lime px-6 text-lg font-black text-ink transition-opacity hover:opacity-88"
               >
-                Buy now
+                Buy now{drop.drop_price != null ? ` at ${formatPrice(drop.drop_price, drop.currency, market)}` : ""}
               </a>
             )}
           </div>
@@ -593,9 +599,21 @@ function RemindMe({ dropKey }: { dropKey: string }) {
  */
 const isVideoFile = (value: string) => /\.(?:mp4|mov|webm)(?:[?#].*)?$/i.test(value || "");
 
-function BroadcastStage({ market, drop }: { market: string; drop: LiveDropView }) {
+function BroadcastStage({
+  market,
+  drop,
+  untilStart,
+  untilEnd,
+}: {
+  market: string;
+  drop: LiveDropView;
+  untilStart: number | null;
+  untilEnd: number | null;
+}) {
   const showable = drop.state === "waiting" || drop.state === "live";
   if (!showable) return null;
+  /* The price band under the picture, whichever presenter holds the stage. */
+  const board = <PriceBoard drop={drop} market={market} untilStart={untilStart} untilEnd={untilEnd} />;
 
   const hasStream = Boolean(drop.stream_embed_url);
   const hasPresentation = Boolean(drop.video_url);
@@ -639,7 +657,7 @@ function BroadcastStage({ market, drop }: { market: string; drop: LiveDropView }
   if (!hasStream && drop.tavus_available) {
     return (
       <div className="mt-4 overflow-hidden rounded-2xl border border-white/10 bg-[#061224] shadow-2xl">
-        <TavusHost market={market} drop={drop} />
+        <TavusHost market={market} drop={drop} board={board} />
       </div>
     );
   }
@@ -766,6 +784,7 @@ function BroadcastStage({ market, drop }: { market: string; drop: LiveDropView }
           )}
         </div>
       )}
+      <div className="col-span-full">{board}</div>
     </div>
   );
 }
@@ -841,7 +860,7 @@ type HostPhase = "presenting" | "answering" | "";
  * the presentation gets its place in the line straight back, and the console
  * has her acknowledge the questions between script lines.
  */
-function TavusHost({ market, drop }: { market: string; drop: LiveDropView }) {
+function TavusHost({ market, drop, board }: { market: string; drop: LiveDropView; board?: React.ReactNode }) {
   const live = useLiveBroadcast();
   const watching = live.session?.dropKey === drop.drop_key;
   const [starting, setStarting] = useState(false);
@@ -982,61 +1001,82 @@ function TavusHost({ market, drop }: { market: string; drop: LiveDropView }) {
         ? { tone: "bg-lime text-ink", dot: "bg-ink", text: queued ? `Q&A is open · ${queued} question${queued === 1 ? "" : "s"} in line` : "Q&A is open · ask Chloe anything" }
         : null;
 
-  const chatPanel = (
-    <div className="relative z-20 border-t border-white/10 bg-[#07101e]/95 p-3 backdrop-blur">
-      {status ? (
-        <p className={cn("mb-2 inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-bold", status.tone)}>
-          <span className={cn("h-1.5 w-1.5 animate-pulse rounded-full", status.dot)} aria-hidden="true" />
-          {status.text}
-        </p>
-      ) : null}
-      <div ref={listRef} className="mb-2 max-h-32 space-y-1.5 overflow-y-auto sm:max-h-40" aria-live="polite">
-        {lines.length ? (
-          lines.map((message) =>
+  /*
+   * The chat, on the picture, the way a phone live stream shows it.
+   *
+   * It was a dark panel under the video, which read as a comments box on a
+   * web page rather than an audience in the room. Now the last few lines sit
+   * over the lower left of the stage with no background at all (white text
+   * with a shadow to stay readable on any frame), fading out as they rise, and
+   * the question box is a clear pill along the bottom edge.
+   */
+  const shadow = "[text-shadow:0_1px_2px_rgba(0,0,0,0.95),0_0_10px_rgba(0,0,0,0.55)]";
+  const recent = lines.slice(-6);
+  const chatOverlay = (onPhone: boolean) => (
+    <>
+      <div
+        ref={listRef}
+        aria-live="polite"
+        className={cn(
+          "pointer-events-none absolute bottom-14 left-3 z-30 max-h-[52%] w-[62%] flex-col justify-end gap-1 overflow-hidden sm:bottom-16 sm:left-4 sm:w-[48%]",
+          onPhone ? "flex" : "hidden sm:flex",
+          shadow,
+        )}
+        style={{ maskImage: "linear-gradient(to top, black 70%, transparent)", WebkitMaskImage: "linear-gradient(to top, black 70%, transparent)" }}
+      >
+        {status ? (
+          <p className="mb-0.5 flex items-center gap-1.5 text-[11px] font-bold text-white">
+            <span className={cn("h-1.5 w-1.5 animate-pulse rounded-full", phase === "answering" ? "bg-lime" : "bg-white")} aria-hidden="true" />
+            {status.text}
+          </p>
+        ) : null}
+        {recent.length ? (
+          recent.map((message) =>
             message.kind === "note" ? (
-              <p key={message.id} className="rounded-lg bg-lime/10 px-2 py-1 text-xs leading-relaxed text-lime">
+              <p key={message.id} className="text-xs font-semibold leading-snug text-lime sm:text-sm">
                 {message.text}
               </p>
             ) : (
-              <p key={message.id} className="text-xs leading-relaxed text-white/80">
-                <span className={message.kind === "chloe" ? "font-black text-lime" : "font-bold text-white"}>
-                  {message.author}:
+              <p key={message.id} className="text-xs leading-snug text-white sm:text-sm">
+                <span className={message.kind === "chloe" ? "font-black text-lime" : "font-bold text-white/90"}>
+                  {message.author}
                 </span>{" "}
                 {message.text}
                 {"sent" in message && message.sent ? (
-                  <span className="ml-1 text-[10px] text-lime/80">· Chloe has it</span>
+                  <span className="ml-1 text-[10px] font-semibold text-lime">· Chloe has it</span>
                 ) : "mine" in message && message.mine ? (
-                  <span className="ml-1 text-[10px] text-white/40">· in line</span>
+                  <span className="ml-1 text-[10px] text-white/70">· in line</span>
                 ) : null}
               </p>
             ),
           )
         ) : (
-          <p className="text-xs text-white/50">No questions yet. Ask Chloe anything about this deal.</p>
+          <p className="text-xs text-white/90 sm:text-sm">Ask Chloe anything about this deal</p>
         )}
       </div>
-      <form onSubmit={ask} className="flex gap-2">
+      <form onSubmit={ask} className="absolute inset-x-3 bottom-3 z-30 flex gap-2 sm:inset-x-4">
         <input
           type="text"
           value={question}
           onChange={(event) => setQuestion(event.target.value)}
           maxLength={200}
-          placeholder="Ask Chloe a question..."
+          placeholder={postError || "Ask Chloe a question..."}
           aria-label="Question for Chloe"
-          className="h-10 min-w-0 flex-1 rounded-full border border-white/15 bg-white/10 px-4 text-sm text-white outline-none placeholder:text-white/40 focus:border-white/35"
+          className={cn(
+            "h-9 min-w-0 flex-1 rounded-full border bg-black/10 px-4 text-sm text-white outline-none placeholder:text-white/80 focus:border-white/80 sm:h-10",
+            postError ? "border-[#ff7a68]" : "border-white/45",
+            shadow,
+          )}
         />
         <button
           type="submit"
           disabled={!question.trim() || posting}
-          className="h-10 rounded-full bg-accent px-4 text-xs font-black text-white disabled:opacity-40"
+          className="h-9 rounded-full bg-lime px-4 text-xs font-black text-ink shadow-lg disabled:opacity-50 sm:h-10"
         >
           Send
         </button>
       </form>
-      <p className="mt-1.5 text-[10px] text-white/40">
-        {postError || "Everyone watching sees the chat · Chloe answers questions after she presents the product"}
-      </p>
-    </div>
+    </>
   );
 
   if (watching) {
@@ -1071,7 +1111,7 @@ function TavusHost({ market, drop }: { market: string; drop: LiveDropView }) {
                 const video = event.currentTarget.parentElement?.querySelector("video[aria-label^='Chloe']") as HTMLVideoElement | null;
                 void video?.play().then(() => setNeedsPlay(false));
               }}
-              className="absolute inset-0 z-30 m-auto h-12 w-fit rounded-full bg-accent px-6 text-sm font-black text-white"
+              className="absolute inset-0 z-40 m-auto h-12 w-fit rounded-full bg-accent px-6 text-sm font-black text-white"
             >
               Play Chloe
             </button>
@@ -1087,9 +1127,10 @@ function TavusHost({ market, drop }: { market: string; drop: LiveDropView }) {
               Leave
             </button>
           </div>
+          {chatOverlay(true)}
         </div>
         {error || live.error ? <p className="px-3 pt-2 text-xs font-semibold text-red-300">{error || live.error}</p> : null}
-        {chatPanel}
+        {board}
       </div>
     );
   }
@@ -1103,8 +1144,8 @@ function TavusHost({ market, drop }: { market: string; drop: LiveDropView }) {
           productImage={drop.image_url}
           productAlt={drop.title}
           host={
-            <div className="flex h-full w-full flex-col items-center justify-center bg-[radial-gradient(circle_at_50%_20%,#123b69_0%,#07172b_48%,#030914_100%)] px-4 text-center">
-              <p className="text-base font-black text-white sm:text-xl">Chloe is presenting live</p>
+            <div className="flex h-full w-full flex-col items-center justify-center bg-[radial-gradient(circle_at_50%_20%,#123b69_0%,#07172b_48%,#030914_100%)] px-4 pb-10 text-center">
+              <p className="hidden text-base font-black text-white sm:block sm:text-xl">Chloe is presenting live</p>
               <p className="mt-1.5 hidden max-w-xs text-xs leading-relaxed text-white/65 sm:block sm:text-sm">
                 Watch with everyone else and ask your questions in the chat.
               </p>
@@ -1112,18 +1153,20 @@ function TavusHost({ market, drop }: { market: string; drop: LiveDropView }) {
                 type="button"
                 onClick={start}
                 disabled={starting}
-                className="relative z-20 mt-3 rounded-full bg-accent px-5 py-2 text-xs font-black text-white shadow-lg transition hover:brightness-110 disabled:cursor-wait disabled:opacity-60 sm:mt-4 sm:px-6 sm:py-2.5 sm:text-sm"
+                className="relative z-40 mt-3 rounded-full bg-accent px-5 py-2 text-xs font-black text-white shadow-lg transition hover:brightness-110 disabled:cursor-wait disabled:opacity-60 sm:mt-4 sm:px-6 sm:py-2.5 sm:text-sm"
               >
                 {starting ? "Connecting Chloe..." : "Watch Chloe live"}
               </button>
               {error ? <p className="relative z-20 mt-2 text-xs font-semibold text-red-300">{error}</p> : null}
-              <p className="mt-2 hidden text-[11px] text-white/45 sm:block">No camera or microphone access</p>
             </div>
           }
         />
         <StageLabel>AI host</StageLabel>
+        {/* Before joining, the join button needs the middle of a small phone
+            stage, so the lines show from tablet width up; the box is always there. */}
+        {chatOverlay(false)}
       </div>
-      {chatPanel}
+      {board}
     </div>
   );
 }
