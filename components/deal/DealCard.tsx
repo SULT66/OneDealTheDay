@@ -2,7 +2,8 @@ import Link from "next/link";
 import type React from "react";
 import { getCategory } from "@/lib/catalog";
 import { categoryName, getLanguage, t } from "@/lib/i18n";
-import { discountPercent, retailerLabel } from "@/lib/format";
+import { retailerLabel } from "@/lib/format";
+import { displayDiscount } from "@/lib/pricing";
 import type { Deal } from "@/lib/types";
 import { cn } from "@/lib/cn";
 import { ProductImage } from "@/components/ui/ProductImage";
@@ -39,7 +40,9 @@ export async function DealCard({
 }) {
   const category = getCategory(deal.category);
   const language = await getLanguage(market);
-  const off = discountPercent(deal.price, deal.referencePrice);
+  /* A card carries no price history, so a saving too large to take on the
+     seller's word alone is not claimed here. See lib/pricing.ts. */
+  const off = displayDiscount(deal.price, deal.referencePrice);
   /* A plain <div> when there is nowhere safe to send the visitor. */
   const Body = (unavailable ? "div" : Link) as React.ElementType;
 

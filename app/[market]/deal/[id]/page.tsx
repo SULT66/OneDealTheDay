@@ -1,4 +1,5 @@
 import { schemaAvailability } from "@/lib/schemaAvailability";
+import { displayDiscount } from "@/lib/pricing";
 import { productPhrase } from "@/lib/productPhrase";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -13,7 +14,7 @@ import { WatchPrice } from "@/components/deal/WatchPrice";
 import { getCategory, getDeal, getMarket, getRelated } from "@/lib/catalog";
 import { categoryName, countryName, getLanguage, t } from "@/lib/i18n";
 import {
-  discountPercent,
+
   formatDate,
   formatDateTime,
   formatPrice,
@@ -63,7 +64,7 @@ export default async function DealPage({
   const language = await getLanguage(market);
   const localCategory = category ? categoryName(category.name, language) : deal.category;
   const related = await getRelated(market, deal, 4);
-  const off = discountPercent(deal.price, deal.referencePrice);
+  const off = displayDiscount(deal.price, deal.referencePrice, deal.priceHistory);
   const info = getMarket(market);
 
   const goHref = (placement: string) =>
@@ -206,6 +207,7 @@ export default async function DealPage({
             market={market}
             language={language}
             size="lg"
+            history={deal.priceHistory}
           />
 
           <TrustSignals deal={deal} language={language} />
