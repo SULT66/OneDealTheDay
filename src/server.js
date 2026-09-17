@@ -3,6 +3,7 @@ const fs = require("fs");
 const crypto = require("crypto");
 const express = require("express");
 const helmet = require("helmet");
+const { SECURITY_HEADERS } = require("./securityHeaders");
 const cron = require("node-cron");
 const Stripe = require("stripe");
 const db = require("./db");
@@ -172,9 +173,35 @@ const getEbayPublicKey = createEbayPublicKeyClient({
  * that the visitor came from onedailydrop.com. The outbound redirect widens
  * this deliberately — see the /go routes.
  */
-const SECURITY_HEADERS = { contentSecurityPolicy: false, referrerPolicy: { policy: "strict-origin-when-cross-origin" } };
-
 app.use(helmet(SECURITY_HEADERS));
+
+
+
+
+/*
+ * What the policy would have blocked.
+ *
+ * Browsers send one of these per violation, and a single bad page can send
+ * thousands, so they are counted rather than logged: one line per distinct
+ * directive and blocked address, the first time it is seen and then every
+ * hundredth. Read the log before enforcing the policy.
+ */
+const cspViolations = new Map();
+app.post(
+  "/api/csp-report",
+  express.json({ type: ["application/csp-report", "application/reports+json", "application/json"], limit: "16kb" }),
+  (req, res) => {
+    const body = req.body?.["csp-report"] || req.body?.body || req.body || {};
+    const directive = String(body["violated-directive"] || body.effectiveDirective || "unknown").slice(0, 60);
+    const blocked = String(body["blocked-uri"] || body.blockedURL || "").slice(0, 120);
+    const key = `${directive} <- ${blocked}`;
+    const seen = (cspViolations.get(key) || 0) + 1;
+    cspViolations.set(key, seen);
+    if (seen === 1 || seen % 100 === 0) console.warn(`[csp] ${key} (${seen})`);
+    if (cspViolations.size > 500) cspViolations.clear();
+    res.status(204).end();
+  },
+);
 app.post("/api/stripe/webhook", express.raw({type:"application/json"}), (req, res) => {
   if (!stripe || !stripeWebhookSecret) return res.status(503).send("Stripe webhook is not configured.");
   let event;

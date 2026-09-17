@@ -30,6 +30,7 @@ process.on("uncaughtException", error => {
 
 const express = require("express");
 const helmet = require("helmet");
+const { SECURITY_HEADERS } = require("./src/securityHeaders");
 const cron = require("node-cron");
 const db = require("./src/db");
 const { health: personalPostgresHealth } = require("./src/personalPostgres");
@@ -140,7 +141,7 @@ function expressWithHomepage(...args) {
   app.disable("x-powered-by");
   /* Same policy as the Express side, and for the same reason: a click with no
      referring page is indistinguishable from a bot's. See src/server.js. */
-  app.use(helmet({ contentSecurityPolicy:false, referrerPolicy:{ policy:"strict-origin-when-cross-origin" } }));
+  app.use(helmet(SECURITY_HEADERS));
   app.use((req, res, next) => {
     const forwardedHost = String(req.headers["x-forwarded-host"] || req.headers.host || "")
       .split(",")[0]
