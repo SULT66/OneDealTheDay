@@ -21,10 +21,13 @@ export function PriceHistory({
   currency = "USD",
   market,
   dealId,
+  priceIsCurrent = true,
 }: {
   history: PricePoint[];
   currency?: string;
   market?: string;
+  /* False once the last check is older than the backend's confidence window. */
+  priceIsCurrent?: boolean;
   /* When given, a price that is not at its low offers to watch it. */
   dealId?: string;
 }) {
@@ -39,7 +42,7 @@ export function PriceHistory({
 
   const money = (price: number) => formatPrice(price, currency, market);
   const day = (date: string) => formatDate(date, market);
-  const verdict = priceVerdict(days, money, day);
+  const verdict = priceVerdict(days, money, day, { priceIsCurrent });
 
   const prices = days.map((p) => p.price);
   const min = Math.min(...prices);
@@ -85,7 +88,8 @@ export function PriceHistory({
             Tracking since {day(first.date)} · {trackedDays} day{trackedDays === 1 ? "" : "s"}
           </span>
           <span className="tnum text-xs text-fg-muted">
-            Today <span className="font-semibold text-fg">{money(last.price)}</span>
+            {priceIsCurrent ? "Today" : `Last seen ${day(last.date)}`}{" "}
+            <span className="font-semibold text-fg">{money(last.price)}</span>
           </span>
         </div>
 
@@ -96,6 +100,15 @@ export function PriceHistory({
           </div>
         ) : null}
 
+        {/* One day is a price, not a history: a chart of it was a single dot in
+            an empty box the height of a phone screen. */}
+        {days.length < 2 ? (
+          <p className="mt-4 rounded-xl bg-surface-2 px-4 py-3 text-sm text-fg-muted">
+            One price so far: <span className="font-semibold text-fg tnum">{money(last.price)}</span> on {day(last.date)}.
+            The chart appears once we have a second day.
+          </p>
+        ) : (
+        <>
         <div className="mt-4 overflow-x-auto">
           <svg
             viewBox={`0 0 ${W} ${H}`}
@@ -162,6 +175,8 @@ export function PriceHistory({
         <figcaption className="mt-3 text-xs text-fg-subtle">
           One point per day: the last price we saw that day.
         </figcaption>
+        </>
+        )}
 
         {/* Same series as data, for screen readers and anyone who wants exact values. */}
         <details className="mt-3">

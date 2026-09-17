@@ -56,10 +56,23 @@ export function priceVerdict(
   days: DailyPrice[],
   format: (price: number) => string,
   formatDay: (date: string) => string,
+  { priceIsCurrent = true }: { priceIsCurrent?: boolean } = {},
 ): PriceVerdict | null {
   if (!days.length) return null;
   const first = days[0];
   const current = days[days.length - 1];
+
+  /* A price we have not been able to recheck is not "today's", and no
+     judgement about it is worth making. Listings the refresh stops finding
+     are retired after two days; until then, say plainly how old it is. */
+  if (!priceIsCurrent) {
+    return {
+      tone: "neutral",
+      headline: `We last saw this price on ${formatDay(current.date)}.`,
+      detail: "We haven't been able to recheck it since, so it may have changed. Check the current price at the shop.",
+      suggestWatch: false,
+    };
+  }
   const tracked = daysBetween(first.date, current.date) + 1;
   const prices = days.map((day) => day.price);
   const low = Math.min(...prices);
