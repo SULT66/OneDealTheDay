@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { getLanguage } from "@/lib/i18n";
+import { SpanishTerms, spanishMeta } from "@/components/site/SpanishPages";
 import { Prose } from "@/components/site/Prose";
 
 /**
@@ -20,6 +22,7 @@ export async function generateMetadata({
   return {
     title: "Terms of Use",
     description: "The terms you agree to by using OneDailyDrop.",
+    ...((await getLanguage(market)) === "es" ? { title: spanishMeta.terms.title, description: spanishMeta.terms.description } : {}),
     /* The same words live at five market prefixes; this says which one is the
        original rather than leaving search engines to pick. */
     alternates: { canonical: `/${market}/terms` },
@@ -32,6 +35,7 @@ export default async function TermsPage({
   params: Promise<{ market: string }>;
 }) {
   const { market } = await params;
+  if ((await getLanguage(market)) === "es") return <SpanishTerms market={market} />;
 
   return (
     <Prose

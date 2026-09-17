@@ -28,6 +28,10 @@ export type PriceVerdict = {
 /* Days need at least this much history before we call a price low or high. */
 export const MIN_DAYS_FOR_VERDICT = 3;
 
+/* Words come from the site's dictionary (app.trend.*), so the verdict reads in
+   the visitor's language. */
+export type Translate = (key: string, variables?: Record<string, string | number>) => string;
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export function dailyPrices(history: PricePoint[]): DailyPrice[] {
@@ -56,7 +60,7 @@ export function priceVerdict(
   days: DailyPrice[],
   format: (price: number) => string,
   formatDay: (date: string) => string,
-  { priceIsCurrent = true }: { priceIsCurrent?: boolean } = {},
+  { priceIsCurrent = true, tr }: { priceIsCurrent?: boolean; tr: Translate },
 ): PriceVerdict | null {
   if (!days.length) return null;
   const first = days[0];
@@ -68,8 +72,8 @@ export function priceVerdict(
   if (!priceIsCurrent) {
     return {
       tone: "neutral",
-      headline: `We last saw this price on ${formatDay(current.date)}.`,
-      detail: "We haven't been able to recheck it since, so it may have changed. Check the current price at the shop.",
+      headline: tr("app.trend.lastSaw", { date: formatDay(current.date) }),
+      detail: tr("app.trend.lastSawDetail"),
       suggestWatch: false,
     };
   }
@@ -83,20 +87,20 @@ export function priceVerdict(
   if (tracked < MIN_DAYS_FOR_VERDICT) {
     return {
       tone: "neutral",
-      headline: `We started tracking this price on ${formatDay(first.date)}.`,
-      detail: "That is too recent to say whether today's price is a good one. Check back in a few days.",
+      headline: tr("app.trend.started", { date: formatDay(first.date) }),
+      detail: tr("app.trend.startedDetail"),
       suggestWatch: true,
     };
   }
 
   const change = recentChange(days, 7);
-  const changeText = change ? describeChange(change, format) : "";
+  const changeText = change ? describeChange(change, format, tr) : "";
 
   if (high === low) {
     return {
       tone: "neutral",
-      headline: `The price hasn't changed in ${tracked} days of tracking.`,
-      detail: `It has been ${format(current.price)} every day since ${formatDay(first.date)}.`,
+      headline: tr("app.trend.flat", { days: tracked }),
+      detail: tr("app.trend.flatDetail", { price: format(current.price), date: formatDay(first.date) }),
       suggestWatch: true,
     };
   }
@@ -104,8 +108,8 @@ export function priceVerdict(
   if (current.price <= low) {
     return {
       tone: "good",
-      headline: `This is the lowest price since we started tracking on ${formatDay(first.date)}.`,
-      detail: changeText || `It has been as high as ${format(high)}.`,
+      headline: tr("app.trend.lowest", { date: formatDay(first.date) }),
+      detail: changeText || tr("app.trend.asHighAs", { price: format(high) }),
       suggestWatch: false,
     };
   }
@@ -114,8 +118,11 @@ export function priceVerdict(
   if (current.price >= high) {
     return {
       tone: "high",
-      headline: `This is the highest price we've tracked since ${formatDay(first.date)}.`,
-      detail: `It was ${format(low)} on ${formatDay(lowDay.date)}${aboveLow > 0 ? `, ${aboveLow}% less than today` : ""}.`,
+      headline: tr("app.trend.highest", { date: formatDay(first.date) }),
+      detail:
+        aboveLow > 0
+          ? tr("app.trend.wasOnLess", { price: format(low), date: formatDay(lowDay.date), percent: aboveLow })
+          : tr("app.trend.wasOn", { price: format(low), date: formatDay(lowDay.date) }),
       suggestWatch: true,
     };
   }
@@ -123,16 +130,16 @@ export function priceVerdict(
   if (aboveLow <= 2) {
     return {
       tone: "good",
-      headline: `Within ${aboveLow <= 0 ? "a cent" : `${aboveLow}%`} of the lowest price we've tracked.`,
-      detail: changeText || `The low was ${format(low)} on ${formatDay(lowDay.date)}.`,
+      headline: aboveLow <= 0 ? tr("app.trend.withinCent") : tr("app.trend.withinPercent", { percent: aboveLow }),
+      detail: changeText || tr("app.trend.lowWas", { price: format(low), date: formatDay(lowDay.date) }),
       suggestWatch: false,
     };
   }
 
   return {
     tone: aboveLow >= 10 ? "high" : "neutral",
-    headline: `${aboveLow}% above the lowest price we've tracked.`,
-    detail: `It was ${format(low)} on ${formatDay(lowDay.date)}.${changeText ? ` ${changeText}` : ""}`,
+    headline: tr("app.trend.aboveLow", { percent: aboveLow }),
+    detail: `${tr("app.trend.wasOn", { price: format(low), date: formatDay(lowDay.date) })}${changeText ? ` ${changeText}` : ""}`,
     suggestWatch: true,
   };
 }
@@ -152,8 +159,12 @@ export function recentChange(days: DailyPrice[], window: number): Change | null 
   return { amount, percent: Math.round((amount / earlier.price) * 100), days: span };
 }
 
-function describeChange(change: Change, format: (price: number) => string): string {
-  const direction = change.amount < 0 ? "Down" : "Up";
+function describeChange(change: Change, format: (price: number) => string, tr: Translate): string {
   const percent = Math.abs(change.percent);
-  return `${direction} ${format(Math.abs(change.amount))}${percent ? ` (${percent}%)` : ""} in the last ${change.days} day${change.days === 1 ? "" : "s"}.`;
+  return tr(change.amount < 0 ? "app.trend.down" : "app.trend.up", {
+    amount: format(Math.abs(change.amount)),
+    percent: percent ? ` (${percent}%)` : "",
+    days: change.days,
+    dayWord: tr(change.days === 1 ? "app.trend.day" : "app.trend.days"),
+  });
 }

@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { getLanguage } from "@/lib/i18n";
+import { SpanishContact, spanishMeta } from "@/components/site/SpanishPages";
 import { Prose } from "@/components/site/Prose";
 
 /**
@@ -20,6 +22,7 @@ export async function generateMetadata({
   return {
     title: "Get in touch.",
     description: "Questions, corrections, partnership inquiries and deal submissions are welcome.",
+    ...((await getLanguage(market)) === "es" ? { title: spanishMeta.contact.title, description: spanishMeta.contact.description } : {}),
     /* The same words live at five market prefixes; this says which one is the
        original rather than leaving search engines to pick. */
     alternates: { canonical: `/${market}/contact` },
@@ -32,6 +35,7 @@ export default async function ContactPage({
   params: Promise<{ market: string }>;
 }) {
   const { market } = await params;
+  if ((await getLanguage(market)) === "es") return <SpanishContact market={market} />;
 
   return (
     <Prose

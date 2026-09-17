@@ -6,6 +6,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import DailyIframe from "@daily-co/daily-js";
 import { analyticsSessionId } from "@/lib/analyticsSession";
 import { startStageMusic, type StageMusic } from "./stageMusic";
+import { useCopy } from "@/components/site/CopyProvider";
 
 /*
  * Chloe's broadcast, held above the pages.
@@ -412,6 +413,7 @@ export function SwapStage({
 }
 
 function MiniPlayer({ market }: { market: string }) {
+  const tr = useCopy();
   const { session, stream, joined, talking, musicOn, setMusicOn, leave } = useLiveBroadcast();
   const pathname = usePathname();
   const [needsPlay, setNeedsPlay] = useState(false);
@@ -422,7 +424,7 @@ function MiniPlayer({ market }: { market: string }) {
     <div
       className="fixed bottom-4 left-4 z-50 w-64 overflow-hidden rounded-2xl border border-white/15 bg-[#07172b] shadow-2xl sm:w-80"
       role="region"
-      aria-label="Chloe, live"
+      aria-label={tr("app.player.region")}
     >
       <div className="relative">
         <SwapStage
@@ -436,12 +438,12 @@ function MiniPlayer({ market }: { market: string }) {
               <BroadcastVideo
                 stream={stream}
                 className="h-full w-full object-cover"
-                label="Chloe, OneDailyDrop AI shopping host"
+                label={tr("app.live.chloeLabel")}
                 onNeedsPlay={setNeedsPlay}
               />
               {!joined && (
                 <div className="absolute inset-0 flex items-center justify-center text-xs font-bold text-white/70">
-                  Connecting…
+                  {tr("app.player.connecting")}
                 </div>
               )}
             </>
@@ -456,19 +458,19 @@ function MiniPlayer({ market }: { market: string }) {
             }}
             className="absolute inset-0 z-30 m-auto h-9 w-fit rounded-full bg-accent px-4 text-xs font-black text-white"
           >
-            Play Chloe
+            {tr("app.live.playChloe")}
           </button>
         )}
         <span className="absolute left-2 top-2 z-30 inline-flex items-center gap-1.5 rounded-full bg-danger px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-white">
           <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" aria-hidden="true" />
-          Live
+          {tr("app.player.live")}
         </span>
         <div className="absolute right-2 top-2 z-30 flex gap-1">
           <MusicToggle on={musicOn} onChange={setMusicOn} small />
           <button
             type="button"
             onClick={leave}
-            aria-label="Close Chloe"
+            aria-label={tr("app.player.close")}
             className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-full bg-black/70 text-sm leading-none text-white hover:bg-black"
           >
             ×
@@ -480,25 +482,26 @@ function MiniPlayer({ market }: { market: string }) {
         className="flex items-center justify-between gap-2 px-3 py-2 text-xs text-white hover:bg-white/5"
       >
         <span className="min-w-0 truncate font-semibold">{session.title}</span>
-        <span className="shrink-0 font-bold text-lime">Back to drop →</span>
+        <span className="shrink-0 font-bold text-lime">{tr("app.player.backToDrop")}</span>
       </Link>
     </div>
   );
 }
 
 export function MusicToggle({ on, onChange, small = false }: { on: boolean; onChange: (on: boolean) => void; small?: boolean }) {
+  const tr = useCopy();
   return (
     <button
       type="button"
       onClick={() => onChange(!on)}
       aria-pressed={on}
-      aria-label={on ? "Turn music off" : "Turn music on"}
-      title={on ? "Music on" : "Music off"}
+      aria-label={on ? tr("app.player.turnMusicOff") : tr("app.player.turnMusicOn")}
+      title={on ? tr("app.player.musicOn") : tr("app.player.musicOff")}
       className={`flex cursor-pointer items-center justify-center rounded-full bg-black/70 font-bold text-white backdrop-blur hover:bg-black ${
         small ? "h-6 px-2 text-[10px]" : "h-8 px-3 text-xs"
       }`}
     >
-      {on ? "♪ Music" : "♪ Off"}
+      {on ? tr("app.player.musicOn") : tr("app.player.musicOff")}
     </button>
   );
 }

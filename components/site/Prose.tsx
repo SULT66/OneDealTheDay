@@ -27,7 +27,7 @@ export async function Prose({
         <ol className="flex items-center gap-1.5 text-sm text-fg-muted">
           <li>
             <Link href={`/${market}`} className="hover:text-fg">
-              Home
+              {t(language, "page.home")}
             </Link>
           </li>
           <li aria-hidden="true">

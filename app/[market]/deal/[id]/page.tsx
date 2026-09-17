@@ -11,7 +11,7 @@ import {
 } from "@phosphor-icons/react/ssr";
 import { WatchPrice } from "@/components/deal/WatchPrice";
 import { getCategory, getDeal, getMarket, getRelated } from "@/lib/catalog";
-import { categoryName, getLanguage, t } from "@/lib/i18n";
+import { categoryName, countryName, getLanguage, t } from "@/lib/i18n";
 import {
   discountPercent,
   formatDate,
@@ -36,13 +36,14 @@ export async function generateMetadata({
   const { market, id } = await params;
   const deal = await getDeal(market, id);
   if (!deal) return {};
+  const language = await getLanguage(market);
 
   const short =
     deal.title.length > 44 ? `${deal.title.slice(0, 44).trim()}…` : deal.title;
 
   return {
-    title: `${short}: price, Score & buying guide`,
-    description: `Check the current ${retailerLabel(deal.retailer)} price, OneDailyDrop Score, seller, delivery and returns for ${deal.title}.`,
+    title: t(language, "app.deal.metaTitle", { title: short }),
+    description: t(language, "app.deal.metaDescription", { store: retailerLabel(deal.retailer), title: deal.title }),
     alternates: { canonical: `/${market}/deal/${id}` },
     openGraph: {
       title: short,
@@ -162,8 +163,8 @@ export default async function DealPage({
                 {localCategory} ·{" "}
                 {retailerLabel(deal.retailer)}
               </Pill>
-              {deal.rank === 1 && <Pill tone="solid">Today&apos;s #1 pick</Pill>}
-              {off !== null && <Pill tone="accent">{off}% below reference</Pill>}
+              {deal.rank === 1 && <Pill tone="solid">{t(language, "app.deal.todaysPick")}</Pill>}
+              {off !== null && <Pill tone="accent">{t(language, "app.deal.belowReference", { percent: off })}</Pill>}
             </div>
 
             <h1 className="mt-4 text-2xl font-bold leading-tight tracking-tight text-fg sm:text-3xl lg:text-4xl">
@@ -191,7 +192,7 @@ export default async function DealPage({
                     {t(language, "product.sellerRating")}
                   </p>
                   <p className="text-sm font-semibold text-fg tnum">
-                    {deal.seller.positivePct.toFixed(1)}% positive
+                    {t(language, "app.deal.positive", { percent: deal.seller.positivePct.toFixed(1) })}
                   </p>
                 </div>
               )}
@@ -216,19 +217,19 @@ export default async function DealPage({
               rel="sponsored noopener"
               className="inline-flex h-14 flex-1 cursor-pointer items-center justify-center gap-2 rounded-full bg-surface-inverse px-6 text-base font-semibold text-fg-on-inverse transition-opacity hover:opacity-88 active:scale-[0.98]"
             >
-              View deal at {retailerLabel(deal.retailer)}
+              {t(language, "app.deal.viewDealAt", { store: retailerLabel(deal.retailer) })}
               <ArrowUpRight size={18} weight="bold" aria-hidden="true" />
             </a>
             <DeliaTrigger
               variant="inline"
-              label="Ask Delia about this"
+              label={t(language, "app.deal.askDelia")}
               /* The product travels as an id, not inside the sentence. Seeding
                  the full retailer title made the question unanswerable: as a
                  search query, "Power Bank 20000mAh 45W Charging Portable
                  External Battery Backup For Cell Phone" matches nothing, and
                  Delia answered that no shop sold it — from that product's own
                  page. */
-              seed={`Is this a good price? ${productPhrase(deal.title, deal.brand)}`}
+              seed={t(language, "app.deal.deliaSeed", { product: productPhrase(deal.title, deal.brand) })}
               productId={deal.id}
               className="h-14 px-6 text-base"
             />
@@ -247,9 +248,9 @@ export default async function DealPage({
                 rel="sponsored nofollow noopener"
                 className="underline underline-offset-4 hover:text-fg"
               >
-                Shop all at {retailerLabel(deal.retailer)}
+                {t(language, "app.deal.shopAllAt", { store: retailerLabel(deal.retailer) })}
               </a>{" "}
-              &mdash; we may earn a commission on anything you buy there.
+              {t(language, "app.deal.shopAllNote")}
             </p>
           ) : null}
 
@@ -259,18 +260,15 @@ export default async function DealPage({
               work out what a timestamp meant. */}
           <p className="text-xs text-fg-subtle tnum">
             {deal.priceIsCurrent ? (
-              <>Price checked {formatDateTime(deal.checkedAt, market)}.</>
+              <>{t(language, "app.deal.priceChecked", { date: formatDateTime(deal.checkedAt, market) })}</>
             ) : (
               <>
                 <strong className="font-semibold text-fg-muted">
-                  This price was last confirmed{" "}
-                  {formatDateTime(deal.checkedAt, market)} and may have changed
-                  since.
+                  {t(language, "app.deal.priceOld", { date: formatDateTime(deal.checkedAt, market) })}
                 </strong>{" "}
               </>
             )}{" "}
-            Check the current price and availability on the retailer&apos;s
-            website. {info?.country ?? "local"} terms apply at checkout.
+            {t(language, "app.deal.checkRetailer", { country: info ? countryName(market, language) : "" })}
           </p>
         </div>
       </div>
@@ -279,8 +277,8 @@ export default async function DealPage({
       <section aria-labelledby="brief-title" className="mt-20">
         <SectionHeader
           id="brief-title"
-          eyebrow="OneDailyDrop buying brief"
-          title="The useful details, without the sales-page noise"
+          eyebrow={t(language, "app.deal.briefEyebrow")}
+          title={t(language, "app.deal.briefTitle")}
         />
 
         <p className="mb-6 flex items-start gap-2 text-sm text-fg-muted">
@@ -290,30 +288,28 @@ export default async function DealPage({
             aria-hidden="true"
             className="mt-0.5 shrink-0 text-lime-deep"
           />
-          This brief uses verified listing data and OneDailyDrop calculations.
-          Unknown specifications are not filled in or guessed.
+          {t(language, "app.deal.briefNote")}
         </p>
 
         {deal.priceHistory.length > 0 && (
           <p className="mb-4 text-sm text-fg-muted">
-            Price lows use only our recorded observations, which may cover less
-            than 30 or 90 days. The history shown starts on{" "}
-            {formatDate(deal.priceHistory.map((point) => point.date).sort()[0], market)}.
-            Prices between observations may differ.
+            {t(language, "app.deal.lowsNote", {
+              date: formatDate(deal.priceHistory.map((point) => point.date).sort()[0], market),
+            })}
           </p>
         )}
 
         <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {[
-            ["Current price", formatPrice(deal.price, deal.currency, market)],
-            ["Retailer", retailerLabel(deal.retailer)],
-            ["Sold by", deal.seller.name],
+            [t(language, "app.deal.currentPrice"), formatPrice(deal.price, deal.currency, market)],
+            [t(language, "app.deal.retailer"), retailerLabel(deal.retailer)],
+            [t(language, "app.deal.soldBy"), deal.seller.name],
             ...(deal.priceHistory.length > 0
               ? ([
-                  ["30-day tracked low", formatPrice(deal.lows.d30, deal.currency, market)],
-                  ["90-day tracked low", formatPrice(deal.lows.d90, deal.currency, market)],
+                  [t(language, "app.deal.low30"), formatPrice(deal.lows.d30, deal.currency, market)],
+                  [t(language, "app.deal.low90"), formatPrice(deal.lows.d90, deal.currency, market)],
                   [
-                    "All-time tracked low",
+                    t(language, "app.deal.lowAll"),
                     formatPrice(deal.lows.allTime, deal.currency, market),
                   ],
                 ] as const)
@@ -399,11 +395,7 @@ export default async function DealPage({
             </ul>
             {deal.score !== null && (
               <p className="mt-5 border-t border-border pt-5 text-sm leading-relaxed text-fg-muted">
-                The OneDailyDrop Score is {deal.score}/100 and measures the offer
-                as a whole: price value, product evidence, review confidence,
-                seller reliability and buying terms. Affiliate commission does
-                not add points and does not determine which item becomes the
-                Daily Drop.
+                {t(language, "app.deal.scoreNote", { score: deal.score })}
               </p>
             )}
           </div>
@@ -412,7 +404,11 @@ export default async function DealPage({
 
       {/* -------------------------------------------------- price history */}
       <section aria-labelledby="history-title" className="mt-20">
-        <SectionHeader id="history-title" eyebrow="Tracked" title="Price history" />
+        <SectionHeader
+          id="history-title"
+          eyebrow={t(language, "app.deal.trackedEyebrow")}
+          title={t(language, "app.deal.priceHistory")}
+        />
         <PriceHistory
           history={deal.priceHistory}
           currency={deal.currency}
@@ -428,12 +424,11 @@ export default async function DealPage({
             rel="sponsored noopener"
             className="inline-flex h-14 cursor-pointer items-center justify-center gap-2 rounded-full bg-lime px-7 text-base font-semibold text-ink transition-opacity hover:opacity-88 active:scale-[0.98]"
           >
-            Check current price at {retailerLabel(deal.retailer)}
+            {t(language, "app.deal.checkCurrentAt", { store: retailerLabel(deal.retailer) })}
             <ArrowUpRight size={18} weight="bold" aria-hidden="true" />
           </a>
           <p className="text-sm text-fg-muted">
-            The retailer is always the final source for price, condition and
-            total at checkout.
+            {t(language, "app.deal.finalSource")}
           </p>
         </div>
       </section>
@@ -443,8 +438,8 @@ export default async function DealPage({
         <section aria-labelledby="related-title" className="mt-20">
           <SectionHeader
             id="related-title"
-            eyebrow="Also checked"
-            title="Related picks"
+            eyebrow={t(language, "app.deal.alsoChecked")}
+            title={t(language, "app.deal.related")}
             action={{
               href: `/${market}/category/${deal.category}`,
               label: `${t(language, "app.list.allDeals")} · ${localCategory}`,

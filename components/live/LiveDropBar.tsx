@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { LiveDropView } from "./LiveDropPanel";
+import { useCopy } from "@/components/site/CopyProvider";
 
 /*
  * A thin strip above every page while a Live Drop is on the calendar.
@@ -30,6 +31,7 @@ const countdown = (seconds: number) => {
 };
 
 export function LiveDropBar({ market }: { market: string }) {
+  const tr = useCopy();
   const pathname = usePathname();
   const [drop, setDrop] = useState<LiveDropView | null>(null);
   const [seconds, setSeconds] = useState<number | null>(null);
@@ -88,7 +90,7 @@ export function LiveDropBar({ market }: { market: string }) {
             <span className={`absolute inline-flex h-full w-full rounded-full ${live ? "animate-ping bg-white/70" : "bg-danger/60 animate-ping"}`} />
             <span className={`relative inline-flex h-2.5 w-2.5 rounded-full ${live ? "bg-white" : "bg-danger"}`} />
           </span>
-          <span className="shrink-0 font-bold uppercase tracking-[0.12em]">{live ? "Live now" : "Live Drop"}</span>
+          <span className="shrink-0 font-bold uppercase tracking-[0.12em]">{live ? tr("app.live.stateLive") : tr("app.bar.liveDrop")}</span>
           <span className="min-w-0 truncate opacity-85">
             <span className="hidden sm:inline">{drop.title} · </span>
             <span className="tnum">{when}</span>
@@ -96,7 +98,7 @@ export function LiveDropBar({ market }: { market: string }) {
           <span
             className={`ml-auto shrink-0 rounded-full px-3 py-1 text-xs font-bold ${live ? "bg-white text-danger" : "bg-lime text-ink"}`}
           >
-            {live ? "Join now" : "Remind me"}
+            {live ? tr("app.bar.joinNow") : tr("app.live.remindMe")}
           </span>
         </Link>
         <button
@@ -109,7 +111,7 @@ export function LiveDropBar({ market }: { market: string }) {
               /* Hidden for this page view only. */
             }
           }}
-          aria-label="Hide the Live Drop bar"
+          aria-label={tr("app.bar.hide")}
           className="shrink-0 cursor-pointer rounded-full px-1.5 text-base leading-none opacity-70 hover:opacity-100"
         >
           ×

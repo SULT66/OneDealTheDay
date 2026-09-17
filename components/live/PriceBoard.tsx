@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { formatPrice } from "@/lib/format";
 import type { LiveDropView } from "./LiveDropPanel";
+import { useCopy, useLanguage } from "@/components/site/CopyProvider";
 
 /*
  * The price graphic under the stage, the way a shopping channel shows it.
@@ -34,10 +35,10 @@ const clock = (totalSeconds: number | null) => {
   return hours > 0 ? `${hours}:${pad(minutes)}:${pad(rest)}` : `${pad(minutes)}:${pad(rest)}`;
 };
 
-const openingTime = (iso: string, market: string) => {
+const openingTime = (iso: string, market: string, language: string) => {
   const zone = market === "us" ? "America/New_York" : undefined;
   try {
-    return new Intl.DateTimeFormat("en-US", {
+    return new Intl.DateTimeFormat(`${language}-${market.toUpperCase()}`, {
       hour: "numeric",
       minute: "2-digit",
       timeZone: zone,
@@ -95,6 +96,8 @@ export function PriceBoard({
   untilStart: number | null;
   untilEnd: number | null;
 }) {
+  const tr = useCopy();
+  const language = useLanguage();
   const live = drop.state === "live";
   const revealed = live && drop.drop_price != null;
   const money = (value: number) => formatPrice(value, drop.currency, market);
@@ -129,7 +132,7 @@ export function PriceBoard({
     <div
       className="relative z-20 border-t border-white/10 bg-[#050d1a] text-white"
       role="group"
-      aria-label="Drop price"
+      aria-label={tr("app.board.label")}
       aria-live="polite"
     >
       {/* The lime rule a shopping channel runs above its price band. */}
@@ -138,7 +141,7 @@ export function PriceBoard({
       <div className="grid grid-cols-[1fr_1.35fr] sm:grid-cols-[1fr_1.35fr_0.85fr_1fr]">
         {/* Usually */}
         <div className="flex flex-col justify-center gap-1 px-3 py-3 sm:px-5">
-          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/55">Usually</p>
+          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/55">{tr("app.board.usually")}</p>
           {hasCompare ? (
             <p className="relative w-fit text-xl font-black leading-none text-white/80 tnum sm:text-3xl">
               {money(drop.retail_price as number)}
@@ -151,17 +154,17 @@ export function PriceBoard({
               />
             </p>
           ) : (
-            <p className="text-sm font-semibold text-white/60">{drop.retailer_name || "At the shop"}</p>
+            <p className="text-sm font-semibold text-white/60">{drop.retailer_name || tr("app.board.atShop")}</p>
           )}
           {drop.retailer_name && hasCompare ? (
-            <p className="truncate text-[10px] text-white/45">on {drop.retailer_name}</p>
+            <p className="truncate text-[10px] text-white/45">{tr("app.board.onStore", { store: drop.retailer_name })}</p>
           ) : null}
         </div>
 
         {/* Today's drop price */}
         <div className="relative flex flex-col justify-center overflow-hidden bg-lime px-3 py-3 text-ink sm:px-5">
           <p className="text-[10px] font-black uppercase tracking-[0.16em] text-ink/70">
-            {revealed ? "Live Drop price" : "Drop price"}
+            {revealed ? tr("app.board.liveDropPrice") : tr("app.board.dropPrice")}
           </p>
           {revealed ? (
             <p
@@ -173,7 +176,7 @@ export function PriceBoard({
               {money(drop.drop_price as number)}
             </p>
           ) : (
-            <p className="text-2xl font-black leading-none tracking-widest text-ink/35 sm:text-4xl" aria-label="Hidden until the drop opens">
+            <p className="text-2xl font-black leading-none tracking-widest text-ink/35 sm:text-4xl" aria-label={tr("app.board.hidden")}>
               $ ? ? ?
             </p>
           )}
@@ -197,7 +200,7 @@ export function PriceBoard({
           )}
         >
           <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/55">
-            {live ? "Ends in" : "Opens in"}
+            {live ? tr("app.board.endsIn") : tr("app.board.opensIn")}
           </p>
           {timerSeconds != null ? (
             <p
@@ -209,7 +212,7 @@ export function PriceBoard({
               {clock(timerSeconds)}
             </p>
           ) : (
-            <p className="text-lg font-black leading-none text-white tnum sm:text-2xl">{openingTime(drop.start_at, market)}</p>
+            <p className="text-lg font-black leading-none text-white tnum sm:text-2xl">{openingTime(drop.start_at, market, language)}</p>
           )}
         </div>
 
@@ -217,12 +220,12 @@ export function PriceBoard({
         <div className="flex flex-col justify-center gap-2 border-l border-t border-white/10 px-3 py-2.5 sm:border-t-0 sm:px-5">
           {revealed && drop.saving ? (
             <p className="flex flex-col gap-0.5">
-              <span className="whitespace-nowrap text-2xl font-black leading-none text-lime tnum sm:text-[1.7rem]">{counted}% off</span>
-              <span className="whitespace-nowrap text-xs font-semibold text-white/70 tnum">save {money(drop.saving.amount)}</span>
+              <span className="whitespace-nowrap text-2xl font-black leading-none text-lime tnum sm:text-[1.7rem]">{tr("app.board.off", { percent: counted })}</span>
+              <span className="whitespace-nowrap text-xs font-semibold text-white/70 tnum">{tr("app.board.save", { amount: money(drop.saving.amount) })}</span>
             </p>
           ) : (
             <p className="text-xs font-semibold text-white/70">
-              {hasCompare ? "The price drops when we go live" : "Price revealed live"}
+              {hasCompare ? tr("app.board.priceDrops") : tr("app.board.revealedLive")}
             </p>
           )}
 
@@ -242,10 +245,10 @@ export function PriceBoard({
               {live
                 ? left > 0
                   ? fewLeft
-                    ? `Only ${left} left of ${drop.quantity_total}`
-                    : `${left} of ${drop.quantity_total} left at this price`
-                  : "All units claimed"
-                : `${drop.quantity_total} units at the drop price`}
+                    ? tr("app.board.onlyLeft", { left, total: drop.quantity_total })
+                    : tr("app.board.leftAtPrice", { left, total: drop.quantity_total })
+                  : tr("app.board.allClaimed")
+                : tr("app.board.unitsAtPrice", { total: drop.quantity_total })}
             </p>
           ) : null}
         </div>

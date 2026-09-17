@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { BellRinging } from "@phosphor-icons/react";
+import { useCopy } from "@/components/site/CopyProvider";
 
 /*
  * The one thing to offer somebody who is interested and not ready today.
@@ -26,6 +27,7 @@ export function WatchPrice({
   /* The form appears twice on a product page, and an id must not. */
   inputId?: string;
 }) {
+  const tr = useCopy();
   const [email, setEmail] = useState("");
   const [state, setState] = useState<"idle" | "sending" | "done" | "failed">("idle");
   const [message, setMessage] = useState("");
@@ -40,12 +42,12 @@ export function WatchPrice({
         body: JSON.stringify({ email, product_id: Number(dealId) }),
       });
       const body = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(body.error || "That did not go through.");
+      if (!response.ok) throw new Error(body.error || tr("app.watch.failed"));
       setState("done");
-      setMessage(body.message || "We will email you if the price drops.");
+      setMessage(body.message || tr("app.watch.done"));
     } catch (error) {
       setState("failed");
-      setMessage(error instanceof Error ? error.message : "That did not go through.");
+      setMessage(error instanceof Error ? error.message : tr("app.watch.failed"));
     }
   }
 
@@ -61,16 +63,16 @@ export function WatchPrice({
     <form onSubmit={submit} className="rounded-2xl border border-border bg-surface-2 p-4">
       <p className="flex items-center gap-2 text-sm font-semibold text-fg">
         <BellRinging size={17} weight="bold" aria-hidden="true" />
-        Tell me if this gets cheaper
+        {tr("app.watch.title")}
       </p>
       {/* The comparison is named, because "cheaper" with nothing to compare
           against is an advertisement and this is meant to be information. */}
       <p className="mt-1 text-xs text-fg-muted">
-        We will watch it against today&rsquo;s {price} and email you once, if it drops.
+        {tr("app.watch.lede", { price })}
       </p>
       <div className="mt-3 flex flex-col gap-2 sm:flex-row">
         <label htmlFor={inputId} className="sr-only">
-          Email address
+          {tr("app.watch.email")}
         </label>
         <input
           id={inputId}
@@ -87,12 +89,12 @@ export function WatchPrice({
           disabled={state === "sending" || !email}
           className="inline-flex h-11 cursor-pointer items-center justify-center rounded-full bg-surface-inverse px-5 text-sm font-semibold text-fg-on-inverse transition-opacity hover:opacity-88 disabled:opacity-55"
         >
-          {state === "sending" ? "Saving…" : "Watch it"}
+          {state === "sending" ? tr("app.watch.saving") : tr("app.watch.submit")}
         </button>
       </div>
       {state === "failed" && <p className="mt-2 text-xs text-danger">{message}</p>}
       <p className="mt-2 text-xs text-fg-subtle">
-        One email about this product. Nothing else, and no account needed.
+        {tr("app.watch.fineprint")}
       </p>
     </form>
   );

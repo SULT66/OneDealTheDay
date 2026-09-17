@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { countryName, getLanguage } from "@/lib/i18n";
+import { SpanishAbout, spanishMeta } from "@/components/site/SpanishPages";
 import { getCatalogSize, getCategoriesWithCounts, getMarket } from "@/lib/catalog";
 import { Prose } from "@/components/site/Prose";
 
@@ -12,6 +14,7 @@ export async function generateMetadata({
     title: "About OneDailyDrop",
     description:
     "What OneDailyDrop checks before it recommends anything, how it makes money, and what it deliberately does not do.",
+    ...((await getLanguage(market)) === "es" ? { title: spanishMeta.about.title, description: spanishMeta.about.description } : {}),
     /* The same words live at five market prefixes; this says which one is the
        original rather than leaving search engines to pick. */
     alternates: { canonical: `/${market}/about` },
@@ -38,6 +41,16 @@ export default async function AboutPage({
      so the page said "across 11 categories" while the catalogue held 13. */
   const catalogSize = await getCatalogSize(market);
   const categoryCount = (await getCategoriesWithCounts(market)).length;
+  if ((await getLanguage(market)) === "es") {
+    return (
+      <SpanishAbout
+        market={market}
+        country={info ? countryName(market, "es") : "tu mercado"}
+        catalogSize={catalogSize}
+        categoryCount={categoryCount}
+      />
+    );
+  }
 
   return (
     <Prose

@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { countryName, getLanguage } from "@/lib/i18n";
+import { SpanishStores, spanishMeta } from "@/components/site/SpanishPages";
 import Link from "next/link";
 import { getConnectedShops, getMarket } from "@/lib/catalog";
 import { Prose } from "@/components/site/Prose";
@@ -31,6 +33,7 @@ export async function generateMetadata({
     title: "Stores we work with",
     description:
       "The retailers whose listings appear on OneDailyDrop, and how to be added.",
+    ...((await getLanguage(market)) === "es" ? { title: spanishMeta.stores.title, description: spanishMeta.stores.description } : {}),
     alternates: { canonical: `/${market}/stores` },
   };
 }
@@ -60,6 +63,12 @@ export default async function StoresPage({
     ...shops,
     { retailer: "Amazon", listings: 0, host: "amazon.com", href: `/${market}/amazon/go/store` },
   ];
+
+  if ((await getLanguage(market)) === "es") {
+    return (
+      <SpanishStores market={market} country={info ? countryName(market, "es") : "este mercado"} total={total} tiles={tiles} />
+    );
+  }
 
   return (
     <Prose

@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { countryName, getLanguage } from "@/lib/i18n";
+import { SpanishHowWeSelect, spanishMeta } from "@/components/site/SpanishPages";
 import { getMarket } from "@/lib/catalog";
 import { Prose } from "@/components/site/Prose";
 
@@ -12,6 +14,7 @@ export async function generateMetadata({
     title: "How we select deals",
     description:
     "The evidence behind every OneDailyDrop pick: price signal, product quality and seller confidence, and what the Score does not measure.",
+    ...((await getLanguage(market)) === "es" ? { title: spanishMeta.howWeSelect.title, description: spanishMeta.howWeSelect.description } : {}),
     /* The same words live at five market prefixes; this says which one is the
        original rather than leaving search engines to pick. */
     alternates: { canonical: `/${market}/how-we-select-deals` },
@@ -23,6 +26,9 @@ export default async function HowWeSelectPage({
 }: PageProps<"/[market]/how-we-select-deals">) {
   const { market } = await params;
   const info = getMarket(market);
+  if ((await getLanguage(market)) === "es") {
+    return <SpanishHowWeSelect market={market} country={info ? countryName(market, "es") : "tu mercado"} />;
+  }
 
   return (
     <Prose

@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { countryName, getLanguage } from "@/lib/i18n";
+import { SpanishForRetailers, spanishMeta } from "@/components/site/SpanishPages";
 import { getCatalogSize, getMarkets } from "@/lib/catalog";
 import { Prose } from "@/components/site/Prose";
 
@@ -12,6 +14,7 @@ export async function generateMetadata({
     title: "Partner with OneDailyDrop",
     description:
     "What OneDailyDrop is, how listings are selected, what a retailer gets, and how to reach the partnerships contact.",
+    ...((await getLanguage(market)) === "es" ? { title: spanishMeta.forRetailers.title, description: spanishMeta.forRetailers.description } : {}),
     /* The same words live at five market prefixes; this says which one is the
        original rather than leaving search engines to pick. */
     alternates: { canonical: `/${market}/for-retailers` },
@@ -43,6 +46,16 @@ export default async function ForRetailersPage({
   const { market } = await params;
   const catalogSize = await getCatalogSize(market);
   const markets = getMarkets();
+  if ((await getLanguage(market)) === "es") {
+    return (
+      <SpanishForRetailers
+        market={market}
+        catalogSize={catalogSize}
+        marketCount={markets.length}
+        countries={markets.map((m) => countryName(m.code, "es")).join(", ")}
+      />
+    );
+  }
 
   return (
     <Prose

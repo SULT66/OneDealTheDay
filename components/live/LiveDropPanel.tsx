@@ -10,6 +10,7 @@ import { LiveDropSignup } from "@/components/site/LiveDropSignup";
 import { analyticsSessionId, recordLiveDropEvent } from "@/lib/analyticsSession";
 import { BroadcastVideo, MusicToggle, SwapStage, useLiveBroadcast } from "./LiveBroadcast";
 import { PriceBoard } from "./PriceBoard";
+import { useCopy } from "@/components/site/CopyProvider";
 
 /**
  * The Live Drop, as a shopper sees it.
@@ -96,6 +97,7 @@ export function LiveDropPanel({
   initialDrop?: LiveDropView | null;
   serverChecked?: boolean;
 }) {
+  const tr = useCopy();
   const [drop, setDrop] = useState<LiveDropView | null>(initialDrop);
   const [loaded, setLoaded] = useState(serverChecked);
   const [untilStart, setUntilStart] = useState<number | null>(
@@ -243,7 +245,7 @@ export function LiveDropPanel({
   if (!loaded) {
     return (
       <Frame>
-        <p className="text-sm text-fg-subtle">Checking for a drop...</p>
+        <p className="text-sm text-fg-subtle">{tr("app.live.checking")}</p>
       </Frame>
     );
   }
@@ -251,11 +253,8 @@ export function LiveDropPanel({
   if (!drop) {
     return (
       <Frame>
-        <h1 className="text-2xl font-bold text-fg sm:text-3xl">No drop scheduled</h1>
-        <p className="mt-3 max-w-prose text-sm leading-relaxed text-fg-muted">
-          A Live Drop is one product, at one price, for ten minutes. There is not one
-          on the calendar right now.
-        </p>
+        <h1 className="text-2xl font-bold text-fg sm:text-3xl">{tr("app.live.noneTitle")}</h1>
+        <p className="mt-3 max-w-prose text-sm leading-relaxed text-fg-muted">{tr("app.live.noneText")}</p>
         {/* Somebody who followed a link here between drops is the person most
             likely to want the next one, and this page used to let them leave
             with nothing. */}
@@ -303,12 +302,12 @@ export function LiveDropPanel({
             <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-fg-muted tnum">
               <Eye size={15} weight="fill" aria-hidden="true" />
               {drop.watching.toLocaleString()}
-              <span className="font-normal text-fg-subtle">watching</span>
+              <span className="font-normal text-fg-subtle">{tr("app.live.watching")}</span>
             </span>
           )}
         </div>
         <span className="rounded-full border border-border bg-surface-2 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-fg-muted">
-          AI host
+          {tr("app.live.aiHost")}
         </span>
       </div>
 
@@ -328,7 +327,7 @@ export function LiveDropPanel({
             {drop.title}
           </h1>
           {drop.retailer_name && (
-            <p className="mt-1 text-sm text-fg-muted">Available on {drop.retailer_name}</p>
+            <p className="mt-1 text-sm text-fg-muted">{tr("app.live.availableOn", { store: drop.retailer_name })}</p>
           )}
 
           {/* Before it opens the price is not merely hidden on screen: the
@@ -342,7 +341,7 @@ export function LiveDropPanel({
               <span className="text-3xl font-black text-fg tnum">{price}</span>
             ) : (
               <span className="text-lg font-semibold text-fg-muted">
-                Price revealed when it opens
+                {tr("app.live.priceRevealed")}
               </span>
             )}
             {retail && (
@@ -352,7 +351,7 @@ export function LiveDropPanel({
             )}
             {drop.saving && (
               <span className="rounded-full bg-lime px-2.5 py-1 text-xs font-bold text-ink">
-                Save {formatPrice(drop.saving.amount, drop.currency, market)} ({drop.saving.percent}%)
+                {tr("app.live.save", { amount: formatPrice(drop.saving.amount, drop.currency, market), percent: drop.saving.percent })}
               </span>
             )}
           </div>
@@ -367,9 +366,9 @@ export function LiveDropPanel({
                 corrected with Set stock while the drop runs, or the shop's own
                 count when it reports one; a real cap, never decoration. */}
             {drop.quantity_total > 0 && !finished && !onAir && (
-              <Metric label={isLive ? "Left" : "Units"}>
+              <Metric label={isLive ? tr("app.live.left") : tr("app.live.units")}>
                 <span className="tnum">{isLive ? drop.quantity_remaining : drop.quantity_total}</span>
-                {isLive ? ` of ${drop.quantity_total}` : " at this price"}
+                {isLive ? tr("app.live.ofTotal", { total: drop.quantity_total }) : tr("app.live.atThisPrice")}
               </Metric>
             )}
             {isLive && drop.affiliate_url && signedIn === false && (
@@ -377,8 +376,8 @@ export function LiveDropPanel({
                 href={`/${market}/account?next=${encodeURIComponent(`/${market}/live`)}`}
                 className="inline-flex min-h-14 w-full flex-col items-center justify-center rounded-xl bg-lime px-6 py-2 text-center text-ink transition-opacity hover:opacity-88"
               >
-                <span className="text-base font-bold">Sign up to buy</span>
-                <span className="text-[11px] font-medium opacity-85">Free account · takes seconds</span>
+                <span className="text-base font-bold">{tr("app.live.signUpToBuy")}</span>
+                <span className="text-[11px] font-medium opacity-85">{tr("app.live.signUpHint")}</span>
               </a>
             )}
             {isLive && drop.affiliate_url && signedIn === true && (
@@ -392,7 +391,7 @@ export function LiveDropPanel({
                 onClick={() => recordLiveDropEvent(drop.drop_key, "buy_click")}
                 className="inline-flex min-h-14 w-full items-center justify-center rounded-xl bg-lime px-6 text-lg font-black text-ink transition-opacity hover:opacity-88"
               >
-                Buy now{drop.drop_price != null ? ` at ${formatPrice(drop.drop_price, drop.currency, market)}` : ""}
+                {drop.drop_price != null ? tr("app.live.buyNowAt", { price: formatPrice(drop.drop_price, drop.currency, market) }) : tr("app.live.buyNow")}
               </a>
             )}
           </div>
@@ -400,7 +399,7 @@ export function LiveDropPanel({
           <div className="mt-4 flex flex-wrap items-center gap-2.5">
             <DeliaTrigger
               variant="header"
-              label="Ask a live question"
+              label={tr("app.live.askLive")}
               seed={`I am watching OneDailyDrop Live. Is the ${drop.title} a good deal at ${price || "the drop price"}?`}
               className="h-12 flex-1 justify-center rounded-xl px-5 sm:flex-none"
             />
@@ -449,12 +448,13 @@ function Frame({ children }: { children: React.ReactNode }) {
 }
 
 function StateBadge({ state }: { state: LiveDropView["state"] }) {
+  const tr = useCopy();
   const label: Record<LiveDropView["state"], string> = {
-    upcoming: "Next live drop",
-    waiting: "Starting soon",
-    live: "Live now",
-    sold_out: "Sold out",
-    ended: "Drop ended",
+    upcoming: tr("app.live.stateUpcoming"),
+    waiting: tr("app.live.stateWaiting"),
+    live: tr("app.live.stateLive"),
+    sold_out: tr("app.live.stateSoldOut"),
+    ended: tr("app.live.stateEnded"),
   };
   const live = state === "live";
   return (
@@ -479,12 +479,13 @@ function Countdown({
   untilStart: number | null;
   untilEnd: number | null;
 }) {
+  const tr = useCopy();
   if (state === "sold_out" || state === "ended") return null;
   const live = state === "live";
   const seconds = live ? untilEnd : untilStart;
   if (seconds == null) return null;
 
-  return <Metric label={live ? "Closes in" : "Opens in"}>{clock(seconds)}</Metric>;
+  return <Metric label={live ? tr("app.live.closesIn") : tr("app.live.opensIn")}>{clock(seconds)}</Metric>;
 }
 
 function Metric({ label, children }: { label: string; children: React.ReactNode }) {
@@ -505,6 +506,7 @@ function Metric({ label, children }: { label: string; children: React.ReactNode 
  * somebody back and asking them to register first loses the half-interested.
  */
 function RemindMe({ dropKey }: { dropKey: string }) {
+  const tr = useCopy();
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
@@ -526,7 +528,7 @@ function RemindMe({ dropKey }: { dropKey: string }) {
         onClick={() => setOpen(true)}
         className="inline-flex h-12 items-center rounded-full bg-lime px-6 text-sm font-bold text-ink transition-opacity hover:opacity-88"
       >
-        Remind me when it opens
+        {tr("app.live.remindWhenOpens")}
       </button>
     );
   }
@@ -547,8 +549,8 @@ function RemindMe({ dropKey }: { dropKey: string }) {
         if (response?.ok) recordLiveDropEvent(dropKey, "remind");
         setMessage(
           response?.ok
-            ? body?.message || "We will email you when it opens."
-            : body?.error || "That did not go through. Try again.",
+            ? body?.message || tr("app.live.remindDone")
+            : body?.error || tr("app.live.tryAgain"),
         );
       }}
       className="flex flex-wrap items-center gap-2"
@@ -559,7 +561,7 @@ function RemindMe({ dropKey }: { dropKey: string }) {
         value={email}
         onChange={(event) => setEmail(event.target.value)}
         placeholder="you@example.com"
-        aria-label="Email for the reminder"
+        aria-label={tr("app.live.remindEmail")}
         className="h-12 w-56 rounded-full border border-border bg-surface-2 px-4 text-sm text-fg outline-none focus:border-border-strong"
       />
       <button
@@ -567,7 +569,7 @@ function RemindMe({ dropKey }: { dropKey: string }) {
         disabled={busy}
         className="inline-flex h-12 items-center rounded-full bg-lime px-5 text-sm font-semibold text-ink transition-opacity hover:opacity-88 disabled:opacity-60"
       >
-        Remind me
+        {tr("app.live.remindMe")}
       </button>
     </form>
   );
@@ -610,6 +612,7 @@ function BroadcastStage({
   untilStart: number | null;
   untilEnd: number | null;
 }) {
+  const tr = useCopy();
   const showable = drop.state === "waiting" || drop.state === "live";
   if (!showable) return null;
   /* The price band under the picture, whichever presenter holds the stage. */
@@ -673,7 +676,7 @@ function BroadcastStage({
       )}
     >
       <div className="relative min-w-0 overflow-hidden bg-[radial-gradient(circle_at_50%_20%,#123b69_0%,#07172b_48%,#030914_100%)]">
-        <StageLabel>AI host</StageLabel>
+        <StageLabel>{tr("app.live.aiHost")}</StageLabel>
         {/*
           * hasStream, not hasHost.
           *
@@ -737,13 +740,13 @@ function BroadcastStage({
             <p className="text-xl font-black text-white">OneDailyDrop Live</p>
             <p className="mt-2 max-w-sm text-sm leading-relaxed text-white/65">
               {drop.state === "waiting"
-                ? "The AI host joins when the show begins."
-                : "The offer is live. Product details and checkout remain available below."}
+                ? tr("app.live.hostJoinsSoon")
+                : tr("app.live.offerLiveBelow")}
             </p>
           </div>
         )}
         <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-4 pb-4 pt-16">
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/60">Now presenting</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/60">{tr("app.live.nowPresenting")}</p>
           <p className="mt-1 line-clamp-2 text-lg font-bold text-white">{drop.title}</p>
         </div>
       </div>
@@ -817,10 +820,11 @@ function ProductStill({ src, alt, inUse = false }: { src: string; alt: string; i
 }
 
 function ProductStillMissing({ inUse }: { inUse?: boolean }) {
+  const tr = useCopy();
   return (
     <div className={cn("flex items-center justify-center px-4 text-center", inUse && "border-t border-white/10")}>
       <p className="text-xs leading-relaxed text-white/40">
-        {inUse ? "A photograph of the product in use goes here." : "A photograph of the product goes here."}
+        {inUse ? tr("app.live.photoInUseMissing") : tr("app.live.photoMissing")}
       </p>
     </div>
   );
@@ -861,6 +865,7 @@ type HostPhase = "presenting" | "answering" | "";
  * has her acknowledge the questions between script lines.
  */
 function TavusHost({ market, drop, board }: { market: string; drop: LiveDropView; board?: React.ReactNode }) {
+  const tr = useCopy();
   const live = useLiveBroadcast();
   const watching = live.session?.dropKey === drop.drop_key;
   const [starting, setStarting] = useState(false);
@@ -902,7 +907,7 @@ function TavusHost({ market, drop, board }: { market: string; drop: LiveDropView
           .map((row) => ({
             id: `m${row.id}`,
             kind: "viewer" as const,
-            author: mineRef.current.has(`m${row.id}`) ? "You" : row.author,
+            author: mineRef.current.has(`m${row.id}`) ? tr("app.live.you") : row.author,
             text: row.text,
             at: Date.parse(row.created_at),
             sent: row.status === "sent",
@@ -943,7 +948,7 @@ function TavusHost({ market, drop, board }: { market: string; drop: LiveDropView
     const body = await response?.json().catch(() => ({}));
     setStarting(false);
     if (!response?.ok || !body?.conversation_url) {
-      setError(body?.error || "Chloe could not join. Please try again.");
+      setError(body?.error || tr("app.live.couldNotJoin"));
       return;
     }
     live.join({
@@ -971,7 +976,7 @@ function TavusHost({ market, drop, board }: { market: string; drop: LiveDropView
     const body = await response?.json().catch(() => ({}));
     setPosting(false);
     if (!response?.ok) {
-      setPostError(body?.error || "That didn't send. Try again.");
+      setPostError(body?.error || tr("app.live.didntSend"));
       return;
     }
     setQuestion("");
@@ -981,24 +986,25 @@ function TavusHost({ market, drop, board }: { market: string; drop: LiveDropView
     const presenting = body.phase === "presenting";
     /* Straight back, so nobody sits wondering whether anybody saw it. */
     setChat((current) => [
-      ...current.map((message) => (message.id === id ? { ...message, author: "You", mine: true } : message)),
+      ...current.map((message) => (message.id === id ? { ...message, author: tr("app.live.you"), mine: true } : message)),
       {
         id: `note-${body.id}`,
         kind: "note" as const,
         author: "",
         text: presenting
-          ? `Got it! You're #${position || 1} in line. Chloe answers questions right after she finishes showing the product.`
-          : `Got it! You're #${position || 1} in line for Chloe.`,
+          ? tr("app.live.gotItPresenting", { position: position || 1 })
+          : tr("app.live.gotIt", { position: position || 1 }),
         at: new Date().getTime() + 1,
       },
     ].slice(-80));
   };
 
+  const inLineText = queued === 1 ? tr("app.live.questionsOne") : tr("app.live.questionsMany", { count: queued });
   const status =
     phase === "presenting"
-      ? { tone: "bg-white/10 text-white", dot: "bg-lime", text: `Chloe is presenting · Q&A right after${queued ? ` · ${queued} question${queued === 1 ? "" : "s"} in line` : ""}` }
+      ? { tone: "bg-white/10 text-white", dot: "bg-lime", text: `${tr("app.live.statusPresenting")}${queued ? ` · ${inLineText}` : ""}` }
       : phase === "answering"
-        ? { tone: "bg-lime text-ink", dot: "bg-ink", text: queued ? `Q&A is open · ${queued} question${queued === 1 ? "" : "s"} in line` : "Q&A is open · ask Chloe anything" }
+        ? { tone: "bg-lime text-ink", dot: "bg-ink", text: queued ? `${tr("app.live.qaOpen")} · ${inLineText}` : tr("app.live.qaAskAnything") }
         : null;
 
   /*
@@ -1043,15 +1049,15 @@ function TavusHost({ market, drop, board }: { market: string; drop: LiveDropView
                 </span>{" "}
                 {message.text}
                 {"sent" in message && message.sent ? (
-                  <span className="ml-1 text-[10px] font-semibold text-lime">· Chloe has it</span>
+                  <span className="ml-1 text-[10px] font-semibold text-lime">{tr("app.live.chloeHasIt")}</span>
                 ) : "mine" in message && message.mine ? (
-                  <span className="ml-1 text-[10px] text-white/70">· in line</span>
+                  <span className="ml-1 text-[10px] text-white/70">{tr("app.live.inLine")}</span>
                 ) : null}
               </p>
             ),
           )
         ) : (
-          <p className="text-xs text-white/90 sm:text-sm">Ask Chloe anything about this deal</p>
+          <p className="text-xs text-white/90 sm:text-sm">{tr("app.live.askAnything")}</p>
         )}
       </div>
       <form onSubmit={ask} className="absolute inset-x-3 bottom-3 z-30 flex gap-2 sm:inset-x-4">
@@ -1060,8 +1066,8 @@ function TavusHost({ market, drop, board }: { market: string; drop: LiveDropView
           value={question}
           onChange={(event) => setQuestion(event.target.value)}
           maxLength={200}
-          placeholder={postError || "Ask Chloe a question..."}
-          aria-label="Question for Chloe"
+          placeholder={postError || tr("app.live.askPlaceholder")}
+          aria-label={tr("app.live.questionLabel")}
           className={cn(
             "h-9 min-w-0 flex-1 rounded-full border bg-black/10 px-4 text-sm text-white outline-none placeholder:text-white/80 focus:border-white/80 sm:h-10",
             postError ? "border-[#ff7a68]" : "border-white/45",
@@ -1073,7 +1079,7 @@ function TavusHost({ market, drop, board }: { market: string; drop: LiveDropView
           disabled={!question.trim() || posting}
           className="h-9 rounded-full bg-lime px-4 text-xs font-black text-ink shadow-lg disabled:opacity-50 sm:h-10"
         >
-          Send
+          {tr("app.live.send")}
         </button>
       </form>
     </>
@@ -1093,12 +1099,12 @@ function TavusHost({ market, drop, board }: { market: string; drop: LiveDropView
                 <BroadcastVideo
                   stream={live.stream}
                   className="h-full w-full object-cover"
-                  label="Chloe, OneDailyDrop AI shopping host"
+                  label={tr("app.live.chloeLabel")}
                   onNeedsPlay={setNeedsPlay}
                 />
                 {!live.joined ? (
                   <div className="absolute inset-0 flex items-center justify-center bg-[#07172b] text-sm font-bold text-white/75">
-                    Connecting Chloe...
+                    {tr("app.live.connectingChloe")}
                   </div>
                 ) : null}
               </>
@@ -1113,10 +1119,10 @@ function TavusHost({ market, drop, board }: { market: string; drop: LiveDropView
               }}
               className="absolute inset-0 z-40 m-auto h-12 w-fit rounded-full bg-accent px-6 text-sm font-black text-white"
             >
-              Play Chloe
+              {tr("app.live.playChloe")}
             </button>
           ) : null}
-          <StageLabel>AI host</StageLabel>
+          <StageLabel>{tr("app.live.aiHost")}</StageLabel>
           <div className="absolute right-3 top-3 z-30 flex gap-1.5">
             <MusicToggle on={live.musicOn} onChange={live.setMusicOn} />
             <button
@@ -1124,7 +1130,7 @@ function TavusHost({ market, drop, board }: { market: string; drop: LiveDropView
               onClick={live.leave}
               className="rounded-full border border-white/20 bg-black/70 px-3 py-1.5 text-xs font-bold text-white backdrop-blur hover:bg-black"
             >
-              Leave
+              {tr("app.live.leave")}
             </button>
           </div>
           {chatOverlay(true)}
@@ -1145,9 +1151,9 @@ function TavusHost({ market, drop, board }: { market: string; drop: LiveDropView
           productAlt={drop.title}
           host={
             <div className="flex h-full w-full flex-col items-center justify-center bg-[radial-gradient(circle_at_50%_20%,#123b69_0%,#07172b_48%,#030914_100%)] px-4 pb-10 text-center">
-              <p className="hidden text-base font-black text-white sm:block sm:text-xl">Chloe is presenting live</p>
+              <p className="hidden text-base font-black text-white sm:block sm:text-xl">{tr("app.live.presentingLive")}</p>
               <p className="mt-1.5 hidden max-w-xs text-xs leading-relaxed text-white/65 sm:block sm:text-sm">
-                Watch with everyone else and ask your questions in the chat.
+                {tr("app.live.watchWithEveryone")}
               </p>
               <button
                 type="button"
@@ -1155,13 +1161,13 @@ function TavusHost({ market, drop, board }: { market: string; drop: LiveDropView
                 disabled={starting}
                 className="relative z-40 mt-3 rounded-full bg-accent px-5 py-2 text-xs font-black text-white shadow-lg transition hover:brightness-110 disabled:cursor-wait disabled:opacity-60 sm:mt-4 sm:px-6 sm:py-2.5 sm:text-sm"
               >
-                {starting ? "Connecting Chloe..." : "Watch Chloe live"}
+                {starting ? tr("app.live.connectingChloe") : tr("app.live.watchChloe")}
               </button>
               {error ? <p className="relative z-20 mt-2 text-xs font-semibold text-red-300">{error}</p> : null}
             </div>
           }
         />
-        <StageLabel>AI host</StageLabel>
+        <StageLabel>{tr("app.live.aiHost")}</StageLabel>
         {/* Before joining, the join button needs the middle of a small phone
             stage, so the lines show from tablet width up; the box is always there. */}
         {chatOverlay(false)}

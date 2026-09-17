@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { SavedList } from "@/components/account/SavedList";
+import { getLanguage } from "@/lib/i18n";
+import { spanishMeta } from "@/components/site/SpanishPages";
 
 /**
  * The list a shopper comes back to.
@@ -9,11 +11,19 @@ import { SavedList } from "@/components/account/SavedList";
  * generated `PageProps` helper so a brand-new route compiles on a clean
  * checkout.
  */
-export const metadata: Metadata = {
-  title: "Saved products",
-  description: "Products you put aside to come back to.",
-  robots: { index: false, follow: false },
-};
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ market: string }>;
+}): Promise<Metadata> {
+  const { market } = await params;
+  const es = (await getLanguage(market)) === "es";
+  return {
+    title: es ? spanishMeta.saved.title : "Saved products",
+    description: es ? spanishMeta.saved.description : "Products you put aside to come back to.",
+    robots: { index: false, follow: false },
+  };
+}
 
 export default async function SavedPage({
   params,

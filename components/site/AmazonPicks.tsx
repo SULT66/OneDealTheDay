@@ -1,5 +1,6 @@
 import { ArrowUpRight } from "@phosphor-icons/react/ssr";
 import { BACKEND_URL } from "@/lib/catalog";
+import { getLanguage, t, tagFor } from "@/lib/i18n";
 
 /*
  * A handful of Amazon products, chosen by a person.
@@ -55,27 +56,28 @@ async function amazonPicks(market: string): Promise<Pick[]> {
   }
 }
 
-const checkedOn = (iso: string | null) => {
+const checkedOn = (iso: string | null, locale: string) => {
   if (!iso) return "";
   const when = new Date(iso);
   return Number.isNaN(when.getTime())
     ? ""
-    : when.toLocaleDateString("en-US", { day: "numeric", month: "short" });
+    : when.toLocaleDateString(locale, { day: "numeric", month: "short" });
 };
 
 export async function AmazonPicks({ market }: { market: string }) {
   const picks = await amazonPicks(market);
   if (!picks.length) return null;
+  const language = await getLanguage(market);
+  const locale = tagFor(market, language);
 
   return (
     <section id="amazon" className="mt-14 scroll-mt-32 border-t border-border pt-10">
-      <h2 className="text-lg font-bold text-fg">Featured on Amazon</h2>
+      <h2 className="text-lg font-bold text-fg">{t(language, "app.amazon.title")}</h2>
       {/* What the reader needs, said once and plainly: where these came from and
           how old a price is. The date beside each price carries the second half,
           which Amazon's terms require whenever a price is not live. */}
       <p className="mt-1 max-w-prose text-sm leading-relaxed text-fg-muted">
-        Selected from Amazon&rsquo;s best sellers. Prices are shown with the date
-        they were recorded; the current price is on Amazon.
+        {t(language, "app.amazon.lede")}
       </p>
 
       <ul className="mt-5 grid gap-2 sm:grid-cols-2">
@@ -106,7 +108,7 @@ export async function AmazonPicks({ market }: { market: string }) {
                       {/* The date is not decoration. Without it this is a claim
                           about today's price, which is the one thing it is not. */}
                       <span className="text-xs text-fg-subtle">
-                        on Amazon, {checkedOn(pick.price_checked_at)}
+                        {t(language, "app.amazon.onAmazon", { date: checkedOn(pick.price_checked_at, locale) })}
                       </span>
                     </>
                   ) : null}
@@ -127,8 +129,7 @@ export async function AmazonPicks({ market }: { market: string }) {
       </ul>
 
       <p className="mt-4 text-xs text-fg-subtle">
-        As an Amazon Associate we earn from qualifying purchases. Following one of
-        these costs you nothing and pays us a small commission.
+        {t(language, "app.amazon.disclosure")}
       </p>
     </section>
   );

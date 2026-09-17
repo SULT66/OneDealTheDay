@@ -1,4 +1,5 @@
 import { cache } from "react";
+import { headers } from "next/headers";
 import categoriesData from "@/site-content/categories.json";
 import marketsData from "@/site-content/markets.json";
 import type { Category, Deal, DealFilter, Market } from "./types";
@@ -68,9 +69,29 @@ export const BACKEND_URL =
  * already returns daily-drop items first, followed by the rest of the
  * catalog sorted by score.
  */
+/*
+ * The visitor's language, for the backend.
+ *
+ * The Express side writes every display_* field (the reason a pick was chosen,
+ * "Price checked", delivery and returns wording) in the language of the
+ * request. These fetches came from the Next server with no cookie and no
+ * ?lang, so a Spanish page was filled with English sentences from the API.
+ * Empty when there is no request, at build time, which is English as before.
+ */
+async function languageParam(): Promise<string> {
+  try {
+    const value = (await headers()).get("x-odd-language") || "";
+    return /^[a-z]{2}$/.test(value) ? value : "";
+  } catch {
+    return "";
+  }
+}
+
 const fetchMarketCatalog = cache(
   async (marketCode: string, limit?: number, category?: string): Promise<Deal[]> => {
     const params = new URLSearchParams({ market: marketCode, compact: "1" });
+    const lang = await languageParam();
+    if (lang) params.set("lang", lang);
     if (limit) params.set("limit", String(limit));
     if (category) params.set("category", category);
     const bounded = Boolean(limit || category);
@@ -238,6 +259,8 @@ export async function searchDeals(marketCode: string, filter: DealFilter): Promi
   if (filter.category) params.set("category", filter.category);
   if (filter.minPrice != null) params.set("min_price", String(filter.minPrice));
   if (filter.maxPrice != null) params.set("max_price", String(filter.maxPrice));
+  const lang = await languageParam();
+  if (lang) params.set("lang", lang);
 
   const res = await fetch(`${BACKEND_URL}/api/search?${params}`, { next: { revalidate: 120 } });
   if (!res.ok) {
@@ -278,6 +301,8 @@ const fetchDealPage = cache(
   async (marketCode: string, id: string): Promise<RawDealPageResponse | undefined> => {
     const dealId = dealIdFromParam(id);
     const params = new URLSearchParams({ market: marketCode });
+    const lang = await languageParam();
+    if (lang) params.set("lang", lang);
     const res = await fetch(
       `${BACKEND_URL}/api/products/${encodeURIComponent(dealId)}?${params}`,
       { next: { revalidate: 300 } },
@@ -588,7 +613,7 @@ export type ArchiveDay = {
 
 export async function getArchive(marketCode: string, days = 30): Promise<ArchiveDay[]> {
   const res = await fetch(
-    `${BACKEND_URL}/api/archive?market=${encodeURIComponent(marketCode)}&days=${days}`,
+    `${BACKEND_URL}/api/archive?market=${encodeURIComponent(marketCode)}&days=${days}${await languageParam().then((lang) => (lang ? `&lang=${lang}` : ""))}`,
     { cache: "no-store" },
   );
   if (!res.ok) {
