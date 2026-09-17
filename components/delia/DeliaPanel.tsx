@@ -1421,7 +1421,12 @@ export function DeliaPanel() {
         type="button"
         aria-label="Close Delia"
         onClick={closeDelia}
-        className="fade-in absolute inset-0 cursor-pointer bg-ink/55 backdrop-blur-sm"
+        /* On a phone the panel is the whole screen, and this layer is only
+           what shows below it: under Safari's see-through bottom toolbar,
+           which sits outside the visible height the panel is sized to. Dimmed
+           and blurred there, it showed the page through the gap, so on a phone
+           it is the panel's own colour, and not a surprise way to close it. */
+        className="fade-in pointer-events-none absolute inset-0 bg-surface sm:pointer-events-auto sm:cursor-pointer sm:bg-ink/55 sm:backdrop-blur-sm"
       />
 
       <div
@@ -1433,7 +1438,7 @@ export function DeliaPanel() {
           /* The whole screen on a phone, where a sheet with a strip of page
              above it only takes room from the answer; a large window on a
              desktop, wide enough for the list beside the chat. */
-          "rise-in relative flex w-full overflow-hidden bg-surface shadow-lift",
+          "rise-in relative flex w-full overflow-hidden bg-surface sm:shadow-lift",
           "h-dvh sm:h-[min(880px,92dvh)] sm:rounded-3xl",
           hasSidebar ? "sm:max-w-6xl" : "sm:max-w-4xl",
         )}
