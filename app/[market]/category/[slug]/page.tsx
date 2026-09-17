@@ -8,7 +8,7 @@ import {
   getMarket,
   getMarkets,
 } from "@/lib/catalog";
-import { categoryName, countryName, getLanguage, t } from "@/lib/i18n";
+import { categoryName, countryName, getLanguage, marketAlternates, t } from "@/lib/i18n";
 import { DealListing } from "@/components/catalog/DealListing";
 
 export function generateStaticParams() {
@@ -33,7 +33,7 @@ export async function generateMetadata({
       country,
     }),
     description: t(language, "app.category.metaDescription", { blurb: category.blurb }),
-    alternates: { canonical: `/${market}/category/${slug}` },
+    alternates: { canonical: `/${market}/category/${slug}`, languages: marketAlternates(`/category/${slug}`) },
   };
 }
 

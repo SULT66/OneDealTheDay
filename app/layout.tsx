@@ -25,6 +25,15 @@ export const metadata: Metadata = {
   openGraph: {
     siteName: "OneDailyDrop",
     type: "website",
+    /* Every page that does not supply its own picture — the homepage, the
+       categories, the text pages — shared to Facebook, WhatsApp or Slack as a
+       bare link with no image at all. A product page still uses the product's
+       own photograph. */
+    images: [{ url: "/brand/og-default.png", width: 1200, height: 630, alt: "OneDailyDrop" }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    images: ["/brand/og-default.png"],
   },
 };
 

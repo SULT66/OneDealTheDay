@@ -6,7 +6,7 @@ import {
   getMarket,
   getTopPicks,
 } from "@/lib/catalog";
-import { countryName, getLanguage, t } from "@/lib/i18n";
+import { countryName, getLanguage, marketAlternates, t } from "@/lib/i18n";
 import { CategoryIcon } from "@/components/ui/CategoryIcon";
 import { SectionHeader } from "@/components/site/SectionHeader";
 import { LiveDropSignup } from "@/components/site/LiveDropSignup";
@@ -37,7 +37,7 @@ export async function generateMetadata({
       absolute: `OneDailyDrop: ${t(language, "app.home.metaTitle", { country })}`,
     },
     description: t(language, "app.home.metaDescription", { country }),
-    alternates: { canonical: `/${market}` },
+    alternates: { canonical: `/${market}`, languages: marketAlternates() },
   };
 }
 

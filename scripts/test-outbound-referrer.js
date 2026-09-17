@@ -26,11 +26,17 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 
 /* ------------------------------------------------- the site-wide policy */
 
+/* Both entry points take their headers from one module now (see
+   src/securityHeaders.js), so the policy is asserted where it lives and each
+   entry point is asserted to use it. */
+assert.ok(
+  /referrerPolicy\s*:\s*\{\s*policy\s*:\s*"strict-origin-when-cross-origin"\s*\}/.test(read("src/securityHeaders.js")),
+  "src/securityHeaders.js lets helmet fall back to its no-referrer default",
+);
 for (const file of ["src/server.js", "app.js"]) {
-  const source = read(file);
   assert.ok(
-    /referrerPolicy\s*:\s*\{\s*policy\s*:\s*"strict-origin-when-cross-origin"\s*\}/.test(source),
-    `${file} lets helmet fall back to its no-referrer default`,
+    read(file).includes("helmet(SECURITY_HEADERS)"),
+    `${file} sets its own headers instead of the shared ones`,
   );
 }
 

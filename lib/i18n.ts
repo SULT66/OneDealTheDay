@@ -76,6 +76,31 @@ export function countryName(market: string, language: string): string {
   return marketName(market, language);
 }
 
+/**
+ * The same page in every market, for hreflang.
+ *
+ * /us, /ca, /uk, /fr and /de carry the same pages in different languages and
+ * currencies, and nothing told a search engine they were versions of one
+ * another: Google was left to work out from the text which one to show a
+ * Canadian, and it does that badly. `path` is what follows the market, "" for
+ * a market's front page.
+ */
+export function marketAlternates(path = ""): Record<string, string> {
+  const suffix = path && !path.startsWith("/") ? `/${path}` : path;
+  const languages: Record<string, string> = {};
+  for (const code of Object.keys(defaultLanguages)) {
+    for (const language of languagesForMarket(code)) {
+      /* The default language of each market owns that market's URL; a second
+         language there is a ?lang= view, which is noindex and has no business
+         in hreflang. */
+      if (language !== defaultLanguages[code]) continue;
+      languages[languageTag(code, language)] = `/${code}${suffix}`;
+    }
+  }
+  languages["x-default"] = `/us${suffix}`;
+  return languages;
+}
+
 /** A market with more than one language needs a switcher; the UK does not. */
 export function hasLanguageChoice(market: string): boolean {
   return languagesForMarket(market).length > 1;
