@@ -1,5 +1,7 @@
 import { cn } from "@/lib/cn";
-import { discountPercent, formatPrice } from "@/lib/format";
+import { formatPrice } from "@/lib/format";
+import { displayDiscount } from "@/lib/pricing";
+import type { PricePoint } from "@/lib/types";
 import { t } from "@/lib/i18n";
 
 /**
@@ -16,6 +18,7 @@ export function PriceBlock({
   language,
   size = "md",
   className,
+  history = [],
 }: {
   price: number;
   referencePrice: number | null;
@@ -24,8 +27,11 @@ export function PriceBlock({
   language: string;
   size?: "sm" | "md" | "lg";
   className?: string;
+  /* What we recorded ourselves, where the caller has it: the only independent
+     support an extraordinary saving can have. */
+  history?: PricePoint[];
 }) {
-  const off = discountPercent(price, referencePrice);
+  const off = displayDiscount(price, referencePrice, history);
 
   const priceSize = {
     sm: "text-lg",
