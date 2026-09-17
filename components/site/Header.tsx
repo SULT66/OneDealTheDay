@@ -26,7 +26,7 @@ export async function Header({ market }: { market: string }) {
   return (
     <header className="sticky top-0 z-40 bg-bg/95 backdrop-blur supports-[backdrop-filter]:bg-bg/80">
       <div className="border-b border-border">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-2 px-3 py-3 min-[360px]:px-4 sm:gap-4 sm:px-5 lg:gap-5 lg:px-6 xl:flex-nowrap">
+        <div className="mx-auto grid max-w-7xl grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-2 gap-y-3 px-3 py-3 min-[360px]:px-4 sm:px-5 lg:px-6 xl:flex xl:flex-nowrap xl:gap-5">
           <Logo market={market} />
 
           {/* Until xl the search owns a full second row. A viewport can be
@@ -38,53 +38,53 @@ export async function Header({ market }: { market: string }) {
             market={market}
             label={t(language, "app.card.searchLabel")}
             action={t(language, "app.card.searchButton")}
-            className="order-last w-full min-w-0 xl:order-none xl:ml-4 xl:w-auto xl:max-w-xl xl:flex-1"
+            className="col-span-3 row-start-3 w-full min-w-0 xl:order-none xl:col-auto xl:row-auto xl:ml-4 xl:w-auto xl:max-w-xl xl:flex-1"
           />
 
-          {/* Every action remains available at every width. Below xl this is
-              a dedicated wrapping row, so shrinking a desktop window behaves
-              like a responsive layout instead of deleting actions or crushing
-              the search field. */}
-          <div className="order-2 flex w-full flex-wrap items-center justify-center gap-2 xl:order-none xl:ml-0 xl:w-auto xl:shrink-0 xl:flex-nowrap">
-            {languages.length > 1 && (
-              <nav aria-label={t(language, "language.label")}>
-                <ul className="flex items-center rounded-full border border-border bg-surface p-0.5">
-                  {languages.map((option) => (
-                    <li key={option.code}>
-                      {/* A plain <a>, not <Link>, on purpose.
-                      *
-                      * The Header and Footer live in app/[market]/layout.tsx.
-                      * Switching language only changes the query string, so
-                      * <Link> does a client-side navigation and Next reuses the
-                      * cached layout — the page body came back in the new
-                      * language while the header, the category tabs and this
-                      * very switcher stayed in the old one. It read as "the
-                      * toggle does nothing".
-                      *
-                      * A full document request re-renders the layout and lets
-                      * Express set the odd_lang_<market> cookie on the way
-                      * through, which is what makes the choice stick. */}
-                      <a
-                        href={option.href}
-                        hrefLang={option.code}
-                        aria-current={option.current ? "true" : undefined}
-                        title={option.label}
-                        className={
-                          option.current
-                            ? "inline-flex h-8 items-center rounded-full bg-lime px-2 text-xs font-semibold uppercase tracking-wide text-ink sm:px-3"
-                            : "inline-flex h-8 items-center rounded-full px-2 text-xs font-semibold uppercase tracking-wide text-fg-muted transition-colors hover:text-fg sm:px-3"
-                        }
-                      >
-                        {option.code}
-                      </a>
-                    </li>
-                  ))}
-                </ul>
-              </nav>
-            )}
+          {languages.length > 1 && (
+            <nav className="col-start-2 row-start-1" aria-label={t(language, "language.label")}>
+              <ul className="flex items-center rounded-full border border-border bg-surface p-0.5">
+                {languages.map((option) => (
+                  <li key={option.code}>
+                    {/* A plain <a>, not <Link>, on purpose.
+                    *
+                    * The Header and Footer live in app/[market]/layout.tsx.
+                    * Switching language only changes the query string, so
+                    * <Link> does a client-side navigation and Next reuses the
+                    * cached layout — the page body came back in the new
+                    * language while the header, the category tabs and this
+                    * very switcher stayed in the old one. It read as "the
+                    * toggle does nothing".
+                    *
+                    * A full document request re-renders the layout and lets
+                    * Express set the odd_lang_<market> cookie on the way
+                    * through, which is what makes the choice stick. */}
+                    <a
+                      href={option.href}
+                      hrefLang={option.code}
+                      aria-current={option.current ? "true" : undefined}
+                      title={option.label}
+                      className={
+                        option.current
+                          ? "inline-flex h-8 items-center rounded-full bg-lime px-2 text-xs font-semibold uppercase tracking-wide text-ink sm:px-3"
+                          : "inline-flex h-8 items-center rounded-full px-2 text-xs font-semibold uppercase tracking-wide text-fg-muted transition-colors hover:text-fg sm:px-3"
+                      }
+                    >
+                      {option.code}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </nav>
+          )}
+
+          {/* On compact screens the three actions form one intentional row:
+              a flexible subscription button plus two intrinsic controls. At
+              xl `contents` promotes them into the main desktop row. */}
+          <div className="col-span-3 row-start-2 grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 sm:flex sm:justify-center xl:contents">
             <Link
               href={`/${market}#subscribe`}
-              className="inline-flex h-11 shrink-0 cursor-pointer items-center rounded-full bg-lime px-5 text-sm font-semibold text-ink transition-opacity hover:opacity-88"
+              className="inline-flex h-10 min-w-0 cursor-pointer items-center justify-center whitespace-nowrap rounded-full bg-lime px-2.5 text-[0.7rem] font-semibold text-ink transition-opacity hover:opacity-88 min-[360px]:px-4 min-[360px]:text-xs sm:h-11 sm:px-5 sm:text-sm xl:shrink-0"
             >
               {t(language, "app.header.subscribe")}
             </Link>
@@ -97,10 +97,13 @@ export async function Header({ market }: { market: string }) {
               market={market}
               signInLabel={t(language, "app.header.signIn")}
               signOutLabel={t(language, "app.header.signOut")}
-              className="inline-flex h-11 shrink-0 cursor-pointer items-center rounded-full border border-border px-4 text-sm font-semibold text-fg transition-colors hover:bg-surface-2 disabled:opacity-60"
+              className="inline-flex h-10 shrink-0 cursor-pointer items-center whitespace-nowrap rounded-full border border-border px-2.5 text-[0.7rem] font-semibold text-fg transition-colors hover:bg-surface-2 disabled:opacity-60 min-[360px]:px-4 min-[360px]:text-xs sm:h-11 sm:text-sm"
             />
-            <ThemeToggle />
           </div>
+
+          <span className="col-start-3 row-start-1 xl:contents">
+            <ThemeToggle />
+          </span>
         </div>
       </div>
 
