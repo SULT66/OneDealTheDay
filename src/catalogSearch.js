@@ -1,4 +1,7 @@
-const { matchesAnySearchTerm, scoreOffers, searchTokens, selectUniqueProducts } = require("./ranker");
+const {
+  headTerm, landedCost, matchesAnySearchTerm, matchesHeadTerm, queryBudget,
+  scoreOffers, searchTokens, selectUniqueProducts,
+} = require("./ranker");
 
 const SORTS = Object.freeze(["best_match", "price_asc", "price_desc", "newest", "quality"]);
 const DEFAULT_PAGE_SIZE = 24;
@@ -139,8 +142,27 @@ function searchCatalogProducts(rows, options) {
    */
   const intentCategory = options.categories.length === 1 ? options.categories[0] : "";
   const searchTerms = [...new Set([...searchTokens(options.query), ...searchTokens(intentCategory)])];
+  /*
+   * The thing asked for has to be there.
+   *
+   * Matching any one term let "wireless earbuds under 50" answer with
+   * speakers, router antennas and printer cables. The head term — the last
+   * word that names a thing rather than describing it — is required in the
+   * title, brand or category. See headTerm in src/ranker.js.
+   */
+  const head = headTerm(options.query);
+  /*
+   * And a budget in the words is a budget, not a hint. "under 50" used to
+   * multiply a listing's relevance rather than exclude it, so $180 headphones
+   * still came back for a query that said fifty.
+   */
+  const budget = queryBudget(options.query);
   const matching = options.query
-    ? candidates.filter(product => matchesAnySearchTerm(product, searchTerms))
+    ? candidates.filter(product =>
+      matchesAnySearchTerm(product, searchTerms) &&
+      matchesHeadTerm(product, head) &&
+      (budget.max == null || landedCost(product) <= budget.max) &&
+      (budget.min == null || landedCost(product) >= budget.min))
     : candidates;
 
   const scored = selectUniqueProducts(scoreOffers(matching, {
