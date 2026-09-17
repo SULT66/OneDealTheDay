@@ -64,6 +64,12 @@ assert.deepStrictEqual(change, { amount: -9, percent: -10, days: 7 });
 
 assert.strictEqual(priceVerdict([], money, day), null);
 
+/* A price we could not recheck is reported as old, never judged. */
+verdict = priceVerdict(days, money, day, { priceIsCurrent: false });
+assert.match(verdict.headline, /last saw this price on 2026-09-16/);
+assert.doesNotMatch(`${verdict.headline} ${verdict.detail}`, /lowest|highest|above/i, "a stale price was judged");
+assert.strictEqual(verdict.suggestWatch, false);
+
 /* The page uses it. */
 const chart = fs.readFileSync(path.join(__dirname, "..", "components", "deal", "PriceHistory.tsx"), "utf8");
 assert(/dailyPrices\(history\)/.test(chart) && /priceVerdict\(/.test(chart), "the chart plots raw checks again");
