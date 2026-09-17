@@ -26,20 +26,22 @@ export async function Header({ market }: { market: string }) {
   return (
     <header className="sticky top-0 z-40 bg-bg/95 backdrop-blur supports-[backdrop-filter]:bg-bg/80">
       <div className="border-b border-border">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-2 px-3 py-3 min-[360px]:px-4 sm:flex-nowrap sm:gap-4 sm:px-5 lg:gap-5 lg:px-6">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-2 px-3 py-3 min-[360px]:px-4 sm:gap-4 sm:px-5 lg:gap-5 lg:px-6 xl:flex-nowrap">
           <Logo market={market} />
 
-          {/* Below sm the search wraps to its own full-width row: sharing the
-              line with the logo and controls squeezed it to ~50px, which is
-              too narrow to read a query in, let alone tap accurately. */}
+          {/* Until xl the search owns a full second row. A viewport can be
+              tablet-wide (or a desktop window can simply be narrowed) while
+              still having all the desktop controls available. Keeping it in
+              that first row squeezed the input almost to zero and made the
+              whole document scroll horizontally. */}
           <SearchBox
             market={market}
             label={t(language, "app.card.searchLabel")}
             action={t(language, "app.card.searchButton")}
-            className="order-last w-full min-w-0 sm:order-none sm:ml-2 sm:w-auto sm:max-w-xl sm:flex-1 lg:ml-4"
+            className="order-last w-full min-w-0 xl:order-none xl:ml-4 xl:w-auto xl:max-w-xl xl:flex-1"
           />
 
-          <div className="ml-auto flex shrink-0 items-center gap-1 min-[360px]:gap-2 sm:ml-0">
+          <div className="ml-auto flex shrink-0 items-center gap-1 min-[360px]:gap-2 xl:ml-0">
             {languages.length > 1 && (
               <nav aria-label={t(language, "language.label")}>
                 <ul className="flex items-center rounded-full border border-border bg-surface p-0.5">
@@ -78,15 +80,17 @@ export async function Header({ market }: { market: string }) {
             )}
             <Link
               href={`/${market}#subscribe`}
-              className="hidden h-11 shrink-0 cursor-pointer items-center rounded-full bg-lime px-5 text-sm font-semibold text-ink transition-opacity hover:opacity-88 lg:inline-flex"
+              className="hidden h-11 shrink-0 cursor-pointer items-center rounded-full bg-lime px-5 text-sm font-semibold text-ink transition-opacity hover:opacity-88 xl:inline-flex"
             >
               {t(language, "app.header.subscribe")}
             </Link>
-            <DeliaTrigger
-              variant="header"
-              label={t(language, "app.header.askDelia")}
-              className="hidden xl:inline-flex"
-            />
+            {/* DeliaTrigger is intrinsically inline-flex. A `hidden` class on
+                the button itself lost that display conflict in the generated
+                CSS and the control leaked back onto phones. Hide its wrapper
+                instead; `contents` restores the button only at xl. */}
+            <span className="hidden xl:contents">
+              <DeliaTrigger variant="header" label={t(language, "app.header.askDelia")} />
+            </span>
             {/* Last in the row, after Delia. There was no way into the account
                 from anywhere on the site before this: it could only be reached
                 by typing the address. Quiet rather than loud, because
