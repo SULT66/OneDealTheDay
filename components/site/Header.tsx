@@ -41,7 +41,11 @@ export async function Header({ market }: { market: string }) {
             className="order-last w-full min-w-0 xl:order-none xl:ml-4 xl:w-auto xl:max-w-xl xl:flex-1"
           />
 
-          <div className="ml-auto flex shrink-0 items-center gap-1 min-[360px]:gap-2 xl:ml-0">
+          {/* Every action remains available at every width. Below xl this is
+              a dedicated wrapping row, so shrinking a desktop window behaves
+              like a responsive layout instead of deleting actions or crushing
+              the search field. */}
+          <div className="order-2 flex w-full flex-wrap items-center justify-center gap-2 xl:order-none xl:ml-0 xl:w-auto xl:shrink-0 xl:flex-nowrap">
             {languages.length > 1 && (
               <nav aria-label={t(language, "language.label")}>
                 <ul className="flex items-center rounded-full border border-border bg-surface p-0.5">
@@ -80,17 +84,11 @@ export async function Header({ market }: { market: string }) {
             )}
             <Link
               href={`/${market}#subscribe`}
-              className="hidden h-11 shrink-0 cursor-pointer items-center rounded-full bg-lime px-5 text-sm font-semibold text-ink transition-opacity hover:opacity-88 xl:inline-flex"
+              className="inline-flex h-11 shrink-0 cursor-pointer items-center rounded-full bg-lime px-5 text-sm font-semibold text-ink transition-opacity hover:opacity-88"
             >
               {t(language, "app.header.subscribe")}
             </Link>
-            {/* DeliaTrigger is intrinsically inline-flex. A `hidden` class on
-                the button itself lost that display conflict in the generated
-                CSS and the control leaked back onto phones. Hide its wrapper
-                instead; `contents` restores the button only at xl. */}
-            <span className="hidden xl:contents">
-              <DeliaTrigger variant="header" label={t(language, "app.header.askDelia")} />
-            </span>
+            <DeliaTrigger variant="header" label={t(language, "app.header.askDelia")} />
             {/* Last in the row, after Delia. There was no way into the account
                 from anywhere on the site before this: it could only be reached
                 by typing the address. Quiet rather than loud, because
@@ -99,7 +97,7 @@ export async function Header({ market }: { market: string }) {
               market={market}
               signInLabel={t(language, "app.header.signIn")}
               signOutLabel={t(language, "app.header.signOut")}
-              className="hidden h-11 shrink-0 cursor-pointer items-center rounded-full border border-border px-4 text-sm font-semibold text-fg transition-colors hover:bg-surface-2 disabled:opacity-60 xl:inline-flex"
+              className="inline-flex h-11 shrink-0 cursor-pointer items-center rounded-full border border-border px-4 text-sm font-semibold text-fg transition-colors hover:bg-surface-2 disabled:opacity-60"
             />
             <ThemeToggle />
           </div>
