@@ -147,3 +147,38 @@ jobs:
 
           echo "Azure did not serve the expected release within 15 minutes."
           exit 1
+
+      # How long the site takes to answer, checked on every release.
+      #
+      # Speed is the thing that decays quietly: a page picks up one more
+      # sequential fetch and nobody notices until an advert is paying for
+      # visitors who leave before anything is drawn. The first request may
+      # render the page (the HTML cache is per-process and a deploy empties
+      # it); the two after it should be served from that cache, so the fast
+      # one of the pair is what gets the threshold.
+      - name: Check how fast the homepage answers
+        shell: bash
+        run: |
+          set -uo pipefail
+          url="https://www.onedailydrop.com/us"
+          best=99
+          for attempt in 1 2 3; do
+            ttfb="$(curl --silent --show-error --output /dev/null --max-time 60 \
+              --write-out '%{time_starttransfer}' "${url}" || echo 99)"
+            echo "attempt ${attempt}: ${ttfb}s"
+            if (( attempt > 1 )) && awk "BEGIN{exit !(${ttfb} < ${best})}"; then best="${ttfb}"; fi
+            sleep 3
+          done
+          echo "best warm TTFB: ${best}s"
+          headers="$(curl --silent --show-error --output /dev/null --dump-header - --max-time 60 "${url}" || true)"
+          if ! grep -qi 'cache-control:.*public' <<<"${headers}"; then
+            echo "The homepage is no longer publicly cacheable:"
+            grep -i 'cache-control' <<<"${headers}" || true
+            exit 1
+          fi
+          # Generous against a shared runner and a single-core plan: this is
+          # here to catch a page that got slow, not to fail on jitter.
+          if awk "BEGIN{exit !(${best} > 2.0)}"; then
+            echo "The homepage took ${best}s to answer when warm, which is too slow to advertise against."
+            exit 1
+          fi

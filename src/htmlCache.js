@@ -61,6 +61,22 @@ const isSearch = (path) => /\/search\/?$/.test(path);
  */
 const DESCRIBING_HEADERS = ["content-type", "content-encoding", "vary", "x-robots-tag", "content-language"];
 
+/*
+ * What a browser, and any CDN in front of us, may do with one of these pages.
+ *
+ * Next marks every dynamic render "private, no-store", so a visitor who
+ * pressed back, or who came from an advert and opened two pages, paid for
+ * every one of them and nothing in between could help. These pages are the
+ * same for everybody asking in the same language: a short browser life and a
+ * longer shared one, with stale-while-revalidate so the copy in hand is served
+ * while a fresh one is fetched behind it.
+ *
+ * Vary on Cookie because the language is a cookie, and a shared cache that
+ * ignored it would hand a Spanish page to the next English visitor.
+ */
+const PUBLIC_CACHE_CONTROL = "public, max-age=60, s-maxage=600, stale-while-revalidate=86400";
+const PUBLIC_VARY = "Cookie, Accept-Encoding";
+
 /* A cached gzip body is useless to a client that did not ask for gzip. Rare
    enough to simply not answer from cache rather than to hold both forms. */
 function encodingAccepted(entry, acceptEncoding) {
@@ -96,7 +112,12 @@ function htmlCache(options = {}) {
       entries.delete(key);
       entries.set(key, hit);
       for (const [name, value] of Object.entries(hit.headers)) res.set(name, value);
-      return res.set("X-ODD-Cache", "HIT").status(200).end(hit.body);
+      return res
+        .set("Cache-Control", PUBLIC_CACHE_CONTROL)
+        .set("Vary", PUBLIC_VARY)
+        .set("X-ODD-Cache", "HIT")
+        .status(200)
+        .end(hit.body);
     }
     if (hit) entries.delete(key);
 
@@ -125,6 +146,33 @@ function htmlCache(options = {}) {
 
     const originalWrite = res.write.bind(res);
     const originalEnd = res.end.bind(res);
+    const originalWriteHead = res.writeHead.bind(res);
+
+    /*
+     * Next writes its own headers the moment it starts streaming, and it
+     * writes "no-cache, must-revalidate" on every dynamic render — so setting
+     * ours above only survived on a cache hit, and the render that fills the
+     * cache still told the browser to keep nothing. This puts it back as the
+     * headers go out, unless the response turned out to carry a cookie, which
+     * makes it one visitor's own page rather than a public one.
+     */
+    res.writeHead = function writeHead(...args) {
+      const publicPage =
+        res.statusCode === 200 &&
+        !res.getHeader("set-cookie") &&
+        /^text\/html/i.test(String(res.getHeader("content-type") || ""));
+      if (publicPage) {
+        for (const argument of args.slice(1)) {
+          if (!argument || typeof argument !== "object" || Array.isArray(argument)) continue;
+          for (const name of Object.keys(argument)) {
+            if (/^cache-control$/i.test(name)) delete argument[name];
+          }
+        }
+        res.setHeader("Cache-Control", PUBLIC_CACHE_CONTROL);
+        res.setHeader("Vary", PUBLIC_VARY);
+      }
+      return originalWriteHead(...args);
+    };
 
     res.write = function write(chunk, encoding, callback) {
       collect(chunk, encoding);
@@ -142,6 +190,7 @@ function htmlCache(options = {}) {
     function store() {
       res.write = originalWrite;
       res.end = originalEnd;
+      res.writeHead = originalWriteHead;
       if (!collecting || res.statusCode !== 200) return;
       if (!/^text\/html/i.test(String(res.get("content-type") || ""))) return;
       /* A response that sets a cookie is carrying something about this one

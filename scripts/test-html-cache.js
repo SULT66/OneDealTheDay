@@ -90,6 +90,16 @@ async function withServer(build, run) {
       assert.strictEqual(en.headers["x-odd-cache"], "MISS");
       assert.strictEqual(fr.headers["x-odd-cache"], "MISS", "another language is another page");
 
+      /* A public page says so, on the render that fills the cache as well as
+         on the copy served from it: Next writes "no-cache, must-revalidate"
+         over our header as it starts streaming, so a browser or a CDN kept
+         nothing and every visit paid for a page again. */
+      for (const response of [first, second]) {
+        assert.match(response.headers["cache-control"] || "", /public/, "the page is not publicly cacheable");
+        assert.match(response.headers["cache-control"] || "", /s-maxage=\d+/);
+        assert.match(response.headers["vary"] || "", /Cookie/i, "language lives in a cookie, so a shared cache must vary on it");
+      }
+
       /* Private pages are never cached, whatever the clock says. */
       for (const path of ["/us/account", "/us/saved", "/us/live", "/admin"]) {
         assert.strictEqual((await get(port, path)).headers["x-odd-cache"], undefined, `${path} must not be cached`);
@@ -162,7 +172,11 @@ async function withServer(build, run) {
     async port => {
       for (const path of ["/us/about", "/us/contact", "/us/terms"]) {
         await get(port, path);
-        assert.notStrictEqual((await get(port, path)).headers["x-odd-cache"], "HIT", `${path} must never be served from cache`);
+        const response = await get(port, path);
+        assert.notStrictEqual(response.headers["x-odd-cache"], "HIT", `${path} must never be served from cache`);
+        /* And never promised to a browser or a CDN either: the page that sets
+           a cookie is one visitor's own. */
+        assert.doesNotMatch(response.headers["cache-control"] || "", /public/, `${path} was offered for public caching`);
       }
     },
   );

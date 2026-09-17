@@ -110,8 +110,16 @@ function realBrand(value: string | null | undefined): string | null {
   return brand && !PLACEHOLDER_BRAND.test(brand) ? brand : null;
 }
 
+/*
+ * eBay serves whatever size the URL asks for, and the catalogue asks for
+ * s-l1600: a 1600px photograph behind a card that draws it at about 300, on a
+ * grid of twelve. The gallery on the product page keeps the large one.
+ */
+const cardSized = (url: string) => url.replace(/\/s-l1600\.(jpe?g|png|webp)$/i, "/s-l800.$1");
+
 export function adaptProduct(raw: RawProduct): Omit<Deal, "rank"> {
-  const image = raw.image_url || "";
+  const original = raw.image_url || "";
+  const image = cardSized(original);
   const reason = raw.display_selection_reason || raw.selection_reason;
 
   return {
@@ -121,7 +129,7 @@ export function adaptProduct(raw: RawProduct): Omit<Deal, "rank"> {
     category: slugifyCategory(raw.public_category),
     retailer: raw.retailer_name || raw.source,
     image,
-    images: image ? [image] : [],
+    images: original ? [original] : [],
     price: raw.current_price,
     /*
      * No reference price once the current price is out of date, and that is
