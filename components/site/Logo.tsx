@@ -4,17 +4,17 @@ import Link from "next/link";
 /**
  * Wordmark shared by the header and footer. The tag artwork is the same brand
  * mark used by the favicon; keeping it here avoids a different identity in the
- * browser tab and the site chrome.
+ * browser tab and the site chrome. The name stays as live text so it remains
+ * sharp at every density and inherits the active light/dark theme.
  */
 export function Logo({ market }: { market: string }) {
   return (
     <Link
       href={`/${market}`}
-      className="group inline-flex items-center gap-2.5"
+      className="group inline-flex shrink-0 items-center gap-1.5 sm:gap-2 lg:gap-2.5"
       aria-label="OneDailyDrop home"
     >
-      {/* Sized to the wordmark rather than to itself, so the tag sits level
-          with the two lines of type instead of hanging below them.
+      {/* Keep the tag optically level with the single-line wordmark.
 
           Served whole, not resized. With sizes="30px" the optimiser sent a
           32-pixel copy, which is right at 100% and a smear the moment
@@ -27,24 +27,14 @@ export function Logo({ market }: { market: string }) {
         height={512}
         unoptimized
         priority
-        className="h-[2.4rem] w-auto shrink-0 object-contain"
+        className="h-8 w-auto shrink-0 object-contain sm:h-9 lg:h-10"
       />
-      {/* A column, so the lime line inherits its width from the badge above it
-          and the two edges line up exactly. Letter-spacing cannot do this: it
-          adds the same gap after the final letter as between the others, which
-          is why DROP always hung past the right edge of the badge. */}
-      <span className="hidden flex-col items-stretch sm:flex">
-        <span className="rounded-md bg-logo-badge px-1.5 py-0.5 text-center text-[0.8rem] font-extrabold uppercase leading-[1.25] tracking-[0.08em] text-white">
-          One Daily
-        </span>
-        <span
-          className="mt-[3px] flex justify-between text-[0.8rem] font-extrabold uppercase leading-[1.25] text-lime-deep"
-          aria-hidden="true"
-        >
-          {["D", "R", "O", "P"].map((letter) => (
-            <span key={letter}>{letter}</span>
-          ))}
-        </span>
+      <span
+        className="inline-flex whitespace-nowrap text-[0.875rem] font-extrabold leading-none tracking-[-0.05em] text-fg min-[360px]:text-[1.05rem] sm:text-xl lg:text-[1.45rem]"
+        aria-hidden="true"
+      >
+        <span>OneDaily</span>
+        <span className="text-lime-deep">Drop</span>
       </span>
     </Link>
   );
