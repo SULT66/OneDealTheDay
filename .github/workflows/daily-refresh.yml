@@ -33,7 +33,13 @@ concurrency:
 jobs:
   refresh:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # The primary-market source is intentionally allowed about 31 minutes
+    # (its 30-minute deadline plus shutdown grace), and the remaining markets
+    # are refreshed after it. The old 30-minute job / 25-minute polling window
+    # could therefore report a failure while the bounded server job was still
+    # working normally. This timeout covers the server's own limits; it does
+    # not make any retailer request wait longer.
+    timeout-minutes: 90
 
     steps:
       - name: Validate admin secret
@@ -88,7 +94,10 @@ jobs:
             "https://www.onedailydrop.com/api/admin/refresh")
           echo "Refresh response: ${response}"
 
-          for attempt in $(seq 1 50); do
+          # Seventy minutes covers the bounded primary-market deadline and the
+          # smaller markets that follow it. Polling is only observation: the
+          # refresh continues on Azure and keeps its existing source deadlines.
+          for attempt in $(seq 1 140); do
             status=$(curl --fail-with-body --silent --show-error \
               --retry 3 --retry-delay 10 --retry-all-errors \
               --max-time 60 \
@@ -107,7 +116,7 @@ jobs:
             sleep 30
           done
 
-          echo "Refresh did not finish within 25 minutes"
+          echo "Refresh did not finish within 70 minutes"
           exit 1
 
       - name: Verify refreshed products
