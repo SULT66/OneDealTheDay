@@ -24,10 +24,12 @@ const {
   feedListingMatchesCategory,
   isDirectProductPage,
   looksLikeAccessory,
+  matchesExplicitConstraints,
   responseLanguage,
   selectRetailerDiverseCandidates,
   searchCatalog,
   shoppingMissionText,
+  summaryMatchesResultCount,
   urlMatchesMarket,
 } = require("../src/shoppingAssistant");
 
@@ -188,6 +190,61 @@ for (const [title, request, isAccessory] of [
     `"${title}" should read as ${isAccessory ? "an accessory" : "the product itself"} for "${request}"`,
   );
 }
+
+/* A discovered page is never allowed to contradict a mandatory condition in
+   the shopper's request. These are production regressions, not synthetic
+   vocabulary tests: Delia described both mismatches correctly, but the cards
+   survived to the final shortlist anyway. */
+assert.strictEqual(
+  matchesExplicitConstraints(
+    { title: "New Classic Edition US Mini Game For Nintendo 30 Games NES Console Games" },
+    "Find a complete new Nintendo Switch console under $250. Do not show cases, controllers, stands, replacement parts, or games.",
+  ),
+  false,
+  "A non-Switch NES console still survives a Nintendo Switch request",
+);
+assert.strictEqual(
+  matchesExplicitConstraints(
+    { title: "Nintendo Switch Lite Console, Blue" },
+    "Find a complete new Nintendo Switch console under $250. Do not show cases, controllers, stands, replacement parts, or games.",
+  ),
+  true,
+  "A real Nintendo Switch console was rejected",
+);
+assert.strictEqual(
+  matchesExplicitConstraints(
+    { title: "TWS Wireless Earbuds Bluetooth 5.0 Noise Cancelling" },
+    "Найди новые беспроводные наушники до 80 долларов с активным шумоподавлением.",
+  ),
+  false,
+  "Generic noise-cancelling wording still passes an explicit ANC requirement",
+);
+assert.strictEqual(
+  matchesExplicitConstraints(
+    { title: "Skullcandy Hesh 540 ANC Wireless Headphones" },
+    "Найди новые беспроводные наушники до 80 долларов с активным шумоподавлением.",
+  ),
+  true,
+  "A product that explicitly confirms ANC was rejected",
+);
+assert.strictEqual(
+  matchesExplicitConstraints(
+    { title: "Apple iPhone 15 Case - Open Box" },
+    "Find me a new iPhone 15 case. Do not show refurbished or used products.",
+  ),
+  false,
+  "An open-box product still passes a new-only request",
+);
+assert.strictEqual(
+  summaryMatchesResultCount("I found three confirmed new laptops under $300.", 4),
+  false,
+  "A summary may still state a different count from the cards",
+);
+assert.strictEqual(
+  summaryMatchesResultCount("The Acer is the lowest-priced option.", 4),
+  true,
+  "A summary without a count was incorrectly rejected",
+);
 /* The shortlist ceiling the assistant is configured with, read rather than
    copied: pinning the number here is what made every retune of it fail. */
 const MAX_SHORTLIST = recommendationLimit("Find a blender under $100");
@@ -3362,6 +3419,8 @@ const client = {
     "https://shop.example.com/blog/best-tvs-2026",
     "https://shop.example.com/tv",
     "https://www.example.com/",
+    "https://www.bestbuy.com/site/shop/iphone-15-clear-cases",
+    "https://www.verizon.com/products/clear/apple/",
   ]) {
     assert(!isDirectProductPage(url), `a page that is not a product was accepted: ${url}`);
   }

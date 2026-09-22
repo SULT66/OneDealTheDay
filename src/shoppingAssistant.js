@@ -999,6 +999,99 @@ function matchesRequestedSubtype(candidate, request) {
   return true;
 }
 
+const NON_NEW_CONDITION_PATTERN =
+  /\b(?:used|pre[- ]?owned|refurbished|renewed|open[- ]?box|second[- ]?hand|for parts)\b|б\/у|бывш\p{L}*\s+в\s+употреблен\p{L}*|восстановлен\p{L}*/iu;
+const NEW_CONDITION_REQUEST_PATTERN =
+  /\b(?:new|brand[- ]?new)\b|нов\p{L}*/iu;
+const ACTIVE_NOISE_CANCELLATION_REQUEST_PATTERN =
+  /\b(?:anc|active\s+noise\s+cancell?ation|active\s+noise\s+cancell?ing)\b|активн\p{L}*\s+шумоподавлен\p{L}*/iu;
+const ACTIVE_NOISE_CANCELLATION_PRODUCT_PATTERN =
+  /\b(?:anc|active\s+noise\s+cancell?ation|active\s+noise\s+cancell?ing)\b/iu;
+const EXCLUSION_CLAUSE_PATTERN =
+  /(?:do\s+not\s+show|don't\s+show|exclude|excluding|не\s+показывай(?:те)?|исключи(?:те)?)([^.!?;]*)/giu;
+const EXCLUSION_IGNORED_WORDS = new Set([
+  "and", "or", "the", "a", "an", "any", "item", "items", "model", "models",
+  "option", "options", "product", "products", "show", "with", "without",
+  "и", "или", "а", "также", "модель", "модели", "вариант", "варианты", "товар", "товары",
+]);
+const EXCLUSION_ALIASES = new Map([
+  ["проводной", "wired"],
+  ["проводные", "wired"],
+  ["проводных", "wired"],
+  ["б/у", "used"],
+]);
+
+function excludedRequestTokens(request) {
+  const excluded = new Set();
+  for (const match of clean(request).matchAll(EXCLUSION_CLAUSE_PATTERN)) {
+    const words = normalizeTokenText(match[1])
+      .toLowerCase()
+      .match(/[\p{L}\p{N}]+/gu) || [];
+    for (const word of words) {
+      if (word.length < 3 || EXCLUSION_IGNORED_WORDS.has(word)) continue;
+      excluded.add(EXCLUSION_ALIASES.get(word) || word);
+    }
+  }
+  return excluded;
+}
+
+/*
+ * Final, deterministic checks for conditions the shopper made mandatory.
+ *
+ * The web model is useful for discovering products, but its own prose cannot
+ * be the enforcement layer. Production showed why: it correctly wrote that
+ * an NES console was not a Nintendo Switch and that a pair of earbuds did not
+ * confirm ANC, then both cards still reached the shopper. Every source passes
+ * this gate immediately before ranking, including live web and retailer API
+ * results.
+ */
+function matchesExplicitConstraints(candidate, request) {
+  const requested = clean(request);
+  const identity = clean(
+    `${candidate?.title || ""} ${candidate?.category || ""} ${candidate?.model_number || ""}`,
+  );
+  const identityTokens = candidateTokens(identity);
+
+  if (
+    NEW_CONDITION_REQUEST_PATTERN.test(requested) &&
+    NON_NEW_CONDITION_PATTERN.test(identity)
+  ) {
+    return false;
+  }
+  if (
+    ACTIVE_NOISE_CANCELLATION_REQUEST_PATTERN.test(requested) &&
+    !ACTIVE_NOISE_CANCELLATION_PRODUCT_PATTERN.test(identity)
+  ) {
+    return false;
+  }
+  if (/\bnintendo\s+switch\b/i.test(requested) && !/\bnintendo\s+switch\b/i.test(identity)) {
+    return false;
+  }
+  for (const qualifier of ["pro max", "ultra", "plus"]) {
+    const qualifierPattern = new RegExp(`\\b${qualifier.replace(" ", "\\s+")}\\b`, "i");
+    if (qualifierPattern.test(requested) && !qualifierPattern.test(identity)) return false;
+  }
+  for (const excluded of excludedRequestTokens(requested)) {
+    if (identityHasToken(identityTokens, excluded)) return false;
+  }
+  return true;
+}
+
+const RESULT_COUNT_WORDS = new Map([
+  ["one", 1], ["two", 2], ["three", 3], ["four", 4], ["five", 5], ["six", 6],
+  ["один", 1], ["одну", 1], ["два", 2], ["две", 2], ["три", 3], ["четыре", 4], ["пять", 5], ["шесть", 6],
+]);
+
+function summaryMatchesResultCount(value, count) {
+  const text = clean(value).toLowerCase();
+  const match = /(?:i\s+found|found|наш(?:ла|ёл|ли)|показыва\p{L}*)\s+(\d+|[\p{L}]+)/iu.exec(text);
+  if (!match) return true;
+  const stated = /^\d+$/.test(match[1])
+    ? Number(match[1])
+    : RESULT_COUNT_WORDS.get(match[1]);
+  return stated == null || stated === count;
+}
+
 /*
  * Numbers the shopper gave as a size or a price, rather than as part of a
  * model name.
@@ -4311,6 +4404,17 @@ function isDirectProductPage(value) {
     const url = new URL(safe);
     const path = decodeURIComponent(url.pathname).toLowerCase().replace(/\/+$/, "");
     if (!path || path === "/") return false;
+    /* Best Buy uses /site/shop/... for curated browse pages, and Verizon uses
+       nested /products/<collection>/<brand> paths for collections. Both were
+       accepted by the generic product-shaped fallback and appeared as product
+       cards even though the shopper could not buy the named item there. */
+    if (/\/site\/shop\//i.test(path)) return false;
+    if (
+      /(?:^|\.)verizon\.com$/i.test(url.hostname) &&
+      /^\/products\/[^/]+\/[^/]+\/?$/i.test(path)
+    ) {
+      return false;
+    }
     if (
       /(?:^|\/)(?:search|browse|category|categories|collection|collections|department|departments|results)(?:\/|$)/i.test(
         path,
@@ -6256,7 +6360,11 @@ function createShoppingAssistant({
         ...structuredRecommendationCandidates,
         ...retailerRecommendationCandidates,
         ...sourceRecommendationCandidates,
-      ];
+      ].filter((candidate) => {
+        if (matchesExplicitConstraints(candidate, resolvedRequest)) return true;
+        trace("dropped explicit-constraint mismatch |", candidate.title);
+        return false;
+      });
       const deduplicatedCandidates = deduplicateRecommendations(
         recommendationCandidates,
       );
@@ -6433,9 +6541,11 @@ function createShoppingAssistant({
           ? "exact_matches"
           : !sizeConfirmed
             ? "closest_alternatives"
-          : structured.result_state === "no_match"
-            ? "closest_alternatives"
-            : structured.result_state;
+          : recommendations.every((recommendation) =>
+              matchesExplicitConstraints(recommendation, resolvedRequest),
+            )
+            ? "exact_matches"
+            : "closest_alternatives";
       const preferredRetailer = requestedRetailer(userMessage);
       const usefulFollowUp = usefulShoppingFollowUp(
         resolvedRequest,
@@ -6515,7 +6625,7 @@ function createShoppingAssistant({
       /* Her words about the final list, when there is time to write them. The
          exact-shop price comparison stays with the template, which does that
          sum against the screen. */
-      const summary = !preferredRetailer && arrangedRecommendations.length
+      let summary = !preferredRetailer && arrangedRecommendations.length
         ? await summarizeShortlist({
             openai,
             model,
@@ -6530,6 +6640,18 @@ function createShoppingAssistant({
             timeoutMs: Math.min(SUMMARY_TIMEOUT_MS, SUMMARY_DEADLINE_MS - (Date.now() - startedAt)),
           })
         : null;
+      if (
+        summary &&
+        !summaryMatchesResultCount(summary.answer, arrangedRecommendations.length)
+      ) {
+        trace(
+          "discarded summary with wrong result count |",
+          summary.answer,
+          "| actual:",
+          arrangedRecommendations.length,
+        );
+        summary = null;
+      }
       const shownRecommendations = summary
         ? withSummary(recommendations, arrangedRecommendations, summary, (items, pickIndex) =>
             arrangeRecommendations(items, {
@@ -6633,6 +6755,7 @@ module.exports = {
   feedListingMatchesCategory,
   focusProductPhrase,
   looksLikeAccessory,
+  matchesExplicitConstraints,
   greetingContext,
   mergeShoppingMission,
   matchesShoppingIntent,
@@ -6649,6 +6772,7 @@ module.exports = {
   normalizeDeliaPunctuation,
   searchCatalog,
   shoppingMissionText,
+  summaryMatchesResultCount,
   timeoutResponse,
   urlMatchesMarket,
 };
