@@ -124,7 +124,8 @@ const RETAILERS = Object.freeze([
     name:"LoveIsARose.com",
     network:"Awin",
     markets:["us"],
-    maxCatalogProducts:75
+    maxCatalogProducts:75,
+    feedPolicy:{spreadAcrossFeed:true, excludeTitleTerms:["the being game"]}
   },
   {id:"currys", name:"Currys", network:"Awin", markets:["uk"]},
   {id:"ao", name:"AO.com", network:"Awin", markets:["uk"]},
