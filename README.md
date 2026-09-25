@@ -98,7 +98,8 @@ Argendon (US) and LoveIsARose.com (US) use separate Awin feeds. Configure their
 signed URLs as `AFFILIATE_FEED_ARGENDON_US_URL` and
 `AFFILIATE_FEED_LOVE_IS_A_ROSE_US_URL` in the hosting environment. Argendon
 imports only dehumidifiers and excludes wholesale packs and accessories.
-LoveIsARose.com is capped at 75 listings so gifts do not crowd out other shops.
+LoveIsARose.com is capped at 75 listings sampled across its feed so one group
+of rose color variants does not crowd out other gifts or other shops.
 King Koil imports only the `Mattresses` category. When Awin supplies several
 variant rows with the same product title, the public catalog's product-family
 deduplication prevents repeated cards while retaining the tracked variant URLs.

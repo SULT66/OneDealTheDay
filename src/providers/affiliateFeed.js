@@ -529,7 +529,15 @@ async function searchProducts({definition, market, keywords = [], fetchImpl = gl
   const catalogLimit = Number(definition.maxProducts) > 0
     ? Math.max(50, Math.min(10000, Math.round(Number(definition.maxProducts))))
     : 2000;
-  products = products.slice(0, catalogLimit);
+  if (!tokens.length && definition.feedPolicy?.spreadAcrossFeed && products.length > catalogLimit) {
+    // Some merchant feeds group hundreds of color variants ahead of other
+    // products. Spread a small catalog allowance over the full feed instead
+    // of publishing only variants from the first group.
+    products = Array.from({length:catalogLimit}, (_, index) =>
+      products[Math.floor(index * (products.length - 1) / (catalogLimit - 1))]);
+  } else {
+    products = products.slice(0, catalogLimit);
+  }
   if (!products.length) throw new Error(`${definition.retailerName} feed returned no usable commissionable products`);
   return products;
 }
