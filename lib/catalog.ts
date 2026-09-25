@@ -297,6 +297,7 @@ type RawDealPageResponse = {
   related?: RawProduct[];
   price_history?: RawPriceHistoryResponse;
   comparable?: RawComparable | null;
+  indexable?: boolean;
 };
 
 /**
@@ -333,6 +334,7 @@ export const getDeal = cache(
       ...adaptProduct(payload.product),
       rank: payload.product.daily_rank ?? 0,
     };
+    const indexable = payload.indexable === true;
     const comparable = payload.comparable
       ? {
           source: payload.comparable.source,
@@ -343,9 +345,9 @@ export const getDeal = cache(
           checkedAt: payload.comparable.checked_at,
         }
       : null;
-    if (!payload.price_history) return { ...deal, comparable };
+    if (!payload.price_history) return { ...deal, comparable, indexable };
     const { priceHistory, lows } = adaptPriceHistory(payload.price_history);
-    return { ...deal, priceHistory, lows, comparable };
+    return { ...deal, priceHistory, lows, comparable, indexable };
   },
 );
 

@@ -176,6 +176,10 @@ export function adaptProduct(raw: RawProduct): Omit<Deal, "rank"> {
     lows: { d30: 0, d90: 0, allTime: 0 },
     checkedAt: raw.checked_at,
     trackedDropPercent: Math.max(0, Math.round(Number(raw.tracked_drop_percent) || 0)),
+    /* A card cannot know; only the product page's own payload carries this,
+       and getDeal fills it in below. Defaulting to true here would put a page
+       in the sitemap on the strength of a guess. */
+    indexable: false,
     trackedLow: Number(raw.tracked_low) || 0,
     /* Filled in by getDeal from the product page payload; a catalogue card
        has no comparison and does not pretend to. */

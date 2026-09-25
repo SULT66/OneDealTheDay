@@ -46,6 +46,13 @@ export async function generateMetadata({
     title: t(language, "app.deal.metaTitle", { title: short }),
     description: t(language, "app.deal.metaDescription", { store: retailerLabel(deal.retailer), title: deal.title }),
     alternates: { canonical: `/${market}/deal/${id}` },
+    /*
+     * A page that repeats the shop's own words and adds nothing of ours is not
+     * offered for ranking — Google's spam policy names that shape directly,
+     * and the argument is not worth having. It stays reachable by link, by
+     * search and through Delia. See src/indexability.js.
+     */
+    ...(deal.indexable ? {} : { robots: { index: false, follow: true } }),
     openGraph: {
       title: short,
       images: deal.image ? [deal.image] : undefined,
@@ -81,6 +88,27 @@ export default async function DealPage({
 
   /* Same Product markup the live site publishes, so the redesign keeps its
      rich results when it takes over the URLs. */
+  /*
+   * The trail as data, not only as a row of links.
+   *
+   * The page has drawn breadcrumbs since it was built and never published
+   * them in its markup, so a search result showed the bare URL where it could
+   * have shown Home › Electronics › this product.
+   */
+  const breadcrumbs = {
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: t(language, "page.home"), item: `https://www.onedailydrop.com/${market}` },
+      {
+        "@type": "ListItem",
+        position: 2,
+        name: localCategory,
+        item: `https://www.onedailydrop.com/${market}/category/${deal.category}`,
+      },
+      { "@type": "ListItem", position: 3, name: deal.title },
+    ],
+  };
+
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "Product",
@@ -119,7 +147,7 @@ export default async function DealPage({
     <div className="mx-auto max-w-7xl px-4 pb-24 pt-8 sm:px-6">
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: JSON.stringify({ "@context": "https://schema.org", "@graph": [jsonLd, breadcrumbs] }) }}
       />
 
       <nav aria-label={t(language, "app.list.breadcrumb")} className="mb-6">
