@@ -90,9 +90,15 @@ It uses `sale_price` before `price` and `aw_deep_link` before the untracked
 merchant URL. Large feeds are filtered against Delia's current shopping query
 before the per-source limit is applied.
 Giftlab's lingerie category and explicit adult-themed titles are excluded at
-import time. Its built-in catalog limit is 3,000 products, which retains the
-current safe US assortment; Delia balances matching results across retailers
+import time. Its built-in catalog limit is 150 products to keep gifts from
+dominating the catalog; Delia balances matching results across retailers
 after catalog search so the larger feed cannot occupy every recommendation.
+
+Argendon (US) and LoveIsARose.com (US) use separate Awin feeds. Configure their
+signed URLs as `AFFILIATE_FEED_ARGENDON_US_URL` and
+`AFFILIATE_FEED_LOVE_IS_A_ROSE_US_URL` in the hosting environment. Argendon
+imports only dehumidifiers and excludes wholesale packs and accessories.
+LoveIsARose.com is capped at 75 listings so gifts do not crowd out other shops.
 King Koil imports only the `Mattresses` category. When Awin supplies several
 variant rows with the same product title, the public catalog's product-family
 deduplication prevents repeated cards while retaining the tracked variant URLs.
