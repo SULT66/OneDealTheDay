@@ -916,7 +916,12 @@ for (const [column, type] of [
   ["relevance_score", "REAL"],
   ["commerce_quality", "REAL"],
   ["ranking_score", "REAL"],
-  ["evidence_confidence", "REAL"]
+  ["evidence_confidence", "REAL"],
+  /* How far below our own tracked high today's price sits, and the lowest we
+     recorded — written nightly by src/trackedPrice.js so a card can show it
+     without reading anybody's history. */
+  ["tracked_drop_percent", "REAL"],
+  ["tracked_low", "REAL"]
 ]) {
   if (!productColumns.has(column)) db.exec(`ALTER TABLE products ADD COLUMN ${column} ${type}`);
 }

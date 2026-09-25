@@ -210,6 +210,12 @@ export default async function DealPage({
             history={deal.priceHistory}
           />
 
+          {deal.trackedDropPercent > 0 && (
+            <p className="-mt-2 text-sm font-semibold text-lime-deep">
+              {t(language, "app.card.trackedDrop", { percent: deal.trackedDropPercent })}
+            </p>
+          )}
+
           <TrustSignals deal={deal} language={language} />
 
           <div className="flex flex-col gap-3 sm:flex-row">

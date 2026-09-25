@@ -66,6 +66,13 @@ export type Deal = {
   /** ISO timestamp of the last price check. */
   checkedAt: string;
   /**
+   * How far below the highest price we ourselves recorded this one sits, and
+   * the lowest we recorded. Zero when the price has not moved — which is most
+   * of the catalogue, and the reason the badge means something when it shows.
+   */
+  trackedDropPercent: number;
+  trackedLow: number;
+  /**
    * The same product on another shop, matched by barcode — never by title.
    * eBay's price on the day we asked and the rating of that listing, both
    * presented as eBay's. Null when no match was found or none was looked for.

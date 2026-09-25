@@ -87,6 +87,18 @@ export async function DealCard({
               {t(language, "app.card.percentOff", { percent: off })}
             </span>
           )}
+
+          {/* Our own measurement, and the only claim on this card that is
+              ours rather than the shop's. A price that has not moved gets
+              nothing, which is most of them. */}
+          {deal.trackedDropPercent > 0 && (
+            <span
+              className="absolute left-3 bottom-3 inline-flex items-center rounded-full bg-surface-inverse px-2.5 py-1 text-[0.7rem] font-bold text-fg-on-inverse tnum"
+              title={t(language, "app.card.trackedDrop", { percent: deal.trackedDropPercent })}
+            >
+              {t(language, "app.card.trackedDropShort", { percent: deal.trackedDropPercent })}
+            </span>
+          )}
         </div>
 
         <div className="flex flex-1 flex-col gap-2.5 p-5">
