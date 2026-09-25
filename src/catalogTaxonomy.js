@@ -114,7 +114,7 @@ const TITLE_RULES = [
      because \b after "headset" refuses the trailing s, so a Newegg listing
      stayed filed under vehicle parts. */
   ["Electronics", /\b(iphones?|ipads?|android|smartphones?|cell phones?|mobile phones?|phone batter(?:y|ies)|battery replacement|screen replacement|chargers?|charging|usb|headphones?|earbuds?|laptops?|computers?|tablets?|cameras?|smart watch(?:es)?|smartwatch(?:es)?|televisions?|tvs?|oled|qled|projectors?|bluetooth|wi-?fi|ssds?|nvme|hard drives?|external drives?|flash drives?|memory cards?|micro ?sd|power banks?|hdmi|webcams?|routers?|soundbars?|graphics cards?|motherboards?|processors?|gaming mouse|wireless mouse|computer mouse|mechanical keyboards?|wireless keyboards?|gaming monitors?|computer monitors?|portable speakers?|bluetooth speakers?|headsets?|smart thermostats?|smart plugs?|smart bulbs?|security cameras?|video doorbells?|streaming sticks?|3d printers?)\b/i],
-  ["Mattresses & Sleep", /\b(mattress|mattresses|bed pillow|sleep topper|bed frame)\b/i],
+  ["Mattresses & Sleep", /\b(mattress|mattresses|bed pillows?|pillow sets?|sleep topper|bed frame|mattress protector)\b/i],
   ["Bikes & Mobility", /\b(bicycle|bike|tricycle|e-?bike|scooter|mobility)\b/i],
   ["Office", /\b(office desk|computer desk|writing desk|standing desk|workstation|filing cabinet|office chair|printer|ink cartridge|toner|paper shredder|laminator|stapler|whiteboard|label maker|desk organizer|desk lamp|monitor stand|copy paper|file folders?)\b/i],
   ["Furniture", /\b(bookcase|bookshelf|shelving unit|nightstand|dresser|wardrobe|sideboard|console table|coffee table|dining table|sofa|accent chair|shoe cabinet)\b/i],
@@ -122,8 +122,13 @@ const TITLE_RULES = [
   ["Automotive", /\b(car|vehicle|truck|automotive|motorcycle|dash ?cam|jump starter)\b/i],
   ["Sports & Outdoors", /\b(fitness|exercise|workout|gym|yoga|camping|hiking|sports?|dumbbell|kettlebell|treadmill|resistance bands?)\b/i],
   ["Health & Beauty", /\b(skincare|skin care|makeup|cosmetic|hair dryer|hair care|massager|wellness|toothbrush)\b/i],
+  /* Nothing filed clothing by title at all, because no connected shop sold
+     any: a pair of running shoes or a men's watch landed in Other Deals. */
+  ["Fashion", /\b(sneakers?|running shoes|shoes|boots|sandals|sunglasses|wrist ?watch(?:es)?|men'?s watch(?:es)?|women'?s watch(?:es)?|handbags?|purses?|wallets?|jewelry|necklaces?|earrings?|bracelets?|hoodie|jacket)\b/i],
   ["Pet Supplies", /\b(dog|cat|pet|puppy|kitten)\b/i],
-  ["Toys & Games", /\b(toy|game|puzzle|playset|collectible)\b/i],
+  /* A toy is usually named by what it is — "LEGO Classic Creative Bricks
+     Building Set" never says "toy", and filed itself under Other Deals. */
+  ["Toys & Games", /\b(toy|game|puzzle|playset|collectible|lego|building bricks|building blocks?|building sets?|action figures?|dolls?|board games?|jigsaws?)\b/i],
   ["Baby & Kids", /\b(baby|toddler|kids?|children|stroller|nursery)\b/i],
   ["Travel", /\b(luggage|suitcase|travel bag|travel backpack|packing cubes?|passport|weekender|carry.?on)\b/i],
   ["Home & Kitchen", /\b(kitchen|cookware|bakeware|dinnerware|air fryer|coffee maker|espresso machine|blender|toaster|microwave|slow cooker|pressure cooker|stand mixer|hand mixer|food processor|electric kettle|mixing bowls?|cutting board|knife set|utensils?|frying pan|saucepan|stock pot|dutch oven|spatula|food storage|dish rack|vacuum cleaner|robot vacuum|mop|broom|bedding|comforter|duvet|towel set|shower curtain|storage organizer|home decor|lamp|lighting|garden|bathroom)\b/i],

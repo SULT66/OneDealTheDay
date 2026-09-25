@@ -152,7 +152,49 @@ const defaultKeywords = [
   // Sports & Outdoors
   "yoga mat",
   "dumbbell set",
-  "camping tent"
+  "camping tent",
+  "resistance bands",
+  "kettlebell",
+  /*
+   * The categories the shops we have agreements with do not sell.
+   *
+   * Newegg is an electronics retailer and the small feeds are one brand each,
+   * so whole aisles of the site were furnished by a single supplier or by
+   * nobody: Mattresses & Sleep held one listing, Toys five, and Baby, Health
+   * and Fashion none at all. A category page with one product in it is not a
+   * category page, and it is the visitor who finds that out.
+   *
+   * eBay is the one source that can reach every aisle, so its allowance buys
+   * the ones nothing else covers. Named products rather than category words,
+   * for the reason written above: a marketplace answers "memory foam
+   * mattress" and shrugs at "mattresses".
+   */
+  // Mattresses & Sleep
+  "memory foam mattress",
+  "mattress topper",
+  "mattress protector",
+  "bed pillow set",
+  // Toys & Games
+  "lego set",
+  "board game",
+  "jigsaw puzzle",
+  // Baby & Kids
+  "baby monitor",
+  "diaper bag",
+  "toddler car seat",
+  // Health & Beauty
+  "electric toothbrush",
+  "hair dryer",
+  "massage gun",
+  "electric shaver",
+  // Fashion
+  "running shoes",
+  "sunglasses",
+  "mens watch",
+  // Travel and pets, which had three keywords each and emptied out
+  "travel pillow",
+  "luggage set",
+  "dog crate"
 ];
 const localizedDefaultKeywords = {
   fr: [
@@ -214,6 +256,12 @@ const keywordsForMarket = code => {
 };
 /*
  * Where the eBay allowance goes.
+ *
+ * The list above grew by twenty keywords to cover the aisles no connected
+ * shop sells, which is twenty more searches per run: five runs of sixty-seven
+ * searches rather than forty-seven, about a hundred extra calls a day against
+ * an allowance of five thousand. The detail budget is unchanged — it is spent
+ * on whatever the searches found that can actually be scored.
  *
  * It was split five ways evenly: every market refreshed on the same schedule
  * with the same per-run budget, so the United States — 2,256 listings and half
