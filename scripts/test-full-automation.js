@@ -98,6 +98,15 @@ assert.strictEqual(
   true,
   "A real FED Fitness product was rejected",
 );
+const argendonDefinition = feedDefinitions({AFFILIATE_FEED_ARGENDON_US_URL:"https://ui.awin.com/argendon.csv.gz"})[0];
+assert.strictEqual(argendonDefinition.retailerName, "Argendon");
+assert(allowedByFeedPolicy({title:"Argendon 145-Pint Dehumidifier", category:"Business & Industrial"}, argendonDefinition));
+for (const title of ["MERV-1 Filter for Dehumidifier", "Argendon Wholesale Pack – 180-Pint Dehumidifier", "Gap Fee and Price difference link"]) {
+  assert(!allowedByFeedPolicy({title, category:"Dehumidifiers"}, argendonDefinition), `${title} was allowed into the catalog`);
+}
+const roseDefinition = feedDefinitions({AFFILIATE_FEED_LOVE_IS_A_ROSE_US_URL:"https://ui.awin.com/rose.csv.gz"})[0];
+assert.strictEqual(roseDefinition.retailerName, "LoveIsARose.com");
+assert.strictEqual(roseDefinition.maxProducts, 75);
 const giftlabDefinition = definitions.find(item => item.id === "giftlab-us");
 /*
  * This asserted 3,000, on the reasoning that the feed was small enough to keep
