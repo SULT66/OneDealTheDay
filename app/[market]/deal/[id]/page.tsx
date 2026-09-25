@@ -293,6 +293,55 @@ export default async function DealPage({
           {t(language, "app.deal.briefNote")}
         </p>
 
+
+        {/*
+          * The comparison the site promised and never had.
+          *
+          * Nothing in the catalogue appears in two of our shops, so this is
+          * fetched: the barcode is looked up on eBay and the cheapest new
+          * listing of the same product comes back with its own rating. Both
+          * numbers are labelled as eBay's, because they are.
+          */}
+        {deal.comparable && (
+          <div className="mb-6 rounded-card border border-border bg-surface p-5">
+            <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
+              <p className="text-sm font-semibold text-fg">
+                {t(language, "app.deal.comparableTitle", { store: retailerLabel(deal.comparable.source) })}
+              </p>
+              <p className="tnum text-lg font-bold text-fg">
+                {formatPrice(deal.comparable.price, deal.comparable.currency, market)}
+              </p>
+            </div>
+            <p className="mt-1 text-sm font-semibold text-lime-deep">
+              {deal.price < deal.comparable.price
+                ? t(language, "app.deal.comparableCheaperHere", {
+                    amount: formatPrice(deal.comparable.price - deal.price, deal.currency, market),
+                  })
+                : deal.price > deal.comparable.price
+                  ? t(language, "app.deal.comparableCheaperThere", {
+                      amount: formatPrice(deal.price - deal.comparable.price, deal.currency, market),
+                      store: retailerLabel(deal.comparable.source),
+                    })
+                  : t(language, "app.deal.comparableSame", { store: retailerLabel(deal.comparable.source) })}
+            </p>
+            {deal.comparable.rating && deal.comparable.reviewCount ? (
+              <p className="mt-1 text-sm text-fg-muted tnum">
+                {t(language, "app.deal.comparableRating", {
+                  rating: deal.comparable.rating.toFixed(1),
+                  count: deal.comparable.reviewCount.toLocaleString("en-US"),
+                  store: retailerLabel(deal.comparable.source),
+                })}
+              </p>
+            ) : null}
+            <p className="mt-2 text-xs text-fg-subtle">
+              {t(language, "app.deal.comparableMatched", {
+                date: formatDate(deal.comparable.checkedAt, market),
+                store: retailerLabel(deal.comparable.source),
+              })}
+            </p>
+          </div>
+        )}
+
         {deal.priceHistory.length > 0 && (
           <p className="mb-4 text-sm text-fg-muted">
             {t(language, "app.deal.lowsNote", {

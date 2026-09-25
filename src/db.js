@@ -494,6 +494,26 @@ db.exec(`
 
   /* One shared Chloe per drop, and the chat everybody watching shares.
      See src/liveHost.js. */
+  /* What the same product costs somewhere else, and what its buyers there
+     said about it. One row per product; see src/comparables.js. */
+  CREATE TABLE IF NOT EXISTS product_comparables(
+    product_id INTEGER PRIMARY KEY,
+    barcode TEXT NOT NULL,
+    found INTEGER NOT NULL DEFAULT 0,
+    source TEXT,
+    item_id TEXT,
+    title TEXT,
+    price REAL,
+    currency TEXT,
+    url TEXT,
+    rating REAL,
+    review_count INTEGER,
+    checked_at TEXT NOT NULL,
+    FOREIGN KEY(product_id) REFERENCES products(id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_product_comparables_checked
+    ON product_comparables(checked_at);
+
   CREATE TABLE IF NOT EXISTS live_host_broadcasts(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     drop_id INTEGER NOT NULL,

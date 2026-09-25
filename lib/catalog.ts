@@ -283,10 +283,20 @@ export async function searchDeals(marketCode: string, filter: DealFilter): Promi
   return sortDeals(applyFilter(found, rest), filter.sort ?? "relevance");
 }
 
+type RawComparable = {
+  source: string;
+  price: number;
+  currency: string;
+  rating: number | null;
+  review_count: number | null;
+  checked_at: string;
+};
+
 type RawDealPageResponse = {
   product: RawProduct;
   related?: RawProduct[];
   price_history?: RawPriceHistoryResponse;
+  comparable?: RawComparable | null;
 };
 
 /**
@@ -323,9 +333,19 @@ export const getDeal = cache(
       ...adaptProduct(payload.product),
       rank: payload.product.daily_rank ?? 0,
     };
-    if (!payload.price_history) return deal;
+    const comparable = payload.comparable
+      ? {
+          source: payload.comparable.source,
+          price: payload.comparable.price,
+          currency: payload.comparable.currency,
+          rating: payload.comparable.rating,
+          reviewCount: payload.comparable.review_count,
+          checkedAt: payload.comparable.checked_at,
+        }
+      : null;
+    if (!payload.price_history) return { ...deal, comparable };
     const { priceHistory, lows } = adaptPriceHistory(payload.price_history);
-    return { ...deal, priceHistory, lows };
+    return { ...deal, priceHistory, lows, comparable };
   },
 );
 

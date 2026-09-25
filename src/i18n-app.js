@@ -323,6 +323,12 @@ const appCopy = {
     "app.filter.ratingFour": "4★ and up",
     "app.filter.ratingFourHalf": "4.5★ and up",
     "app.filter.scored": "Scored",
+    "app.deal.comparableTitle": "The same product on {store}",
+    "app.deal.comparableCheaperHere": "{amount} cheaper here",
+    "app.deal.comparableCheaperThere": "{amount} cheaper on {store}",
+    "app.deal.comparableSame": "The same price on {store}",
+    "app.deal.comparableMatched": "Matched by barcode, checked {date}. The price and the rating belong to the {store} listing, not to this one.",
+    "app.deal.comparableRating": "{rating}/5 from {count} reviews on {store}",
   },
 
   es: {
@@ -633,6 +639,12 @@ const appCopy = {
     "app.filter.ratingFour": "4★ o más",
     "app.filter.ratingFourHalf": "4.5★ o más",
     "app.filter.scored": "Con puntuación",
+    "app.deal.comparableTitle": "El mismo producto en {store}",
+    "app.deal.comparableCheaperHere": "{amount} más barato aquí",
+    "app.deal.comparableCheaperThere": "{amount} más barato en {store}",
+    "app.deal.comparableSame": "El mismo precio en {store}",
+    "app.deal.comparableMatched": "Emparejado por código de barras, comprobado el {date}. El precio y la valoración son del anuncio de {store}, no de este.",
+    "app.deal.comparableRating": "{rating}/5 con {count} opiniones en {store}",
   },
 
   fr: {
@@ -755,6 +767,12 @@ const appCopy = {
     "app.footer.country": "Pays",
     "app.footer.copyright": "© {year} OneDailyDrop. Les prix et la disponibilité sont vérifiés périodiquement et peuvent changer chez le marchand à tout moment.",
     "app.deal.belowReference": "{percent}% sous le prix de liste du vendeur",
+    "app.deal.comparableTitle": "Le même produit sur {store}",
+    "app.deal.comparableCheaperHere": "{amount} moins cher ici",
+    "app.deal.comparableCheaperThere": "{amount} moins cher sur {store}",
+    "app.deal.comparableSame": "Le même prix sur {store}",
+    "app.deal.comparableMatched": "Apparié par code-barres, vérifié le {date}. Le prix et la note appartiennent à l'annonce {store}, pas à celle-ci.",
+    "app.deal.comparableRating": "{rating}/5 sur {count} avis sur {store}",
   },
 
   de: {
@@ -877,6 +895,12 @@ const appCopy = {
     "app.footer.country": "Land",
     "app.footer.copyright": "© {year} OneDailyDrop. Preise und Verfügbarkeit werden regelmäßig geprüft und können sich beim Händler jederzeit ändern.",
     "app.deal.belowReference": "{percent}% unter dem Listenpreis des Verkäufers",
+    "app.deal.comparableTitle": "Dasselbe Produkt bei {store}",
+    "app.deal.comparableCheaperHere": "{amount} günstiger hier",
+    "app.deal.comparableCheaperThere": "{amount} günstiger bei {store}",
+    "app.deal.comparableSame": "Derselbe Preis bei {store}",
+    "app.deal.comparableMatched": "Über den Barcode zugeordnet, geprüft am {date}. Preis und Bewertung gehören zum Angebot bei {store}, nicht zu diesem.",
+    "app.deal.comparableRating": "{rating}/5 aus {count} Bewertungen bei {store}",
   },
 };
 
