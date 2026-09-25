@@ -340,6 +340,10 @@ function allowedByFeedPolicy(product, definition) {
     : [];
   if (excludedCategoryLeaves.includes(leaf)) return false;
   const title = compactText(product.title).toLowerCase();
+  const requiredTerms = Array.isArray(policy.titleTerms)
+    ? policy.titleTerms.map(value => compactText(value).toLowerCase()).filter(Boolean)
+    : [];
+  if (requiredTerms.length && !requiredTerms.some(term => title.includes(term))) return false;
   const excludedTerms = Array.isArray(policy.excludeTitleTerms)
     ? policy.excludeTitleTerms.map(value => compactText(value).toLowerCase()).filter(Boolean)
     : [];
