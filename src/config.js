@@ -379,6 +379,11 @@ module.exports = {
   /* Away from the refresh and the offer checks so the two never contend for
      the same retailer's rate limit. */
   linkHealthCron: process.env.LINK_HEALTH_CRON || "20 2 * * *",
+  /* The barcode comparison sweep: a few hundred lookups a night, an hour
+     after the link check so two jobs never spend the eBay allowance in the
+     same minute. See src/comparables.js. */
+  comparablesCron: process.env.COMPARABLES_CRON || "40 3 * * *",
+  comparablesBatch: boundedNumber(process.env.COMPARABLES_BATCH, 200, 0),
   linkHealthBatch: Math.max(50, Math.min(2000, Number(process.env.LINK_HEALTH_BATCH) || 400)),
   timezone: process.env.TIMEZONE || "America/New_York",
   searchKeywords: configuredKeywords.length ? configuredKeywords : defaultKeywords,

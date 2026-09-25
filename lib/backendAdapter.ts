@@ -173,6 +173,9 @@ export function adaptProduct(raw: RawProduct): Omit<Deal, "rank"> {
     priceHistory: [],
     lows: { d30: 0, d90: 0, allTime: 0 },
     checkedAt: raw.checked_at,
+    /* Filled in by getDeal from the product page payload; a catalogue card
+       has no comparison and does not pretend to. */
+    comparable: null,
   };
 }
 

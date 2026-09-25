@@ -69,6 +69,7 @@ const { emailHealth } = require("./emailHealth");
 const { htmlCache } = require("./htmlCache");
 const { startCacheWarmer, pathsFor } = require("./cacheWarmer");
 const { readEbayStock, refreshDropStock, ebayItemIdFrom } = require("./liveStock");
+const { comparableFor, refreshComparables } = require("./comparables");
 const { checkAmazonLinks } = require("./amazonLinkHealth");
 const { overview } = require("./overview");
 const { pageViewRow, recordPageView } = require("./pageViews");
@@ -2936,6 +2937,9 @@ app.get("/api/products/:id", (req, res) => {
   }
 
   const history = historyFor(product.id);
+  /* What the same product costs on eBay, by barcode, and what its buyers
+     there said. eBay's numbers, labelled as eBay's. See src/comparables.js. */
+  const comparable = comparableFor(db, product.id);
   res.set("X-Robots-Tag", "noindex, nofollow");
   res.set("Cache-Control", "private, max-age=60, stale-while-revalidate=300");
   return res.json({
@@ -2944,6 +2948,14 @@ app.get("/api/products/:id", (req, res) => {
       ...row,
       deal_url:dealPath(row)
     }, req.language), req.language))),
+    comparable:comparable ? {
+      source:comparable.source,
+      price:comparable.price,
+      currency:comparable.currency,
+      rating:comparable.rating || null,
+      review_count:comparable.review_count || null,
+      checked_at:comparable.checked_at,
+    } : null,
     price_history:{
       product:{id:product.id,title:product.title,current_price:product.current_price,currency:product.currency},
       summary:{
@@ -4250,6 +4262,31 @@ if (c.liveRefreshEnabled) {
     {timezone:"UTC"}
   );
 
+  /*
+   * What the same product costs elsewhere, fetched rather than hoped for.
+   *
+   * No product in the catalogue appears in two of our shops, so a comparison
+   * can never fall out of the data we already hold — it has to be asked for.
+   * A few hundred barcode lookups a night covers the catalogue inside a week.
+   */
+  cron.schedule(
+    c.comparablesCron,
+    async () => {
+      if (!c.comparablesBatch) return;
+      try {
+        const summary = await refreshComparables(db, {limit: c.comparablesBatch});
+        if (summary.checked) {
+          console.log(
+            `[comparables] checked ${summary.checked}: ${summary.matched} matched, ${summary.failed} failed`,
+          );
+        }
+        if (summary.stopped) console.warn(`[comparables] stopped early: ${summary.stopped}`);
+      } catch (error) {
+        console.error(`[comparables] ${error.message}`);
+      }
+    },
+    {timezone:"UTC"},
+  );
   /* The hand-added Amazon links, on the same daily pass as the catalogue's.
      They are the only thing on this site nothing else ever revisits. */
   cron.schedule(

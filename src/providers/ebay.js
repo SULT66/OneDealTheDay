@@ -166,6 +166,23 @@ function createEbayClient({clientId, clientSecret, campaignId, environment = "pr
       });
       return Array.isArray(body.itemSummaries) ? body.itemSummaries : [];
     },
+    /*
+     * The same product, by its barcode.
+     *
+     * A keyword search answers with things that read like the query; a GTIN
+     * search answers with the product itself, which is the only kind of match
+     * allowed to stand next to our price as a comparison. See
+     * src/comparables.js.
+     */
+    async searchByGtin(gtin, market) {
+      const body = await request("/buy/browse/v1/item_summary/search", market, {
+        gtin: String(gtin),
+        limit: "10",
+        fieldgroups: "EXTENDED",
+        filter: `buyingOptions:{FIXED_PRICE},conditions:{NEW},deliveryCountry:${market.countryCodes?.[0] || "US"}`,
+      });
+      return Array.isArray(body.itemSummaries) ? body.itemSummaries : [];
+    },
     getItem(itemId, market) {
       return request(`/buy/browse/v1/item/${encodeURIComponent(itemId)}`, market);
     },

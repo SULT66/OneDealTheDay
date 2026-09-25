@@ -65,6 +65,19 @@ export type Deal = {
   lows: { d30: number; d90: number; allTime: number };
   /** ISO timestamp of the last price check. */
   checkedAt: string;
+  /**
+   * The same product on another shop, matched by barcode — never by title.
+   * eBay's price on the day we asked and the rating of that listing, both
+   * presented as eBay's. Null when no match was found or none was looked for.
+   */
+  comparable: {
+    source: string;
+    price: number;
+    currency: string;
+    rating: number | null;
+    reviewCount: number | null;
+    checkedAt: string;
+  } | null;
 };
 
 export type Category = {
