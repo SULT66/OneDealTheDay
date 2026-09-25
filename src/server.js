@@ -71,6 +71,7 @@ const { startCacheWarmer, pathsFor } = require("./cacheWarmer");
 const { readEbayStock, refreshDropStock, ebayItemIdFrom } = require("./liveStock");
 const { comparableFor, refreshComparables } = require("./comparables");
 const { updateTrackedPrices } = require("./trackedPrice");
+const { indexEvidence, isIndexableProduct } = require("./indexability");
 const { checkAmazonLinks } = require("./amazonLinkHealth");
 const { overview } = require("./overview");
 const { pageViewRow, recordPageView } = require("./pageViews");
@@ -1848,6 +1849,20 @@ const isGenericBrand = value => /^(?:unbranded(?:-generic)?|generic|unknown|bran
    own bar put noindex on 1,727 of 1,741 product pages, purely because their
    shop publishes no per-listing delivery charge. */
 const isPubliclyIndexable = product => isDailyPickEligible(product, {requireKnownFulfillment:false});
+
+/*
+ * Whether a page is worth putting in front of a search engine.
+ *
+ * Publishing is one decision and indexing is another: everything published
+ * stays reachable, searchable and recommendable, but a page that repeats the
+ * shop's own words and adds nothing of ours is not offered for ranking. See
+ * src/indexability.js.
+ */
+const productIsIndexable = product => isIndexableProduct(product, {
+  comparable: db.prepare("SELECT 1 FROM product_comparables WHERE product_id=? AND found=1").get(product.id),
+  priceIsCurrent: Number.isFinite(Date.parse(product.checked_at))
+    && Date.now() - Date.parse(product.checked_at) <= c.staleOfferHours * 3600 * 1000,
+});
 const navigationCategoryCache = new Map();
 const searchCatalogCache = new Map();
 const navCategories = code => {
@@ -2382,7 +2397,7 @@ app.get("/sitemap.xml", (req, res) => {
   const products = capPerSourceAndCategory(
     uniqueProductsInOrder(db.prepare(`SELECT * FROM products WHERE status='published' AND ${sourceSql()} ORDER BY market,COALESCE(ranking_score,score) DESC,score DESC,updated_at DESC`).all())
       .filter(isPubliclyIndexable),
-  );
+  ).filter(productIsIndexable);
   const urls = [];
   const localizedAlternates = (pathname, codes = marketCodes) => {
     const supported = [...new Set(codes.map(normalizeMarket).filter(Boolean))];
@@ -2874,6 +2889,7 @@ app.get("/api/products/:id", (req, res) => {
   /* What the same product costs on eBay, by barcode, and what its buyers
      there said. eBay's numbers, labelled as eBay's. See src/comparables.js. */
   const comparable = comparableFor(db, product.id);
+  const indexable = productIsIndexable(product);
   res.set("X-Robots-Tag", "noindex, nofollow");
   res.set("Cache-Control", "private, max-age=60, stale-while-revalidate=300");
   return res.json({
@@ -2882,6 +2898,10 @@ app.get("/api/products/:id", (req, res) => {
       ...row,
       deal_url:dealPath(row)
     }, req.language), req.language))),
+    /* What this page carries that the shop's own page does not, and whether
+       that is enough to offer it to a search engine. See src/indexability.js. */
+    indexable,
+    index_evidence:indexEvidence(product, {comparable}),
     comparable:comparable ? {
       source:comparable.source,
       price:comparable.price,

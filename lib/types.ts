@@ -73,6 +73,13 @@ export type Deal = {
   trackedDropPercent: number;
   trackedLow: number;
   /**
+   * Whether this page is offered to a search engine. False when the price
+   * could not be confirmed recently, or when the page carries nothing of ours
+   * — no reviews, no comparison, no measured drop, no Score. The page still
+   * works; it is simply not put forward for ranking. See src/indexability.js.
+   */
+  indexable: boolean;
+  /**
    * The same product on another shop, matched by barcode — never by title.
    * eBay's price on the day we asked and the rating of that listing, both
    * presented as eBay's. Null when no match was found or none was looked for.
