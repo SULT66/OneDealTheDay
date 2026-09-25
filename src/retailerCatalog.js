@@ -109,6 +109,23 @@ const RETAILERS = Object.freeze([
       ]
     }
   },
+  {
+    id:"argendon",
+    name:"Argendon",
+    network:"Awin",
+    markets:["us"],
+    feedPolicy:{
+      titleTerms:["dehumidifier"],
+      excludeTitleTerms:["wholesale pack", "package", "hanging kit", "pump kit", "filter", "riser", "replacement part", "gap fee"]
+    }
+  },
+  {
+    id:"love-is-a-rose",
+    name:"LoveIsARose.com",
+    network:"Awin",
+    markets:["us"],
+    maxCatalogProducts:75
+  },
   {id:"currys", name:"Currys", network:"Awin", markets:["uk"]},
   {id:"ao", name:"AO.com", network:"Awin", markets:["uk"]},
   {id:"fnac", name:"Fnac", network:"Awin", markets:["fr"]},
