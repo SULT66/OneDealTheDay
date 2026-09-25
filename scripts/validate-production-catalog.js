@@ -164,8 +164,10 @@ for (const required of ['app.post("/api/shopping-assistant"', 'app.get("/api/sho
 if (server.includes("display_evidence_confidence_label ||")) {
   throw new Error("Public catalog pages still expose evidence confidence as a second score");
 }
+/* The canonical on the text pages moved with the pages themselves: they are
+   Next routes now, and their canonical comes from each route's own metadata
+   rather than from a string in Express's source. */
 for (const required of [
-  'const canonical = `${SITE}${marketPath(selectedMarket.code, route)}`',
   'language === defaultLanguages[selectedMarket.code]',
   'url:canonical,priceCurrency',
   "brandMarkets",
@@ -218,39 +220,6 @@ const accountScript = fs.readFileSync(path.join(root, "public/account.js"), "utf
 if (!accountScript.includes("form.reset()")) throw new Error("Auth fields are not cleared when switching modes");
 if (!accountScript.includes("updatePasswordRules")) throw new Error("Password requirements UI is missing");
 
-const trustPages = [
-  "about.html",
-  "contact.html",
-  "privacy.html",
-  "terms.html",
-  "affiliate-disclosure.html",
-  "editorial-policy.html",
-  "how-we-select-deals.html",
-  "price-disclaimer.html"
-];
-const footerLinks = [
-  'href="/"',
-  'href="/about"',
-  'href="/contact"',
-  'href="/privacy"',
-  'href="/terms"',
-  'href="/affiliate-disclosure"',
-  'href="/editorial-policy"',
-  'href="/how-we-select-deals"',
-  'href="/price-disclaimer"'
-];
-for (const file of trustPages) {
-  const html = fs.readFileSync(path.join(root, "public", "pages", file), "utf8");
-  if (!hasLiquidGlass(html)) {
-    throw new Error(`Liquid Glass is missing from ${file}`);
-  }
-  if (!html.includes('<nav class="footer-links" aria-label="Footer navigation">')) {
-    throw new Error(`Accessible footer navigation is missing from ${file}`);
-  }
-  for (const link of footerLinks) {
-    if (!html.includes(link)) throw new Error(`Footer link ${link} is missing from ${file}`);
-  }
-}
 /* admin.html is gone: the console is a Next page (app/admin) in the current
    design, so there is no static template left to check Liquid Glass against. */
 for (const file of ["club.html", "account.html"]) {
@@ -270,9 +239,6 @@ if (!liquidGlass.includes(".live-card h2") || !liquidGlass.includes(".rules h2")
 if (!liquidGlass.includes("@media (hover: hover) and (pointer: fine)")) {
   throw new Error("Mouse hover highlighting is missing");
 }
-const trustStyles = fs.readFileSync(path.join(root, "public", "trust.css"), "utf8");
-if (!trustStyles.includes("flex-wrap:wrap")) throw new Error("Trust-page footer links cannot wrap");
-if (!trustStyles.includes("row-gap:12px")) throw new Error("Trust-page footer row spacing is missing");
 for (const selector of [".shopping-model-note", ".offer-facts", ".price-history-link", ".retailer-detail-grid"]) {
   if (!styles.includes(selector)) throw new Error(`Offer UI style is missing: ${selector}`);
 }
