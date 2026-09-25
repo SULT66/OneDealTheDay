@@ -384,6 +384,9 @@ module.exports = {
      same minute. See src/comparables.js. */
   comparablesCron: process.env.COMPARABLES_CRON || "40 3 * * *",
   comparablesBatch: boundedNumber(process.env.COMPARABLES_BATCH, 200, 0),
+  /* The tracked-price pass, before the comparison sweep: it reads the
+     database and nothing else, so it costs no allowance anywhere. */
+  trackedPriceCron: process.env.TRACKED_PRICE_CRON || "10 3 * * *",
   linkHealthBatch: Math.max(50, Math.min(2000, Number(process.env.LINK_HEALTH_BATCH) || 400)),
   timezone: process.env.TIMEZONE || "America/New_York",
   searchKeywords: configuredKeywords.length ? configuredKeywords : defaultKeywords,

@@ -98,5 +98,42 @@ const uniqueProductsInOrder = products => {
   return unique;
 };
 
+/*
+ * How many listings one shop may fill a category with.
+ *
+ * Newegg sends 1,500 of the 1,532 listings in Electronics, so the category
+ * page, the sitemap and every count on the site were one supplier's feed with
+ * a OneDailyDrop header on it. Nothing about those listings is wrong; there
+ * are simply far too many of them to publish as a shelf we chose.
+ *
+ * The cap is absolute rather than a share of the category: a percentage would
+ * shrink Electronics to fifty listings, because there is almost nobody else in
+ * it. This keeps the best of each shop, in the order the ranking already put
+ * them, and leaves the rest in the database — searchable, reachable by direct
+ * link, and out of the pages we publish as a selection.
+ */
+const CATEGORY_SOURCE_CAP = (() => {
+  const configured = Number(process.env.CATEGORY_SOURCE_CAP);
+  if (Number.isFinite(configured) && configured >= 0) return Math.floor(configured);
+  return 300;
+})();
+
+const capPerSourceAndCategory = (products, { cap = CATEGORY_SOURCE_CAP } = {}) => {
+  if (!cap) return products;
+  const counts = new Map();
+  const kept = [];
+  for (const product of products) {
+    const category = String(product?.normalized_category || product?.category || "").toLowerCase();
+    const source = String(product?.source || "").toLowerCase();
+    const key = `${category}::${source}`;
+    const used = counts.get(key) || 0;
+    if (used >= cap) continue;
+    counts.set(key, used + 1);
+    kept.push(product);
+  }
+  return kept;
+};
+
 module.exports = {
+  CATEGORY_SOURCE_CAP, capPerSourceAndCategory,
   PUBLIC_PRODUCT_SOURCES, sourceSql, isAvailable, isPublicProduct, isPublicSource, uniqueProductsInOrder };

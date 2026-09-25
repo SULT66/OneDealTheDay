@@ -54,6 +54,8 @@ export type RawProduct = {
   original_price: number | null;
   currency: string;
   display_score: number | null;
+  tracked_drop_percent?: number | null;
+  tracked_low?: number | null;
   rating: number | null;
   review_count: number | null;
   seller_name: string | null;
@@ -173,6 +175,8 @@ export function adaptProduct(raw: RawProduct): Omit<Deal, "rank"> {
     priceHistory: [],
     lows: { d30: 0, d90: 0, allTime: 0 },
     checkedAt: raw.checked_at,
+    trackedDropPercent: Math.max(0, Math.round(Number(raw.tracked_drop_percent) || 0)),
+    trackedLow: Number(raw.tracked_low) || 0,
     /* Filled in by getDeal from the product page payload; a catalogue card
        has no comparison and does not pretend to. */
     comparable: null,

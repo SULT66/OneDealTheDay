@@ -41,7 +41,7 @@ const { detectBrand, normalizeBrand, slugifyBrand } = require("./brandDetector")
 const { reasonFor } = require("./demoEditorial");
 const { localizeProduct } = require("./demoTranslations");
 const { priceIntelligence } = require("./priceIntelligence");
-const { sourceSql, isPublicSource, uniqueProductsInOrder } = require("./publicCatalog");
+const { capPerSourceAndCategory, sourceSql, isPublicSource, uniqueProductsInOrder } = require("./publicCatalog");
 const { enabledProviders, searchForAssistant } = require("./providers/registry");
 const { coverage: retailerCoverage } = require("./retailerCatalog");
 const { presentProduct } = require("./productPresentation");
@@ -70,6 +70,7 @@ const { htmlCache } = require("./htmlCache");
 const { startCacheWarmer, pathsFor } = require("./cacheWarmer");
 const { readEbayStock, refreshDropStock, ebayItemIdFrom } = require("./liveStock");
 const { comparableFor, refreshComparables } = require("./comparables");
+const { updateTrackedPrices } = require("./trackedPrice");
 const { checkAmazonLinks } = require("./amazonLinkHealth");
 const { overview } = require("./overview");
 const { pageViewRow, recordPageView } = require("./pageViews");
@@ -2453,8 +2454,10 @@ app.get("/robots.txt", (req, res) => res
   .type("text/plain")
   .send(`User-agent: *\nAllow: /\nDisallow: /admin\nDisallow: /api/\nDisallow: /go/\nDisallow: /us/go/\nDisallow: /ca/go/\nDisallow: /uk/go/\nDisallow: /fr/go/\nDisallow: /de/go/\n\nSitemap: ${SITE}/sitemap.xml\n`));
 app.get("/sitemap.xml", (req, res) => {
-  const products = uniqueProductsInOrder(db.prepare(`SELECT * FROM products WHERE status='published' AND ${sourceSql()} ORDER BY market,COALESCE(ranking_score,score) DESC,score DESC,updated_at DESC`).all())
-    .filter(isPubliclyIndexable);
+  const products = capPerSourceAndCategory(
+    uniqueProductsInOrder(db.prepare(`SELECT * FROM products WHERE status='published' AND ${sourceSql()} ORDER BY market,COALESCE(ranking_score,score) DESC,score DESC,updated_at DESC`).all())
+      .filter(isPubliclyIndexable),
+  );
   const urls = [];
   const localizedAlternates = (pathname, codes = marketCodes) => {
     const supported = [...new Set(codes.map(normalizeMarket).filter(Boolean))];
@@ -2741,7 +2744,9 @@ app.get("/api/products", (req, res) => {
     conditions.push("normalized_category=?");
     params.push(String(req.query.category));
   }
-  const catalog = uniqueProductsInOrder(db.prepare(`SELECT * FROM products WHERE ${conditions.join(" AND ")} ORDER BY COALESCE(ranking_score,score) DESC,score DESC,updated_at DESC`).all(...params)).filter(isPubliclyIndexable);
+  const catalog = capPerSourceAndCategory(
+    uniqueProductsInOrder(db.prepare(`SELECT * FROM products WHERE ${conditions.join(" AND ")} ORDER BY COALESCE(ranking_score,score) DESC,score DESC,updated_at DESC`).all(...params)).filter(isPubliclyIndexable),
+  );
   const daily = db.prepare(`
     SELECT product_id,rank,score AS drop_score,score_model AS drop_score_model,current_price AS drop_price,
       original_price AS drop_original_price,drop_date,selection_reason
@@ -2858,6 +2863,10 @@ const compactApiProduct = product => ({
   original_price:product.original_price,
   currency:product.currency,
   display_score:product.display_score,
+  /* How far below our own tracked high this price is, and the lowest we
+     recorded. Zero when the price has not moved, which is most of them. */
+  tracked_drop_percent:product.tracked_drop_percent || 0,
+  tracked_low:product.tracked_low || 0,
   rating:product.rating,
   review_count:product.review_count,
   seller_name:product.seller_name,
@@ -4262,6 +4271,28 @@ if (c.liveRefreshEnabled) {
     {timezone:"UTC"}
   );
 
+  /*
+   * What our own tracking says, written onto the products.
+   *
+   * A card cannot read a price history — there are twelve of them on a page
+   * and the history is tens of thousands of rows — so the one number a card
+   * needs is computed here once a night. See src/trackedPrice.js.
+   */
+  cron.schedule(
+    c.trackedPriceCron,
+    () => {
+      try {
+        const summary = updateTrackedPrices(db);
+        console.log(
+          `[tracked-price] ${summary.updated} products, ${summary.withDrop} below their tracked high`,
+        );
+        publicHtmlCache.clear();
+      } catch (error) {
+        console.error(`[tracked-price] ${error.message}`);
+      }
+    },
+    {timezone:"UTC"},
+  );
   /*
    * What the same product costs elsewhere, fetched rather than hoped for.
    *
