@@ -45,7 +45,9 @@ const { coverage: retailerCoverage } = require("./src/retailerCatalog");
 const { recalculateCatalog } = require("./src/catalogRecalculation");
 const { TAXONOMY_VERSION } = require("./src/catalogTaxonomy");
 const { RELEASE_ID } = require("./src/release");
-const { parseSearchOptions, searchCatalogProducts } = require("./src/catalogSearch");
+const { isUnavailable, parseSearchOptions, searchCatalogProducts } = require("./src/catalogSearch");
+const { buildSuggestIndex, suggestTerms } = require("./src/searchSuggest");
+const { categoryLabel } = require("./src/i18n");
 const { storefrontUrl } = require("./src/storefrontLinks");
 const { applySearchIntent } = require("./src/searchIntent");
 const createExpressApp = express;
@@ -53,6 +55,10 @@ const CANONICAL_HOST = "www.onedailydrop.com";
 const AZURE_PRODUCTION_HOST = "onedealtheday-g3dme0aghzerc3a2.centralus-01.azurewebsites.net";
 const apiResponseCache = new Map();
 const searchCatalogCache = new Map();
+/* The catalogue's own vocabulary, per market. Built from the same rows the
+   search itself reads and thrown away as often, so the box can never propose a
+   word the results page has stopped carrying. See src/searchSuggest.js. */
+const suggestIndexCache = new Map();
 const cachedValue = key => {
   const entry = apiResponseCache.get(key);
   if (!entry || entry.expiresAt <= Date.now()) {
@@ -181,6 +187,97 @@ function expressWithHomepage(...args) {
     if (cached) return res.set("X-ODD-Cache", "HIT").json(cached);
     const status = cacheValue(cacheKey, catalogStatus(marketCode), 10000);
     return res.set("X-ODD-Cache", "MISS").json(status);
+  });
+
+  /* The rows a suggestion may be built from: what search itself would look
+     at, minus the listings it would then filter out as unavailable. Offering a
+     term that leads to an empty page is worse than offering nothing. */
+  const suggestIndexForMarket = marketCode => {
+    const cached = suggestIndexCache.get(marketCode);
+    if (cached && cached.expiresAt > Date.now()) return cached.index;
+    const index = buildSuggestIndex(searchRowsForMarket(marketCode).filter(row => !isUnavailable(row)));
+    suggestIndexCache.set(marketCode, {index, expiresAt:Date.now() + 300000});
+    return index;
+  };
+
+  /* A dropdown thumbnail is forty pixels wide. eBay serves the same picture at
+     several sizes and the catalogue stores the largest, which is a megabyte of
+     photograph per row of a list that changes on every keystroke. */
+  const suggestThumbnail = url => String(url || "").replace(/\/s-l1600\.(jpe?g|png|webp)$/i, "/s-l500.$1");
+
+  /**
+   * What the search box shows while it is being typed into.
+   *
+   * Three kinds of answer, in the order they are useful: the words the
+   * catalogue actually uses, the aisles those words lead to, and the listings
+   * themselves — because a price and a photograph answer "do you even have
+   * this" faster than any number of results ever could.
+   *
+   * The listings come from the same searchCatalogProducts the results page
+   * calls, with the same options. The dropdown and the page it leads to cannot
+   * disagree, because there is only one search.
+   */
+  app.get("/api/search/suggest", (req, res) => {
+    const selectedMarket = normalizeMarket(req.query.market) || marketFromIp(req).code;
+    const language = resolveLanguage(req, res, selectedMarket);
+    const query = String(req.query.q || "").replace(/\s+/g, " ").trim().slice(0, 80);
+    res.set("X-Robots-Tag", "noindex, nofollow");
+    /* Typed on every keystroke, so it is cached briefly and privately: the
+       answer depends on the market and the language, both of which vary by
+       visitor. */
+    res.set("Cache-Control", "private, max-age=60");
+    const searchPath = marketPath(selectedMarket, "/search");
+    const emptyAnswer = {query, market:selectedMarket, terms:[], categories:[], products:[], total:0, all_url:searchPath};
+    /* One letter is not a question. */
+    if (query.length < 2) return res.json(emptyAnswer);
+
+    const cacheKey = `suggest:${selectedMarket}:${language}:${query.toLowerCase()}`;
+    const cached = cachedValue(cacheKey);
+    if (cached) return res.set("X-ODD-Cache", "HIT").json(cached);
+
+    let options;
+    try {
+      options = parseSearchOptions({q:query, limit:6});
+    } catch {
+      /* A half-typed filter is not an error worth showing anybody mid-word. */
+      return res.json(emptyAnswer);
+    }
+    const rows = searchRowsForMarket(selectedMarket);
+    const result = searchCatalogProducts(rows, options);
+    const products = result.products.map(product => {
+      const shown = presentProduct(localizeProduct(product, language), language);
+      return {
+        id:product.id,
+        title:shown.title || product.title,
+        price:shown.display_current_price,
+        was:shown.display_original_price,
+        save:shown.display_save_label,
+        retailer:product.retailer_name || product.source,
+        image:suggestThumbnail(product.image_url),
+        url:marketPath(selectedMarket, `/deal/${product.id}`)
+      };
+    });
+    const terms = suggestTerms(suggestIndexForMarket(selectedMarket), query).map(term => ({
+      term:term.phrase,
+      count:term.count,
+      url:`${searchPath}?q=${encodeURIComponent(term.phrase)}`
+    }));
+    const categories = result.facets.categories.slice(0, 3).map(entry => ({
+      value:entry.value,
+      label:categoryLabel(entry.value, language),
+      count:entry.count,
+      url:`${searchPath}?q=${encodeURIComponent(query)}&category=${encodeURIComponent(entry.value)}`
+    }));
+    const payload = cacheValue(cacheKey, {
+      query,
+      market:selectedMarket,
+      terms,
+      categories,
+      products,
+      total:result.pagination.total,
+      all_url:`${searchPath}?q=${encodeURIComponent(query)}`
+    }, 60000);
+    return res.set("X-ODD-Cache", "MISS").json(payload);
   });
 
   app.get("/api/search", (req, res) => {

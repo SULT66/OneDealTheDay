@@ -204,7 +204,7 @@ async function refreshComparables(db, {
     try {
       const items = await ebay.searchByGtin(barcode, selectedMarket);
       const match = pickComparable(items);
-      saveComparable(db, { productId: product.id, barcode, match, now: Date.now() });
+      saveComparable(db, { productId: product.id, barcode, match, now });
       checked += 1;
       if (match) matched += 1;
     } catch (error) {
@@ -215,7 +215,7 @@ async function refreshComparables(db, {
       failed += 1;
       /* A listing that cannot be looked up today is recorded as asked, so the
          batch moves on rather than stalling on the same few every night. */
-      saveComparable(db, { productId: product.id, barcode, match: null, now: Date.now() });
+      saveComparable(db, { productId: product.id, barcode, match: null, now });
     }
   }
 
