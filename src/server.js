@@ -72,6 +72,7 @@ const { readEbayStock, refreshDropStock, ebayItemIdFrom } = require("./liveStock
 const { comparableFor, refreshComparables } = require("./comparables");
 const { updateTrackedPrices } = require("./trackedPrice");
 const { indexEvidence, isIndexableProduct } = require("./indexability");
+const { missingQueries, pruneSearches, searchDemand } = require("./searchQueries");
 const { checkAmazonLinks } = require("./amazonLinkHealth");
 const { overview } = require("./overview");
 const { pageViewRow, recordPageView } = require("./pageViews");
@@ -3747,6 +3748,34 @@ app.patch("/api/admin/live-drops/:key/media", admin, express.json({limit:"8kb"})
 });
 
 /* The host console: what only the admin side may see and do. See src/liveHost.js. */
+/**
+ * What people looked for, and what they looked for and did not find.
+ *
+ * The second list is the useful one: every phrase that came back empty, most
+ * asked first. It is a shopping list written by the people who wanted to buy
+ * something here and left without it — worth more than any guess about what
+ * to stock next, and until now it was thrown away the moment the page
+ * rendered. See src/searchQueries.js.
+ */
+app.get("/api/admin/search-demand", admin, (req, res) => {
+  const selectedMarket = normalizeMarket(req.query.market) || c.primaryMarket;
+  const days = Math.min(180, Math.max(1, Number(req.query.days) || 30));
+  /* Everything, down to a single search: a report is for reading, and the
+     thresholds elsewhere exist to keep one person's typo out of the product,
+     not out of your sight. */
+  const popular = [...searchDemand(db, {market:selectedMarket, days, minCount:1}).entries()]
+    .map(([query, searches]) => ({query, searches}))
+    .sort((left, right) => right.searches - left.searches || (left.query < right.query ? -1 : 1))
+    .slice(0, 25);
+  res.set("X-Robots-Tag", "noindex, nofollow");
+  res.json({
+    market:selectedMarket,
+    days,
+    popular,
+    missing:missingQueries(db, {market:selectedMarket, days, limit:25, minCount:1})
+  });
+});
+
 app.get("/api/admin/live-host/:key", admin, async (req, res) => {
   res.set("Cache-Control", "no-store");
   const drop = db.prepare("SELECT * FROM live_drops WHERE drop_key=?").get(String(req.params.key || ""));
@@ -4263,6 +4292,33 @@ if (c.liveRefreshEnabled) {
     },
     {timezone:"UTC"},
   );
+  /*
+   * What the search box could not answer, once a night and in the log.
+   *
+   * The admin console shows the same thing on demand; this is so that a gap
+   * opening up reaches somebody without anybody having to go and look.
+   */
+  cron.schedule(
+    c.trackedPriceCron,
+    () => {
+      try {
+        for (const marketCode of c.markets) {
+          const missing = missingQueries(db, {market:marketCode, limit:5});
+          if (missing.length) {
+            console.log(
+              `[search-demand] ${marketCode}: nothing found for ${missing.map(row => `"${row.query}" x${row.searches}`).join(", ")}`,
+            );
+          }
+        }
+        const pruned = pruneSearches(db);
+        if (pruned) console.log(`[search-demand] forgot ${pruned} searches past the retention window`);
+      } catch (error) {
+        console.error(`[search-demand] ${error.message}`);
+      }
+    },
+    {timezone:"UTC"},
+  );
+
   /* The hand-added Amazon links, on the same daily pass as the catalogue's.
      They are the only thing on this site nothing else ever revisits. */
   cron.schedule(

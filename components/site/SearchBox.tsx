@@ -19,6 +19,10 @@ type ProductSuggestion = {
 };
 type Answer = {
   query: string;
+  /* What was actually searched, when a near miss answered where the words as
+     typed found nothing. See src/searchFallback.js. */
+  searched_query?: string;
+  corrected_from?: string | null;
   terms: TermSuggestion[];
   categories: CategorySuggestion[];
   products: ProductSuggestion[];
@@ -332,6 +336,12 @@ export function SearchBox({
                   )),
                 )}
               </>
+            )}
+
+            {typed.length >= MIN_QUERY && answer?.corrected_from && (
+              <li className="px-3 pb-1 pt-3 text-xs text-fg-subtle">
+                {copy("app.search.correctedTo", { corrected: answer.searched_query || "" })}
+              </li>
             )}
 
             {typed.length >= MIN_QUERY && answer && answer.terms.length > 0 && (

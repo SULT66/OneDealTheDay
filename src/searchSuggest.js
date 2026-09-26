@@ -209,6 +209,20 @@ function suggestTerms(index, query, { limit = MAX_TERMS } = {}) {
     ...matchesIn(index.keywords || new Map(), typed, "keyword"),
     ...matchesIn(index.titles || new Map(), typed, "catalogue"),
   ];
+
+  /*
+   * What people have been asking for goes first.
+   *
+   * Everything above ranks a phrase by how much of it we hold, which is a fact
+   * about the warehouse rather than about the shopper. Once the search log has
+   * something to say, it says it louder: a phrase eleven people looked for
+   * beats a fuller shelf nobody asks about. Sorting is stable, so phrases
+   * nobody has searched keep the order they already had.
+   * See src/searchQueries.js.
+   */
+  for (const candidate of pool) candidate.demand = index.demand?.get(candidate.phrase) || 0;
+  pool.sort((left, right) => right.demand - left.demand);
+
   const seen = new Set();
   return pool
     .filter(candidate => !isRedundant(candidate, pool))

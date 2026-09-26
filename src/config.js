@@ -350,6 +350,10 @@ module.exports = {
   affiliateTagConfigured: markets.some(code => Boolean(affiliateTagForMarket(code))),
   provider,
   requestedProvider: provider,
+  /* How many of the phrases shoppers could not find a refresh may go looking
+     for. Every one spends a slice of the same daily allowance the catalogue
+     itself needs, so the default is small. See src/searchQueries.js. */
+  demandKeywordLimit: Math.max(0, Math.min(10, Number(process.env.DEMAND_KEYWORD_LIMIT ?? 3))),
   enabledSourceIds: uniqueSourceIds,
   affiliateFeeds,
   siteMode: "live",

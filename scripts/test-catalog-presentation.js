@@ -287,7 +287,7 @@ assert(
 );
 const searchPage = read("app", "[market]", "search", "page.tsx");
 assert(
-  /searchDeals\(market, filter\)/.test(searchPage),
+  /searchDeals\(market, filter[,)]/.test(searchPage),
   "the search page is back to filtering the whole catalogue by substring",
 );
 /* "Clear all" sat beside chips that included the query, and cleared all but

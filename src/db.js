@@ -246,6 +246,14 @@ db.exec(`
     user_agent TEXT NOT NULL DEFAULT '',
     FOREIGN KEY(product_id) REFERENCES products(id)
   );
+  CREATE TABLE IF NOT EXISTS search_queries(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    market TEXT NOT NULL DEFAULT 'us',
+    query TEXT NOT NULL,
+    normalized TEXT NOT NULL,
+    result_count INTEGER NOT NULL DEFAULT 0,
+    searched_at TEXT NOT NULL
+  );
   CREATE TABLE IF NOT EXISTS price_history(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     product_id INTEGER NOT NULL,
@@ -1023,6 +1031,8 @@ db.exec(`
   CREATE UNIQUE INDEX IF NOT EXISTS idx_clicks_event_id ON clicks(event_id) WHERE event_id IS NOT NULL AND event_id<>'';
   CREATE INDEX IF NOT EXISTS idx_clicks_session_date ON clicks(session_id, clicked_at DESC);
   CREATE INDEX IF NOT EXISTS idx_analytics_events_type_date ON analytics_events(event_type, occurred_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_search_queries_market_date ON search_queries(market, searched_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_search_queries_missing ON search_queries(market, result_count, searched_at DESC);
   CREATE INDEX IF NOT EXISTS idx_analytics_events_session_date ON analytics_events(session_id, occurred_at DESC);
   CREATE INDEX IF NOT EXISTS idx_analytics_events_product_date ON analytics_events(product_id, occurred_at DESC);
   CREATE INDEX IF NOT EXISTS idx_assistant_feedback_created ON shopping_assistant_feedback(created_at DESC);
