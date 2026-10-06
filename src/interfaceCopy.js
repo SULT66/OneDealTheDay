@@ -602,3 +602,8 @@ Object.assign(interfaceCopy, {
   "Searching {count} shops": { es: "Buscando en {count} tiendas", fr: "Recherche dans {count} boutiques", de: "Suche in {count} Shops" },
   "Found {count}, checking prices and stock": { es: "Encontradas {count}, comprobando precios y disponibilidad", fr: "{count} trouvées, vérification des prix et des stocks", de: "{count} gefunden, Preise und Verfügbarkeit werden geprüft" }
 });
+
+Object.assign(interfaceCopy, {
+  "Searching…": { es: "Buscando…", fr: "Recherche…", de: "Suche…" },
+  "No conversations mention {query}.": { es: "Ninguna conversación menciona «{query}».", fr: "Aucune conversation ne mentionne « {query} ».", de: "Keine Unterhaltung erwähnt „{query}“." }
+});

@@ -995,3 +995,20 @@ Object.assign(appCopy.de, {
 });
 
 module.exports = { appCopy };
+
+Object.assign(appCopy.en, {
+  "app.drop.emptyTitle": "No freshly checked drop today",
+  "app.drop.emptyText": "The selected drop does not have a verified price check for today. Browse the catalog while we wait for a fresh check."
+});
+Object.assign(appCopy.es, {
+  "app.drop.emptyTitle": "Aún no hay oferta verificada hoy",
+  "app.drop.emptyText": "La oferta seleccionada no tiene una verificación de precio de hoy. Puedes explorar el catálogo mientras esperamos una nueva comprobación."
+});
+Object.assign(appCopy.fr, {
+  "app.drop.emptyTitle": "Aucune offre vérifiée aujourd’hui",
+  "app.drop.emptyText": "L’offre sélectionnée n’a pas de vérification du prix datant d’aujourd’hui. Consultez le catalogue en attendant une nouvelle vérification."
+});
+Object.assign(appCopy.de, {
+  "app.drop.emptyTitle": "Heute noch kein frisch geprüftes Angebot",
+  "app.drop.emptyText": "Für das ausgewählte Angebot liegt heute noch keine Preisprüfung vor. Bis zur nächsten Prüfung können Sie den Katalog durchsuchen."
+});

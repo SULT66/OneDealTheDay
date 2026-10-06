@@ -874,8 +874,8 @@ function ConversationSidebar({
           <p className="px-3 pt-3 text-sm leading-relaxed text-fg-muted">
             {hasQuery
               ? searching
-                ? "Searching…"
-                : `No conversations mention “${query.trim()}”.`
+                ? ui("Searching…")
+                : ui("No conversations mention {query}.", { query: query.trim() })
               : ui("Your conversations will appear here.")}
           </p>
         ) : (
@@ -1511,7 +1511,7 @@ export function DeliaPanel() {
                         onClick={() => ask(ui(e))}
                         className="w-full cursor-pointer rounded-2xl border border-border px-4 py-3 text-left text-sm text-fg-muted transition-colors hover:bg-bg hover:text-fg disabled:cursor-default disabled:opacity-40"
                       >
-                        {e}
+                        {ui(e)}
                       </button>
                     </li>
                   ))}
