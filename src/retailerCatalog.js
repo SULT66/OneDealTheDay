@@ -127,6 +127,11 @@ const RETAILERS = Object.freeze([
     maxCatalogProducts:75,
     feedPolicy:{spreadAcrossFeed:true, excludeTitleTerms:["the being game"]}
   },
+  {
+    id:"silver-brush", name:"Silver Brush", network:"Awin", markets:["us"],
+    maxCatalogProducts:100,
+    feedPolicy:{spreadAcrossFeed:true, excludeTitleTerms:["not sold separately", "not for sale", "non-delivery"]}
+  },
   {id:"currys", name:"Currys", network:"Awin", markets:["uk"]},
   {id:"ao", name:"AO.com", network:"Awin", markets:["uk"]},
   {id:"fnac", name:"Fnac", network:"Awin", markets:["fr"]},
