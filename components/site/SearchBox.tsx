@@ -298,7 +298,17 @@ export function SearchBox({
             onFocus={() => setOpen(true)}
             onKeyDown={onKeyDown}
             placeholder={label}
+            /* Chrome keeps its own list of things typed into a field with this
+               name and offers them in a little box of its own, with its own
+               border around the input — which on a search box that has real
+               suggestions underneath reads as the site showing one stray word.
+               Off here, along with the phone keyboard's helpfulness: a product
+               name is not a sentence and should not be capitalised, corrected
+               or underlined in red. */
             autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck={false}
             role="combobox"
             aria-expanded={showDropdown}
             aria-controls={listId}
