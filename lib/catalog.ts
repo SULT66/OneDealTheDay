@@ -244,9 +244,24 @@ export function dealIdFromParam(value: string): string {
  */
 const SEARCH_LIMIT = 100;
 
-export async function searchDeals(marketCode: string, filter: DealFilter): Promise<Deal[]> {
+/**
+ * What a search found, and whether it is the search that was asked for.
+ *
+ * `correctedFrom` carries what the shopper typed when nothing matched it and
+ * a near miss did — a letter out of place, or a word that means the same thing
+ * on the other side of an ocean. The page has to say so: a search box that
+ * quietly answers a different question is worse than one that finds nothing.
+ * See src/searchFallback.js.
+ */
+export type SearchOutcome = { deals: Deal[]; correction: { from: string; to: string } | null };
+
+export async function searchDeals(
+  marketCode: string,
+  filter: DealFilter,
+  { exact = false }: { exact?: boolean } = {},
+): Promise<SearchOutcome> {
   const query = String(filter.query || "").trim();
-  if (!query) return getDeals(marketCode, filter);
+  if (!query) return { deals: await getDeals(marketCode, filter), correction: null };
 
   const params = new URLSearchParams({
     q: query,
@@ -259,6 +274,8 @@ export async function searchDeals(marketCode: string, filter: DealFilter): Promi
   if (filter.category) params.set("category", filter.category);
   if (filter.minPrice != null) params.set("min_price", String(filter.minPrice));
   if (filter.maxPrice != null) params.set("max_price", String(filter.maxPrice));
+  /* The shopper asked for exactly these words — offer no correction. */
+  if (exact) params.set("exact", "1");
   const lang = await languageParam();
   if (lang) params.set("lang", lang);
 
@@ -266,7 +283,7 @@ export async function searchDeals(marketCode: string, filter: DealFilter): Promi
   if (!res.ok) {
     throw new Error(`Search failed for "${query}" in "${marketCode}" (${res.status}).`);
   }
-  const body = (await res.json()) as { products?: RawProduct[] };
+  const body = (await res.json()) as { products?: RawProduct[]; corrected_from?: string | null; search_query?: string };
   const found = (body.products ?? []).map((product, index) => ({
     ...adaptProduct(product),
     rank: index + 1,
@@ -274,13 +291,19 @@ export async function searchDeals(marketCode: string, filter: DealFilter): Promi
 
   /* The query has been answered; everything else is the filter panel. */
   const { query: _query, ...rest } = filter;
+  const correction = body.corrected_from && body.search_query
+    ? { from: String(body.corrected_from), to: String(body.search_query) }
+    : null;
   /*
    * The shopper's sort if they picked one, and otherwise the order the backend
    * ranked these in. It used to fall through to sortDeals' own default of
    * "score", which threw the ranking away on every search nobody had touched
    * the sort control on — that is to say, on every search from an ad.
    */
-  return sortDeals(applyFilter(found, rest), filter.sort ?? "relevance");
+  return {
+    deals: sortDeals(applyFilter(found, rest), filter.sort ?? "relevance"),
+    correction,
+  };
 }
 
 type RawComparable = {

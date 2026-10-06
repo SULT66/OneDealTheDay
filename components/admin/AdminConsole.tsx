@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { ShopIcons } from "./ShopIcons";
 import { Numbers } from "./Numbers";
+import { SearchDemand } from "./SearchDemand";
 import { Weekly } from "./Weekly";
 import { isInternalBrowser, setInternalBrowser } from "@/lib/analyticsSession";
 import { AmazonPicks } from "./AmazonPicks";
@@ -375,6 +376,15 @@ export function AdminConsole() {
         * the last of four steps and none of the three before it.
         */}
       <TabPanel id="weekly" active={tab}>
+      <Card className="mt-6">
+        <Legend>What people searched for</Legend>
+        <p className="mt-1 max-w-prose text-sm leading-relaxed text-fg-muted">
+          The words visitors typed into the search box, and the ones that came
+          back with nothing. The second list is a shopping list: somebody
+          wanted that here and left without it.
+        </p>
+        <SearchDemand adminKey={adminKey} />
+      </Card>
       <Card className="mt-6">
         <Legend>Week by week</Legend>
         <p className="mt-1 max-w-prose text-sm leading-relaxed text-fg-muted">

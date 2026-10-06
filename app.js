@@ -45,7 +45,11 @@ const { coverage: retailerCoverage } = require("./src/retailerCatalog");
 const { recalculateCatalog } = require("./src/catalogRecalculation");
 const { TAXONOMY_VERSION } = require("./src/catalogTaxonomy");
 const { RELEASE_ID } = require("./src/release");
-const { parseSearchOptions, searchCatalogProducts } = require("./src/catalogSearch");
+const { isUnavailable, parseSearchOptions, searchCatalogProducts } = require("./src/catalogSearch");
+const { buildSuggestIndex, suggestTerms } = require("./src/searchSuggest");
+const { rescueQuery } = require("./src/searchFallback");
+const { recordSearch, searchDemand } = require("./src/searchQueries");
+const { categoryLabel } = require("./src/i18n");
 const { storefrontUrl } = require("./src/storefrontLinks");
 const { applySearchIntent } = require("./src/searchIntent");
 const createExpressApp = express;
@@ -53,6 +57,10 @@ const CANONICAL_HOST = "www.onedailydrop.com";
 const AZURE_PRODUCTION_HOST = "onedealtheday-g3dme0aghzerc3a2.centralus-01.azurewebsites.net";
 const apiResponseCache = new Map();
 const searchCatalogCache = new Map();
+/* The catalogue's own vocabulary, per market. Built from the same rows the
+   search itself reads and thrown away as often, so the box can never propose a
+   word the results page has stopped carrying. See src/searchSuggest.js. */
+const suggestIndexCache = new Map();
 const cachedValue = key => {
   const entry = apiResponseCache.get(key);
   if (!entry || entry.expiresAt <= Date.now()) {
@@ -183,6 +191,135 @@ function expressWithHomepage(...args) {
     return res.set("X-ODD-Cache", "MISS").json(status);
   });
 
+  /* The rows a suggestion may be built from: what search itself would look
+     at, minus the listings it would then filter out as unavailable. Offering a
+     term that leads to an empty page is worse than offering nothing. */
+  const suggestIndexForMarket = marketCode => {
+    const cached = suggestIndexCache.get(marketCode);
+    if (cached && cached.expiresAt > Date.now()) return cached.index;
+    const index = buildSuggestIndex(searchRowsForMarket(marketCode).filter(row => !isUnavailable(row)));
+    /* What people have actually been asking for, so the box can rank by what
+       shoppers want rather than only by how much of a thing we happen to hold.
+       Read on the same five-minute clock as the vocabulary itself. */
+    const demand = searchDemand(db, {market:marketCode});
+    suggestIndexCache.set(marketCode, {index:{...index, demand}, expiresAt:Date.now() + 300000});
+    return suggestIndexCache.get(marketCode).index;
+  };
+
+  /* Whether a phrase would land on anything at all. The rescue uses it to
+     check its own suggestion before offering it, which is the difference
+     between a correction and a guess. */
+  const wouldFindSomething = (rows, phrase) =>
+    searchCatalogProducts(rows, parseSearchOptions({q:phrase, limit:1})).pagination.total > 0;
+
+  /* A dropdown thumbnail is forty pixels wide. eBay serves the same picture at
+     several sizes and the catalogue stores the largest, which is a megabyte of
+     photograph per row of a list that changes on every keystroke. */
+  const suggestThumbnail = url => String(url || "").replace(/\/s-l1600\.(jpe?g|png|webp)$/i, "/s-l500.$1");
+
+  /**
+   * What the search box shows while it is being typed into.
+   *
+   * Three kinds of answer, in the order they are useful: the words the
+   * catalogue actually uses, the aisles those words lead to, and the listings
+   * themselves — because a price and a photograph answer "do you even have
+   * this" faster than any number of results ever could.
+   *
+   * The listings come from the same searchCatalogProducts the results page
+   * calls, with the same options. The dropdown and the page it leads to cannot
+   * disagree, because there is only one search.
+   */
+  app.get("/api/search/suggest", (req, res) => {
+    const selectedMarket = normalizeMarket(req.query.market) || marketFromIp(req).code;
+    const language = resolveLanguage(req, res, selectedMarket);
+    const query = String(req.query.q || "").replace(/\s+/g, " ").trim().slice(0, 80);
+    res.set("X-Robots-Tag", "noindex, nofollow");
+    /* Typed on every keystroke, so it is cached briefly and privately: the
+       answer depends on the market and the language, both of which vary by
+       visitor. */
+    res.set("Cache-Control", "private, max-age=60");
+    const searchPath = marketPath(selectedMarket, "/search");
+    const emptyAnswer = {query, market:selectedMarket, terms:[], categories:[], products:[], total:0, all_url:searchPath};
+    /* One letter is not a question. */
+    if (query.length < 2) return res.json(emptyAnswer);
+
+    const cacheKey = `suggest:${selectedMarket}:${language}:${query.toLowerCase()}`;
+    const cached = cachedValue(cacheKey);
+    if (cached) return res.set("X-ODD-Cache", "HIT").json(cached);
+
+    let options;
+    try {
+      options = parseSearchOptions({q:query, limit:6});
+    } catch {
+      /* A half-typed filter is not an error worth showing anybody mid-word. */
+      return res.json(emptyAnswer);
+    }
+    const rows = searchRowsForMarket(selectedMarket);
+    const index = suggestIndexForMarket(selectedMarket);
+    let searched = query;
+    let result = searchCatalogProducts(rows, options);
+    let terms = suggestTerms(index, query);
+    let correctedFrom = null;
+    /*
+     * Nothing matched what was typed — so try the two commonest ways to miss
+     * by a hair before showing an empty box. The replacement has to be a
+     * phrase this catalogue can answer, and what was typed is still shown.
+     * See src/searchFallback.js.
+     */
+    if (!terms.length && !result.pagination.total) {
+      const rescue = rescueQuery(index, query, {hasResults:phrase => wouldFindSomething(rows, phrase)});
+      if (rescue) {
+        correctedFrom = query;
+        searched = rescue.query;
+        try {
+          options = parseSearchOptions({q:searched, limit:6});
+          result = searchCatalogProducts(rows, options);
+          terms = suggestTerms(index, searched);
+        } catch {
+          correctedFrom = null;
+          searched = query;
+        }
+      }
+    }
+    const products = result.products.map(product => {
+      const shown = presentProduct(localizeProduct(product, language), language);
+      return {
+        id:product.id,
+        title:shown.title || product.title,
+        price:shown.display_current_price,
+        was:shown.display_original_price,
+        save:shown.display_save_label,
+        retailer:product.retailer_name || product.source,
+        image:suggestThumbnail(product.image_url),
+        url:marketPath(selectedMarket, `/deal/${product.id}`)
+      };
+    });
+    const suggestions = terms.map(term => ({
+      term:term.phrase,
+      count:term.count,
+      url:`${searchPath}?q=${encodeURIComponent(term.phrase)}`
+    }));
+    const categories = result.facets.categories.slice(0, 3).map(entry => ({
+      value:entry.value,
+      label:categoryLabel(entry.value, language),
+      count:entry.count,
+      url:`${searchPath}?q=${encodeURIComponent(searched)}&category=${encodeURIComponent(entry.value)}`
+    }));
+    const payload = cacheValue(cacheKey, {
+      query,
+      /* What was actually searched, when it is not what was typed. */
+      searched_query:searched,
+      corrected_from:correctedFrom,
+      market:selectedMarket,
+      terms:suggestions,
+      categories,
+      products,
+      total:result.pagination.total,
+      all_url:`${searchPath}?q=${encodeURIComponent(searched)}`
+    }, 60000);
+    return res.set("X-ODD-Cache", "MISS").json(payload);
+  });
+
   app.get("/api/search", (req, res) => {
     const selectedMarket = normalizeMarket(req.query.market) || marketFromIp(req).code;
     const language = resolveLanguage(req, res, selectedMarket);
@@ -195,20 +332,66 @@ function expressWithHomepage(...args) {
       res.set("X-Robots-Tag", "noindex, nofollow");
       return res.status(400).json({error:error.message});
     }
-    const cacheKey = `search:${selectedMarket}:${language}:${JSON.stringify({options, originalQuery:interpreted.intent.originalQuery})}`;
+    /* A shopper who insisted on their own words must not be handed the
+       corrected answer somebody else's search left in the cache. */
+    const exact = String(req.query.exact || "") === "1";
+    const cacheKey = `search:${selectedMarket}:${language}:${JSON.stringify({options, exact, originalQuery:interpreted.intent.originalQuery})}`;
     const cached = cachedValue(cacheKey);
     if (cached) {
       res.set("X-Robots-Tag", "noindex, nofollow");
       res.set("Cache-Control", "private, max-age=30, stale-while-revalidate=120");
       return res.set("X-ODD-Cache", "HIT").json(cached);
     }
-    const result = searchCatalogProducts(rows, options);
+    let result = searchCatalogProducts(rows, options);
+    let correctedFrom = null;
+    /*
+     * An empty results page is read as an empty shop, and it almost never is
+     * one — the query missed by a letter, or by a word that means the same
+     * thing on the other side of an ocean. The replacement is always a phrase
+     * this catalogue can answer, and the page says what it did with it.
+     */
+    if (options.query && !exact && !result.pagination.total) {
+      const rescue = rescueQuery(suggestIndexForMarket(selectedMarket), options.query, {
+        hasResults:phrase => wouldFindSomething(rows, phrase)
+      });
+      if (rescue) {
+        try {
+          const rescued = parseSearchOptions({...interpreted.query, q:rescue.query});
+          const attempt = searchCatalogProducts(rows, rescued);
+          if (attempt.pagination.total) {
+            correctedFrom = options.query;
+            options = rescued;
+            result = attempt;
+          }
+        } catch {
+          /* A rescue that cannot be parsed is simply not a rescue. */
+        }
+      }
+    }
+    /*
+     * What was asked for, kept as words and counts and nothing else.
+     *
+     * Recorded against what the shopper typed rather than what was searched,
+     * and with the number of results they ended up seeing — so a rescued typo
+     * does not read as a hole in the catalogue, and a phrase that genuinely
+     * found nothing does. Page two of the same search is the same search.
+     * See src/searchQueries.js.
+     */
+    if (options.page === 1) {
+      recordSearch(db, {
+        market:selectedMarket,
+        query:interpreted.intent.originalQuery || correctedFrom || options.query,
+        resultCount:result.pagination.total
+      });
+    }
     const products = result.products.map(product => presentProduct(localizeProduct(product, language), language));
     res.set("X-Robots-Tag", "noindex, nofollow");
     res.set("Cache-Control", "private, max-age=30, stale-while-revalidate=120");
     const payload = cacheValue(cacheKey, {
       query:interpreted.intent.originalQuery || options.query,
       search_query:options.query,
+      /* Set when the query as typed found nothing and this one did. */
+      corrected_from:correctedFrom,
       parsed_intent:{
         inferred:interpreted.intent.inferred,
         category:interpreted.intent.category || null,

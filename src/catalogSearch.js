@@ -204,6 +204,7 @@ function searchCatalogProducts(rows, options) {
 
 module.exports = {
   DEFAULT_PAGE_SIZE,
+  isUnavailable,
   MAX_PAGE_SIZE,
   SORTS,
   parseSearchOptions,

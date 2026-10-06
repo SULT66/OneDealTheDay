@@ -4,6 +4,7 @@ const { detectBrand, normalizeBrand, slugifyBrand } = require("./brandDetector")
 const { priceIntelligence } = require("./priceIntelligence");
 const { createPriceSnapshotWriter } = require("./priceSnapshots");
 const { searchAll } = require("./providers/registry");
+const { demandKeywords } = require("./searchQueries");
 const activeMarketRefreshes = new Map();
 
 function textValue(value) {
@@ -214,9 +215,21 @@ function queueDistributionPackets(marketCode, dropDate, selected, updatedAt) {
 }
 
 async function refreshMarket(config, marketCode, options = {}) {
+  const configuredKeywords = config.marketConfig(marketCode).searchKeywords;
+  /*
+   * What shoppers asked for and we did not have.
+   *
+   * A search that comes back empty is a request, and answering it by hand
+   * meant somebody reading a log nobody kept. At most three a run, each asked
+   * for repeatedly, each short enough to be a thing a shop sells — every
+   * keyword spends a slice of eBay's daily allowance that the catalogue
+   * refresh is already spending. See src/searchQueries.js.
+   */
+  const wanted = demandKeywords(db, {market:marketCode, limit:config.demandKeywordLimit})
+    .filter(keyword => !configuredKeywords.some(existing => String(existing).toLowerCase() === keyword));
   const selectedMarket = {
     ...config.marketConfig(marketCode),
-    searchKeywords: config.marketConfig(marketCode).searchKeywords
+    searchKeywords: [...configuredKeywords, ...wanted]
   };
   const started = new Date().toISOString();
   const runId = Number(db.prepare(
@@ -241,6 +254,9 @@ async function refreshMarket(config, marketCode, options = {}) {
   console.log(
     `[refresh] ${selectedMarket.code}: ${selectedMarket.searchKeywords.length} search terms from ${keywordSource} — ${selectedMarket.searchKeywords.join(", ")}`
   );
+  if (wanted.length) {
+    console.log(`[refresh] ${selectedMarket.code}: also looking for what shoppers could not find — ${wanted.join(", ")}`);
+  }
 
   try {
     const loaded = await loadProducts(config, selectedMarket, options);
