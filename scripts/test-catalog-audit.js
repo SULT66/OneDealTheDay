@@ -23,3 +23,19 @@ assert.strictEqual(isCheckedToday('2026-10-05T23:30:00Z', 'de', new Date('2026-1
 assert.strictEqual(isCheckedToday('2026-10-05T01:00:00Z', 'us', new Date('2026-10-06T01:00:00Z')), false);
 assert.strictEqual(isCheckedToday('bad date', 'us'), false);
 console.log('Catalog audit regressions passed: scoped facets, meaningful titles and related products, stock labels, local-day freshness.');
+
+const Database = require('better-sqlite3');
+const { refreshCatalogTaxonomy } = require('../src/catalogRecalculation');
+const { TAXONOMY_VERSION } = require('../src/catalogTaxonomy');
+const db = new Database(':memory:');
+db.exec("CREATE TABLE products (id INTEGER PRIMARY KEY,title TEXT,category TEXT,source TEXT,normalized_category TEXT,taxonomy_version TEXT,status TEXT,score REAL); CREATE TABLE daily_drops (product_id INTEGER,rank INTEGER)");
+db.prepare("INSERT INTO products VALUES (?,?,?,?,?,?,?,?)").run(1,'Silver Brush artist paintbrush','Tools','feed-silver-brush','Tools & DIY','catalog-taxonomy-v5','published',84);
+db.prepare("INSERT INTO products VALUES (?,?,?,?,?,?,?,?)").run(2,'closeout - $3','Tools','feed-giftlab','Tools & DIY','catalog-taxonomy-v5','published',70);
+db.exec('INSERT INTO daily_drops VALUES (1,1)');
+assert.strictEqual(refreshCatalogTaxonomy(db), 2);
+assert.deepStrictEqual(db.prepare('SELECT normalized_category,taxonomy_version,status,score FROM products WHERE id=1').get(), { normalized_category: 'Arts & Crafts', taxonomy_version: TAXONOMY_VERSION, status: 'published', score: 84 });
+assert.strictEqual(db.prepare('SELECT status FROM products WHERE id=2').get().status, 'archived');
+assert.strictEqual(db.prepare('SELECT rank FROM daily_drops WHERE product_id=1').get().rank, 1);
+assert.strictEqual(refreshCatalogTaxonomy(db), 0, 'category migration is idempotent');
+db.close();
+console.log('Fast taxonomy migration preserves scores and daily selection order.');
