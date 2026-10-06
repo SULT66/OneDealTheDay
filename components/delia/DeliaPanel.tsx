@@ -1,4 +1,5 @@
 "use client";
+import { useUiCopy } from "@/components/site/CopyProvider";
 
 import Link from "next/link";
 import { AffiliateNotice } from "@/components/site/AffiliateNotice";
@@ -144,6 +145,7 @@ const newConversationKey = () =>
  * milestones and for a browser that could not read the stream.
  */
 function SearchProgress({ progress }: { progress: DeliaProgress | null }) {
+  const ui = useUiCopy();
   const [seconds, setSeconds] = useState(0);
 
   useEffect(() => {
@@ -169,22 +171,22 @@ function SearchProgress({ progress }: { progress: DeliaProgress | null }) {
          for a monitor and reads "looking for a mirror" can stop right there. */
       if (product) {
         return progress.budget_max
-          ? `Looking for a ${product} under ${progress.budget_max}`
-          : `Looking for a ${product}`;
+          ? ui("Looking for {product} under {budget}", { product, budget: progress.budget_max })
+          : ui("Looking for {product}", { product });
       }
       return "Working out what you need";
     }
     if (progress.stage === "catalog") {
-      return progress.found ? `Found ${progress.found} of our own picks` : "Searching the shops";
+      return progress.found ? ui("Found {count} of our own picks", { count: progress.found }) : "Searching the shops";
     }
     /* A plan with no named shops is an open search, and "looking in 0 shops"
        would be worse than saying nothing about the number. */
     if (progress.stage === "searching") {
-      return progress.shops ? `Searching ${progress.shops} shops` : "Searching the shops";
+      return progress.shops ? ui("Searching {count} shops", { count: progress.shops }) : "Searching the shops";
     }
     if (progress.stage === "checking") {
       return progress.found
-        ? `Found ${progress.found}, checking prices and stock`
+        ? ui("Found {count}, checking prices and stock", { count: progress.found })
         : "Checking prices and stock";
     }
     return fromClock;
@@ -192,7 +194,7 @@ function SearchProgress({ progress }: { progress: DeliaProgress | null }) {
 
   return (
     <span className="text-xs text-fg-subtle" aria-live="polite">
-      {label}
+      {ui(label)}
     </span>
   );
 }
@@ -226,6 +228,7 @@ function OfferRow({
   position: number;
   priceUnconfirmed?: boolean;
 }) {
+  const ui = useUiCopy();
   const inCatalog = rec.source_type === "catalog" && Boolean(rec.catalog_product_id);
   /*
    * A web result leaves through our own redirect when the server signed one.
@@ -268,7 +271,7 @@ function OfferRow({
               pick is also the cheapest, and that it is not new. */}
           {rec.position_role === "best_overall" && rec.lowest_price && (
             <span className="shrink-0 rounded-full bg-bg px-1.5 py-px text-[0.65rem] font-semibold text-fg-muted">
-              {rec.lowest_new ? "Lowest new price" : "Lowest price"}
+              {rec.lowest_new ? ui("Lowest new price") : ui("Lowest price")}
             </span>
           )}
           {rec.condition && CONDITION_LABEL[rec.condition] && (
@@ -290,7 +293,7 @@ function OfferRow({
       <span className="flex shrink-0 items-center gap-1 pt-0.5 text-sm font-bold text-fg tnum">
         {price || (
           <span className="text-xs font-medium text-fg-subtle">
-            {priceUnconfirmed ? "Price at the shop" : "No price"}
+            {priceUnconfirmed ? ui("Price at the shop") : ui("No price")}
           </span>
         )}
         {!inCatalog && <ArrowUpRight size={13} weight="bold" aria-hidden="true" />}
@@ -329,7 +332,7 @@ function OfferRow({
       </div>
       {otherOffers.length > 0 && (
         <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 pl-7 text-xs text-fg-muted">
-          <span>Also at</span>
+          <span>{ui("Also at")}</span>
           {otherOffers.map((offer) => {
             const otherPrice =
               offer.price_value != null
@@ -397,6 +400,7 @@ function OfferGroups({
   market: string;
   onClose: () => void;
 }) {
+  const ui = useUiCopy();
   const [expanded, setExpanded] = useState(false);
   const shown = expanded ? recs : recs.slice(0, FIRST_SHOWN);
   const hiddenCount = recs.length - FIRST_SHOWN;
@@ -413,7 +417,7 @@ function OfferGroups({
             <li key={`rec-${rec.url}-${i}`}>
               {startsGroup && (
                 <p className={cn("px-0.5 pb-1.5 text-xs font-semibold text-fg-subtle", i > 0 && "pt-2")}>
-                  {heading}
+                  {ui(heading)}
                 </p>
               )}
               <OfferRow rec={rec} market={market} onClose={onClose} position={i + 1} />
@@ -428,7 +432,7 @@ function OfferGroups({
           aria-expanded={expanded}
           className="cursor-pointer rounded-full px-1 text-sm font-semibold text-fg-muted underline-offset-4 transition-colors hover:text-fg hover:underline"
         >
-          {expanded ? "Show fewer" : `Show ${hiddenCount} more ${hiddenCount === 1 ? "option" : "options"}`}
+          {expanded ? ui("Show fewer") : `Show ${hiddenCount} more ${hiddenCount === 1 ? "option" : "options"}`}
         </button>
       )}
     </div>
@@ -443,6 +447,7 @@ function OfferGroups({
  * the order backwards. An unsigned tap raises the prompt instead.
  */
 function SaveOfferButton({ rec, price }: { rec: DeliaRecommendation; price: string }) {
+  const ui = useUiCopy();
   const saved = useSavedOffers();
   if (!saved) return null;
   const isSaved = saved.isSaved(rec.url);
@@ -463,7 +468,7 @@ function SaveOfferButton({ rec, price }: { rec: DeliaRecommendation; price: stri
       }
       aria-pressed={isSaved}
       aria-label={isSaved ? `Remove ${rec.title} from saved` : `Save ${rec.title}`}
-      title={isSaved ? "Saved" : "Save for later"}
+      title={isSaved ? ui("Saved") : ui("Save for later")}
       className={cn(
         "mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-colors",
         isSaved ? "text-lime-deep" : "text-fg-subtle hover:bg-surface hover:text-fg",
@@ -489,6 +494,7 @@ function SaveOfferButton({ rec, price }: { rec: DeliaRecommendation; price: stri
  * what was asked.
  */
 function UserBubble({ children }: { children: React.ReactNode }) {
+  const ui = useUiCopy();
   return (
     <div className="flex justify-end">
       <p className="max-w-[80%] whitespace-pre-wrap wrap-anywhere rounded-3xl bg-bg px-4 py-2.5 text-[0.95rem] leading-relaxed text-fg">
@@ -499,6 +505,7 @@ function UserBubble({ children }: { children: React.ReactNode }) {
 }
 
 function DeliaMark() {
+  const ui = useUiCopy();
   return (
     <span className="mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-lime text-ink">
       <Sparkle size={14} weight="fill" aria-hidden="true" />
@@ -530,6 +537,7 @@ function DeliaExchange({
   onFeedback: (type: "helpful" | "not_helpful") => void;
   disabled: boolean;
 }) {
+  const ui = useUiCopy();
   // When there are two questions, answering one used to fire the request
   // immediately, taking only that answer and leaving the other question
   // unanswered. Two questions now select, and wait for both before sending
@@ -585,8 +593,7 @@ function DeliaExchange({
           result.messageSource === "delia" &&
           result.recommendations.length > 0 && (
             <p className="text-xs font-medium text-fg-muted">
-              Nothing matched exactly, so these are the closest I found.
-            </p>
+              {ui("Nothing matched exactly, so these are the closest I found.")}</p>
           )}
 
         {result.recommendations.length > 0 && (
@@ -614,7 +621,7 @@ function DeliaExchange({
         {(result.clarificationPrompts.length > 0 || result.clarifyingQuestions.length > 0) && (
           <div className="space-y-3">
             {result.recommendations.length > 0 && (
-              <p className="px-0.5 text-xs font-semibold text-fg-subtle">Narrow it down</p>
+              <p className="px-0.5 text-xs font-semibold text-fg-subtle">{ui("Narrow it down")}</p>
             )}
 
             {result.clarificationPrompts.map((prompt, i) => (
@@ -660,8 +667,7 @@ function DeliaExchange({
                 }
                 className="inline-flex items-center gap-1.5 rounded-full bg-lime px-4 py-2 text-sm font-semibold text-ink transition-opacity hover:opacity-88 disabled:cursor-default disabled:opacity-40"
               >
-                Continue
-                <ArrowRight size={14} weight="bold" aria-hidden="true" />
+                {ui("Continue")}<ArrowRight size={14} weight="bold" aria-hidden="true" />
               </button>
             )}
 
@@ -679,8 +685,7 @@ function DeliaExchange({
                 onClick={onSkipClarification}
                 className="block text-sm font-semibold text-fg-muted underline underline-offset-4 transition-colors hover:text-fg disabled:cursor-default disabled:opacity-40"
               >
-                Just show me options
-              </button>
+                {ui("Just show me options")}</button>
             )}
 
             {result.clarificationPrompts.length === 0 && (
@@ -722,7 +727,7 @@ function DeliaExchange({
           >
             <span className="min-w-0 flex-1">
               <span className="block text-sm font-medium text-fg">{result.followUp}</span>
-              <span className="mt-0.5 block text-xs text-fg-subtle">Answer to narrow it down</span>
+              <span className="mt-0.5 block text-xs text-fg-subtle">{ui("Answer to narrow it down")}</span>
             </span>
           </button>
         )}
@@ -734,8 +739,8 @@ function DeliaExchange({
             type="button"
             disabled={feedbackGiven}
             onClick={() => onFeedback("helpful")}
-            aria-label="This was helpful"
-            title={feedbackGiven ? "Thanks for the feedback" : "Helpful"}
+            aria-label={ui("This was helpful")}
+            title={feedbackGiven ? ui("Thanks for the feedback") : ui("Helpful")}
             className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg text-fg-subtle transition-colors hover:bg-bg hover:text-fg disabled:cursor-default disabled:opacity-40"
           >
             <ThumbsUp size={16} aria-hidden="true" />
@@ -744,8 +749,8 @@ function DeliaExchange({
             type="button"
             disabled={feedbackGiven}
             onClick={() => onFeedback("not_helpful")}
-            aria-label="This was not helpful"
-            title={feedbackGiven ? "Thanks for the feedback" : "Not helpful"}
+            aria-label={ui("This was not helpful")}
+            title={feedbackGiven ? ui("Thanks for the feedback") : ui("Not helpful")}
             className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg text-fg-subtle transition-colors hover:bg-bg hover:text-fg disabled:cursor-default disabled:opacity-40"
           >
             <ThumbsDown size={16} aria-hidden="true" />
@@ -822,6 +827,7 @@ function ConversationSidebar({
   /* Present when the sidebar is an overlay that can be dismissed. */
   onClose?: () => void;
 }) {
+  const ui = useUiCopy();
   const groups = groupByRecency(conversations);
   const hasQuery = query.trim().length > 0;
 
@@ -834,13 +840,12 @@ function ConversationSidebar({
           className="inline-flex h-10 flex-1 cursor-pointer items-center gap-2 rounded-xl px-3 text-sm font-semibold text-fg transition-colors hover:bg-surface"
         >
           <NotePencil size={18} aria-hidden="true" />
-          New chat
-        </button>
+          {ui("New chat")}</button>
         {onClose && (
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close conversations"
+            aria-label={ui("Close conversations")}
             className="inline-flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-xl text-fg-muted transition-colors hover:bg-surface hover:text-fg"
           >
             <X size={18} aria-hidden="true" />
@@ -851,12 +856,12 @@ function ConversationSidebar({
       <div className="px-3 pb-2 pt-2">
         <label className="flex h-10 items-center gap-2 rounded-xl border border-border bg-surface px-3 transition-colors focus-within:border-fg-subtle">
           <MagnifyingGlass size={16} className="shrink-0 text-fg-subtle" aria-hidden="true" />
-          <span className="sr-only">Search conversations</span>
+          <span className="sr-only">{ui("Search conversations")}</span>
           <input
             type="search"
             value={query}
             onChange={(event) => onQuery(event.target.value)}
-            placeholder="Search chats"
+            placeholder={ui("Search chats")}
             autoComplete="off"
             spellCheck={false}
             className="focus-self h-full min-w-0 flex-1 bg-transparent text-sm text-fg outline-none placeholder:text-fg-subtle"
@@ -864,19 +869,19 @@ function ConversationSidebar({
         </label>
       </div>
 
-      <nav aria-label="Past conversations" className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
+      <nav aria-label={ui("Past conversations")} className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
         {conversations.length === 0 ? (
           <p className="px-3 pt-3 text-sm leading-relaxed text-fg-muted">
             {hasQuery
               ? searching
                 ? "Searching…"
                 : `No conversations mention “${query.trim()}”.`
-              : "Your conversations will appear here."}
+              : ui("Your conversations will appear here.")}
           </p>
         ) : (
           groups.map((group) => (
-            <div key={group.label} className="pt-3">
-              <p className="px-3 pb-1 text-xs font-semibold text-fg-subtle">{group.label}</p>
+            <div key={ui(group.label)} className="pt-3">
+              <p className="px-3 pb-1 text-xs font-semibold text-fg-subtle">{ui(group.label)}</p>
               <ul>
                 {group.items.map((conversation) => {
                   const active = conversation.conversation_key === activeKey;
@@ -906,7 +911,7 @@ function ConversationSidebar({
                         type="button"
                         onClick={() => onDelete(conversation.id, conversation.conversation_key)}
                         aria-label={`Delete ${conversation.title || "this conversation"}`}
-                        title="Delete"
+                        title={ui("Delete")}
                         className="absolute right-1 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 cursor-pointer items-center justify-center rounded-md text-fg-subtle transition-opacity hover:bg-bg hover:text-fg focus-visible:opacity-100 md:opacity-0 md:group-hover:opacity-100"
                       >
                         <Trash size={15} aria-hidden="true" />
@@ -924,6 +929,7 @@ function ConversationSidebar({
 }
 
 export function DeliaPanel() {
+  const ui = useUiCopy();
   const { open, seed, seedProductId, market, language, closeDelia } = useDelia();
 
   const [available, setAvailable] = useState<boolean | null>(null);
@@ -1361,8 +1367,7 @@ export function DeliaPanel() {
         className="flex cursor-text items-end gap-2 rounded-[28px] border border-border bg-surface py-2 pl-5 pr-2 shadow-card transition-colors focus-within:border-fg-subtle"
       >
         <label htmlFor="delia-input" className="sr-only">
-          Ask Delia
-        </label>
+          {ui("Ask Delia")}</label>
         <textarea
           id="delia-input"
           ref={inputRef}
@@ -1370,14 +1375,14 @@ export function DeliaPanel() {
           value={typed}
           onChange={(e) => setTyped(e.target.value)}
           onKeyDown={onComposerKey}
-          placeholder="Ask Delia anything"
+          placeholder={ui("Ask Delia anything")}
           autoComplete="off"
           className="focus-self max-h-[200px] min-h-10 flex-1 resize-none bg-transparent py-2 text-[0.95rem] leading-6 text-fg outline-none placeholder:text-fg-subtle"
         />
         <button
           type="submit"
           disabled={!typed.trim() || loading}
-          aria-label="Send question"
+          aria-label={ui("Send question")}
           className="mb-0.5 inline-flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full bg-lime text-ink transition-colors hover:bg-lime-deep disabled:cursor-default disabled:bg-border disabled:text-fg-subtle"
         >
           <ArrowUp size={18} weight="bold" aria-hidden="true" />
@@ -1419,7 +1424,7 @@ export function DeliaPanel() {
     <div className="fixed inset-0 z-50 flex items-stretch justify-center sm:items-center sm:p-4">
       <button
         type="button"
-        aria-label="Close Delia"
+        aria-label={ui("Close Delia")}
         onClick={closeDelia}
         /* On a phone the panel is the whole screen, and this layer is only
            what shows below it: under Safari's see-through bottom toolbar,
@@ -1458,8 +1463,8 @@ export function DeliaPanel() {
               <button
                 type="button"
                 onClick={() => setHistoryOpen(true)}
-                aria-label="Past conversations"
-                title="Past conversations"
+                aria-label={ui("Past conversations")}
+                title={ui("Past conversations")}
                 className={cn(iconButton, "md:hidden")}
               >
                 <SidebarSimple size={20} aria-hidden="true" />
@@ -1475,14 +1480,14 @@ export function DeliaPanel() {
               <button
                 type="button"
                 onClick={startNewConversation}
-                aria-label="New chat"
-                title="New chat"
+                aria-label={ui("New chat")}
+                title={ui("New chat")}
                 className={cn(iconButton, "md:hidden")}
               >
                 <NotePencil size={20} aria-hidden="true" />
               </button>
             )}
-            <button type="button" onClick={closeDelia} aria-label="Close Delia" className={iconButton}>
+            <button type="button" onClick={closeDelia} aria-label={ui("Close Delia")} className={iconButton}>
               <X size={20} aria-hidden="true" />
             </button>
           </div>
@@ -1491,21 +1496,19 @@ export function DeliaPanel() {
             {showEmpty ? (
               <div className="mx-auto flex min-h-full w-full max-w-3xl flex-col items-center justify-center px-4 pb-10 pt-2 sm:px-6">
                 <h3 className="text-balance text-center text-2xl font-bold tracking-tight text-fg sm:text-3xl">
-                  What are you shopping for?
-                </h3>
+                  {ui("What are you shopping for?")}</h3>
                 <p className="mt-2 max-w-md text-center text-sm leading-relaxed text-fg-muted">
-                  Tell Delia what you need and your budget.
-                </p>
+                  {ui("Tell Delia what you need and your budget.")}</p>
 
                 <div className="mt-7 w-full">{composer}</div>
 
                 <ul className="mt-4 grid w-full grid-cols-1 gap-2 sm:grid-cols-2">
                   {examples.map((e) => (
-                    <li key={e}>
+                    <li key={ui(e)}>
                       <button
                         type="button"
                         disabled={loading}
-                        onClick={() => ask(e)}
+                        onClick={() => ask(ui(e))}
                         className="w-full cursor-pointer rounded-2xl border border-border px-4 py-3 text-left text-sm text-fg-muted transition-colors hover:bg-bg hover:text-fg disabled:cursor-default disabled:opacity-40"
                       >
                         {e}
@@ -1520,8 +1523,7 @@ export function DeliaPanel() {
               <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6">
                 {available === false && (
                   <p role="alert" className="rounded-2xl bg-bg p-4 text-sm text-fg-muted">
-                    Delia isn&apos;t connected right now. Try again shortly.
-                  </p>
+                    {ui("Delia isn’t connected right now. Try again shortly.")}</p>
                 )}
 
                 {turns.length > 0 && (
@@ -1597,6 +1599,7 @@ export function DeliaPanel() {
  * taken away for not signing up.
  */
 function SaveNeedsAccount() {
+  const ui = useUiCopy();
   const saved = useSavedOffers();
   const { closeDelia } = useDelia();
   if (!saved?.promptToSignIn) return null;
@@ -1614,11 +1617,9 @@ function SaveNeedsAccount() {
         */
       className="fade-in absolute inset-x-4 bottom-44 z-10 mx-auto max-w-md rounded-2xl border border-border bg-surface p-4 shadow-card sm:inset-x-auto"
     >
-      <p className="text-sm font-semibold text-fg">Sign in to keep this</p>
+      <p className="text-sm font-semibold text-fg">{ui("Sign in to keep this")}</p>
       <p className="mt-1 text-sm leading-relaxed text-fg-muted">
-        Saved products stay with your account, so they are still here on your phone
-        tomorrow.
-      </p>
+        {ui("Saved products stay with your account, so they are still here on your phone tomorrow.")}</p>
       <div className="mt-3 flex items-center gap-2">
         <Link
           href={`/${saved.market}/account`}
@@ -1637,15 +1638,13 @@ function SaveNeedsAccount() {
           }}
           className="inline-flex h-10 items-center rounded-full bg-lime px-4 text-sm font-semibold text-ink transition-opacity hover:opacity-88"
         >
-          Create a free account
-        </Link>
+          {ui("Create a free account")}</Link>
         <button
           type="button"
           onClick={saved.dismissPrompt}
           className="inline-flex h-10 items-center rounded-full px-3 text-sm font-semibold text-fg-muted transition-colors hover:text-fg"
         >
-          Not now
-        </button>
+          {ui("Not now")}</button>
       </div>
     </div>
   );

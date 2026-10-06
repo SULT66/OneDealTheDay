@@ -1,4 +1,5 @@
 const geoip = require("geoip-lite");
+const { marketTimezones } = require("./marketCalendar");
 
 const definitions = {
   us: {
@@ -8,7 +9,7 @@ const definitions = {
     currency: "USD",
     locale: "en-US",
     hreflang: "en-US",
-    timezone: "America/New_York",
+    timezone: marketTimezones.us,
     ebayMarketplaceId: "EBAY_US",
     amazonDomain: "amazon.com",
     walmartDomain: "walmart.com",
@@ -21,7 +22,7 @@ const definitions = {
     currency: "CAD",
     locale: "en-CA",
     hreflang: "en-CA",
-    timezone: "America/Toronto",
+    timezone: marketTimezones.ca,
     ebayMarketplaceId: "EBAY_CA",
     amazonDomain: "amazon.ca",
     walmartDomain: "walmart.ca",
@@ -34,7 +35,7 @@ const definitions = {
     currency: "GBP",
     locale: "en-GB",
     hreflang: "en-GB",
-    timezone: "Europe/London",
+    timezone: marketTimezones.uk,
     ebayMarketplaceId: "EBAY_GB",
     amazonDomain: "amazon.co.uk",
     supportsWalmart: false
@@ -46,7 +47,7 @@ const definitions = {
     currency: "EUR",
     locale: "fr-FR",
     hreflang: "fr-FR",
-    timezone: "Europe/Paris",
+    timezone: marketTimezones.fr,
     ebayMarketplaceId: "EBAY_FR",
     amazonDomain: "amazon.fr",
     supportsWalmart: false
@@ -58,7 +59,7 @@ const definitions = {
     currency: "EUR",
     locale: "de-DE",
     hreflang: "de-DE",
-    timezone: "Europe/Berlin",
+    timezone: marketTimezones.de,
     ebayMarketplaceId: "EBAY_DE",
     amazonDomain: "amazon.de",
     supportsWalmart: false

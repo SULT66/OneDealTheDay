@@ -1,3 +1,4 @@
+const { relatedProducts } = require("./relatedProducts");
 const path = require("path");
 const fs = require("fs");
 const crypto = require("crypto");
@@ -2738,6 +2739,7 @@ app.get("/api/archive", (req, res) => {
   const marketConfig = market(selectedMarket) || requestMarket(req);
   const today = localDate(marketConfig.timezone);
   const days = Math.min(120, Math.max(1, Number(req.query.days) || 30));
+  const before = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.before || "")) ? String(req.query.before) : today;
 
   const rows = db.prepare(`
     SELECT p.*,d.drop_date,d.rank,d.score AS drop_score,d.score_model AS drop_score_model,
@@ -2754,7 +2756,7 @@ app.get("/api/archive", (req, res) => {
     WHERE d.market=? AND d.drop_date<? AND ${sourceSql("p")}
     ORDER BY d.drop_date DESC,d.rank
     LIMIT 400
-  `).all(selectedMarket, today);
+  `).all(selectedMarket, before);
 
   const groups = new Map();
   for (const row of rows) {
@@ -2873,18 +2875,7 @@ app.get("/api/products/:id", (req, res) => {
     ORDER BY COALESCE(ranking_score,score) DESC,score DESC,updated_at DESC
     LIMIT 80
   `).all(selectedMarket, product.normalized_category, product.id);
-  let related = uniqueProductsInOrder(relatedRows).slice(0, 12);
-  if (related.length < 12) {
-    const fallbackRows = db.prepare(`
-      SELECT * FROM products
-      WHERE market=? AND status='published' AND ${sourceSql()}
-        AND normalized_category<>? AND id<>?
-      ORDER BY COALESCE(ranking_score,score) DESC,score DESC,updated_at DESC
-      LIMIT 80
-    `).all(selectedMarket, product.normalized_category, product.id);
-    related = uniqueProductsInOrder([...related, ...fallbackRows])
-      .slice(0, 12);
-  }
+  const related = relatedProducts(product, uniqueProductsInOrder(relatedRows));
 
   const history = historyFor(product.id);
   /* What the same product costs on eBay, by barcode, and what its buyers

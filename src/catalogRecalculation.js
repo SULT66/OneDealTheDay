@@ -1,3 +1,4 @@
+const { hasDescriptiveTitle } = require("./catalogTitleQuality");
 const { market } = require("./markets");
 const { normalizeProductIdentity } = require("./productIdentity");
 const { SCORE_MODEL, isDailyPickEligible, scoreOffers, selectUniqueProducts } = require("./ranker");
@@ -91,7 +92,7 @@ function recalculateCatalog(db, marketCodes = ["us", "ca", "uk", "fr", "de"], op
 
   for (const row of rows) normalizedById.set(row.id, normalizeProductIdentity(normalizeCatalogProduct(withPriceHistory(row))));
   for (const code of marketCodes) {
-    const candidates = rows.filter(row => row.market === code).map(row => normalizedById.get(row.id));
+    const candidates = rows.filter(row => row.market === code && hasDescriptiveTitle(row.title)).map(row => normalizedById.get(row.id));
     const scored = scoreOffers(candidates, {
       currency:market(code).currency,
       minimumScore:0,

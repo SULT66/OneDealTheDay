@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext } from "react";
+import { interfaceCopy } from "@/src/interfaceCopy";
 import { appCopy } from "@/src/i18n-app";
 
 /*
@@ -37,4 +38,14 @@ export function useCopy(): Copy {
     },
     [language],
   );
+}
+
+export function useUiCopy() {
+  const language = useLanguage();
+  return useCallback((text: string, variables: Record<string, string | number> = {}) => {
+    const direct = (interfaceCopy as Record<string, Record<string, string>>)[text]?.[language];
+    if (direct) return direct.replace(/\{(\w+)\}/g, (_, name: string) => String(variables[name] ?? ""));
+    const key = Object.keys(dictionaries.en).find(key => dictionaries.en[key] === text);
+    return ((key ? dictionaries[language]?.[key] : undefined) || text).replace(/\{(\w+)\}/g, (_, name: string) => String(variables[name] ?? ""));
+  }, [language]);
 }

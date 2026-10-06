@@ -312,8 +312,8 @@ function localizeReturns(value, language) {
 
 function localizeAvailability(value, language) {
   const availability = clean(value);
-  if (/^In stock$/i.test(availability)) return t(language, "offer.inStock");
-  if (/^Out of stock$/i.test(availability)) return t(language, "offer.outOfStock");
+  if (/^(?:in[ _-]?stock)$/i.test(availability)) return t(language, "offer.inStock");
+  if (/^(?:out[ _-]?of[ _-]?stock|sold[ _-]?out|unavailable)$/i.test(availability)) return t(language, "offer.outOfStock");
   return availability || t(language, "product.confirmRetailer");
 }
 

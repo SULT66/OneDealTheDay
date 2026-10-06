@@ -1,4 +1,5 @@
 import { cache } from "react";
+import { isCheckedToday } from "@/src/marketCalendar";
 import { headers } from "next/headers";
 import categoriesData from "@/site-content/categories.json";
 import marketsData from "@/site-content/markets.json";
@@ -88,7 +89,7 @@ async function languageParam(): Promise<string> {
 }
 
 const fetchMarketCatalog = cache(
-  async (marketCode: string, limit?: number, category?: string): Promise<Deal[]> => {
+  async (marketCode: string, limit?: number, category?: string, fresh = false): Promise<Deal[]> => {
     const params = new URLSearchParams({ market: marketCode, compact: "1" });
     const lang = await languageParam();
     if (lang) params.set("lang", lang);
@@ -97,7 +98,7 @@ const fetchMarketCatalog = cache(
     const bounded = Boolean(limit || category);
 
     const res = await fetch(`${BACKEND_URL}/api/products?${params}`, {
-      ...(bounded ? { next: { revalidate: 300 } } : { cache: "no-store" as const }),
+      ...(bounded && !fresh ? { next: { revalidate: 60 } } : { cache: "no-store" as const }),
     });
     if (!res.ok) {
       throw new Error(`Failed to load the catalog for "${marketCode}" (${res.status}).`);
@@ -180,7 +181,7 @@ async function fetchCategoryCounts(
 ): Promise<Array<{ category: string; count: number }>> {
   const res = await fetch(
     `${BACKEND_URL}/api/categories?market=${encodeURIComponent(marketCode)}`,
-    { next: { revalidate: 300 } },
+    { next: { revalidate: 60 } },
   );
   if (!res.ok) {
     throw new Error(`Failed to load category counts for "${marketCode}" (${res.status}).`);
@@ -339,7 +340,7 @@ const fetchDealPage = cache(
     if (lang) params.set("lang", lang);
     const res = await fetch(
       `${BACKEND_URL}/api/products/${encodeURIComponent(dealId)}?${params}`,
-      { next: { revalidate: 300 } },
+      { next: { revalidate: 60 } },
     );
     if (res.status === 404) return undefined;
     if (!res.ok) {
@@ -375,9 +376,12 @@ export const getDeal = cache(
 );
 
 /** Rank 1 — the single pick the whole site is built around. */
-export async function getTodaysDrop(marketCode: string): Promise<Deal> {
-  const deals = await fetchMarketCatalog(marketCode, 1);
-  return deals[0];
+export async function getTodaysDrop(marketCode: string): Promise<Deal | undefined> {
+  const deals = await fetchMarketCatalog(marketCode, 1, undefined, true);
+  const drop = deals[0];
+  // A stale listing cannot be presented as checked today.
+  if (!drop || !drop.priceIsCurrent || !isCheckedToday(drop.checkedAt, marketCode)) return undefined;
+  return drop;
 }
 
 /**
@@ -555,12 +559,24 @@ const fetchFacets = cache(
     if (category) params.set("category", category);
     const res = await fetch(
       `${BACKEND_URL}/api/catalog-facets?${params}`,
-      { next: { revalidate: 300 } },
+      { next: { revalidate: 60 } },
     );
     if (!res.ok) throw new Error(`Failed to load filter facets for "${marketCode}" (${res.status}).`);
     return (await res.json()) as CatalogFacets;
   },
 );
+
+
+export async function getListingFacets(marketCode: string, category?: string, query?: string, retailer?: string): Promise<CatalogFacets> {
+  if (!query && !retailer) return fetchFacets(marketCode, category);
+  const params = new URLSearchParams({ market: marketCode });
+  if (category) params.set("category", category);
+  if (query) params.set("q", query);
+  if (retailer) params.set("retailer", retailer);
+  const res = await fetch(`${BACKEND_URL}/api/catalog-facets?${params}`, { next: { revalidate: 60 } });
+  if (!res.ok) throw new Error(`Failed to load scoped filters (${res.status}).`);
+  return res.json();
+}
 
 export async function getPriceBounds(
   marketCode: string,
@@ -656,9 +672,9 @@ export type ArchiveDay = {
   }>;
 };
 
-export async function getArchive(marketCode: string, days = 30): Promise<ArchiveDay[]> {
+export async function getArchive(marketCode: string, days = 5, before?: string): Promise<ArchiveDay[]> {
   const res = await fetch(
-    `${BACKEND_URL}/api/archive?market=${encodeURIComponent(marketCode)}&days=${days}${await languageParam().then((lang) => (lang ? `&lang=${lang}` : ""))}`,
+    `${BACKEND_URL}/api/archive?market=${encodeURIComponent(marketCode)}&days=${days}${before ? `&before=${encodeURIComponent(before)}` : ""}${await languageParam().then((lang) => (lang ? `&lang=${lang}` : ""))}`,
     { cache: "no-store" },
   );
   if (!res.ok) {

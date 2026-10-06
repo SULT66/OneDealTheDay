@@ -63,12 +63,12 @@ async function withServer(build, run) {
       });
     },
     async port => {
-      const first = await get(port, "/us/daily-drop");
+      const first = await get(port, "/us/stores");
       assert.strictEqual(first.status, 200);
       assert.strictEqual(first.headers["x-odd-cache"], "MISS");
       assert.strictEqual(renders, 1);
 
-      const second = await get(port, "/us/daily-drop");
+      const second = await get(port, "/us/stores");
       assert.strictEqual(second.headers["x-odd-cache"], "HIT");
       assert.strictEqual(renders, 1, "the second request must not reach the renderer");
       assert.strictEqual(second.body.toString(), first.body.toString(), "byte-identical to what was served first");
@@ -106,10 +106,17 @@ async function withServer(build, run) {
         assert.strictEqual((await get(port, path)).headers["x-odd-cache"], undefined, `${path} must not be cached on repeat`);
       }
 
+      // Daily Drop must not replay stale HTML, even when stores are cached.
+      const dailyA = await get(port, "/us/daily-drop");
+      const dailyB = await get(port, "/us/daily-drop");
+      assert.notStrictEqual(dailyA.body.toString(), dailyB.body.toString());
+      assert.match(dailyB.headers["cache-control"], /no-store/);
+      assert.strictEqual((await get(port, "/us/stores", {RSC: "1"})).headers["x-odd-cache"], undefined);
+
       /* Expiry: past the TTL the page is rendered again rather than served stale. */
       const before = renders;
       clock += 10 * 60 * 1000 + 1;
-      assert.strictEqual((await get(port, "/us/daily-drop")).headers["x-odd-cache"], "MISS");
+      assert.strictEqual((await get(port, "/us/stores")).headers["x-odd-cache"], "MISS");
       assert.strictEqual(renders, before + 1);
 
       /* Search lives a shorter life than the rest, because it follows a query
@@ -120,12 +127,12 @@ async function withServer(build, run) {
       assert.strictEqual((await get(port, "/us/search?q=desk")).headers["x-odd-cache"], "MISS", "search expires at two minutes");
       /* Rendered just after the ten-minute jump above, so it is two minutes
          old here — expired if it shared search's life, live on its own. */
-      assert.strictEqual((await get(port, "/us/daily-drop")).headers["x-odd-cache"], "HIT", "…and other pages do not");
+      assert.strictEqual((await get(port, "/us/stores")).headers["x-odd-cache"], "HIT", "…and other pages do not");
 
       /* clear() is what a catalogue refresh calls; a page quoting yesterday's
          price is worse than a slow one. */
       cache.clear();
-      assert.strictEqual((await get(port, "/us/daily-drop")).headers["x-odd-cache"], "MISS");
+      assert.strictEqual((await get(port, "/us/stores")).headers["x-odd-cache"], "MISS");
     },
   );
 

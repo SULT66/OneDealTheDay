@@ -86,5 +86,61 @@
     "nounPlural": "gift ideas",
     "icon": "Gift",
     "blurb": "Checked picks worth giving, not just buying."
+  },
+  {
+    "slug": "arts-crafts",
+    "name": "Arts & Crafts",
+    "noun": "pick",
+    "nounPlural": "picks",
+    "icon": "PaintBrush",
+    "blurb": "Artist brushes, paints and supplies for making things."
+  },
+  {
+    "slug": "sports-outdoors",
+    "name": "Sports & Outdoors",
+    "noun": "pick",
+    "nounPlural": "picks",
+    "icon": "Barbell",
+    "blurb": "Fitness, sports and outdoor equipment."
+  },
+  {
+    "slug": "toys-games",
+    "name": "Toys & Games",
+    "noun": "pick",
+    "nounPlural": "picks",
+    "icon": "PuzzlePiece",
+    "blurb": "Toys, games and creative play."
+  },
+  {
+    "slug": "baby-kids",
+    "name": "Baby & Kids",
+    "noun": "pick",
+    "nounPlural": "picks",
+    "icon": "Baby",
+    "blurb": "Everyday essentials for babies and children."
+  },
+  {
+    "slug": "fashion",
+    "name": "Fashion",
+    "noun": "pick",
+    "nounPlural": "picks",
+    "icon": "TShirt",
+    "blurb": "Clothing, shoes and accessories."
+  },
+  {
+    "slug": "health-beauty",
+    "name": "Health & Beauty",
+    "noun": "pick",
+    "nounPlural": "picks",
+    "icon": "Heart",
+    "blurb": "Personal care, beauty and wellness."
+  },
+  {
+    "slug": "other-deals",
+    "name": "Other Deals",
+    "noun": "pick",
+    "nounPlural": "picks",
+    "icon": "Package",
+    "blurb": "More checked picks."
   }
 ]

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useCopy } from "./CopyProvider";
 
 /** Next drop lands at midnight UTC — the same cadence the live site uses. */
 function msUntilNextDrop(now: number): number {
@@ -26,6 +27,7 @@ function parts(ms: number) {
  * a live time on both sides would guarantee a hydration mismatch.
  */
 export function NextDropCountdown() {
+  const tr = useCopy();
   const [remaining, setRemaining] = useState<number | null>(null);
 
   useEffect(() => {
@@ -41,7 +43,7 @@ export function NextDropCountdown() {
   return (
     <div>
       <p className="text-[0.7rem] font-bold uppercase tracking-[0.18em] text-ink/70">
-        Next drop in
+        {tr("app.drop.nextIn")}
       </p>
       <p
         className="mt-1 flex items-baseline gap-1 text-4xl font-bold tabular-nums text-ink sm:text-5xl"

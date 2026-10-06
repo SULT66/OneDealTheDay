@@ -1,3 +1,4 @@
+import { LanguageLink } from "./LanguageLink";
 import Link from "next/link";
 import {
   FacebookLogo,
@@ -191,7 +192,7 @@ export async function Footer({ market }: { market: string }) {
                 <ul className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-sm">
                   {languages.map((option) => (
                     <li key={option.code}>
-                      <a
+                      <LanguageLink code={option.code}
                         href={option.href}
                         hrefLang={option.code}
                         aria-current={option.current ? "true" : undefined}
@@ -202,7 +203,7 @@ export async function Footer({ market }: { market: string }) {
                         }
                       >
                         {option.label}
-                      </a>
+                      </LanguageLink>
                     </li>
                   ))}
                 </ul>

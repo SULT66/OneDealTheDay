@@ -59,15 +59,19 @@ function dayLabel(date: string, market: string, language: string) {
 }
 
 export default async function ArchivePage({
-  params,
+  params, searchParams,
 }: {
   params: Promise<{ market: string }>;
+  searchParams: Promise<{ before?: string }>;
 }) {
   const { market } = await params;
   const info = getMarket(market);
   const language = await getLanguage(market);
   const country = info ? countryName(market, language) : t(language, "app.yourMarket");
-  const days = await getArchive(market);
+  const { before } = await searchParams;
+  const days = await getArchive(market, 6, before);
+  const hasOlder = days.length > 5;
+  const visibleDays = days.slice(0, 5);
 
   return (
     <div className="mx-auto max-w-7xl px-4 pb-24 pt-8 sm:px-6 sm:pt-10">
@@ -102,7 +106,7 @@ export default async function ArchivePage({
           </p>
         </div>
       ) : (
-        days.map((day, dayIndex) => (
+        visibleDays.map((day, dayIndex) => (
           <section key={day.date} className={dayIndex === 0 ? "mt-16" : "mt-20"}>
             <SectionHeader
               id={`day-${day.date}`}
@@ -152,6 +156,8 @@ export default async function ArchivePage({
           </section>
         ))
       )}
+      {hasOlder && <Link href={`/${market}/archive?before=${visibleDays[visibleDays.length - 1].date}`} className="mt-12 inline-flex rounded-full border border-border px-6 py-3 font-semibold">{t(language, "app.archive.older")}</Link>}
+      {before && <Link href={`/${market}/archive`} className="ml-4 inline-flex px-4 py-3 underline">{t(language, "app.archive.latest")}</Link>}
     </div>
   );
 }

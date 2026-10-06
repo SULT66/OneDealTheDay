@@ -3,6 +3,8 @@ const { TAXONOMY_VERSION, PUBLIC_CATEGORIES, canonicalCategory, normalizeCatalog
 const { capabilityCoverage, capabilityProfile } = require("../src/sourceCapabilities");
 
 const cases = [
+  [{source:"feed-silver-brush-us", category:"Tools", title:"Black Velvet Round Paintbrush"}, "Arts & Crafts"],
+  [{source:"ebay", category:"Tools", title:"Artist paintbrush watercolor brush"}, "Arts & Crafts"],
   [{source:"ebay", category:"gifts under 25", title:"Personalized keepsake"}, "Gifts"],
   [{source:"feed-giftlab", category:"Gifts > Personalized Gifts", title:"Custom photo plaque"}, "Gifts"],
   [{source:"ebay", category:"office gadgets", title:"Ergonomic desk lamp"}, "Office"],
@@ -69,7 +71,7 @@ const cases = [
   [{source:"ebay", category:"", title:"Infant Optics Baby Monitor"}, "Baby & Kids"]
 ];
 
-assert.strictEqual(PUBLIC_CATEGORIES.length, 16, "The shopper taxonomy must stay intentionally small");
+assert.strictEqual(PUBLIC_CATEGORIES.length, 17, "The shopper taxonomy must stay intentionally small");
 assert.strictEqual(new Set(PUBLIC_CATEGORIES).size, PUBLIC_CATEGORIES.length, "Public categories must be unique");
 assert(!PUBLIC_CATEGORIES.some(category => category.includes(">")), "A raw feed hierarchy escaped into public navigation");
 
