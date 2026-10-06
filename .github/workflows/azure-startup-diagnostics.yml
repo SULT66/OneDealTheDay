@@ -1,0 +1,16 @@
+name: Azure startup diagnostics
+on:
+  push:
+    branches: [codex/azure-startup-diagnostics]
+permissions:
+  contents: read
+jobs:
+  logs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - name: Read redacted startup logs
+        env:
+          AZURE_WEBAPP_PUBLISH_PROFILE: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+        run: node scripts/fetch-azure-startup-logs.js
