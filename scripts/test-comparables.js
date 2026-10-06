@@ -110,7 +110,8 @@ assert.strictEqual(rated.review_count, 231);
 
 /* ------------------------------------------------------ the sweep */
 
-const now = Date.parse("2026-09-25T00:00:00Z");
+/* Saved comparisons use the current clock; keep expiry checks relative to it. */
+const now = Date.now();
 const insert = db.prepare(`
   INSERT INTO products(id,market,source,external_id,title,current_price,currency,status,gtin,affiliate_url,image_url,updated_at,checked_at,first_seen_at,last_seen_at)
   VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
