@@ -40,6 +40,30 @@ function nativeProviders(config) {
       })
     });
   }
+  if (config.aliexpressAppKey && config.aliexpressAppSecret && config.aliexpressTrackingId) {
+    providers.push({
+      id:"aliexpress",
+      source:"aliexpress",
+      name:"AliExpress Portals",
+      /* Only where it has been turned on. The programme covers far more
+         countries than the catalogue should. */
+      markets:config.aliexpressMarkets,
+      search:({market, keywords, keywordsPerRun, signal}) => require("./aliexpress").searchProducts({
+        appKey:config.aliexpressAppKey,
+        appSecret:config.aliexpressAppSecret,
+        trackingId:config.aliexpressTrackingId,
+        keywords:keywords || market.searchKeywords,
+        rotate:!keywords,
+        keywordsPerRun:keywordsPerRun || 6,
+        market,
+        maxProducts:config.aliexpressMaxProducts,
+        maxDeliveryDays:config.aliexpressMaxDeliveryDays,
+        minSellerPercent:config.aliexpressMinSellerPercent,
+        minOrders:config.aliexpressMinOrders,
+        signal
+      })
+    });
+  }
   if (config.rainforestApiKey) {
     providers.push({
       id:"amazon",
