@@ -315,11 +315,32 @@ const marketConfig = code => {
   };
 };
 
+/*
+ * AliExpress, which needs nobody's approval and therefore needs our own.
+ *
+ * The three credentials come from portals.aliexpress.com. The four numbers
+ * after them are the editorial policy for this source, kept in settings
+ * rather than in code because the right answer moves with the catalogue. See
+ * src/providers/aliexpress.js.
+ */
+const aliexpressAppKey = String(process.env.ALIEXPRESS_APP_KEY || "").trim();
+const aliexpressAppSecret = String(process.env.ALIEXPRESS_APP_SECRET || "").trim();
+const aliexpressTrackingId = String(process.env.ALIEXPRESS_TRACKING_ID || "").trim();
+const aliexpressMarkets = String(process.env.ALIEXPRESS_MARKETS || "us")
+  .split(",").map(code => code.trim().toLowerCase()).filter(Boolean);
+const aliexpressMaxProducts = Math.max(0, Math.min(500, Number(process.env.ALIEXPRESS_MAX_PRODUCTS ?? 120)));
+const aliexpressMaxDeliveryDays = Math.max(1, Math.min(60, Number(process.env.ALIEXPRESS_MAX_DELIVERY_DAYS ?? 10)));
+const aliexpressMinSellerPercent = Math.max(0, Math.min(100, Number(process.env.ALIEXPRESS_MIN_SELLER_PERCENT ?? 94)));
+const aliexpressMinOrders = Math.max(0, Number(process.env.ALIEXPRESS_MIN_ORDERS ?? 100));
+
 const enabledSourceIds = [];
 if (ebayClientId && ebayClientSecret && /^\d{10}$/.test(ebayCampaignId)) enabledSourceIds.push("ebay");
 if (rainforestApiKey && markets.some(code => affiliateTagForMarket(code))) enabledSourceIds.push("amazon");
 if (bluecartApiKey && markets.some(code => walmartAffiliateTemplateForMarket(code))) enabledSourceIds.push("walmart");
 if (rakutenClientId && rakutenClientSecret && rakutenPublisherSid && markets.includes("us")) enabledSourceIds.push("newegg");
+if (aliexpressAppKey && aliexpressAppSecret && aliexpressTrackingId && aliexpressMarkets.some(code => markets.includes(code))) {
+  enabledSourceIds.push("aliexpress");
+}
 for (const feed of affiliateFeeds) enabledSourceIds.push(feed.source);
 const uniqueSourceIds = [...new Set(enabledSourceIds)];
 const provider = uniqueSourceIds.length > 1 ? "multi" : uniqueSourceIds[0] || "unconfigured";
@@ -354,6 +375,14 @@ module.exports = {
      for. Every one spends a slice of the same daily allowance the catalogue
      itself needs, so the default is small. See src/searchQueries.js. */
   demandKeywordLimit: Math.max(0, Math.min(10, Number(process.env.DEMAND_KEYWORD_LIMIT ?? 3))),
+  aliexpressAppKey,
+  aliexpressAppSecret,
+  aliexpressTrackingId,
+  aliexpressMarkets,
+  aliexpressMaxProducts,
+  aliexpressMaxDeliveryDays,
+  aliexpressMinSellerPercent,
+  aliexpressMinOrders,
   enabledSourceIds: uniqueSourceIds,
   affiliateFeeds,
   siteMode: "live",
