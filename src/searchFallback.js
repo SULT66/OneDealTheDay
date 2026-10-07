@@ -145,11 +145,19 @@ function closestPhrase(index, query) {
   for (const [phrase, count] of vocabulary(index)) {
     const words = phrase.split(" ");
     if (words.length !== typedWords.length) continue;
+    /* Each word has to be within its own allowance. editDistance gives up and
+       returns one past its limit, and adding that sentinel up as if it were a
+       real distance let "tab" reach "computer" — two words with nothing in
+       common, counted as a two letter typo. */
     let distance = 0;
-    for (let index_ = 0; index_ < words.length && distance <= 2; index_ += 1) {
-      distance += editDistance(typedWords[index_], words[index_], allowedDistance(typedWords[index_]));
+    let reachable = true;
+    for (let index_ = 0; index_ < words.length; index_ += 1) {
+      const allowed = allowedDistance(typedWords[index_]);
+      const apart = editDistance(typedWords[index_], words[index_], allowed);
+      if (apart > allowed) { reachable = false; break; }
+      distance += apart;
     }
-    if (distance === 0 || distance > 2) continue;
+    if (!reachable || distance === 0 || distance > 2) continue;
     if (!best || distance < best.distance || (distance === best.distance && count > best.count)) {
       best = { phrase, count, distance };
     }

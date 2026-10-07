@@ -123,7 +123,12 @@ function buildSuggestIndex(rows = []) {
      * system, not something anybody types into a search box.
      */
     const keywordWords = phraseWords(row?.category);
-    const keyword = keywordWords.length <= MAX_PHRASE_WORDS ? keywordWords.join(" ") : "";
+    /* And no phrase that says the same word twice. "computers tablet
+       computers" is a shelf label a feed wrote, not a search anybody types. */
+    const keyword = keywordWords.length <= MAX_PHRASE_WORDS
+      && new Set(keywordWords).size === keywordWords.length
+      ? keywordWords.join(" ")
+      : "";
     if (keyword) {
       countInto(keywordCounts, keyword);
       const last = keyword.split(" ").pop();
@@ -230,8 +235,24 @@ function suggestTerms(index, query, { limit = MAX_TERMS } = {}) {
     .slice(0, limit);
 }
 
+/**
+ * Whether the catalogue uses this phrase at all.
+ *
+ * Half a word is not a search. "tab" is three letters on the way to "table",
+ * and running it through the product search as if it were a word matches
+ * "adjustable" and "portable" and fills the dropdown with a kettlebell. The
+ * words we offer are good; what is searched underneath them has to be a word
+ * too.
+ */
+function knowsPhrase(index, phrase) {
+  const typed = normalizedTitle(phrase);
+  if (!typed || !index) return false;
+  return Boolean(index.keywords?.has(typed) || index.titles?.has(typed));
+}
+
 module.exports = {
   EDGE_WORDS,
+  knowsPhrase,
   MAX_PHRASE_WORDS,
   MIN_PHRASE_PRODUCTS,
   buildSuggestIndex,
