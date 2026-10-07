@@ -1,4 +1,5 @@
 "use client";
+import { useUiCopy } from "@/components/site/CopyProvider";
 
 import Link from "next/link";
 import { ArrowUpRight, Heart } from "@phosphor-icons/react";
@@ -21,6 +22,7 @@ import {
  * like it helps.
  */
 export function SavedList({ market }: { market: string }) {
+  const ui = useUiCopy();
   return (
     <SavedOffersProvider market={market}>
       <SavedListInner market={market} />
@@ -29,25 +31,23 @@ export function SavedList({ market }: { market: string }) {
 }
 
 function SavedListInner({ market }: { market: string }) {
+  const ui = useUiCopy();
   const saved = useSavedOffers();
 
   if (!saved || saved.signedIn === null) {
-    return <Shell market={market}><p className="text-sm text-fg-subtle">Loading your saved products...</p></Shell>;
+    return <Shell market={market}><p className="text-sm text-fg-subtle">{ui("Loading your saved products...")}</p></Shell>;
   }
 
   if (saved.signedIn === false) {
     return (
       <Shell market={market}>
         <p className="text-sm leading-relaxed text-fg-muted">
-          Saved products live with your account, so they are still here when you come
-          back on another device.
-        </p>
+          {ui("Saved products live with your account, so they are still here when you come back on another device.")}</p>
         <Link
           href={`/${market}/account`}
           className="mt-5 inline-flex h-12 items-center rounded-full bg-lime px-5 text-sm font-semibold text-ink transition-opacity hover:opacity-88"
         >
-          Sign in or create an account
-        </Link>
+          {ui("Sign in or create an account")}</Link>
       </Shell>
     );
   }
@@ -56,9 +56,7 @@ function SavedListInner({ market }: { market: string }) {
     return (
       <Shell market={market}>
         <p className="text-sm leading-relaxed text-fg-muted">
-          Nothing saved yet. Tap the heart on any offer, in a deal or in a conversation
-          with Delia, and it will be waiting here.
-        </p>
+          {ui("Nothing saved yet. Tap the heart on any offer, in a deal or in a conversation with Delia, and it will be waiting here.")}</p>
         {/* Both ways to find something worth saving. The drop is one deal a
             day; Delia is for when the shopper already knows what they want,
             and an empty list is exactly the moment to offer her. */}
@@ -67,11 +65,10 @@ function SavedListInner({ market }: { market: string }) {
             href={`/${market}`}
             className="inline-flex h-12 items-center rounded-full bg-lime px-5 text-sm font-semibold text-ink transition-opacity hover:opacity-88"
           >
-            See today&rsquo;s drop
-          </Link>
+            {ui("See today’s drop")}</Link>
           <DeliaTrigger
             variant="header"
-            label="Ask Delia"
+            label={ui("Ask Delia")}
             className="h-12 px-5"
           />
         </div>
@@ -105,6 +102,7 @@ function SavedListInner({ market }: { market: string }) {
  * looking more helpful.
  */
 function SavedTotal({ offers, market }: { offers: SavedOffer[]; market: string }) {
+  const ui = useUiCopy();
   const totals = new Map<string, number>();
   let unpriced = 0;
   for (const offer of offers) {
@@ -123,20 +121,17 @@ function SavedTotal({ offers, market }: { offers: SavedOffer[]; market: string }
   return (
     <div className="mt-4 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 rounded-2xl bg-surface-2 px-4 py-3">
       <span className="text-sm text-fg-muted">
-        {offers.length} {offers.length === 1 ? "product" : "products"} saved
-        {unpriced > 0 && (
+        {offers.length} {offers.length === 1 ? ui("product") : ui("products")} {ui("saved")}{unpriced > 0 && (
           <span className="text-fg-subtle">
             {" "}
-            ({unpriced} with no confirmed price)
-          </span>
+            ({unpriced} {ui("with no confirmed price)")}</span>
         )}
       </span>
       {sums.length > 0 && (
         <span className="text-lg font-bold text-fg tnum">
           {sums.join(" · ")}
           <span className="ml-2 text-xs font-medium text-fg-subtle">
-            when you saved them
-          </span>
+            {ui("when you saved them")}</span>
         </span>
       )}
     </div>
@@ -153,16 +148,16 @@ function Shell({
   summary?: React.ReactNode;
   children: React.ReactNode;
 }) {
+  const ui = useUiCopy();
   return (
     <section className="mx-auto w-full max-w-2xl px-4 py-10 sm:py-14">
       <nav className="text-xs text-fg-subtle">
         <Link href={`/${market}`} className="hover:text-fg">
-          Home
-        </Link>
+          {ui("Home")}</Link>
         <span aria-hidden="true"> / </span>
-        <span className="text-fg-muted">Saved</span>
+        <span className="text-fg-muted">{ui("Saved")}</span>
       </nav>
-      <h1 className="mt-3 text-2xl font-bold text-fg sm:text-3xl">Saved products</h1>
+      <h1 className="mt-3 text-2xl font-bold text-fg sm:text-3xl">{ui("Saved products")}</h1>
       {summary}
       <div className="mt-6">{children}</div>
     </section>
@@ -170,6 +165,7 @@ function Shell({
 }
 
 function SavedRow({ offer, market }: { offer: SavedOffer; market: string }) {
+  const ui = useUiCopy();
   const saved = useSavedOffers();
   const inCatalog = offer.catalog_product_id > 0;
   const href = inCatalog ? `/${market}/deal/${offer.catalog_product_id}` : offer.url;
@@ -195,7 +191,7 @@ function SavedRow({ offer, market }: { offer: SavedOffer; market: string }) {
         </span>
       </span>
       <span className="flex shrink-0 items-center gap-1 pt-0.5 text-sm font-bold text-fg tnum">
-        {price || <span className="text-xs font-medium text-fg-subtle">Price at the shop</span>}
+        {price || <span className="text-xs font-medium text-fg-subtle">{ui("Price at the shop")}</span>}
         {!inCatalog && <ArrowUpRight size={13} weight="bold" aria-hidden="true" />}
       </span>
     </>
@@ -218,7 +214,7 @@ function SavedRow({ offer, market }: { offer: SavedOffer; market: string }) {
         type="button"
         onClick={() => saved?.toggle({ url: offer.url, title: offer.title })}
         aria-label={`Remove ${offer.title} from saved`}
-        title="Remove"
+        title={ui("Remove")}
         className="mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-lime-deep transition-colors hover:bg-surface"
       >
         <Heart size={16} weight="fill" aria-hidden="true" />

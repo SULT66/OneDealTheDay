@@ -1,3 +1,4 @@
+const { hasDescriptiveTitle } = require("./catalogTitleQuality");
 const { market } = require("./markets");
 const { normalizeProductIdentity } = require("./productIdentity");
 const { SCORE_MODEL, isDailyPickEligible, scoreOffers, selectUniqueProducts } = require("./ranker");
@@ -35,8 +36,24 @@ function needsRecalculation(db) {
   `).get(`%"model":"${SCORE_MODEL}"%`, TAXONOMY_VERSION));
 }
 
+// A category change does not require re-reading all price history or rescoring
+// archived listings. Keep published scores and today's selected order intact.
+function refreshCatalogTaxonomy(db) {
+  const rows = db.prepare("SELECT id,title,category,source,normalized_category FROM products WHERE status='published' AND COALESCE(taxonomy_version,'')<>?").all(TAXONOMY_VERSION);
+  if (!rows.length) return 0;
+  db.transaction(() => {
+    const update = db.prepare("UPDATE products SET normalized_category=?,taxonomy_version=?,status=? WHERE id=?");
+    for (const row of rows) {
+      const normalized = normalizeCatalogProduct(row);
+      update.run(normalized.normalized_category, TAXONOMY_VERSION, hasDescriptiveTitle(row.title) ? "published" : "archived", row.id);
+    }
+  })();
+  return rows.length;
+}
+
 function recalculateCatalog(db, marketCodes = ["us", "ca", "uk", "fr", "de"], options = {}) {
-  if (!options.force && !needsRecalculation(db)) return { changed:false, products:0, selections:0, markets:[] };
+  const taxonomyProducts = options.force ? 0 : refreshCatalogTaxonomy(db);
+  if (!options.force && !needsRecalculation(db)) return { changed:taxonomyProducts > 0, products:taxonomyProducts, selections:0, markets:[] };
 
   const rows = db.prepare("SELECT * FROM products").all();
 
@@ -91,7 +108,7 @@ function recalculateCatalog(db, marketCodes = ["us", "ca", "uk", "fr", "de"], op
 
   for (const row of rows) normalizedById.set(row.id, normalizeProductIdentity(normalizeCatalogProduct(withPriceHistory(row))));
   for (const code of marketCodes) {
-    const candidates = rows.filter(row => row.market === code).map(row => normalizedById.get(row.id));
+    const candidates = rows.filter(row => row.market === code && hasDescriptiveTitle(row.title)).map(row => normalizedById.get(row.id));
     const scored = scoreOffers(candidates, {
       currency:market(code).currency,
       minimumScore:0,
@@ -176,4 +193,4 @@ function recalculateCatalog(db, marketCodes = ["us", "ca", "uk", "fr", "de"], op
   };
 }
 
-module.exports = { localDate, needsRecalculation, recalculateCatalog };
+module.exports = { localDate, needsRecalculation, recalculateCatalog, refreshCatalogTaxonomy };

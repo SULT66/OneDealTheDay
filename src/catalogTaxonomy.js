@@ -8,7 +8,7 @@
    The version is what makes the catalogue re-file itself — app.js recalculates
    every product whose stamp does not match on boot — so bumping it is how
    corrected rules reach the listings already stored. */
-const TAXONOMY_VERSION = "catalog-taxonomy-v5";
+const TAXONOMY_VERSION = "catalog-taxonomy-v6";
 
 // This is the only taxonomy exposed to shoppers. Source-feed category paths are
 // preserved in `category` for auditing, but must never be used as navigation.
@@ -18,6 +18,7 @@ const PUBLIC_CATEGORIES = Object.freeze([
   "Furniture",
   "Office",
   "Tools & DIY",
+  "Arts & Crafts",
   "Automotive",
   "Sports & Outdoors",
   "Bikes & Mobility",
@@ -43,6 +44,8 @@ const EXACT = new Map([
   ["furniture", "Furniture"],
   ["office", "Office"],
   ["office gadgets", "Office"],
+  ["arts & crafts", "Arts & Crafts"],
+  ["art supplies", "Arts & Crafts"],
   ["tools", "Tools & DIY"],
   ["tools & diy", "Tools & DIY"],
   ["automotive", "Automotive"],
@@ -209,6 +212,7 @@ function canonicalCategory(product = {}) {
   const exact = EXACT.get(fold(raw));
 
   const source = fold(product.source);
+  if (source.includes("silver-brush") || /\b(?:artist paintbrush|watercolor brush|acrylic paintbrush|oil paintbrush|art supplies|painting canvas)\b/i.test(product.title || "")) return "Arts & Crafts";
   if (source.includes("giftlab")) return "Gifts";
   if (source.includes("king-koil")) return "Mattresses & Sleep";
   if (source.includes("mooncool")) return "Bikes & Mobility";

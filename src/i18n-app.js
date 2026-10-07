@@ -948,4 +948,67 @@ const appCopy = {
   },
 };
 
+
+Object.assign(appCopy.en, {
+  "app.filter.applyPrice": "Apply price",
+  "app.filter.invalidPrice": "Enter a valid minimum and maximum price.",
+  "app.filter.under": "Under {price}",
+  "app.filter.over": "Over {price}",
+  "app.filter.ratingAndUp": "{rating}★ and up",
+  "app.list.emptyHint": "No listings match these filters. Try widening the price range or removing a filter.",
+  "app.archive.older": "Older drops",
+  "app.archive.latest": "Latest drops",
+  "app.drop.nextIn": "Next drop in"
+});
+Object.assign(appCopy.es, {
+  "app.filter.applyPrice": "Aplicar precio",
+  "app.filter.invalidPrice": "Introduce precios mínimo y máximo válidos.",
+  "app.filter.under": "Menos de {price}",
+  "app.filter.over": "Más de {price}",
+  "app.filter.ratingAndUp": "{rating}★ o más",
+  "app.list.emptyHint": "Ningún producto coincide. Amplía el rango de precios o quita un filtro.",
+  "app.archive.older": "Ofertas anteriores",
+  "app.archive.latest": "Ofertas recientes",
+  "app.drop.nextIn": "Próxima oferta en"
+});
+Object.assign(appCopy.fr, {
+  "app.filter.applyPrice": "Appliquer le prix",
+  "app.filter.invalidPrice": "Saisissez des prix minimum et maximum valides.",
+  "app.filter.under": "Moins de {price}",
+  "app.filter.over": "Plus de {price}",
+  "app.filter.ratingAndUp": "{rating}★ et plus",
+  "app.list.emptyHint": "Aucun résultat. Élargissez la fourchette de prix ou retirez un filtre.",
+  "app.archive.older": "Offres plus anciennes",
+  "app.archive.latest": "Dernières offres",
+  "app.drop.nextIn": "Prochaine offre dans"
+});
+Object.assign(appCopy.de, {
+  "app.filter.applyPrice": "Preis anwenden",
+  "app.filter.invalidPrice": "Gültigen Mindest- und Höchstpreis eingeben.",
+  "app.filter.under": "Unter {price}",
+  "app.filter.over": "Über {price}",
+  "app.filter.ratingAndUp": "Ab {rating}★",
+  "app.list.emptyHint": "Keine Treffer. Erweitere den Preisbereich oder entferne einen Filter.",
+  "app.archive.older": "Ältere Angebote",
+  "app.archive.latest": "Neueste Angebote",
+  "app.drop.nextIn": "Nächstes Angebot in"
+});
+
 module.exports = { appCopy };
+
+Object.assign(appCopy.en, {
+  "app.drop.emptyTitle": "No freshly checked drop today",
+  "app.drop.emptyText": "The selected drop does not have a verified price check for today. Browse the catalog while we wait for a fresh check."
+});
+Object.assign(appCopy.es, {
+  "app.drop.emptyTitle": "Aún no hay oferta verificada hoy",
+  "app.drop.emptyText": "La oferta seleccionada no tiene una verificación de precio de hoy. Puedes explorar el catálogo mientras esperamos una nueva comprobación."
+});
+Object.assign(appCopy.fr, {
+  "app.drop.emptyTitle": "Aucune offre vérifiée aujourd’hui",
+  "app.drop.emptyText": "L’offre sélectionnée n’a pas de vérification du prix datant d’aujourd’hui. Consultez le catalogue en attendant une nouvelle vérification."
+});
+Object.assign(appCopy.de, {
+  "app.drop.emptyTitle": "Heute noch kein frisch geprüftes Angebot",
+  "app.drop.emptyText": "Für das ausgewählte Angebot liegt heute noch keine Preisprüfung vor. Bis zur nächsten Prüfung können Sie den Katalog durchsuchen."
+});

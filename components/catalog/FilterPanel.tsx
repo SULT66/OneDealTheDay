@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { PriceRange } from "./PriceRange";
 import { X } from "@phosphor-icons/react";
 import { cn } from "@/lib/cn";
 import { formatPrice, retailerLabel } from "@/lib/format";
@@ -111,11 +112,11 @@ export function FilterPanel({
   const active = [
     filter.maxPrice !== undefined && {
       key: "maxPrice" as const,
-      label: `Under ${formatPrice(filter.maxPrice, currency, market)}`,
+      label: tr("app.filter.under", {price: formatPrice(filter.maxPrice, currency, market)}),
     },
     filter.minPrice !== undefined && {
       key: "minPrice" as const,
-      label: `Over ${formatPrice(filter.minPrice, currency, market)}`,
+      label: tr("app.filter.over", {price: formatPrice(filter.minPrice, currency, market)}),
     },
     filter.retailer && {
       key: "retailer" as const,
@@ -123,7 +124,7 @@ export function FilterPanel({
     },
     filter.minRating !== undefined && {
       key: "minRating" as const,
-      label: `${filter.minRating}★ and up`,
+      label: tr("app.filter.ratingAndUp", {rating: filter.minRating}),
     },
     filter.minScore !== undefined && {
       key: "minScore" as const,
@@ -135,11 +136,6 @@ export function FilterPanel({
     },
     filter.query && { key: "query" as const, label: `“${filter.query}”` },
   ].filter(Boolean) as Array<{ key: keyof DealFilter; label: string }>;
-
-  const maxValue = filter.maxPrice ?? bounds.max;
-  const minValue = filter.minPrice ?? bounds.min;
-  /* Never zero: the fill below divides by it. */
-  const span = Math.max(1, bounds.max - bounds.min);
 
   return (
     <div className="space-y-7">
@@ -183,92 +179,7 @@ export function FilterPanel({
         </div>
       )}
 
-      {/*
-        * price
-        *
-        * One handle for the top end and nothing for the bottom, so a shopper
-        * who wanted to skip the two-dollar phone cases had no way to say so.
-        * Two handles now, each dropping its own filter when it reaches the end
-        * of its travel — the low one at the bottom, the high one at the top,
-        * which is what the trailing "+" has always meant.
-        */}
-      <div>
-        <h3 className="text-[0.7rem] font-semibold uppercase tracking-[0.16em] text-fg-subtle">
-          {copy.priceRange}
-        </h3>
-        <p className="mt-2 text-lg font-bold text-fg tnum">
-          {formatPrice(minValue, currency, market)} &ndash;{" "}
-          {formatPrice(maxValue, currency, market)}
-          {maxValue >= bounds.max ? "+" : ""}
-        </p>
-
-        {/*
-          * One track with both handles on it.
-          *
-          * They were two full-width sliders stacked, which read as two broken
-          * controls rather than one range: the upper looked empty and the lower
-          * looked full. Overlaid on a single rail, with the selected span lit
-          * between them, it reads as what it is.
-          *
-          * Both inputs sit on top of each other and are transparent to the
-          * pointer except at their thumbs, so whichever handle is under the
-          * cursor is the one that moves.
-          */}
-        <div className="relative mt-3 h-11">
-          <div /* border rather than surface-2: the panel sits on a white card, where
-               surface-2 is close enough to white that the unselected part of the
-               rail read as missing rather than as unselected. */
-            className="pointer-events-none absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-border" />
-          <div
-            className="pointer-events-none absolute top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-lime"
-            style={{
-              left: `${((minValue - bounds.min) / span) * 100}%`,
-              right: `${100 - ((maxValue - bounds.min) / span) * 100}%`,
-            }}
-          />
-          <label htmlFor="filter-min-price" className="sr-only">
-            {copy.minimumPrice}
-          </label>
-          <input
-            id="filter-min-price"
-            type="range"
-            min={bounds.min}
-            max={bounds.max}
-            step={5}
-            value={minValue}
-            onChange={(e) => {
-              const v = Number(e.target.value);
-              /* Never past the other handle: a range whose bottom is above its
-                 top matches nothing, and the page would look broken rather
-                 than empty. */
-              const capped = Math.min(v, maxValue);
-              update({ minPrice: capped <= bounds.min ? undefined : capped });
-            }}
-            className="range-thumb pointer-events-none absolute inset-0 h-11 w-full cursor-pointer"
-          />
-          <label htmlFor="filter-max-price" className="sr-only">
-            {copy.maximumPrice}
-          </label>
-          <input
-            id="filter-max-price"
-            type="range"
-            min={bounds.min}
-            max={bounds.max}
-            step={5}
-            value={maxValue}
-            onChange={(e) => {
-              const v = Number(e.target.value);
-              const floored = Math.max(v, minValue);
-              update({ maxPrice: floored >= bounds.max ? undefined : floored });
-            }}
-            className="range-thumb pointer-events-none absolute inset-0 h-11 w-full cursor-pointer"
-          />
-        </div>
-        <p className="flex justify-between text-xs text-fg-subtle tnum">
-          <span>{formatPrice(bounds.min, currency, market)}</span>
-          <span>{formatPrice(bounds.max, currency, market)}+</span>
-        </p>
-      </div>
+      <PriceRange filter={filter} bounds={bounds} currency={currency} market={market} onApply={update} />
 
       {/* retailer */}
       <fieldset>

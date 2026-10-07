@@ -1,4 +1,5 @@
 "use client";
+import { useUiCopy } from "@/components/site/CopyProvider";
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
@@ -58,6 +59,7 @@ const TITLES: Record<Mode, string> = {
 };
 
 export function AccountPanel({ market }: { market: string }) {
+  const ui = useUiCopy();
   const [account, setAccount] = useState<Account | null>(null);
   const [checked, setChecked] = useState(false);
   const [googleReady, setGoogleReady] = useState(false);
@@ -69,7 +71,7 @@ export function AccountPanel({ market }: { market: string }) {
   const [accepted, setAccepted] = useState(false);
   const [resetToken, setResetToken] = useState("");
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("Free forever. Club is optional.");
+  const [message, setMessage] = useState(ui("Free forever. Club is optional."));
   const [failed, setFailed] = useState(false);
   /* Where to go once signed in, such as the Live Drop that sent them here.
      A path on this site only. */
@@ -126,7 +128,7 @@ export function AccountPanel({ market }: { market: string }) {
     setMode(next);
     setPassword("");
     setAccepted(false);
-    say(next === "forgot" ? "We will email you a link to set a new password." : "Free forever. Club is optional.");
+    say(next === "forgot" ? "We will email you a link to set a new password." : ui("Free forever. Club is optional."));
   };
 
   async function submit(event: React.FormEvent) {
@@ -191,7 +193,7 @@ export function AccountPanel({ market }: { market: string }) {
   if (!checked) {
     return (
       <section className="mx-auto flex min-h-[60vh] w-full max-w-md items-center justify-center px-4">
-        <p className="text-sm text-fg-subtle">Checking your account...</p>
+        <p className="text-sm text-fg-subtle">{ui("Checking your account...")}</p>
       </section>
     );
   }
@@ -204,19 +206,18 @@ export function AccountPanel({ market }: { market: string }) {
             {(account.name || account.email).charAt(0).toUpperCase()}
           </span>
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-fg-subtle">
-            You are signed in
-          </p>
+            {ui("You are signed in")}</p>
           <h1 className="mt-2 text-2xl font-bold text-fg">{account.name}</h1>
           <p className="mt-1 text-sm text-fg-muted">{account.email}</p>
 
           <div className="mt-6 rounded-2xl bg-surface-2 p-5 text-left">
             <p className="text-sm font-bold text-fg">
-              {account.membership === "club" ? "Club member" : "Free account"}
+              {account.membership === "club" ? ui("Club member") : ui("Free account")}
             </p>
             <p className="mt-1 text-sm text-fg-muted">
               {account.membership === "club"
-                ? "Club benefits are active on this account."
-                : "You are on the free plan. Everything on the site is included."}
+                ? ui("Club benefits are active on this account.")
+                : ui("You are on the free plan. Everything on the site is included.")}
             </p>
           </div>
 
@@ -225,21 +226,18 @@ export function AccountPanel({ market }: { market: string }) {
               href={`/${market}/saved`}
               className="flex h-12 items-center justify-center rounded-full bg-lime text-sm font-semibold text-ink transition-opacity hover:opacity-88"
             >
-              Saved products
-            </Link>
+              {ui("Saved products")}</Link>
             <Link
               href={`/${market}`}
               className="flex h-12 items-center justify-center rounded-full border border-border text-sm font-semibold text-fg transition-colors hover:bg-surface-2"
             >
-              Back to today&rsquo;s drop
-            </Link>
+              {ui("Back to today’s drop")}</Link>
             <button
               type="button"
               onClick={signOut}
               className="h-12 rounded-full border border-border text-sm font-semibold text-fg transition-colors hover:bg-surface-2"
             >
-              Log out
-            </button>
+              {ui("Log out")}</button>
           </div>
         </div>
       </section>
@@ -255,7 +253,7 @@ export function AccountPanel({ market }: { market: string }) {
   return (
     <section className="mx-auto w-full max-w-md px-4 py-12 sm:py-16">
       <div className="rounded-3xl border border-border bg-surface p-8">
-        <h1 className="text-2xl font-bold text-fg">{TITLES[mode]}</h1>
+        <h1 className="text-2xl font-bold text-fg">{ui(TITLES[mode])}</h1>
 
         {showTabs && (
           <div className="mt-5 flex gap-2">
@@ -271,7 +269,7 @@ export function AccountPanel({ market }: { market: string }) {
                     : "border-border text-fg hover:bg-surface-2",
                 )}
               >
-                {tab === "register" ? "Create account" : "Sign in"}
+                {tab === "register" ? ui("Create account") : ui("Sign in")}
               </button>
             ))}
           </div>
@@ -289,12 +287,10 @@ export function AccountPanel({ market }: { market: string }) {
                 <path fill="#FBBC05" d="M3.97 10.72a5.4 5.4 0 0 1 0-3.44V4.95H.96a9 9 0 0 0 0 8.1l3.01-2.33Z" />
                 <path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58C13.46.9 11.43 0 9 0A9 9 0 0 0 .96 4.95l3.01 2.33C4.68 5.16 6.66 3.58 9 3.58Z" />
               </svg>
-              Continue with Google
-            </a>
+              {ui("Continue with Google")}</a>
             <p className="my-5 flex items-center gap-3 text-xs font-semibold text-fg-subtle">
               <span className="h-px flex-1 bg-border" />
-              or
-              <span className="h-px flex-1 bg-border" />
+              {ui("or")}<span className="h-px flex-1 bg-border" />
             </p>
           </>
         )}
@@ -302,8 +298,7 @@ export function AccountPanel({ market }: { market: string }) {
         <form onSubmit={submit} className={cn("grid gap-4", showTabs && !googleReady && "mt-5")}>
           {isRegister && (
             <label className="block text-xs font-bold text-fg">
-              Name
-              <input
+              {ui("Name")}<input
                 value={name}
                 onChange={(event) => setName(event.target.value)}
                 autoComplete="name"
@@ -315,8 +310,7 @@ export function AccountPanel({ market }: { market: string }) {
 
           {!isReset && (
             <label className="block text-xs font-bold text-fg">
-              Email
-              <input
+              {ui("Email")}<input
                 type="email"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
@@ -329,8 +323,7 @@ export function AccountPanel({ market }: { market: string }) {
 
           {showPassword && (
             <label className="block text-xs font-bold text-fg">
-              Password
-              {/*
+              {ui("Password")}{/*
                 * With a way to look at it.
                 *
                 * Twelve characters and four rules to satisfy, typed blind on a
@@ -355,7 +348,7 @@ export function AccountPanel({ market }: { market: string }) {
                   onClick={() => setPasswordVisible((shown) => !shown)}
                   /* Labelled rather than titled: a screen reader has to be told
                      what the eye does, and the label has to change with it. */
-                  aria-label={passwordVisible ? "Hide password" : "Show password"}
+                  aria-label={passwordVisible ? ui("Hide password") : ui("Show password")}
                   aria-pressed={passwordVisible}
                   className="absolute inset-y-0 right-0 flex w-12 cursor-pointer items-center justify-center text-fg-subtle transition-colors hover:text-fg"
                 >
@@ -372,8 +365,8 @@ export function AccountPanel({ market }: { market: string }) {
           {(isRegister || isReset) && (
             <ul className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-fg-subtle">
               {PASSWORD_RULES.map(([label, met]) => (
-                <li key={label} className={cn(met(password) && "font-semibold text-lime-deep")}>
-                  {met(password) ? "✓" : "○"} {label}
+                <li key={ui(label)} className={cn(met(password) && "font-semibold text-lime-deep")}>
+                  {met(password) ? "✓" : "○"} {ui(label)}
                 </li>
               ))}
             </ul>
@@ -389,10 +382,10 @@ export function AccountPanel({ market }: { market: string }) {
                 className="mt-0.5 h-4 w-4 shrink-0"
               />
               <span>
-                I agree to the{" "}
-                <Link href={`/${market}/terms`} className="text-fg underline underline-offset-4">Terms</Link>{" "}
-                and{" "}
-                <Link href={`/${market}/privacy`} className="text-fg underline underline-offset-4">Privacy Policy</Link>.
+                {ui("I agree to the")}{" "}
+                <Link href={`/${market}/terms`} className="text-fg underline underline-offset-4">{ui("Terms")}</Link>{" "}
+                {ui("and")}{" "}
+                <Link href={`/${market}/privacy`} className="text-fg underline underline-offset-4">{ui("Privacy Policy")}</Link>.
               </span>
             </label>
           )}
@@ -403,8 +396,7 @@ export function AccountPanel({ market }: { market: string }) {
               onClick={() => switchTo("forgot")}
               className="justify-self-end text-xs font-semibold text-fg-muted underline underline-offset-4"
             >
-              Forgot password?
-            </button>
+              {ui("Forgot password?")}</button>
           )}
 
           <button
@@ -413,12 +405,12 @@ export function AccountPanel({ market }: { market: string }) {
             className="h-12 rounded-full bg-lime text-sm font-semibold text-ink transition-opacity hover:opacity-88 disabled:opacity-60"
           >
             {isForgot
-              ? "Email me a reset link"
+              ? ui("Email me a reset link")
               : isReset
-                ? "Save new password"
+                ? ui("Save new password")
                 : isRegister
-                  ? "Create free account"
-                  : "Sign in"}
+                  ? ui("Create free account")
+                  : ui("Sign in")}
           </button>
 
           {(isForgot || isReset) && (
@@ -427,13 +419,12 @@ export function AccountPanel({ market }: { market: string }) {
               onClick={() => switchTo("login")}
               className="text-xs font-semibold text-fg-muted underline underline-offset-4"
             >
-              Back to sign in
-            </button>
+              {ui("Back to sign in")}</button>
           )}
 
           {message && (
             <p className={cn("text-center text-sm leading-relaxed", failed ? "text-danger" : "text-fg-subtle")}>
-              {message}
+              {ui(message)}
             </p>
           )}
         </form>

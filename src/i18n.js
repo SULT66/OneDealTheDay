@@ -1490,7 +1490,7 @@ const copy = {
 const categoryNames = {
   en: {
     "Electronics": "Electronics", "Home & Kitchen": "Home & Kitchen", "Furniture": "Furniture",
-    "Office": "Office", "Tools & DIY": "Tools & DIY", "Automotive": "Automotive",
+    "Office": "Office", "Arts & Crafts": "Arts & Crafts", "Tools & DIY": "Tools & DIY", "Automotive": "Automotive",
     "Sports & Outdoors": "Sports & Outdoors", "Bikes & Mobility": "Bikes & Mobility",
     "Health & Beauty": "Health & Beauty", "Fashion": "Fashion", "Pet Supplies": "Pet Supplies",
     "Toys & Games": "Toys & Games", "Baby & Kids": "Baby & Kids", "Travel": "Travel",
@@ -1498,7 +1498,7 @@ const categoryNames = {
   },
   es: {
     "Electronics": "Electrónica", "Home & Kitchen": "Hogar y cocina", "Furniture": "Muebles",
-    "Office": "Oficina", "Tools & DIY": "Herramientas y bricolaje", "Automotive": "Automóvil",
+    "Office": "Oficina", "Arts & Crafts": "Arte y manualidades", "Tools & DIY": "Herramientas y bricolaje", "Automotive": "Automóvil",
     "Sports & Outdoors": "Deportes y aire libre", "Bikes & Mobility": "Bicicletas y movilidad",
     "Health & Beauty": "Salud y belleza", "Fashion": "Moda", "Pet Supplies": "Productos para mascotas",
     "Toys & Games": "Juguetes y juegos", "Baby & Kids": "Bebés y niños", "Travel": "Viajes",
@@ -1506,7 +1506,7 @@ const categoryNames = {
   },
   fr: {
     "Electronics": "Électronique", "Home & Kitchen": "Maison et cuisine", "Furniture": "Meubles",
-    "Office": "Bureau", "Tools & DIY": "Outils et bricolage", "Automotive": "Auto",
+    "Office": "Bureau", "Arts & Crafts": "Arts et loisirs créatifs", "Tools & DIY": "Outils et bricolage", "Automotive": "Auto",
     "Sports & Outdoors": "Sports et plein air", "Bikes & Mobility": "Vélos et mobilité",
     "Health & Beauty": "Santé et beauté", "Fashion": "Mode", "Pet Supplies": "Produits pour animaux",
     "Toys & Games": "Jouets et jeux", "Baby & Kids": "Bébé et enfants", "Travel": "Voyage",
@@ -1514,7 +1514,7 @@ const categoryNames = {
   },
   de: {
     "Electronics": "Elektronik", "Home & Kitchen": "Wohnen und Küche", "Furniture": "Möbel",
-    "Office": "Büro", "Tools & DIY": "Werkzeuge und Heimwerken", "Automotive": "Auto",
+    "Office": "Büro", "Arts & Crafts": "Kunst und Basteln", "Tools & DIY": "Werkzeuge und Heimwerken", "Automotive": "Auto",
     "Sports & Outdoors": "Sport und Outdoor", "Bikes & Mobility": "Fahrräder und Mobilität",
     "Health & Beauty": "Gesundheit und Beauty", "Fashion": "Mode", "Pet Supplies": "Tierbedarf",
     "Toys & Games": "Spielzeug und Spiele", "Baby & Kids": "Baby und Kinder", "Travel": "Reisen",

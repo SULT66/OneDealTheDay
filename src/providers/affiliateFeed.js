@@ -1,3 +1,4 @@
+const { hasDescriptiveTitle } = require("../catalogTitleQuality");
 const crypto = require("crypto");
 const zlib = require("zlib");
 
@@ -503,7 +504,7 @@ async function searchProducts({definition, market, keywords = [], fetchImpl = gl
       const records = parseRecords(downloaded, definition.format).map(normalizedRecord);
       const loaded = records
         .map((record, index) => normalize(record, definition, market, index, map))
-        .filter(product => product.title && product.image_url && product.affiliate_url && product.current_price > 0)
+        .filter(product => hasDescriptiveTitle(product.title) && product.image_url && product.affiliate_url && product.current_price > 0)
         .filter(product => allowedByFeedPolicy(product, definition));
       if (!loaded.length) throw new Error(`${definition.retailerName} feed returned no usable commissionable products`);
       return loaded;

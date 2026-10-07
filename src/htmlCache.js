@@ -74,8 +74,8 @@ const DESCRIBING_HEADERS = ["content-type", "content-encoding", "vary", "x-robot
  * Vary on Cookie because the language is a cookie, and a shared cache that
  * ignored it would hand a Spanish page to the next English visitor.
  */
-const PUBLIC_CACHE_CONTROL = "public, max-age=60, s-maxage=600, stale-while-revalidate=86400";
-const PUBLIC_VARY = "Cookie, Accept-Encoding";
+const PUBLIC_CACHE_CONTROL = "public, max-age=60, s-maxage=600, stale-while-revalidate=60";
+const PUBLIC_VARY = "Cookie, Accept-Encoding, RSC, Next-Router-State-Tree, Next-Router-Prefetch, Next-Url";
 
 /* A cached gzip body is useless to a client that did not ask for gzip. Rare
    enough to simply not answer from cache rather than to hold both forms. */
@@ -100,20 +100,24 @@ function htmlCache(options = {}) {
     if (req.method !== "GET") return next();
     const path = req.path;
     if (!CACHEABLE_PATH.test(path)) return next();
+    // A Flight response is not an HTML document and must never receive one.
+    if (req.headers.rsc || req.headers["next-router-prefetch"] || req.query?._rsc) return next();
+    const daily = /\/daily-drop\/?$/.test(path);
+    const cacheControl = daily ? "private, no-store" : PUBLIC_CACHE_CONTROL;
 
     /* The language is decided per request by the middleware in front of this
        one and changes the whole document, so it belongs in the key rather
        than being hoped away. The URL carries the market and the query. */
     const key = `${req.language || "en"}:${req.originalUrl}`;
     const hit = entries.get(key);
-    if (hit && hit.expiresAt > now() && encodingAccepted(hit, req.headers["accept-encoding"])) {
+    if (!daily && hit && hit.expiresAt > now() && encodingAccepted(hit, req.headers["accept-encoding"])) {
       /* Touch it so the eviction below drops what nobody asks for rather than
          whatever happens to be oldest. */
       entries.delete(key);
       entries.set(key, hit);
       for (const [name, value] of Object.entries(hit.headers)) res.set(name, value);
       return res
-        .set("Cache-Control", PUBLIC_CACHE_CONTROL)
+        .set("Cache-Control", cacheControl)
         .set("Vary", PUBLIC_VARY)
         .set("X-ODD-Cache", "HIT")
         .status(200)
@@ -168,7 +172,7 @@ function htmlCache(options = {}) {
             if (/^cache-control$/i.test(name)) delete argument[name];
           }
         }
-        res.setHeader("Cache-Control", PUBLIC_CACHE_CONTROL);
+        res.setHeader("Cache-Control", cacheControl);
         res.setHeader("Vary", PUBLIC_VARY);
       }
       return originalWriteHead(...args);
@@ -191,7 +195,7 @@ function htmlCache(options = {}) {
       res.write = originalWrite;
       res.end = originalEnd;
       res.writeHead = originalWriteHead;
-      if (!collecting || res.statusCode !== 200) return;
+      if (daily || !collecting || res.statusCode !== 200) return;
       if (!/^text\/html/i.test(String(res.get("content-type") || ""))) return;
       /* A response that sets a cookie is carrying something about this one
          visitor, whatever the body looks like. Not ours to hand to the next

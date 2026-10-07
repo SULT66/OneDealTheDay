@@ -180,6 +180,11 @@ function searchCatalogProducts(rows, options) {
     .filter(product => Number(product.commerce_quality || 0) >= options.minimumQuality)
     .sort(comparator(options.sort));
 
+  const pricesFor = (items) => {
+    const prices = items.map(p => Number(p.current_price)).filter(p => p > 0 && Number.isFinite(p));
+    return prices.length ? { min: Math.floor(Math.min(...prices) * 100) / 100, max: Math.ceil(Math.max(...prices) * 100) / 100 } : { min: 0, max: 0 };
+  };
+  const merchants = facet(scored, retailer);
   const total = scored.length;
   const totalPages = total ? Math.ceil(total / options.limit) : 0;
   const start = (options.page - 1) * options.limit;
@@ -196,7 +201,9 @@ function searchCatalogProducts(rows, options) {
     },
     facets:{
       categories:facet(scored, product => product.normalized_category || product.category),
-      merchants:facet(scored, retailer),
+      merchants,
+      price:pricesFor(scored),
+      priceByMerchant:Object.fromEntries(merchants.map(({value}) => [value, pricesFor(scored.filter(p => retailer(p) === value))])),
       availability:facet(scored, product => product.availability || "Available")
     }
   };

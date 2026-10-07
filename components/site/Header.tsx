@@ -1,3 +1,4 @@
+import { LanguageLink } from "./LanguageLink";
 import Link from "next/link";
 import { getLanguage, hasLanguageChoice, t } from "@/lib/i18n";
 import { languageLinks } from "@/lib/switchers";
@@ -59,7 +60,7 @@ export async function Header({ market }: { market: string }) {
                     * A full document request re-renders the layout and lets
                     * Express set the odd_lang_<market> cookie on the way
                     * through, which is what makes the choice stick. */}
-                    <a
+                    <LanguageLink code={option.code}
                       href={option.href}
                       hrefLang={option.code}
                       aria-current={option.current ? "true" : undefined}
@@ -71,7 +72,7 @@ export async function Header({ market }: { market: string }) {
                       }
                     >
                       {option.code}
-                    </a>
+                    </LanguageLink>
                   </li>
                 ))}
               </ul>

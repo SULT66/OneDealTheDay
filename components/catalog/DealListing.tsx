@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { CaretRight } from "@phosphor-icons/react/ssr";
-import { getActiveRetailers, getCategory, getMarket, getPriceBounds } from "@/lib/catalog";
+import { getCategory, getMarket, getListingFacets } from "@/lib/catalog";
 import type { Deal, DealFilter } from "@/lib/types";
 import { getLanguage, t } from "@/lib/i18n";
 import { DealCard } from "@/components/deal/DealCard";
@@ -107,10 +107,7 @@ export async function DealListing({
   const backendCategory =
     scopeCategory || (filter.category ? getCategory(filter.category)?.name : undefined);
 
-  const [retailers, bounds] = await Promise.all([
-    getActiveRetailers(market, backendCategory),
-    getPriceBounds(market, backendCategory),
-  ]);
+  const { retailers, price: bounds } = await getListingFacets(market, backendCategory, filter.query, filter.retailer);
   const currency = getMarket(market)?.currency ?? "USD";
 
   return (
@@ -164,9 +161,7 @@ export async function DealListing({
                 {t(language, "app.list.noMatches")}
               </h2>
               <p className="mx-auto mt-2 max-w-sm text-sm text-fg-muted">
-                Every listing here has to clear our price, rating and seller
-                checks, so narrow filters can empty the page. Try widening the
-                price range or clearing a filter.
+                {t(language, "app.list.emptyHint")}
               </p>
               <Link
                 href={basePath}
@@ -182,7 +177,7 @@ export async function DealListing({
                   <DealCard
                     deal={deal}
                     market={market}
-                    index={i}
+                    index={(currentPage - 1) * PER_PAGE + i}
                     priority={i < 3}
                   />
                 </li>

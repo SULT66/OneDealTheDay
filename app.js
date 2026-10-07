@@ -546,11 +546,24 @@ function expressWithHomepage(...args) {
        Electronics page listed King Koil, a mattress company, and choosing it
        returned nothing. */
     const facetCategory = String(req.query.category || "").trim();
-    const cacheKey = `facets:${selectedMarket}:${facetCategory}`;
+    const facetQuery = String(req.query.q || "").trim().slice(0, 160);
+    const facetRetailer = String(req.query.retailer || "").trim().slice(0, 100);
+    const cacheKey = `facets:${selectedMarket}:${facetCategory}:${facetQuery}:${facetRetailer}`;
     const cached = cachedValue(cacheKey);
     res.set("Cache-Control", "private, max-age=60, stale-while-revalidate=300");
     if (cached) return res.set("X-ODD-Cache", "HIT").json(cached);
 
+    if (facetQuery) {
+      const rows = searchRowsForMarket(selectedMarket);
+      const interpreted = applySearchIntent({ q: facetQuery, category: facetCategory || undefined }, rows);
+      const result = searchCatalogProducts(rows, parseSearchOptions(interpreted.query));
+      const facets = {
+        retailers: result.facets.merchants.map(row => row.value).sort(),
+        price: facetRetailer ? (result.facets.priceByMerchant[facetRetailer] || {min: 0, max: 0}) : result.facets.price,
+      };
+      cacheValue(cacheKey, facets, 60000);
+      return res.set("X-ODD-Cache", "MISS").json(facets);
+    }
     const where = `market=? AND status='published' AND ${sourceSql()}`
       + (facetCategory ? " AND normalized_category=?" : "");
     const whereValues = facetCategory ? [selectedMarket, facetCategory] : [selectedMarket];
@@ -620,11 +633,11 @@ function expressWithHomepage(...args) {
      */
     const prices = db.prepare(`
       SELECT current_price FROM products
-      WHERE ${where} AND current_price > 0
+      WHERE ${where} AND current_price > 0${facetRetailer ? " AND COALESCE(NULLIF(retailer_name,''),source)=?" : ""}
       ORDER BY current_price
-    `).all(...whereValues).map(row => Number(row.current_price));
+    `).all(...whereValues, ...(facetRetailer ? [facetRetailer] : [])).map(row => Number(row.current_price));
     const highest = prices.length
-      ? prices[Math.min(prices.length - 1, Math.floor(prices.length * 0.98))]
+      ? prices[Math.min(prices.length - 1, Math.floor(prices.length * (facetRetailer ? 1 : 0.98)))]
       : 0;
     const lowest = prices.length ? prices[0] : 0;
 
@@ -636,8 +649,8 @@ function expressWithHomepage(...args) {
          already connected here. */
       shops: byRetailer.map(row => ({...row, host: shopHost(row.retailer)})),
       price: {
-        min: Math.max(0, Math.floor((Number(lowest) || 5) / 5) * 5),
-        max: Math.ceil((Number(highest) || 100) / 50) * 50,
+        min: facetRetailer ? lowest : Math.max(0, Math.floor((Number(lowest) || 5) / 5) * 5),
+        max: facetRetailer ? highest : Math.ceil((Number(highest) || 100) / 50) * 50,
       },
     };
     cacheValue(cacheKey, facets, 60000);

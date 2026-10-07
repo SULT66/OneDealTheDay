@@ -106,16 +106,17 @@ jobs:
           attempt=0
           while (( SECONDS < deadline )); do
             attempt=$(( attempt + 1 ))
-            if curl --fail --silent --show-error --max-time 20 "${host}/api/status" > /dev/null; then
+            if curl --fail --silent --show-error --max-time 20 "${host}/api/status" > "${RUNNER_TEMP}/odd-health.json" &&
+               node -e 'const fs=require("fs"); const status=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); process.exit(status.releaseId===process.env.GITHUB_SHA ? 0 : 1)' "${RUNNER_TEMP}/odd-health.json"; then
               echo "Healthy after ${attempt} attempt(s), $(( 600 - (deadline - SECONDS) ))s."
               exit 0
             fi
-            echo "Attempt ${attempt}: not answering yet ($(( deadline - SECONDS ))s left)."
+            echo "Attempt ${attempt}: new release not ready yet ($(( deadline - SECONDS ))s left)."
             # Out of time is a stop, not a tighter loop against a struggling site.
             if (( SECONDS + 15 >= deadline )); then break; fi
             sleep 15
           done
-          echo "Production did not answer within 10 minutes of the deploy."
+          echo "The expected release did not start within 10 minutes of the deploy."
           exit 1
 
       - name: Collect Azure startup logs after failed health check

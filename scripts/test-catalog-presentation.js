@@ -240,7 +240,7 @@ assert(
 const todaysDropSource = /export async function getTodaysDrop\([\s\S]*?\n\}/.exec(catalogSource);
 assert(todaysDropSource, "getTodaysDrop moved out of lib/catalog.ts");
 assert(
-  /fetchMarketCatalog\(marketCode, 1\)/.test(todaysDropSource[0]),
+  /fetchMarketCatalog\(marketCode, 1(?:, undefined, true)?\)/.test(todaysDropSource[0]),
   "Daily Drop downloads the complete market catalogue again",
 );
 const archiveSource = /export async function getArchive\([\s\S]*?\n\}/.exec(catalogSource);
