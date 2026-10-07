@@ -8,7 +8,7 @@ const RETAILERS = Object.freeze([
   {id:"home-depot", name:"Home Depot", network:"Impact", markets:["us", "ca"]},
   {id:"lowes", name:"Lowe's", network:"Impact", markets:["us", "ca"]},
   {id:"wayfair", name:"Wayfair", network:"CJ Affiliate", markets:["us", "ca", "uk", "de"]},
-  {id:"aliexpress", name:"AliExpress", network:"AliExpress Portals", markets:["us", "ca", "uk", "fr", "de"]},
+  {id:"aliexpress", name:"AliExpress", network:"AliExpress Portals", markets:["us", "ca", "uk", "fr", "de"], nativeProvider:"aliexpress"},
   {
     id:"tribesigns",
     name:"Tribesigns",
