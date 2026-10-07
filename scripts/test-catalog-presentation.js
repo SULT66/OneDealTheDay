@@ -240,7 +240,10 @@ assert(
 const todaysDropSource = /export async function getTodaysDrop\([\s\S]*?\n\}/.exec(catalogSource);
 assert(todaysDropSource, "getTodaysDrop moved out of lib/catalog.ts");
 assert(
-  /fetchMarketCatalog\(marketCode, 1(?:, undefined, true)?\)/.test(todaysDropSource[0]),
+  /* The day's selection is ten deep and the page may look past a pick whose
+     price has gone stale since, so a small bounded request belongs here. What
+     this guards against is asking for the whole market. */
+  /fetchMarketCatalog\(marketCode, (?:DROP_SHORTLIST|10|[1-9])(?:, undefined, true)?\)/.test(todaysDropSource[0]),
   "Daily Drop downloads the complete market catalogue again",
 );
 const archiveSource = /export async function getArchive\([\s\S]*?\n\}/.exec(catalogSource);
