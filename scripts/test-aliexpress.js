@@ -184,7 +184,13 @@ const fakeFetch = async (url) => {
   /* ---------------------------------------------------------- the rotation */
 
   const terms = ["a", "b", "c", "d", "e", "f", "g", "h"];
-  assert.strictEqual(keywordsForRun(terms, { perRun: 3 }).length, 3, "one run must not spend the whole list");
+  /* A fixed clock: the slice a run takes depends on the hour, and the last
+     slice of an uneven list is short by design. */
+  assert.deepStrictEqual(keywordsForRun(terms, { perRun: 3, now: 0 }), ["a", "b", "c"]);
+  for (let hours = 0; hours < 48; hours += 3) {
+    const slice = keywordsForRun(terms, { perRun: 3, now: hours * 3600 * 1000 });
+    assert.ok(slice.length >= 1 && slice.length <= 3, "one run must not spend the whole list");
+  }
   assert.deepStrictEqual(keywordsForRun(terms, { rotate: false }), terms);
   const slices = new Set();
   for (let hours = 0; hours < 24; hours += 3) {
