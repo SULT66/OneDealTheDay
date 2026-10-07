@@ -40,6 +40,10 @@ const FALLBACK_CATEGORY: Omit<Category, "slug" | "name"> = {
  * than the public domain — no DNS/TLS round trip for a request that never
  * leaves the machine.
  */
+/* How far down the day's selection the page may look for a pick whose price
+   is still confirmed. The backend saves ten. */
+const DROP_SHORTLIST = 10;
+
 export const BACKEND_URL =
   process.env.BACKEND_API_URL || `http://127.0.0.1:${process.env.PORT || 8088}`;
 
@@ -376,12 +380,21 @@ export const getDeal = cache(
 );
 
 /** Rank 1 — the single pick the whole site is built around. */
+/**
+ * Today's pick, or nothing.
+ *
+ * The badge on this page says "Checked today", so a listing whose price was
+ * last confirmed yesterday cannot be shown under it. That part has always been
+ * right. What was wrong was asking only the first pick: the day's selection is
+ * ten deep, and one stale listing at the top emptied the whole page while the
+ * nine behind it were fine. The backend now picks only from listings confirmed
+ * in the same run (src/catalogRecalculation.js), and this looks past one that
+ * has gone stale since — at midnight, in the quarter of an hour before the new
+ * selection runs, that is the difference between a page and an apology.
+ */
 export async function getTodaysDrop(marketCode: string): Promise<Deal | undefined> {
-  const deals = await fetchMarketCatalog(marketCode, 1, undefined, true);
-  const drop = deals[0];
-  // A stale listing cannot be presented as checked today.
-  if (!drop || !drop.priceIsCurrent || !isCheckedToday(drop.checkedAt, marketCode)) return undefined;
-  return drop;
+  const deals = await fetchMarketCatalog(marketCode, DROP_SHORTLIST, undefined, true);
+  return deals.find(deal => deal.priceIsCurrent && isCheckedToday(deal.checkedAt, marketCode));
 }
 
 /**

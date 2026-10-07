@@ -1,5 +1,6 @@
 const { hasDescriptiveTitle } = require("./catalogTitleQuality");
 const { market } = require("./markets");
+const { isCheckedToday } = require("./marketCalendar");
 const { normalizeProductIdentity } = require("./productIdentity");
 const { SCORE_MODEL, isDailyPickEligible, scoreOffers, selectUniqueProducts } = require("./ranker");
 const { TAXONOMY_VERSION, normalizeCatalogProduct } = require("./catalogTaxonomy");
@@ -118,7 +119,24 @@ function recalculateCatalog(db, marketCodes = ["us", "ca", "uk", "fr", "de"], op
       maximumShippingRatio:0.5
     });
     for (const product of scored) scoredById.set(product.id, product);
-    selectedByMarket.set(code, selectUniqueProducts(scored).filter(isDailyPickEligible).slice(0, 10));
+    /*
+     * And its price has to have been confirmed today.
+     *
+     * The page that shows the pick carries a "Checked today" badge, and it
+     * will not print that over a price from yesterday — quite rightly. But the
+     * selection did not apply the same rule, so a listing that scored well and
+     * was not re-checked in this run could be chosen as number one, and the
+     * page then had a drop it was not willing to show and fell back to "no
+     * freshly checked drop today" while nine perfectly good picks sat behind
+     * it. The two ends now agree on what "today" means.
+     *
+     * If nothing was confirmed today there is no honest pick, and an empty
+     * slot is what this site says it does in that case rather than filling it.
+     */
+    const confirmedToday = selectUniqueProducts(scored)
+      .filter(isDailyPickEligible)
+      .filter(product => isCheckedToday(product.checked_at, code));
+    selectedByMarket.set(code, confirmedToday.slice(0, 10));
   }
 
   let selectionCount = 0;
