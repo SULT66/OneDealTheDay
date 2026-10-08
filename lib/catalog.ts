@@ -394,7 +394,19 @@ export const getDeal = cache(
  */
 export async function getTodaysDrop(marketCode: string): Promise<Deal | undefined> {
   const deals = await fetchMarketCatalog(marketCode, DROP_SHORTLIST, undefined, true);
-  return deals.find(deal => deal.priceIsCurrent && isCheckedToday(deal.checkedAt, marketCode));
+  /*
+   * A price we can still stand behind, which is not the same question as
+   * which calendar day it was checked on.
+   *
+   * Requiring today's date emptied the page for the quarter of an hour after
+   * midnight every night: the stored selection is the one made the previous
+   * day, so at 00:10 nothing in it had been checked "today" and there was
+   * nothing to fall back to. The honest fix is not to loosen what we claim
+   * but to claim the right thing — the badge below now says when the price
+   * was checked instead of asserting a day. priceIsCurrent is the site's own
+   * staleness rule (STALE_OFFER_HOURS), the same one every product page uses.
+   */
+  return deals.find(deal => deal.priceIsCurrent);
 }
 
 /**

@@ -4,6 +4,7 @@ import { ArrowRight, ShieldCheck } from "@phosphor-icons/react/ssr";
 import { getMarket, getTodaysDrop } from "@/lib/catalog";
 import { countryName, getLanguage, t } from "@/lib/i18n";
 import { formatDateTime } from "@/lib/format";
+import { isCheckedToday } from "@/src/marketCalendar";
 import { NextDropCountdown } from "@/components/site/NextDropCountdown";
 import { SectionHeader } from "@/components/site/SectionHeader";
 import { FeaturedDeal } from "@/components/deal/FeaturedDeal";
@@ -130,7 +131,14 @@ export default async function DailyDropPage({
       <section aria-labelledby="drop-title" className="mt-20">
         <SectionHeader
           id="drop-title"
-          eyebrow={t(language, "app.drop.checkedToday")}
+          /* "Checked today" only when it was. Otherwise the date itself,
+             which is the one thing that is always true and is what a shopper
+             wanted to know by reading the badge. */
+          eyebrow={
+            isCheckedToday(drop.checkedAt, market)
+              ? t(language, "app.drop.checkedToday")
+              : t(language, "app.drop.checkedOn", { checkedAt: formatDateTime(drop.checkedAt, market) })
+          }
           title={t(language, "app.drop.todaysPick")}
         />
         <FeaturedDeal deal={drop} market={market} />
