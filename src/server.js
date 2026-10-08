@@ -2805,6 +2805,7 @@ const compactApiProduct = product => ({
   current_price:product.current_price,
   original_price:product.original_price,
   currency:product.currency,
+  coupons:product.coupons,
   display_score:product.display_score,
   /* How far below our own tracked high this price is, and the lowest we
      recorded. Zero when the price has not moved, which is most of them. */

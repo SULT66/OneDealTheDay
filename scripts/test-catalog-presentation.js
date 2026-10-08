@@ -428,3 +428,11 @@ assert(!hasDescriptiveTitle("Shipping Protection"));
 assert(!hasDescriptiveTitle("Make up the difference | Remote Area Shipping Fee"));
 assert(hasDescriptiveTitle("Shipping Boxes 20 Pack"));
 assert(hasDescriptiveTitle("Laptop with free shipping"));
+
+// Coupon data must survive both compact API routes, not just the Daily Drop list.
+const detailProjection = /const compactApiProduct = product => \(\{[\s\S]*?\n\}\);/.exec(read("src", "server.js"));
+assert(detailProjection, "The product detail projection is missing");
+const vm = require("vm");
+const projectDetail = vm.runInNewContext(detailProjection[0] + "; compactApiProduct;");
+const sourceCoupons = [{code:"EXTRA20",message:"20% off",termsUrl:"https://www.ebay.com/terms",expiresAt:"2099-01-01"}];
+assert.deepStrictEqual(projectDetail({id:1,coupons:sourceCoupons}).coupons,sourceCoupons,"The detail API lost the coupon shown on Daily Drop");
