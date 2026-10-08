@@ -153,6 +153,17 @@ assert.deepStrictEqual(rescueQuery(index, "couch"), { query: "sofa", reason: "sy
 assert.deepStrictEqual(rescueQuery(index, "offce chair"), { query: "office chair", reason: "spelling" });
 assert.strictEqual(rescueQuery(index, "helicopter"), null, "a word the catalogue knows nothing about was rescued");
 
+/* Half a word is not a typo. "tab" is on the way to "table"; it is not a
+   misspelling of anything, and treating it as one let it reach words with no
+   letters in common beyond the first three. */
+assert.strictEqual(closestPhrase(index, "tab"), null, "a fragment was corrected into an unrelated word");
+assert.strictEqual(closestPhrase(index, "off"), null, "a fragment was corrected into an unrelated word");
+/* Because each word has to be within its own allowance, not merely add up to
+   one: editDistance gives up at one past its limit, and that sentinel must not
+   be counted as a real distance. */
+assert.ok(editDistance("tab", "sofa", 1) > 1);
+assert.ok(editDistance("tab", "sofa", 2) > 2);
+
 /* And a rescue is checked before it is offered: a replacement that would land
    on another empty page is not a rescue. */
 assert.strictEqual(

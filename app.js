@@ -46,7 +46,7 @@ const { recalculateCatalog } = require("./src/catalogRecalculation");
 const { TAXONOMY_VERSION } = require("./src/catalogTaxonomy");
 const { RELEASE_ID } = require("./src/release");
 const { isUnavailable, parseSearchOptions, searchCatalogProducts } = require("./src/catalogSearch");
-const { buildSuggestIndex, suggestTerms } = require("./src/searchSuggest");
+const { buildSuggestIndex, knowsPhrase, suggestTerms } = require("./src/searchSuggest");
 const { rescueQuery } = require("./src/searchFallback");
 const { recordSearch, searchDemand } = require("./src/searchQueries");
 const { categoryLabel } = require("./src/i18n");
@@ -260,6 +260,35 @@ function expressWithHomepage(...args) {
     let result = searchCatalogProducts(rows, options);
     let terms = suggestTerms(index, query);
     let correctedFrom = null;
+    /*
+     * Half a word is not a word.
+     *
+     * Somebody typing "tab" is on the way to "table", and the suggestions say
+     * so correctly. But the listings underneath them were searched for the
+     * fragment itself, which matches "adjustable" and "portable" — so the box
+     * offered six kinds of table above a kettlebell and a label maker.
+     *
+     * So when what has been typed is not a phrase the catalogue actually uses,
+     * the listings are searched for the best thing it is on the way to. The
+     * words stay the shopper's; what is searched underneath them is a word.
+     */
+    if (!knowsPhrase(index, query) && !terms.length) {
+      /* Half a word that is not on the way to anything either. Searching it
+         raw matches it inside other words and answers "tab" with a kettlebell,
+         so the listings are dropped and the rescue below gets its turn. */
+      result = {...result, products:[], pagination:{...result.pagination, total:0}};
+    } else if (!knowsPhrase(index, query) && terms.length) {
+      const best = terms.reduce((widest, candidate) => (candidate.count > widest.count ? candidate : widest));
+      try {
+        options = parseSearchOptions({q:best.phrase, limit:6});
+        result = searchCatalogProducts(rows, options);
+        searched = best.phrase;
+      } catch {
+        /* A phrase that cannot be parsed is not an improvement. */
+        searched = query;
+      }
+    }
+
     /*
      * Nothing matched what was typed — so try the two commonest ways to miss
      * by a hair before showing an empty box. The replacement has to be a
