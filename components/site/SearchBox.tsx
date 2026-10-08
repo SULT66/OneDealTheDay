@@ -275,7 +275,9 @@ export function SearchBox({
           router.push(q ? `/${market}/search?q=${encodeURIComponent(q)}` : `/${market}`);
         }}
       >
-        <div className="flex h-12 items-center gap-2 rounded-full border border-border bg-surface pl-4 pr-1.5 transition-colors focus-within:border-border-strong">
+        {/* Focus shows on the pill, not as a ring around the field inside it;
+            see .focus-self in globals.css for why that needed saying. */}
+        <div className="flex h-12 items-center gap-2 rounded-full border border-border bg-surface pl-4 pr-1.5 transition-colors focus-within:border-fg-subtle">
           <MagnifyingGlass
             size={18}
             weight="bold"
@@ -316,7 +318,7 @@ export function SearchBox({
             aria-activedescendant={active >= 0 ? optionId(active) : undefined}
             // h-full so the tap target is the whole 48px pill, not the ~23px
             // intrinsic height of the text box.
-            className="h-full min-w-0 flex-1 bg-transparent text-[0.95rem] text-fg outline-none placeholder:text-fg-subtle"
+            className="focus-self h-full min-w-0 flex-1 bg-transparent text-[0.95rem] text-fg outline-none placeholder:text-fg-subtle"
           />
           <button
             type="submit"
