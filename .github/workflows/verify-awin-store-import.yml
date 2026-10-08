@@ -1,0 +1,36 @@
+name: Verify Awin store import
+on:
+  push:
+    branches: [verify/awin-store-import]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Verify enabled feeds and public store listings
+        shell: python
+        run: |
+          import json, time, urllib.request
+          base = "https://www.onedailydrop.com"
+          required = {"feed-grommet-us", "feed-gmktec-us", "feed-fntcase-us"}
+          for attempt in range(1, 16):
+              try:
+                  with urllib.request.urlopen(base + "/api/status?market=us", timeout=20) as response:
+                      status = json.load(response)
+                  enabled = {source["id"] for source in status.get("sources", [])}
+                  with urllib.request.urlopen(base + "/api/catalog-facets?market=us", timeout=30) as response:
+                      facets = json.load(response)
+                  shops = {row["retailer"]: row["listings"] for row in facets.get("shops", [])}
+                  counts = {name: shops.get(name, 0) for name in ["Grommet", "GMKtec", "FNTCASE"]}
+                  result = {"attempt": attempt, "releaseId": status.get("releaseId"), "uptimeSeconds": status.get("uptimeSeconds"), "enabled": sorted(required & enabled), "listings": counts, "lastRun": status.get("lastRun")}
+                  print(json.dumps(result), flush=True)
+                  if required <= enabled and all(count > 0 for count in counts.values()):
+                      print("All three Awin stores are enabled and have public catalog listings.", flush=True)
+                      break
+              except Exception as error:
+                  print("Attempt %s: %s" % (attempt, error), flush=True)
+              if attempt == 15:
+                  raise SystemExit("Awin import could not be verified within the polling window")
+              time.sleep(30)
