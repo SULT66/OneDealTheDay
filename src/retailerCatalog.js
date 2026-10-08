@@ -10,6 +10,21 @@ const RETAILERS = Object.freeze([
   {id:"wayfair", name:"Wayfair", network:"CJ Affiliate", markets:["us", "ca", "uk", "de"]},
   {id:"aliexpress", name:"AliExpress", network:"AliExpress Portals", markets:["us", "ca", "uk", "fr", "de"], nativeProvider:"aliexpress"},
   {
+    id:"grommet", name:"Grommet", network:"Awin", markets:["us"],
+    maxCatalogProducts:150,
+    feedPolicy:{spreadAcrossFeed:true, excludeTitleTerms:["not sold separately", "not for sale", "non-delivery", "gift card", "purchase protection"]}
+  },
+  {
+    id:"gmktec", name:"GMKtec", network:"Awin", markets:["us"],
+    maxCatalogProducts:100,
+    feedPolicy:{spreadAcrossFeed:true, excludeTitleTerms:["not sold separately", "not for sale", "non-delivery", "extended warranty", "purchase protection"]}
+  },
+  {
+    id:"fntcase", name:"FNTCASE", network:"Awin", markets:["us"],
+    maxCatalogProducts:100,
+    feedPolicy:{spreadAcrossFeed:true, excludeTitleTerms:["not sold separately", "not for sale", "non-delivery", "purchase protection"]}
+  },
+  {
     id:"tribesigns",
     name:"Tribesigns",
     network:"Awin",

@@ -73,6 +73,28 @@ must be stored only in the hosting provider's encrypted app settings.
 
 ### Tribesigns, Mooncool, Giftlab and King Koil through Awin
 
+Grommet (Awin advertiser 99907), GMKtec (45751), and FNTCASE / Shenzhen
+Feinuote (45915) are also built-in US retailers. Accept the FNTCASE invitation
+in Awin before enabling its catalog. Create separate USD feeds with tracked
+`aw_deep_link` URLs, then configure these server-only Azure App Settings:
+
+- `AFFILIATE_FEED_GROMMET_US_URL`
+- `AFFILIATE_FEED_GMKTEC_US_URL`
+- `AFFILIATE_FEED_FNTCASE_US_URL`
+
+These stores remain disabled until their signed feed URLs are configured.
+Grommet is US-only. Its program excludes products with the `New` tag during
+their first seven days; confirm the selected feed contains only eligible
+products before enabling it. Catalog limits are 150 Grommet, 100 GMKtec, and
+100 FNTCASE products, sampled across each feed to limit variant crowding.
+The normal six-hour offer checks, tracked outbound links, regional currency
+checks, catalog search, and Daily Drop editorial gates apply to all three.
+Checkout protection, GMKtec extended warranties, and Grommet gift cards are
+excluded. Do not fabricate reviews, shipping prices, or return terms. When
+the feed omits delivery or returns, configure the corresponding verified
+`_SHIPPING_JSON` and `_RETURNS` settings; otherwise the existing Daily Drop
+gate keeps those offers out of the daily selection.
+
 Tribesigns (US), Mooncool (US and Canada), Giftlab (US), and King Koil (US) are built-in Awin retailers. In
 Awin, create a separate market/currency feed for each storefront. Google-format
 feeds should include at least `id`, `title`, `description`,

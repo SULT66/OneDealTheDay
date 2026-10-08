@@ -43,7 +43,7 @@ process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "onedailydrop-autom
 
 const { RETAILERS, feedDefinitions } = require("../src/retailerCatalog");
 const { searchAll, searchForAssistant } = require("../src/providers/registry");
-const { allowedByFeedPolicy, download, parseDelimited, parseRecords, safeFeedUrl } = require("../src/providers/affiliateFeed");
+const { allowedByFeedPolicy, download, normalize, parseDelimited, parseRecords, safeFeedUrl } = require("../src/providers/affiliateFeed");
 const { scoreOffers, selectUniqueProducts } = require("../src/ranker");
 const { refreshMarket, sortByCurrentScore } = require("../src/refresh");
 const { recalculateCatalog } = require("../src/catalogRecalculation");
@@ -51,6 +51,33 @@ const { missingConfiguredProviders } = require("../src/catalogRecovery");
 const db = require("../src/db");
 
 assert(RETAILERS.length >= 20, "The complete target retailer catalog is missing");
+// New Awin stores must be opt-in, US-only, and retain the tracked sale URL.
+for (const [id, name, maxProducts, title] of [
+  ["grommet", "Grommet", 150, "Reusable Silicone Food Storage Bags"],
+  ["gmktec", "GMKtec", 100, "GMKtec NucBox Mini PC"],
+  ["fntcase", "FNTCASE", 100, "Samsung Galaxy Protective Phone Case"],
+]) {
+  assert(!feedDefinitions({}).some(feed => feed.retailerId === id));
+  const prefix = `AFFILIATE_FEED_${id.toUpperCase()}_US`;
+  const [feed] = feedDefinitions({[`${prefix}_URL`]:`https://productdata.awin.com/${id}.csv.gz`});
+  assert.strictEqual(feed.retailerName, name);
+  assert.deepStrictEqual(feed.markets, ["us"]);
+  assert.strictEqual(feed.maxProducts, maxProducts);
+  assert.strictEqual(feed.shipping, null);
+  assert.strictEqual(feed.returns, null);
+  assert(allowedByFeedPolicy({title, category:""}, feed));
+  assert(!allowedByFeedPolicy({title:"Purchase Protection", category:""}, feed));
+  const tracked = `https://www.awin1.com/cread.php?awinmid=1&awinaffid=3018019&ued=https%3A%2F%2Fshop.test%2Fproduct`;
+  const product = normalize({
+    id:"test-variant", title, price:"100 USD", sale_price:"80 USD", currency:"USD",
+    image_link:"https://images.test/product.jpg", link:"https://shop.test/product",
+    aw_deep_link:tracked, availability:"in_stock",
+  }, feed, {code:"us", currency:"USD"}, 0, {});
+  assert.strictEqual(product.current_price, 80);
+  assert.strictEqual(product.affiliate_url, tracked);
+  assert.strictEqual(product.source, `feed-${id}`);
+  assert.strictEqual(product.shipping_cost, null);
+}
 for (const retailer of ["Amazon", "eBay", "Walmart", "Target", "Best Buy", "Tribesigns", "Mooncool", "Giftlab", "King Koil", "FED Fitness", "Currys", "Fnac", "Darty", "MediaMarkt", "Saturn", "OTTO", "Samsung"]) {
   assert(RETAILERS.some(item => item.name === retailer), `${retailer} is missing from retailer coverage`);
 }
