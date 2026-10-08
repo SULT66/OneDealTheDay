@@ -90,6 +90,9 @@ const searchRowsForMarket = marketCode => {
 if (config.isProduction) {
   const recalculated = recalculateCatalog(db, marketCodes, {selectionMarkets:config.markets});
   if (recalculated.changed) console.log(`Recalculated ${recalculated.products} catalog products and ${recalculated.selections} daily selections with ${require("./src/ranker").SCORE_MODEL}.`);
+  require("./src/couponRefresh").backfillDailyCoupons(db, config)
+    .then(count => { if (count) { apiResponseCache.clear(); searchCatalogCache.clear(); } })
+    .catch(error => console.warn(`[coupons] ${error.message}`));
 }
 
 if (!config.liveRefreshEnabled) {
@@ -357,6 +360,7 @@ function expressWithHomepage(...args) {
     let options;
     try {
       options = parseSearchOptions(interpreted.query);
+      if (String(req.query.catalog || "") === "1") options.limit = Math.max(1, rows.length);
     } catch (error) {
       res.set("X-Robots-Tag", "noindex, nofollow");
       return res.status(400).json({error:error.message});
@@ -386,6 +390,7 @@ function expressWithHomepage(...args) {
       if (rescue) {
         try {
           const rescued = parseSearchOptions({...interpreted.query, q:rescue.query});
+          if (String(req.query.catalog || "") === "1") rescued.limit = Math.max(1, rows.length);
           const attempt = searchCatalogProducts(rows, rescued);
           if (attempt.pagination.total) {
             correctedFrom = options.query;
@@ -499,6 +504,7 @@ function expressWithHomepage(...args) {
         daily_rank:shaped.daily_rank,
         deal_url:shaped.deal_url,
         display_badge:shaped.display_badge,
+        coupons:shaped.coupons,
         display_score:shaped.display_score,
         display_selection_reason:shaped.display_selection_reason,
         display_product_rating:shaped.display_product_rating,
@@ -740,7 +746,7 @@ function expressWithHomepage(...args) {
      */
     if (!/^[0-9]+$/.test(String(req.params.id || ""))) return next();
     if (!config.isProduction) return next();
-    const product = db.prepare("SELECT source,availability,status FROM products WHERE id=?").get(req.params.id);
+    const product = db.prepare("SELECT source,availability,status,title FROM products WHERE id=?").get(req.params.id);
     if (!isPublicProduct(product)) return res.sendStatus(404);
     return next();
   });
@@ -749,7 +755,7 @@ function expressWithHomepage(...args) {
     if (!config.isProduction) return next();
     const id = String(req.params.slug).match(/-(\d+)$/)?.[1];
     if (!id) return next();
-    const product = db.prepare("SELECT source,availability,status FROM products WHERE id=?").get(id);
+    const product = db.prepare("SELECT source,availability,status,title FROM products WHERE id=?").get(id);
     if (!isPublicProduct(product)) {
       res.set("X-Robots-Tag", "noindex, nofollow");
       return res.sendStatus(410);

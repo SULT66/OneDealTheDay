@@ -88,3 +88,14 @@ assert(allEarbuds.includes(7), "the budget filter fired on a query with no budge
 assert.strictEqual(search("").length, CATALOGUE.length);
 
 console.log("search relevance: ok");
+
+const { parseSearchOptions } = require("../src/catalogSearch");
+const laptops = searchCatalogProducts([
+  {...listing(101,"Arctic Thermal Paste for Laptop CPU",8), ranking_score:99, rating:5, review_count:100},
+  {...listing(102,"Laptop Backpack",35), ranking_score:98},
+  {...listing(103,"Lenovo ThinkPad Laptop 16GB RAM",999), ranking_score:20},
+],parseSearchOptions({q:"laptop"}));
+assert.strictEqual(laptops.products[0].id,103,"Accessories outranked an actual laptop");
+assert.strictEqual(searchCatalogProducts([
+  listing(104,"Laptop Backpack",35)
+],parseSearchOptions({q:"laptop backpack"})).products[0].id,104);

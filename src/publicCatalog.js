@@ -1,4 +1,5 @@
 const config = require("./config");
+const { hasDescriptiveTitle } = require("./catalogTitleQuality");
 
 const enabledSources = new Set((config.enabledSourceIds || [])
   .map(source => String(source || "").trim().toLowerCase())
@@ -43,7 +44,12 @@ const sourceSql = (alias = "") => {
     AND LOWER(COALESCE(${prefix}availability,'')) NOT LIKE '%out of stock%'
     AND LOWER(COALESCE(${prefix}availability,'')) NOT LIKE '%sold out%'
     AND LOWER(COALESCE(${prefix}availability,'')) NOT LIKE '%expired%'
-    AND LOWER(COALESCE(${prefix}availability,'')) NOT LIKE '%discontinued%')`;
+    AND LOWER(COALESCE(${prefix}availability,'')) NOT LIKE '%discontinued%'
+    AND LOWER(COALESCE(${prefix}title,'')) NOT LIKE '%shipping protection%'
+    AND LOWER(COALESCE(${prefix}title,'')) NOT LIKE '%shipping insurance%'
+    AND LOWER(COALESCE(${prefix}title,'')) NOT LIKE '%shipping fee%'
+    AND LOWER(COALESCE(${prefix}title,'')) NOT LIKE '%remote area surcharge%'
+    AND LOWER(COALESCE(${prefix}title,'')) NOT LIKE '%make up the difference%')`;
 };
 
 const isPublicSource = source => PUBLIC_PRODUCT_SOURCES.includes(
@@ -59,7 +65,7 @@ const isWithinConsumerPrice = price => !CONSUMER_PRICE_CEILING ||
 const isPublicProduct = product => Boolean(product) &&
   isPublicSource(product.source) &&
   isAvailable(product.availability) &&
-  product.status === "published";
+  product.status === "published" && hasDescriptiveTitle(product.title);
 
 /**
  * One row per product, for every list the site renders.
@@ -85,6 +91,7 @@ const uniqueProductsInOrder = products => {
   const used = new Set();
   const unique = [];
   for (const product of products || []) {
+    if (!hasDescriptiveTitle(product.title)) continue;
     const marketPrefix = String(product.market || "").toLowerCase();
     const repeat = offerRepeatKey(product);
     const keys = [

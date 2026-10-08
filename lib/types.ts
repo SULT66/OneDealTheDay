@@ -40,6 +40,7 @@ export type Deal = {
   thumbnail: string;
   images: string[];
   price: number;
+  coupons?: Array<{ code: string; message: string; termsUrl: string; expiresAt: string }>;
   /** Retailer's own reference/list price, when one is verified. */
   referencePrice: number | null;
   currency: string;

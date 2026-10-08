@@ -947,6 +947,7 @@ for (const column of [
   "retailer_shop_url",
   "seller_name",
   "shipping_summary",
+  "coupon_json",
   "return_summary",
   "availability",
   "checked_at"

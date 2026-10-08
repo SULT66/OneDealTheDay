@@ -130,3 +130,13 @@ export function searchParamsFromFilter(filter: DealFilter): string {
   const s = params.toString();
   return s ? `?${s}` : "";
 }
+
+/** Same matched products as the grid, before applying each facet's own restriction. */
+export function listingFacets<T extends DealLike>(deals: T[], filter: DealFilter) {
+  const retailers = [...new Set(applyFilter(deals, { minPrice: filter.minPrice, maxPrice: filter.maxPrice }).map(d => d.retailer))].sort();
+  const prices = applyFilter(deals, { retailer: filter.retailer }).map(d => d.price).filter(p => p > 0 && Number.isFinite(p)).sort((a,b) => a-b);
+  const min = prices.length ? Math.floor(prices[0]) : 0;
+  // The upper stop is open ended; exceptional prices remain reachable in the numeric fields.
+  const upper = prices.length ? prices[Math.min(prices.length-1, Math.floor((prices.length-1)*0.8))] : 0;
+  return { retailers, price: { min, max: Math.max(min+1, Math.ceil(upper/10)*10) } };
+}

@@ -223,3 +223,29 @@ const fetchImpl = async (url, options = {}) => {
   console.error(error);
   process.exit(1);
 });
+
+const { normalizeCoupons, publicCoupons } = require("../src/coupons");
+const coupon = {redemptionCode:"EXTRA20",message:"20% off eligible orders",termsWebUrl:"https://www.ebay.com/coupon/terms",constraint:{expirationDate:"2099-01-01T00:00:00Z"}};
+const normalized = normalizeItem({...summary,availableCoupons:[coupon]},"office",1,market);
+assert.strictEqual(publicCoupons(normalized,true)[0].code,"EXTRA20");
+assert.strictEqual(publicCoupons(normalized,true)[0].message,coupon.message);
+assert.strictEqual(publicCoupons(normalized,true)[0].termsUrl,coupon.termsWebUrl);
+assert.deepStrictEqual(publicCoupons(normalized,false),[],"Stale coupons were published");
+assert.deepStrictEqual(normalizeCoupons([{...coupon,constraint:{expirationDate:"2000-01-01"}}]),[]);
+assert.deepStrictEqual(normalizeCoupons([{...coupon,termsWebUrl:"javascript:alert(1)"}]),[]);
+assert.deepStrictEqual(publicCoupons({coupon_json:"broken"},true),[]);
+(async () => {
+  const database = new (require("better-sqlite3"))(":memory:");
+  database.exec(`CREATE TABLE products(id INTEGER PRIMARY KEY,provider_external_id TEXT,market TEXT,source TEXT,status TEXT,coupon_json TEXT);
+    CREATE TABLE daily_drops(product_id INTEGER,market TEXT,rank INTEGER,drop_date TEXT);
+    INSERT INTO products VALUES(1,'ebay:v1|123|0','us','ebay','published',NULL);
+    INSERT INTO daily_drops VALUES(1,'us',1,'2026-10-08');`);
+  const { backfillDailyCoupons } = require("../src/couponRefresh");
+  const changed = await backfillDailyCoupons(database,{ebayClientId:"test",ebayClientSecret:"test",ebayCampaignId:"5339179772"},{getItem:async (id,selected) => {
+    assert.strictEqual(id,"v1|123|0"); assert.strictEqual(selected.code,"us"); return {availableCoupons:[coupon]};
+  }});
+  assert.strictEqual(changed,1);
+  assert.strictEqual(publicCoupons(database.prepare("SELECT * FROM products").get(),true)[0].code,"EXTRA20");
+  assert.strictEqual(await backfillDailyCoupons(database,{ebayClientId:"test",ebayClientSecret:"test",ebayCampaignId:"5339179772"},{getItem:async()=>{throw new Error("Should not repeat backfill");}}),0);
+  database.close();
+})().catch(error => { console.error(error); process.exitCode=1; });

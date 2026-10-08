@@ -314,14 +314,14 @@ async function refreshMarket(config, marketCode, options = {}) {
         INSERT INTO products(
           external_id,provider_external_id,market,product_key,upc,gtin,model_number,brand,brand_slug,manufacturer,mpn,ean,
           title,category,normalized_category,taxonomy_version,description,image_url,affiliate_url,retailer_shop_url,retailer_name,seller_name,seller_rating,seller_feedback_count,shipping_summary,return_summary,
-          shipping_cost,landed_cost,availability,checked_at,rating,review_count,current_price,original_price,currency,badge,
+          shipping_cost,landed_cost,availability,checked_at,rating,review_count,current_price,original_price,currency,badge,coupon_json,
           score,relevance_score,commerce_quality,ranking_score,evidence_confidence,score_breakdown,
           selection_reason,source,status,updated_at,first_seen_at,last_seen_at
         )
         VALUES(
           @external_id,@provider_external_id,@market,@product_key,@upc,@gtin,@model_number,@brand,@brand_slug,@manufacturer,@mpn,@ean,
           @title,@category,@normalized_category,@taxonomy_version,@description,@image_url,@affiliate_url,@retailer_shop_url,@retailer_name,@seller_name,@seller_rating,@seller_feedback_count,@shipping_summary,@return_summary,
-          @shipping_cost,@landed_cost,@availability,@checked_at,@rating,@review_count,@current_price,@original_price,@currency,@badge,
+          @shipping_cost,@landed_cost,@availability,@checked_at,@rating,@review_count,@current_price,@original_price,@currency,@badge,@coupon_json,
           @score,@relevance_score,@commerce_quality,@ranking_score,@evidence_confidence,@score_breakdown,
           @selection_reason,@source,'published',@updated_at,@first_seen_at,@last_seen_at
         )
@@ -333,7 +333,7 @@ async function refreshMarket(config, marketCode, options = {}) {
           description=excluded.description,image_url=excluded.image_url,
           affiliate_url=excluded.affiliate_url,retailer_shop_url=excluded.retailer_shop_url,retailer_name=excluded.retailer_name,seller_name=excluded.seller_name,
           seller_rating=excluded.seller_rating,seller_feedback_count=excluded.seller_feedback_count,
-          shipping_summary=excluded.shipping_summary,return_summary=excluded.return_summary,
+          shipping_summary=excluded.shipping_summary,return_summary=excluded.return_summary,coupon_json=excluded.coupon_json,
           shipping_cost=excluded.shipping_cost,landed_cost=excluded.landed_cost,
           availability=excluded.availability,checked_at=excluded.checked_at,rating=excluded.rating,
           review_count=excluded.review_count,current_price=excluded.current_price,original_price=excluded.original_price,
@@ -388,6 +388,7 @@ async function refreshMarket(config, marketCode, options = {}) {
           original_price: product.original_price == null ? null : numberValue(product.original_price, null),
           currency: textValue(product.currency || selectedMarket.currency).toUpperCase(),
           badge: textValue(product.badge),
+          coupon_json: JSON.stringify(require("./coupons").publicCoupons(product, true)),
           score: numberValue(product.score, 0),
           relevance_score: numberValue(product.relevance_score, 0),
           commerce_quality: numberValue(product.commerce_quality, 0),

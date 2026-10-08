@@ -242,12 +242,9 @@ export function dealIdFromParam(value: string): string {
  * simply not the thing the search box called.
  *
  * The remaining filters — rating, score, discounted-only, and the sorts the
- * API does not carry — still run locally over what comes back, so the filter
- * panel behaves exactly as it did. A hundred is a deliberate ceiling: it is
- * the API's own maximum, far more than anybody pages through, and it replaces
- * a fetch of the entire catalogue on every keystroke-driven navigation.
+ * API does not carry — run over the complete matching set before pagination.
+ * This keeps local filters, price sorts and retailer facets on the same products.
  */
-const SEARCH_LIMIT = 100;
 
 /**
  * What a search found, and whether it is the search that was asked for.
@@ -271,14 +268,12 @@ export async function searchDeals(
   const params = new URLSearchParams({
     q: query,
     market: marketCode,
-    limit: String(SEARCH_LIMIT),
+    catalog: "1",
     /* Relevance from the backend; the shopper's own sort is applied below over
        the set it returns. */
     sort: "best_match",
   });
-  if (filter.category) params.set("category", filter.category);
-  if (filter.minPrice != null) params.set("min_price", String(filter.minPrice));
-  if (filter.maxPrice != null) params.set("max_price", String(filter.maxPrice));
+  if (filter.category) params.set("category", getCategory(filter.category)?.name ?? filter.category);
   /* The shopper asked for exactly these words — offer no correction. */
   if (exact) params.set("exact", "1");
   const lang = await languageParam();
@@ -523,7 +518,7 @@ export async function getMorePicks(marketCode: string, limit?: number): Promise<
  * When the filter names a category, that's scoped server-side too — a
  * category page only ever needed its own slice, not the market's full
  * catalog. The rest of the filter (retailer, price, rating, score, sort)
- * still runs client-side over that (already much smaller) slice via
+ * still runs over that slice on the server via
  * `applyFilter`. The search page passes no category, so it still reads the
  * full catalog — free-text search across everything doesn't have a
  * server-side query to scope it to yet.
@@ -542,7 +537,7 @@ export async function getDeals(marketCode: string, filter: DealFilter = {}): Pro
    */
   const deals = await fetchMarketCatalog(
     marketCode,
-    backendCategory ? 2000 : undefined,
+    undefined,
     backendCategory,
   );
   return applyFilter(deals, filter);

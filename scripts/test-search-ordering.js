@@ -77,5 +77,15 @@ assert.deepStrictEqual(
   "filtering scrambled the search ranking",
 );
 
+const { listingFacets } = require(path.join(out, "filter.js"));
+const matching = [
+  {...deal(1,"Laptop",null),retailer:"A",price:500},
+  {...deal(2,"Laptop",null),retailer:"B",price:1000},
+  {...deal(3,"Laptop",null),retailer:"A",price:100000},
+];
+assert.deepStrictEqual(listingFacets(matching,{maxPrice:600}).retailers,["A"]);
+assert.deepStrictEqual(listingFacets(matching,{retailer:"B"}).price,{min:1000,max:1001});
+assert(listingFacets(matching,{}).price.max < 100000,"An outlier flattened the slider");
+assert.strictEqual(applyFilter(matching,{maxPrice:1500}).length,2,"Explicit ceiling was not applied");
 fs.rmSync(out, { recursive: true, force: true });
 console.log("Search result ordering passed.");

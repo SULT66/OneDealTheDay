@@ -138,6 +138,7 @@ const MODIFIER_WORDS = new Set([
 const ACCESSORY_WORDS = [
   "case", "cover", "cable", "charger", "adapter", "adaptor", "replacement", "battery", "batteries",
   "stand", "mount", "holder", "antenna", "protector", "strap", "sleeve", "dock", "hanger", "bracket",
+  "backpack", "thermal paste", "thermal compound", "hard drive", "stain remover",
 ];
 
 function singularForm(word) {
@@ -187,7 +188,7 @@ function headInHeadline(product, head) {
 function looksLikeAccessory(product, query) {
   const asked = normalizedTitle(query);
   const title = normalizedTitle(product?.title);
-  return ACCESSORY_WORDS.some(word => title.includes(word) && !asked.includes(word));
+  return ACCESSORY_WORDS.some(word => new RegExp(`\\b${word}\\b`).test(title) && !new RegExp(`\\b${word}\\b`).test(asked));
 }
 
 function roundScore(value) {

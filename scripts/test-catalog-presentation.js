@@ -422,3 +422,9 @@ for (const field of adapterReads) {
 }
 
 console.log("Catalogue presentation checks passed: numbering, score order, one count, honest stock, one URL per thing, real search, cheap facets, direct product images, partner pages, complete compact payload.");
+
+const { hasDescriptiveTitle } = require("../src/catalogTitleQuality");
+assert(!hasDescriptiveTitle("Shipping Protection"));
+assert(!hasDescriptiveTitle("Make up the difference | Remote Area Shipping Fee"));
+assert(hasDescriptiveTitle("Shipping Boxes 20 Pack"));
+assert(hasDescriptiveTitle("Laptop with free shipping"));

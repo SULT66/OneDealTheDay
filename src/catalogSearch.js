@@ -1,6 +1,6 @@
 const {
   headTerm, landedCost, matchesAnySearchTerm, matchesHeadTerm, queryBudget,
-  scoreOffers, searchTokens, selectUniqueProducts,
+  scoreOffers, searchTokens, selectUniqueProducts, looksLikeAccessory,
 } = require("./ranker");
 
 const SORTS = Object.freeze(["best_match", "price_asc", "price_desc", "newest", "quality"]);
@@ -95,7 +95,7 @@ function stableTieBreak(left, right) {
   return fold(left.title).localeCompare(fold(right.title)) || Number(left.id || 0) - Number(right.id || 0);
 }
 
-function comparator(sort) {
+function comparator(sort, query = "") {
   if (sort === "price_asc") return (left, right) => totalPrice(left) - totalPrice(right) || stableTieBreak(left, right);
   if (sort === "price_desc") return (left, right) => totalPrice(right) - totalPrice(left) || stableTieBreak(left, right);
   if (sort === "newest") return (left, right) => timestamp(right) - timestamp(left) || stableTieBreak(left, right);
@@ -104,6 +104,8 @@ function comparator(sort) {
     Number(right.evidence_confidence || 0) - Number(left.evidence_confidence || 0) ||
     stableTieBreak(left, right);
   return (left, right) =>
+    Number(looksLikeAccessory(left, query)) - Number(looksLikeAccessory(right, query)) ||
+    Number(right.relevance_score || 0) - Number(left.relevance_score || 0) ||
     Number(right.ranking_score || 0) - Number(left.ranking_score || 0) ||
     Number(right.relevance_score || 0) - Number(left.relevance_score || 0) ||
     Number(right.commerce_quality || 0) - Number(left.commerce_quality || 0) ||
@@ -178,7 +180,7 @@ function searchCatalogProducts(rows, options) {
     .filter(product => !options.query || Number(product.relevance_score || 0) > 0)
     .filter(product => Number(product.relevance_score || 0) >= options.minimumMatch)
     .filter(product => Number(product.commerce_quality || 0) >= options.minimumQuality)
-    .sort(comparator(options.sort));
+    .sort(comparator(options.sort, options.query));
 
   const pricesFor = (items) => {
     const prices = items.map(p => Number(p.current_price)).filter(p => p > 0 && Number.isFinite(p));

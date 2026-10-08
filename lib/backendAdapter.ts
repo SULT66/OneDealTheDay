@@ -51,6 +51,7 @@ export type RawProduct = {
   source: string;
   image_url: string | null;
   current_price: number;
+  coupons?: Deal["coupons"];
   original_price: number | null;
   currency: string;
   display_score: number | null;
@@ -138,6 +139,7 @@ export function adaptProduct(raw: RawProduct): Omit<Deal, "rank"> {
     thumbnail: cardSized(image),
     images: image ? [image] : [],
     price: raw.current_price,
+    coupons: raw.coupons ?? [],
     /*
      * No reference price once the current price is out of date, and that is
      * deliberately the only place this decision is made.

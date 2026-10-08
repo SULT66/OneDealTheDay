@@ -58,7 +58,7 @@ assert(
   "The 500-listing category cap is back, so part of a category is unreachable again",
 );
 assert(
-  /backendCategory \? 2000 : undefined/.test(catalog),
+  /marketCode,\s+undefined,\s+backendCategory/.test(catalog),
   "The category fetch no longer covers a whole category",
 );
 

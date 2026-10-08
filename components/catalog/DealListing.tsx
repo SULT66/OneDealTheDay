@@ -1,7 +1,9 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { CaretRight } from "@phosphor-icons/react/ssr";
-import { getCategory, getMarket, getListingFacets } from "@/lib/catalog";
+import { getCategory, getMarket, getDeals, searchDeals } from "@/lib/catalog";
+import { listingFacets } from "@/lib/filter";
+import { slugifyCategory } from "@/lib/backendAdapter";
 import type { Deal, DealFilter } from "@/lib/types";
 import { getLanguage, t } from "@/lib/i18n";
 import { DealCard } from "@/components/deal/DealCard";
@@ -107,7 +109,10 @@ export async function DealListing({
   const backendCategory =
     scopeCategory || (filter.category ? getCategory(filter.category)?.name : undefined);
 
-  const { retailers, price: bounds } = await getListingFacets(market, backendCategory, filter.query, filter.retailer);
+  const baseFilter = { ...filter, category: backendCategory ? slugifyCategory(backendCategory) : undefined, retailer: undefined, minPrice: undefined, maxPrice: undefined };
+  const exact = searchParams.exact === "1";
+  const baseDeals = filter.query ? (await searchDeals(market, baseFilter, { exact })).deals : await getDeals(market, baseFilter);
+  const { retailers, price: bounds } = listingFacets(baseDeals, filter);
   const currency = getMarket(market)?.currency ?? "USD";
 
   return (

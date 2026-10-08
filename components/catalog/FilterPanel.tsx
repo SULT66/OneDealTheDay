@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { PriceRange } from "./PriceRange";
 import { X } from "@phosphor-icons/react";
@@ -100,14 +101,17 @@ export function FilterPanel({
 }) {
   const tr = useCopy();
   const router = useRouter();
+  const requested = useRef(filter);
+  useEffect(() => { requested.current = filter; }, [filter]);
 
   function go(next: DealFilter) {
+    requested.current = next;
     router.replace(`${basePath}${searchParamsFromFilter(next)}`, {
       scroll: false,
     });
   }
 
-  const update = (patch: Partial<DealFilter>) => go({ ...filter, ...patch });
+  const update = (patch: Partial<DealFilter>) => go({ ...requested.current, ...patch });
 
   const active = [
     filter.maxPrice !== undefined && {

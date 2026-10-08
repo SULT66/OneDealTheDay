@@ -230,6 +230,7 @@ export default async function DealPage({
 
           <PriceBlock
             price={deal.price}
+              coupons={deal.coupons}
             referencePrice={deal.referencePrice}
             currency={deal.currency}
             market={market}

@@ -1,7 +1,7 @@
 import { cn } from "@/lib/cn";
 import { formatPrice } from "@/lib/format";
 import { displayDiscount } from "@/lib/pricing";
-import type { PricePoint } from "@/lib/types";
+import type { PricePoint, Deal } from "@/lib/types";
 import { t } from "@/lib/i18n";
 
 /**
@@ -19,8 +19,10 @@ export function PriceBlock({
   size = "md",
   className,
   history = [],
+  coupons = [],
 }: {
   price: number;
+  coupons?: Deal["coupons"];
   referencePrice: number | null;
   currency?: string;
   market?: string;
@@ -55,6 +57,11 @@ export function PriceBlock({
           </span>
         </>
       )}
+      {coupons.map(coupon => <div key={coupon.code} className="w-full text-sm leading-relaxed text-fg-muted">
+        <span className="font-semibold text-fg">{t(language, "app.coupon.code")}: <code>{coupon.code}</code></span>
+        {coupon.message && <span className="block">{coupon.message}</span>}
+        <a href={coupon.termsUrl} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">{t(language, "app.coupon.terms")}</a>
+      </div>)}
     </div>
   );
 }

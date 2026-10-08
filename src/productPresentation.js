@@ -457,6 +457,7 @@ function presentProduct(product, language = "en") {
     : new Intl.NumberFormat(languageTag(product.market, language), { maximumFractionDigits: 1 }).format(sellerPercent);
   return {
     ...product,
+    coupons: require("./coupons").publicCoupons(product, priceIsCurrent),
     shipping_summary: displayShipping,
     return_summary: displayReturns,
     availability: displayAvailability,

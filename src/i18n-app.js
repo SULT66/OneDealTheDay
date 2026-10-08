@@ -1016,3 +1016,7 @@ Object.assign(appCopy.de, {
   "app.drop.emptyTitle": "Heute noch kein frisch geprüftes Angebot",
   "app.drop.emptyText": "Für das ausgewählte Angebot liegt heute noch keine Preisprüfung vor. Bis zur nächsten Prüfung können Sie den Katalog durchsuchen."
 });
+
+for (const [language, labels] of Object.entries({en:["Coupon code","Coupon terms"], es:["Código de cupón","Condiciones del cupón"], fr:["Code promo","Conditions du coupon"], de:["Gutscheincode","Gutscheinbedingungen"]})) {
+  Object.assign(appCopy[language], {"app.coupon.code":labels[0], "app.coupon.terms":labels[1]});
+}

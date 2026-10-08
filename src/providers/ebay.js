@@ -270,7 +270,7 @@ function badge(item) {
   if (item?.topRatedBuyingExperience) return "Top Rated Plus";
   const discount = Math.round(number(item?.marketingPrice?.discountPercentage, 0));
   if (discount > 0) return `${discount}% off`;
-  if (item?.availableCoupons) return "Coupon available";
+  if (require("../coupons").normalizeCoupons(item?.availableCoupons).length) return "Coupon available";
   return "";
 }
 
@@ -301,6 +301,7 @@ function normalizeItem(item, keyword, sourceRank, market) {
     original_price:originalPrice > currentPrice ? originalPrice : null,
     currency:text(item?.price?.currency || market?.currency).toUpperCase(),
     badge:badge(item),
+    coupon_json:JSON.stringify(require("../coupons").normalizeCoupons(item?.availableCoupons)),
     image_url:imageUrl(item),
     affiliate_url:text(item?.itemAffiliateWebUrl),
     retailer_name:"eBay",
