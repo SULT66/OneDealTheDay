@@ -71,8 +71,8 @@ assert.deepStrictEqual(
 );
 assert(earbuds.includes(1) && earbuds.includes(6), "the actual earbuds are missing");
 assert(!earbuds.includes(7), "$179 earbuds came back for a query that said under 50");
-/* The case is allowed to appear, but never above the thing it protects. */
-assert(earbuds.indexOf(8) > earbuds.indexOf(1), "an accessory outranked the product");
+/* An accessory is not an answer unless the shopper asks for it. */
+assert(!earbuds.includes(8), "a case came back for a search asking for earbuds");
 
 /* Ask for the accessory and it is the product. */
 const stands = search("headphone stand");
@@ -99,3 +99,16 @@ assert.strictEqual(laptops.products[0].id,103,"Accessories outranked an actual l
 assert.strictEqual(searchCatalogProducts([
   listing(104,"Laptop Backpack",35)
 ],parseSearchOptions({q:"laptop backpack"})).products[0].id,104);
+
+assert.deepStrictEqual(laptops.products.map(p=>p.id),[103]);
+const primary = searchCatalogProducts([
+  listing(201,"Lenovo Laptop 16GB RAM with Backlit Keyboard",700),
+  {...listing(202,"Computer Desk with Drawers",100),description:"Use a laptop here",retailer_name:"DesksOnly"},
+  {...listing(203,"Custom Arm Sleeves",10),description:"laptop sleeve",retailer_name:"SleevesOnly"},
+  {...listing(204,"Gaming Headset with Microphone for Laptop PC",30),retailer_name:"AccessoriesOnly"},
+  listing(205,"Lenovo Laptop with built-in Battery",800),
+],parseSearchOptions({q:"laptop"}));
+assert.deepStrictEqual(primary.products.map(p=>p.id).sort(),[201,205]);
+assert.deepStrictEqual(primary.facets.merchants.map(p=>p.value),["eBay"],"Accessory-only stores leaked into retailer facets");
+assert(!looksLikeAccessory({title:"True Wireless Earbuds with Charging Case"},"earbuds"));
+assert(!looksLikeAccessory({title:"Headphones 40h Battery Life"},"headphones"));

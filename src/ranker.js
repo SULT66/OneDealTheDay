@@ -185,10 +185,34 @@ function headInHeadline(product, head) {
   return headVariants(head).some(variant => haystack.includes(variant));
 }
 
+const MAIN_PRODUCT_HEADS = new Set([
+  "laptop", "notebook", "earbud", "earbuds", "headphone", "headphones", "headset",
+  "speaker", "phone", "smartphone", "tablet", "television", "tv", "monitor",
+  "vacuum", "printer", "camera", "drone", "router", "mattress", "chair", "sofa",
+  "bicycle", "bike", "drill", "blender", "refrigerator", "freezer",
+]);
+const accessoryPattern = word => new RegExp(`\\b${word}(?:s)?\\b`);
+function isMainProductQuery(query) {
+  const asked = normalizedTitle(query);
+  return headVariants(headTerm(query)).some(head => MAIN_PRODUCT_HEADS.has(head)) &&
+    !ACCESSORY_WORDS.some(word => accessoryPattern(word).test(asked));
+}
 function looksLikeAccessory(product, query) {
   const asked = normalizedTitle(query);
   const title = normalizedTitle(product?.title);
-  return ACCESSORY_WORDS.some(word => new RegExp(`\\b${word}\\b`).test(title) && !new RegExp(`\\b${word}\\b`).test(asked));
+  const askedForAccessory = ACCESSORY_WORDS.some(word => accessoryPattern(word).test(asked));
+  const head = headTerm(query);
+  if (!askedForAccessory && head && headVariants(head).some(variant =>
+    new RegExp(`\\b(?:for|compatible with|works with|fits)\\b[^.]{0,60}\\b${variant}\\b`).test(title))) return true;
+  return ACCESSORY_WORDS.some(word => {
+    const match = accessoryPattern(word).exec(title);
+    if (!match || accessoryPattern(word).test(asked)) return false;
+    // A bundled charging case or built-in battery is part of the product.
+    const prefix = title.slice(Math.max(0,match.index-45),match.index);
+    if (/\b(?:with|includes|including|built in|integrated)\b/.test(prefix)) return false;
+    if (/^batter/.test(word) && /battery (?:life|powered|operated)/.test(title)) return false;
+    return true;
+  });
 }
 
 function roundScore(value) {
@@ -872,6 +896,8 @@ exports.normalizedTitle = normalizedTitle;
 exports.matchesAnySearchTerm = matchesAnySearchTerm;
 exports.matchesHeadTerm = matchesHeadTerm;
 exports.headTerm = headTerm;
+exports.headInHeadline = headInHeadline;
+exports.isMainProductQuery = isMainProductQuery;
 exports.looksLikeAccessory = looksLikeAccessory;
 exports.queryBudget = queryBudget;
 exports.landedCost = landedCost;

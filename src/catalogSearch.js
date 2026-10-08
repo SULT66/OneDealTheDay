@@ -1,6 +1,6 @@
 const {
   headTerm, landedCost, matchesAnySearchTerm, matchesHeadTerm, queryBudget,
-  scoreOffers, searchTokens, selectUniqueProducts, looksLikeAccessory,
+  scoreOffers, searchTokens, selectUniqueProducts, looksLikeAccessory, headInHeadline, isMainProductQuery,
 } = require("./ranker");
 
 const SORTS = Object.freeze(["best_match", "price_asc", "price_desc", "newest", "quality"]);
@@ -159,10 +159,12 @@ function searchCatalogProducts(rows, options) {
    * still came back for a query that said fifty.
    */
   const budget = queryBudget(options.query);
+  const mainProduct = isMainProductQuery(options.query);
   const matching = options.query
     ? candidates.filter(product =>
       matchesAnySearchTerm(product, searchTerms) &&
       matchesHeadTerm(product, head) &&
+      (!mainProduct || (headInHeadline(product, head) && !looksLikeAccessory(product, options.query))) &&
       (budget.max == null || landedCost(product) <= budget.max) &&
       (budget.min == null || landedCost(product) >= budget.min))
     : candidates;
