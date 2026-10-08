@@ -164,9 +164,34 @@ assert.ok(
 
 const catalog = read("lib/catalog.ts");
 assert.ok(
-  /getTodaysDrop[\s\S]*?deals\.find\(deal => deal\.priceIsCurrent && isCheckedToday/.test(catalog),
+  /getTodaysDrop[\s\S]*?deals\.find\(deal => deal\.priceIsCurrent\)/.test(catalog),
   "the page is back to giving up on the first pick instead of looking past it",
 );
+/*
+ * And choosing one is not a question about the calendar.
+ *
+ * It was, and that emptied the page for the quarter of an hour after midnight
+ * every night: the stored selection is the one made the previous day, so at
+ * ten past twelve nothing in it had been checked "today" and there was nothing
+ * behind it to fall back to either. Measured on production at 00:10 New York
+ * time on 2026-10-08, with a full catalogue and a healthy release.
+ */
+assert.ok(
+  !/getTodaysDrop[\s\S]*?deals\.find\([^)]*isCheckedToday/.test(catalog),
+  "choosing the pick is back on the calendar date, which empties the page after midnight",
+);
+
+/* The claim moved to where it can be kept: the badge says the day only when it
+   is that day, and otherwise says when the price was checked. */
+const dropPage = read("app/[market]/daily-drop/page.tsx");
+assert.ok(
+  /isCheckedToday\(drop\.checkedAt, market\)[\s\S]{0,240}app\.drop\.checkedToday[\s\S]{0,240}app\.drop\.checkedOn/.test(dropPage),
+  "the page claims a pick was checked today without checking that it was",
+);
+const { appCopy } = require("../src/i18n-app");
+for (const language of ["en", "es", "fr", "de"]) {
+  assert.ok(appCopy[language]["app.drop.checkedOn"], `${language} is missing app.drop.checkedOn`);
+}
 assert.ok(
   !/getTodaysDrop[\s\S]{0,400}fetchMarketCatalog\(marketCode, 1,/.test(catalog),
   "the page asks the backend for one pick, so it has nothing to look past",
