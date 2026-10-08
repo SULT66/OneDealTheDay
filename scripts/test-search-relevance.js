@@ -112,3 +112,13 @@ assert.deepStrictEqual(primary.products.map(p=>p.id).sort(),[201,205]);
 assert.deepStrictEqual(primary.facets.merchants.map(p=>p.value),["eBay"],"Accessory-only stores leaked into retailer facets");
 assert(!looksLikeAccessory({title:"True Wireless Earbuds with Charging Case"},"earbuds"));
 assert(!looksLikeAccessory({title:"Headphones 40h Battery Life"},"headphones"));
+
+const onlyLaptops = searchCatalogProducts([
+  listing(301,"Laptop Cooling Pad Gaming Laptop Cooler with 9 Quiet Fans",59),
+  listing(302,"24 Inch Computer Monitor Home Office Laptop PC Macs",149),
+  listing(303,"Lenovo Notebook Laptop Intel Core i3",406),
+  listing(304,"Lenovo Laptop with 24 Inch Monitor",700),
+],parseSearchOptions({q:"laptop",sort:"price_asc"}));
+assert.deepStrictEqual(onlyLaptops.products.map(p=>p.id),[303,304]);
+assert.strictEqual(searchCatalogProducts([listing(301,"Laptop Cooling Pad Gaming Laptop Cooler",59)],parseSearchOptions({q:"laptop cooling pad"})).products[0].id,301);
+assert.strictEqual(searchCatalogProducts([listing(305,"Wireless Headphones Earbuds",20)],parseSearchOptions({q:"earbuds"})).products[0].id,305);

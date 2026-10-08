@@ -1,6 +1,6 @@
 const {
   headTerm, landedCost, matchesAnySearchTerm, matchesHeadTerm, queryBudget,
-  scoreOffers, searchTokens, selectUniqueProducts, looksLikeAccessory, headInHeadline, isMainProductQuery,
+  scoreOffers, searchTokens, selectUniqueProducts, looksLikeAccessory, matchesMainProduct, isMainProductQuery,
 } = require("./ranker");
 
 const SORTS = Object.freeze(["best_match", "price_asc", "price_desc", "newest", "quality"]);
@@ -164,7 +164,7 @@ function searchCatalogProducts(rows, options) {
     ? candidates.filter(product =>
       matchesAnySearchTerm(product, searchTerms) &&
       matchesHeadTerm(product, head) &&
-      (!mainProduct || (headInHeadline(product, head) && !looksLikeAccessory(product, options.query))) &&
+      (!mainProduct || matchesMainProduct(product, options.query)) &&
       (budget.max == null || landedCost(product) <= budget.max) &&
       (budget.min == null || landedCost(product) >= budget.min))
     : candidates;
