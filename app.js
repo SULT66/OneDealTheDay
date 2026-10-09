@@ -41,7 +41,7 @@ const { codes: marketCodes, normalizeMarket, marketFromIp, marketPath } = requir
 const { resolveLanguage } = require("./src/i18n");
 const { sourceSql, isPublicProduct, uniqueProductsInOrder } = require("./src/publicCatalog");
 const { enabledProviders } = require("./src/providers/registry");
-const { coverage: retailerCoverage } = require("./src/retailerCatalog");
+const { RETAILERS, coverage: retailerCoverage } = require("./src/retailerCatalog");
 const { recalculateCatalog } = require("./src/catalogRecalculation");
 const { TAXONOMY_VERSION } = require("./src/catalogTaxonomy");
 const { RELEASE_ID } = require("./src/release");
@@ -636,7 +636,23 @@ function expressWithHomepage(...args) {
        place that knows which host belongs to which shop. Taken from the
        front-door link, so a shop with no commissionable link has no host and
        no row for the directory to draw. */
+    /*
+     * A shop can say what its own front door is.
+     *
+     * The host below is read off a product's outbound link, which is right for
+     * a shop that sells its own things and wrong for one that does not: every
+     * Grommet link lands on the maker's domain, so the directory drew a tile
+     * for getsmartcupper.com — a supplier nobody came here for — and found no
+     * logo there either. Where a retailer names its storefront host, that wins.
+     */
+    const declaredHost = retailer => {
+      const name = String(retailer || "").trim().toLowerCase();
+      const known = RETAILERS.find(entry => String(entry.name || "").trim().toLowerCase() === name);
+      return String(known?.storefrontHost || "").trim().toLowerCase();
+    };
     const shopHost = retailer => {
+      const declared = declaredHost(retailer);
+      if (declared) return declared;
       const row = db.prepare(`
         SELECT * FROM products
         WHERE ${where} AND COALESCE(NULLIF(retailer_name,''), source)=?

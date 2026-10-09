@@ -181,6 +181,47 @@ const fakeFetch = async (url) => {
   });
   assert.deepStrictEqual(halted, [], "an aborted sweep kept working");
 
+  /* ------------------------------------------------- it cannot hold the run */
+
+  /*
+   * A connection that is accepted and then goes quiet.
+   *
+   * On 2026-10-09 this source sat on the catalogue refresh for its entire
+   * thirty-minute budget and the run ended with every source reporting
+   * failure and nothing imported. Aborting a request only works if the other
+   * end honours the signal; when it does not, the await never returns and no
+   * budget helps. So the sweep races its own clock and settles either way.
+   */
+  const silent = () => new Promise(() => {});
+  const startedAt = Date.now();
+  await assert.rejects(
+    searchProducts({
+      appKey: "key", appSecret: SECRET, trackingId: "t",
+      keywords: ["a", "b", "c", "d", "e", "f"],
+      fetchImpl: silent, budgetMs: 3000, timeoutMs: 800,
+    }),
+    /did not answer/,
+    "a source that never answers must still end its own sweep",
+  );
+  assert.ok(Date.now() - startedAt < 15000, "the sweep outlived its own budget");
+
+  /* And one bad keyword is one bad keyword, not a lost sweep. */
+  let attempts = 0;
+  const flaky = async () => {
+    attempts += 1;
+    if (attempts === 1) throw new Error("boom");
+    return { ok: true, json: async () => ({
+      aliexpress_affiliate_product_query_response: {
+        resp_result: { result: { products: { product: [listing({ product_id: 2000 + attempts })] } } },
+      },
+    }) };
+  };
+  const survived = await searchProducts({
+    appKey: "key", appSecret: SECRET, trackingId: "t",
+    keywords: ["a", "b", "c", "d", "e", "f"], fetchImpl: flaky,
+  });
+  assert.strictEqual(survived.length, 5, "one failing keyword threw away the five that worked");
+
   /* ---------------------------------------------------------- the rotation */
 
   const terms = ["a", "b", "c", "d", "e", "f", "g", "h"];

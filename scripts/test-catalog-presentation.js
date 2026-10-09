@@ -436,3 +436,29 @@ const vm = require("vm");
 const projectDetail = vm.runInNewContext(detailProjection[0] + "; compactApiProduct;");
 const sourceCoupons = [{code:"EXTRA20",message:"20% off",termsUrl:"https://www.ebay.com/terms",expiresAt:"2099-01-01"}];
 assert.deepStrictEqual(projectDetail({id:1,coupons:sourceCoupons}).coupons,sourceCoupons,"The detail API lost the coupon shown on Daily Drop");
+
+/*
+ * A shop's tile points at the shop.
+ *
+ * The host in the directory is read off a product's outbound link, which is
+ * right for a shop selling its own things and wrong for one that does not:
+ * every Grommet link lands on the maker's domain, so the row was drawn for
+ * getsmartcupper.com — a supplier nobody came here for — and the logo lookup
+ * found nothing there either. Measured on production on 2026-10-09: three of
+ * thirteen shops had no logo, and two of them were this.
+ */
+const retailerCatalogSource = read("src", "retailerCatalog.js");
+const directorySource = read("app.js");
+assert(
+  /storefrontHost:"thegrommet\.com"/.test(retailerCatalogSource),
+  "Grommet's tile is back to pointing at whichever supplier a link landed on",
+);
+assert(
+  /storefrontHost:"gmktec\.com"/.test(retailerCatalogSource),
+  "GMKtec's tile is back to a shop-platform subdomain that serves no logo",
+);
+assert(
+  /const declaredHost = retailer =>[\s\S]{0,400}storefrontHost/.test(appSource)
+    && /const shopHost = retailer => \{\s*\n\s*const declared = declaredHost\(retailer\);/.test(directorySource),
+  "the directory no longer lets a shop name its own front door",
+);
