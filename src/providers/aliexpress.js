@@ -33,7 +33,19 @@ const GATEWAY = "https://api-sg.aliexpress.com/sync";
 const PRODUCT_QUERY = "aliexpress.affiliate.product.query";
 /* The API's own ceiling. Asking for more is an error, not a bigger page. */
 const MAX_PAGE_SIZE = 50;
-const DEFAULT_TIMEOUT_MS = 20000;
+/* One call. Ten seconds is already twice what a healthy answer takes. */
+const DEFAULT_TIMEOUT_MS = 10000;
+/*
+ * And the whole sweep, whatever happens inside it.
+ *
+ * The refresh gives every source a deadline measured in tens of minutes,
+ * because that is what a full eBay sweep legitimately needs. This source needs
+ * seconds, so it is held to seconds: on 2026-10-09 it sat on the market's
+ * entire thirty-minute budget and the run ended with every source reporting
+ * failure and nothing imported. A new source must not be able to do that to a
+ * working catalogue, whatever is wrong with it on the day.
+ */
+const SWEEP_BUDGET_MS = Number(process.env.ALIEXPRESS_SWEEP_BUDGET_MS || 120000);
 
 /* Ten days is the line between "ordered it, forgot about it, it arrived" and a
    complaint. Items shipping from a warehouse in the destination country are
@@ -110,7 +122,25 @@ async function callApi(method, params, {
   const onAbort = () => controller.abort();
   if (signal) signal.addEventListener("abort", onAbort, { once: true });
   try {
-    const response = await fetchImpl(requestUrl(parameters), { method: "POST", signal: controller.signal });
+    /*
+     * The signal asks; the race insists.
+     *
+     * Aborting a request only works if whatever is on the other end of fetch
+     * honours the signal. A socket that accepts the connection and then says
+     * nothing may not, and then the await never returns and no budget above
+     * this line can help — which is how one source sat on the whole refresh
+     * for half an hour. This settles either way.
+     */
+    const response = await Promise.race([
+      fetchImpl(requestUrl(parameters), { method: "POST", signal: controller.signal }),
+      new Promise((_, reject) => {
+        const giveUp = setTimeout(
+          () => reject(new Error(`AliExpress did not answer within ${Math.round(timeoutMs / 1000)}s`)),
+          timeoutMs,
+        );
+        giveUp.unref?.();
+      }),
+    ]);
     if (!response.ok) throw new Error(`AliExpress API responded ${response.status}`);
     const body = await response.json();
     /* The gateway reports failure inside a 200. */
@@ -233,6 +263,8 @@ async function searchProducts({
   minSellerPercent = DEFAULT_MIN_SELLER_PERCENT,
   minOrders = DEFAULT_MIN_ORDERS,
   maxDeliveryDays = DEFAULT_MAX_DELIVERY_DAYS,
+  budgetMs = SWEEP_BUDGET_MS,
+  timeoutMs = DEFAULT_TIMEOUT_MS,
   fetchImpl = global.fetch,
   signal,
 } = {}) {
@@ -243,10 +275,20 @@ async function searchProducts({
   const country = String(market?.code || "us").toUpperCase();
   const collected = [];
   const seen = new Set();
+  /* The sweep's own clock, independent of the deadline the refresh sets. */
+  const expiresAt = Date.now() + budgetMs;
+  let firstFailure = null;
+  let attempted = 0;
 
   for (const keyword of terms) {
     if (signal?.aborted) break;
-    const body = await callApi(PRODUCT_QUERY, {
+    /* Out of time: hand back what has been gathered rather than spending the
+       catalogue's budget on the rest of the list. */
+    if (Date.now() >= expiresAt) break;
+    attempted += 1;
+    let body;
+    try {
+      body = await callApi(PRODUCT_QUERY, {
       keywords: keyword,
       tracking_id: trackingId,
       page_no: 1,
@@ -257,8 +299,22 @@ async function searchProducts({
       /* Asked for at the source as well as filtered below: a narrower request
          spends the same call on better rows. */
       delivery_days: String(maxDeliveryDays),
-      sort: "LAST_VOLUME_DESC",
-    }, { appKey, appSecret, fetchImpl, signal });
+        sort: "LAST_VOLUME_DESC",
+      }, {
+        appKey,
+        appSecret,
+        fetchImpl,
+        signal,
+        /* Never longer than what is left of the sweep. */
+        timeoutMs: Math.max(1000, Math.min(timeoutMs, expiresAt - Date.now())),
+      });
+    } catch (error) {
+      /* One keyword that fails is one keyword. The next one may be fine, and
+         a source that returns five of six shelves is worth more than one that
+         returns none because the sixth timed out. */
+      firstFailure = firstFailure || error;
+      continue;
+    }
 
     for (const item of productsFrom(body)) {
       if (!isAcceptable(item, { minSellerPercent, minOrders, maxDeliveryDays })) continue;
@@ -269,10 +325,18 @@ async function searchProducts({
       if (collected.length >= maxProducts) return collected;
     }
   }
+  /*
+   * Nothing at all, and every attempt failed: say why. A source that reports
+   * "no products" when it actually could not reach the API sends whoever reads
+   * the run looking in the wrong place.
+   */
+  if (!collected.length && firstFailure && attempted) throw firstFailure;
   return collected;
 }
 
 module.exports = {
+  DEFAULT_TIMEOUT_MS,
+  SWEEP_BUDGET_MS,
   DEFAULT_MAX_DELIVERY_DAYS,
   DEFAULT_MIN_ORDERS,
   DEFAULT_MIN_SELLER_PERCENT,

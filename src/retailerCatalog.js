@@ -11,11 +11,19 @@ const RETAILERS = Object.freeze([
   {id:"aliexpress", name:"AliExpress", network:"AliExpress Portals", markets:["us", "ca", "uk", "fr", "de"], nativeProvider:"aliexpress"},
   {
     id:"grommet", name:"Grommet", network:"Awin", markets:["us"],
+    /* The shop, not the brand a deep link happened to land on. Grommet sells
+       other people's products, so the host read off a product URL was
+       getsmartcupper.com — which made the tile point at one supplier and left
+       the row without a logo. See shopHost in app.js. */
+    storefrontHost:"thegrommet.com",
     maxCatalogProducts:150,
     feedPolicy:{spreadAcrossFeed:true, excludeTitleTerms:["not sold separately", "not for sale", "non-delivery", "gift card", "purchase protection"]}
   },
   {
     id:"gmktec", name:"GMKtec", network:"Awin", markets:["us"],
+    /* Their storefront runs on a shop platform subdomain that serves no
+       favicon; the brand's own domain does. */
+    storefrontHost:"gmktec.com",
     maxCatalogProducts:100,
     feedPolicy:{spreadAcrossFeed:true, excludeTitleTerms:["not sold separately", "not for sale", "non-delivery", "extended warranty", "purchase protection"]}
   },
