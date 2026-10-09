@@ -332,6 +332,8 @@ const aliexpressMaxProducts = Math.max(0, Math.min(500, Number(process.env.ALIEX
 const aliexpressMaxDeliveryDays = Math.max(1, Math.min(60, Number(process.env.ALIEXPRESS_MAX_DELIVERY_DAYS ?? 10)));
 const aliexpressMinSellerPercent = Math.max(0, Math.min(100, Number(process.env.ALIEXPRESS_MIN_SELLER_PERCENT ?? 94)));
 const aliexpressMinOrders = Math.max(0, Number(process.env.ALIEXPRESS_MIN_ORDERS ?? 100));
+/* A floor on price, off by default: see DEFAULT_MIN_PRICE in the provider. */
+const aliexpressMinPrice = Math.max(0, Number(process.env.ALIEXPRESS_MIN_PRICE ?? 0));
 
 const enabledSourceIds = [];
 if (ebayClientId && ebayClientSecret && /^\d{10}$/.test(ebayCampaignId)) enabledSourceIds.push("ebay");
@@ -383,6 +385,7 @@ module.exports = {
   aliexpressMaxDeliveryDays,
   aliexpressMinSellerPercent,
   aliexpressMinOrders,
+  aliexpressMinPrice,
   enabledSourceIds: uniqueSourceIds,
   affiliateFeeds,
   siteMode: "live",

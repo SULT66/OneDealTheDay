@@ -60,6 +60,7 @@ function nativeProviders(config) {
         maxDeliveryDays:config.aliexpressMaxDeliveryDays,
         minSellerPercent:config.aliexpressMinSellerPercent,
         minOrders:config.aliexpressMinOrders,
+        minPrice:config.aliexpressMinPrice,
         signal
       })
     });

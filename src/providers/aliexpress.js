@@ -57,6 +57,16 @@ const DEFAULT_MIN_SELLER_PERCENT = 94;
 /* Something a few hundred people have bought is a product. Something nobody
    has bought is a listing. */
 const DEFAULT_MIN_ORDERS = 100;
+/*
+ * And a price floor, off by default.
+ *
+ * Sorting by what sells most brings the cheapest things first: measured on the
+ * first live sweep, the median price of what came back was $5.70 and three
+ * quarters of it was under ten dollars. That is a real shelf and it is also a
+ * different shop from the one the rest of this catalogue describes, so the
+ * choice belongs to whoever owns the brand rather than to this file.
+ */
+const DEFAULT_MIN_PRICE = 0;
 
 const text = value => String(value ?? "").trim();
 const number = (value, fallback = 0) => {
@@ -167,7 +177,7 @@ function productsFrom(body) {
 }
 
 /** A listing we would be willing to put our name next to. */
-function isAcceptable(item, { minSellerPercent, minOrders, maxDeliveryDays }) {
+function isAcceptable(item, { minSellerPercent, minOrders, maxDeliveryDays, minPrice = 0 }) {
   const sellerPercent = number(item?.evaluate_rate, 0);
   const orders = number(item?.lastest_volume, 0);
   const days = number(item?.ship_to_days, 0);
@@ -175,7 +185,9 @@ function isAcceptable(item, { minSellerPercent, minOrders, maxDeliveryDays }) {
   if (orders < minOrders) return false;
   /* An unknown delivery time is not a fast one. */
   if (!days || days > maxDeliveryDays) return false;
-  return Boolean(text(item?.promotion_link) && text(item?.product_title) && number(item?.target_sale_price, 0) > 0);
+  const price = number(item?.target_sale_price, 0);
+  if (price < minPrice) return false;
+  return Boolean(text(item?.promotion_link) && text(item?.product_title) && price > 0);
 }
 
 function normalizeItem(item, keyword, sourceRank, market) {
@@ -262,6 +274,7 @@ async function searchProducts({
   maxProducts = 120,
   minSellerPercent = DEFAULT_MIN_SELLER_PERCENT,
   minOrders = DEFAULT_MIN_ORDERS,
+  minPrice = DEFAULT_MIN_PRICE,
   maxDeliveryDays = DEFAULT_MAX_DELIVERY_DAYS,
   budgetMs = SWEEP_BUDGET_MS,
   timeoutMs = DEFAULT_TIMEOUT_MS,
@@ -317,7 +330,7 @@ async function searchProducts({
     }
 
     for (const item of productsFrom(body)) {
-      if (!isAcceptable(item, { minSellerPercent, minOrders, maxDeliveryDays })) continue;
+      if (!isAcceptable(item, { minSellerPercent, minOrders, maxDeliveryDays, minPrice })) continue;
       const id = text(item?.product_id);
       if (!id || seen.has(id)) continue;
       seen.add(id);
@@ -339,6 +352,7 @@ module.exports = {
   SWEEP_BUDGET_MS,
   DEFAULT_MAX_DELIVERY_DAYS,
   DEFAULT_MIN_ORDERS,
+  DEFAULT_MIN_PRICE,
   DEFAULT_MIN_SELLER_PERCENT,
   GATEWAY,
   isAcceptable,
