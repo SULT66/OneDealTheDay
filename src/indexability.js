@@ -26,14 +26,35 @@
 
 /* A shop that sends reviews sends a rating with them; one without the other is
    a number with no weight behind it. */
+const { isDailyPickEligible } = require("./ranker");
+
 const hasReviews = (product) => Number(product?.review_count) > 0 && Number(product?.rating) > 0;
+
+/*
+ * A Score we actually publish, not the number every row carries.
+ *
+ * Every published listing is given a ranking number, zero included, so asking
+ * whether one exists was asking whether the catalogue had run at all — and the
+ * answer was yes for all 2,770 of them. The gate let everything through and
+ * nothing was ever kept out of Google, which is the opposite of what this file
+ * was written to do.
+ *
+ * The honest question is the one the product page already asks before it dares
+ * print a Score: does this listing clear the editorial floor? That is what
+ * display_score means (src/productPresentation.js), and where a caller has
+ * already computed it, that answer is used directly.
+ */
+const hasPublicScore = (product) => (
+  product?.display_score != null
+  || (product?.display_score === undefined && isDailyPickEligible(product || {}))
+);
 
 function indexEvidence(product = {}, { comparable = null } = {}) {
   return {
     reviews: hasReviews(product),
     comparable: Boolean(comparable),
     trackedDrop: Number(product?.tracked_drop_percent) > 0,
-    score: product?.score != null || product?.display_score != null,
+    score: hasPublicScore(product),
   };
 }
 
