@@ -140,3 +140,97 @@ export function listingFacets<T extends DealLike>(deals: T[], filter: DealFilter
   const upper = prices.length ? prices[Math.min(prices.length-1, Math.floor((prices.length-1)*0.8))] : 0;
   return { retailers, price: { min, max: Math.max(min+1, Math.ceil(upper/10)*10) } };
 }
+
+/* ------------------------------ what each choice would actually leave ----- */
+
+/*
+ * Every option says how many listings it leaves.
+ *
+ * Three of the five filters here hide most of the catalogue for a reason that
+ * has nothing to do with quality. Measured on the live market: 15% of listings
+ * carry a product rating at all, 8% carry a published Score, and 31% have a
+ * reference price to be below. So "4★ and up" is, in practice, "and sold by
+ * one of the shops that publishes reviews" — it removes 86% of the shelf, and
+ * nothing on screen said so until you pressed it.
+ *
+ * A number beside each option fixes that without arguing about it, and it is
+ * the same rule the search box already keeps: never offer a choice that leads
+ * nowhere.
+ *
+ * Counted the way facets are counted everywhere: a dimension's own value is
+ * left out of the filter while its options are counted, so the rating options
+ * answer "how many, given everything else you have chosen" rather than "how
+ * many in the whole market".
+ */
+
+/** A catalogue small enough to read is not one worth filtering by price. */
+export const PRICE_FILTER_MIN_LISTINGS = 40;
+
+export type OptionCount<V> = { value: V; count: number };
+export type PriceBucket = { min: number; max?: number; count: number };
+
+const RATING_VALUES: Array<number | undefined> = [undefined, 4, 4.5];
+const SCORE_VALUES: Array<number | undefined> = [undefined, 1, 85];
+
+/** 25 → 25, 240 → 250, 1,730 → 2,000: a number somebody would have typed. */
+function friendly(value: number): number {
+  if (!Number.isFinite(value) || value <= 0) return 0;
+  const magnitude = 10 ** Math.floor(Math.log10(value));
+  for (const step of [1, 2, 2.5, 5, 10]) {
+    const candidate = step * magnitude;
+    if (candidate >= value) return Math.round(candidate);
+  }
+  return Math.round(10 * magnitude);
+}
+
+/**
+ * Price bands drawn from this shelf rather than from a constant.
+ *
+ * Mattresses and phone cases do not share a sensible set of thresholds, so the
+ * bands come from the quartiles of whatever is in scope, rounded to numbers a
+ * person would have typed themselves.
+ */
+export function priceBuckets<T extends DealLike>(deals: T[]): PriceBucket[] {
+  const prices = deals.map((d) => d.price).filter((p) => p > 0 && Number.isFinite(p)).sort((a, b) => a - b);
+  if (prices.length < PRICE_FILTER_MIN_LISTINGS) return [];
+  const at = (q: number) => prices[Math.min(prices.length - 1, Math.floor(prices.length * q))];
+  /* An edge above the dearest thing on the shelf would make a top band with
+     nothing in it, and dropping that band afterwards would leave the panel
+     with a closed top — a price filter that cannot say "and up". */
+  const dearest = prices[prices.length - 1];
+  const edges = [...new Set([friendly(at(0.25)), friendly(at(0.5)), friendly(at(0.75))])]
+    .filter((edge) => edge > 0 && edge < dearest)
+    .sort((a, b) => a - b);
+  if (!edges.length) return [];
+  const bounds = [0, ...edges];
+  return bounds.map((min, index) => {
+    const max = bounds[index + 1];
+    const count = prices.filter((price) => price >= min && (max === undefined || price < max)).length;
+    return max === undefined ? { min, count } : { min, max, count };
+  }).filter((bucket) => bucket.count > 0);
+}
+
+/** Every option on the panel, with the number it would leave behind. */
+export function listingCounts<T extends DealLike>(deals: T[], filter: DealFilter = {}) {
+  const size = (patch: Partial<DealFilter>) =>
+    applyFilter(deals, { ...filter, ...patch }).length;
+  const withoutPrice = { minPrice: undefined, maxPrice: undefined };
+  const inPriceScope = applyFilter(deals, { ...filter, ...withoutPrice });
+
+  return {
+    total: applyFilter(deals, filter).length,
+    retailers: [...new Set(applyFilter(deals, { ...filter, retailer: undefined }).map((d) => d.retailer))]
+      .sort()
+      .map((value) => ({ value, count: size({ retailer: value }) })),
+    rating: RATING_VALUES.map((value) => ({ value, count: size({ minRating: value }) })),
+    score: SCORE_VALUES.map((value) => ({ value, count: size({ minScore: value }) })),
+    discounted: size({ discountedOnly: true }),
+    price: {
+      buckets: priceBuckets(inPriceScope).map((bucket) => ({
+        ...bucket,
+        count: size({ minPrice: bucket.min || undefined, maxPrice: bucket.max }),
+      })),
+      listings: inPriceScope.length,
+    },
+  };
+}

@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { CaretRight } from "@phosphor-icons/react/ssr";
 import { getCategory, getMarket, getDeals, searchDeals } from "@/lib/catalog";
-import { listingFacets } from "@/lib/filter";
+import { listingCounts } from "@/lib/filter";
 import { slugifyCategory } from "@/lib/backendAdapter";
 import type { Deal, DealFilter } from "@/lib/types";
 import { getLanguage, t } from "@/lib/i18n";
@@ -112,7 +112,9 @@ export async function DealListing({
   const baseFilter = { ...filter, category: backendCategory ? slugifyCategory(backendCategory) : undefined, retailer: undefined, minPrice: undefined, maxPrice: undefined };
   const exact = searchParams.exact === "1";
   const baseDeals = filter.query ? (await searchDeals(market, baseFilter, { exact })).deals : await getDeals(market, baseFilter);
-  const { retailers, price: bounds } = listingFacets(baseDeals, filter);
+  /* What every option on the panel would leave behind. Counted here, on the
+     server, over the same list the page is drawn from. See listingCounts. */
+  const counts = listingCounts(baseDeals, filter);
   const currency = getMarket(market)?.currency ?? "USD";
 
   return (
@@ -152,8 +154,7 @@ export async function DealListing({
               filter={filter}
               market={market}
               currency={currency}
-              retailers={retailers}
-              bounds={bounds}
+              counts={counts}
               copy={filterCopy}
             />
           </FilterShell>
