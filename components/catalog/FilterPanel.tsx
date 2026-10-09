@@ -2,11 +2,11 @@
 
 import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { PriceRange } from "./PriceRange";
+import { PriceBands } from "./PriceBands";
 import { X } from "@phosphor-icons/react";
 import { cn } from "@/lib/cn";
 import { formatPrice, retailerLabel } from "@/lib/format";
-import { searchParamsFromFilter } from "@/lib/filter";
+import { searchParamsFromFilter, type listingCounts } from "@/lib/filter";
 import type { DealFilter, SortKey } from "@/lib/types";
 import { useCopy } from "@/components/site/CopyProvider";
 
@@ -87,16 +87,14 @@ export function FilterPanel({
   filter,
   market,
   currency,
-  retailers,
-  bounds,
+  counts,
   copy,
 }: {
   basePath: string;
   filter: DealFilter;
   market: string;
   currency: string;
-  retailers: string[];
-  bounds: { min: number; max: number };
+  counts: ReturnType<typeof listingCounts>;
   copy: FilterCopy;
 }) {
   const tr = useCopy();
@@ -183,7 +181,7 @@ export function FilterPanel({
         </div>
       )}
 
-      <PriceRange filter={filter} bounds={bounds} currency={currency} market={market} onApply={update} />
+      <PriceBands filter={filter} buckets={counts.price.buckets} currency={currency} market={market} onApply={update} />
 
       {/* retailer */}
       <fieldset>
@@ -197,15 +195,16 @@ export function FilterPanel({
           >
             {tr("app.filter.all")}
           </ChoiceButton>
-          {retailers.map((r) => (
+          {counts.retailers.map((r) => (
             <ChoiceButton
-              key={r}
-              selected={filter.retailer === r}
+              key={r.value}
+              selected={filter.retailer === r.value}
+              count={r.count}
               onClick={() =>
-                update({ retailer: filter.retailer === r ? undefined : r })
+                update({ retailer: filter.retailer === r.value ? undefined : r.value })
               }
             >
-              {retailerLabel(r)}
+              {retailerLabel(r.value)}
             </ChoiceButton>
           ))}
         </div>
@@ -217,10 +216,11 @@ export function FilterPanel({
           {copy.productRating}
         </legend>
         <div className="mt-3 flex flex-wrap gap-2">
-          {RATING_STEPS.map((s) => (
+          {RATING_STEPS.map((s, index) => (
             <ChoiceButton
               key={String(s.value)}
               selected={filter.minRating === s.value}
+              count={counts.rating[index]?.count}
               onClick={() => update({ minRating: s.value })}
             >
               {s.value === 4 ? tr("app.filter.ratingFour") : s.value === 4.5 ? tr("app.filter.ratingFourHalf") : copy.any}
@@ -235,10 +235,11 @@ export function FilterPanel({
           {copy.score}
         </legend>
         <div className="mt-3 flex flex-wrap gap-2">
-          {SCORE_STEPS.map((s) => (
+          {SCORE_STEPS.map((s, index) => (
             <ChoiceButton
               key={String(s.value)}
               selected={filter.minScore === s.value}
+              count={counts.score[index]?.count}
               onClick={() => update({ minScore: s.value })}
             >
               {s.value === 1 ? tr("app.filter.scored") : s.label || copy.any}
@@ -260,7 +261,8 @@ export function FilterPanel({
           />
           <span>
             <span className="block text-sm font-semibold text-fg">
-              {copy.belowReferenceOnly}
+              {copy.belowReferenceOnly}{" "}
+              <span className="font-normal tabular-nums text-fg-subtle">{counts.discounted}</span>
             </span>
             <span className="mt-0.5 block text-xs text-fg-subtle">
               {tr("app.filter.belowReferenceHint")}
@@ -298,28 +300,46 @@ export function FilterPanel({
   );
 }
 
+/*
+ * A choice, and what it would leave.
+ *
+ * An option that leads to nothing is not offered: it is drawn, with its zero,
+ * and cannot be pressed. Hiding it instead would make the panel rearrange
+ * itself under the hand every time something was chosen, and the zero is worth
+ * reading — "4★ and up: 0" next to this shop says something true about the
+ * shop rather than about the goods.
+ */
 function ChoiceButton({
   selected,
   onClick,
+  count,
   children,
 }: {
   selected: boolean;
   onClick: () => void;
+  count?: number;
   children: React.ReactNode;
 }) {
+  const empty = count === 0 && !selected;
   return (
     <button
       type="button"
       onClick={onClick}
+      disabled={empty}
       aria-pressed={selected}
       className={cn(
-        "inline-flex h-11 cursor-pointer items-center rounded-full px-4 text-sm font-medium transition-colors",
+        "inline-flex h-11 items-center gap-2 rounded-full px-4 text-sm font-medium transition-colors",
+        empty && "cursor-not-allowed border border-border text-fg-subtle opacity-55",
+        !empty && "cursor-pointer",
         selected
           ? "bg-surface-inverse text-fg-on-inverse"
-          : "border border-border text-fg-muted hover:border-border-strong hover:text-fg",
+          : !empty && "border border-border text-fg-muted hover:border-border-strong hover:text-fg",
       )}
     >
-      {children}
+      <span>{children}</span>
+      {count !== undefined && (
+        <span className="text-xs tabular-nums opacity-60">{count}</span>
+      )}
     </button>
   );
 }
