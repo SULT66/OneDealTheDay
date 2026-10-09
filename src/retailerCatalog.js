@@ -8,7 +8,14 @@ const RETAILERS = Object.freeze([
   {id:"home-depot", name:"Home Depot", network:"Impact", markets:["us", "ca"]},
   {id:"lowes", name:"Lowe's", network:"Impact", markets:["us", "ca"]},
   {id:"wayfair", name:"Wayfair", network:"CJ Affiliate", markets:["us", "ca", "uk", "de"]},
-  {id:"aliexpress", name:"AliExpress", network:"AliExpress Portals", markets:["us", "ca", "uk", "fr", "de"], nativeProvider:"aliexpress"},
+  {
+    id:"aliexpress", name:"AliExpress", network:"AliExpress Portals",
+    markets:["us", "ca", "uk", "fr", "de"], nativeProvider:"aliexpress",
+    /* Their links are tracked redirects through s.click.aliexpress.com, so no
+       front door can be read off a product the way it can for a shop that
+       links to itself. Without this the shop has no tile at all. */
+    storefrontHost:"aliexpress.com"
+  },
   {
     id:"grommet", name:"Grommet", network:"Awin", markets:["us"],
     /* The shop, not the brand a deep link happened to land on. Grommet sells
