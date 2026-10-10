@@ -731,7 +731,7 @@ export async function getArchive(marketCode: string, days = 5, before?: string):
 export type MerchantCoupon = {
   id: string; merchant: string; code: string; title: string;
   description: string; terms: string; expiresAt: string;
-  checkedAt: string; href: string;
+  checkedAt: string; href: string; discountPercent?: number | null; termsUrl?: string; itemTitle?: string;
 };
 export const getMerchantCoupons = cache(async (market: string): Promise<MerchantCoupon[]> => {
   try {

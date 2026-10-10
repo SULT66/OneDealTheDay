@@ -20,7 +20,8 @@ jobs:
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event.workflow_run.conclusion == 'success' &&
-       startsWith(github.event.workflow_run.head_commit.message, 'Enable one-time AliExpress category backfill'))
+       (startsWith(github.event.workflow_run.head_commit.message, 'Enable one-time AliExpress category backfill') ||
+        startsWith(github.event.workflow_run.head_commit.message, 'Add coupon search sorting and marketplace offers')))
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -48,8 +49,8 @@ jobs:
           while time.monotonic() < deadline:
               try:
                   if job_id is None:
-                      health = request("/api/status?market=us")
-                      if health.get("releaseId") != expected or health.get("uptimeSeconds", 0) < 600:
+                      health = request("/api/status?market=us&release_check=" + expected)
+                      if health.get("releaseId") != expected or health.get("uptimeSeconds", 0) < 120:
                           print("Waiting for the deployed release to settle", flush=True)
                           time.sleep(30)
                           continue

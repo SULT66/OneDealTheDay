@@ -18,6 +18,10 @@ function utcTime(value) {
 function clean(value, limit=3000) {
   return String(value || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, limit);
 }
+function discountPercentage(text) {
+  const values = [...new Set((String(text).match(/\b\d+(?:\.\d+)?\s*%/g) || []).map(v=>parseFloat(v)))];
+  return values.length === 1 && values[0] > 0 && values[0] <= 100 ? values[0] : null;
+}
 function normalizeOffer(raw, checkedAt, now=Date.now()) {
   const shop = SHOPS[raw.advertiser?.id];
   const code = clean(raw.voucher?.code,100);
@@ -43,7 +47,7 @@ function normalizeOffer(raw, checkedAt, now=Date.now()) {
   } catch { return null; }
   if (!/^\d+$/.test(String(raw.promotionId))) return null;
   return {id:String(raw.promotionId), merchant:shop.name, code, title, description, terms,
-    expiresAt:new Date(ends).toISOString(), checkedAt, trackingUrl:tracking.href,
+    expiresAt:new Date(ends).toISOString(), checkedAt, discountPercent:discountPercentage(`${title} ${description} ${terms}`), trackingUrl:tracking.href,
     href:`/go/coupon/${raw.promotionId}?market=us`};
 }
 function activeOffers(snapshot, now=Date.now()) {
@@ -102,4 +106,4 @@ function couponDestination(id,market="us") {
   refreshIfDue();
   return activeOffers(snapshot).find(o=>o.id===String(id))?.trackingUrl || null;
 }
-module.exports = {normalizeOffer,activeOffers,fetchOffers,listCoupons,couponDestination};
+module.exports = {normalizeOffer,activeOffers,fetchOffers,listCoupons,couponDestination,discountPercentage};

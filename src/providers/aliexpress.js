@@ -229,6 +229,7 @@ function normalizeItem(item, keyword, sourceRank, market) {
     /* The tracked link, not the plain product URL: the plain one earns
        nothing and the API will not give us both. */
     affiliate_url: text(item?.promotion_link),
+    coupon_json: JSON.stringify(require("../marketplaceCoupons").aliCoupons(item?.promo_code_info)),
     retailer_name: "AliExpress",
     retailer_shop_url: text(item?.shop_url),
     seller_name: text(item?.shop_id ? `AliExpress seller ${item.shop_id}` : "AliExpress seller"),
