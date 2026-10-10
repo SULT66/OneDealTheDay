@@ -28,6 +28,7 @@
  * outcome and it happens on its own.
  */
 const crypto = require("crypto");
+const { normalizeCatalogProduct } = require("../catalogTaxonomy");
 
 const GATEWAY = "https://api-sg.aliexpress.com/sync";
 const PRODUCT_QUERY = "aliexpress.affiliate.product.query";
@@ -272,6 +273,8 @@ async function searchProducts({
   keywordsPerRun = 6,
   pageSize = 30,
   maxProducts = 120,
+  maxProductsPerKeyword = Infinity,
+  keywordCategories = {},
   minSellerPercent = DEFAULT_MIN_SELLER_PERCENT,
   minOrders = DEFAULT_MIN_ORDERS,
   minPrice = DEFAULT_MIN_PRICE,
@@ -284,6 +287,7 @@ async function searchProducts({
   if (!appKey || !appSecret || !trackingId) {
     throw new Error("AliExpress is not configured: app key, secret and tracking id are all required.");
   }
+  if (maxProducts <= 0 || maxProductsPerKeyword <= 0) return [];
   const terms = keywordsForRun(keywords, { rotate, perRun: keywordsPerRun });
   const country = String(market?.code || "us").toUpperCase();
   const collected = [];
@@ -329,13 +333,26 @@ async function searchProducts({
       continue;
     }
 
+    let acceptedForKeyword = 0;
     for (const item of productsFrom(body)) {
       if (!isAcceptable(item, { minSellerPercent, minOrders, maxDeliveryDays, minPrice })) continue;
       const id = text(item?.product_id);
       if (!id || seen.has(id)) continue;
+      const product = normalizeItem(item, keyword, collected.length + 1, market);
+      const targetCategory = keywordCategories[keyword];
+      const titleCategory = normalizeCatalogProduct({...product, category:""}).normalized_category;
+      if (targetCategory && titleCategory !== "Other Deals" && titleCategory !== targetCategory) continue;
+      const inferredCategory = normalizeCatalogProduct(product).normalized_category;
+      if (targetCategory && inferredCategory !== "Other Deals" && inferredCategory !== targetCategory) continue;
+      // The shelf is the search context, while taxonomy still checks the
+      // actual title and rejects a result that belongs to another shelf.
+      if (targetCategory) product.category = targetCategory;
+      if (targetCategory && normalizeCatalogProduct(product).normalized_category !== targetCategory) continue;
       seen.add(id);
-      collected.push(normalizeItem(item, keyword, collected.length + 1, market));
+      collected.push(product);
+      acceptedForKeyword += 1;
       if (collected.length >= maxProducts) return collected;
+      if (acceptedForKeyword >= maxProductsPerKeyword) break;
     }
   }
   /*

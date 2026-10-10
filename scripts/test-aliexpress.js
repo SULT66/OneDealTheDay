@@ -28,6 +28,25 @@ const {
   signParams,
 } = require("../src/providers/aliexpress");
 const { isIndexableProduct } = require("../src/indexability");
+const { planGapSearches, SHELVES } = require("../src/aliexpressGaps");
+const { canonicalCategory } = require("../src/catalogTaxonomy");
+
+const categoryRows = Object.keys(SHELVES).map(category => ({ category, count: 150 }));
+const setCount = (category, count) => categoryRows.find(row => row.category === category).count = count;
+setCount("Baby & Kids", 12);
+setCount("Bikes & Mobility", 22);
+setCount("Fashion", 25);
+setCount("Automotive", 33);
+setCount("Furniture", 35);
+setCount("Pet Supplies", 42);
+const gapPlan = planGapSearches(categoryRows, { now: 0 });
+assert.deepStrictEqual(gapPlan.map(row => row.category), ["Baby & Kids", "Bikes & Mobility", "Fashion", "Automotive", "Furniture", "Pet Supplies"]);
+assert(!gapPlan.some(row => row.category === "Electronics"), "a full shelf must not compete with a gap");
+assert.notStrictEqual(planGapSearches(categoryRows, { now: 3 * 3600 * 1000 })[0].keyword, gapPlan[0].keyword);
+assert.deepStrictEqual(planGapSearches(categoryRows.map(row => ({...row, count:100}))), []);
+for (const [category, keywords] of Object.entries(SHELVES)) {
+  for (const title of keywords) assert.strictEqual(canonicalCategory({title, category}), category);
+}
 
 const SECRET = "test-secret";
 
@@ -85,6 +104,26 @@ const fakeFetch = async (url) => {
 };
 
 (async () => {
+  const gapCalls = [];
+  const gapProducts = await searchProducts({
+    appKey: "key", appSecret: SECRET, trackingId: "onedailydrop",
+    keywords: ["fashion scarf", "dog leash"], rotate: false,
+    keywordCategories: {"fashion scarf":"Fashion", "dog leash":"Pet Supplies"},
+    maxProducts: 4, maxProductsPerKeyword: 2,
+    fetchImpl: async url => {
+      const keyword = new URL(url).searchParams.get("keywords");
+      gapCalls.push(keyword);
+      return {ok:true, json:async () => ({resp_result:{result:{products:{product:[
+        listing({product_id:`${keyword}-wrong`, product_title:"USB Hub Laptop Adapter"}),
+        ...Array.from({length:5}, (_, index) => listing({product_id:`${keyword}-${index}`, product_title:keyword}))
+      ]}}}})};
+    }
+  });
+  assert.deepStrictEqual(gapCalls, ["fashion scarf", "dog leash"]);
+  assert.strictEqual(gapProducts.length, 4, "one keyword must not consume the entire import cap");
+  assert.strictEqual(gapProducts.filter(product => product.category === "Fashion").length, 2);
+  assert.strictEqual(gapProducts.filter(product => product.category === "Pet Supplies").length, 2);
+  assert(!gapProducts.some(product => product.title.includes("USB")), "irrelevant API results must not fill a gap");
   const found = await searchProducts({
     appKey: "key",
     appSecret: SECRET,

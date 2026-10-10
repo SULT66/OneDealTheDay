@@ -5,6 +5,7 @@ const { priceIntelligence } = require("./priceIntelligence");
 const { createPriceSnapshotWriter } = require("./priceSnapshots");
 const { searchAll } = require("./providers/registry");
 const { demandKeywords } = require("./searchQueries");
+const { planGapSearches } = require("./aliexpressGaps");
 const activeMarketRefreshes = new Map();
 
 function textValue(value) {
@@ -231,6 +232,11 @@ async function refreshMarket(config, marketCode, options = {}) {
     ...config.marketConfig(marketCode),
     searchKeywords: [...configuredKeywords, ...wanted]
   };
+  selectedMarket.aliexpressGapPlan = planGapSearches(db.prepare(`
+    SELECT normalized_category AS category, COUNT(*) AS count
+    FROM products WHERE market=? AND status='published'
+    GROUP BY normalized_category
+  `).all(marketCode));
   const started = new Date().toISOString();
   const runId = Number(db.prepare(
     "INSERT INTO refresh_runs(provider,market,started_at,status,message) VALUES(?,?,?,'running','')"
@@ -257,6 +263,7 @@ async function refreshMarket(config, marketCode, options = {}) {
   if (wanted.length) {
     console.log(`[refresh] ${selectedMarket.code}: also looking for what shoppers could not find — ${wanted.join(", ")}`);
   }
+  console.log(`[refresh] ${selectedMarket.code}: AliExpress category gaps — ${selectedMarket.aliexpressGapPlan.map(row => `${row.category} (${row.count}/100): ${row.keyword}`).join(", ") || "none"}`);
 
   try {
     const loaded = await loadProducts(config, selectedMarket, options);
