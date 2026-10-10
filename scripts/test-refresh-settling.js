@@ -103,6 +103,10 @@ const base = `http://127.0.0.1:${port}`;
      about our uptime or our state. --- */
   const unauthorised = await fetch(`${base}/api/admin/refresh`, { method: "POST" });
   assert.strictEqual(unauthorised.status, 401, "the admin key is checked before the guard");
+  for (const query of ["source=unknown&market=us", "source=aliexpress"]) {
+    const invalid = await fetch(`${base}/api/admin/refresh?${query}`, {method:"POST", headers:{"x-admin-key":KEY}});
+    assert.strictEqual(invalid.status, 400, "invalid source selection must never fall back to a full refresh");
+  }
 
   console.log("refresh settling: ok");
   await new Promise(resolve => setTimeout(resolve, 250));

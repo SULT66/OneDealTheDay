@@ -1,0 +1,78 @@
+name: Fill AliExpress category gaps
+
+on:
+  workflow_run:
+    workflows: [Deploy OneDailyDrop to Azure]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: daily-product-refresh
+  cancel-in-progress: false
+
+jobs:
+  backfill:
+    # One automatic backfill for this release; subsequent runs are manual.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       startsWith(github.event.workflow_run.head_commit.message, 'Enable one-time AliExpress category backfill'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Import AliExpress into the smallest US categories
+        env:
+          ADMIN_KEY: ${{ secrets.ONEDEAL_ADMIN_KEY }}
+          EXPECTED_RELEASE: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: |
+          python3 - <<'PY'
+          import json, os, time, urllib.request, urllib.error
+          base = "https://www.onedailydrop.com"
+          deadline = time.monotonic() + 22 * 60
+          key = os.environ["ADMIN_KEY"]
+          expected = os.environ["EXPECTED_RELEASE"]
+          if not key:
+              raise SystemExit("ONEDEAL_ADMIN_KEY is missing")
+
+          def request(path, method="GET", authenticated=False):
+              headers = {"x-admin-key": key} if authenticated else {}
+              req = urllib.request.Request(base + path, method=method, headers=headers)
+              with urllib.request.urlopen(req, timeout=40) as response:
+                  return json.load(response)
+
+          job_id = None
+          while time.monotonic() < deadline:
+              try:
+                  if job_id is None:
+                      health = request("/api/status?market=us")
+                      if health.get("releaseId") != expected or health.get("uptimeSeconds", 0) < 600:
+                          print("Waiting for the deployed release to settle", flush=True)
+                          time.sleep(30)
+                          continue
+                      started = request("/api/admin/refresh?market=us&source=aliexpress", "POST", True)
+                      if not started.get("accepted"):
+                          print("Waiting for the existing refresh", flush=True)
+                          time.sleep(30)
+                          continue
+                      job_id = started["jobId"]
+                      print("AliExpress-only import started", flush=True)
+                  status = request("/api/admin/refresh-status", authenticated=True)
+                  if status.get("jobId") != job_id:
+                      raise SystemExit("The import job changed; inspect the source refresh history")
+                  if status.get("status") == "failed":
+                      raise SystemExit("AliExpress import failed; inspect automation status")
+                  if status.get("status") == "success":
+                      print(json.dumps(status.get("result")), flush=True)
+                      break
+                  time.sleep(15)
+              except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as error:
+                  # No request headers or credential-bearing URLs are logged.
+                  print("The site is not ready yet; retrying", flush=True)
+                  time.sleep(30)
+          else:
+              raise SystemExit("AliExpress backfill did not complete within 22 minutes")
+          PY

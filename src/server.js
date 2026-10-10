@@ -3128,6 +3128,14 @@ const SETTLING_SECONDS = Number(process.env.REFRESH_SETTLING_SECONDS ?? 600);
 
 app.post("/api/admin/refresh", admin, (req,res) => {
   const requestedMarket = normalizeMarket(req.query.market);
+  const requestedSource = String(req.query.source || "").trim();
+  if (requestedSource && (!requestedMarket || !enabledProviders(c).some(provider =>
+    provider.id === requestedSource && provider.markets.includes(requestedMarket)
+  ))) return res.status(400).json({error:"A source refresh requires an enabled source and its market."});
+  const refreshOptions = {
+    ...(requestedMarket ? {market:requestedMarket} : {}),
+    ...(requestedSource ? {providerIds:[requestedSource], skipDailySelection:true} : {})
+  };
   const settlingFor = Math.ceil(SETTLING_SECONDS - process.uptime());
   if (settlingFor > 0) {
     /* 503 with Retry-After, so a caller waits rather than treating this as a
@@ -3160,7 +3168,7 @@ app.post("/api/admin/refresh", admin, (req,res) => {
   // duplicate runs from starting for the same market.
   setImmediate(async () => {
     try {
-      job.result = await refreshProducts(c, requestedMarket ? {market:requestedMarket} : {});
+      job.result = await refreshProducts(c, refreshOptions);
       /* New prices on the listings mean the rendered pages quoting the old
          ones are wrong, however fast they are to serve. */
       publicHtmlCache.clear();
