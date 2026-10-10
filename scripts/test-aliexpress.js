@@ -115,6 +115,7 @@ const fakeFetch = async (url) => {
       gapCalls.push(keyword);
       return {ok:true, json:async () => ({resp_result:{result:{products:{product:[
         listing({product_id:`${keyword}-wrong`, product_title:"USB Hub Laptop Adapter"}),
+        listing({product_id:`${keyword}-unknown`, product_title:"Unidentified promotional item"}),
         ...Array.from({length:5}, (_, index) => listing({product_id:`${keyword}-${index}`, product_title:keyword}))
       ]}}}})};
     }
@@ -124,6 +125,7 @@ const fakeFetch = async (url) => {
   assert.strictEqual(gapProducts.filter(product => product.category === "Fashion").length, 2);
   assert.strictEqual(gapProducts.filter(product => product.category === "Pet Supplies").length, 2);
   assert(!gapProducts.some(product => product.title.includes("USB")), "irrelevant API results must not fill a gap");
+  assert(!gapProducts.some(product => product.title.includes("Unidentified")), "unknown products must not inherit the search shelf");
   const found = await searchProducts({
     appKey: "key",
     appSecret: SECRET,

@@ -3,6 +3,21 @@ const { TAXONOMY_VERSION, PUBLIC_CATEGORIES, canonicalCategory, normalizeCatalog
 const { capabilityCoverage, capabilityProfile } = require("../src/sourceCapabilities");
 
 const cases = [
+  [{source:"aliexpress", category:"Furniture", title:"Table Tennis Racket Double-Sided Protective Film"}, "Sports & Outdoors"],
+  [{source:"aliexpress", category:"Travel", title:"Ice Cube Mold Set Kitchen Tools"}, "Home & Kitchen"],
+  [{source:"aliexpress", category:"Fashion", title:"100-Pack White Plastic Pastry Bag"}, "Home & Kitchen"],
+  [{source:"aliexpress", category:"Automotive", title:"Dog Pee Pad Car Seat Waterproof Pet Supplies"}, "Pet Supplies"],
+  [{source:"aliexpress", category:"Furniture", title:"Metal Straight Ruler Precision Tool"}, "Tools & DIY"],
+  [{source:"aliexpress", category:"Furniture", title:"Unidentified promotional item"}, "Other Deals"],
+  [{source:"aliexpress", category:"Fashion", title:"Leather Cowhide Men's Belt"}, "Fashion"],
+  [{source:"aliexpress", category:"Travel", title:"Packing Cubes Portable Wardrobe Suitcase Storage Bags"}, "Travel"],
+  [{source:"aliexpress", category:"Travel", title:"Business Travel Laptop Bag"}, "Travel"],
+  [{source:"newegg", category:"Baby & Toddler", title:"Kyocera Black Toner Cartridge for Laser Printer"}, "Office"],
+  [{source:"newegg", category:"Kitchen Appliances > Ovens", title:"Wireless Gaming Headset"}, "Electronics"],
+  [{source:"newegg", category:"Printer Consumables", title:"Laptop SATA Hard Drive SSD Connector Cable"}, "Electronics"],
+  [{source:"newegg", category:"Electronics", title:"CNC Aluminum Mechanical Keyboard"}, "Electronics"],
+  [{source:"newegg", category:"Tools > Drills", title:"Blackmagic Video Router"}, "Electronics"],
+  [{source:"newegg", category:"Electronics", title:"Solid Carbide CNC Router Bit for Wood"}, "Tools & DIY"],
   [{source:"feed-silver-brush-us", category:"Tools", title:"Black Velvet Round Paintbrush"}, "Arts & Crafts"],
   [{source:"ebay", category:"Tools", title:"Artist paintbrush watercolor brush"}, "Arts & Crafts"],
   [{source:"ebay", category:"gifts under 25", title:"Personalized keepsake"}, "Gifts"],
@@ -82,6 +97,8 @@ for (const [product, expected] of cases) {
   assert.strictEqual(normalized.taxonomy_version, TAXONOMY_VERSION);
   assert.strictEqual(normalized.category, product.category, "Raw source category must remain unchanged");
 }
+
+assert.strictEqual(canonicalCategory({source:"aliexpress", category:"Furniture", title:"Table Tennis Racket Film", normalized_category:"Furniture", taxonomy_version:"catalog-taxonomy-v6"}), "Sports & Outdoors", "stored v6 categories must be repaired on migration");
 
 /*
  * A department a source sends can be wrong, and two ways of being wrong put
