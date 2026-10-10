@@ -1,0 +1,38 @@
+const assert = require("node:assert/strict");
+const seed = require("../site-content/merchant-coupons.json");
+const {activeOffers, normalizeOffer, fetchOffers, listCoupons, couponDestination} = require("../src/merchantCoupons");
+const now = Date.parse("2026-10-10T03:00:00Z");
+assert.equal(activeOffers(seed,now).length,11);
+assert.equal(activeOffers(seed,now+8*86400000).length,0,"unrefreshed codes must disappear");
+const base = seed.offers[0];
+const check = patch => normalizeOffer({...base,...patch},seed.checkedAt,now);
+assert.equal(check({endDate:"2026-10-10T02:00:00Z"}),null);
+assert.equal(check({startDate:"2026-10-11T00:00:00Z"}),null);
+assert.equal(check({advertiser:{...base.advertiser,joined:false}}),null);
+assert.equal(check({regions:{all:false,list:[{countryCode:"GB"}]}}),null);
+assert.equal(check({description:"Save 20% today"}),null,"conflicting percentages must be excluded");
+assert.equal(check({urlTracking:base.urlTracking.replace("3018019","999")}),null);
+assert.equal(check({urlTracking:base.urlTracking.replace("www.awin1.com","evil.example")}),null);
+assert.equal(check({url:"https://evil.example/"}),null);
+assert.equal(check({terms:"1"}),null);
+assert.equal(listCoupons("ca").length,0);
+assert.equal(couponDestination("9999999"),null);
+assert.equal(couponDestination(base.promotionId,"uk"),null);
+assert.ok(listCoupons().every(c=>!('trackingUrl' in c)));
+(async()=>{
+  let calls=0;
+  const result = await fetchOffers(async (url,options)=>{
+    assert.equal(url,"https://api.awin.com/publisher/3018019/promotions");
+    assert.equal(options.headers.Authorization,"Bearer test-token");
+    const body=JSON.parse(options.body);
+    assert.equal(body.filters.membership,"joined");
+    assert.deepEqual(body.filters.regionCodes,["US"]);
+    assert.equal(body.pagination.page,++calls);
+    return {ok:true,json:async()=>calls===1 ? Array.from({length:200},()=>base) : [base]};
+  },"test-token");
+  assert.equal(result.offers.length,201);
+  assert.equal(calls,2);
+  await assert.rejects(fetchOffers(async()=>({ok:false,status:401}),"test-token"),/401/);
+  await assert.rejects(fetchOffers(async()=>({ok:true,json:async()=>({unexpected:[]})}),"test-token"),/Unexpected/);
+  console.log("Merchant coupon dates, freshness, regions, claims, tracking and pagination passed.");
+})().catch(error=>{console.error(error);process.exitCode=1;});

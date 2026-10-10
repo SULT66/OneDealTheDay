@@ -1,0 +1,302 @@
+{
+  "checkedAt": "2026-10-10T02:04:00.000Z",
+  "offers": [
+    {
+      "promotionId": 4129526,
+      "type": "voucher",
+      "advertiser": {
+        "id": 129485,
+        "name": "Silver Brush",
+        "joined": true
+      },
+      "title": "Take 10% off your entire order sitewide Take 10% off your entire order sitewide",
+      "description": "Take 10% off your entire order sitewide Take 10% off your entire order sitewide",
+      "terms": "No exclusions.",
+      "startDate": "2026-10-01T00:00:00.000Z",
+      "endDate": "2027-01-01T00:00:00.000Z",
+      "url": "http://www.silverbrush.com",
+      "urlTracking": "https://www.awin1.com/cread.php?awinmid=129485&awinaffid=3018019&ued=http%3A%2F%2Fwww.silverbrush.com",
+      "regions": {
+        "all": true,
+        "list": [
+          {
+            "countryCode": "US"
+          }
+        ]
+      },
+      "voucher": {
+        "code": "FallPromo10"
+      }
+    },
+    {
+      "promotionId": 4064247,
+      "type": "voucher",
+      "advertiser": {
+        "id": 126513,
+        "name": "Argendon Crawlspace & commercial dehumidifier",
+        "joined": true
+      },
+      "title": "5% off Argendon Shield 60",
+      "description": "Get an extra 5% off the Argendon Shield 60, in addition to the current sale price. A strong option for high-moisture basements and crawl spaces that need reliable humidity control.",
+      "terms": "Get an extra 5% off the Argendon Shield 60, in addition to the current sale price. A strong option for high-moisture basements and crawl spaces that need reliable humidity control.",
+      "startDate": "2026-08-17T00:00:00.000Z",
+      "endDate": "2028-08-17T00:00:00.000Z",
+      "url": "https://www.argendon.com/products/crawl-space-dehumidifier-shield-60?_pos=1&_sid=9bcd9ddd4&_ss=r",
+      "urlTracking": "https://www.awin1.com/cread.php?awinmid=126513&awinaffid=3018019&ued=https%3A%2F%2Fwww.argendon.com%2Fproducts%2Fcrawl-space-dehumidifier-shield-60%3F_pos%3D1%26_sid%3D9bcd9ddd4%26_ss%3Dr",
+      "regions": {
+        "all": true,
+        "list": [
+          {
+            "countryCode": "US"
+          }
+        ]
+      },
+      "voucher": {
+        "code": "AWShield60"
+      }
+    },
+    {
+      "promotionId": 4013111,
+      "type": "voucher",
+      "advertiser": {
+        "id": 126513,
+        "name": "Argendon Crawlspace & commercial dehumidifier",
+        "joined": true
+      },
+      "title": "3% off Argendon Shield 35M",
+      "description": "Get an extra 3% off the Argendon Shield 35M, in addition to the current sale price. A strong option for high-moisture basements and crawl spaces that need reliable humidity control.",
+      "terms": "Get an extra 3% off the Argendon Shield 35M, in addition to the current sale price. A strong option for high-moisture basements and crawl spaces that need reliable humidity control.",
+      "startDate": "2026-07-19T00:00:00.000Z",
+      "endDate": "2029-07-02T00:00:00.000Z",
+      "url": "https://www.argendon.com/products/crawl-space-dehumidifier-shield-35m?_pos=1&_sid=28bdb976c&_ss=r",
+      "urlTracking": "https://www.awin1.com/cread.php?awinmid=126513&awinaffid=3018019&ued=https%3A%2F%2Fwww.argendon.com%2Fproducts%2Fcrawl-space-dehumidifier-shield-35m%3F_pos%3D1%26_sid%3D28bdb976c%26_ss%3Dr",
+      "regions": {
+        "all": true,
+        "list": [
+          {
+            "countryCode": "US"
+          }
+        ]
+      },
+      "voucher": {
+        "code": "AW35M"
+      }
+    },
+    {
+      "promotionId": 4010533,
+      "type": "voucher",
+      "advertiser": {
+        "id": 126513,
+        "name": "Argendon Crawlspace & commercial dehumidifier",
+        "joined": true
+      },
+      "title": "5% off Argendon Sandidry Pro 35c",
+      "description": "Get an extra 5% off the Argendon Sandidry Pro 35c, in addition to the current sale price. A strong option for high-moisture basements and crawl spaces that need reliable humidity control.",
+      "terms": "Get an extra 5% off the Argendon Sandidry Pro 35c, in addition to the current sale price. A strong option for high-moisture basements and crawl spaces that need reliable humidity control.",
+      "startDate": "2026-07-17T00:00:00.000Z",
+      "endDate": "2029-07-02T00:00:00.000Z",
+      "url": "https://www.argendon.com/products/crawl-space-dehumidifier-sandidry-pro-35c",
+      "urlTracking": "https://www.awin1.com/cread.php?awinmid=126513&awinaffid=3018019&ued=https%3A%2F%2Fwww.argendon.com%2Fproducts%2Fcrawl-space-dehumidifier-sandidry-pro-35c",
+      "regions": {
+        "all": true,
+        "list": [
+          {
+            "countryCode": "US"
+          }
+        ]
+      },
+      "voucher": {
+        "code": "AWSandidry"
+      }
+    },
+    {
+      "promotionId": 3983275,
+      "type": "voucher",
+      "advertiser": {
+        "id": 126513,
+        "name": "Argendon Crawlspace & commercial dehumidifier",
+        "joined": true
+      },
+      "title": "7% off Argendon XStorm pro",
+      "description": "Get an extra 7% off the Argendon XStorm pro, in addition to the current sale price. A strong option for high-moisture basements and crawl spaces that need reliable humidity control.",
+      "terms": "Get an extra 7% off the Argendon XStorm pro, in addition to the current sale price. A strong option for high-moisture basements and crawl spaces that need reliable humidity control.",
+      "startDate": "2026-07-02T00:00:00.000Z",
+      "endDate": "2029-07-02T00:00:00.000Z",
+      "url": "https://www.argendon.com/products/commercial-dehumidifier-xstorm-pro?_pos=4&_sid=6cda49b3c&_ss=r",
+      "urlTracking": "https://www.awin1.com/cread.php?awinmid=126513&awinaffid=3018019&ued=https%3A%2F%2Fwww.argendon.com%2Fproducts%2Fcommercial-dehumidifier-xstorm-pro%3F_pos%3D4%26_sid%3D6cda49b3c%26_ss%3Dr",
+      "regions": {
+        "all": true,
+        "list": [
+          {
+            "countryCode": "US"
+          }
+        ]
+      },
+      "voucher": {
+        "code": "AWXStormpro"
+      }
+    },
+    {
+      "promotionId": 3983273,
+      "type": "voucher",
+      "advertiser": {
+        "id": 126513,
+        "name": "Argendon Crawlspace & commercial dehumidifier",
+        "joined": true
+      },
+      "title": "5% off Argendon Guardian 60",
+      "description": "Get an extra 5% off the Argendon Guardian 60, in addition to the current sale price. A strong option for high-moisture basements and crawl spaces that need reliable humidity control.",
+      "terms": "Get an extra 5% off the Argendon Guardian 60, in addition to the current sale price. A strong option for high-moisture basements and crawl spaces that need reliable humidity control.",
+      "startDate": "2026-07-02T00:00:00.000Z",
+      "endDate": "2029-07-02T00:00:00.000Z",
+      "url": "https://www.argendon.com/products/crawl-space-dehumidifier-guardian-60?_pos=5&_sid=e0e68978c&_ss=r",
+      "urlTracking": "https://www.awin1.com/cread.php?awinmid=126513&awinaffid=3018019&ued=https%3A%2F%2Fwww.argendon.com%2Fproducts%2Fcrawl-space-dehumidifier-guardian-60%3F_pos%3D5%26_sid%3De0e68978c%26_ss%3Dr",
+      "regions": {
+        "all": true,
+        "list": [
+          {
+            "countryCode": "US"
+          }
+        ]
+      },
+      "voucher": {
+        "code": "AWGuardian60"
+      }
+    },
+    {
+      "promotionId": 3873631,
+      "type": "voucher",
+      "advertiser": {
+        "id": 126513,
+        "name": "Argendon Crawlspace & commercial dehumidifier",
+        "joined": true
+      },
+      "title": "5% Off Sitewide at Argendon",
+      "description": "Save 5% on eligible Argendon dehumidifiers with this exclusive code. Shop basement, crawl space, garage, and moisture-control solutions designed to help manage excess humidity and musty odors.",
+      "terms": "Save 5% on eligible Argendon dehumidifiers with this exclusive code. Shop basement, crawl space, garage, and moisture-control solutions designed to help manage excess humidity and musty odors.",
+      "startDate": "2026-05-06T00:00:00.000Z",
+      "endDate": "2027-12-31T00:00:00.000Z",
+      "url": "https://www.argendon.com/",
+      "urlTracking": "https://www.awin1.com/cread.php?awinmid=126513&awinaffid=3018019&ued=https%3A%2F%2Fwww.argendon.com%2F",
+      "regions": {
+        "all": true,
+        "list": [
+          {
+            "countryCode": "US"
+          }
+        ]
+      },
+      "voucher": {
+        "code": "PRELUV"
+      }
+    },
+    {
+      "promotionId": 3852341,
+      "type": "voucher",
+      "advertiser": {
+        "id": 126513,
+        "name": "Argendon Crawlspace & commercial dehumidifier",
+        "joined": true
+      },
+      "title": "Extra 5% OFF Argendon Shield 35P Dehumidifier",
+      "description": "Boost your savings on the Argendon Shield 35P Crawl Space Dehumidifier\u2014designed for powerful moisture control in spaces up to 1,000 sq. ft. Use code Shield35PAWIN to get an extra 5% OFF and enjoy efficient performance, compact design, and reliable humidity control.",
+      "terms": "Boost your savings on the Argendon Shield 35P Crawl Space Dehumidifier\u2014designed for powerful moisture control in spaces up to 1,000 sq. ft.\nUse code Shield35PAWIN to get an extra 5% OFF and enjoy efficient performance, compact design, and reliable humidity control.",
+      "startDate": "2026-04-24T00:00:00.000Z",
+      "endDate": "2030-02-24T00:00:00.000Z",
+      "url": "https://www.argendon.com/products/crawl-space-dehumidifier-shield-35p",
+      "urlTracking": "https://www.awin1.com/cread.php?awinmid=126513&awinaffid=3018019&ued=https%3A%2F%2Fwww.argendon.com%2Fproducts%2Fcrawl-space-dehumidifier-shield-35p",
+      "regions": {
+        "all": true,
+        "list": [
+          {
+            "countryCode": "US"
+          }
+        ]
+      },
+      "voucher": {
+        "code": "Shield35PAWIN"
+      }
+    },
+    {
+      "promotionId": 3780096,
+      "type": "voucher",
+      "advertiser": {
+        "id": 45915,
+        "name": "Shenzhen Feinuote Electronic Technology Co., Ltd.",
+        "joined": true
+      },
+      "title": "Get our 20%off wideside",
+      "description": "20%off, save your money here",
+      "terms": "No restrictions",
+      "startDate": "2026-03-12T00:00:00.000Z",
+      "endDate": "2027-02-28T00:00:00.000Z",
+      "url": "https://fntcase.com/",
+      "urlTracking": "https://www.awin1.com/cread.php?awinmid=45915&awinaffid=3018019&ued=https%3A%2F%2Ffntcase.com%2F",
+      "regions": {
+        "all": true,
+        "list": [
+          {
+            "countryCode": "US"
+          }
+        ]
+      },
+      "voucher": {
+        "code": "NEW20"
+      }
+    },
+    {
+      "promotionId": 3624626,
+      "type": "voucher",
+      "advertiser": {
+        "id": 66494,
+        "name": "mooncool",
+        "joined": true
+      },
+      "title": "Exclusive New Customer First-Order Discount",
+      "description": "Use code AFFMC5 to enjoy an exclusive, one-time first-order discount for new customers; not combinable with other offers and valid permanently.",
+      "terms": "Mooncool New Customer Coupon \u2013 Terms & Conditions Coupon Code: AFFMC5 Discount: 5% off on first purchase only. Eligibility: Valid for first-time customers only. Usage Limit: One-time use per customer. Validity: Permanent, no expiration date. Applicable Products: All products on www.mooncool.com , unless otherwise stated. Non-combinable: Cannot be combined with other coupons, promotions, or discounts. Returns & Refunds: Standard Mooncool return and refund policy applies. Discount will be deducted from the refunded amount. Fraud Prevention: Coupon use suspected of abuse or fraud may be canceled. Amendments: Mooncool reserves the right to modify or terminate this offer at any time.",
+      "startDate": "2025-12-10T00:00:00.000Z",
+      "endDate": "2035-12-31T00:00:00.000Z",
+      "url": "https://www.mooncool.com/",
+      "urlTracking": "https://www.awin1.com/cread.php?awinmid=66494&awinaffid=3018019&ued=https%3A%2F%2Fwww.mooncool.com%2F",
+      "regions": {
+        "all": true,
+        "list": [
+          {
+            "countryCode": "US"
+          }
+        ]
+      },
+      "voucher": {
+        "code": "AFFMC5"
+      }
+    },
+    {
+      "promotionId": 3313809,
+      "type": "voucher",
+      "advertiser": {
+        "id": 95201,
+        "name": "Giftlab",
+        "joined": true
+      },
+      "title": "10% off storewide VAL10",
+      "description": "10% off storewide VAL10",
+      "terms": "N/A",
+      "startDate": "2022-01-12T00:00:00.000Z",
+      "endDate": "2050-12-30T00:00:00.000Z",
+      "url": "https://www.giftlab.com/",
+      "urlTracking": "https://www.awin1.com/cread.php?awinmid=95201&awinaffid=3018019&ued=https%3A%2F%2Fwww.giftlab.com%2F",
+      "regions": {
+        "all": false,
+        "list": [
+          {
+            "countryCode": "US"
+          }
+        ]
+      },
+      "voucher": {
+        "code": "VAL10"
+      }
+    }
+  ]
+}

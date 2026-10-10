@@ -139,6 +139,7 @@ export async function Header({ market }: { market: string }) {
                  whose links pay on anything bought after them. It lived in the
                  footer, where a page nobody scrolls to earns nothing. */
               { href: `/${market}/stores`, label: t(language, "app.nav.stores") },
+              ...(market === "us" ? [{ href: `/${market}/coupons`, label: language === "es" ? "Cupones" : "Coupons" }] : []),
             ].map((item) => (
               /* Ordered rather than left to the DOM, because the row wants a
                  different shape on a phone — see the drop button below. */

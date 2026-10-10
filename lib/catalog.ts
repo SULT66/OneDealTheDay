@@ -727,3 +727,19 @@ export async function getArchive(marketCode: string, days = 5, before?: string):
     })),
   }));
 }
+
+export type MerchantCoupon = {
+  id: string; merchant: string; code: string; title: string;
+  description: string; terms: string; expiresAt: string;
+  checkedAt: string; href: string;
+};
+export const getMerchantCoupons = cache(async (market: string): Promise<MerchantCoupon[]> => {
+  try {
+    const response = await fetch(`${BACKEND_URL}/api/coupons?market=${encodeURIComponent(market)}`, {
+      cache: "no-store", signal: AbortSignal.timeout(5000),
+    });
+    if (!response.ok) return [];
+    const data = await response.json();
+    return Array.isArray(data.coupons) ? data.coupons : [];
+  } catch { return []; }
+});
