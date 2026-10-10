@@ -8,7 +8,7 @@
    The version is what makes the catalogue re-file itself — app.js recalculates
    every product whose stamp does not match on boot — so bumping it is how
    corrected rules reach the listings already stored. */
-const TAXONOMY_VERSION = "catalog-taxonomy-v6";
+const TAXONOMY_VERSION = "catalog-taxonomy-v7";
 
 // This is the only taxonomy exposed to shoppers. Source-feed category paths are
 // preserved in `category` for auditing, but must never be used as navigation.
@@ -139,6 +139,32 @@ const TITLE_RULES = [
   ["Gifts", /\b(gift|personalized|custom|keepsake|souvenir)\b/i]
 ];
 
+// Product types outrank incidental features and suggested uses. A Bluetooth
+// label maker is still office equipment; a table-tennis bat is not a table.
+// Keep these specific: bare "car", "USB", "gift", and "table" are not types.
+const PRODUCT_TYPE_RULES = [
+  ["Toys & Games", /\b(lego|building blocks?|building bricks|action figures?|board games?|jigsaw puzzles?)\b/i],
+  ["Pet Supplies", /\b(?:dog|cat|pet|puppy|kitten)\b.{0,50}\b(?:harness|leash|collar|feeder|fountain|bowl|pee pad|urine mat|bed|toy|scratching mat|grooming brush)\b/i],
+  ["Baby & Kids", /\b(baby monitor|baby stroller|stroller cup holder|baby clothes|baby clothing|baby storage organizer|baby hangers?|baby rompers?|baby bodysuit|newborn|toddler|infant)\b/i],
+  ["Sports & Outdoors", /\b(table tennis|ping pong|camping (?:sleeping bag|plate|cutlery|utensils|bag)|igt table|sleeping bag|tactical (?:assault pack|backpack)|survival tool|hydration pack|soft (?:water bottle|flask)|sport folding bag flask)\b/i],
+  ["Home & Kitchen", /\b(ice (?:cube (?:molds?|bags?)|trays?)|chocolate mold|pastry bags?|piping bags?|suction cup hooks?|cartoon rug|robot vacuum|vacuum cleaner|handheld fan|lighted base|eyeglass holder|leather tray|handbag (?:hanger|holders?)|bag (?:hook|holder))\b/i],
+  ["Arts & Crafts", /\b(sewing kit|drawing pencils?|paint brushes?|(?:artist|watercolor|acrylic|oil) paintbrush|(?:clasps|snap carabiner).{0,70}diy crafts)\b/i],
+  ["Tools & DIY", /\b(cnc (?:router|milling)|router bits?|router sled|milling cutter|end mill|cordless drill|impact driver|socket wrench|socket set|socket joint|screwdrivers?|metal (?:straight )?ruler|tool organizer)\b/i],
+  ["Electronics", /\b(gaming headsets?|headphones?|earbuds?|graphics cards?|nvme|ssds?|hard drives?|mechanical keyboards?|wireless mouse|usb hub|usb c pd|5g module|phone stand|screen protector|video router|network router|wireless.{0,30}router|3d printer)\b|\b(?:cooling fan|fan)\b.{0,100}\b(?:router|motherboard|computer|pc|tv box)\b|\b(?:router|motherboard|computer|pc|tv box)\b.{0,100}\bcooling fan\b/i],
+  ["Automotive", /\b(dash ?cam|car dvr|jump starter|engine hood|car (?:seat|trunk|floor mats?|organizer|sun shade|cleaning brush)|auto (?:trunk|parts))\b/i],
+  ["Travel", /\b(packing cubes?|passport (?:holder|cover|case)|luggage (?:organizer|fixed strap|strap)|(?:travel|laptop|business) (?:backpacks?|bags?)|travel shoe bag|carry.?on|suitcases?|backpack.{0,90}(?:rain cover|attachment strap)|hat clip.{0,30}travel)\b/i],
+  ["Bikes & Mobility", /\b(bicycle|bike)\b/i],
+  ["Office", /\b(?:office|computer|writing|standing) (?:desks?|chairs?)\b|\b(label maker|paper shredder|toner cartridge|ink cartridge|desk organizer|monitor (?:stand|riser)|(?:computer monitor|laptop).{0,35}riser|office stationery|pencil case)\b/i],
+  ["Furniture", /\b(bookcases?|bookshelves?|nightstands?|dressers?|wardrobes?|sideboards?|(?:console|coffee|dining|side) tables?|sofas?|accent chairs?|(?:storage|pantry|shoe) cabinets?|baker'?s rack|storage shelf)\b/i],
+  ["Mattresses & Sleep", /\b(mattress(?:es| protector)?|bed pillows?|pillow sets?|bed frame|bedding (?:pillowcase|sheet))\b/i],
+  ["Health & Beauty", /\b(makeup|make up|cosmetic|concealer|eyeliner|eyebrow|eyelash|mascara|hair brush|hair dryer|toothbrush)\b/i],
+  ["Fashion", /\b(handbags?|tote bags?|shoulder bags?|crossbody bags?|waist belt|fashion (?:belt|scarf)|(?:men'?s|women'?s?|pin buckle|rivet|click|jeans|brown|metal|cowhide|leather|designer) belts?|waist (?:tightening|buckle)|buckle set|suspenders|sneakers?|running shoes|sunglasses)\b/i],
+];
+
+function titleCategory(title) {
+  return firstMatch(fold(title), PRODUCT_TYPE_RULES) || firstMatch(fold(title), TITLE_RULES) || FALLBACK_CATEGORY;
+}
+
 /*
  * Words that settle an argument with the source.
  *
@@ -218,6 +244,13 @@ function canonicalCategory(product = {}) {
   if (source.includes("mooncool")) return "Bikes & Mobility";
 
   const title = fold(product.title);
+  const productType = firstMatch(title, PRODUCT_TYPE_RULES);
+  // AliExpress stores OUR search/shelf, not a verified source department.
+  // It cannot be used as evidence about what the returned item actually is.
+  if (source === "aliexpress") return titleCategory(title);
+  // Narrow, named product types also repair incorrectly labelled source feeds.
+  // Preserve intentionally curated gifts and specialist merchant accessories.
+  if (productType && exact !== "Gifts") return productType;
   const titleMatch = firstMatch(title, TITLE_RULES);
   if (exact === "Tools & DIY" && titleMatch === "Electronics") return titleMatch;
   if (titleMatch && exact && contradictsCategory(exact, title)) return titleMatch;
@@ -279,5 +312,6 @@ module.exports = {
   FALLBACK_CATEGORY,
   canonicalCategory,
   isPublicCategory,
-  normalizeCatalogProduct
+  normalizeCatalogProduct,
+  titleCategory
 };

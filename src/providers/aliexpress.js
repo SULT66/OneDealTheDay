@@ -342,7 +342,9 @@ async function searchProducts({
       const product = normalizeItem(item, keyword, collected.length + 1, market);
       const targetCategory = keywordCategories[keyword];
       const titleCategory = normalizeCatalogProduct({...product, category:""}).normalized_category;
-      if (targetCategory && titleCategory !== "Other Deals" && titleCategory !== targetCategory) continue;
+      // Require positive product evidence. Unknown titles must not inherit
+      // the requested shelf merely because the API returned them for a query.
+      if (targetCategory && titleCategory !== targetCategory) continue;
       const inferredCategory = normalizeCatalogProduct(product).normalized_category;
       if (targetCategory && inferredCategory !== "Other Deals" && inferredCategory !== targetCategory) continue;
       // The shelf is the search context, while taxonomy still checks the
