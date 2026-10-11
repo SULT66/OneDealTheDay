@@ -30,7 +30,10 @@ function normalizePublicCoupon(raw, now=Date.now()) {
   const checked = Date.parse(raw.checkedAt);
   // Do not renew dates merely because a deployment or product refresh ran.
   if (!Number.isFinite(checked) || checked > now || now-checked > 2*DAY) return null;
-  if (raw.expiresOn) {
+  if (raw.expiresAt) {
+    const end = Date.parse(raw.expiresAt);
+    if (!Number.isFinite(end) || end <= now) return null;
+  } else if (raw.expiresOn) {
     const end = Date.parse(`${raw.expiresOn}T00:00:00Z`);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(raw.expiresOn) || !Number.isFinite(end) ||
         new Date(end).toISOString().slice(0,10) !== raw.expiresOn || now >= end+DAY) return null;
@@ -40,7 +43,7 @@ function normalizePublicCoupon(raw, now=Date.now()) {
   if (!href || !termsUrl) return null;
   return {id:`public:${raw.id}`, merchant:shop.name, code:raw.code, title:raw.title,
     description:raw.description || "", terms:raw.terms, checkedAt:raw.checkedAt,
-    expiresAt:"", expiresOn:raw.expiresOn || "", discountPercent:discountPercentage(raw.title),
+    expiresAt:raw.expiresAt || "", expiresOn:raw.expiresOn || "", discountPercent:discountPercentage(raw.title),
     href, termsUrl, affiliate:false, sourceType:"official-public"};
 }
 function activePublicCoupons(rows,market="us", now=Date.now()) {
