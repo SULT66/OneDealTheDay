@@ -8,7 +8,7 @@
    The version is what makes the catalogue re-file itself — app.js recalculates
    every product whose stamp does not match on boot — so bumping it is how
    corrected rules reach the listings already stored. */
-const TAXONOMY_VERSION = "catalog-taxonomy-v8";
+const TAXONOMY_VERSION = "catalog-taxonomy-v9";
 
 // This is the only taxonomy exposed to shoppers. Source-feed category paths are
 // preserved in `category` for auditing, but must never be used as navigation.
@@ -144,7 +144,7 @@ const TITLE_RULES = [
 // Keep these specific: bare "car", "USB", "gift", and "table" are not types.
 const PRODUCT_TYPE_RULES = [
   ["Home & Kitchen", /\b(dehumidifiers?|air scrubbers?)\b/i],
-  ["Sports & Outdoors", /\b(treadmills?|walking pads?|waders?|hunting blinds?|hunting boots?|rangefinders?)\b/i],
+  ["Sports & Outdoors", /\b(exercise bikes?|stationary bikes?|spin bikes?|treadmills?|walking pads?|waders?|hunting blinds?|hunting boots?|hunting chairs?|hunting bibs|binocular harness|rangefinders?)\b/i],
   ["Toys & Games", /\b(lego|building blocks?|building bricks|action figures?|board games?|jigsaw puzzles?)\b/i],
   ["Pet Supplies", /\b(?:dog|cat|pet|puppy|kitten)\b.{0,50}\b(?:harness|leash|collar|feeder|fountain|bowl|pee pad|urine mat|bed|toy|scratching mat|grooming brush)\b/i],
   ["Baby & Kids", /\b(baby monitor|baby stroller|stroller cup holder|baby clothes|baby clothing|baby storage organizer|baby hangers?|baby rompers?|baby bodysuit|newborn|toddler|infant)\b/i],

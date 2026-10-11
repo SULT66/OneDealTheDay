@@ -11,7 +11,7 @@ assert.strictEqual(result.products.length, 1);
 assert.deepStrictEqual(result.facets.price, { min: 6, max: 429.55 }, 'price bounds must include matches outside the current page');
 assert.deepStrictEqual(result.facets.merchants.map(x => x.value), ['Silver Brush']);
 assert.deepStrictEqual(result.facets.priceByMerchant['Silver Brush'], result.facets.price);
-for (const title of ['closeout - $3', 'clearance', 'item', '']) assert.strictEqual(hasDescriptiveTitle(title), false);
+for (const title of ['closeout - $3', 'clearance', 'item', '', 'Toputure Custom Payment', 'Price Difference Link (Not a Product Sale)']) assert.strictEqual(hasDescriptiveTitle(title), false);
 for (const title of ['Closeout Sony television', 'Silver Brush watercolor brush', 'Sale garden furniture']) assert.strictEqual(hasDescriptiveTitle(title), true);
 const brush = product(4, 'Watercolor artist brush round', 10);
 assert.deepStrictEqual(relatedProducts(brush, [product(5, 'Cordless drill', 30), product(6, 'Watercolor artist brush flat', 12), product(7, 'Worklight', 20)]).map(x => x.id), [6]);

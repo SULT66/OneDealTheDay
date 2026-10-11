@@ -155,3 +155,9 @@ console.log("Catalog taxonomy and honest source capability coverage passed.");
 for (const [title, category] of [["Crawlspace Dehumidifier with Pump","Home & Kitchen"],["Under Desk Walking Pad","Sports & Outdoors"],["Waterproof Chest Waders","Sports & Outdoors"],["Hunting Boots","Sports & Outdoors"]]) {
   assert.strictEqual(canonicalCategory({title,category:"Electronics"}),category);
 }
+
+for (const title of ["Heated Hunting Chair Adjustable Height 360° Swivel Blind Chair", "MOLLE System Binocular Harness Chest Pack", "Whitetail Hunting Bibs"]) {
+  assert.strictEqual(canonicalCategory({title,category:"Furniture > Outdoor Chairs"}),"Sports & Outdoors");
+}
+
+assert.strictEqual(canonicalCategory({title:"Toputure TEB4 Foldable Recumbent Exercise Bike with Resistance Bands",category:"Sporting Goods > Exercise Bikes"}),"Sports & Outdoors");
