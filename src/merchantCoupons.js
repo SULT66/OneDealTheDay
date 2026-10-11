@@ -5,6 +5,9 @@ const DAY = 86400000;
 const MAX_AGE = 7 * DAY;
 const REFRESH_INTERVAL = 6 * 3600000;
 const SHOPS = {
+  125464: {name:"Toputure", host:"toputure.com"},
+  78182: {name:"TideWe", host:"tidewe.com"},
+  104549: {name:"AlorairCrawlspace", host:"aloraircrawlspace.com"},
   129485: {name:"Silver Brush", host:"silverbrush.com"},
   126513: {name:"Argendon", host:"argendon.com"},
   45915: {name:"FNTCASE", host:"fntcase.com"},

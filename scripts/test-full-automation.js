@@ -51,6 +51,26 @@ const { missingConfiguredProviders } = require("../src/catalogRecovery");
 const db = require("../src/db");
 
 assert(RETAILERS.length >= 20, "The complete target retailer catalog is missing");
+// Existing publisher credentials enable exactly the three accepted US merchants.
+const testAwinKey = "a".repeat(32);
+for (const existingUrl of [
+  `https://ui.awin.com/productdata-darwin-download/publisher/3018019/${testAwinKey}/1/feed/F2277.csv.gz`,
+  `https://productdata.awin.com/datafeed/download/apikey/${testAwinKey}/language/en/fid/108580/format/csv/`,
+]) {
+  const joined = feedDefinitions({AFFILIATE_FEED_MOONCOOL_US_URL:existingUrl});
+  for (const [id, feedId] of [["toputure","F3285"],["tidewe","F1386"],["alorair-crawlspace","F2715"]]) {
+    const feed = joined.find(f => f.retailerId === id);
+    assert(feed, `Missing joined merchant ${id}`);
+    assert.deepStrictEqual(feed.markets,["us"]);
+    assert(feed.url.endsWith(`/feed/${feedId}.csv.gz`));
+    assert.strictEqual(feed.shipping,null);
+    assert.strictEqual(feed.returns,null);
+  }
+}
+assert(!feedDefinitions({AFFILIATE_FEED_OTHER_US_URL:`https://untrusted.test/apikey/${testAwinKey}/`}).length);
+assert(!feedDefinitions({AFFILIATE_FEED_OTHER_US_URL:`https://ui.awin.com/productdata-darwin-download/publisher/999/${testAwinKey}/1/feed/F1.csv.gz`}).length);
+assert.strictEqual(feedDefinitions({AWIN_PRODUCT_DATA_KEY:testAwinKey,AFFILIATE_FEED_TOPUTURE_US_URL:"https://feeds.test/override.csv"}).find(f=>f.retailerId === "toputure").url,"https://feeds.test/override.csv");
+
 // New Awin stores must be opt-in, US-only, and retain the tracked sale URL.
 for (const [id, name, maxProducts, title] of [
   ["grommet", "Grommet", 150, "Reusable Silicone Food Storage Bags"],

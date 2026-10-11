@@ -151,3 +151,7 @@ assert.strictEqual(feedRows[0].shipping_summary, "", "Capability reporting must 
 assert.strictEqual(feedRows[0].return_summary, "", "Capability reporting must not invent return evidence");
 
 console.log("Catalog taxonomy and honest source capability coverage passed.");
+
+for (const [title, category] of [["Crawlspace Dehumidifier with Pump","Home & Kitchen"],["Under Desk Walking Pad","Sports & Outdoors"],["Waterproof Chest Waders","Sports & Outdoors"],["Hunting Boots","Sports & Outdoors"]]) {
+  assert.strictEqual(canonicalCategory({title,category:"Electronics"}),category);
+}

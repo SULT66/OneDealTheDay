@@ -162,6 +162,21 @@ const RETAILERS = Object.freeze([
     maxCatalogProducts:100,
     feedPolicy:{spreadAcrossFeed:true, excludeTitleTerms:["not sold separately", "not for sale", "non-delivery"]}
   },
+  {
+    id:"toputure", name:"Toputure", network:"Awin", markets:["us"],
+    storefrontHost:"toputure.com", awinFeedId:"F3285", maxCatalogProducts:100,
+    feedPolicy:{spreadAcrossFeed:true, excludeTitleTerms:["purchase protection", "gift card", "not sold separately", "not for sale", "non-delivery"]}
+  },
+  {
+    id:"tidewe", name:"TideWe", network:"Awin", markets:["us"],
+    storefrontHost:"tidewe.com", awinFeedId:"F1386", maxCatalogProducts:150,
+    feedPolicy:{spreadAcrossFeed:true, excludeTitleTerms:["purchase protection", "gift card", "not sold separately", "not for sale", "non-delivery"]}
+  },
+  {
+    id:"alorair-crawlspace", name:"AlorairCrawlspace", network:"Awin", markets:["us"],
+    storefrontHost:"aloraircrawlspace.com", awinFeedId:"F2715", maxCatalogProducts:100,
+    feedPolicy:{spreadAcrossFeed:true, excludeTitleTerms:["purchase protection", "gift card", "not sold separately", "not for sale", "non-delivery"]}
+  },
   {id:"currys", name:"Currys", network:"Awin", markets:["uk"]},
   {id:"ao", name:"AO.com", network:"Awin", markets:["uk"]},
   {id:"fnac", name:"Fnac", network:"Awin", markets:["fr"]},
@@ -239,12 +254,32 @@ function optionalReturnsTerms(value) {
   return String(value == null ? "" : value).replace(/\s+/g, " ").trim().slice(0, 200) || null;
 }
 
+// Newly joined merchants reuse this publisher's existing product-data credential.
+// Credentials stay in server environment variables; never store feed keys in code.
+function joinedAwinFeedUrl(retailer, env) {
+  if (!retailer.awinFeedId) return "";
+  let key = String(env.AWIN_PRODUCT_DATA_KEY || "").trim();
+  for (const [name, value] of Object.entries(env)) {
+    if (key || !/^AFFILIATE_FEED_.*_URL$/.test(name)) continue;
+    try {
+      const url = new URL(String(value));
+      if (url.protocol !== "https:" || url.username || url.password ||
+          !["ui.awin.com", "productdata.awin.com"].includes(url.hostname)) continue;
+      const modern = /^\/productdata-darwin-download\/publisher\/3018019\/([a-f0-9]{32})\//i.exec(url.pathname);
+      const legacy = /\/apikey\/([a-f0-9]{32})\//i.exec(url.pathname);
+      key = modern?.[1] || legacy?.[1] || "";
+    } catch { /* An unrelated or invalid configured feed is not a credential. */ }
+  }
+  if (!/^[a-f0-9]{32}$/i.test(key)) return "";
+  return `https://ui.awin.com/productdata-darwin-download/publisher/3018019/${key}/1/feed/${retailer.awinFeedId}.csv.gz`;
+}
+
 function feedDefinitions(env = process.env) {
   const definitions = [];
   for (const retailer of RETAILERS) {
     for (const market of retailer.markets) {
       const prefix = environmentPrefix(retailer.id, market);
-      const url = String(env[`${prefix}_URL`] || "").trim();
+      const url = String(env[`${prefix}_URL`] || joinedAwinFeedUrl(retailer, env)).trim();
       if (!url) continue;
       definitions.push({
         id:`${retailer.id}-${market}`,

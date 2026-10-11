@@ -235,6 +235,9 @@ const SHOPPING_TERM_ALIASES = new Map([
   ["молодёжный", "youth"],
 ]);
 const RETAILER_PATTERNS = [
+  ["Toputure", /(?:^|[^\p{L}\p{N}])toputure(?=$|[^\p{L}\p{N}])/iu],
+  ["TideWe", /(?:^|[^\p{L}\p{N}])tidewe(?=$|[^\p{L}\p{N}])/iu],
+  ["AlorairCrawlspace", /(?:^|[^\p{L}\p{N}])alorair(?:\s*crawlspace)?(?=$|[^\p{L}\p{N}])/iu],
   ["Amazon", /(?:^|[^\p{L}\p{N}])(?:amazon|амазон\p{L}*)(?=$|[^\p{L}\p{N}])/iu],
   ["Best Buy", /(?:^|[^\p{L}\p{N}])(?:best\s*buy|бест\s*бай)(?=$|[^\p{L}\p{N}])/iu],
   ["Walmart", /(?:^|[^\p{L}\p{N}])(?:walmart|wal-mart|волмарт\p{L}*)(?=$|[^\p{L}\p{N}])/iu],
