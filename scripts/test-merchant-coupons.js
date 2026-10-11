@@ -27,6 +27,9 @@ assert.ok(listCoupons().every(c=>!('trackingUrl' in c)));
     const body=JSON.parse(options.body);
     assert.equal(body.filters.membership,"joined");
     assert.deepEqual(body.filters.regionCodes,["US"]);
+    for (const merchantId of [99907,45751,92307,115216,125138,96879,125464,78182,104549]) {
+      assert.ok(body.filters.advertiserIds.includes(merchantId),"all connected merchants must be queried");
+    }
     assert.equal(body.pagination.page,++calls);
     return {ok:true,json:async()=>calls===1 ? Array.from({length:200},()=>base) : [base]};
   },"test-token");
@@ -52,3 +55,39 @@ assert.equal(aliCoupons({...ali,code_availabletime_end:"2026-10-10 10:00:00"},no
 assert.equal(aliCoupons({...ali,code_promotionurl:"https://evil.example"},now).length,0);
 assert.equal(aliCoupons({...ali,code_availabletime_end:""},now).length,0);
 assert.equal(require("../src/merchantCoupons").discountPercentage("USD 5 off USD 50"),null);
+
+const publicSeed = require("../site-content/public-coupons.json");
+const {activePublicCoupons,normalizePublicCoupon,confirmsOffer,reviewOffers} = require("../src/publicCoupons");
+const publicNow = Date.parse(publicSeed.offers[0].checkedAt)+1000;
+const publicBase = publicSeed.offers[0];
+assert.equal(activePublicCoupons(publicSeed.offers,"us",publicNow).length,9);
+assert.equal(activePublicCoupons(publicSeed.offers,"ca",publicNow).length,0);
+assert.equal(activePublicCoupons(publicSeed.offers,"us",publicNow+3*86400000).length,0,"public codes must not remain indefinitely without a new source review");
+assert.equal(normalizePublicCoupon({...publicBase,checkedAt:new Date(publicNow+1).toISOString()},publicNow),null);
+assert.equal(normalizePublicCoupon({...publicBase,url:"https://evil.example"},publicNow),null);
+assert.equal(normalizePublicCoupon({...publicBase,sourceUrl:"https://iherb.com.evil.example"},publicNow),null);
+assert.equal(normalizePublicCoupon({...publicBase,expiresOn:"2026-02-31"},publicNow),null);
+assert.equal(normalizePublicCoupon({...publicBase,expiresOn:"2026-10-10"},publicNow),null);
+assert.equal(normalizePublicCoupon({...publicBase,code:""},publicNow),null);
+const directOffer=normalizePublicCoupon(publicBase,publicNow);
+assert.equal(directOffer.affiliate,false);
+assert.equal(directOffer.sourceType,"official-public");
+assert.equal(directOffer.href,"https://www.iherb.com/info/sales-and-offers");
+assert.equal(directOffer.expiresAt,"","missing expiry must not be invented");
+assert.equal(directOffer.discountPercent,20);
+const sourceHtml = require("node:fs").readFileSync(require("node:path").join(__dirname,"../components/coupons/CouponCatalog.tsx"),"utf8");
+assert.ok(sourceHtml.includes('coupon.affiliate === false ? "noopener noreferrer"'));
+console.log("Public coupons: official sources, non-affiliate links, regions, expiry and freshness passed.");
+assert.ok(confirmsOffer('<h2>20% off your first order</h2><p>NEW20</p>',publicBase));
+assert.equal(confirmsOffer('<script>NEW20 20% first order</script><p>No active offer</p>',publicBase),false);
+assert.equal(confirmsOffer('<h2>10% off your first order</h2><p>NEW20</p>',publicBase),false);
+assert.equal(confirmsOffer('<h2>20% off your first order</h2><p>NEW200</p>',publicBase),false);
+(async()=>{
+  const reviewed=await reviewOffers(async()=>({ok:true,text:async()=>'<h2>20% off your first order</h2><p>NEW20</p>'}),[publicBase],publicNow);
+  assert.equal(reviewed[0].checkedAt,new Date(publicNow).toISOString());
+  const failed=await reviewOffers(async()=>({ok:false}),[publicBase],publicNow);
+  assert.equal(failed[0].checkedAt,publicBase.checkedAt,"a failed check must not renew freshness");
+  const changed=await reviewOffers(async()=>({ok:true,text:async()=>'<p>NEW20: 10% off first order</p>'}),[publicBase],publicNow);
+  assert.equal(changed[0].checkedAt,publicBase.checkedAt,"changed terms need a new review");
+  console.log("Public source rechecks preserve dates on failures and changed claims.");
+})().catch(error=>{console.error(error);process.exitCode=1;});

@@ -3247,7 +3247,7 @@ function outboundHeaders(res) {
 app.get("/api/coupons", (req, res) => {
   const market = String(req.query.market || req.market || "us").toLowerCase();
   res.set("Cache-Control", "no-store");
-  res.json({market, coupons:[...require("./merchantCoupons").listCoupons(market), ...require("./marketplaceCoupons").listMarketplaceCoupons(db,market)]});
+  res.json({market, coupons:[...require("./merchantCoupons").listCoupons(market), ...require("./marketplaceCoupons").listMarketplaceCoupons(db,market), ...require("./publicCoupons").listPublicCoupons(market)]});
 });
 
 app.get("/go/coupon/:id", (req, res) => {

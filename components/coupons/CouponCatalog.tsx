@@ -45,17 +45,18 @@ export function CouponCatalog({coupons, spanish}: {coupons: MerchantCoupon[]; sp
       <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
         {visible.map(coupon => <article key={coupon.id} className="flex flex-col rounded-2xl border border-border bg-surface p-6">
           <p className="text-xs font-semibold uppercase tracking-wider text-fg-muted">{coupon.merchant}</p>
+          {coupon.sourceType === "official-public" && <p className="mt-2 text-xs text-fg-muted">{spanish ? "Oferta pública de la tienda" : "Public store offer"}</p>}
           {coupon.itemTitle && <p className="mt-2 text-xs text-fg-muted">{spanish ? "Producto elegible" : "Eligible item"}: {coupon.itemTitle}</p>}
           <h2 className="mt-3 text-xl font-bold leading-snug text-fg">{coupon.title.replace(/(Take 10% off your entire order sitewide)\s+\1/, "$1")}</h2>
           <p className="mb-5 mt-3 text-sm leading-relaxed text-fg-muted">{coupon.description.replace(/(Take 10% off your entire order sitewide)\s+\1/, "$1")}</p>
           <div className="mt-auto"><CopyCoupon code={coupon.code} spanish={spanish} />
-            <a href={coupon.href} target="_blank" rel="sponsored noopener" className="mt-3 inline-flex rounded-full bg-lime px-5 py-2.5 text-sm font-semibold text-ink hover:opacity-85">{spanish ? "Ir a la tienda" : "Shop offer"} ↗</a>
+            <a href={coupon.href} target="_blank" rel={coupon.affiliate === false ? "noopener noreferrer" : "sponsored noopener"} className="mt-3 inline-flex rounded-full bg-lime px-5 py-2.5 text-sm font-semibold text-ink hover:opacity-85">{spanish ? "Ir a la tienda" : "Shop offer"} ↗</a>
             <details className="mt-5 text-sm text-fg-muted">
               <summary className="cursor-pointer font-medium text-fg">{spanish ? "Condiciones de la tienda" : "Store terms"}</summary>
               <p className="mt-2 leading-relaxed">{!coupon.terms || /^(N\/A|No restrictions|No exclusions\.)$/i.test(coupon.terms) ? (spanish ? "La tienda no indica restricciones adicionales. Confirma el descuento al pagar." : "The store lists no additional restrictions. Confirm the discount at checkout.") : coupon.terms}</p>
               {coupon.termsUrl && <a href={coupon.termsUrl} target="_blank" rel="noopener noreferrer" className="mt-2 inline-block underline">{spanish ? "Condiciones oficiales" : "Official offer terms"} ↗</a>}
             </details>
-            <p className="mt-4 text-xs text-fg-muted">{spanish ? "Caduca" : "Expires"}: {coupon.expiresAt ? date(coupon.expiresAt) : (spanish ? "Ver condiciones" : "See offer terms")}<br />{spanish ? "Fuente comprobada" : "Source checked"}: {date(coupon.checkedAt)}</p>
+            <p className="mt-4 text-xs text-fg-muted">{spanish ? "Caduca" : "Expires"}: {coupon.expiresOn ? date(`${coupon.expiresOn}T12:00:00Z`) : coupon.expiresAt ? date(coupon.expiresAt) : (spanish ? "Ver condiciones" : "See offer terms")}<br />{spanish ? "Fuente comprobada" : "Source checked"}: {date(coupon.checkedAt)}</p>
           </div>
         </article>)}
       </div>
