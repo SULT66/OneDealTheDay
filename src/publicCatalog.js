@@ -49,7 +49,10 @@ const sourceSql = (alias = "") => {
     AND LOWER(COALESCE(${prefix}title,'')) NOT LIKE '%shipping insurance%'
     AND LOWER(COALESCE(${prefix}title,'')) NOT LIKE '%shipping fee%'
     AND LOWER(COALESCE(${prefix}title,'')) NOT LIKE '%remote area surcharge%'
-    AND LOWER(COALESCE(${prefix}title,'')) NOT LIKE '%make up the difference%')`;
+    AND LOWER(COALESCE(${prefix}title,'')) NOT LIKE '%make up the difference%'
+    AND LOWER(COALESCE(${prefix}title,'')) NOT LIKE '%custom payment%'
+    AND LOWER(COALESCE(${prefix}title,'')) NOT LIKE '%price difference link%'
+    AND LOWER(COALESCE(${prefix}title,'')) NOT LIKE '%not a product sale%')`;
 };
 
 const isPublicSource = source => PUBLIC_PRODUCT_SOURCES.includes(

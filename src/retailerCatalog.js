@@ -165,17 +165,17 @@ const RETAILERS = Object.freeze([
   {
     id:"toputure", name:"Toputure", network:"Awin", markets:["us"],
     storefrontHost:"toputure.com", awinFeedId:"F3285", maxCatalogProducts:100,
-    feedPolicy:{spreadAcrossFeed:true, excludeTitleTerms:["purchase protection", "gift card", "not sold separately", "not for sale", "non-delivery"]}
+    feedPolicy:{spreadAcrossFeed:true, excludeTitleTerms:["custom payment", "price difference link", "not a product sale", "purchase protection", "gift card", "not sold separately", "not for sale", "non-delivery"]}
   },
   {
     id:"tidewe", name:"TideWe", network:"Awin", markets:["us"],
     storefrontHost:"tidewe.com", awinFeedId:"F1386", maxCatalogProducts:150,
-    feedPolicy:{spreadAcrossFeed:true, excludeTitleTerms:["purchase protection", "gift card", "not sold separately", "not for sale", "non-delivery"]}
+    feedPolicy:{spreadAcrossFeed:true, excludeTitleTerms:["custom payment", "price difference link", "not a product sale", "purchase protection", "gift card", "not sold separately", "not for sale", "non-delivery"]}
   },
   {
     id:"alorair-crawlspace", name:"AlorairCrawlspace", network:"Awin", markets:["us"],
     storefrontHost:"aloraircrawlspace.com", awinFeedId:"F2715", maxCatalogProducts:100,
-    feedPolicy:{spreadAcrossFeed:true, excludeTitleTerms:["purchase protection", "gift card", "not sold separately", "not for sale", "non-delivery"]}
+    feedPolicy:{spreadAcrossFeed:true, excludeTitleTerms:["custom payment", "price difference link", "not a product sale", "purchase protection", "gift card", "not sold separately", "not for sale", "non-delivery"]}
   },
   {id:"currys", name:"Currys", network:"Awin", markets:["uk"]},
   {id:"ao", name:"AO.com", network:"Awin", markets:["uk"]},
