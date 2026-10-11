@@ -5,6 +5,12 @@ const DAY = 86400000;
 const MAX_AGE = 7 * DAY;
 const REFRESH_INTERVAL = 6 * 3600000;
 const SHOPS = {
+  99907: {name:"Grommet", host:"thegrommet.com"},
+  45751: {name:"GMKtec", host:"gmktec.com"},
+  92307: {name:"Tribesigns", host:"tribesigns.com"},
+  115216: {name:"King Koil", host:"kingkoilairbeds.com"},
+  125138: {name:"FED Fitness", host:"fedfitness.com"},
+  96879: {name:"LoveIsARose.com", host:"loveisarose.com"},
   125464: {name:"Toputure", host:"toputure.com"},
   78182: {name:"TideWe", host:"tidewe.com"},
   104549: {name:"AlorairCrawlspace", host:"aloraircrawlspace.com"},

@@ -1,0 +1,188 @@
+{
+  "stores": {
+    "iherb": {
+      "name": "iHerb",
+      "host": "iherb.com"
+    },
+    "kohls": {
+      "name": "Kohl’s",
+      "host": "kohls.com"
+    },
+    "jcpenney": {
+      "name": "JCPenney",
+      "host": "jcpenney.com"
+    }
+  },
+  "offers": [
+    {
+      "id": "iherb-new20",
+      "store": "iherb",
+      "code": "NEW20",
+      "title": "20% off your first order",
+      "description": "New customers can use this one-time welcome code online or in the app.",
+      "terms": "For first orders only; discount excludes delivery and tax. Product exclusions apply. Cannot be combined with another offer.",
+      "url": "https://www.iherb.com/info/sales-and-offers",
+      "sourceUrl": "https://www.iherb.com/info/sales-and-offers",
+      "markets": [
+        "us"
+      ],
+      "checkedAt": "2026-10-11T21:16:23Z",
+      "evidence": [
+        "20%",
+        "first order"
+      ]
+    },
+    {
+      "id": "iherb-goldus",
+      "store": "iherb",
+      "code": "GOLDUS",
+      "title": "10% off orders over $80",
+      "description": "A public discount for eligible US orders above $80.",
+      "terms": "Order value must exceed $80. Savings capped at $100. Additional exclusions appear at checkout.",
+      "url": "https://www.iherb.com/info/sales-and-offers",
+      "sourceUrl": "https://www.iherb.com/info/sales-and-offers",
+      "markets": [
+        "us"
+      ],
+      "checkedAt": "2026-10-11T21:16:23Z",
+      "evidence": [
+        "10%",
+        "$80",
+        "$100"
+      ]
+    },
+    {
+      "id": "kohls-get20",
+      "store": "kohls",
+      "code": "GET20",
+      "title": "Extra 20% off eligible purchases",
+      "description": "Use this code on coupon-eligible items.",
+      "terms": "One use per customer. Other percentage coupons cannot be combined. Excludes gift cards, delivery, taxes, charitable items, Sephora and ineligible brands.",
+      "url": "https://www.kohls.com/sale-event/todays-deals.jsp",
+      "sourceUrl": "https://www.kohls.com/ecom/PrintPass/GET20/20261009.html",
+      "markets": [
+        "us"
+      ],
+      "checkedAt": "2026-10-11T21:16:23Z",
+      "expiresOn": "2026-10-18",
+      "evidence": [
+        "20%",
+        "10/09-10/18, 2026"
+      ]
+    },
+    {
+      "id": "kohls-extra20",
+      "store": "kohls",
+      "code": "EXTRA20",
+      "title": "$20 off eligible purchases of $100 or more",
+      "description": "Meet the qualifying pre-tax minimum in a single transaction.",
+      "terms": "One use per customer. Applied before percentage coupons. When stacking offers, all minimum spending requirements must be met. Product and brand exclusions apply.",
+      "url": "https://www.kohls.com/sale-event/todays-deals.jsp",
+      "sourceUrl": "https://www.kohls.com/ecom/PrintPass/EXTRA20_GENPUB/20261009.html",
+      "markets": [
+        "us"
+      ],
+      "checkedAt": "2026-10-11T21:16:23Z",
+      "expiresOn": "2026-10-12",
+      "evidence": [
+        "$100",
+        "10/09-10/12, 2026"
+      ]
+    },
+    {
+      "id": "kohls-10home",
+      "store": "kohls",
+      "code": "10HOME",
+      "title": "$10 off qualifying home purchases of $50 or more",
+      "description": "Available to Kohl’s Rewards members.",
+      "terms": "Rewards membership required. Sign into the linked account online. Minimum $50 qualifying spend before tax; one use per customer. Exclusions apply.",
+      "url": "https://www.kohls.com/sale-event/todays-deals.jsp",
+      "sourceUrl": "https://www.kohls.com/ecom/PrintPass/10HOME_GENPUB/20261005.html",
+      "markets": [
+        "us"
+      ],
+      "checkedAt": "2026-10-11T21:16:23Z",
+      "expiresOn": "2026-10-18",
+      "evidence": [
+        "$50",
+        "rewards",
+        "10/05-10/18, 2026"
+      ]
+    },
+    {
+      "id": "kohls-october30",
+      "store": "kohls",
+      "code": "OCTOBER30",
+      "title": "Extra 30% off with a Kohl’s Card",
+      "description": "For existing cardholders buying coupon-eligible items.",
+      "terms": "Payment with a Kohl’s Card required. One use per customer. Cannot combine with another percentage coupon. Sephora and other item exclusions apply.",
+      "url": "https://www.kohls.com/sale-event/todays-deals.jsp",
+      "sourceUrl": "https://www.kohls.com/ecom/PrintPass/OCTOBER30/20261009.html",
+      "markets": [
+        "us"
+      ],
+      "checkedAt": "2026-10-11T21:16:23Z",
+      "expiresOn": "2026-10-18",
+      "evidence": [
+        "30%",
+        "card",
+        "10/09-10/18, 2026"
+      ]
+    },
+    {
+      "id": "jcpenney-autumn26",
+      "store": "jcpenney",
+      "code": "AUTUMN26",
+      "title": "Extra 30% off select categories",
+      "description": "Eligible clothing, shoes, accessories, fine jewelry, bed linens, bath items and curtains.",
+      "terms": "Online code for selected items only. Brand and product exclusions apply; consult the official offer details for dates and eligibility.",
+      "url": "https://www.jcpenney.com/m/jcpenney-coupons",
+      "sourceUrl": "https://www.jcpenney.com/m/jcpenney-coupons",
+      "markets": [
+        "us"
+      ],
+      "checkedAt": "2026-10-11T21:16:23Z",
+      "evidence": [
+        "30%",
+        "curtains"
+      ]
+    },
+    {
+      "id": "jcpenney-savebig7",
+      "store": "jcpenney",
+      "code": "SAVEBIG7",
+      "title": "Extra 30% off selected jewelry",
+      "description": "Cardholders may qualify for 35% off instead.",
+      "terms": "Selected fine and fashion jewelry only. The higher discount requires a JCPenney Credit Card or Mastercard. Check official dates and exclusions.",
+      "url": "https://www.jcpenney.com/m/jcpenney-coupons",
+      "sourceUrl": "https://www.jcpenney.com/m/jcpenney-coupons",
+      "markets": [
+        "us"
+      ],
+      "checkedAt": "2026-10-11T21:16:23Z",
+      "evidence": [
+        "35%",
+        "30%",
+        "jewelry"
+      ]
+    },
+    {
+      "id": "jcpenney-mascara",
+      "store": "jcpenney",
+      "code": "MASCARA",
+      "title": "Extra 10% off select beauty and salon products",
+      "description": "Use the online code for eligible JCPenney Beauty and Salon products.",
+      "terms": "Selected products only. Check the official coupon details for brand exclusions and expiration.",
+      "url": "https://www.jcpenney.com/m/jcpenney-coupons",
+      "sourceUrl": "https://www.jcpenney.com/m/jcpenney-coupons",
+      "markets": [
+        "us"
+      ],
+      "checkedAt": "2026-10-11T21:16:23Z",
+      "evidence": [
+        "10%",
+        "beauty"
+      ]
+    }
+  ]
+}
