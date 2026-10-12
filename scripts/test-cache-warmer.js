@@ -200,3 +200,33 @@ const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
   console.error(error);
   process.exit(1);
 });
+
+/*
+ * The busiest shelves are kept warm too.
+ *
+ * The warmer kept the home and drop pages rendered and left every category
+ * page to whoever arrived first after a refresh. Measured on production on
+ * 2026-10-11: Electronics answered in 6.8 seconds cold against a quarter of a
+ * second warm, and that cold number grows with the catalogue — which is what
+ * deeper merchant feeds are for. Only the largest few: each path is a full
+ * render on a single core, twenty seconds apart.
+ */
+const serverSource = require("fs").readFileSync(require("path").join(__dirname, "..", "src", "server.js"), "utf8");
+assert.ok(
+  /WARM_CATEGORIES/.test(serverSource),
+  "the warmer is back to leaving every category page cold",
+);
+assert.ok(
+  /ORDER BY listings DESC\s*\n\s*LIMIT \?/.test(serverSource),
+  "the warmer no longer picks the busiest categories",
+);
+assert.ok(
+  /process\.env\.WARM_PATHS \? \[\] : warmPaths/.test(serverSource),
+  "an explicit WARM_PATHS list must stay exactly what was asked for",
+);
+/* Two stored categories can fold into one public shelf; warming it twice is a
+   render nobody reads. */
+assert.ok(
+  /new Set\(warmestCategories\)/.test(serverSource),
+  "the warmed category list is no longer deduplicated",
+);
