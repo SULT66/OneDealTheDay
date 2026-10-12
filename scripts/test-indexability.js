@@ -33,7 +33,18 @@ assert.strictEqual(indexabilityReason(bare, { priceIsCurrent: true }), "nothing 
 assert.strictEqual(isIndexableProduct({ ...bare, review_count: 42, rating: 4.6 }), true);
 assert.strictEqual(isIndexableProduct(bare, { comparable: { price: 119 } }), true);
 assert.strictEqual(isIndexableProduct({ ...bare, tracked_drop_percent: 18 }), true);
-assert.strictEqual(isIndexableProduct({ ...bare, score: 71 }), true);
+/*
+ * A published Score, not the number every row carries.
+ *
+ * Measured on production on 2026-10-09: a bare eBay listing with no reviews,
+ * no comparison and no measured drop came back indexable because its internal
+ * score was 40 — a number every published listing has. The gate passed all
+ * 2,770 of them and kept nothing out of Google, which is the opposite of what
+ * it exists for. The question the product page asks before it dares print a
+ * Score is the one that belongs here too.
+ */
+assert.strictEqual(isIndexableProduct({ ...bare, score: 71 }), false, "an internal ranking number is not a Score we publish");
+assert.strictEqual(isIndexableProduct({ ...bare, display_score: 71 }), true);
 
 /* A review count without a rating is a number with nothing behind it — only
    eBay sends reviews at all, and a shop that sends one sends both. */
@@ -42,8 +53,8 @@ assert.strictEqual(isIndexableProduct({ ...bare, review_count: 0, rating: 4.6 })
 
 /* A stale price overrides everything else: the page may be full of our work
    and still be quoting a figure we could not confirm today. */
-assert.strictEqual(isIndexableProduct({ ...bare, score: 71, review_count: 42, rating: 4.6 }, { priceIsCurrent: false }), false);
-assert.strictEqual(indexabilityReason({ ...bare, score: 71 }, { priceIsCurrent: false }), "price not confirmed recently");
+assert.strictEqual(isIndexableProduct({ ...bare, display_score: 71, review_count: 42, rating: 4.6 }, { priceIsCurrent: false }), false);
+assert.strictEqual(indexabilityReason({ ...bare, display_score: 71 }, { priceIsCurrent: false }), "price not confirmed recently");
 
 /* The reason names what is actually there, for the admin console. */
 assert.strictEqual(
@@ -51,7 +62,7 @@ assert.strictEqual(
   "reviews, trackedDrop",
 );
 
-const evidence = indexEvidence({ ...bare, score: 71 }, { comparable: null });
+const evidence = indexEvidence({ ...bare, display_score: 71 }, { comparable: null });
 assert.deepStrictEqual(evidence, { reviews: false, comparable: false, trackedDrop: false, score: true });
 
 /* The sitemap offers the same set, and from the same clock. */
