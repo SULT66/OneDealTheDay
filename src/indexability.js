@@ -26,8 +26,6 @@
 
 /* A shop that sends reviews sends a rating with them; one without the other is
    a number with no weight behind it. */
-const { isDailyPickEligible } = require("./ranker");
-
 const hasReviews = (product) => Number(product?.review_count) > 0 && Number(product?.rating) > 0;
 
 /*
@@ -39,22 +37,32 @@ const hasReviews = (product) => Number(product?.review_count) > 0 && Number(prod
  * nothing was ever kept out of Google, which is the opposite of what this file
  * was written to do.
  *
- * The honest question is the one the product page already asks before it dares
- * print a Score: does this listing clear the editorial floor? That is what
- * display_score means (src/productPresentation.js), and where a caller has
- * already computed it, that answer is used directly.
+ * Asking the right question was not enough either. The second attempt asked the
+ * editorial floor directly — and asked it with the wrong inputs, handing it the
+ * stored ranking number where it expects a freshly computed one and omitting the
+ * evidence confidence entirely, so it kept saying yes. Measured on production
+ * after that shipped: a yoga mat with no reviews, no comparison and no measured
+ * drop printed no Score at all and was still offered to Google, reason "score".
+ *
+ * There is one function that decides whether a listing publishes a Score, and
+ * it is the one the page itself calls. This asks that. Not a reading of it, not
+ * a cheaper version of it — a page whose Score is blank cannot be described
+ * here as having one, because it is the same arithmetic either way.
  */
-const hasPublicScore = (product) => (
-  product?.display_score != null
-  || (product?.display_score === undefined && isDailyPickEligible(product || {}))
+const { publishedScore } = require("./productPresentation");
+
+const hasPublicScore = (product, priceIsCurrent) => (
+  product?.display_score !== undefined
+    ? product.display_score != null
+    : publishedScore(product || {}, { priceIsCurrent }) != null
 );
 
-function indexEvidence(product = {}, { comparable = null } = {}) {
+function indexEvidence(product = {}, { comparable = null, priceIsCurrent } = {}) {
   return {
     reviews: hasReviews(product),
     comparable: Boolean(comparable),
     trackedDrop: Number(product?.tracked_drop_percent) > 0,
-    score: hasPublicScore(product),
+    score: hasPublicScore(product, priceIsCurrent),
   };
 }
 
@@ -66,12 +74,14 @@ function indexEvidence(product = {}, { comparable = null } = {}) {
  */
 function isIndexableProduct(product = {}, { comparable = null, priceIsCurrent = true } = {}) {
   if (!priceIsCurrent) return false;
-  return Object.values(indexEvidence(product, { comparable })).some(Boolean);
+  return Object.values(indexEvidence(product, { comparable, priceIsCurrent })).some(Boolean);
 }
 
 /** The reason, for the admin console and for anyone asking why a page is out. */
 function indexabilityReason(product = {}, options = {}) {
   if (!options.priceIsCurrent) return "price not confirmed recently";
+  /* indexEvidence reads priceIsCurrent off the same options object, so the
+     reason and the verdict cannot be computed against different clocks. */
   const evidence = indexEvidence(product, options);
   const carried = Object.entries(evidence).filter(([, present]) => present).map(([name]) => name);
   return carried.length ? carried.join(", ") : "nothing of ours on the page";
