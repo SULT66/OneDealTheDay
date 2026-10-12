@@ -3,7 +3,6 @@ import type React from "react";
 import { getCategory } from "@/lib/catalog";
 import { categoryName, getLanguage, t } from "@/lib/i18n";
 import { retailerLabel } from "@/lib/format";
-import { displayDiscount } from "@/lib/pricing";
 import type { Deal } from "@/lib/types";
 import { cn } from "@/lib/cn";
 import { ProductImage } from "@/components/ui/ProductImage";
@@ -42,7 +41,6 @@ export async function DealCard({
   const language = await getLanguage(market);
   /* A card carries no price history, so a saving too large to take on the
      seller's word alone is not claimed here. See lib/pricing.ts. */
-  const off = displayDiscount(deal.price, deal.referencePrice);
   /* A plain <div> when there is nowhere safe to send the visitor. */
   const Body = (unavailable ? "div" : Link) as React.ElementType;
 
@@ -82,11 +80,18 @@ export async function DealCard({
             #{index + 1}
           </span>
 
-          {off !== null && (
-            <span className="absolute right-3 top-3 inline-flex items-center rounded-full bg-lime px-2.5 py-1 text-[0.7rem] font-bold uppercase tracking-wide text-ink tnum">
-              {t(language, "app.card.percentOff", { percent: off })}
-            </span>
-          )}
+          {/*
+           * The seller's discount is said once, beside the price it is a
+           * discount from.
+           *
+           * It used to be said twice on the same card in the same green pill:
+           * "42% OFF LIST" in this corner and "42% BELOW SELLER'S LIST" under
+           * the price, from the same number. Up here it had nothing next to it
+           * to be 42% of; down there the struck-through price is right beside
+           * it. So the corner is left to the one claim on this card that is
+           * ours rather than the shop's — the drop we measured ourselves,
+           * below.
+           */}
 
           {/* Our own measurement, and the only claim on this card that is
               ours rather than the shop's. A price that has not moved gets

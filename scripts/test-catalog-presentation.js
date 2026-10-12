@@ -462,3 +462,27 @@ assert(
     && /const shopHost = retailer => \{\s*\n\s*const declared = declaredHost\(retailer\);/.test(directorySource),
   "the directory no longer lets a shop name its own front door",
 );
+
+/*
+ * A discount is said once, beside the price it is a discount from.
+ *
+ * The card carried the same number twice in the same green pill: "42% OFF
+ * LIST" in the image corner and "42% BELOW SELLER'S LIST" under the price,
+ * both from displayDiscount. In the corner it had nothing beside it to be 42%
+ * of; under the price the struck-through figure is right there. The corner is
+ * left to the one claim on the card that is ours rather than the shop's.
+ */
+const dealCardSource = read("components", "deal", "DealCard.tsx");
+assert(
+  !/percentOff/.test(dealCardSource),
+  "the card says the seller's discount twice again",
+);
+assert(
+  /trackedDropPercent > 0/.test(dealCardSource),
+  "the card stopped showing the drop we measured ourselves",
+);
+const priceBlockSource = read("components", "deal", "PriceBlock.tsx");
+assert(
+  /percentBelowRef/.test(priceBlockSource),
+  "the discount lost the place where the price it is below is visible",
+);

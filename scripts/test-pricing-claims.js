@@ -57,7 +57,7 @@ assert.strictEqual(
 );
 
 /* The pages ask pricing, not the raw arithmetic. */
-for (const file of ["components/deal/DealCard.tsx", "components/deal/PriceBlock.tsx", "app/[market]/deal/[id]/page.tsx"]) {
+for (const file of ["components/deal/PriceBlock.tsx", "app/[market]/deal/[id]/page.tsx"]) {
   const source = fs.readFileSync(path.join(__dirname, "..", file), "utf8");
   assert(/displayDiscount\(/.test(source), `${file} no longer goes through the claim check`);
   assert(!/discountPercent\(/.test(source), `${file} prints the raw seller discount again`);
@@ -71,3 +71,18 @@ for (const language of ["en", "es", "fr", "de"]) {
 }
 
 console.log("pricing claims: ok");
+
+/*
+ * And the card itself prints no discount of its own.
+ *
+ * It used to print the same percentage twice — once in the image corner with
+ * nothing beside it to be a percentage of, and once under the price next to
+ * the struck-through figure. Only the second one can be read, so the card now
+ * leaves the claim to PriceBlock. If a percentage ever comes back to the card,
+ * it has to come back through displayDiscount with it.
+ */
+const card = fs.readFileSync(path.join(__dirname, "..", "components", "deal", "DealCard.tsx"), "utf8");
+assert(
+  !/percentOff|percentBelowRef/.test(card) || /displayDiscount[(]/.test(card),
+  "the card prints a discount without going through the claim check",
+);
