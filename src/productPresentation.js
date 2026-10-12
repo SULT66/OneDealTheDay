@@ -206,6 +206,64 @@ function oneDailyDropEvidenceConfidence(product) {
  * does when it can work one out; the older two-argument form still derives
  * quality from the raw total so archived selections keep their scores.
  */
+/*
+ * Is the price we are quoting one we confirmed recently enough to reason about?
+ *
+ * Unknown counts as not current: a listing with no check date is the one we
+ * know least about, not the one to trust most.
+ */
+function priceIsCurrentFor(product = {}) {
+  const checkedAt = clean(product.checked_at || product.updated_at);
+  const checkedTime = checkedAt ? new Date(checkedAt).getTime() : NaN;
+  return Number.isFinite(checkedTime)
+    && Date.now() - checkedTime <= PRICE_CONFIDENT_HOURS * 3600 * 1000;
+}
+
+/*
+ * The Score this listing publishes, or null when it publishes none.
+ *
+ * Candidate ranking and consumer presentation are deliberately separate: every
+ * row carries a ranking number, and only offers that clear the editorial floor
+ * receive a calibrated public one. This is the function that decides, and it is
+ * exported because it turned out that two parts of the site were answering the
+ * question and only one of them was answering it correctly — the index gate had
+ * its own approximation, which said "there is a Score" about pages that print
+ * none, and so offered them to Google. An approximation of this cannot be kept
+ * in step with it; calling it can.
+ *
+ * priceIsCurrent is accepted so a caller working to a different clock than
+ * PRICE_CONFIDENT_HOURS — the sitemap uses the catalogue's own staleness
+ * window — gets its answer, not a second opinion.
+ */
+function publishedScore(product = {}, { priceIsCurrent } = {}) {
+  const rawDealScore = oneDailyDropScore(product);
+  const confidence = oneDailyDropEvidenceConfidence(product);
+  const discount = discountPercent(product);
+  const fresh = priceIsCurrent === undefined ? priceIsCurrentFor(product) : Boolean(priceIsCurrent);
+  /* Today's price throughout: this is the live score, and every input to it has
+     to describe the listing as it is now. Leaving the snapshot's price here
+     while the score came from the current one is what kept search and the
+     product page apart after the first half of this fix. */
+  if (!isDailyPickEligible({
+    ...pricedAs(product, false),
+    score:rawDealScore,
+    evidence_confidence:confidence,
+  }, {
+    /* A shop that publishes no per-listing delivery charge is not thereby a
+       worse offer. The drop's ten slots still demand one; a product page
+       scores what is known and lets the confidence carry the rest. */
+    requireKnownFulfillment:false
+  })) return null;
+  return publicOneDailyDropScore(rawDealScore, confidence, commerceQuality(pricedAs(product, false)), {
+    /* Reviews of the product, not of the seller. A shop with a spotless
+       feedback record has still told us nothing about this thing. */
+    hasReviews: number(product.review_count) >= MEANINGFUL_REVIEW_COUNT && number(product.rating) > 0,
+    /* The same test the badge uses, so the number and the badge cannot
+       disagree about whether there is a saving. */
+    hasStatedDiscount: discount > 0 && fresh,
+  });
+}
+
 function publicOneDailyDropScore(rawScore, confidence, knownQuality = null, known = null) {
   const raw = number(rawScore, NaN);
   const evidence = number(confidence, NaN);
@@ -400,8 +458,7 @@ function presentProduct(product, language = "en") {
   const checkedTime = checkedAt ? new Date(checkedAt).getTime() : NaN;
   /* Unknown counts as not current: a listing with no check date is the one we
      know least about, not the one to trust most. */
-  const priceIsCurrent = Number.isFinite(checkedTime)
-    && Date.now() - checkedTime <= PRICE_CONFIDENT_HOURS * 3600 * 1000;
+  const priceIsCurrent = priceIsCurrentFor(product);
   const store = clean(product.retailer_name) || clean(product.source) || t(language, "product.retailer");
   const displayShipping = localizeShipping(product.shipping_summary, product, language);
   const displayReturns = localizeReturns(product.return_summary, language);
@@ -409,29 +466,7 @@ function presentProduct(product, language = "en") {
   const displayReason = presentationReason(product, language);
   const rawDealScore = oneDailyDropScore(product);
   const confidence = oneDailyDropEvidenceConfidence(product);
-  // Candidate ranking and consumer presentation are deliberately separate.
-  // Only offers that pass the editorial floor receive a calibrated public score.
-  /* Today's price throughout: this is the live score, and every input to it has
-     to describe the listing as it is now. Leaving the snapshot's price here
-     while the score came from the current one is what kept search and the
-     product page apart after the first half of this fix. */
-  const dealScore = isDailyPickEligible({
-    ...pricedAs(product, false),
-    score:rawDealScore,
-    evidence_confidence:confidence,
-  }, {
-    /* A shop that publishes no per-listing delivery charge is not thereby a
-       worse offer. The drop's ten slots still demand one; a product page
-       scores what is known and lets the confidence carry the rest. */
-    requireKnownFulfillment:false
-  }) ? publicOneDailyDropScore(rawDealScore, confidence, commerceQuality(pricedAs(product, false)), {
-    /* Reviews of the product, not of the seller. A shop with a spotless
-       feedback record has still told us nothing about this thing. */
-    hasReviews: number(product.review_count) >= MEANINGFUL_REVIEW_COUNT && number(product.rating) > 0,
-    /* The same test the badge uses, so the number and the badge cannot
-       disagree about whether there is a saving. */
-    hasStatedDiscount: discount > 0 && priceIsCurrent,
-  }) : null;
+  const dealScore = publishedScore(product, { priceIsCurrent });
 
   /*
    * The number as it stood on the day this was chosen, for the one place that
@@ -535,7 +570,9 @@ module.exports = {
   localizeShipping,
   oneDailyDropScore,
   oneDailyDropEvidenceConfidence,
+  priceIsCurrentFor,
   publicOneDailyDropScore,
+  publishedScore,
   presentProduct,
   presentationReason,
   sellerRatingPercent,

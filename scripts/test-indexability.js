@@ -65,6 +65,89 @@ assert.strictEqual(
 const evidence = indexEvidence({ ...bare, display_score: 71 }, { comparable: null });
 assert.deepStrictEqual(evidence, { reviews: false, comparable: false, trackedDrop: false, score: true });
 
+/*
+ * A row as the database hands it over, with no display_score on it at all.
+ *
+ * This is the case the fix above missed, and it is the one that actually runs:
+ * the product API and the sitemap both pass the stored row, which has a
+ * ranking score column and no display_score key. The gate answered that by
+ * asking the editorial floor itself — with the wrong inputs, handing it the
+ * stored ranking number where a freshly computed one belongs and omitting the
+ * evidence confidence, so it said yes. Measured on production on 2026-10-12,
+ * after the first fix shipped: /us/deal/balancefrom-gocloud-...-225983 printed
+ * no Score, carried no reviews, no comparison and no measured drop, and came
+ * back {"score":true} and indexable, with no robots tag on the page.
+ *
+ * So the two have to be one computation, and this is the assertion that says
+ * so: whatever the page prints, the gate reports, for the same row.
+ */
+{
+  const { presentProduct, publishedScore } = require("../src/productPresentation");
+  const fresh = new Date().toISOString();
+  const row = {
+    id: 225983, market: "us", source: "ebay", retailer_name: "eBay",
+    title: 'BalanceFrom GoCloud 1" Extra Thick Exercise Yoga Mat with Carrying Strap, Gray',
+    brand: "Balancefrom Fitness", category: "Sports & Outdoors", normalized_category: "sports-outdoors",
+    /* Both required before a listing is eligible for anything at all, and both
+       stripped by the compact API — which is why a fixture built from what the
+       API returns does not reproduce this. */
+    image_url: "https://i.ebayimg.com/images/g/YeoAAeSwc65pXsbZ/s-l1600.jpg",
+    affiliate_url: "https://www.ebay.com/itm/000000000000",
+    /* A genuinely strong offer: 78% under the reference price, free delivery,
+       returns paid by the seller, a seller with two million feedbacks. This is
+       what made it clear the drop's eligibility floor. */
+    current_price: 30.99, original_price: 139.99, currency: "USD", checked_at: fresh,
+    shipping_summary: "Free delivery via Standard Shipping",
+    return_summary: "Returns accepted within 30 days; return shipping paid by seller",
+    availability: "In stock",
+    seller_name: "spreetail", seller_rating: 4.985, seller_feedback_count: 2365838,
+    /* And what it does not carry: eBay published no product rating, so there is
+       not enough evidence behind a number to print one. */
+    rating: 0, review_count: 0, tracked_drop_percent: 0, tracked_low: 29.99,
+    /* The ranking number every published row carries. No display_score: the
+       database does not store one. */
+    score: 40,
+  };
+  assert.strictEqual("display_score" in row, false, "the fixture must be the row, not a presented product");
+  assert.strictEqual(presentProduct(row, "en").display_score, null, "this listing publishes no Score");
+  assert.strictEqual(
+    indexEvidence(row, { priceIsCurrent: true }).score,
+    false,
+    "a page that prints no Score must not be described as having one",
+  );
+  assert.strictEqual(isIndexableProduct(row, { priceIsCurrent: true }), false);
+  assert.strictEqual(indexabilityReason(row, { priceIsCurrent: true }), "nothing of ours on the page");
+
+  /* Stated the other way round, against the page itself, so this keeps holding
+     when the floor moves: the gate's answer is the page's answer. */
+  for (const candidate of [
+    row,
+    { ...row, rating: 4.7, review_count: 3100, original_price: 49.99, shipping_summary: "Free shipping", return_summary: "30-day returns", availability: "In stock", seller_feedback_percent: 99.4, seller_feedback_count: 48000 },
+    { ...row, current_price: 0 },
+  ]) {
+    assert.strictEqual(
+      indexEvidence(candidate, { priceIsCurrent: true }).score,
+      presentProduct(candidate, "en").display_score != null,
+      "the gate and the product page must answer the Score question identically",
+    );
+  }
+
+  /* One function, called by both, rather than two that agree today. */
+  assert.strictEqual(typeof publishedScore, "function", "the Score decision is no longer exported");
+  assert.ok(
+    read("src/indexability.js").includes('require("./productPresentation")'),
+    "the gate has gone back to computing the Score itself",
+  );
+  assert.ok(
+    !/isDailyPickEligible/.test(read("src/indexability.js")),
+    "the gate must not reach past publishedScore to the floor it is built on",
+  );
+  assert.ok(
+    read("src/productPresentation.js").includes("const dealScore = publishedScore(product, { priceIsCurrent });"),
+    "the product page must get its Score from the shared function too",
+  );
+}
+
 /* The sitemap offers the same set, and from the same clock. */
 const server = read("src/server.js");
 assert.ok(server.includes('require("./indexability")'), "server does not use the shared rule");
