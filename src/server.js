@@ -4551,10 +4551,40 @@ app.use((error, req, res, next) => {
      * background render nobody asked for, on a machine with no visitors.
      */
     if (c.isProduction) {
+      /*
+       * The busiest shelves, too.
+       *
+       * The warmer kept the home and drop pages rendered and left every
+       * category page to whoever arrived first after a refresh. Measured on
+       * production: Electronics answered in 6.8 seconds cold and a quarter of
+       * a second warm, and that cold number grows with the catalogue — which
+       * is exactly what the deeper merchant feeds are about to do.
+       *
+       * Only the largest few. Each path costs a full render on a single core
+       * and the warmer spaces them twenty seconds apart, so warming all
+       * seventeen would leave the box rendering more often than not.
+       */
+      const warmestCategories = db.prepare(`
+        SELECT normalized_category AS category, COUNT(*) AS listings
+        FROM products
+        WHERE market=? AND status='published' AND ${sourceSql()}
+        GROUP BY normalized_category
+        ORDER BY listings DESC
+        LIMIT ?
+      `).all(c.primaryMarket, Math.max(0, Number(process.env.WARM_CATEGORIES ?? 5)))
+        .map(row => canonicalCategory({category:row.category}))
+        .filter(isPublicCategory)
+        .map(category => catPath(category, c.primaryMarket));
+      /* Two stored categories can fold into one public shelf, and warming the
+         same page twice is a render nobody reads. */
+      const warmPaths = [...new Set(warmestCategories)];
       startCacheWarmer({
         baseUrl: `http://127.0.0.1:${c.port}`,
         market: c.primaryMarket,
-        paths: pathsFor(c.primaryMarket, process.env.WARM_PATHS),
+        paths: [
+          ...pathsFor(c.primaryMarket, process.env.WARM_PATHS),
+          ...(process.env.WARM_PATHS ? [] : warmPaths),
+        ],
       });
     }
     // Azure production recovery is owned by app.js so only one initial API
