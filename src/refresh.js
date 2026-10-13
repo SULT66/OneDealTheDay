@@ -64,7 +64,7 @@ async function loadProducts(config, selectedMarket, options = {}) {
     const products = await provider.searchProducts({ market: selectedMarket });
     return {products, reports:[{id:"demo", source:"demo", name:"Demo", status:"success", found:products.length, error:""}]};
   }
-  return searchAll(config, selectedMarket, {providerIds:options.providerIds});
+  return searchAll(config, selectedMarket, {providerIds:options.providerIds, keywords:options.keywords, searchOptions:options.searchOptions, sourceDeadlineMs:options.sourceDeadlineMs});
 }
 
 function qualifiedProviderId(product) {
@@ -230,7 +230,7 @@ async function refreshMarket(config, marketCode, options = {}) {
     .filter(keyword => !configuredKeywords.some(existing => String(existing).toLowerCase() === keyword));
   const selectedMarket = {
     ...config.marketConfig(marketCode),
-    searchKeywords: [...configuredKeywords, ...wanted]
+    searchKeywords: options.keywords || [...configuredKeywords, ...wanted]
   };
   selectedMarket.aliexpressGapPlan = planGapSearches(db.prepare(`
     SELECT normalized_category AS category, COUNT(*) AS count
@@ -252,7 +252,7 @@ async function refreshMarket(config, marketCode, options = {}) {
    * difference between seeing that and not.
    */
   const marketOverride = `SEARCH_KEYWORDS_${selectedMarket.code.toUpperCase()}`;
-  const keywordSource = String(process.env[marketOverride] || "").trim()
+  const keywordSource = options.keywords ? "active merchandising themes" : String(process.env[marketOverride] || "").trim()
     ? marketOverride
     : String(process.env.SEARCH_KEYWORDS || "").trim()
       ? "SEARCH_KEYWORDS"
@@ -321,14 +321,14 @@ async function refreshMarket(config, marketCode, options = {}) {
         INSERT INTO products(
           external_id,provider_external_id,market,product_key,upc,gtin,model_number,brand,brand_slug,manufacturer,mpn,ean,
           title,category,normalized_category,taxonomy_version,description,image_url,affiliate_url,retailer_shop_url,retailer_name,seller_name,seller_rating,seller_feedback_count,shipping_summary,return_summary,
-          shipping_cost,landed_cost,availability,checked_at,rating,review_count,current_price,original_price,currency,badge,coupon_json,
+          shipping_cost,delivery_estimated_at,delivery_country,delivery_postal_code,landed_cost,availability,checked_at,rating,review_count,current_price,original_price,currency,badge,coupon_json,
           score,relevance_score,commerce_quality,ranking_score,evidence_confidence,score_breakdown,
           selection_reason,source,status,updated_at,first_seen_at,last_seen_at
         )
         VALUES(
           @external_id,@provider_external_id,@market,@product_key,@upc,@gtin,@model_number,@brand,@brand_slug,@manufacturer,@mpn,@ean,
           @title,@category,@normalized_category,@taxonomy_version,@description,@image_url,@affiliate_url,@retailer_shop_url,@retailer_name,@seller_name,@seller_rating,@seller_feedback_count,@shipping_summary,@return_summary,
-          @shipping_cost,@landed_cost,@availability,@checked_at,@rating,@review_count,@current_price,@original_price,@currency,@badge,@coupon_json,
+          @shipping_cost,@delivery_estimated_at,@delivery_country,@delivery_postal_code,@landed_cost,@availability,@checked_at,@rating,@review_count,@current_price,@original_price,@currency,@badge,@coupon_json,
           @score,@relevance_score,@commerce_quality,@ranking_score,@evidence_confidence,@score_breakdown,
           @selection_reason,@source,'published',@updated_at,@first_seen_at,@last_seen_at
         )
@@ -341,7 +341,8 @@ async function refreshMarket(config, marketCode, options = {}) {
           affiliate_url=excluded.affiliate_url,retailer_shop_url=excluded.retailer_shop_url,retailer_name=excluded.retailer_name,seller_name=excluded.seller_name,
           seller_rating=excluded.seller_rating,seller_feedback_count=excluded.seller_feedback_count,
           shipping_summary=excluded.shipping_summary,return_summary=excluded.return_summary,coupon_json=excluded.coupon_json,
-          shipping_cost=excluded.shipping_cost,landed_cost=excluded.landed_cost,
+          shipping_cost=excluded.shipping_cost,delivery_estimated_at=excluded.delivery_estimated_at,
+          delivery_country=excluded.delivery_country,delivery_postal_code=excluded.delivery_postal_code,landed_cost=excluded.landed_cost,
           availability=excluded.availability,checked_at=excluded.checked_at,rating=excluded.rating,
           review_count=excluded.review_count,current_price=excluded.current_price,original_price=excluded.original_price,
           currency=excluded.currency,badge=excluded.badge,score=excluded.score,
@@ -384,6 +385,9 @@ async function refreshMarket(config, marketCode, options = {}) {
           shipping_summary: textValue(product.shipping_summary),
           return_summary: textValue(product.return_summary),
           shipping_cost: product.shipping_cost == null ? null : numberValue(product.shipping_cost, null),
+          delivery_estimated_at: textValue(product.delivery_estimated_at),
+          delivery_country: textValue(product.delivery_country),
+          delivery_postal_code: textValue(product.delivery_postal_code),
           landed_cost: product.landed_cost == null ? numberValue(product.current_price, null) : numberValue(product.landed_cost, null),
           /* Silence is stored as silence. Filling it with "Available" is how a
              feed that carries no stock field ended up claiming stock. */
@@ -455,7 +459,7 @@ async function refreshMarket(config, marketCode, options = {}) {
         );
       });
       const staleCutoff = new Date(Date.now() - Number(config.staleOfferHours || 48) * 3600000).toISOString();
-      for (const report of loaded.reports.filter(item => item.status === "success")) {
+      for (const report of loaded.reports.filter(item => item.status === "success" && !options.keywords)) {
         db.prepare(`
           UPDATE products
           SET availability='Unavailable',status='archived',checked_at=?,updated_at=?
@@ -480,7 +484,7 @@ async function refreshMarket(config, marketCode, options = {}) {
       .run(new Date().toISOString(), selectedMarket.code);
     // Refresh local placements after new prices arrive. External trend research
     // belongs to the throttled hourly job, not every retailer refresh.
-    if (String(process.env.MERCHANDISING_ENABLED || "true").toLowerCase() !== "false") {
+    if (!options.skipMerchandising && String(process.env.MERCHANDISING_ENABLED || "true").toLowerCase() !== "false") {
       try {
         await require("./merchandising").runMerchandising(db, {market:selectedMarket.code, research:false});
       } catch (error) {
@@ -540,4 +544,5 @@ exports.refreshProducts = async (config, options = {}) => {
 
 exports.localDate = localDate;
 exports.refreshMarketOnce = refreshMarketOnce;
+exports.isMarketRefreshing = market => activeMarketRefreshes.has(market);
 exports.sortByCurrentScore = sortByCurrentScore;

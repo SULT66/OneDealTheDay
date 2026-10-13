@@ -1,7 +1,7 @@
 const { isIP } = require("node:net");
 const { isPublicProduct, uniqueProductsInOrder } = require("./publicCatalog");
 const { offerStatus } = require("./offerStatus");
-const { PRICE_CONFIDENT_HOURS } = require("./productPresentation");
+const { MEANINGFUL_REVIEW_COUNT, PRICE_CONFIDENT_HOURS } = require("./productPresentation");
 const { market: marketDefinition, normalizeMarket } = require("./markets");
 const { unknownRetailerTerms } = require('./verifiedRetailerTerms');
 const {
@@ -49,6 +49,7 @@ function* promotionRejections(product, { market = "us", now = Date.now() } = {})
   else if (!status.returns.allowed || returnsNotAccepted(product)) yield 'returns_refused';
   if (status.delivery.cost == null) yield 'shipping_unknown';
   else if (status.delivery.cost > Number(product.current_price) * 0.5) yield 'shipping_expensive';
+  if (!(Number(product.rating) > 0) || !(Number(product.review_count) >= MEANINGFUL_REVIEW_COUNT)) yield 'product_reviews_missing';
   if (Number(product.rating) > 0 && Number(product.rating) < 4.3) yield 'rating_below_bar';
   if (status.score_missing_reasons.some(item => item.reason === 'seller_record_below_bar')) yield 'seller_below_bar';
   if (!isEligible(product, { currency: marketDefinition(code).currency, maximumShippingRatio: 0.5 })) yield 'basic_eligibility_failed';
@@ -88,6 +89,19 @@ function matchesQuery(product, query) {
   return (budget.max == null || cost <= budget.max) && (budget.min == null || cost >= budget.min);
 }
 
+function signalRejectionReasons(product, signal, {market = "us", now = Date.now()} = {}) {
+  if (!array(signal?.queries).some(query => matchesQuery(product, query))) return ["theme_mismatch"];
+  // Only dated occasions need arrival before the event. Longer seasonal
+  // campaigns still require known shipping charges, but make no arrival claim.
+  if (signal.kind !== "seasonal" || !Number(signal.metadata?.deliveryLeadDays)) return [];
+  const arrival = stamp(product.delivery_estimated_at);
+  const event = stamp(signal.eventAt);
+  if (!Number.isFinite(arrival) || !Number.isFinite(event) ||
+      product.delivery_country !== marketDefinition(market).countryCodes[0]) return ["holiday_delivery_unknown"];
+  if (arrival < now || arrival >= event - 2 * 86400000) return ["holiday_delivery_late"];
+  return [];
+}
+
 function balanced(products, limit) {
   const selected = [];
   const retailers = new Map();
@@ -100,7 +114,7 @@ function balanced(products, limit) {
     const usage = product => (retailers.get(product.retailer_name || product.source) || 0) * 2 +
       (categories.get(product.normalized_category || product.category) || 0);
     for (let index = 1; index < remaining.length; index += 1) {
-      if (usage(remaining[index]) < usage(remaining[best])) best = index;
+      if (remaining[index].source === remaining[best].source && usage(remaining[index]) < usage(remaining[best])) best = index;
     }
     const [product] = remaining.splice(best, 1);
     selected.push(product);
@@ -118,8 +132,8 @@ function selectMerchandise(rows, signals, { market = "us", now = Date.now(), lim
   const limit = Math.max(0, Math.min(24, Math.floor(Number(limitPerSignal) || 0)));
   const eligible = array(rows).filter(product => isPromotionEligible(product, { market: code, now }));
   return array(signals).filter(signal => activeSignal(signal, code, now)).map(signal => {
-    const matching = eligible.filter(product => array(signal.queries).some(query => matchesQuery(product, query)));
-    const ordered = matching.sort((left, right) => commerceQuality(right) - commerceQuality(left) ||
+    const matching = eligible.filter(product => !signalRejectionReasons(product, signal, {market:code, now}).length);
+    const ordered = matching.sort((left, right) => (left.source === "ebay" ? 0 : 1) - (right.source === "ebay" ? 0 : 1) || commerceQuality(right) - commerceQuality(left) ||
       Date.parse(right.checked_at) - Date.parse(left.checked_at) || Number(left.id) - Number(right.id));
     const unique = uniqueProductsInOrder(ordered);
     return { signal, products: balanced(unique, limit), rejected: array(rows).length - unique.length };
@@ -138,7 +152,8 @@ function merchandisingDiagnostics(rows, signals, { market = 'us', now = Date.now
   for (const item of assessed) for (const reason of item.reasons) rejectionCounts[reason] = (rejectionCounts[reason] || 0) + 1;
   return { assessed: assessed.length, eligible: assessed.filter(item => !item.reasons.length).length, rejectionCounts,
     signals: array(signals).filter(signal => activeSignal(signal, market, now)).map(signal => {
-      const matches = assessed.filter(item => array(signal.queries).some(query => matchesQuery(item.row, query)));
+      const matches = assessed.filter(item => array(signal.queries).some(query => matchesQuery(item.row, query)))
+        .map(item => ({...item, reasons:[...item.reasons, ...signalRejectionReasons(item.row, signal, {market, now})]}));
       const rejected = {};
       for (const item of matches) for (const reason of item.reasons) rejected[reason] = (rejected[reason] || 0) + 1;
       return { id:signal.id, title:signal.title, queries:signal.queries, matched:matches.length,
@@ -147,4 +162,4 @@ function merchandisingDiagnostics(rows, signals, { market = 'us', now = Date.now
           linkStatus:item.row.link_last_status ?? null, linkFailures:item.row.link_consecutive_failures ?? 0})) };
     }) };
 }
-module.exports = { isPromotionEligible, promotionRejectionReasons, promotionExpiresAt, selectMerchandise, merchandisingDiagnostics };
+module.exports = { matchesQuery, signalRejectionReasons, isPromotionEligible, promotionRejectionReasons, promotionExpiresAt, selectMerchandise, merchandisingDiagnostics };

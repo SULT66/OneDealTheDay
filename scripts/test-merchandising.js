@@ -10,6 +10,7 @@ Module._load = function(request, parent, ...rest) {
     if (request === './merchandisingCalendar') return { calendarSignals: () => [] };
     if (request === './merchandisingTrends') return { internalTrendSignals: () => [], researchTrendSignals: async ({ market }) => { calls++; if (gate) await gate; return failResearch ? { status: 'failed', signals: [], reason: 'timeout' } : { status: 'success', signals: [signal(market)] }; } };
     if (request === './merchandisingSelection') return {
+      matchesQuery: () => true, signalRejectionReasons: () => [],
       merchandisingDiagnostics: () => ({assessed:0, eligible:0, rejectionCounts:{}, signals:[]}),
       isPromotionEligible: (row, { market, now: at }) => row.market === market && row.availability === 'in_stock' && Number(row.link_last_status || 200) < 400 && Date.parse(row.checked_at) + DAY > at,
       selectMerchandise: (rows, signals, opts) => { if (chooseFail) throw Error('selector unavailable'); return signals.map(s => ({ signal: s, products: rows.filter(r => r.market === opts.market).reverse() })); },
@@ -41,6 +42,12 @@ function database() {
   await runMerchandising(db, { market: 'ca', now, research: true });
   assert.equal(calls, 2);
   assert.equal(getMerchandisingShelves(db, { market: 'ca', now })[0].products[0].id, 2);
+  let discoveryCalls=0;
+  const discover=async ({keywords})=>{discoveryCalls++;assert.deepEqual(keywords,['headphones']);return {status:'success',count:1};};
+  await runMerchandising(db,{now:now+2*3600000,discover});
+  await runMerchandising(db,{now:now+3*3600000,discover});
+  assert.equal(discoveryCalls,1,'Repeated manual or hourly checks share the persisted six-hour eBay throttle');
+  assert.equal(merchandisingStatus(db,{now}).stages.discovery.details.count,1);
   // A failed daily attempt must preserve unexpired prior research and throttle retries.
   db.prepare('UPDATE products SET checked_at=?').run(new Date(now + DAY).toISOString());
   failResearch = true;
@@ -95,6 +102,7 @@ function database() {
     retailer_name: 'eBay', status: 'published', current_price: 40, checked_at: new Date(now).toISOString(),
     image_url: 'https://i.ebayimg.com/pumpkin.jpg', affiliate_url: 'https://www.ebay.com/itm/10',
     availability: 'In stock', shipping_summary: 'Free shipping', return_summary: '30 day returns accepted',
+    rating:4.7, review_count:30, delivery_estimated_at:new Date(now+3*DAY).toISOString(), delivery_country:'US',
     seller_rating: 99.5, seller_feedback_count: 400, category: 'Home' };
   live.exec(`CREATE TABLE products(${Object.keys(p).map(key => `${key} ${typeof p[key] === 'number' ? 'REAL' : 'TEXT'}`).join(',')})`);
   live.prepare(`INSERT INTO products VALUES (${Object.keys(p).map(() => '?').join(',')})`).run(...Object.values(p));
