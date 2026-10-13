@@ -66,8 +66,8 @@ function catalogRows(db, market, publishedOnly = false, now = Date.now()) {
   const filter = publishedOnly ? ' AND p.id IN (SELECT product_id FROM merchandising_placements WHERE market=? AND expires_at>?)' : '';
   return db.prepare((hasHealth ? `SELECT p.*,lh.last_status AS link_last_status,
     lh.consecutive_failures AS link_consecutive_failures,lh.last_error AS link_last_error
-    FROM products p LEFT JOIN link_health lh ON lh.product_id=p.id WHERE p.market=?`
-    : 'SELECT p.* FROM products p WHERE p.market=?') + filter).all(...(publishedOnly ? [market, market, now] : [market]))
+    FROM products p LEFT JOIN link_health lh ON lh.product_id=p.id WHERE p.market=? AND p.status='published'`
+    : "SELECT p.* FROM products p WHERE p.market=? AND p.status='published'") + filter).all(...(publishedOnly ? [market, market, now] : [market]))
     .map(row => withVerifiedRetailerTerms(row, {now}));
 }
 function priceExpiry(row) {

@@ -96,3 +96,6 @@ assert.equal(paidDesk.shipping_cost,12,'Item-specific charges beat the general p
 assert.equal(paidDesk.return_summary,'No returns');
 assert(!isPromotionEligible(withVerifiedRetailerTerms({...rawDesk,title:'Customized Computer Desk'},{now:policyNow}),{now:policyNow}));
 assert(!isPromotionEligible(product(81,{return_summary:'See retailer policy'}),{now}),'A placeholder is not proof that returns are accepted');
+const archived = product(90,{status:'archived'});
+Object.defineProperty(archived,'current_price',{get(){throw new Error('Archived offers must not be scored');}});
+assert.equal(isPromotionEligible(archived,{now}),false,'Eligibility must stop before evaluating archived offer details');
