@@ -81,29 +81,16 @@ export async function DealCard({
           </span>
 
           {/*
-           * The seller's discount is said once, beside the price it is a
-           * discount from.
+           * Nothing else in this corner.
            *
-           * It used to be said twice on the same card in the same green pill:
-           * "42% OFF LIST" in this corner and "42% BELOW SELLER'S LIST" under
-           * the price, from the same number. Up here it had nothing next to it
-           * to be 42% of; down there the struck-through price is right beside
-           * it. So the corner is left to the one claim on this card that is
-           * ours rather than the shop's — the drop we measured ourselves,
-           * below.
+           * It held "42% OFF LIST" while the price block said "42% BELOW
+           * SELLER'S LIST" from the same number — one claim, printed twice, and
+           * up here with nothing beside it to be 42% of. The corner was then
+           * given to the drop we measured ourselves, which has since moved
+           * beside the price for the same reason: a percentage belongs next to
+           * the figure it is a percentage of.
            */}
 
-          {/* Our own measurement, and the only claim on this card that is
-              ours rather than the shop's. A price that has not moved gets
-              nothing, which is most of them. */}
-          {deal.trackedDropPercent > 0 && (
-            <span
-              className="absolute left-3 bottom-3 inline-flex items-center rounded-full bg-surface-inverse px-2.5 py-1 text-[0.7rem] font-bold text-fg-on-inverse tnum"
-              title={t(language, "app.card.trackedDrop", { percent: deal.trackedDropPercent })}
-            >
-              {t(language, "app.card.trackedDropShort", { percent: deal.trackedDropPercent })}
-            </span>
-          )}
         </div>
 
         <div className="flex flex-1 flex-col gap-2.5 p-5">
@@ -127,6 +114,7 @@ export async function DealCard({
             <PriceBlock
               price={deal.price}
               referencePrice={deal.referencePrice}
+              trackedDropPercent={deal.trackedDropPercent}
               currency={deal.currency}
               market={market}
               language={language}

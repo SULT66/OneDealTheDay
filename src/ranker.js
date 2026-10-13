@@ -109,7 +109,7 @@ function deduplicationCandidateKeys(product) {
  * stored one keeps the old — which is the exact disagreement the change is
  * there to end.
  */
-const SCORE_MODEL = "current-offer-v8";
+const SCORE_MODEL = "current-offer-v9";
 const RANKING_MODEL = "ranking-v1";
 
 const SEARCH_STOP_WORDS = new Set([
@@ -572,8 +572,40 @@ function priceScore(product) {
   return Math.max(referenceScore, marketScore);
 }
 
+/*
+ * A rating, weighted by how many people are behind it.
+ *
+ * The score read the average and nothing else. Five stars from three buyers
+ * earned the full twenty points for product quality; 4.94 from thirty earned
+ * nineteen. commerceQuality weights this component at 25 — more than anything
+ * except the price — so that one line decided the Daily Drop. On 2026-10-12 it
+ * made a knife set the pick of the day over a watch with ten times the
+ * reviews, and positions two, three and four of that day's drop each rested on
+ * a single five-star review.
+ *
+ * So the stated rating is pulled toward the catalogue's own average by how
+ * little evidence stands behind it. A listing with no reviews is the average
+ * and earns nothing for it; a listing with plenty is entirely itself.
+ *
+ * The two numbers are measurements, not preferences. 4.7 is this catalogue's
+ * mean rating weighted by review count — the rating of the average review
+ * rather than of the average listing — over 6,355 reviews on 2026-10-13.
+ * Twenty is where a rating stops being mostly borrowed: the median rated
+ * listing here carries fourteen reviews and the upper quartile thirty-six, and
+ * a sixth of them carry fewer than five.
+ */
+const RATING_PRIOR = 4.7;
+const RATING_PRIOR_REVIEWS = 20;
+
+function confidentRating(product) {
+  const rating = number(product?.rating);
+  if (rating <= 0) return 0;
+  const reviews = Math.max(0, number(product?.review_count));
+  return (rating * reviews + RATING_PRIOR * RATING_PRIOR_REVIEWS) / (reviews + RATING_PRIOR_REVIEWS);
+}
+
 function productQualityScore(product) {
-  const rating = number(product.rating);
+  const rating = confidentRating(product);
   const brand = String(product.brand || "").trim();
   const brandMultiplier = brand && !/^(?:unbranded|generic|unknown)$/i.test(brand) ? 1 : 0.9;
   if (rating <= 0) return 0;
@@ -930,6 +962,9 @@ exports.looksLikeAccessory = looksLikeAccessory;
 exports.queryBudget = queryBudget;
 exports.landedCost = landedCost;
 exports.paidShippingCost = paidShippingCost;
+exports.RATING_PRIOR = RATING_PRIOR;
+exports.RATING_PRIOR_REVIEWS = RATING_PRIOR_REVIEWS;
+exports.confidentRating = confidentRating;
 exports.SCORE_MODEL = SCORE_MODEL;
 exports.RANKING_MODEL = RANKING_MODEL;
 exports.scoreOffers = scoreOffers;

@@ -1,10 +1,19 @@
 /*
- * What a discount badge is allowed to claim (lib/pricing.ts).
+ * Whose number the percentage is.
  *
  * The reference beside a listing is the seller's own "was" price. A storage
  * cabinet selling at $124 carried a $939 reference and the page printed "87%
- * below reference" as a fact of ours. It was the seller's number, and at that
- * size it is the kind of number that has to be earned.
+ * below reference" as a fact of ours. The first fix only stopped the
+ * extraordinary ones, and that drew the line in the wrong place: fifty per
+ * cent off a doubled list price is exactly as unchecked as eighty-seven, and
+ * far more common. Measured on 2026-10-13, 344 of 2,380 listings printed a
+ * saving worked out from the seller's figure, not one of them carried an
+ * independent comparison behind it, and the drops the site had actually
+ * measured itself came to 111.
+ *
+ * So the rule this file guards is simple and total: the only percentage the
+ * site prints is the one it measured. The seller's figure still shows, named
+ * as theirs, with no arithmetic of ours performed on it.
  */
 const assert = require("assert");
 const fs = require("fs");
@@ -23,66 +32,120 @@ function load(file, stubs = {}) {
   return mod.exports;
 }
 
-const format = load("lib/format.ts", {});
-const { displayDiscount, EXTRAORDINARY_DISCOUNT } = load("lib/pricing.ts", { "./format": format, "./types": {} });
+const read = (file) => fs.readFileSync(path.join(__dirname, "..", file), "utf8");
+/* Comments describe what the code used to do; they must not satisfy a check
+   that the code no longer does it. */
+const codeOf = (file) => read(file)
+  .replace(/\{\/\*[\s\S]*?\*\/\}/g, "")
+  .replace(/\/\*[\s\S]*?\*\//g, "");
 
-const point = (date, price) => ({ date, price });
+const { trackedSaving } = load("lib/pricing.ts", { "./types": {} });
 
-/* An everyday saving is shown as it always was. */
-assert.strictEqual(displayDiscount(80, 100), 20);
-assert.strictEqual(displayDiscount(50, 100), 50);
-assert.strictEqual(displayDiscount(100, 100), null, "no saving against an equal reference");
-assert.strictEqual(displayDiscount(100, null), null, "no reference, no claim");
+/* --- The one number we may put a percent sign on. --- */
+assert.strictEqual(trackedSaving(12), 12);
+assert.strictEqual(trackedSaving(11.6), 12, "the nightly figure arrives rounded; never trust that twice");
+assert.strictEqual(trackedSaving(0), null, "a price that has not moved claims nothing");
+assert.strictEqual(trackedSaving(null), null);
+assert.strictEqual(trackedSaving(undefined), null);
+assert.strictEqual(trackedSaving(-5), null, "a rise is not a saving");
 
-/* The line itself, and just under it. */
-assert.strictEqual(displayDiscount(31, 100), 69);
-assert.strictEqual(EXTRAORDINARY_DISCOUNT, 70);
-
-/* Above it, the seller's word alone is not enough — which is all a catalogue
-   card ever has. */
-assert.strictEqual(displayDiscount(124.18, 939.99), null, "the Sterilite claim went out unchecked");
-assert.strictEqual(displayDiscount(30, 100), null);
-assert.strictEqual(displayDiscount(30, 100, []), null);
-
-/* Unless we ourselves recorded a price near that reference. */
-assert.strictEqual(
-  displayDiscount(30, 100, [point("2026-09-01", 95), point("2026-09-10", 30)]),
-  70,
-  "our own observation supports the reference",
+/*
+ * --- Nothing computes a saving from the seller's figure. ---
+ *
+ * The old helper took (price, referencePrice) and returned a percentage; its
+ * absence is the whole point, so this looks for the shape as well as the name.
+ */
+assert.ok(
+  !/referencePrice/.test(codeOf("lib/pricing.ts")),
+  "lib/pricing.ts is working arithmetic on the seller's reference again",
 );
-assert.strictEqual(
-  displayDiscount(30, 100, [point("2026-09-01", 60), point("2026-09-10", 30)]),
-  null,
-  "a history that never came near the reference does not support it",
-);
-
-/* The pages ask pricing, not the raw arithmetic. */
-for (const file of ["components/deal/PriceBlock.tsx", "app/[market]/deal/[id]/page.tsx"]) {
-  const source = fs.readFileSync(path.join(__dirname, "..", file), "utf8");
-  assert(/displayDiscount\(/.test(source), `${file} no longer goes through the claim check`);
+for (const file of [
+  "components/deal/PriceBlock.tsx",
+  "components/deal/DealCard.tsx",
+  "components/deal/FeaturedDeal.tsx",
+  "app/[market]/deal/[id]/page.tsx",
+]) {
+  const source = codeOf(file);
+  assert(!/displayDiscount\(/.test(source), `${file} still computes the seller's discount`);
   assert(!/discountPercent\(/.test(source), `${file} prints the raw seller discount again`);
 }
 
-/* And the badge says whose number it is. */
+/* The price block shows their figure, and says it is theirs. */
+const block = codeOf("components/deal/PriceBlock.tsx");
+assert(/trackedSaving\(/.test(block), "the price block no longer asks what it may claim");
+assert(/app\.price\.sellerList/.test(block), "the struck-through figure is no longer attributed to the seller");
+assert(/app\.card\.trackedDropShort/.test(block), "the pill beside the price is no longer our own measurement");
+
+/* --- The strings themselves, in every language the site speaks. --- */
 const { appCopy } = require("../src/i18n-app");
 for (const language of ["en", "es", "fr", "de"]) {
-  const copy = `${appCopy[language]["app.card.percentBelowRef"]} ${appCopy[language]["app.deal.belowReference"]}`.toLowerCase();
-  assert(/list|liste|vendeur|verkäufer|lista/.test(copy), `${language} still claims the reference as ours`);
+  const words = appCopy[language];
+  assert.strictEqual(words["app.card.percentBelowRef"], undefined, `${language} can still say "% below seller's list"`);
+  assert.strictEqual(words["app.deal.belowReference"], undefined, `${language} can still claim the reference as a saving`);
+  assert.ok(words["app.price.sellerList"], `${language} has no way to name the seller's figure`);
+  assert.ok(
+    !/%|\{percent\}/.test(words["app.price.sellerList"]),
+    `${language} attaches a percentage to the seller's figure`,
+  );
+  assert.ok(
+    /list|liste|lista|verkäufer|vendeur|vendedor/i.test(words["app.price.sellerList"]),
+    `${language} does not say whose figure it is`,
+  );
+  assert.ok(words["app.card.trackedDrop"] && words["app.card.trackedDropShort"], `${language} cannot state our own drop`);
 }
 
-console.log("pricing claims: ok");
+/* --- And the same on the server, which feeds the API and Delia. --- */
+const { copy } = require("../src/i18n");
+for (const language of ["en", "es", "fr", "de"]) {
+  const strings = copy[language];
+  for (const gone of ["product.belowReference", "product.belowReferencePercent", "product.off"]) {
+    assert.strictEqual(strings[gone], undefined, `${language} still carries ${gone}`);
+  }
+  for (const needed of ["product.priceDropped", "product.trackedDropPercent", "product.trackedDropShort"]) {
+    assert.ok(strings[needed], `${language} is missing ${needed}`);
+  }
+}
 
 /*
- * And the card itself prints no discount of its own.
+ * --- The listing that started this. ---
  *
- * It used to print the same percentage twice — once in the image corner with
- * nothing beside it to be a percentage of, and once under the price next to
- * the struck-through figure. Only the second one can be read, so the card now
- * leaves the claim to PriceBlock. If a percentage ever comes back to the card,
- * it has to come back through displayDiscount with it.
+ * The Hecef knife set: $25.99 against a $51.98 reference, exactly double, three
+ * reviews, and no price we ever recorded moving. It was Today's #1 Pick on
+ * 2026-10-12 under a pill reading "50% BELOW SELLER'S LIST". Nothing on the
+ * page may say fifty per cent about it.
  */
-const card = fs.readFileSync(path.join(__dirname, "..", "components", "deal", "DealCard.tsx"), "utf8");
-assert(
-  !/percentOff|percentBelowRef/.test(card) || /displayDiscount[(]/.test(card),
-  "the card prints a discount without going through the claim check",
-);
+const { presentProduct } = require("../src/productPresentation");
+const fresh = new Date().toISOString();
+const knives = {
+  id: 1, market: "us", source: "ebay", retailer_name: "eBay",
+  title: "Hecef Kitchen Knife Set 5Pcs Stonewashed Chef Knife Cutlery Set",
+  image_url: "https://example.test/knives.jpg", affiliate_url: "https://www.ebay.com/itm/1",
+  current_price: 25.99, original_price: 51.98, currency: "USD", checked_at: fresh,
+  rating: 5, review_count: 3, tracked_drop_percent: 0, tracked_low: 0,
+  shipping_summary: "Free shipping", return_summary: "Returns accepted within 30 days",
+  availability: "In stock", seller_name: "hecef_official", seller_rating: 4.975, seller_feedback_count: 4542,
+};
+const shownKnives = presentProduct(knives, "en");
+assert.strictEqual(shownKnives.display_save_label, "", "the seller's doubled list price is a saving again");
+assert.strictEqual(shownKnives.display_off_label, "", "the seller's doubled list price is a percentage again");
+assert.notStrictEqual(shownKnives.display_badge, "BELOW REFERENCE", "the badge is back to repeating the seller");
+assert.ok(shownKnives.display_original_price, "their figure should still show — attributed, not computed from");
+
+/* A price we watched fall says so, in our own words. */
+const watched = presentProduct({ ...knives, id: 2, tracked_drop_percent: 18, tracked_low: 25.99 }, "en");
+assert.ok(/18/.test(watched.display_save_label), "a drop we measured prints nothing");
+assert.strictEqual(watched.display_badge, "PRICE DROPPED");
+
+/*
+ * --- The badge order: what buyers said outranks what the price did. ---
+ *
+ * The discount test used to come first, so 4.8 stars from three thousand
+ * buyers were labelled BELOW REFERENCE. The badge advertised the weakest thing
+ * known about a listing and hid the strongest.
+ */
+const reviewed = presentProduct({
+  ...knives, id: 3, rating: 4.8, review_count: 3000, tracked_drop_percent: 22,
+}, "en");
+assert.strictEqual(reviewed.display_badge, "STRONG REVIEWS", "reviews lost their place to the price again");
+
+console.log("pricing claims: ok");

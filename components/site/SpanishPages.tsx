@@ -99,8 +99,8 @@ export function SpanishAbout({
         valoración de evidencia más baja.
       </p>
       <p>
-        Además comparamos el precio con cifras de referencia verificadas, leemos las opiniones del producto y del
-        vendedor, y publicamos el razonamiento junto a cada selección. Cuando falta una señal, la página lo dice.
+        Además seguimos el precio con nuestras propias mediciones, leemos las opiniones del producto y del vendedor, y
+        publicamos el razonamiento junto a cada selección. Cuando falta una señal, la página lo dice.
       </p>
 
       <h2>Lo que no hacemos a propósito</h2>
@@ -151,17 +151,25 @@ export function SpanishHowWeSelect({ market, country }: { market: string; countr
     >
       <h2>Señal de precio</h2>
       <p>
-        Seguimos el precio de cada producto a lo largo del tiempo y comparamos la cifra actual con el precio de
-        referencia de la propia tienda. Solo mostramos un ahorro cuando esa referencia está verificada. Si no existe, la
-        página lo dice en lugar de inventar un número tachado.
+        Registramos nosotros mismos el precio de cada producto, varias veces al día. El único ahorro que este sitio
+        afirma por cuenta propia es el que muestran esos registros: cuánto está hoy el precio por debajo del máximo
+        diario que hemos visto en los últimos sesenta días. Por debajo del cinco por ciento, o con menos de tres días de
+        observaciones nuestras detrás, no decimos nada.
+      </p>
+      <p>
+        Cuando la tienda publica un precio de referencia, lo mostramos junto al precio actual y señalamos que es suyo.
+        No calculamos ningún porcentaje a partir de él: es su cifra, no hemos podido comprobarla, y un número tachado
+        que nadie comprobó es el truco más viejo del comercio.
       </p>
 
       <h2>Calidad del producto</h2>
       <p>
         Las valoraciones y el número de opiniones se leen del propio anuncio y se mantienen separados de las opiniones
         sobre el vendedor, porque un producto bien valorado vendido por un vendedor poco fiable no es una buena compra.
-        Los productos sin opiniones no se excluyen, pero se marcan como sin valoración en lugar de puntuarse como si
-        fueran perfectos.
+        Una valoración vale lo que valga el número de opiniones que la respalda: cinco estrellas de tres compradores se
+        acercan a la media de todo lo que publicamos, mientras que la misma valoración de trescientos se sostiene sola.
+        Los productos sin opiniones no se excluyen: la página muestra que no tienen ninguna, en lugar de puntuarlos como
+        si fueran perfectos.
       </p>
 
       <h2>Confianza en el vendedor</h2>

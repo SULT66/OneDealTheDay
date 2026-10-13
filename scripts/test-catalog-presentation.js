@@ -464,25 +464,31 @@ assert(
 );
 
 /*
- * A discount is said once, beside the price it is a discount from.
+ * A saving is said once, beside the price it is a saving from, and it is ours.
  *
  * The card carried the same number twice in the same green pill: "42% OFF
  * LIST" in the image corner and "42% BELOW SELLER'S LIST" under the price,
- * both from displayDiscount. In the corner it had nothing beside it to be 42%
- * of; under the price the struck-through figure is right there. The corner is
- * left to the one claim on the card that is ours rather than the shop's.
+ * both worked out from the seller's own reference. The corner went first,
+ * because it had nothing beside it to be 42% of. Then the number itself went:
+ * nothing we held supported it, so the percentage beside the price is now the
+ * fall our own tracking recorded, and the seller's figure sits there named as
+ * theirs. See scripts/test-pricing-claims.js for the rule in full.
  */
 const dealCardSource = read("components", "deal", "DealCard.tsx");
 assert(
-  !/percentOff/.test(dealCardSource),
-  "the card says the seller's discount twice again",
+  !/percentOff|percentBelowRef/.test(dealCardSource),
+  "the card is claiming the seller's discount again",
 );
 assert(
-  /trackedDropPercent > 0/.test(dealCardSource),
-  "the card stopped showing the drop we measured ourselves",
+  !/trackedDropPercent > 0/.test(dealCardSource),
+  "the card says our own drop twice again — the price block already does",
 );
 const priceBlockSource = read("components", "deal", "PriceBlock.tsx");
 assert(
-  /percentBelowRef/.test(priceBlockSource),
-  "the discount lost the place where the price it is below is visible",
+  /app\.card\.trackedDropShort/.test(priceBlockSource),
+  "the saving lost the place where the price it is below is visible",
+);
+assert(
+  /trackedDropPercent/.test(priceBlockSource) && !/percentBelowRef/.test(priceBlockSource),
+  "the price block is back to printing the seller's percentage",
 );

@@ -1,5 +1,4 @@
 import { schemaAvailability } from "@/lib/schemaAvailability";
-import { displayDiscount } from "@/lib/pricing";
 import { productPhrase } from "@/lib/productPhrase";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -71,7 +70,6 @@ export default async function DealPage({
   const language = await getLanguage(market);
   const localCategory = category ? categoryName(category.name, language) : deal.category;
   const related = await getRelated(market, deal, 4);
-  const off = displayDiscount(deal.price, deal.referencePrice, deal.priceHistory);
   const info = getMarket(market);
 
   const goHref = (placement: string) =>
@@ -193,7 +191,9 @@ export default async function DealPage({
                 {retailerLabel(deal.retailer)}
               </Pill>
               {deal.rank === 1 && <Pill tone="solid">{t(language, "app.deal.todaysPick")}</Pill>}
-              {off !== null && <Pill tone="accent">{t(language, "app.deal.belowReference", { percent: off })}</Pill>}
+              {deal.trackedDropPercent > 0 && (
+                <Pill tone="accent">{t(language, "app.card.trackedDrop", { percent: deal.trackedDropPercent })}</Pill>
+              )}
             </div>
 
             <h1 className="mt-4 text-2xl font-bold leading-tight tracking-tight text-fg sm:text-3xl lg:text-4xl">
@@ -230,20 +230,14 @@ export default async function DealPage({
 
           <PriceBlock
             price={deal.price}
-              coupons={deal.coupons}
+            coupons={deal.coupons}
             referencePrice={deal.referencePrice}
+            trackedDropPercent={deal.trackedDropPercent}
             currency={deal.currency}
             market={market}
             language={language}
             size="lg"
-            history={deal.priceHistory}
           />
-
-          {deal.trackedDropPercent > 0 && (
-            <p className="-mt-2 text-sm font-semibold text-lime-deep">
-              {t(language, "app.card.trackedDrop", { percent: deal.trackedDropPercent })}
-            </p>
-          )}
 
           <TrustSignals deal={deal} language={language} />
 

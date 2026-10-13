@@ -3,6 +3,7 @@ const {
   SCORE_MODEL,
   RANKING_MODEL,
   commerceQuality,
+  confidentRating,
   isDailyPickEligible,
   isEligible,
   landedCost,
@@ -18,7 +19,7 @@ const {
   normalizeTradeItemId
 } = require("../src/productIdentity");
 
-assert.strictEqual(SCORE_MODEL, "current-offer-v8");
+assert.strictEqual(SCORE_MODEL, "current-offer-v9");
 assert.strictEqual(RANKING_MODEL, "ranking-v1");
 for (const placeholder of ["Does not apply", "Does Not Apply", "Non applicable", "Nicht zutreffend", "Ne s'applique pas", "不适用", "N/A"]) {
   assert.strictEqual(normalizeTradeItemId(placeholder), "", `Placeholder GTIN was accepted: ${placeholder}`);
@@ -232,5 +233,53 @@ assert.strictEqual(
   presentProduct(asStored, "en").display_score,
   "the published score changes depending on whether the listing was just ingested",
 );
+
+/*
+ * A rating counts for what the count behind it is worth.
+ *
+ * productQualityScore read the average and nothing else, so five stars from
+ * three buyers took the full twenty points and 4.94 from thirty took nineteen.
+ * commerceQuality weights that component at 25 — more than anything but the
+ * price — so the line decided the Daily Drop. On 2026-10-12 it made a knife set
+ * the pick of the day over a watch with ten times the reviews, and positions
+ * two, three and four of the following day's drop each rested on a single
+ * five-star review.
+ */
+{
+  /* No reviews, no claim: the rating is the catalogue's average and earns
+     nothing for being five stars. */
+  assert.strictEqual(confidentRating({ rating: 0, review_count: 0 }), 0);
+  assert.ok(
+    Math.abs(confidentRating({ rating: 5, review_count: 0 }) - 4.7) < 1e-9,
+    "a rating with nobody behind it is treated as better than average",
+  );
+
+  /* More reviews, closer to what the listing itself says — upward and
+     downward alike, so this is a confidence weighting and not a penalty. */
+  const few = confidentRating({ rating: 5, review_count: 3 });
+  const many = confidentRating({ rating: 5, review_count: 300 });
+  assert.ok(few < many && many > 4.95, "a rating never grows into its own number");
+  const poorFew = confidentRating({ rating: 4.0, review_count: 3 });
+  const poorMany = confidentRating({ rating: 4.0, review_count: 300 });
+  assert.ok(poorFew > poorMany, "a poor rating is not pulled up by the prior as a good one is pulled down");
+
+  /* And the case itself: thirty reviews at 4.94 must outscore three at 5.0. */
+  const base = {
+    title: "x", image_url: "https://example.test/x.jpg", affiliate_url: "https://example.test/go",
+    market: "us", currency: "USD", availability: "In stock",
+    shipping_summary: "Free shipping", return_summary: "Returns accepted within 30 days",
+    seller_name: "someone", seller_rating: 4.9, seller_feedback_count: 5000,
+  };
+  const thin = scoreProduct({ ...base, current_price: 25.99, original_price: 51.98, rating: 5, review_count: 3 });
+  const deep = scoreProduct({ ...base, current_price: 194, original_price: 328, rating: 4.94, review_count: 30 });
+  assert.ok(
+    deep.breakdown.product_quality > thin.breakdown.product_quality,
+    "three five-star reviews score the product better than thirty again",
+  );
+  assert.ok(
+    thin.breakdown.product_quality < 20,
+    "a handful of perfect reviews still takes the full twenty points",
+  );
+}
 
 console.log("Ranking v1, source neutrality, identity normalization, landed cost and evidence confidence passed.");
