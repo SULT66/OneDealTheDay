@@ -25,6 +25,7 @@ function needsRecalculation(db) {
       COALESCE(score_breakdown,'') NOT LIKE ?
       OR evidence_confidence IS NULL
       OR commerce_quality IS NULL
+      OR average_30_day_price IS NULL
       OR ranking_score IS NULL
       OR landed_cost IS NULL
       OR COALESCE(normalized_category,'')=''
@@ -145,7 +146,9 @@ function recalculateCatalog(db, marketCodes = ["us", "ca", "uk", "fr", "de"], op
       UPDATE products
       SET product_key=?,gtin=?,upc=?,ean=?,shipping_cost=?,landed_cost=?,score=?,relevance_score=?,
           commerce_quality=?,ranking_score=?,evidence_confidence=?,normalized_category=?,taxonomy_version=?,
-          score_breakdown=?,selection_reason=?,status=?,updated_at=?
+          score_breakdown=?,selection_reason=?,status=?,updated_at=?,
+          average_30_day_price=?,lowest_30_day_price=?,average_90_day_price=?,lowest_90_day_price=?,
+          price_history_observation_count=?,price_history_distinct_days=?,price_history_coverage_days=?
       WHERE id=?
     `);
     const now = new Date().toISOString();
@@ -171,6 +174,17 @@ function recalculateCatalog(db, marketCodes = ["us", "ca", "uk", "fr", "de"], op
         scored?.selection_reason || "",
         publicStatus,
         now,
+        /* What our own observations say. normalized carries them because
+           withPriceHistory ran before normalization; a row with no history
+           keeps zeros, which is what "we have not watched this one long
+           enough" should look like to every reader. */
+        normalized.average_30_day_price ?? 0,
+        normalized.lowest_30_day_price ?? 0,
+        normalized.average_90_day_price ?? 0,
+        normalized.lowest_90_day_price ?? 0,
+        normalized.price_history_observation_count ?? 0,
+        normalized.price_history_distinct_days ?? 0,
+        normalized.price_history_coverage_days ?? 0,
         row.id
       );
     }
