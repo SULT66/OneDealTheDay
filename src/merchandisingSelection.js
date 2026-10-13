@@ -75,6 +75,16 @@ function matchesQuery(product, query) {
   // Every query word must describe the actual product. A category such as
   // Home is not evidence that a mattress belongs to a Halloween shelf.
   const headline = normalizedTitle(`${product.title || ""} ${product.brand || ""}`);
+  // Search tokens deliberately omit standalone numbers for broad catalogue
+  // searches. Featured recommendations must retain model generations: a
+  // Switch v2 is not a Switch 2, and an iPhone 14 is not an iPhone 15.
+  const modelWords = normalizedTitle(String(query).replace(/\b(?:under|below|less than|up to|over|above|between|from)\b.*$/i, '')).split(' ');
+  for (let index = 0; index < modelWords.length; index++) {
+    if (!/^\d+(?:\.\d+)?$/.test(modelWords[index])) continue;
+    const pair = index > 0 ? `${modelWords[index - 1]} ${modelWords[index]}`
+      : modelWords.slice(0, 2).join(' ');
+    if (!(` ${headline} `).includes(` ${pair} `)) return false;
+  }
   // "Desk chair" and "under desk drawer" name another product, not a desk.
   if (headTerm(query) === 'desk' && /\b(?:chair|drawer|mat|organizer|organiser|lamp|riser)\b/.test(headline) &&
       !/\bdesk\s+(?:with|includes|including)\b/.test(headline)) return false;

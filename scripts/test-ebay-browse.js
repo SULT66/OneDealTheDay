@@ -63,7 +63,7 @@ const fetchImpl = async (url, options = {}) => {
       mpn:"MODEL-100",
       shortDescription:"A verified product description.",
       primaryProductReviewRating:{averageRating:"4.7", reviewCount:321},
-      shippingOptions:[{shippingCost:{value:"0.00", currency:"USD"}, shippingServiceCode:"USPS"}],
+      shippingOptions:[{shippingCost:{value:"0.00", currency:"USD"}, shippingServiceCode:"USPS", maxEstimatedDeliveryDate:"2026-10-20T10:00:00Z"}],
       returnTerms:{
         returnsAccepted:true,
         returnPeriod:{value:30, unit:"CALENDAR_DAY"},
@@ -94,6 +94,9 @@ const fetchImpl = async (url, options = {}) => {
   assert.strictEqual(products[0].review_count, 321);
   assert.strictEqual(products[0].affiliate_url, summary.itemAffiliateWebUrl);
   assert.strictEqual(products[0].shipping_summary, "Free shipping via USPS");
+  assert.strictEqual(products[0].delivery_country,"US","Actual request context supplies omitted estimate location, without inventing a postcode");
+  assert.strictEqual(products[0].delivery_postal_code,"");
+  assert.strictEqual(products[0].delivery_estimated_at,"2026-10-20T10:00:00.000Z");
   assert.strictEqual(products[0].return_summary, "30 calendar days, seller-paid return shipping");
   assert.strictEqual(products[0].product_key, "gtin:00012345678905");
   assert.strictEqual(oauthCalls, 1, "The OAuth application token was not reused");

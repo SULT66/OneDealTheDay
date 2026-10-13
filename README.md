@@ -137,7 +137,9 @@ The holiday calendar updates weekly, catalogue placements hourly and after
 retailer refreshes, and external research at most once per 24 hours per enabled
 market. In the primary market, the third role also searches eBay for active themes
 at most once per six hours, rotating up to six queries and looking up at most
-60 item details. The existing importer saves real offers and price snapshots;
+60 item details. Four query slots are reserved for active seasonal themes before
+interest topics; unused slots can be shared. A discovery policy change runs one
+fresh bounded pass before resuming the six-hour cadence. The existing importer saves real offers and price snapshots;
 this pass does not replace Daily Drop picks or archive unrelated catalogue items.
 Manual and scheduled runs share the persisted throttle, including failed attempts.
 The paid research uses the existing server-only `OPENAI_API_KEY`, one
@@ -152,6 +154,8 @@ accepted returns, safe tracked links, at least five product reviews and a rating
 and no recorded link failure. Established-seller feedback cannot replace product
 reviews on these featured shelves. Dated gift/holiday campaigns also require a
 destination-specific delivery estimate at least two days before the occasion.
+The destination is taken from the reported estimate or the explicit country
+context sent in the eBay API request; missing postcodes are never invented.
 The estimate and shipping cost come from the same delivery option; arrival is
 not guaranteed and may vary by address. Qualified eBay offers are selected first;
 reviewed feeds remain supplementary. The ordinary catalogue still includes
