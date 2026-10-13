@@ -177,6 +177,11 @@ assert.strictEqual(categoryLabel("Home & Kitchen", "de"), "Wohnen und Küche");
  * The price itself may be stale and still be worth showing, with its date. The
  * arithmetic performed on it may not: a percentage off is a claim about right
  * now.
+ *
+ * The percentage is now the fall we recorded ourselves rather than a figure
+ * worked out from the seller's reference, which is why the listing below
+ * carries a tracked drop. The rule it guards did not change: no percentage
+ * survives a price nobody has confirmed today.
  */
 const { presentProduct: present } = require("../src/productPresentation");
 
@@ -187,6 +192,8 @@ const listing = (hoursAgo) => ({
   currency: "USD",
   current_price: 79.95,
   original_price: 195,
+  tracked_drop_percent: 59,
+  tracked_low: 79.95,
   retailer_name: "eBay",
   checked_at: new Date(Date.now() - hoursAgo * 3600 * 1000).toISOString(),
 });
@@ -200,7 +207,7 @@ assert.strictEqual(yesterday.display_price_is_current, false, "a price two days 
 assert.strictEqual(
   yesterday.display_save_label,
   "",
-  "a saving is still worked out from a price nobody has confirmed in two days",
+  "a saving is still stated from a price nobody has confirmed in two days",
 );
 assert.strictEqual(yesterday.display_off_label, "", "the percentage-off pill survives on a stale price");
 /* The price itself stays. Withholding it would leave the page saying nothing
@@ -232,8 +239,8 @@ assert.strictEqual(
  * a different number: 1,119 listings piled onto exactly 74.
  */
 
-const strong = { hasReviews: true, hasStatedDiscount: true };
-const thin = { hasReviews: false, hasStatedDiscount: false };
+const strong = { hasReviews: true, hasTrackedDrop: true };
+const thin = { hasReviews: false, hasTrackedDrop: false };
 
 /* Same offer, same confidence, different evidence behind it. */
 const wellEvidenced = publicOneDailyDropScore(95, 95, 1, strong);
@@ -251,9 +258,9 @@ assert.strictEqual(
   "a listing with nobody's reviews behind it is given a number again",
 );
 assert.strictEqual(
-  publicOneDailyDropScore(95, 95, 1, { hasReviews: false, hasStatedDiscount: true }),
+  publicOneDailyDropScore(95, 95, 1, { hasReviews: false, hasTrackedDrop: true }),
   null,
-  "a verified saving alone produces a score, though the card already states the saving",
+  "a drop we measured alone produces a score, though the card already states the drop",
 );
 assert(wellEvidenced >= 90, "a fully evidenced, excellent offer can no longer reach the top of the range");
 
@@ -321,7 +328,7 @@ assert(
 /* Every number the site is willing to print has reviews behind it, so the
    lowest it can be is well clear of the range that reads as a bad mark. */
 assert(
-  publicOneDailyDropScore(60, 55, 0.45, { hasReviews: true, hasStatedDiscount: false }) >= 70,
+  publicOneDailyDropScore(60, 55, 0.45, { hasReviews: true, hasTrackedDrop: false }) >= 70,
   "a scored listing can show a number a shopper reads as a failing grade",
 );
 /* And the floor itself has to stay out of that range, since it is the lowest

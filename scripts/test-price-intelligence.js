@@ -54,7 +54,7 @@ const score = scoreProduct({
 assert(score.total >= 60 && score.total <= 100, `strong real offer should score credibly, received ${score.total}`);
 assert.equal(score.breakdown.price_quality, 15,
   "a retailer reference price alone must not exceed half of the price-quality component");
-assert.equal(score.breakdown.model, "current-offer-v8");
+assert.equal(score.breakdown.model, "current-offer-v9");
 
 const newListing = {
   source: "ebay",

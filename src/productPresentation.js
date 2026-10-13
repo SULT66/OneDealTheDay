@@ -87,7 +87,7 @@ const PUBLIC_SCORE_CEILING = 95;
  * — the same test the page uses before printing one, so the number and the
  * badge can never disagree about whether a discount exists.
  */
-function evidenceCeiling({hasReviews, hasStatedDiscount}) {
+function evidenceCeiling({hasReviews, hasTrackedDrop}) {
   /*
    * No reviews, no number, whatever else is known.
    *
@@ -98,13 +98,15 @@ function evidenceCeiling({hasReviews, hasStatedDiscount}) {
    * number on a listing that has one of the four — it was wrong at 94 for the
    * same reason it was wrong at 67, only in the other direction.
    *
-   * A verified saving is real evidence and the card already states it, as
-   * "36% BELOW REF." beside the price. That is the honest way to show one
-   * signal: say which signal it is, rather than compressing it into a score
-   * that implies four.
+   * A saving we measured ourselves is real evidence and the card already
+   * states it, as "Down 12%" beside the price. That is the honest way to show
+   * one signal: say which signal it is, rather than compressing it into a
+   * score that implies four. The seller's own struck-through figure used to
+   * count here, which meant the ceiling rose on their word rather than on
+   * anything we had checked.
    */
   if (!hasReviews) return null;
-  return hasStatedDiscount ? EVIDENCE_CEILING.reviewedAndPriced : EVIDENCE_CEILING.reviewed;
+  return hasTrackedDrop ? EVIDENCE_CEILING.reviewedAndPriced : EVIDENCE_CEILING.reviewed;
 }
 
 const clean = value => String(value || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
@@ -238,7 +240,7 @@ function priceIsCurrentFor(product = {}) {
 function publishedScore(product = {}, { priceIsCurrent } = {}) {
   const rawDealScore = oneDailyDropScore(product);
   const confidence = oneDailyDropEvidenceConfidence(product);
-  const discount = discountPercent(product);
+  const drop = trackedDropPercent(product);
   const fresh = priceIsCurrent === undefined ? priceIsCurrentFor(product) : Boolean(priceIsCurrent);
   /* Today's price throughout: this is the live score, and every input to it has
      to describe the listing as it is now. Leaving the snapshot's price here
@@ -260,7 +262,7 @@ function publishedScore(product = {}, { priceIsCurrent } = {}) {
     hasReviews: number(product.review_count) >= MEANINGFUL_REVIEW_COUNT && number(product.rating) > 0,
     /* The same test the badge uses, so the number and the badge cannot
        disagree about whether there is a saving. */
-    hasStatedDiscount: discount > 0 && fresh,
+    hasTrackedDrop: drop > 0 && fresh,
   });
 }
 
@@ -319,6 +321,29 @@ function sellerRatingPercent(product) {
   return Math.max(0, Math.min(100, percent));
 }
 
+/*
+ * The fall in price we recorded ourselves, which is the only saving this site
+ * may state as its own.
+ *
+ * src/trackedPrice.js writes it nightly: how far today's price sits below the
+ * highest daily price our own requests saw in the last sixty days. It is zero
+ * for a price that has not moved, which is most of the catalogue, and that is
+ * the point — a percentage here has been earned.
+ */
+function trackedDropPercent(product) {
+  const percent = number(product?.tracked_drop_percent);
+  return percent > 0 ? Math.round(percent) : 0;
+}
+
+/*
+ * The seller's own struck-through figure, as arithmetic.
+ *
+ * Kept, because the reference price is still shown beside the price and the
+ * filters still offer "below the seller's list". What it no longer does is
+ * supply a percentage in our own voice: measured on 2026-10-13, 330 listings
+ * printed a saving and not one of the 2,380 carried an independent comparison
+ * to support it.
+ */
 function discountPercent(product) {
   const current = number(product?.current_price);
   const reference = number(product?.original_price);
@@ -419,15 +444,30 @@ function presentationReason(product, language) {
     : `${summary} ${t(language, "product.noProductRating", { store })}`;
 }
 
+/*
+ * One line about this listing, and it has to be the truest one.
+ *
+ * The first test used to be "is this 20% below the seller's reference", which
+ * is the seller's own struck-through figure and nothing of ours. Because it
+ * came first it outranked everything: a listing with 4.8 stars from three
+ * thousand buyers was labelled BELOW REFERENCE rather than STRONG REVIEWS, so
+ * the badge advertised the weakest thing we knew about it and hid the
+ * strongest.
+ *
+ * The order now runs from the evidence a shopper can act on to the evidence
+ * that merely reassures: what buyers said about the thing, then a fall in
+ * price we recorded ourselves, then the seller, then the terms. The seller's
+ * reference price appears nowhere here; it is still shown beside the price,
+ * attributed to them.
+ */
 function badge(product, language) {
-  const discount = discountPercent(product);
   const breakdown = scoreBreakdown(product);
   const rating = number(product?.rating);
   const reviews = number(product?.review_count);
   const buyerFriendly = /^Free shipping/i.test(clean(product?.shipping_summary)) &&
     clean(product?.return_summary) && !/^Returns not accepted$/i.test(clean(product?.return_summary));
-  if (discount >= 20) return t(language, "product.belowReference");
   if (rating >= 4.6 && reviews >= 50) return t(language, "product.strongReviews");
+  if (trackedDropPercent(product) > 0) return t(language, "product.priceDropped");
   if (number(breakdown.seller_reliability) >= 12) return t(language, "product.establishedSeller");
   if (buyerFriendly) return t(language, "product.buyerFriendly");
   return t(language, "product.checkedOffer");
@@ -451,6 +491,7 @@ function presentProduct(product, language = "en") {
   if (!product) return product;
   const count = evidenceCount(product);
   const discount = discountPercent(product);
+  const trackedDrop = trackedDropPercent(product);
   const checkedAt = clean(product.checked_at || product.updated_at);
   const checkedDate = checkedAt && !Number.isNaN(new Date(checkedAt).getTime())
     ? new Date(checkedAt).toLocaleString(languageTag(product.market, language))
@@ -525,8 +566,8 @@ function presentProduct(product, language = "en") {
     /* A saving is arithmetic on a price, so it can be no fresher than the
        price. Past the confidence window both of these go quiet rather than
        repeating yesterday's percentage as though it were today's. */
-    display_save_label: discount > 0 && priceIsCurrent ? t(language, "product.belowReferencePercent", { percent: discount }) : "",
-    display_off_label: discount > 0 && priceIsCurrent ? t(language, "product.off", { percent: discount }) : "",
+    display_save_label: trackedDrop > 0 && priceIsCurrent ? t(language, "product.trackedDropPercent", { percent: trackedDrop }) : "",
+    display_off_label: trackedDrop > 0 && priceIsCurrent ? t(language, "product.trackedDropShort", { percent: trackedDrop }) : "",
     /* Published so the pages can make the same decision once, in one place,
        instead of each re-deriving "how old is too old" from checked_at. */
     display_price_is_current: priceIsCurrent,
@@ -565,6 +606,7 @@ module.exports = {
   PUBLIC_SCORE_FLOOR,
   discountPercent,
   evidenceCount,
+  trackedDropPercent,
   localizeAvailability,
   localizeReturns,
   localizeShipping,

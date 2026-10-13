@@ -66,8 +66,9 @@ export async function FeaturedDeal({
 
           <PriceBlock
             price={deal.price}
-              coupons={deal.coupons}
+            coupons={deal.coupons}
             referencePrice={deal.referencePrice}
+            trackedDropPercent={deal.trackedDropPercent}
             currency={deal.currency}
             market={market}
             language={language}

@@ -105,7 +105,7 @@ const appCopy = {
     "app.nav.stores": "Stores",
     "app.card.searchLabel": "Search checked deals",
     "app.card.searchButton": "Search",
-    "app.card.percentBelowRef": "{percent}% below seller's list",
+    "app.price.sellerList": "seller's list price",
     "app.card.noReviews": "No product reviews yet",
     "app.card.outOfFive": "{value} out of 5",
     "app.card.fromReviews": "from {count} reviews",
@@ -291,7 +291,6 @@ const appCopy = {
     "app.deal.metaTitle": "{title}: price, Score & buying guide",
     "app.deal.metaDescription": "Check the current {store} price, OneDailyDrop Score, seller, delivery and returns for {title}.",
     "app.deal.todaysPick": "Today's #1 pick",
-    "app.deal.belowReference": "{percent}% below the seller's list price",
     "app.deal.positive": "{percent}% positive",
     "app.deal.viewDealAt": "View deal at {store}",
     "app.deal.askDelia": "Ask Delia about this",
@@ -432,7 +431,6 @@ const appCopy = {
     "app.nav.stores": "Tiendas",
     "app.card.searchLabel": "Buscar ofertas verificadas",
     "app.card.searchButton": "Buscar",
-    "app.card.percentBelowRef": "{percent}% bajo el precio de lista",
     "app.card.noReviews": "Todavía sin reseñas del producto",
     "app.card.outOfFive": "{value} de 5",
     "app.card.fromReviews": "de {count} reseñas",
@@ -618,7 +616,6 @@ const appCopy = {
     "app.deal.metaTitle": "{title}: precio, puntuación y guía de compra",
     "app.deal.metaDescription": "Consulta el precio actual en {store}, la puntuación OneDailyDrop, el vendedor, la entrega y las devoluciones de {title}.",
     "app.deal.todaysPick": "La n.º 1 de hoy",
-    "app.deal.belowReference": "{percent}% por debajo del precio de lista del vendedor",
     "app.deal.positive": "{percent}% positivas",
     "app.deal.viewDealAt": "Ver oferta en {store}",
     "app.deal.askDelia": "Pregúntale a Delia",
@@ -667,6 +664,7 @@ const appCopy = {
     "app.deal.comparableRating": "{rating}/5 con {count} opiniones en {store}",
     "app.card.trackedDrop": "{percent}% por debajo de nuestro máximo registrado",
     "app.card.trackedDropShort": "Baja {percent}%",
+    "app.price.sellerList": "precio de lista del vendedor",
   },
 
   fr: {
@@ -759,7 +757,6 @@ const appCopy = {
     "app.nav.stores": "Boutiques",
     "app.card.searchLabel": "Rechercher des offres vérifiées",
     "app.card.searchButton": "Rechercher",
-    "app.card.percentBelowRef": "{percent}% sous le prix vendeur",
     "app.card.noReviews": "Pas encore d'avis sur ce produit",
     "app.card.outOfFive": "{value} sur 5",
     "app.card.fromReviews": "sur {count} avis",
@@ -797,7 +794,6 @@ const appCopy = {
     "app.footer.legal": "Mentions légales",
     "app.footer.country": "Pays",
     "app.footer.copyright": "© {year} OneDailyDrop. Les prix et la disponibilité sont vérifiés périodiquement et peuvent changer chez le marchand à tout moment.",
-    "app.deal.belowReference": "{percent}% sous le prix de liste du vendeur",
     "app.deal.comparableTitle": "Le même produit sur {store}",
     "app.deal.comparableCheaperHere": "{amount} moins cher ici",
     "app.deal.comparableCheaperThere": "{amount} moins cher sur {store}",
@@ -806,6 +802,7 @@ const appCopy = {
     "app.deal.comparableRating": "{rating}/5 sur {count} avis sur {store}",
     "app.card.trackedDrop": "{percent}% sous notre plus haut relevé",
     "app.card.trackedDropShort": "-{percent}%",
+    "app.price.sellerList": "prix de liste du vendeur",
   },
 
   de: {
@@ -898,7 +895,6 @@ const appCopy = {
     "app.nav.stores": "Shops",
     "app.card.searchLabel": "Geprüfte Angebote suchen",
     "app.card.searchButton": "Suchen",
-    "app.card.percentBelowRef": "{percent}% unter Verkäuferpreis",
     "app.card.noReviews": "Noch keine Produktbewertungen",
     "app.card.outOfFive": "{value} von 5",
     "app.card.fromReviews": "aus {count} Bewertungen",
@@ -936,7 +932,6 @@ const appCopy = {
     "app.footer.legal": "Rechtliches",
     "app.footer.country": "Land",
     "app.footer.copyright": "© {year} OneDailyDrop. Preise und Verfügbarkeit werden regelmäßig geprüft und können sich beim Händler jederzeit ändern.",
-    "app.deal.belowReference": "{percent}% unter dem Listenpreis des Verkäufers",
     "app.deal.comparableTitle": "Dasselbe Produkt bei {store}",
     "app.deal.comparableCheaperHere": "{amount} günstiger hier",
     "app.deal.comparableCheaperThere": "{amount} günstiger bei {store}",
@@ -945,6 +940,7 @@ const appCopy = {
     "app.deal.comparableRating": "{rating}/5 aus {count} Bewertungen bei {store}",
     "app.card.trackedDrop": "{percent}% unter unserem erfassten Höchstpreis",
     "app.card.trackedDropShort": "-{percent}%",
+    "app.price.sellerList": "Listenpreis des Verkäufers",
   },
 };
 
