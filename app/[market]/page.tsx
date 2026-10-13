@@ -16,6 +16,7 @@ import { DealCard } from "@/components/deal/DealCard";
 import { NextLiveDrop } from "@/components/live/NextLiveDrop";
 import { AmazonPicks } from "@/components/site/AmazonPicks";
 import { PartnerPicks } from "@/components/site/PartnerPicks";
+import { MerchandisingShelves } from "@/components/site/MerchandisingShelves";
 
 export async function generateMetadata({
   params,
@@ -84,6 +85,7 @@ export default async function MarketHome({ params }: PageProps<"/[market]">) {
             misleading the way a stale catalogue would. */}
         <div className="mt-4 text-left">
           <AmazonPicks market={market} />
+          <MerchandisingShelves market={market} language={language} />
         </div>
       </div>
     );
@@ -171,6 +173,8 @@ export default async function MarketHome({ params }: PageProps<"/[market]">) {
       {/* Directly under the hero, and only when a drop is actually scheduled:
           it renders nothing the rest of the time. */}
       <NextLiveDrop market={market} />
+
+      <MerchandisingShelves market={market} language={language} />
 
       {/* ---------------------------------------------------------- categories */}
       <section aria-labelledby="categories-title" className="mt-20">

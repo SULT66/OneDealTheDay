@@ -13,6 +13,7 @@ import {
 } from "@/lib/catalog";
 import { categoryName, countryName, getLanguage, marketAlternates, t } from "@/lib/i18n";
 import { DealListing } from "@/components/catalog/DealListing";
+import { MerchandisingShelves } from "@/components/site/MerchandisingShelves";
 
 export function generateStaticParams() {
   return getMarkets().flatMap((m) =>
@@ -66,6 +67,9 @@ export default async function CategoryPage({
   ] };
   return (<>
     {!filtered && <StructuredData data={schema} />}
+    {!filtered && <div className="mx-auto max-w-7xl px-4 sm:px-6">
+      <MerchandisingShelves market={market} language={language} category={category.name} />
+    </div>}
     <DealListing
       market={market}
       basePath={`/${market}/category/${slug}`}

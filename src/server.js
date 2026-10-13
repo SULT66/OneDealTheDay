@@ -72,6 +72,7 @@ const { startCacheWarmer, pathsFor } = require("./cacheWarmer");
 const { readEbayStock, refreshDropStock, ebayItemIdFrom } = require("./liveStock");
 const { comparableFor, refreshComparables } = require("./comparables");
 const { updateTrackedPrices } = require("./trackedPrice");
+const { runMerchandising, getMerchandisingShelves, merchandisingStatus } = require("./merchandising");
 const { indexEvidence, isIndexableProduct } = require("./indexability");
 const { missingQueries, pruneSearches, searchDemand } = require("./searchQueries");
 const { checkAmazonLinks } = require("./amazonLinkHealth");
@@ -3215,6 +3216,44 @@ app.get("/api/admin/automation-status", admin, (req,res) => {
     distribution
   });
 });
+
+// Reads only: visiting a shelf never triggers a paid research call.
+app.get("/api/merchandising", (req, res) => {
+  const marketCode = normalizeMarket(req.query.market) || req.market || "us";
+  if (!merchandisingEnabled) return res.set("Cache-Control", "no-store").json({market:marketCode, shelves:[]});
+  const language = resolveLanguage(req, res, marketCode);
+  const category = String(req.query.category || "").trim().toLowerCase();
+  const shelves = getMerchandisingShelves(db, {market:marketCode, category:category || undefined, limit:3})
+    .map(shelf => ({
+      id:shelf.id, title:shelf.title, kind:shelf.kind, confidence:shelf.confidence,
+      sourceUrls:shelf.sourceUrls || [], endsAt:shelf.endsAt,
+      products:shelf.products
+        .filter(product => !category || String(product.normalized_category || product.category).toLowerCase() === category)
+        .map(product => presentProduct(localizeProduct({...product, deal_url:dealPath(product)}, language), language))
+    })).filter(shelf => shelf.products.length);
+  return res.set("Cache-Control", "no-store").json({market:marketCode, shelves});
+});
+app.get("/api/admin/merchandising", admin, (req, res) => {
+  const marketCode = normalizeMarket(req.query.market);
+  if (!marketCode) return res.status(400).json({error:"Choose a supported market."});
+  return res.set("Cache-Control", "no-store").json({
+    market:marketCode, enabled:merchandisingEnabled,
+    researchEnabled:merchandisingResearchMarkets.has(marketCode),
+    schedule:{catalog:"hourly", externalResearch:"at most once per 24 hours", calendar:"weekly"},
+    status:merchandisingStatus(db, {market:marketCode}),
+    performance:merchandisingPerformance(marketCode)
+  });
+});
+app.post("/api/admin/merchandising/run", admin, express.json({limit:"1kb"}), (req, res) => {
+  const marketCode = normalizeMarket(req.body?.market);
+  if (!marketCode) return res.status(400).json({error:"Choose a supported market."});
+  if (!merchandisingEnabled) return res.status(409).json({error:"Merchandising is disabled."});
+  // Paid calls retain the same daily throttle on manual and scheduled runs.
+  runMerchandising(db, {market:marketCode, research:merchandisingResearchMarkets.has(marketCode)})
+    .then(() => publicHtmlCache.clear())
+    .catch(error => console.error(`[merchandising] ${marketCode}: ${error.message}`));
+  return res.status(202).json({market:marketCode, status:"accepted"});
+});
 /*
  * The way out of the shop directory.
  *
@@ -4240,6 +4279,46 @@ function backfillBrands() {
   if (rows.length) console.log(`Brand intelligence reviewed ${rows.length} existing products`);
 }
 
+const merchandisingEnabled = String(process.env.MERCHANDISING_ENABLED || "true").toLowerCase() !== "false";
+const merchandisingResearchMarkets = new Set(
+  String(process.env.MERCHANDISING_RESEARCH_MARKETS || c.primaryMarket)
+    .split(",").map(normalizeMarket).filter(code => c.markets.includes(code))
+);
+function merchandisingPerformance(marketCode) {
+  const since = new Date(Date.now() - 7 * 86400000).toISOString();
+  const internalFilter = "substr(session_id,1,9)<>'internal_'";
+  const impressions = db.prepare(`SELECT placement,COUNT(*) AS count FROM analytics_events
+    WHERE market=? AND occurred_at>=? AND event_type='impression' AND ${internalFilter}
+      AND placement IN ('seasonal_card','trend_card') GROUP BY placement`).all(marketCode, since);
+  const clicks = db.prepare(`SELECT placement,COUNT(*) AS count FROM clicks
+    WHERE market=? AND clicked_at>=? AND action_type='view_details' AND ${internalFilter}
+      AND placement IN ('seasonal_card','trend_card') GROUP BY placement`).all(marketCode, since);
+  return {days:7, purchasesAvailable:false, shelves:["seasonal_card", "trend_card"].map(placement => ({
+    placement, impressions:impressions.find(row => row.placement === placement)?.count || 0,
+    detailClicks:clicks.find(row => row.placement === placement)?.count || 0
+  }))};
+}
+let merchandisingSweepRunning = false;
+async function merchandisingSweep() {
+  if (!merchandisingEnabled || merchandisingSweepRunning) return;
+  merchandisingSweepRunning = true;
+  try {
+    for (const marketCode of c.markets) {
+      try {
+        await runMerchandising(db, {market:marketCode, research:merchandisingResearchMarkets.has(marketCode)});
+      } catch (error) {
+        console.error(`[merchandising] ${marketCode}: ${error.message}`);
+      }
+    }
+    publicHtmlCache.clear();
+  } finally {
+    merchandisingSweepRunning = false;
+  }
+}
+if (merchandisingEnabled && c.liveRefreshEnabled) {
+  cron.schedule("23 * * * *", merchandisingSweep, {timezone:"UTC"});
+}
+
 for (const marketCode of c.markets) {
   const selectedMarket = c.marketConfig(marketCode);
   cron.schedule(
@@ -4557,6 +4636,7 @@ app.use((error, req, res, next) => {
   await bootstrapPersonalPostgres(db);
   app.listen(c.port, () => {
     console.log(`http://localhost:${c.port}`);
+    if (merchandisingEnabled && c.liveRefreshEnabled) setImmediate(merchandisingSweep);
     /*
      * Keep the entry pages rendered so a visitor does not have to be the
      * one who renders them. Only in production: locally the cost is a

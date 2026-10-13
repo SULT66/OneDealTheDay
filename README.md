@@ -128,6 +128,52 @@ deduplication prevents repeated cards while retaining the tracked variant URLs.
 
 The ranking compares landed price, product evidence, seller reliability, demand signals, delivery and returns. A public score appears only after an offer clears the editorial gate; no-return listings, unknown delivery costs and disproportionate shipping charges are excluded from the Daily Drop. Previous products are archived and the best qualified offers are published.
 
+## Four-agent merchandising
+
+The existing Azure server runs four coordinated roles: regional holiday planning,
+current shopping-interest research, qualified catalogue matching, and shelf
+publication. These are scheduled server jobs, not four permanent chat sessions.
+The holiday calendar updates weekly, catalogue placements hourly and after
+retailer refreshes, and external research at most once per 24 hours per enabled
+market. The paid research uses the existing server-only `OPENAI_API_KEY`, one
+bounded Responses request with at most two web-search calls and 2,400 output
+tokens. Failed lookups are throttled too and retain unexpired earlier evidence.
+
+Current seasonal and interest shelves appear above the ordinary catalogue on
+the homepage and unfiltered first category page. Explicit price/quality sorts
+and the Daily Drop editorial rules are preserved. Shelf matches must have
+current checked prices, known stock, correct regional currency, delivery costs,
+accepted returns, safe tracked links and no recorded link failure. Unknown or
+stale data produces a shorter shelf or no shelf; missing products are never
+invented or imported from unconnected shops. Calendar categories are planning
+hypotheses, while external interest signals retain their retrieved citations;
+neither is presented as verified global sales or guaranteed holiday delivery.
+
+`/admin#agents` shows the four roles, last results, missing catalogue matches,
+upcoming promotion windows, and seven-day shelf impressions/product opens.
+Owner sessions are excluded; shelf-attributed affiliate purchases are not
+available. The run button shares the scheduled job's persisted daily research
+throttle. Public reads at `/api/merchandising` never trigger paid calls and
+revalidate stock, links and price expiry. Rendered pages can retain their normal
+ten-minute HTML cache; prices and expiry therefore update with that same bound.
+
+Optional server-only Azure App Settings:
+
+- `MERCHANDISING_ENABLED=false` disables scheduled/manual placement and hides shelves;
+- `MERCHANDISING_RESEARCH_MARKETS=us` selects paid research markets (primary market
+  by default; supported codes are `us,ca,uk,fr,de`);
+- `OPENAI_SHOPPING_MODEL` shares the shopping assistant's existing model override.
+
+Signals, daily-throttle state and a per-market lease are kept in the existing
+catalogue SQLite database. The lease prevents duplicate work for workers sharing
+that database; separately replicated catalogues require a shared scheduler or
+database before scaling across multiple independent instances. This curated
+calendar covers major shopping occasions rather than every local holiday,
+school opening or retailer-specific promotion.
+
+Run `npm run test:merchandising` for the calendar, evidence validation, catalogue
+selection and transactional orchestration checks.
+
 ## AI Shopping Assistant
 
 The assistant uses the OpenAI Responses API with web search plus two server-side catalog tools: qualified regional product search and tracked price history. It keeps the API key on the server, does not persist conversations through the API, and never exposes unqualified catalog scores.
