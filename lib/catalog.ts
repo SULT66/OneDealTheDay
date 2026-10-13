@@ -5,6 +5,7 @@ import categoriesData from "@/site-content/categories.json";
 import marketsData from "@/site-content/markets.json";
 import type { Category, Deal, DealFilter, Market } from "./types";
 import { applyFilter, sortDeals } from "./filter";
+import { chooseTopPicks } from "./topPicks";
 import { categoryName } from "./i18n";
 import {
   adaptPriceHistory,
@@ -427,12 +428,12 @@ export async function getTodaysDrop(marketCode: string): Promise<Deal | undefine
  * The homepage shortlist.
  *
  * The homepage no longer leads with the daily drop, so it needs its own list:
- * the best-scoring offers in the market, capped so a single category or
- * retailer cannot fill the whole grid. Without the caps the grid fills with
- * whatever the largest feed happens to score well on — twelve desk gadgets
- * from one source is a worse homepage than eight varied ones.
+ * the best-scoring offers in the market, capped so a single category cannot
+ * fill the whole grid. Without that cap the grid fills with whatever the
+ * largest feed happens to score well on — twelve desk gadgets from one source
+ * is a worse homepage than eight varied ones.
  *
- * These caps are a front-end stopgap. Diversity belongs in the backend ranker
+ * The caps are a front-end stopgap. Diversity belongs in the backend ranker
  * next to the daily selection; this keeps the page honest until it lives there.
  * A thin catalog can starve the caps, and a short grid is the right answer —
  * it is never padded back out with the items the caps just rejected.
@@ -447,44 +448,7 @@ export async function getTopPicks(
      market would — every category here has well under 300 listings except
      Gifts, which the caps below only ever take perCategory of anyway. */
   const deals = await fetchMarketCatalog(marketCode, 300);
-  const picked: Deal[] = [];
-  const categoryCount = new Map<string, number>();
-  const retailerCount = new Map<string, number>();
-
-  for (const deal of deals) {
-    if (picked.length >= limit) break;
-    /*
-     * A shelf called "Best right now" may only hold things we can call best.
-     *
-     * It took the top of the catalogue by score and printed whatever came, so
-     * once the score stopped flattering thin listings the grid filled with
-     * 67s and 68s under a heading claiming they were the best on the site.
-     * An unscored listing is not a bad one — it is one we have no reviews for
-     * — and it belongs in the category pages, not here.
-     *
-     * The grid is allowed to come back short. Padding it with the listings
-     * this line just rejected is how it went wrong in the first place.
-     */
-    if (deal.score == null) continue;
-    if ((categoryCount.get(deal.category) ?? 0) >= perCategory) continue;
-    if ((retailerCount.get(deal.retailer) ?? 0) >= perRetailer) continue;
-    picked.push(deal);
-    categoryCount.set(deal.category, (categoryCount.get(deal.category) ?? 0) + 1);
-    retailerCount.set(deal.retailer, (retailerCount.get(deal.retailer) ?? 0) + 1);
-  }
-  /*
-   * Best first, because the section calls itself "Best right now".
-   *
-   * The caps above pick a spread across categories and shops, which is what
-   * makes the grid worth reading, but they walk the catalogue in its own order
-   * and the result came out 88, 88, 90, 90, 89, 89. A section promising the
-   * highest scoring that lists a 90 below an 88 reads as a broken ranking, and
-   * a reviewer read it exactly that way.
-   *
-   * Only the order changes; the same items are chosen. An item the backend has
-   * not scored sorts last rather than counting as a zero.
-   */
-  return picked.sort((left, right) => (right.score ?? -1) - (left.score ?? -1));
+  return chooseTopPicks(deals, { limit, perCategory, perRetailer });
 }
 
 /**
