@@ -4,7 +4,7 @@ const { calendarSignals } = require('./merchandisingCalendar');
 const { internalTrendSignals, researchTrendSignals } = require('./merchandisingTrends');
 const { selectMerchandise, isPromotionEligible, promotionExpiresAt, merchandisingDiagnostics, matchesQuery, signalRejectionReasons } = require('./merchandisingSelection');
 const { PRICE_CONFIDENT_HOURS } = require('./productPresentation');
-const { discoveryKeywords, INTERVAL_MS } = require('./merchandisingDiscovery');
+const { discoveryKeywords, INTERVAL_MS, POLICY_VERSION } = require('./merchandisingDiscovery');
 const { withVerifiedRetailerTerms } = require('./verifiedRetailerTerms');
 const DAY = 86400000;
 const active = new WeakMap();
@@ -158,7 +158,7 @@ async function runMerchandising(db, { market = 'us', now = Date.now(), research 
     let signals = signalsFor(db, market, now);
     const previousDiscovery = storedStatus(db, market, 'discovery');
     if (typeof discover === 'function' &&
-        (!previousDiscovery?.details.attemptedAt || now - previousDiscovery.details.attemptedAt >= INTERVAL_MS)) {
+        (!previousDiscovery?.details.attemptedAt || previousDiscovery.details.policyVersion !== POLICY_VERSION || now - previousDiscovery.details.attemptedAt >= INTERVAL_MS)) {
       const keywords = discoveryKeywords(signals, {market, now});
       if (keywords.length) {
         const attemptedAt = now;
@@ -171,6 +171,7 @@ async function runMerchandising(db, { market = 'us', now = Date.now(), research 
         if (Number.isFinite(stamp(result.observedAt))) now = Math.max(now, stamp(result.observedAt));
         status(db, market, 'discovery', now, result.status || 'failed', {
           attemptedAt: result.status === 'busy' ? previousDiscovery?.details.attemptedAt || null : attemptedAt,
+          policyVersion: result.status === 'busy' ? previousDiscovery?.details.policyVersion || null : POLICY_VERSION,
           keywords, count:result.count || 0, reason:result.reason || null,
         });
         signals = signalsFor(db, market, now);

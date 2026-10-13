@@ -110,3 +110,10 @@ assert.deepEqual(signalRejectionReasons({...onTime,delivery_estimated_at:iso(now
 const reviewedFeed=product(104,{source:'feed-tribesigns',retailer_name:'Tribesigns'});
 assert.equal(selectMerchandise([reviewedFeed,valid],[signal()],{now,limitPerSignal:1})[0].products[0].source,'ebay');
 assert.equal(isPromotionEligible(product(105,{rating:0,review_count:0}),{now}),false,'Established seller is not a substitute for product reviews on featured shelves');
+const consoleSignal=signal({kind:'trend',queries:['Nintendo Switch 2 console']});
+const oldConsole=product(110,{title:'New Nintendo Switch v2 Console Gaming System HAC-001(-01) Red/Blue'});
+const newConsole=product(111,{title:'Nintendo Switch 2 Console with Mario Kart Bundle'});
+assert.deepEqual(selectMerchandise([oldConsole,newConsole],[consoleSignal],{now})[0].products.map(p=>p.id),[111],
+  'Product generations must not be discarded as if they were price constraints');
+const phoneSignal=signal({kind:'trend',queries:['iPhone 15']});
+assert.equal(selectMerchandise([product(112,{title:'Apple iPhone 14 Unlocked Smartphone'})],[phoneSignal],{now})[0].products.length,0);
