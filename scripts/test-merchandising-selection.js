@@ -4,7 +4,7 @@ process.env.EBAY_CLIENT_ID = "merchandising-test";
 process.env.EBAY_CLIENT_SECRET = "merchandising-test";
 process.env.EBAY_CAMPAIGN_ID = "1234567890";
 process.env.PUBLIC_PRODUCT_SOURCES = "ebay";
-const { isPromotionEligible, promotionExpiresAt, selectMerchandise } = require("../src/merchandisingSelection");
+const { isPromotionEligible, promotionExpiresAt, selectMerchandise, merchandisingDiagnostics } = require("../src/merchandisingSelection");
 const { PRICE_CONFIDENT_HOURS } = require("../src/productPresentation");
 const now = Date.parse("2026-10-13T16:00:00Z");
 const iso = at => new Date(at).toISOString();
@@ -62,3 +62,18 @@ const varied = [
 assert.deepEqual(selectMerchandise(varied, [signal()], { now, limitPerSignal: 2 })[0].products.map(row => row.id), [21, 23],
   "qualified matches balance retailer and category");
 console.log("merchandising selection: all checks passed");
+const deskSignal = signal({kind:'trend',queries:['desk']});
+const desk = product(70,{title:'Solid Wood Computer Desk',category:'Furniture'});
+const chair = product(71,{title:'Office Desk Chair',category:'Furniture'});
+const drawer = product(72,{title:'Under Desk Drawer Organizer',category:'Furniture'});
+const bundled = product(73,{title:'Computer Desk with Drawer',category:'Furniture'});
+assert.deepEqual(selectMerchandise([desk,chair,drawer,bundled],[deskSignal],{now})[0].products.map(p=>p.id),[70,73]);
+const failedDesk = product(74,{title:'Standing Computer Desk',link_last_status:403,link_consecutive_failures:1,shipping_summary:''});
+const diagnostics = merchandisingDiagnostics([desk,chair,failedDesk],[deskSignal],{now});
+assert.equal(diagnostics.assessed,3);
+assert.equal(diagnostics.signals[0].matched,2,'desk chairs must not inflate desk matches');
+assert.equal(diagnostics.signals[0].eligible,1);
+assert.equal(diagnostics.signals[0].rejectionCounts.link_check_failed,1);
+assert.equal(diagnostics.signals[0].rejectionCounts.shipping_unknown,1);
+assert.equal(diagnostics.signals[0].examples[0].linkStatus,403);
+assert.deepEqual(diagnostics.signals[0].examples[0].reasons.sort(),['link_check_failed','shipping_unknown']);

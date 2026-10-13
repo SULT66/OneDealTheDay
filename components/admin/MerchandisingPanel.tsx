@@ -3,12 +3,24 @@
 import { useCallback, useEffect, useState } from "react";
 
 type Stage = { status: string; updated_at: number; details: { count?: number; reason?: string; gaps?: Array<{id: string; title: string}> } } | null;
+type Diagnostic = { assessed:number; eligible:number; rejectionCounts:Record<string,number>;
+  signals:Array<{id:string;title:string;queries:string[];matched:number;eligible:number;rejectionCounts:Record<string,number>;
+    examples:Array<{id:number;title:string;reasons:string[];linkStatus:number|null;linkFailures:number}>}> };
+const REASONS:Record<string,string> = {
+  not_public:'Source disabled or listing not public', wrong_market_or_currency:'Wrong market or currency',
+  unsafe_link_or_image:'Invalid product link or image', link_check_failed:'Link check failed',
+  price_check_missing:'Price check missing', price_check_in_future:'Price checked after this run started', price_stale:'Price needs checking again',
+  offer_incomplete:'Offer data incomplete', stock_not_confirmed:'Stock not confirmed', returns_unknown:'Return terms missing',
+  returns_refused:'Returns refused', shipping_unknown:'Shipping cost missing', shipping_expensive:'Shipping too expensive',
+  rating_below_bar:'Product rating below threshold', seller_below_bar:'Seller record below threshold',
+  basic_eligibility_failed:'Basic offer checks failed', quality_below_bar:'Offer quality below threshold'
+};
 type Snapshot = {
   enabled: boolean; researchEnabled: boolean;
   performance: {days: number; purchasesAvailable: boolean; shelves: Array<{placement: string; impressions: number; detailClicks: number}>};
   status: { stages: Record<string, Stage>; futureEvents: Array<{id: string; title: string; preparationAt?: string; startsAt: string}>;
     shelves: Array<{id: string; title: string; productCount: number}>;
-    lastRun: {status: string; started_at: number} | null };
+    lastRun: {status: string; started_at: number} | null; diagnostics?:Diagnostic };
 };
 const ROLES = [
   { title: "1 · Holidays", stages: ["calendar"], description: "Plans regional occasions and promotion windows." },
@@ -89,6 +101,21 @@ export function MerchandisingPanel({ adminKey, active }: { adminKey: string; act
       {data.status.shelves.length ? <ul className="mt-2 text-sm text-fg-muted">
         {data.status.shelves.map(shelf => <li key={shelf.id}>{shelf.title} · {shelf.productCount} products</li>)}
       </ul> : <p className="mt-2 text-sm text-fg-muted">No qualifying matches yet. Ordinary catalogue listings remain available.</p>}
+      {data.status.diagnostics && <div className="mt-6 text-sm text-fg-muted">
+        <h3 className="font-semibold text-fg">Why products are not placed</h3>
+        <p className="mt-2">{data.status.diagnostics.assessed} published listings checked · {data.status.diagnostics.eligible} pass all promotion checks.</p>
+        <p className="mt-1 text-xs">One listing can fail several checks. Counts overlap. These checks use current catalogue data.</p>
+        <ul className="mt-2">{Object.entries(data.status.diagnostics.rejectionCounts).sort((a,b)=>b[1]-a[1]).map(([reason,count]) =>
+          <li key={reason}>{REASONS[reason] || reason}: {count}</li>)}</ul>
+        {data.status.diagnostics.signals.map(signal => <details key={signal.id} className="mt-3 rounded-xl border border-border p-3">
+          <summary className="cursor-pointer">{signal.title} · {signal.matched} matching listings · {signal.eligible} eligible</summary>
+          <p className="mt-2">Matching queries: {signal.queries.join(', ')}</p>
+          {signal.matched === 0 && <p>No actual product matches these queries.</p>}
+          <ul className="mt-2">{Object.entries(signal.rejectionCounts).map(([reason,count]) => <li key={reason}>{REASONS[reason] || reason}: {count}</li>)}</ul>
+          {signal.examples.map(example => <p key={example.id} className="mt-2 text-xs">#{example.id} {example.title}: {example.reasons.map(reason=>REASONS[reason] || reason).join('; ')}
+            {example.reasons.includes('link_check_failed') ? ` · HTTP ${example.linkStatus ?? 'no response'} · ${example.linkFailures} failed checks` : ''}</p>)}
+        </details>)}
+      </div>}
       <h3 className="mt-6 font-semibold text-fg">Shelf response · last {data.performance.days} days</h3>
       <ul className="mt-2 text-sm text-fg-muted">{data.performance.shelves.map(shelf => <li key={shelf.placement}>
         {shelf.placement === "seasonal_card" ? "Seasonal" : "Interest"}: {shelf.impressions} impressions · {shelf.detailClicks} product opens

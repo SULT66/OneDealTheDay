@@ -29,23 +29,34 @@ function linkHasFailure(product) {
     (status != null && !(Number(status) >= 200 && Number(status) < 400));
 }
 
-function isPromotionEligible(product, { market = "us", now = Date.now() } = {}) {
+function promotionRejectionReasons(product, { market = "us", now = Date.now() } = {}) {
   const code = normalizeMarket(market);
-  if (!code || !product || !isPublicProduct(product)) return false;
+  if (!code || !product || !Number.isFinite(now)) return ['invalid_market_or_product'];
+  const reasons = [];
+  if (!isPublicProduct(product)) reasons.push('not_public');
   if (String(product.market || "").toLowerCase() !== code ||
-      String(product.currency || "").toUpperCase() !== marketDefinition(code).currency) return false;
-  if (!safeHttps(product.affiliate_url) || !safeHttps(product.image_url) || linkHasFailure(product)) return false;
+      String(product.currency || "").toUpperCase() !== marketDefinition(code).currency) reasons.push('wrong_market_or_currency');
+  if (!safeHttps(product.affiliate_url) || !safeHttps(product.image_url)) reasons.push('unsafe_link_or_image');
+  if (linkHasFailure(product)) reasons.push('link_check_failed');
   const checkedAt = Date.parse(product.checked_at || "");
-  if (!Number.isFinite(checkedAt) || checkedAt > now || !Number.isFinite(now) ||
-      now >= checkedAt + PRICE_CONFIDENT_HOURS * 3600000) return false;
+  if (!Number.isFinite(checkedAt)) reasons.push('price_check_missing');
+  else if (checkedAt > now) reasons.push('price_check_in_future');
+  else if (now >= checkedAt + PRICE_CONFIDENT_HOURS * 3600000) reasons.push('price_stale');
   const status = offerStatus({ ...product, availability: String(product.availability || "").replace(/_/g, " ") }, { now });
-  if (!status.publishable || !status.price.is_current || status.availability !== "in_stock") return false;
-  if (!status.returns.allowed || returnsNotAccepted(product) || status.delivery.cost == null ||
-      status.delivery.cost > Number(product.current_price) * 0.5) return false;
-  if (Number(product.rating) > 0 && Number(product.rating) < 4.3) return false;
-  if (status.score_missing_reasons.some(item => item.reason === "seller_record_below_bar")) return false;
-  return isEligible(product, { currency: marketDefinition(code).currency, maximumShippingRatio: 0.5 }) &&
-    commerceQuality(product) >= 0.45;
+  if (!status.publishable) reasons.push('offer_incomplete');
+  if (status.availability !== 'in_stock') reasons.push('stock_not_confirmed');
+  if (status.returns.allowed == null) reasons.push('returns_unknown');
+  else if (!status.returns.allowed || returnsNotAccepted(product)) reasons.push('returns_refused');
+  if (status.delivery.cost == null) reasons.push('shipping_unknown');
+  else if (status.delivery.cost > Number(product.current_price) * 0.5) reasons.push('shipping_expensive');
+  if (Number(product.rating) > 0 && Number(product.rating) < 4.3) reasons.push('rating_below_bar');
+  if (status.score_missing_reasons.some(item => item.reason === 'seller_record_below_bar')) reasons.push('seller_below_bar');
+  if (!isEligible(product, { currency: marketDefinition(code).currency, maximumShippingRatio: 0.5 })) reasons.push('basic_eligibility_failed');
+  if (commerceQuality(product) < 0.45) reasons.push('quality_below_bar');
+  return reasons;
+}
+function isPromotionEligible(product, options = {}) {
+  return promotionRejectionReasons(product, options).length === 0;
 }
 
 const stamp = value => typeof value === "number" ? value : Date.parse(value || "");
@@ -61,6 +72,9 @@ function matchesQuery(product, query) {
   // Every query word must describe the actual product. A category such as
   // Home is not evidence that a mattress belongs to a Halloween shelf.
   const headline = normalizedTitle(`${product.title || ""} ${product.brand || ""}`);
+  // "Desk chair" and "under desk drawer" name another product, not a desk.
+  if (headTerm(query) === 'desk' && /\b(?:chair|drawer|mat|organizer|organiser|lamp|riser)\b/.test(headline) &&
+      !/\bdesk\s+(?:with|includes|including)\b/.test(headline)) return false;
   const words = headline.split(" ");
   const stems = word => [...new Set([word, word.replace(/ies$/, "y"), word.replace(/es$/, ""), word.replace(/s$/, "")])];
   if (!terms.every(term => words.some(word => stems(word).some(stem => stems(term).includes(stem))))) return false;
@@ -115,4 +129,20 @@ function promotionExpiresAt(product) {
   return Number.isFinite(at) ? new Date(at + PRICE_CONFIDENT_HOURS * 3600000).toISOString() : null;
 }
 
-module.exports = { isPromotionEligible, promotionExpiresAt, selectMerchandise };
+function merchandisingDiagnostics(rows, signals, { market = 'us', now = Date.now() } = {}) {
+  const assessed = array(rows).filter(row => row.market === market && row.status === 'published')
+    .map(row => ({ row, reasons: promotionRejectionReasons(row, {market, now}) }));
+  const rejectionCounts = {};
+  for (const item of assessed) for (const reason of item.reasons) rejectionCounts[reason] = (rejectionCounts[reason] || 0) + 1;
+  return { assessed: assessed.length, eligible: assessed.filter(item => !item.reasons.length).length, rejectionCounts,
+    signals: array(signals).filter(signal => activeSignal(signal, market, now)).map(signal => {
+      const matches = assessed.filter(item => array(signal.queries).some(query => matchesQuery(item.row, query)));
+      const rejected = {};
+      for (const item of matches) for (const reason of item.reasons) rejected[reason] = (rejected[reason] || 0) + 1;
+      return { id:signal.id, title:signal.title, queries:signal.queries, matched:matches.length,
+        eligible:matches.filter(item => !item.reasons.length).length, rejectionCounts:rejected,
+        examples:matches.filter(item => item.reasons.length).slice(0,3).map(item => ({id:item.row.id,title:item.row.title,reasons:item.reasons,
+          linkStatus:item.row.link_last_status ?? null, linkFailures:item.row.link_consecutive_failures ?? 0})) };
+    }) };
+}
+module.exports = { isPromotionEligible, promotionRejectionReasons, promotionExpiresAt, selectMerchandise, merchandisingDiagnostics };

@@ -2,7 +2,7 @@
 const { randomUUID } = require('node:crypto');
 const { calendarSignals } = require('./merchandisingCalendar');
 const { internalTrendSignals, researchTrendSignals } = require('./merchandisingTrends');
-const { selectMerchandise, isPromotionEligible, promotionExpiresAt } = require('./merchandisingSelection');
+const { selectMerchandise, isPromotionEligible, promotionExpiresAt, merchandisingDiagnostics } = require('./merchandisingSelection');
 const { PRICE_CONFIDENT_HOURS } = require('./productPresentation');
 const DAY = 86400000;
 const active = new WeakMap();
@@ -184,6 +184,7 @@ function merchandisingStatus(db, { market = 'us', now = Date.now() } = {}) {
   return { market, stages, roles: { holiday: stages.calendar, demand: { internal: stages.internal, research: stages.research }, catalog: stages.selection, placement: stages.placement },
     futureEvents: signalsFor(db, market, now, true).filter(s => stamp(s.startsAt) > now).map(({ id, title, preparationAt, startsAt, endsAt }) => ({ id, title, preparationAt, startsAt, endsAt })),
     lastRun: db.prepare('SELECT * FROM merchandising_runs WHERE market=? ORDER BY started_at DESC LIMIT 1').get(market) || null,
+    diagnostics: merchandisingDiagnostics(catalogRows(db, market), signalsFor(db, market, now), {market, now}),
     shelves: getMerchandisingShelves(db, { market, now }).map(({ products, ...s }) => ({ ...s, productCount: products.length })) };
 }
 module.exports = { ensureMerchandisingSchema, runMerchandising, getMerchandisingShelves, merchandisingStatus };
