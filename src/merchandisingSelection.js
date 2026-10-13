@@ -30,34 +30,35 @@ function linkHasFailure(product) {
     (status != null && !(Number(status) >= 200 && Number(status) < 400));
 }
 
-function promotionRejectionReasons(product, { market = "us", now = Date.now() } = {}) {
+function* promotionRejections(product, { market = "us", now = Date.now() } = {}) {
   const code = normalizeMarket(market);
-  if (!code || !product || !Number.isFinite(now)) return ['invalid_market_or_product'];
-  const reasons = [];
-  if (!isPublicProduct(product)) reasons.push('not_public');
+  if (!code || !product || !Number.isFinite(now)) { yield 'invalid_market_or_product'; return; }
+  if (!isPublicProduct(product)) yield 'not_public';
   if (String(product.market || "").toLowerCase() !== code ||
-      String(product.currency || "").toUpperCase() !== marketDefinition(code).currency) reasons.push('wrong_market_or_currency');
-  if (!safeHttps(product.affiliate_url) || !safeHttps(product.image_url)) reasons.push('unsafe_link_or_image');
-  if (linkHasFailure(product)) reasons.push('link_check_failed');
+      String(product.currency || "").toUpperCase() !== marketDefinition(code).currency) yield 'wrong_market_or_currency';
+  if (!safeHttps(product.affiliate_url) || !safeHttps(product.image_url)) yield 'unsafe_link_or_image';
+  if (linkHasFailure(product)) yield 'link_check_failed';
   const checkedAt = Date.parse(product.checked_at || "");
-  if (!Number.isFinite(checkedAt)) reasons.push('price_check_missing');
-  else if (checkedAt > now) reasons.push('price_check_in_future');
-  else if (now >= checkedAt + PRICE_CONFIDENT_HOURS * 3600000) reasons.push('price_stale');
+  if (!Number.isFinite(checkedAt)) yield 'price_check_missing';
+  else if (checkedAt > now) yield 'price_check_in_future';
+  else if (now >= checkedAt + PRICE_CONFIDENT_HOURS * 3600000) yield 'price_stale';
   const status = offerStatus({ ...product, availability: String(product.availability || "").replace(/_/g, " ") }, { now });
-  if (!status.publishable) reasons.push('offer_incomplete');
-  if (status.availability !== 'in_stock') reasons.push('stock_not_confirmed');
-  if (status.returns.allowed == null || unknownRetailerTerms(product.return_summary)) reasons.push('returns_unknown');
-  else if (!status.returns.allowed || returnsNotAccepted(product)) reasons.push('returns_refused');
-  if (status.delivery.cost == null) reasons.push('shipping_unknown');
-  else if (status.delivery.cost > Number(product.current_price) * 0.5) reasons.push('shipping_expensive');
-  if (Number(product.rating) > 0 && Number(product.rating) < 4.3) reasons.push('rating_below_bar');
-  if (status.score_missing_reasons.some(item => item.reason === 'seller_record_below_bar')) reasons.push('seller_below_bar');
-  if (!isEligible(product, { currency: marketDefinition(code).currency, maximumShippingRatio: 0.5 })) reasons.push('basic_eligibility_failed');
-  if (commerceQuality(product) < 0.45) reasons.push('quality_below_bar');
-  return reasons;
+  if (!status.publishable) yield 'offer_incomplete';
+  if (status.availability !== 'in_stock') yield 'stock_not_confirmed';
+  if (status.returns.allowed == null || unknownRetailerTerms(product.return_summary)) yield 'returns_unknown';
+  else if (!status.returns.allowed || returnsNotAccepted(product)) yield 'returns_refused';
+  if (status.delivery.cost == null) yield 'shipping_unknown';
+  else if (status.delivery.cost > Number(product.current_price) * 0.5) yield 'shipping_expensive';
+  if (Number(product.rating) > 0 && Number(product.rating) < 4.3) yield 'rating_below_bar';
+  if (status.score_missing_reasons.some(item => item.reason === 'seller_record_below_bar')) yield 'seller_below_bar';
+  if (!isEligible(product, { currency: marketDefinition(code).currency, maximumShippingRatio: 0.5 })) yield 'basic_eligibility_failed';
+  if (commerceQuality(product) < 0.45) yield 'quality_below_bar';
+}
+function promotionRejectionReasons(product, options = {}) {
+  return [...promotionRejections(product, options)];
 }
 function isPromotionEligible(product, options = {}) {
-  return promotionRejectionReasons(product, options).length === 0;
+  return promotionRejections(product, options).next().done;
 }
 
 const stamp = value => typeof value === "number" ? value : Date.parse(value || "");

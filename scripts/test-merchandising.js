@@ -22,15 +22,18 @@ const { runMerchandising, getMerchandisingShelves, merchandisingStatus } = requi
 Module._load = load;
 function database() {
   const native = new DatabaseSync(':memory:');
-  native.exec(`CREATE TABLE products(id INTEGER PRIMARY KEY, market TEXT, title TEXT, checked_at TEXT, availability TEXT);
+  native.exec(`CREATE TABLE products(id INTEGER PRIMARY KEY, market TEXT, title TEXT, checked_at TEXT, availability TEXT, status TEXT DEFAULT 'published');
     CREATE TABLE link_health(product_id INTEGER PRIMARY KEY,last_status INTEGER,consecutive_failures INTEGER,last_error TEXT);`);
   const db = { exec: sql => native.exec(sql), prepare: sql => native.prepare(sql) };
-  for (const [id, market] of [[1, 'us'], [2, 'ca']]) db.prepare('INSERT INTO products VALUES (?,?,?,?,?)').run(id, market, 'Headphones', new Date(now).toISOString(), 'in_stock');
+  for (const [id, market] of [[1, 'us'], [2, 'ca']]) db.prepare('INSERT INTO products(id,market,title,checked_at,availability) VALUES (?,?,?,?,?)').run(id, market, 'Headphones', new Date(now).toISOString(), 'in_stock');
   return { db, native };
 }
 (async () => {
   const { db, native } = database();
+  db.prepare('INSERT INTO products(id,market,title,checked_at,availability,status) VALUES (?,?,?,?,?,?)')
+    .run(99,'us','Archived offer',new Date(now).toISOString(),'in_stock','archived');
   assert.equal((await runMerchandising(db, { now, research: true })).status, 'success');
+  assert.equal(getMerchandisingShelves(db, {now})[0].products.length,1,'Archived rows must never reach the selector');
   assert.equal(calls, 1);
   assert.equal(getMerchandisingShelves(db, { now })[0].products[0].id, 1);
   await runMerchandising(db, { now: now + 3600000, research: true });
@@ -75,7 +78,7 @@ function database() {
   assert.equal(db.prepare('SELECT COUNT(*) AS n FROM merchandising_leases').get().n, 0);
   native.close();
   const ordered = database();
-  ordered.db.prepare('INSERT INTO products VALUES (?,?,?,?,?)').run(3,'us','Headphones',new Date(now).toISOString(),'in_stock');
+  ordered.db.prepare('INSERT INTO products(id,market,title,checked_at,availability) VALUES (?,?,?,?,?)').run(3,'us','Headphones',new Date(now).toISOString(),'in_stock');
   await runMerchandising(ordered.db,{now,research:true});
   assert.deepEqual(getMerchandisingShelves(ordered.db,{now})[0].products.map(p=>p.id),[3,1],
     'Persisted shelves must preserve selector order rather than sorting by database ID');
