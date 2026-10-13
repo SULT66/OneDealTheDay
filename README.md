@@ -131,11 +131,16 @@ The ranking compares landed price, product evidence, seller reliability, demand 
 ## Four-agent merchandising
 
 The existing Azure server runs four coordinated roles: regional holiday planning,
-current shopping-interest research, qualified catalogue matching, and shelf
+current shopping-interest research, targeted eBay discovery and qualified catalogue matching, and shelf
 publication. These are scheduled server jobs, not four permanent chat sessions.
 The holiday calendar updates weekly, catalogue placements hourly and after
 retailer refreshes, and external research at most once per 24 hours per enabled
-market. The paid research uses the existing server-only `OPENAI_API_KEY`, one
+market. In the primary market, the third role also searches eBay for active themes
+at most once per six hours, rotating up to six queries and looking up at most
+60 item details. The existing importer saves real offers and price snapshots;
+this pass does not replace Daily Drop picks or archive unrelated catalogue items.
+Manual and scheduled runs share the persisted throttle, including failed attempts.
+The paid research uses the existing server-only `OPENAI_API_KEY`, one
 bounded Responses request with at most two web-search calls and 2,400 output
 tokens. Failed lookups are throttled too and retain unexpired earlier evidence.
 
@@ -143,9 +148,21 @@ Current seasonal and interest shelves appear above the ordinary catalogue on
 the homepage and unfiltered first category page. Explicit price/quality sorts
 and the Daily Drop editorial rules are preserved. Shelf matches must have
 current checked prices, known stock, correct regional currency, delivery costs,
-accepted returns, safe tracked links and no recorded link failure. Unknown or
+accepted returns, safe tracked links, at least five product reviews and a rating of 4.3 or higher,
+and no recorded link failure. Established-seller feedback cannot replace product
+reviews on these featured shelves. Dated gift/holiday campaigns also require a
+destination-specific delivery estimate at least two days before the occasion.
+The estimate and shipping cost come from the same delivery option; arrival is
+not guaranteed and may vary by address. Qualified eBay offers are selected first;
+reviewed feeds remain supplementary. The ordinary catalogue still includes
+listings with incomplete review data, clearly labelled. Unknown or
 stale data produces a shorter shelf or no shelf; missing products are never
-invented or imported from unconnected shops. Calendar categories are planning
+invented or imported from unconnected shops. Growing-interest shelves use existing consented analytics: distinct anonymous
+browser sessions across at least three days, excluding owner sessions, recognizable
+automation and repeated searches in a session. The legacy anonymous search log
+is not evidence for a trend. Every shelf card explains its matching search phrase,
+review checks and, where available, the holiday arrival estimate.
+Calendar categories are planning
 hypotheses, while external interest signals retain their retrieved citations;
 neither is presented as verified global sales or guaranteed holiday delivery.
 
@@ -162,6 +179,8 @@ Optional server-only Azure App Settings:
 - `MERCHANDISING_ENABLED=false` disables scheduled/manual placement and hides shelves;
 - `MERCHANDISING_RESEARCH_MARKETS=us` selects paid research markets (primary market
   by default; supported codes are `us,ca,uk,fr,de`);
+- `MERCHANDISING_DISCOVERY_MARKETS=us` selects targeted eBay markets (primary
+  market by default); set to an unsupported value such as `none` to disable;
 - `OPENAI_SHOPPING_MODEL` shares the shopping assistant's existing model override.
 
 Signals, daily-throttle state and a per-market lease are kept in the existing

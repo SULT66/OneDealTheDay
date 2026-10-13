@@ -10,6 +10,10 @@ export type MerchandiseShelf = {
   confidence: string;
   sourceUrls: string[];
   endsAt: string;
+  eventAt?: string | null;
+  evidenceType?: string;
+  interestSessions?: number | null;
+  selectionEvidence?: Record<string, {matchedQuery: string; arrivalEstimate?: string | null; destinationPostalCode?: string | null}>;
   products: Deal[];
 };
 

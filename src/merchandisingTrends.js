@@ -1,6 +1,6 @@
-/* Agent 2: evidence of shopping interest, never an estimate of world sales.
- * Searches are anonymous events, not unique shoppers; minimum counts and a
- * previous-week baseline reduce noise but cannot eliminate repeated searches.
+/* Agent 2: distinct anonymous browser sessions over multiple days.
+ * Owner sessions, recognizable automation and repeated searches in one
+ * session cannot manufacture growing interest. No new tracking is introduced.
  */
 const { createHash } = require('node:crypto');
 const { normalizedTitle } = require('./ranker');
@@ -23,24 +23,33 @@ function id(market, query, prefix) {
 function internalTrendSignals(db, { market = 'us', now = Date.now(), limit = 8 } = {}) {
   if (!MARKETS[market] || !Number.isFinite(now) || !cap(limit, 20)) return [];
   try {
-    const rows = db.prepare(`SELECT normalized,
-      SUM(CASE WHEN searched_at>=? THEN 1 ELSE 0 END) AS current_count,
-      SUM(CASE WHEN searched_at<? THEN 1 ELSE 0 END) AS previous_count
-      FROM search_queries WHERE market=? AND searched_at>=? AND searched_at<=?
-      GROUP BY normalized ORDER BY current_count DESC LIMIT 200`)
-      .all(iso(now - 7 * DAY), iso(now - 7 * DAY), market, iso(now - 14 * DAY), iso(now));
-    return rows.filter(row => productQuery(row.normalized) && Number(row.current_count) >= 5 &&
-      (Number(row.previous_count) === 0 ? Number(row.current_count) >= 8 :
-        Number(row.current_count) >= Number(row.previous_count) * 1.5 && Number(row.current_count) - Number(row.previous_count) >= 3))
-      .slice(0, cap(limit, 20)).map(row => {
-        const query = productQuery(row.normalized);
-        return { id: id(market, query, 'search'), kind: 'trend', title: query, market,
-          queries: [query], categories: [], startsAt: iso(now), endsAt: iso(now + 7 * DAY),
-          confidence: 'observed_interest', sourceUrls: [], evidence: {
-            type: 'site_search_interest', currentSearches: Number(row.current_count),
-            previousSearches: Number(row.previous_count), windowDays: 7, observedAt: iso(now),
-            caveat: 'Anonymous search events; not unique shoppers or confirmed sales.' } };
-      });
+    const events = db.prepare(`SELECT session_id,query_text,occurred_at,user_agent
+      FROM analytics_events WHERE market=? AND event_type='search'
+      AND occurred_at>=? AND occurred_at<=? AND substr(session_id,1,9)<>'internal_'
+      ORDER BY occurred_at DESC LIMIT 10000`).all(market, iso(now - 14 * DAY), iso(now));
+    const groups = new Map();
+    for (const event of events) {
+      const query = productQuery(event.query_text);
+      if (!query || !event.session_id || /bot|crawler|spider|headless|playwright|selenium/i.test(event.user_agent || '')) continue;
+      const row = groups.get(query) || {query, current: new Set(), previous: new Set(), days: new Set()};
+      if (Date.parse(event.occurred_at) >= now - 7 * DAY) {
+        row.current.add(event.session_id);
+        row.days.add(event.occurred_at.slice(0, 10));
+      } else row.previous.add(event.session_id);
+      groups.set(query, row);
+    }
+    return [...groups.values()].filter(row => row.current.size >= 5 && row.days.size >= 3 &&
+      (row.previous.size === 0 ? row.current.size >= 8 :
+        row.current.size >= row.previous.size * 1.5 && row.current.size - row.previous.size >= 3))
+      .sort((a,b) => b.current.size - a.current.size || a.query.localeCompare(b.query))
+      .slice(0, cap(limit, 20)).map(row => ({
+        id: id(market, row.query, 'search'), kind: 'trend', title: row.query, market,
+        queries: [row.query], categories: [], startsAt: iso(now), endsAt: iso(now + 7 * DAY),
+        confidence: 'observed_interest', sourceUrls: [], evidence: {
+          type: 'site_search_interest', currentSessions: row.current.size,
+          previousSessions: row.previous.size, activeDays: row.days.size, windowDays: 7, observedAt: iso(now),
+          caveat: 'Distinct anonymous browser sessions; not unique people or confirmed sales.' }
+      }));
   } catch { return []; }
 }
 function webUrl(value) {

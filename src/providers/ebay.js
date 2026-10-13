@@ -143,7 +143,7 @@ function createEbayClient({clientId, clientSecret, campaignId, environment = "pr
         Accept:"application/json",
         "Accept-Language":market.locale || "en-US",
         "X-EBAY-C-MARKETPLACE-ID":market.ebayMarketplaceId,
-        "X-EBAY-C-ENDUSERCTX":`affiliateCampaignId=${campaignId},affiliateReferenceId=odd-${market.code}`
+        "X-EBAY-C-ENDUSERCTX":`affiliateCampaignId=${campaignId},affiliateReferenceId=odd-${market.code},contextualLocation=${encodeURIComponent(`country=${market.countryCodes?.[0] || "US"}`)}`
       },
       signal:deadline(10000)
     });
@@ -254,6 +254,19 @@ function shippingCost(item) {
   return costs.length ? Math.min(...costs) : null;
 }
 
+function deliveryEstimate(item) {
+  const option = (item?.shippingOptions || [])
+    .filter(o => number(o.shippingCost) != null && number(o.shippingCost) >= 0)
+    .sort((a, b) => number(a.shippingCost) - number(b.shippingCost))[0];
+  const at = Date.parse(option?.maxEstimatedDeliveryDate || "");
+  const location = option?.shipToLocationUsedForEstimate || {};
+  return {
+    delivery_estimated_at: Number.isFinite(at) ? new Date(at).toISOString() : "",
+    delivery_country: text(location.country).toUpperCase(),
+    delivery_postal_code: text(location.postalCode),
+  };
+}
+
 function returnSummary(item) {
   const terms = item?.returnTerms;
   if (!terms) return item?.topRatedBuyingExperience ? "Minimum 30-day money-back returns" : "";
@@ -310,6 +323,7 @@ function normalizeItem(item, keyword, sourceRank, market) {
     seller_feedback_count:Math.round(number(item?.seller?.feedbackScore, 0)),
     shipping_summary:shippingSummary(item),
     shipping_cost:shippingCost(item),
+    ...deliveryEstimate(item),
     return_summary:returnSummary(item),
     availability:listingAvailable(item) ? "In stock" : "Out of stock",
     checked_at:new Date().toISOString(),
@@ -361,7 +375,8 @@ async function searchProducts({
      everything should not be rotating through a slice of it and waiting three
      hours for the rest. */
   keywordsPerRun = 0,
-  signal
+  signal,
+  strictQueries = false
 }) {
   if (!clientId || !clientSecret) throw new Error("eBay Production credentials are missing");
   if (!/^\d{10}$/.test(String(campaignId || ""))) throw new Error("EBAY_CAMPAIGN_ID must contain exactly 10 digits");
@@ -399,6 +414,7 @@ async function searchProducts({
     }
     result.value.forEach((item, itemIndex) => {
       if (!candidateIsUsable(item)) return;
+      if (strictQueries && !require("../merchandisingSelection").matchesQuery(item, searchTerms[keywordIndex])) return;
       // Search categories are peers. Penalizing every later category made a
       // strong item rank lower solely because its category ran later.
       const sourceRank = itemIndex + 1;

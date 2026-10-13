@@ -14,7 +14,7 @@ const product = (id, changes = {}) => ({
   retailer_name: "eBay", status: "published", current_price: 40, checked_at: iso(now - 3600000),
   image_url: "https://i.ebayimg.com/pumpkin.jpg", affiliate_url: `https://www.ebay.com/itm/${id}`,
   availability: "In stock", shipping_summary: "Free shipping", return_summary: "30 day returns accepted",
-  seller_rating: 99.5, seller_feedback_count: 400, category: "Home", ...changes,
+  rating:4.7, review_count:30, seller_rating: 99.5, seller_feedback_count: 400, category: "Home", ...changes,
 });
 const signal = changes => ({ id: "halloween", kind: "seasonal", title: "Halloween", market: "us",
   queries: ["halloween pumpkin"], categories: ["Home"], startsAt: iso(now - 86400000), endsAt: iso(now + 86400000), ...changes });
@@ -86,7 +86,7 @@ assert.equal(enrichedDesk.shipping_cost,0);
 assert(enrichedDesk.shipping_summary.includes('contiguous US'));
 assert(enrichedDesk.return_summary.includes('Buyer pays return shipping'));
 assert.equal(enrichedDesk.retailer_terms_sources.length,2);
-assert(isPromotionEligible(enrichedDesk,{now:policyNow}),'Verified terms should unblock a genuine in-stock desk');
+assert(isPromotionEligible(enrichedDesk,{now:policyNow}),'Verified terms with product reviews should qualify a genuine in-stock desk');
 assert.equal(rawDesk.shipping_cost,null,'Raw feed data must remain intact');
 assert.equal(withVerifiedRetailerTerms(rawDesk,{now:Date.parse('2026-11-12T18:00:00Z')}),rawDesk,'Expired policies cannot fill missing costs');
 assert.equal(withVerifiedRetailerTerms({...rawDesk,market:'ca'},{now:policyNow}).shipping_cost,null);
@@ -99,3 +99,14 @@ assert(!isPromotionEligible(product(81,{return_summary:'See retailer policy'}),{
 const archived = product(90,{status:'archived'});
 Object.defineProperty(archived,'current_price',{get(){throw new Error('Archived offers must not be scored');}});
 assert.equal(isPromotionEligible(archived,{now}),false,'Eligibility must stop before evaluating archived offer details');
+
+const {signalRejectionReasons}=require('../src/merchandisingSelection');
+const dated=signal({eventAt:iso(now+18*86400000),metadata:{deliveryLeadDays:7}});
+const onTime=product(100,{delivery_estimated_at:iso(now+7*86400000),delivery_country:'US'});
+assert.equal(selectMerchandise([onTime, product(101,{rating:0,review_count:0}), product(102,{review_count:2})],[dated],{now})[0].products.length,1);
+assert.deepEqual(signalRejectionReasons(product(103),dated,{now}),['holiday_delivery_unknown']);
+assert.deepEqual(signalRejectionReasons({...onTime,delivery_country:'CA'},dated,{now}),['holiday_delivery_unknown']);
+assert.deepEqual(signalRejectionReasons({...onTime,delivery_estimated_at:iso(now+17*86400000)},dated,{now}),['holiday_delivery_late']);
+const reviewedFeed=product(104,{source:'feed-tribesigns',retailer_name:'Tribesigns'});
+assert.equal(selectMerchandise([reviewedFeed,valid],[signal()],{now,limitPerSignal:1})[0].products[0].source,'ebay');
+assert.equal(isPromotionEligible(product(105,{rating:0,review_count:0}),{now}),false,'Established seller is not a substitute for product reviews on featured shelves');

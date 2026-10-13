@@ -26,7 +26,7 @@ function nativeProviders(config) {
       /* No keywords passed means the broad scheduled sweep, which takes a
          rotating slice of the list. A shopper's own query arrives with its
          keywords and is searched in full. */
-      search:({market, keywords, detailLimit, targetEligible, keywordsPerRun, signal}) => require("./ebay").searchProducts({
+      search:({market, keywords, detailLimit, targetEligible, keywordsPerRun, strictQueries, signal}) => require("./ebay").searchProducts({
         clientId:config.ebayClientId,
         clientSecret:config.ebayClientSecret,
         campaignId:config.ebayCampaignId,
@@ -36,6 +36,7 @@ function nativeProviders(config) {
         market,
         detailLimit,
         targetEligible,
+        strictQueries,
         signal
       })
     });
@@ -175,9 +176,9 @@ function deadlineFor(market) {
   return Math.max(PROVIDER_DEADLINE_MS, Math.min(30 * 60 * 1000, calls * 4000));
 }
 
-async function runWithDeadline(provider, market) {
+async function runWithDeadline(provider, market, options = {}) {
   const controller = new AbortController();
-  const deadlineMs = deadlineFor(market);
+  const deadlineMs = options.sourceDeadlineMs || deadlineFor(market);
   const message = `${provider.name} did not finish within ${Math.round(deadlineMs / 60000)} minutes`;
   const timer = setTimeout(() => controller.abort(new Error(message)), deadlineMs);
   timer.unref?.();
@@ -204,9 +205,9 @@ async function runWithDeadline(provider, market) {
      * not take these simply ignores them.
      */
     return await Promise.race([
-      provider.search({market, signal:controller.signal, ...(market.searchBudget || {})}),
+      provider.search({market, signal:controller.signal, ...(market.searchBudget || {}), ...(options.searchOptions || {}), ...(options.keywords ? {keywords: options.keywords} : {})}),
       new Promise((_, reject) => {
-        const backstop = setTimeout(() => reject(new Error(message)), deadlineMs + ABANDON_GRACE_MS);
+        const backstop = setTimeout(() => reject(new Error(message)), deadlineMs + (options.sourceDeadlineMs ? 10000 : ABANDON_GRACE_MS));
         backstop.unref?.();
       }),
     ]);
@@ -218,7 +219,8 @@ async function runWithDeadline(provider, market) {
   }
 }
 
-async function searchAll(config, market, {providerIds = []} = {}) {
+async function searchAll(config, market, options = {}) {
+  const {providerIds = []} = options;
   const selectedIds = new Set((providerIds || []).map(value => String(value || "").trim()).filter(Boolean));
   const providers = providersForMarket(config, market).filter(provider =>
     !selectedIds.size || selectedIds.has(provider.id)
@@ -243,7 +245,7 @@ async function searchAll(config, market, {providerIds = []} = {}) {
    * once spent the day's whole allowance, which took down all five markets.
    */
   const settled = await Promise.allSettled(providers.map(provider =>
-    runWithDeadline(provider, market)
+    runWithDeadline(provider, market, options)
   ));
   const products = [];
   const reports = settled.map((result, index) => {

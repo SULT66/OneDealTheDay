@@ -30,7 +30,7 @@ const product = {
   image_url: 'https://i.ebayimg.com/pumpkin.jpg',
   affiliate_url: 'https://www.ebay.com/itm/123456789?campid=5339179772',
   availability: 'In stock', shipping_summary: 'Free shipping', return_summary: '30 day returns accepted',
-  seller_rating: 99.5, seller_feedback_count: 400,
+  rating:4.7, review_count:30, seller_rating: 99.5, seller_feedback_count: 400,
 };
 const inserted = db.prepare(`INSERT INTO products(${Object.keys(product).join(',')}) VALUES(${Object.keys(product).map(() => '?').join(',')})`)
   .run(...Object.values(product));
@@ -57,6 +57,7 @@ async function get(route, options) {
   assert.equal(publicResult.response.status,200);
   assert.equal(publicResult.body.shelves.length,1);
   assert.equal(publicResult.body.shelves[0].products[0].id,productId);
+  assert.equal(publicResult.body.shelves[0].selectionEvidence[productId].matchedQuery,'Halloween decoration');
   assert.equal(db.prepare('SELECT COUNT(*) n FROM merchandising_runs').get().n,0,'Public reads must not start research');
   assert.equal((await get('/api/merchandising?market=ca')).body.shelves.length,0);
   assert.equal((await get('/api/merchandising?market=us&category=home%20%26%20kitchen')).body.shelves.length,1,'Case-normalized category must retain matching shelves');
@@ -66,6 +67,7 @@ async function get(route, options) {
   const homeHtml = await home.text();
   assert(homeHtml.includes('Test seasonal shelf'),'Homepage must render the selected shelf');
   assert(homeHtml.includes('data-merch-placement="seasonal_card"'),'Shelf cards must carry tracking attribution');
+  assert(homeHtml.includes('Product reviews, price and buying terms checked'),'Homepage must explain why a product was selected');
   const categoryPage = await fetch(base+'/us/category/home-kitchen');
   assert.equal(categoryPage.status,200);
   assert((await categoryPage.text()).includes('Test seasonal shelf'),'First category page must render its matching shelf');

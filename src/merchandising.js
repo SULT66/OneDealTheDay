@@ -2,8 +2,9 @@
 const { randomUUID } = require('node:crypto');
 const { calendarSignals } = require('./merchandisingCalendar');
 const { internalTrendSignals, researchTrendSignals } = require('./merchandisingTrends');
-const { selectMerchandise, isPromotionEligible, promotionExpiresAt, merchandisingDiagnostics } = require('./merchandisingSelection');
+const { selectMerchandise, isPromotionEligible, promotionExpiresAt, merchandisingDiagnostics, matchesQuery, signalRejectionReasons } = require('./merchandisingSelection');
 const { PRICE_CONFIDENT_HOURS } = require('./productPresentation');
+const { discoveryKeywords, INTERVAL_MS } = require('./merchandisingDiscovery');
 const { withVerifiedRetailerTerms } = require('./verifiedRetailerTerms');
 const DAY = 86400000;
 const active = new WeakMap();
@@ -81,7 +82,8 @@ function getMerchandisingShelves(db, { market = 'us', now = Date.now(), limit = 
   const shelves = [];
   for (const signal of signalsFor(db, market, now)) {
     const products = placements.filter(p => p.signal_id === signal.id).map(p => rows.get(p.product_id))
-      .filter(row => row && isPromotionEligible(row, { market, now }) && priceExpiry(row) > now)
+      .filter(row => row && isPromotionEligible(row, { market, now }) &&
+        !signalRejectionReasons(row, signal, {market, now}).length && priceExpiry(row) > now)
       .filter(row => !category || String(row.normalized_category || row.category).toLowerCase() === String(category).toLowerCase());
     if (!products.length) continue;
     shelves.push({ id: signal.id, title: signal.title, kind: signal.kind, confidence: signal.confidence,
@@ -89,6 +91,14 @@ function getMerchandisingShelves(db, { market = 'us', now = Date.now(), limit = 
         try { const parsed = new URL(url); return parsed.protocol === 'https:' && !parsed.username && !parsed.password; }
         catch { return false; }
       }).slice(0, 5),
+      eventAt: signal.eventAt || null,
+      evidenceType: signal.evidence?.type || 'seasonal_planning',
+      interestSessions: signal.evidence?.currentSessions || null,
+      selectionEvidence: Object.fromEntries(products.map(product => [product.id, {
+        matchedQuery: (signal.queries || []).find(q => matchesQuery(product, q)) || '',
+        arrivalEstimate: signal.kind === 'seasonal' && Number(signal.metadata?.deliveryLeadDays) ? product.delivery_estimated_at : null,
+        destinationPostalCode: product.delivery_postal_code || null,
+      }])),
       evidenceSummary: typeof signal.evidence?.summary === 'string' ? signal.evidence.summary : null,
       startsAt: signal.startsAt, endsAt: new Date(Math.min(stamp(signal.endsAt), ...products.map(priceExpiry))).toISOString(), products });
   }
@@ -100,13 +110,13 @@ function getMerchandisingShelves(db, { market = 'us', now = Date.now(), limit = 
   return selected.slice(0, Math.max(0, Math.min(10, Number(limit) || 0)));
 }
 async function runMerchandising(db, { market = 'us', now = Date.now(), research = false,
-  horizonDays = 90, limitPerSignal = 6, researchTimeoutMs = 45000, ...researchOptions } = {}) {
+  horizonDays = 90, limitPerSignal = 6, researchTimeoutMs = 45000, discover, ...researchOptions } = {}) {
   if (!markets.has(market) || !Number.isFinite(now)) throw new Error('Invalid merchandising market or time');
   ensureMerchandisingSchema(db);
   const locks = active.get(db) || new Set(); active.set(db, locks);
   if (locks.has(market)) return { status: 'busy', market };
   locks.add(market);
-  const owner = randomUUID(), leaseDuration = 120000;
+  const owner = randomUUID(), leaseDuration = 300000;
   let leased = false;
   let previousSignals;
   try {
@@ -145,7 +155,29 @@ async function runMerchandising(db, { market = 'us', now = Date.now(), research 
       if (result.status === 'success') replaceSignals(db, market, 'research', result.signals || [], now);
       status(db, market, 'research', now, result.status || 'failed', { attemptedAt: now, count: result.signals?.length || 0, reason: result.reason || null });
     }
-    const signals = signalsFor(db, market, now);
+    let signals = signalsFor(db, market, now);
+    const previousDiscovery = storedStatus(db, market, 'discovery');
+    if (typeof discover === 'function' &&
+        (!previousDiscovery?.details.attemptedAt || now - previousDiscovery.details.attemptedAt >= INTERVAL_MS)) {
+      const keywords = discoveryKeywords(signals, {market, now});
+      if (keywords.length) {
+        const attemptedAt = now;
+        status(db, market, 'discovery', now, 'running', {attemptedAt, keywords});
+        let result;
+        try { result = await discover({market, keywords}); }
+        catch { result = {status:'failed', reason:'ebay_discovery_failed'}; }
+        if (db.prepare('SELECT owner FROM merchandising_leases WHERE market=?').get(market)?.owner !== owner) return {status:'lease_lost', market};
+        // A catalogue import checks its prices after this run starts.
+        if (Number.isFinite(stamp(result.observedAt))) now = Math.max(now, stamp(result.observedAt));
+        status(db, market, 'discovery', now, result.status || 'failed', {
+          attemptedAt: result.status === 'busy' ? previousDiscovery?.details.attemptedAt || null : attemptedAt,
+          keywords, count:result.count || 0, reason:result.reason || null,
+        });
+        signals = signalsFor(db, market, now);
+      } else status(db, market, 'discovery', now, 'idle', {reason:'no_active_themes'});
+    } else if (!previousDiscovery && typeof discover !== 'function') {
+      status(db, market, 'discovery', now, 'disabled', {reason:'scheduled_discovery_not_enabled'});
+    }
     const groups = selectMerchandise(catalogRows(db, market), signals, { market, now, limitPerSignal });
     transaction(db, () => {
       db.prepare('DELETE FROM merchandising_placements WHERE market=?').run(market);
@@ -183,7 +215,7 @@ async function runMerchandising(db, { market = 'us', now = Date.now(), research 
 function merchandisingStatus(db, { market = 'us', now = Date.now() } = {}) {
   if (!markets.has(market)) return null;
   ensureMerchandisingSchema(db);
-  const stages = Object.fromEntries(['calendar', 'internal', 'research', 'selection', 'placement'].map(stage => [stage, storedStatus(db, market, stage)]));
+  const stages = Object.fromEntries(['calendar', 'internal', 'research', 'discovery', 'selection', 'placement'].map(stage => [stage, storedStatus(db, market, stage)]));
   const lastRun = db.prepare('SELECT * FROM merchandising_runs WHERE market=? ORDER BY started_at DESC LIMIT 1').get(market) || null;
   let cache = diagnosticCache.get(db);
   if (!cache) { cache = new Map(); diagnosticCache.set(db, cache); }
@@ -193,7 +225,7 @@ function merchandisingStatus(db, { market = 'us', now = Date.now() } = {}) {
     entry = {at:now,runKey,value:merchandisingDiagnostics(catalogRows(db, market, false, now), signalsFor(db, market, now), {market, now})};
     cache.set(market, entry);
   }
-  return { market, stages, roles: { holiday: stages.calendar, demand: { internal: stages.internal, research: stages.research }, catalog: stages.selection, placement: stages.placement },
+  return { market, stages, roles: { holiday: stages.calendar, demand: { internal: stages.internal, research: stages.research }, catalog: {discovery: stages.discovery, selection: stages.selection}, placement: stages.placement },
     futureEvents: signalsFor(db, market, now, true).filter(s => stamp(s.startsAt) > now).map(({ id, title, preparationAt, startsAt, endsAt }) => ({ id, title, preparationAt, startsAt, endsAt })),
     lastRun,
     diagnostics: {...entry.value, checkedAt:new Date(entry.at).toISOString()},
