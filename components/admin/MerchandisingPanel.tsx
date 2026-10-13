@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 type Stage = { status: string; updated_at: number; details: { count?: number; reason?: string; gaps?: Array<{id: string; title: string}> } } | null;
-type Diagnostic = { assessed:number; eligible:number; rejectionCounts:Record<string,number>;
+type Diagnostic = { assessed:number; eligible:number; rejectionCounts:Record<string,number>; checkedAt?:string;
   signals:Array<{id:string;title:string;queries:string[];matched:number;eligible:number;rejectionCounts:Record<string,number>;
     examples:Array<{id:number;title:string;reasons:string[];linkStatus:number|null;linkFailures:number}>}> };
 const REASONS:Record<string,string> = {
@@ -105,6 +105,7 @@ export function MerchandisingPanel({ adminKey, active }: { adminKey: string; act
         <h3 className="font-semibold text-fg">Why products are not placed</h3>
         <p className="mt-2">{data.status.diagnostics.assessed} published listings checked · {data.status.diagnostics.eligible} pass all promotion checks.</p>
         <p className="mt-1 text-xs">One listing can fail several checks. Counts overlap. These checks use current catalogue data.</p>
+        {data.status.diagnostics.checkedAt && <p className="mt-1 text-xs">Checked {new Date(data.status.diagnostics.checkedAt).toLocaleString()} · refreshed at most once a minute.</p>}
         <ul className="mt-2">{Object.entries(data.status.diagnostics.rejectionCounts).sort((a,b)=>b[1]-a[1]).map(([reason,count]) =>
           <li key={reason}>{REASONS[reason] || reason}: {count}</li>)}</ul>
         {data.status.diagnostics.signals.map(signal => <details key={signal.id} className="mt-3 rounded-xl border border-border p-3">
