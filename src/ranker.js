@@ -942,6 +942,7 @@ function selectUniqueProducts(scoredOffers) {
 
 exports.scoreProduct = scoreProduct;
 exports.isEligible = isEligible;
+exports.returnsNotAccepted = returnsNotAccepted;
 exports.isDailyPickEligible = isDailyPickEligible;
 exports.evidenceConfidence = evidenceConfidence;
 exports.commerceQuality = commerceQuality;

@@ -32,6 +32,7 @@ for (const change of [
   { link_last_status: 404 }, { link_consecutive_failures: 1 }, { link_last_error: "timeout" },
   { link_health: { last_status: 410 } }, { last_status: 500 },
   { shipping_summary: "" }, { shipping_cost: 30 }, { return_summary: "" }, { return_summary: "No returns" },
+  { return_summary: "Retours non acceptés" }, { return_summary: "Keine Rückgabe" },
   { rating: 3.5 }, { seller_rating: 80 },
 ]) assert.equal(isPromotionEligible(product(3, change), { now }), false, JSON.stringify(change));
 assert(isPromotionEligible(product(4, { link_last_status: 200, link_consecutive_failures: 0 }), { now }));

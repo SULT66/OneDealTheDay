@@ -11,7 +11,7 @@ Module._load = function(request, parent, ...rest) {
     if (request === './merchandisingTrends') return { internalTrendSignals: () => [], researchTrendSignals: async ({ market }) => { calls++; if (gate) await gate; return failResearch ? { status: 'failed', signals: [], reason: 'timeout' } : { status: 'success', signals: [signal(market)] }; } };
     if (request === './merchandisingSelection') return {
       isPromotionEligible: (row, { market, now: at }) => row.market === market && row.availability === 'in_stock' && Number(row.link_last_status || 200) < 400 && Date.parse(row.checked_at) + DAY > at,
-      selectMerchandise: (rows, signals, opts) => { if (chooseFail) throw Error('selector unavailable'); return signals.map(s => ({ signal: s, products: rows.filter(r => r.market === opts.market) })); },
+      selectMerchandise: (rows, signals, opts) => { if (chooseFail) throw Error('selector unavailable'); return signals.map(s => ({ signal: s, products: rows.filter(r => r.market === opts.market).reverse() })); },
     };
     if (request === './productPresentation') return { PRICE_CONFIDENT_HOURS: 24 };
   }
@@ -73,6 +73,12 @@ function database() {
   release(); await pending; gate = null;
   assert.equal(db.prepare('SELECT COUNT(*) AS n FROM merchandising_leases').get().n, 0);
   native.close();
+  const ordered = database();
+  ordered.db.prepare('INSERT INTO products VALUES (?,?,?,?,?)').run(3,'us','Headphones',new Date(now).toISOString(),'in_stock');
+  await runMerchandising(ordered.db,{now,research:true});
+  assert.deepEqual(getMerchandisingShelves(ordered.db,{now})[0].products.map(p=>p.id),[3,1],
+    'Persisted shelves must preserve selector order rather than sorting by database ID');
+  ordered.native.close();
   // One end-to-end seasonal pass uses the real Agents 1–3 modules.
   process.env.EBAY_CLIENT_ID = 'merchandising-test';
   process.env.EBAY_CLIENT_SECRET = 'merchandising-test';

@@ -148,9 +148,9 @@ async function runMerchandising(db, { market = 'us', now = Date.now(), research 
       db.prepare('DELETE FROM merchandising_placements WHERE market=?').run(market);
       const insert = db.prepare('INSERT INTO merchandising_placements VALUES (?,?,?,?,?)');
       groups.forEach(({ signal, products }, index) => {
-        for (const row of products) {
+        for (const [productIndex, row] of products.entries()) {
           const expires = Math.min(stamp(signal.endsAt), priceExpiry(row));
-          if (expires > now && isPromotionEligible(row, { market, now })) insert.run(market, signal.id, row.id, index, expires);
+          if (expires > now && isPromotionEligible(row, { market, now })) insert.run(market, signal.id, row.id, index * Math.max(1, limitPerSignal) + productIndex, expires);
         }
       });
     });

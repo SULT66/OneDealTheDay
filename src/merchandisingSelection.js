@@ -5,7 +5,7 @@ const { PRICE_CONFIDENT_HOURS } = require("./productPresentation");
 const { market: marketDefinition, normalizeMarket } = require("./markets");
 const {
   commerceQuality, headTerm, isEligible, isMainProductQuery, looksLikeAccessory,
-  matchesMainProduct, normalizedTitle, queryBudget, searchTokens, landedCost,
+  matchesMainProduct, normalizedTitle, queryBudget, searchTokens, landedCost, returnsNotAccepted,
 } = require("./ranker");
 
 // A promotion is a recommendation, so fulfillment and price need to be known.
@@ -40,7 +40,7 @@ function isPromotionEligible(product, { market = "us", now = Date.now() } = {}) 
       now >= checkedAt + PRICE_CONFIDENT_HOURS * 3600000) return false;
   const status = offerStatus({ ...product, availability: String(product.availability || "").replace(/_/g, " ") }, { now });
   if (!status.publishable || !status.price.is_current || status.availability !== "in_stock") return false;
-  if (!status.returns.allowed || status.delivery.cost == null ||
+  if (!status.returns.allowed || returnsNotAccepted(product) || status.delivery.cost == null ||
       status.delivery.cost > Number(product.current_price) * 0.5) return false;
   if (Number(product.rating) > 0 && Number(product.rating) < 4.3) return false;
   if (status.score_missing_reasons.some(item => item.reason === "seller_record_below_bar")) return false;
