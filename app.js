@@ -501,6 +501,12 @@ function expressWithHomepage(...args) {
         updated_at:shaped.updated_at,
         rating:shaped.rating,
         review_count:shaped.review_count,
+        /* The fall our own tracking recorded, and the lowest price we saw.
+           Zero when the price has not moved, which is most of them. This is
+           the only percentage the site prints in its own voice, so a card
+           without it has nothing of ours on it at all. */
+        tracked_drop_percent:shaped.tracked_drop_percent || 0,
+        tracked_low:shaped.tracked_low || 0,
         daily_rank:shaped.daily_rank,
         deal_url:shaped.deal_url,
         display_badge:shaped.display_badge,
