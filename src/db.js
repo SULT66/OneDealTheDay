@@ -929,7 +929,32 @@ for (const [column, type] of [
      recorded — written nightly by src/trackedPrice.js so a card can show it
      without reading anybody's history. */
   ["tracked_drop_percent", "REAL"],
-  ["tracked_low", "REAL"]
+  ["tracked_low", "REAL"],
+  /*
+   * What our own price history says, kept rather than recomputed.
+   *
+   * These four were already calculated on every catalogue recalculation, used
+   * to score the row, and then dropped: withPriceHistory in
+   * src/catalogRecalculation.js spread them onto an in-memory copy and nothing
+   * wrote them down. Three separate readers ask for them afterwards —
+   * evidenceConfidence counts a price we can compare against as 25 of the 100
+   * points of data confidence, commerceQuality asks the same question, and
+   * priceScore measures today's price against the 30-day average — and all
+   * three read zero on every row of the catalogue, forever.
+   *
+   * So a listing scored one way during ingest and another way on its own page,
+   * which is the fault src/ranker.js already documents for source_rank. This is
+   * the second instance of it, and the honest fix is the same: persist the
+   * input instead of letting the score depend on something that exists for the
+   * length of one run.
+   */
+  ["average_30_day_price", "REAL"],
+  ["lowest_30_day_price", "REAL"],
+  ["average_90_day_price", "REAL"],
+  ["lowest_90_day_price", "REAL"],
+  ["price_history_observation_count", "INTEGER"],
+  ["price_history_distinct_days", "INTEGER"],
+  ["price_history_coverage_days", "INTEGER"]
 ]) {
   if (!productColumns.has(column)) db.exec(`ALTER TABLE products ADD COLUMN ${column} ${type}`);
 }

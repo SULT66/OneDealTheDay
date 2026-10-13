@@ -92,17 +92,36 @@ async function languageParam(): Promise<string> {
   }
 }
 
+/*
+ * The catalogue, read fresh every render.
+ *
+ * A bounded call — one with a limit or a category — used to carry
+ * `next: { revalidate: 60 }`, and the entry it created never updated. The
+ * symptom on 2026-10-13: tracked_drop_percent was added to the compact payload,
+ * the API served it correctly for every set of parameters a page asks for, and
+ * the pill stating our own measured fall still did not appear on a single
+ * category page or on the homepage — while the search page and every product
+ * page, the two that fetch unbounded or by id, showed it immediately. That is
+ * the bounded/unbounded line exactly.
+ *
+ * Nothing is lost by dropping it. Two caches already stand in front of this
+ * call: src/htmlCache.js holds the rendered page for ten minutes, so a render
+ * is rare, and app.js keeps the API response itself in process for a minute, so
+ * the repeat is a local request against a warm object rather than a database
+ * read. What the removed layer bought was a saved localhost round trip; what it
+ * cost was a catalogue that changes four to six times a day being served from
+ * a copy nobody could age out.
+ */
 const fetchMarketCatalog = cache(
-  async (marketCode: string, limit?: number, category?: string, fresh = false): Promise<Deal[]> => {
+  async (marketCode: string, limit?: number, category?: string): Promise<Deal[]> => {
     const params = new URLSearchParams({ market: marketCode, compact: "1" });
     const lang = await languageParam();
     if (lang) params.set("lang", lang);
     if (limit) params.set("limit", String(limit));
     if (category) params.set("category", category);
-    const bounded = Boolean(limit || category);
 
     const res = await fetch(`${BACKEND_URL}/api/products?${params}`, {
-      ...(bounded && !fresh ? { next: { revalidate: 60 } } : { cache: "no-store" as const }),
+      cache: "no-store" as const,
     });
     if (!res.ok) {
       throw new Error(`Failed to load the catalog for "${marketCode}" (${res.status}).`);
@@ -388,7 +407,7 @@ export const getDeal = cache(
  * selection runs, that is the difference between a page and an apology.
  */
 export async function getTodaysDrop(marketCode: string): Promise<Deal | undefined> {
-  const deals = await fetchMarketCatalog(marketCode, DROP_SHORTLIST, undefined, true);
+  const deals = await fetchMarketCatalog(marketCode, DROP_SHORTLIST);
   /*
    * A price we can still stand behind, which is not the same question as
    * which calendar day it was checked on.
