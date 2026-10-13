@@ -249,3 +249,22 @@ assert.deepStrictEqual(publicCoupons({coupon_json:"broken"},true),[]);
   assert.strictEqual(await backfillDailyCoupons(database,{ebayClientId:"test",ebayClientSecret:"test",ebayCampaignId:"5339179772"},{getItem:async()=>{throw new Error("Should not repeat backfill");}}),0);
   database.close();
 })().catch(error => { console.error(error); process.exitCode=1; });
+
+const estimated = normalizeItem({...summary, shippingOptions:[
+  {shippingCost:{value:'12'},maxEstimatedDeliveryDate:'2026-10-15T00:00:00Z',shipToLocationUsedForEstimate:{country:'US',postalCode:'10001'}},
+  {shippingCost:{value:'0'},maxEstimatedDeliveryDate:'2026-10-21T00:00:00Z',shipToLocationUsedForEstimate:{country:'US',postalCode:'11201'}}
+]}, 'home', 1, market);
+assert.equal(estimated.shipping_cost,0);
+assert.equal(estimated.delivery_estimated_at,'2026-10-21T00:00:00.000Z');
+assert.equal(estimated.delivery_country,'US');
+assert.equal(estimated.delivery_postal_code,'11201');
+assert.equal(normalizeItem(summary,'home',1,market).delivery_estimated_at,'','No fabricated arrival estimate');
+
+(async()=>{
+  let lookedUp=[];
+  const wanted={...summary,itemId:'v1|999999999999|0',title:'Halloween Pumpkin String Lights'};
+  const strict=await searchProducts({clientId:'test',clientSecret:'test',campaignId,market,keywords:['Halloween lights'],strictQueries:true,detailLimit:2,targetEligible:1,
+    client:{search:async()=>[summary,wanted],getItem:async id=>{lookedUp.push(id);return {...wanted,primaryProductReviewRating:{averageRating:'4.7',reviewCount:30}};}}});
+  assert.deepEqual(lookedUp,[wanted.itemId],'Irrelevant listings must not spend the targeted detail budget');
+  assert.equal(strict[0].title,wanted.title);
+})().catch(error=>{console.error(error);process.exitCode=1;});

@@ -4,11 +4,11 @@ const { internalTrendSignals, researchTrendSignals } = require('../src/merchandi
 const now = Date.parse('2026-10-13T17:00:00Z'), DAY = 86400000;
 const iso = n => new Date(n).toISOString();
 const db = new DatabaseSync(':memory:');
-db.exec('CREATE TABLE search_queries(market TEXT,normalized TEXT,searched_at TEXT)');
-const insert = db.prepare('INSERT INTO search_queries VALUES(?,?,?)');
+db.exec('CREATE TABLE analytics_events(market TEXT,event_type TEXT,session_id TEXT,query_text TEXT,occurred_at TEXT,user_agent TEXT)');
+const insert = db.prepare('INSERT INTO analytics_events VALUES(?,?,?,?,?,?)');
 function searches(query, current, previous, market = 'us') {
-  for (let i = 0; i < current; i++) insert.run(market, query, iso(now - DAY));
-  for (let i = 0; i < previous; i++) insert.run(market, query, iso(now - 8 * DAY));
+  for (let i = 0; i < current; i++) insert.run(market, 'search', `visitor-${query}-${i}`, query, iso(now - (1+i%3)*DAY), 'Mozilla/5.0');
+  for (let i = 0; i < previous; i++) insert.run(market, 'search', `previous-${query}-${i}`, query, iso(now - 8*DAY), 'Mozilla/5.0');
 }
 searches('standing desk', 9, 4);
 searches('lego flowers', 8, 0);
@@ -18,11 +18,17 @@ searches('password help', 30, 0);
 searches('weather', 30, 0);
 searches('monitor', 20, 0, 'ca');
 searches('standing desk', 8, 0, 'de');
-insert.run('us', 'future product', iso(now + DAY));
+insert.run('us','search','future-session','future product',iso(now+DAY),'Mozilla/5.0');
+for(let i=0;i<50;i++) {
+  insert.run('us','search','single-repeat-session','desk',iso(now-(1+i%3)*DAY),'Mozilla/5.0');
+  insert.run('us','search',`internal_owner-${i}`,'owner product',iso(now-(1+i%3)*DAY),'Mozilla/5.0');
+  insert.run('us','search',`bot-session-${i}`,'bot product',iso(now-(1+i%3)*DAY),'HeadlessChrome');
+  insert.run('us','search',`spike-session-${i}`,'one day spike',iso(now-DAY),'Mozilla/5.0');
+}
 const internal = internalTrendSignals(db, { now });
 assert.deepEqual(internal.map(s => s.title), ['standing desk', 'lego flowers']);
 assert.equal(internal[0].confidence, 'observed_interest');
-assert.equal(internal[0].evidence.previousSearches, 4);
+assert.equal(internal[0].evidence.previousSessions, 4);
 assert.equal(internalTrendSignals(db, { now, market: 'ca' }).length, 1);
 assert.equal(internalTrendSignals(db, { now, market: 'de' }).length, 1);
 assert.deepEqual(internalTrendSignals(db, { now, market: 'mx' }), []);

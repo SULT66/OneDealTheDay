@@ -12,11 +12,13 @@ const REASONS:Record<string,string> = {
   price_check_missing:'Price check missing', price_check_in_future:'Price checked after this run started', price_stale:'Price needs checking again',
   offer_incomplete:'Offer data incomplete', stock_not_confirmed:'Stock not confirmed', returns_unknown:'Return terms missing',
   returns_refused:'Returns refused', shipping_unknown:'Shipping cost missing', shipping_expensive:'Shipping too expensive',
+  product_reviews_missing:'Product reviews missing or fewer than 5',
+  holiday_delivery_unknown:'Holiday delivery estimate missing or wrong destination', holiday_delivery_late:'Estimated arrival too late for the occasion',
   rating_below_bar:'Product rating below threshold', seller_below_bar:'Seller record below threshold',
   basic_eligibility_failed:'Basic offer checks failed', quality_below_bar:'Offer quality below threshold'
 };
 type Snapshot = {
-  enabled: boolean; researchEnabled: boolean;
+  enabled: boolean; researchEnabled: boolean; discoveryEnabled: boolean;
   performance: {days: number; purchasesAvailable: boolean; shelves: Array<{placement: string; impressions: number; detailClicks: number}>};
   status: { stages: Record<string, Stage>; futureEvents: Array<{id: string; title: string; preparationAt?: string; startsAt: string}>;
     shelves: Array<{id: string; title: string; productCount: number}>;
@@ -24,8 +26,8 @@ type Snapshot = {
 };
 const ROLES = [
   { title: "1 · Holidays", stages: ["calendar"], description: "Plans regional occasions and promotion windows." },
-  { title: "2 · Demand", stages: ["internal", "research"], description: "Compares site searches and checks cited external interest." },
-  { title: "3 · Catalogue", stages: ["selection"], description: "Matches actual products and checks buying terms." },
+  { title: "2 · Demand", stages: ["internal", "research"], description: "Compares distinct visitor sessions over several days, excluding owner tests, and checks cited external interest." },
+  { title: "3 · Catalogue", stages: ["discovery", "selection"], description: "Searches eBay for active themes; checks product reviews, buying terms and holiday delivery." },
   { title: "4 · Placement", stages: ["placement"], description: "Publishes shelves and removes expired offers." },
 ];
 
@@ -78,10 +80,10 @@ export function MerchandisingPanel({ adminKey, active }: { adminKey: string; act
         {["us", "ca", "uk", "fr", "de"].map(code => <option key={code} value={code}>{code.toUpperCase()}</option>)}
       </select></label>
     </div>
-    <p className="mt-2 text-sm text-fg-muted">Catalogue checks run hourly; the calendar refreshes weekly. Paid external research runs at most once per 24 hours in enabled markets.</p>
+    <p className="mt-2 text-sm text-fg-muted">Catalogue checks run hourly; targeted eBay searches run at most every 6 hours in enabled markets; the calendar refreshes weekly. Paid external research runs at most once per 24 hours in enabled markets.</p>
     {error && <p role="alert" className="mt-4 text-sm text-fg-muted">{error}</p>}
     {data && <>
-      <p className="mt-3 text-xs text-fg-subtle">{data.enabled ? "Placement enabled" : "Placement disabled"} · {data.researchEnabled ? "External research configured for this market" : "External research disabled for this market"}</p>
+      <p className="mt-3 text-xs text-fg-subtle">{data.enabled ? "Placement enabled" : "Placement disabled"} · {data.researchEnabled ? "External research configured for this market" : "External research disabled for this market"} · {data.discoveryEnabled ? "Targeted eBay search enabled" : "Targeted eBay search disabled"}</p>
       <div className="mt-5 grid gap-3 sm:grid-cols-2">
         {ROLES.map(role => <article key={role.title} className="rounded-xl border border-border p-4">
           <h3 className="font-semibold text-fg">{role.title}</h3>

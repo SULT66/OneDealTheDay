@@ -72,6 +72,7 @@ const { startCacheWarmer, pathsFor } = require("./cacheWarmer");
 const { readEbayStock, refreshDropStock, ebayItemIdFrom } = require("./liveStock");
 const { comparableFor, refreshComparables } = require("./comparables");
 const { updateTrackedPrices } = require("./trackedPrice");
+const { discoverEbay } = require("./merchandisingDiscovery");
 const { runMerchandising, getMerchandisingShelves, merchandisingStatus } = require("./merchandising");
 const { indexEvidence, isIndexableProduct } = require("./indexability");
 const { missingQueries, pruneSearches, searchDemand } = require("./searchQueries");
@@ -3227,6 +3228,8 @@ app.get("/api/merchandising", (req, res) => {
     .map(shelf => ({
       id:shelf.id, title:shelf.title, kind:shelf.kind, confidence:shelf.confidence,
       sourceUrls:shelf.sourceUrls || [], endsAt:shelf.endsAt,
+      eventAt:shelf.eventAt, evidenceType:shelf.evidenceType, interestSessions:shelf.interestSessions,
+      selectionEvidence:shelf.selectionEvidence,
       products:shelf.products
         .filter(product => !category || String(product.normalized_category || product.category).toLowerCase() === category)
         .map(product => presentProduct(localizeProduct({...product, deal_url:dealPath(product)}, language), language))
@@ -3239,7 +3242,8 @@ app.get("/api/admin/merchandising", admin, (req, res) => {
   return res.set("Cache-Control", "no-store").json({
     market:marketCode, enabled:merchandisingEnabled,
     researchEnabled:merchandisingResearchMarkets.has(marketCode),
-    schedule:{catalog:"hourly", externalResearch:"at most once per 24 hours", calendar:"weekly"},
+    discoveryEnabled:c.liveRefreshEnabled && merchandisingDiscoveryMarkets.has(marketCode),
+    schedule:{catalog:"hourly", ebayDiscovery:"at most once per 6 hours; up to 6 searches and 60 details", externalResearch:"at most once per 24 hours", calendar:"weekly"},
     status:merchandisingStatus(db, {market:marketCode}),
     performance:merchandisingPerformance(marketCode)
   });
@@ -3249,7 +3253,7 @@ app.post("/api/admin/merchandising/run", admin, express.json({limit:"1kb"}), (re
   if (!marketCode) return res.status(400).json({error:"Choose a supported market."});
   if (!merchandisingEnabled) return res.status(409).json({error:"Merchandising is disabled."});
   // Paid calls retain the same daily throttle on manual and scheduled runs.
-  runMerchandising(db, {market:marketCode, research:merchandisingResearchMarkets.has(marketCode)})
+  runMerchandisingForMarket(marketCode)
     .then(() => publicHtmlCache.clear())
     .catch(error => console.error(`[merchandising] ${marketCode}: ${error.message}`));
   return res.status(202).json({market:marketCode, status:"accepted"});
@@ -4280,6 +4284,15 @@ function backfillBrands() {
 }
 
 const merchandisingEnabled = String(process.env.MERCHANDISING_ENABLED || "true").toLowerCase() !== "false";
+const merchandisingDiscoveryMarkets = new Set(
+  String(process.env.MERCHANDISING_DISCOVERY_MARKETS || c.primaryMarket)
+    .split(",").map(normalizeMarket).filter(code => c.markets.includes(code))
+);
+function runMerchandisingForMarket(marketCode) {
+  return runMerchandising(db, {market:marketCode, research:merchandisingResearchMarkets.has(marketCode),
+    discover: c.liveRefreshEnabled && merchandisingDiscoveryMarkets.has(marketCode)
+      ? args => discoverEbay(c, args) : undefined});
+}
 const merchandisingResearchMarkets = new Set(
   String(process.env.MERCHANDISING_RESEARCH_MARKETS || c.primaryMarket)
     .split(",").map(normalizeMarket).filter(code => c.markets.includes(code))
@@ -4305,7 +4318,7 @@ async function merchandisingSweep() {
   try {
     for (const marketCode of c.markets) {
       try {
-        await runMerchandising(db, {market:marketCode, research:merchandisingResearchMarkets.has(marketCode)});
+        await runMerchandisingForMarket(marketCode);
       } catch (error) {
         console.error(`[merchandising] ${marketCode}: ${error.message}`);
       }
