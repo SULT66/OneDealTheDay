@@ -1,8 +1,10 @@
+import { StructuredData } from "@/components/site/StructuredData";
+import { schemaAvailability } from "@/lib/schemaAvailability";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, ShieldCheck } from "@phosphor-icons/react/ssr";
 import { getMarket, getTodaysDrop } from "@/lib/catalog";
-import { countryName, getLanguage, t } from "@/lib/i18n";
+import { countryName, getLanguage, marketAlternates, t } from "@/lib/i18n";
 import { formatDateTime } from "@/lib/format";
 import { isCheckedToday } from "@/src/marketCalendar";
 import { NextDropCountdown } from "@/components/site/NextDropCountdown";
@@ -32,7 +34,7 @@ export async function generateMetadata({
   return {
     title: t(language, "app.drop.title"),
     description: t(language, "app.drop.metaDescription", { country }),
-    alternates: { canonical: `/${market}/daily-drop` },
+    alternates: { canonical: `/${market}/daily-drop`, languages: marketAlternates("/daily-drop") },
   };
 }
 
@@ -73,8 +75,16 @@ export default async function DailyDropPage({
     );
   }
 
+  const url = `https://www.onedailydrop.com/${market}/daily-drop`;
+  const schema = { "@context": "https://schema.org", "@type": "Product", name: drop.title, url,
+    ...(drop.image ? { image: drop.image } : {}),
+    ...(drop.brand ? { brand: { "@type": "Brand", name: drop.brand } } : {}),
+    ...(drop.priceIsCurrent ? { offers: { "@type": "Offer", url, price: drop.price, priceCurrency: drop.currency,
+      ...(schemaAvailability(drop.availability) ? { availability: schemaAvailability(drop.availability) } : {}) } } : {})
+  };
   return (
     <div className="mx-auto max-w-7xl px-4 pb-24 pt-8 sm:px-6 sm:pt-10">
+      <StructuredData data={schema} />
       <section
         aria-labelledby="drop-hero-title"
         className="grid gap-4 lg:grid-cols-[1.35fr_1fr]"

@@ -646,7 +646,7 @@ app.post("/api/shopping-assistant/feedback", shoppingAssistantRateLimit, (req, r
  * they reach the catch-all at the bottom of this file instead of being
  * rewritten back onto the old bare-URL Express routes.
  */
-const nextOwnedPath = /^\/(?:about|account|saved|live|how-we-select-deals|search|daily-drop|archive|contact|privacy|terms|affiliate-disclosure|editorial-policy|for-retailers|price-disclaimer|stores|coupons|category|deal\/[^/]+|category\/[^/]+)\/?$/;
+const nextOwnedPath = /^\/(?:about|account|saved|live|how-we-select-deals|search|daily-drop|archive|contact|privacy|terms|affiliate-disclosure|editorial-policy|for-retailers|price-disclaimer|stores|coupons|guides|guides\/[^/]+|category|deal\/[^/]+|category\/[^/]+)\/?$/;
 app.use((req, res, next) => {
   const match = req.url.match(new RegExp(`^/(${marketCodes.join("|")})(?=/|\\?|$)`));
   /* Compare the path alone, not the whole URL: `/de` was left intact for Next
@@ -833,6 +833,7 @@ const startSession = (res, userId) => {
  * older copy of the same wording. The list survives because the sitemap is
  * built from it.
  */
+const { guides: seoGuides, GUIDE_MARKETS, EDITORIAL_DATE } = require("./seoContent");
 const TEXT_PAGES = ["/about", "/contact", "/privacy", "/terms", "/affiliate-disclosure", "/editorial-policy", "/how-we-select-deals", "/price-disclaimer"];
 app.get("/club", (req, res) => res.sendFile(path.join(publicDir, "club.html")));
 /*
@@ -2400,6 +2401,11 @@ app.get("/sitemap.xml", (req, res) => {
     uniqueProductsInOrder(db.prepare(`SELECT * FROM products WHERE status='published' AND ${sourceSql()} ORDER BY market,COALESCE(ranking_score,score) DESC,score DESC,updated_at DESC`).all())
       .filter(isPubliclyIndexable),
   ).filter(productIsIndexable);
+  // Category hubs add editorial value even when their products are noindex.
+  // Product URLs below retain the existing evidence gate.
+  const hubProducts = capPerSourceAndCategory(
+    uniqueProductsInOrder(db.prepare(`SELECT * FROM products WHERE status='published' AND ${sourceSql()} ORDER BY market,COALESCE(ranking_score,score) DESC,score DESC,updated_at DESC`).all()).filter(isPubliclyIndexable)
+  );
   const urls = [];
   const localizedAlternates = (pathname, codes = marketCodes) => {
     const supported = [...new Set(codes.map(normalizeMarket).filter(Boolean))];
@@ -2416,7 +2422,7 @@ app.get("/sitemap.xml", (req, res) => {
   };
   const categoryMarkets = new Map();
   const brandMarkets = new Map();
-  for (const product of products) {
+  for (const product of hubProducts) {
     const category = canonicalCategory(product);
     if (isPublicCategory(category)) {
       const key = categorySlug(category);
@@ -2432,7 +2438,8 @@ app.get("/sitemap.xml", (req, res) => {
   const brandsMarkets = new Set(products.filter(product => product.brand_slug).map(product => product.market));
   for (const code of marketCodes) {
     const marketProducts = products.filter(product => product.market === code);
-    const categories = PUBLIC_CATEGORIES.filter(category => marketProducts.some(product => canonicalCategory(product) === category));
+    const categoryProducts = hubProducts.filter(product => product.market === code);
+    const categories = PUBLIC_CATEGORIES.filter(category => categoryProducts.some(product => canonicalCategory(product) === category));
     const brands = [...new Map(marketProducts.filter(product => product.brand_slug && !isGenericBrand(product.brand_slug)).map(product => [product.brand_slug, product.brand])).values()];
     const latestUpdate = marketProducts.map(product => validLastmod(product.updated_at)).filter(Boolean).sort().at(-1);
     urls.push({ loc: SITE + marketPath(code), alternates: localizedAlternates("/"), lastmod: latestUpdate });
@@ -2441,7 +2448,7 @@ app.get("/sitemap.xml", (req, res) => {
     categories.forEach(value => urls.push({
       loc: SITE + catPath(value, code),
       alternates: localizedAlternates(`/category/${categorySlug(value)}`, [...(categoryMarkets.get(categorySlug(value)) || [])]),
-      lastmod: marketProducts.filter(product => canonicalCategory(product) === value).map(product => validLastmod(product.updated_at)).filter(Boolean).sort().at(-1)
+      lastmod: categoryProducts.filter(product => canonicalCategory(product) === value).map(product => validLastmod(product.updated_at)).filter(Boolean).sort().at(-1)
     }));
     brands.forEach(value => urls.push({
       loc: SITE + brandPath(value, code),
@@ -2460,6 +2467,11 @@ app.get("/sitemap.xml", (req, res) => {
      following a link, while the old server-rendered pages it *did* know about
      are the ones now returning 410. Listing the current set is half of getting
      the index to match the site. */
+  for (const code of GUIDE_MARKETS) {
+    for (const pathname of ["/guides", ...seoGuides.map(guide => `/guides/${guide.slug}`)]) {
+      urls.push({ loc: SITE + marketPath(code, pathname), alternates: localizedAlternates(pathname, GUIDE_MARKETS), lastmod: EDITORIAL_DATE });
+    }
+  }
   urls.push({loc: SITE + "/us/coupons"});
   const staticPages = [...TEXT_PAGES, "/daily-drop", "/for-retailers", "/stores"];
   for (const code of marketCodes) {

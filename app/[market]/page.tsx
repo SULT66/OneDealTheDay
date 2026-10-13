@@ -1,3 +1,4 @@
+import { StructuredData } from "@/components/site/StructuredData";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, ShieldCheck } from "@phosphor-icons/react/ssr";
@@ -34,7 +35,7 @@ export async function generateMetadata({
      * not repeated at both ends.
      */
     title: {
-      absolute: `OneDailyDrop: ${t(language, "app.home.metaTitle", { country })}`,
+      absolute: language === "en" ? `Deals with price evidence in ${country} | OneDailyDrop` : `OneDailyDrop: ${t(language, "app.home.metaTitle", { country })}`,
     },
     description: t(language, "app.home.metaDescription", { country }),
     alternates: { canonical: `/${market}`, languages: marketAlternates() },
@@ -88,8 +89,13 @@ export default async function MarketHome({ params }: PageProps<"/[market]">) {
     );
   }
 
+  const homeSchema = { "@context": "https://schema.org", "@graph": [
+    { "@type": "WebSite", "@id": "https://www.onedailydrop.com/#website", name: "OneDailyDrop", url: "https://www.onedailydrop.com" },
+    { "@type": "ItemList", name: "Best right now", numberOfItems: picks.length, itemListElement: picks.map((deal, index) => ({ "@type": "ListItem", position: index + 1, name: deal.title, url: `https://www.onedailydrop.com/${market}/deal/${deal.id}` })) }
+  ] };
   return (
     <div className="mx-auto max-w-7xl px-4 pb-24 pt-8 sm:px-6 sm:pt-10">
+      <StructuredData data={homeSchema} />
       {/* ---------------------------------------------------------------- hero */}
       <section
         aria-labelledby="hero-title"

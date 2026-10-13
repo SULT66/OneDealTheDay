@@ -70,6 +70,10 @@ export default async function AboutPage({
         that is one feature of the site rather than the whole of it.
       </p>
 
+      <h2>Who publishes OneDailyDrop</h2>
+      <p>OneDailyDrop was founded by Nijat Mammadov. The site publishes offer comparisons using retailer data, recorded price observations and a documented ranking system. We distinguish automated data checks from independent product testing: appearing in our catalogue does not mean we have personally used the item.</p>
+      <p>OneDailyDrop is responsible for the published methodology and selection rules. You can report a pricing error or ask about a selection through our contact page.</p>
+
       <h2>What checked actually means</h2>
       <p>
         Before a listing appears here it has to have a working retailer link, a

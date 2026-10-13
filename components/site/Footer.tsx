@@ -1,3 +1,4 @@
+import { GUIDE_MARKETS } from "@/src/seoContent";
 import { LanguageLink } from "./LanguageLink";
 import Link from "next/link";
 import {
@@ -143,6 +144,7 @@ export async function Footer({ market }: { market: string }) {
                   {t(language, "app.footer.about")}
                 </Link>
               </li>
+              {GUIDE_MARKETS.includes(market) && <li><Link href={`/${market}/guides`} className="inline-flex min-h-6 items-center text-fg-muted hover:text-fg">Deal guides &amp; price checks</Link></li>}
               {legal.map((item) => (
                 <li key={item.href}>
                   <Link

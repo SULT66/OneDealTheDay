@@ -114,7 +114,7 @@ export default async function DealPage({
     category: category?.name ?? deal.category,
     ...(deal.brand ? { brand: { "@type": "Brand", name: deal.brand } } : {}),
     ...(deal.image ? { image: deal.images.length ? deal.images : [deal.image] } : {}),
-    ...(deal.rating > 0
+    ...(deal.rating > 0 && deal.reviewCount > 0
       ? {
           aggregateRating: {
             "@type": "AggregateRating",
@@ -125,7 +125,7 @@ export default async function DealPage({
           },
         }
       : {}),
-    offers: {
+    ...(deal.priceIsCurrent ? { offers: {
       "@type": "Offer",
       priceCurrency: deal.currency,
       price: deal.price,
@@ -137,15 +137,16 @@ export default async function DealPage({
       ...(schemaAvailability(deal.availability)
         ? { availability: schemaAvailability(deal.availability) }
         : {}),
+      url: `https://www.onedailydrop.com/${market}/deal/${deal.id}`,
       seller: { "@type": "Organization", name: retailerLabel(deal.retailer) },
-    },
+    } } : {}),
   };
 
   return (
     <div className="mx-auto max-w-7xl px-4 pb-24 pt-8 sm:px-6">
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify({ "@context": "https://schema.org", "@graph": [jsonLd, breadcrumbs] }) }}
+        dangerouslySetInnerHTML={{ __html: JSON.stringify({ "@context": "https://schema.org", "@graph": [jsonLd, breadcrumbs] }).replace(/</g, "\\u003c") }}
       />
 
       <nav aria-label={t(language, "app.list.breadcrumb")} className="mb-6">
