@@ -73,6 +73,9 @@ async function get(route, options) {
   const admin = await get('/api/admin/merchandising?market=us',{headers});
   assert.equal(admin.response.status,200);
   assert.equal(admin.body.performance.purchasesAvailable,false);
+  assert.equal(admin.body.status.diagnostics.signals[0].matched,1);
+  assert.equal(admin.body.status.diagnostics.signals[0].eligible,1);
+  assert.equal(publicResult.body.diagnostics,undefined,'Rejection diagnostics must be admin-only');
   assert.equal((await get('/api/admin/merchandising?market=mx',{headers})).response.status,400);
   // Real event ingestion preserves the new shelf attribution.
   for (const sessionId of ['merch-api-real-session','internal_merch-api-own-session']) {
