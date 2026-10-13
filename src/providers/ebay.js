@@ -153,7 +153,9 @@ function createEbayClient({clientId, clientSecret, campaignId, environment = "pr
       error.status = response.status;
       throw error;
     }
-    return body;
+    // The estimate is requested in this explicit country context. eBay may
+    // omit shipToLocationUsedForEstimate; retain the request provenance.
+    return {...body, _deliveryContextCountry:market.countryCodes?.[0] || "US"};
   }
 
   return {
@@ -262,7 +264,7 @@ function deliveryEstimate(item) {
   const location = option?.shipToLocationUsedForEstimate || {};
   return {
     delivery_estimated_at: Number.isFinite(at) ? new Date(at).toISOString() : "",
-    delivery_country: text(location.country).toUpperCase(),
+    delivery_country: text(location.country || item?._deliveryContextCountry).toUpperCase(),
     delivery_postal_code: text(location.postalCode),
   };
 }
