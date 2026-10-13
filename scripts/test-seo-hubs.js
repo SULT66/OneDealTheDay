@@ -25,6 +25,17 @@ const { id } = db.prepare(`INSERT INTO products(external_id,provider_external_id
 );
 db.prepare("UPDATE products SET normalized_category='Office',commerce_quality=80,evidence_confidence=80 WHERE id=?").run(id);
 
+/* An Electronics listing from one of the laptop brands, so the guide that
+   matches a list of brands is tested against a listing it has to find by brand
+   and not by category — Electronics holds 915 listings and almost none of them
+   are laptops. */
+const laptop = db.prepare(`INSERT INTO products(external_id,provider_external_id,market,title,brand,category,image_url,affiliate_url,retailer_name,availability,checked_at,current_price,currency,source,status,updated_at,first_seen_at,last_seen_at,seller_name,seller_rating,seller_feedback_count,shipping_summary,return_summary) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id`).get(
+  "us:ebay:seo-laptop", "ebay:seo-laptop", "us", "HP 15-fd0000 Laptop 15.6 inch", "HP", "Electronics",
+  "https://i.ebayimg.com/images/g/laptop/s-l1600.jpg", "https://www.ebay.com/itm/987654321?campid=5339179772", "eBay", "In stock", now, 399, "USD", "ebay", "published", now, now, now,
+  "Fixture seller", 99.5, 1000, "Free delivery", "Returns accepted within 30 days"
+).id;
+db.prepare("UPDATE products SET normalized_category='Electronics',commerce_quality=80,evidence_confidence=80 WHERE id=?").run(laptop);
+
 const base = `http://127.0.0.1:${port}`;
 const schemas = html => [...html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].flatMap(match => {
   const data = JSON.parse(match[1]);
@@ -55,8 +66,39 @@ async function run() {
     const nodes = schemas(html);
     assert(nodes.some(node => node["@type"] === "Article"));
     assert(nodes.some(node => node["@type"] === "BreadcrumbList"));
+    /*
+     * No FAQPage, on purpose, and this assertion is the reason written down.
+     *
+     * Google restricted FAQ rich results to authoritative government and health
+     * sites in 2023 and withdrew them from those too on 7 May 2026, so the
+     * markup now produces nothing in Search for any site. It was never a
+     * ranking signal. Adding it would be bytes and a maintenance surface in
+     * exchange for an appearance that no longer exists — and a plan written
+     * from older advice will keep recommending it, which is what this line is
+     * here to answer.
+     */
     assert(!nodes.some(node => node["@type"] === "FAQPage"));
   }
+
+  /*
+   * A guide that covers a niche rather than a brand finds its listings.
+   *
+   * The laptop guide spans seven makers, because "laptop deals" is not one
+   * brand and its category is 915 listings of which almost none are laptops.
+   * Matching by category alone would fill it with phone cases; matching one
+   * brand would leave six out.
+   */
+  const laptopGuide = await page("/us/guides/laptop-pc-deals");
+  assert(laptopGuide.includes("HP 15-fd0000"), "the laptop guide no longer finds a listing from one of its brands");
+  assert(
+    !laptopGuide.includes("Office desk organiser"),
+    "the laptop guide is pulling in whatever shares its category",
+  );
+  const huntingGuide = await page("/us/guides/hunting-outdoor-deals");
+  assert(
+    !huntingGuide.includes("HP 15-fd0000"),
+    "a brand guide is showing a listing from another brand",
+  );
   await page("/fr/guides/real-vs-fake-discounts", 404);
   await page("/us/guides/does-not-exist", 404);
   const hub = await page("/us/category/office");
@@ -66,9 +108,20 @@ async function run() {
   assert(filtered.includes('content="noindex, follow"'), "filter variants must not compete with the hub");
   const product = await page(`/us/deal/${id}`);
   assert(product.includes('content="noindex, follow"'), "the product evidence gate must stay closed");
+  /*
+   * The page every other page cites carried no structured data at all: no
+   * Article saying what it is, no breadcrumb saying where it sits. It is the
+   * one a reviewer opens first and the whole E-E-A-T case rests on it.
+   */
+  const methodologyPage = await page("/us/how-we-select-deals");
+  const methodologyNodes = schemas(methodologyPage);
+  assert(methodologyNodes.some(node => node["@type"] === "Article"), "the methodology page describes itself to nobody");
+  assert(methodologyNodes.some(node => node["@type"] === "BreadcrumbList"));
+  assert(!methodologyNodes.some(node => node["@type"] === "FAQPage"), "see the note above on FAQ rich results");
+
   const robots = await page("/robots.txt");
   assert(robots.includes("Disallow: /go/"));
   assert(!robots.includes("Disallow: /us/deal/"), "Google must be able to see product noindex");
-  console.log("SEO hubs: routing, schema, canonical/hreflang, sitemap and noindex passed");
+  console.log("SEO hubs: routing, schema, canonical/hreflang, sitemap, niche guides and noindex passed");
 }
 run().then(() => process.exit(0)).catch(error => { console.error(error); process.exit(1); });

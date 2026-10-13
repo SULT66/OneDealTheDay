@@ -51,6 +51,33 @@ const guides = [
     ]
   },
   {
+    slug: "laptop-pc-deals", title: "Laptop and PC deals: the model number, not the marketing name",
+    description: "Match the exact configuration, read what refurbished means on each listing, and check which price evidence exists before trusting a discount.",
+    query: "", category: "electronics",
+    brands: ["HP", "Dell", "Lenovo", "ASUS", "Apple", "Acer", "MSI"],
+    sections: [
+      ["The product name is not the product", "A laptop family name identifies a chassis, not a machine. The same HP 15, Dell Inspiron 15 or Lenovo IdeaPad 3 covers dozens of builds with different processors, memory, storage and screens, sold at prices that differ by hundreds. Find the full model or part number in the listing and compare that. Two listings sharing a family name are not two prices for the same thing."],
+      ["Four specifications decide the price", "Processor generation, memory, storage type and capacity, and the screen panel. A current-generation chip against one three years old is the difference most discounts are hiding. Check whether the memory is soldered to the board, because a cheap 8GB machine that cannot be upgraded is a different purchase from one that can. For screens, panel type and resolution matter more than size."],
+      ["Refurbished, renewed, open box and used are four conditions", "Marketplace listings use these words loosely and they are not interchangeable. Ask who refurbished it, what was replaced, what warranty comes with it and from whom, and for a used machine what the battery health is. A manufacturer-refurbished unit with a year of cover and a privately refurbished one with thirty days are both called refurbished. The condition field on the listing, not the title, is the one to read."],
+      ["What the price evidence here can and cannot tell you", "A tracked-drop label means we recorded that listing's price falling. It does not mean the configuration is competitive, because a poor specification can fall in price and still be poor value. Where a retailer shows a reference price, it is their comparison, labelled as theirs. Neither number says anything about the machine itself; the specification and the reviews do."],
+      ["Check the warranty region before you check the price", "Coverage is regional. A machine imported from another market may carry a warranty that cannot be claimed where you live, and a marketplace seller's own guarantee is not the manufacturer's. Confirm what is covered, by whom, for how long, and whether returns run to the seller or to the manufacturer."],
+      ["Current catalogue listings", "The listings below are laptops and desktops from the brands above, drawn from the current catalogue. They are not a survey of the market. Open each one and confirm the configuration, the condition and the delivered total on the retailer's page before buying."]
+    ]
+  },
+  {
+    slug: "hunting-outdoor-deals", title: "Hunting and outdoor gear: fit, rating and certification before price",
+    description: "Compare sizing over layers, waterproof ratings, temperature ratings and safety certification before a sale percentage.",
+    query: "Tidewe", category: "sports-outdoors",
+    sections: [
+      ["Size for what you will wear underneath", "Outdoor clothing is bought over base and mid layers, so the size that fits in a shop does not fit in the field. Read the manufacturer's measurements rather than the letter size, and check sleeve and inseam length separately from chest and waist. Returning a jacket after a season opens is a cost the discount does not cover."],
+      ["Waterproof and water-resistant are different claims", "A water-resistant finish sheds a shower. A waterproof garment states a hydrostatic head in millimetres and seam sealing, and a breathability figure alongside it. A listing that says only \"waterproof\" with no rating is making a marketing claim, not a specification. Taped seams, storm flaps and cuff closures decide whether the rating survives contact with weather."],
+      ["Temperature ratings describe a test, not a forecast", "A comfort rating is measured under laboratory conditions with a defined clothing layer, and your experience depends on wind, damp, how long you stay still and what you are standing on. Treat a rating as a comparison between products rather than a promise. For boots, insulation in grams is comparable only within the same construction."],
+      ["Safety-critical gear is not a price decision", "Treestands, harnesses, climbing sticks and life vests carry certification for a reason. Buy these new, from a seller who states the standard the product meets and its date of manufacture, and do not buy them used from a marketplace. No discount on this site or anywhere else is a reason to carry less certification than the activity requires."],
+      ["What our evidence covers here", "Our tracked-drop label reports price movement we recorded for that listing. Most outdoor listings in this catalogue arrive through merchant feeds that send no product reviews, which is why many carry no OneDailyDrop Score. A missing score means the evidence does not support a number, not that the product is poor. Read the manufacturer's specification before the percentage."],
+      ["Current catalogue listings", "The listings below come from the current catalogue and are not a survey of the market. Sizing, stock and return terms vary by retailer. Confirm the size chart and the return window on the retailer's page before buying."]
+    ]
+  },
+  {
     slug: "art-supply-deals", title: "Art supply deals: compare quantity, grade and delivery",
     description: "Find art supply listings and compare cost per usable unit, material grade and retailer terms rather than a headline percentage.",
     query: "", category: "arts-crafts",
