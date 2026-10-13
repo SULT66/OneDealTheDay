@@ -400,6 +400,14 @@ assert(
  *
  * So this is checked as a contract rather than field by field: whatever the
  * adapter reads off a raw product, the compact response has to carry.
+ *
+ * The contract used to cover only the display_ fields, and the next one to go
+ * missing was not a display_ field: tracked_drop_percent, the fall our own
+ * tracking recorded, left off the same hand-written list. 115 listings carried
+ * one on 2026-10-13 and not one of them could say so on a card. So the check
+ * now covers every field the card adapter reads — except a name used purely as
+ * a fallback behind a field that is on the list (`raw.display_x || raw.x`),
+ * which is allowed to be absent by design.
  */
 const compactStart = appSource.indexOf("if (!compactResponse) return shaped;");
 const compactBlock = compactStart > 0
@@ -407,12 +415,28 @@ const compactBlock = compactStart > 0
   : "";
 assert(compactBlock, "the compact product projection moved out of app.js");
 const compactFields = new Set(
-  [...compactBlock.matchAll(/^\s+(display_[a-z_]+):/gm)].map((match) => match[1]),
+  [...compactBlock.matchAll(/^\s+([a-z_]+):/gm)].map((match) => match[1]),
+);
+
+/* Only the function that builds a catalogue card. adaptPriceHistory reads a
+   different payload, from a different route. */
+const cardAdapter = adapter.slice(
+  adapter.indexOf("export function adaptProduct"),
+  adapter.indexOf("export function adaptPriceHistory"),
+);
+assert(cardAdapter, "adaptProduct moved; this contract no longer reads the card adapter");
+
+/* A name used only as a fallback behind a field that is on the list is meant
+   to be absent — `raw.display_availability || raw.availability`. */
+const fallbacks = new Set(
+  [...cardAdapter.matchAll(/\|\|\s*raw\.([a-z_]+)/g)].map((match) => match[1]),
 );
 const adapterReads = [
-  ...new Set([...adapter.matchAll(/raw\.(display_[a-z_]+)/g)].map((match) => match[1])),
-];
-assert(adapterReads.length > 0, "the adapter reads no display fields at all, which cannot be right");
+  ...new Set([...cardAdapter.matchAll(/raw\.([a-z_]+)/g)].map((match) => match[1])),
+].filter((field) => !fallbacks.has(field));
+
+assert(adapterReads.length > 10, "the adapter reads almost nothing, which cannot be right");
+assert(adapterReads.includes("tracked_drop_percent"), "the card no longer reads our own measured drop");
 for (const field of adapterReads) {
   assert(
     compactFields.has(field),
