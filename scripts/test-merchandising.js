@@ -10,6 +10,7 @@ Module._load = function(request, parent, ...rest) {
     if (request === './merchandisingCalendar') return { calendarSignals: () => [] };
     if (request === './merchandisingTrends') return { internalTrendSignals: () => [], researchTrendSignals: async ({ market }) => { calls++; if (gate) await gate; return failResearch ? { status: 'failed', signals: [], reason: 'timeout' } : { status: 'success', signals: [signal(market)] }; } };
     if (request === './merchandisingSelection') return {
+      merchandisingDiagnostics: () => ({assessed:0, eligible:0, rejectionCounts:{}, signals:[]}),
       isPromotionEligible: (row, { market, now: at }) => row.market === market && row.availability === 'in_stock' && Number(row.link_last_status || 200) < 400 && Date.parse(row.checked_at) + DAY > at,
       selectMerchandise: (rows, signals, opts) => { if (chooseFail) throw Error('selector unavailable'); return signals.map(s => ({ signal: s, products: rows.filter(r => r.market === opts.market).reverse() })); },
     };
