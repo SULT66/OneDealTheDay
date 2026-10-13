@@ -10,6 +10,7 @@ import { isInternalBrowser, setInternalBrowser } from "@/lib/analyticsSession";
 import { AmazonPicks } from "./AmazonPicks";
 import { MediaUpload } from "./MediaUpload";
 import { LiveHostConsole } from "./LiveHostConsole";
+import { MerchandisingPanel } from "./MerchandisingPanel";
 
 /**
  * The admin console: scheduling a Live Drop, and the catalogue refresh.
@@ -628,6 +629,9 @@ export function AdminConsole() {
         )}
       </Card>
       </TabPanel>
+      <TabPanel id="agents" active={tab}>
+        <MerchandisingPanel adminKey={adminKey} active={tab === "agents"} />
+      </TabPanel>
     </div>
   );
 }
@@ -640,6 +644,7 @@ const TABS = [
   { id: "amazon", label: "Amazon picks" },
   { id: "icons", label: "Shop icons" },
   { id: "catalogue", label: "Catalogue" },
+  { id: "agents", label: "Agents" },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];

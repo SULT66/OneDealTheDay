@@ -26,6 +26,7 @@ export async function DealCard({
   index = 0,
   priority = false,
   unavailable = false,
+  tracking,
 }: {
   deal: Deal;
   market: string;
@@ -36,6 +37,7 @@ export async function DealCard({
   /** Position in the grid, used to stagger the entrance. */
   index?: number;
   priority?: boolean;
+  tracking?: { source: "home" | "category"; placement: "seasonal_card" | "trend_card" };
 }) {
   const category = getCategory(deal.category);
   const language = await getLanguage(market);
@@ -51,6 +53,11 @@ export async function DealCard({
     >
       <Body
         {...(unavailable ? {} : { href: `/${market}/deal/${deal.id}` })}
+        {...(!unavailable && tracking ? {
+          "data-merch-product": deal.id,
+          "data-merch-source": tracking.source,
+          "data-merch-placement": tracking.placement,
+        } : {})}
         className={cn(
           "group flex h-full flex-col overflow-hidden rounded-card border border-border bg-surface",
           unavailable

@@ -478,6 +478,15 @@ async function refreshMarket(config, marketCode, options = {}) {
     );
     db.prepare("UPDATE automation_alerts SET resolved_at=? WHERE kind='catalog_refresh' AND market=? AND resolved_at IS NULL")
       .run(new Date().toISOString(), selectedMarket.code);
+    // Refresh local placements after new prices arrive. External trend research
+    // belongs to the throttled hourly job, not every retailer refresh.
+    if (String(process.env.MERCHANDISING_ENABLED || "true").toLowerCase() !== "false") {
+      try {
+        await require("./merchandising").runMerchandising(db, {market:selectedMarket.code, research:false});
+      } catch (error) {
+        console.warn(`[merchandising] ${selectedMarket.code}: ${error.message}`);
+      }
+    }
     return {
       market: selectedMarket.code,
       provider: config.provider,
