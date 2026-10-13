@@ -4,8 +4,10 @@ const { calendarSignals } = require('./merchandisingCalendar');
 const { internalTrendSignals, researchTrendSignals } = require('./merchandisingTrends');
 const { selectMerchandise, isPromotionEligible, promotionExpiresAt, merchandisingDiagnostics } = require('./merchandisingSelection');
 const { PRICE_CONFIDENT_HOURS } = require('./productPresentation');
+const { withVerifiedRetailerTerms } = require('./verifiedRetailerTerms');
 const DAY = 86400000;
 const active = new WeakMap();
+const diagnosticCache = new WeakMap();
 const markets = new Set(require('./markets').codes);
 const stamp = value => typeof value === 'number' ? value : Date.parse(value);
 const json = value => { try { return JSON.parse(value); } catch { return null; } };
@@ -65,7 +67,8 @@ function catalogRows(db, market, publishedOnly = false, now = Date.now()) {
   return db.prepare((hasHealth ? `SELECT p.*,lh.last_status AS link_last_status,
     lh.consecutive_failures AS link_consecutive_failures,lh.last_error AS link_last_error
     FROM products p LEFT JOIN link_health lh ON lh.product_id=p.id WHERE p.market=?`
-    : 'SELECT p.* FROM products p WHERE p.market=?') + filter).all(...(publishedOnly ? [market, market, now] : [market]));
+    : 'SELECT p.* FROM products p WHERE p.market=?') + filter).all(...(publishedOnly ? [market, market, now] : [market]))
+    .map(row => withVerifiedRetailerTerms(row, {now}));
 }
 function priceExpiry(row) {
   return promotionExpiresAt ? stamp(promotionExpiresAt(row)) : stamp(row.checked_at || row.updated_at) + PRICE_CONFIDENT_HOURS * 3600000;
@@ -181,10 +184,19 @@ function merchandisingStatus(db, { market = 'us', now = Date.now() } = {}) {
   if (!markets.has(market)) return null;
   ensureMerchandisingSchema(db);
   const stages = Object.fromEntries(['calendar', 'internal', 'research', 'selection', 'placement'].map(stage => [stage, storedStatus(db, market, stage)]));
+  const lastRun = db.prepare('SELECT * FROM merchandising_runs WHERE market=? ORDER BY started_at DESC LIMIT 1').get(market) || null;
+  let cache = diagnosticCache.get(db);
+  if (!cache) { cache = new Map(); diagnosticCache.set(db, cache); }
+  let entry = cache.get(market);
+  const runKey = `${lastRun?.id || ''}:${lastRun?.finished_at || ''}`;
+  if (!entry || entry.runKey !== runKey || now < entry.at || now - entry.at >= 60000) {
+    entry = {at:now,runKey,value:merchandisingDiagnostics(catalogRows(db, market, false, now), signalsFor(db, market, now), {market, now})};
+    cache.set(market, entry);
+  }
   return { market, stages, roles: { holiday: stages.calendar, demand: { internal: stages.internal, research: stages.research }, catalog: stages.selection, placement: stages.placement },
     futureEvents: signalsFor(db, market, now, true).filter(s => stamp(s.startsAt) > now).map(({ id, title, preparationAt, startsAt, endsAt }) => ({ id, title, preparationAt, startsAt, endsAt })),
-    lastRun: db.prepare('SELECT * FROM merchandising_runs WHERE market=? ORDER BY started_at DESC LIMIT 1').get(market) || null,
-    diagnostics: merchandisingDiagnostics(catalogRows(db, market), signalsFor(db, market, now), {market, now}),
+    lastRun,
+    diagnostics: {...entry.value, checkedAt:new Date(entry.at).toISOString()},
     shelves: getMerchandisingShelves(db, { market, now }).map(({ products, ...s }) => ({ ...s, productCount: products.length })) };
 }
 module.exports = { ensureMerchandisingSchema, runMerchandising, getMerchandisingShelves, merchandisingStatus };

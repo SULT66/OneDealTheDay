@@ -2,6 +2,7 @@ const { categoryLabel, languageTag, t } = require("./i18n");
 const { SCORE_MODEL, scoreProduct, isDailyPickEligible, commerceQuality } = require("./ranker");
 const { canonicalCategory } = require("./catalogTaxonomy");
 const { storefrontUrl } = require("./storefrontLinks");
+const { withVerifiedRetailerTerms } = require('./verifiedRetailerTerms');
 
 const EDITORIAL_SCORE_FLOOR = 60;
 const EDITORIAL_CONFIDENCE_FLOOR = 55;
@@ -487,6 +488,7 @@ function evidenceCount(product) {
 }
 
 function presentProduct(product, language = "en") {
+  product = withVerifiedRetailerTerms(product);
   const publicCategory = canonicalCategory(product);
   if (!product) return product;
   const count = evidenceCount(product);

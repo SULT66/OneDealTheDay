@@ -3,6 +3,7 @@ const { isPublicProduct, uniqueProductsInOrder } = require("./publicCatalog");
 const { offerStatus } = require("./offerStatus");
 const { PRICE_CONFIDENT_HOURS } = require("./productPresentation");
 const { market: marketDefinition, normalizeMarket } = require("./markets");
+const { unknownRetailerTerms } = require('./verifiedRetailerTerms');
 const {
   commerceQuality, headTerm, isEligible, isMainProductQuery, looksLikeAccessory,
   matchesMainProduct, normalizedTitle, queryBudget, searchTokens, landedCost, returnsNotAccepted,
@@ -45,7 +46,7 @@ function promotionRejectionReasons(product, { market = "us", now = Date.now() } 
   const status = offerStatus({ ...product, availability: String(product.availability || "").replace(/_/g, " ") }, { now });
   if (!status.publishable) reasons.push('offer_incomplete');
   if (status.availability !== 'in_stock') reasons.push('stock_not_confirmed');
-  if (status.returns.allowed == null) reasons.push('returns_unknown');
+  if (status.returns.allowed == null || unknownRetailerTerms(product.return_summary)) reasons.push('returns_unknown');
   else if (!status.returns.allowed || returnsNotAccepted(product)) reasons.push('returns_refused');
   if (status.delivery.cost == null) reasons.push('shipping_unknown');
   else if (status.delivery.cost > Number(product.current_price) * 0.5) reasons.push('shipping_expensive');
