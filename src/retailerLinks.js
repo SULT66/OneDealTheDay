@@ -27,6 +27,8 @@ const PLACEMENTS = new Set([
   "archive_title",
   "archive_details",
   "search_suggestion",
+  "seasonal_card",
+  "trend_card",
   "unknown"
 ]);
 const ACTIONS = new Set(["view_details", "view_deal", "shop_all"]);
