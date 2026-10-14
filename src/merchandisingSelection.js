@@ -4,6 +4,7 @@ const { offerStatus } = require("./offerStatus");
 const { MEANINGFUL_REVIEW_COUNT, PRICE_CONFIDENT_HOURS } = require("./productPresentation");
 const { market: marketDefinition, normalizeMarket } = require("./markets");
 const { unknownRetailerTerms } = require('./verifiedRetailerTerms');
+const { FAILURES_BEFORE_ARCHIVE } = require('./linkHealthPolicy');
 const {
   commerceQuality, headTerm, isEligible, isMainProductQuery, looksLikeAccessory,
   matchesMainProduct, normalizedTitle, queryBudget, searchTokens, landedCost, returnsNotAccepted,
@@ -21,11 +22,16 @@ function safeHttps(value) {
   } catch { return false; }
 }
 
-function linkHasFailure(product) {
+function linkHasFailure(product, {tolerateTransient = false} = {}) {
   const health = product.link_health && typeof product.link_health === "object" ? product.link_health : {};
   const status = product.link_last_status ?? health.last_status ?? product.last_status;
   const failures = product.link_consecutive_failures ?? health.consecutive_failures ?? product.consecutive_failures;
   const error = product.link_last_error ?? health.last_error ?? product.last_error;
+  const transient = Number(status) === 429 || Number(status) >= 500 && Number(status) <= 599 ||
+    (status == null && /timeout|timed out|aborted|fetch failed|ECONN|socket/i.test(String(error || '')));
+  // The fresh retailer API data still has to pass every buying check below.
+  // A single outage is not a confirmed dead link; match catalogue retry policy.
+  if (tolerateTransient && transient && Number(failures || 0) < FAILURES_BEFORE_ARCHIVE) return false;
   return Number(failures || 0) > 0 || Boolean(String(error || "").trim()) ||
     (status != null && !(Number(status) >= 200 && Number(status) < 400));
 }
@@ -37,7 +43,7 @@ function* promotionRejections(product, { market = "us", now = Date.now(), requir
   if (String(product.market || "").toLowerCase() !== code ||
       String(product.currency || "").toUpperCase() !== marketDefinition(code).currency) yield 'wrong_market_or_currency';
   if (!safeHttps(product.affiliate_url) || !safeHttps(product.image_url)) yield 'unsafe_link_or_image';
-  if (linkHasFailure(product)) yield 'link_check_failed';
+  if (linkHasFailure(product, {tolerateTransient:!requireReviews})) yield 'link_check_failed';
   const checkedAt = Date.parse(product.checked_at || "");
   if (!Number.isFinite(checkedAt)) yield 'price_check_missing';
   else if (checkedAt > now) yield 'price_check_in_future';
