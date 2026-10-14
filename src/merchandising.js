@@ -6,6 +6,8 @@ const { selectMerchandise, isPromotionEligible, promotionExpiresAt, merchandisin
 const { PRICE_CONFIDENT_HOURS } = require('./productPresentation');
 const { discoveryKeywords, INTERVAL_MS, RETRY_INTERVAL_MS, POLICY_VERSION } = require('./merchandisingDiscovery');
 const { withVerifiedRetailerTerms } = require('./verifiedRetailerTerms');
+const { merchandisingFocus, focusSignals } = require('./merchandisingFocus');
+const CALENDAR_POLICY_VERSION = 'halloween-focus-v1';
 const DAY = 86400000;
 const active = new WeakMap();
 const diagnosticCache = new WeakMap();
@@ -59,8 +61,8 @@ function replaceSignals(db, market, origin, signals, now) {
   });
 }
 function signalsFor(db, market, now, future = false) {
-  return db.prepare(`SELECT payload FROM merchandising_signals WHERE market=? AND ends_at>? ${future ? '' : 'AND starts_at<=?'} ORDER BY starts_at,id`)
-    .all(...(future ? [market, now] : [market, now, now])).map(row => json(row.payload)).filter(Boolean);
+  return focusSignals(db.prepare(`SELECT payload FROM merchandising_signals WHERE market=? AND ends_at>? ${future ? '' : 'AND starts_at<=?'} ORDER BY starts_at,id`)
+    .all(...(future ? [market, now] : [market, now, now])).map(row => json(row.payload)).filter(Boolean));
 }
 function catalogRows(db, market, publishedOnly = false, now = Date.now()) {
   const hasHealth = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='link_health'").get();
@@ -131,11 +133,11 @@ async function runMerchandising(db, { market = 'us', now = Date.now(), research 
     previousSignals = db.prepare('SELECT * FROM merchandising_signals WHERE market=?').all(market);
     db.prepare('INSERT INTO merchandising_runs VALUES (?,?,?,NULL,?,NULL)').run(owner, market, now, 'running');
     const calendar = storedStatus(db, market, 'calendar');
-    if (!calendar || calendar.status !== 'success' || now - calendar.updated_at >= 7 * DAY) {
+    if (!calendar || calendar.status !== 'success' || calendar.details.policyVersion !== CALENDAR_POLICY_VERSION || now - calendar.updated_at >= 7 * DAY) {
       try {
         const signals = calendarSignals({ market, now, horizonDays });
         replaceSignals(db, market, 'calendar', signals, now);
-        status(db, market, 'calendar', now, 'success', { count: signals.length, horizonDays });
+        status(db, market, 'calendar', now, 'success', { count: signals.length, horizonDays, policyVersion:CALENDAR_POLICY_VERSION });
       } catch { status(db, market, 'calendar', now, 'failed', { reason: 'calendar_failed' }); }
     }
     try {
@@ -143,8 +145,11 @@ async function runMerchandising(db, { market = 'us', now = Date.now(), research 
       replaceSignals(db, market, 'internal', signals, now);
       status(db, market, 'internal', now, 'success', { count: signals.length });
     } catch { status(db, market, 'internal', now, 'failed', { reason: 'internal_interest_failed' }); }
+    const focus = merchandisingFocus();
     const previousResearch = storedStatus(db, market, 'research');
-    if (!research) {
+    if (focus) {
+      status(db, market, 'research', now, 'paused', {...previousResearch?.details, reason:'campaign_focus', focus});
+    } else if (!research) {
       if (!previousResearch) status(db, market, 'research', now, 'disabled', { reason: 'research_not_enabled' });
     } else if (!previousResearch?.details.attemptedAt || now - previousResearch.details.attemptedAt >= DAY) {
       status(db, market, 'research', now, 'running', { attemptedAt: now });
@@ -159,7 +164,7 @@ async function runMerchandising(db, { market = 'us', now = Date.now(), research 
     let signals = signalsFor(db, market, now);
     const previousDiscovery = storedStatus(db, market, 'discovery');
     if (typeof discover === 'function' &&
-        (!previousDiscovery?.details.attemptedAt || previousDiscovery.details.policyVersion !== POLICY_VERSION || now - previousDiscovery.details.attemptedAt >= (previousDiscovery.status === 'failed' && previousDiscovery.details.retryable ? RETRY_INTERVAL_MS : INTERVAL_MS))) {
+        (!previousDiscovery?.details.attemptedAt || previousDiscovery.details.policyVersion !== POLICY_VERSION || (previousDiscovery.details.focus || null) !== focus || now - previousDiscovery.details.attemptedAt >= (previousDiscovery.status === 'failed' && previousDiscovery.details.retryable ? RETRY_INTERVAL_MS : INTERVAL_MS))) {
       const keywords = discoveryKeywords(signals, {market, now});
       if (keywords.length) {
         const attemptedAt = now;
@@ -174,6 +179,7 @@ async function runMerchandising(db, { market = 'us', now = Date.now(), research 
         status(db, market, 'discovery', now, result.status || 'failed', {
           attemptedAt: result.status === 'busy' ? previousDiscovery?.details.attemptedAt || null : attemptedAt,
           policyVersion: result.status === 'busy' ? previousDiscovery?.details.policyVersion || null : POLICY_VERSION,
+          focus:result.status === 'busy' ? previousDiscovery?.details.focus || null : focus,
           keywords, count:result.count || 0, reason:result.reason || null, retryable:Boolean(result.retryable),
         });
         signals = signalsFor(db, market, now);
@@ -223,12 +229,12 @@ function merchandisingStatus(db, { market = 'us', now = Date.now() } = {}) {
   let cache = diagnosticCache.get(db);
   if (!cache) { cache = new Map(); diagnosticCache.set(db, cache); }
   let entry = cache.get(market);
-  const runKey = `${lastRun?.id || ''}:${lastRun?.finished_at || ''}`;
+  const runKey = `${merchandisingFocus() || 'all'}:${lastRun?.id || ''}:${lastRun?.finished_at || ''}`;
   if (!entry || entry.runKey !== runKey || now < entry.at || now - entry.at >= 60000) {
     entry = {at:now,runKey,value:merchandisingDiagnostics(catalogRows(db, market, false, now), signalsFor(db, market, now), {market, now})};
     cache.set(market, entry);
   }
-  return { market, stages, roles: { holiday: stages.calendar, demand: { internal: stages.internal, research: stages.research }, catalog: {discovery: stages.discovery, selection: stages.selection}, placement: stages.placement },
+  return { market, focus:merchandisingFocus(), stages, roles: { holiday: stages.calendar, demand: { internal: stages.internal, research: stages.research }, catalog: {discovery: stages.discovery, selection: stages.selection}, placement: stages.placement },
     futureEvents: signalsFor(db, market, now, true).filter(s => stamp(s.startsAt) > now).map(({ id, title, preparationAt, startsAt, endsAt }) => ({ id, title, preparationAt, startsAt, endsAt })),
     lastRun,
     diagnostics: {...entry.value, checkedAt:new Date(entry.at).toISOString()},
