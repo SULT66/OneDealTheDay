@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
-import { countryName, getLanguage } from "@/lib/i18n";
+import { countryName, getLanguage, marketAlternates } from "@/lib/i18n";
 import { SpanishAbout, spanishMeta } from "@/components/site/SpanishPages";
 import { getCatalogSize, getCategoriesWithCounts, getMarket } from "@/lib/catalog";
 import { Prose } from "@/components/site/Prose";
+import { StructuredData } from "@/components/site/StructuredData";
+import { breadcrumbSchema, graph, organizationSchema } from "@/lib/pageSchema";
 
 export async function generateMetadata({
   params,
@@ -17,7 +19,7 @@ export async function generateMetadata({
     ...((await getLanguage(market)) === "es" ? { title: spanishMeta.about.title, description: spanishMeta.about.description } : {}),
     /* The same words live at five market prefixes; this says which one is the
        original rather than leaving search engines to pick. */
-    alternates: { canonical: `/${market}/about` },
+    alternates: { canonical: `/${market}/about`, languages: marketAlternates("/about") },
   };
 }
 
@@ -53,6 +55,11 @@ export default async function AboutPage({
   }
 
   return (
+    <>
+    <StructuredData data={graph(
+      organizationSchema(market),
+      breadcrumbSchema(market, [["About OneDailyDrop"]]),
+    )} />
     <Prose
       market={market}
       crumb="About"
@@ -146,5 +153,6 @@ export default async function AboutPage({
         <a href={`/${market}/for-retailers`}>partner page</a>.
       </p>
     </Prose>
+    </>
   );
 }

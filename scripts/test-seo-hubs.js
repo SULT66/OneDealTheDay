@@ -135,6 +135,44 @@ async function run() {
     "the Pinterest domain claim is gone from the homepage, which un-claims the site without any other symptom",
   );
 
+  /*
+   * The same page at five market prefixes, told apart.
+   *
+   * These eleven carried a canonical and no hreflang, which is the half that
+   * does nothing on its own: a canonical pointing at itself says this URL is
+   * the original of itself, while /us/about, /ca/about, /uk/about, /fr/about
+   * and /de/about remained five pages of identical English competing with one
+   * another. hreflang is the part that says they are one page for five places.
+   */
+  for (const route of [
+    "/us/about", "/us/stores", "/us/coupons", "/us/archive", "/us/contact",
+    "/us/terms", "/us/privacy", "/us/affiliate-disclosure", "/us/editorial-policy",
+    "/us/price-disclaimer", "/us/for-retailers",
+  ]) {
+    const html = await page(route);
+    assert(
+      /hrefLang="en-US"/i.test(html) && /hrefLang="de-DE"/i.test(html) && /hrefLang="x-default"/i.test(html),
+      route + " is back to competing with its own translations at the other market prefixes",
+    );
+    assert(/rel="canonical"/.test(html), route + " lost its canonical");
+  }
+
+  /*
+   * Who publishes this.
+   *
+   * The page that describes the organization carried nothing describing the
+   * organization. It is the half of E-E-A-T an affiliate site is judged
+   * hardest on, and it was the one page where the claim could be made.
+   */
+  const about = schemas(await page("/us/about"));
+  assert(about.some(node => node["@type"] === "Organization"), "the about page names no publisher");
+  assert(about.some(node => node["@type"] === "BreadcrumbList"));
+
+  /* A hub whose whole job is to list things listed nothing. */
+  const guidesHub = schemas(await page("/us/guides"));
+  assert(guidesHub.some(node => node["@type"] === "ItemList"), "the guides hub lists nothing to a crawler");
+  assert(guidesHub.some(node => node["@type"] === "BreadcrumbList"));
+
   const robots = await page("/robots.txt");
   assert(robots.includes("Disallow: /go/"));
   assert(!robots.includes("Disallow: /us/deal/"), "Google must be able to see product noindex");

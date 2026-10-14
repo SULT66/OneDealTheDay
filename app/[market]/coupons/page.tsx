@@ -1,14 +1,15 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { getMerchantCoupons } from "@/lib/catalog";
-import { getLanguage } from "@/lib/i18n";
+import { getLanguage, marketAlternates } from "@/lib/i18n";
 import { CouponCatalog } from "@/components/coupons/CouponCatalog";
 
 export async function generateMetadata({params}: {params:Promise<{market:string}>}): Promise<Metadata> {
   const {market} = await params;
   const spanish = (await getLanguage(market)) === "es";
   return {title:spanish ? "Cupones y códigos de descuento" : "Coupons & promo codes",
-    description:spanish ? "Códigos públicos y de tiendas asociadas, con fuentes oficiales, condiciones y fechas." : "Public and partner store promo codes, with official sources, terms and dates."};
+    description:spanish ? "Códigos públicos y de tiendas asociadas, con fuentes oficiales, condiciones y fechas." : "Public and partner store promo codes, with official sources, terms and dates.",
+    alternates: { canonical: `/${market}/coupons`, languages: marketAlternates("/coupons") }};
 }
 export default async function CouponsPage({params}: {params:Promise<{market:string}>}) {
   const {market} = await params;

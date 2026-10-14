@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { countryName, getLanguage } from "@/lib/i18n";
+import { countryName, getLanguage, marketAlternates } from "@/lib/i18n";
 import { SpanishForRetailers, spanishMeta } from "@/components/site/SpanishPages";
 import { getCatalogSize, getMarkets } from "@/lib/catalog";
 import { Prose } from "@/components/site/Prose";
@@ -17,7 +17,7 @@ export async function generateMetadata({
     ...((await getLanguage(market)) === "es" ? { title: spanishMeta.forRetailers.title, description: spanishMeta.forRetailers.description } : {}),
     /* The same words live at five market prefixes; this says which one is the
        original rather than leaving search engines to pick. */
-    alternates: { canonical: `/${market}/for-retailers` },
+    alternates: { canonical: `/${market}/for-retailers`, languages: marketAlternates("/for-retailers") },
   };
 }
 

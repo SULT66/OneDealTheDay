@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { getLanguage } from "@/lib/i18n";
+import { getLanguage, marketAlternates } from "@/lib/i18n";
 import { SpanishPriceDisclaimer, spanishMeta } from "@/components/site/SpanishPages";
 import { Prose } from "@/components/site/Prose";
 
@@ -25,7 +25,7 @@ export async function generateMetadata({
     ...((await getLanguage(market)) === "es" ? { title: spanishMeta.priceDisclaimer.title, description: spanishMeta.priceDisclaimer.description } : {}),
     /* The same words live at five market prefixes; this says which one is the
        original rather than leaving search engines to pick. */
-    alternates: { canonical: `/${market}/price-disclaimer` },
+    alternates: { canonical: `/${market}/price-disclaimer`, languages: marketAlternates("/price-disclaimer") },
   };
 }
 
