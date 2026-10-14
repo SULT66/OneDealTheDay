@@ -48,6 +48,13 @@ function database() {
   await runMerchandising(db,{now:now+3*3600000,discover});
   assert.equal(discoveryCalls,1,'Repeated manual or hourly checks share the persisted six-hour eBay throttle');
   assert.equal(merchandisingStatus(db,{now}).stages.discovery.details.count,1);
+  const failedDiscovery = async()=>{discoveryCalls++;throw new Error('eBay fetch failed: timeout');};
+  await runMerchandising(db,{now:now+8*3600000,discover:failedDiscovery});
+  assert.equal(getMerchandisingShelves(db,{now:now+8*3600000}).length,1,'Discovery failure must retain valid catalogue shelves');
+  await runMerchandising(db,{now:now+8*3600000+1000,discover:failedDiscovery});
+  assert.equal(discoveryCalls,2,'Manual clicks must not repeat transient failed discovery');
+  await runMerchandising(db,{now:now+9*3600000,discover});
+  assert.equal(discoveryCalls,3,'Transient failure is retried at the next hourly sweep');
   // A failed daily attempt must preserve unexpired prior research and throttle retries.
   db.prepare('UPDATE products SET checked_at=?').run(new Date(now + DAY).toISOString());
   failResearch = true;

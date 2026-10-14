@@ -4,7 +4,7 @@ const { calendarSignals } = require('./merchandisingCalendar');
 const { internalTrendSignals, researchTrendSignals } = require('./merchandisingTrends');
 const { selectMerchandise, isPromotionEligible, promotionExpiresAt, merchandisingDiagnostics, matchesQuery, signalRejectionReasons } = require('./merchandisingSelection');
 const { PRICE_CONFIDENT_HOURS } = require('./productPresentation');
-const { discoveryKeywords, INTERVAL_MS, POLICY_VERSION } = require('./merchandisingDiscovery');
+const { discoveryKeywords, INTERVAL_MS, RETRY_INTERVAL_MS, POLICY_VERSION } = require('./merchandisingDiscovery');
 const { withVerifiedRetailerTerms } = require('./verifiedRetailerTerms');
 const DAY = 86400000;
 const active = new WeakMap();
@@ -82,7 +82,7 @@ function getMerchandisingShelves(db, { market = 'us', now = Date.now(), limit = 
   const shelves = [];
   for (const signal of signalsFor(db, market, now)) {
     const products = placements.filter(p => p.signal_id === signal.id).map(p => rows.get(p.product_id))
-      .filter(row => row && isPromotionEligible(row, { market, now }) &&
+      .filter(row => row && isPromotionEligible(row, { market, now, requireReviews:false }) &&
         !signalRejectionReasons(row, signal, {market, now}).length && priceExpiry(row) > now)
       .filter(row => !category || String(row.normalized_category || row.category).toLowerCase() === String(category).toLowerCase());
     if (!products.length) continue;
@@ -98,6 +98,7 @@ function getMerchandisingShelves(db, { market = 'us', now = Date.now(), limit = 
         matchedQuery: (signal.queries || []).find(q => matchesQuery(product, q)) || '',
         arrivalEstimate: signal.kind === 'seasonal' && Number(signal.metadata?.deliveryLeadDays) ? product.delivery_estimated_at : null,
         destinationPostalCode: product.delivery_postal_code || null,
+        reviewsVerified: isPromotionEligible(product, {market, now}),
       }])),
       evidenceSummary: typeof signal.evidence?.summary === 'string' ? signal.evidence.summary : null,
       startsAt: signal.startsAt, endsAt: new Date(Math.min(stamp(signal.endsAt), ...products.map(priceExpiry))).toISOString(), products });
@@ -158,21 +159,22 @@ async function runMerchandising(db, { market = 'us', now = Date.now(), research 
     let signals = signalsFor(db, market, now);
     const previousDiscovery = storedStatus(db, market, 'discovery');
     if (typeof discover === 'function' &&
-        (!previousDiscovery?.details.attemptedAt || previousDiscovery.details.policyVersion !== POLICY_VERSION || now - previousDiscovery.details.attemptedAt >= INTERVAL_MS)) {
+        (!previousDiscovery?.details.attemptedAt || previousDiscovery.details.policyVersion !== POLICY_VERSION || now - previousDiscovery.details.attemptedAt >= (previousDiscovery.status === 'failed' && previousDiscovery.details.retryable ? RETRY_INTERVAL_MS : INTERVAL_MS))) {
       const keywords = discoveryKeywords(signals, {market, now});
       if (keywords.length) {
         const attemptedAt = now;
         status(db, market, 'discovery', now, 'running', {attemptedAt, keywords});
         let result;
         try { result = await discover({market, keywords}); }
-        catch { result = {status:'failed', reason:'ebay_discovery_failed'}; }
+        catch (error) { result = {status:'failed', reason:'ebay_discovery_failed',
+          retryable:/timeout|timed out|aborted|fetch failed|ECONN|50[234]/i.test(error.message || '')}; }
         if (db.prepare('SELECT owner FROM merchandising_leases WHERE market=?').get(market)?.owner !== owner) return {status:'lease_lost', market};
         // A catalogue import checks its prices after this run starts.
         if (Number.isFinite(stamp(result.observedAt))) now = Math.max(now, stamp(result.observedAt));
         status(db, market, 'discovery', now, result.status || 'failed', {
           attemptedAt: result.status === 'busy' ? previousDiscovery?.details.attemptedAt || null : attemptedAt,
           policyVersion: result.status === 'busy' ? previousDiscovery?.details.policyVersion || null : POLICY_VERSION,
-          keywords, count:result.count || 0, reason:result.reason || null,
+          keywords, count:result.count || 0, reason:result.reason || null, retryable:Boolean(result.retryable),
         });
         signals = signalsFor(db, market, now);
       } else status(db, market, 'discovery', now, 'idle', {reason:'no_active_themes'});
@@ -186,7 +188,7 @@ async function runMerchandising(db, { market = 'us', now = Date.now(), research 
       groups.forEach(({ signal, products }, index) => {
         for (const [productIndex, row] of products.entries()) {
           const expires = Math.min(stamp(signal.endsAt), priceExpiry(row));
-          if (expires > now && isPromotionEligible(row, { market, now })) insert.run(market, signal.id, row.id, index * Math.max(1, limitPerSignal) + productIndex, expires);
+          if (expires > now && isPromotionEligible(row, { market, now, requireReviews:false })) insert.run(market, signal.id, row.id, index * Math.max(1, limitPerSignal) + productIndex, expires);
         }
       });
     });

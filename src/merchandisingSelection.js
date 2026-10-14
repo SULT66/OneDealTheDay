@@ -30,7 +30,7 @@ function linkHasFailure(product) {
     (status != null && !(Number(status) >= 200 && Number(status) < 400));
 }
 
-function* promotionRejections(product, { market = "us", now = Date.now() } = {}) {
+function* promotionRejections(product, { market = "us", now = Date.now(), requireReviews = true } = {}) {
   const code = normalizeMarket(market);
   if (!code || !product || !Number.isFinite(now)) { yield 'invalid_market_or_product'; return; }
   if (!isPublicProduct(product)) yield 'not_public';
@@ -49,7 +49,7 @@ function* promotionRejections(product, { market = "us", now = Date.now() } = {})
   else if (!status.returns.allowed || returnsNotAccepted(product)) yield 'returns_refused';
   if (status.delivery.cost == null) yield 'shipping_unknown';
   else if (status.delivery.cost > Number(product.current_price) * 0.5) yield 'shipping_expensive';
-  if (!(Number(product.rating) > 0) || !(Number(product.review_count) >= MEANINGFUL_REVIEW_COUNT)) yield 'product_reviews_missing';
+  if (requireReviews && (!(Number(product.rating) > 0) || !(Number(product.review_count) >= MEANINGFUL_REVIEW_COUNT))) yield 'product_reviews_missing';
   if (Number(product.rating) > 0 && Number(product.rating) < 4.3) yield 'rating_below_bar';
   if (status.score_missing_reasons.some(item => item.reason === 'seller_record_below_bar')) yield 'seller_below_bar';
   if (!isEligible(product, { currency: marketDefinition(code).currency, maximumShippingRatio: 0.5 })) yield 'basic_eligibility_failed';
@@ -136,11 +136,11 @@ function balanced(products, limit) {
   return selected;
 }
 
-function selectMerchandise(rows, signals, { market = "us", now = Date.now(), limitPerSignal = 6 } = {}) {
+function selectMerchandise(rows, signals, { market = "us", now = Date.now(), limitPerSignal = 6, requireReviews = false } = {}) {
   const code = normalizeMarket(market);
   if (!code || !Number.isFinite(now)) return [];
   const limit = Math.max(0, Math.min(24, Math.floor(Number(limitPerSignal) || 0)));
-  const eligible = array(rows).filter(product => isPromotionEligible(product, { market: code, now }));
+  const eligible = array(rows).filter(product => isPromotionEligible(product, { market: code, now, requireReviews }));
   return array(signals).filter(signal => activeSignal(signal, code, now)).map(signal => {
     const matching = eligible.filter(product => !signalRejectionReasons(product, signal, {market:code, now}).length);
     const ordered = matching.sort((left, right) => (left.source === "ebay" ? 0 : 1) - (right.source === "ebay" ? 0 : 1) || commerceQuality(right) - commerceQuality(left) ||
@@ -157,7 +157,7 @@ function promotionExpiresAt(product) {
 
 function merchandisingDiagnostics(rows, signals, { market = 'us', now = Date.now() } = {}) {
   const assessed = array(rows).filter(row => row.market === market && row.status === 'published')
-    .map(row => ({ row, reasons: promotionRejectionReasons(row, {market, now}) }));
+    .map(row => ({ row, reasons: promotionRejectionReasons(row, {market, now, requireReviews:false}) }));
   const rejectionCounts = {};
   for (const item of assessed) for (const reason of item.reasons) rejectionCounts[reason] = (rejectionCounts[reason] || 0) + 1;
   return { assessed: assessed.length, eligible: assessed.filter(item => !item.reasons.length).length, rejectionCounts,

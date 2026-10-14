@@ -137,11 +137,11 @@ The holiday calendar updates weekly, catalogue placements hourly and after
 retailer refreshes, and external research at most once per 24 hours per enabled
 market. In the primary market, the third role also searches eBay for active themes
 at most once per six hours, rotating up to six queries and looking up at most
-60 item details. Four query slots are reserved for active seasonal themes before
+24 item details. Four query slots are reserved for active seasonal themes before
 interest topics; unused slots can be shared. A discovery policy change runs one
 fresh bounded pass before resuming the six-hour cadence. The existing importer saves real offers and price snapshots;
 this pass does not replace Daily Drop picks or archive unrelated catalogue items.
-Manual and scheduled runs share the persisted throttle, including failed attempts.
+Manual and scheduled runs share the persisted throttle. Transient discovery failures may retry after one hour; other failures retain the six-hour throttle. Each targeted eBay request has a 20-second timeout and at most one transient retry; the entire pass is bounded to three minutes. Concurrent searches share an OAuth token request.
 The paid research uses the existing server-only `OPENAI_API_KEY`, one
 bounded Responses request with at most two web-search calls and 2,400 output
 tokens. Failed lookups are throttled too and retain unexpired earlier evidence.
@@ -150,9 +150,10 @@ Current seasonal and interest shelves appear above the ordinary catalogue on
 the homepage and unfiltered first category page. Explicit price/quality sorts
 and the Daily Drop editorial rules are preserved. Shelf matches must have
 current checked prices, known stock, correct regional currency, delivery costs,
-accepted returns, safe tracked links, at least five product reviews and a rating of 4.3 or higher,
+accepted returns and safe tracked links. Thematic shelves label products without verified
+reviews; reviewed recommendations require at least five product reviews and a rating of 4.3 or higher,
 and no recorded link failure. Established-seller feedback cannot replace product
-reviews on these featured shelves. Dated gift/holiday campaigns also require a
+reviews on reviewed recommendations. Dated gift/holiday campaigns also require a
 destination-specific delivery estimate at least two days before the occasion.
 The destination is taken from the reported estimate or the explicit country
 context sent in the eBay API request; missing postcodes are never invented.
@@ -274,3 +275,5 @@ post-filtered against the requested product title and category before import.
 Rakuten's product response does not supply item-level delivery or return terms;
 OneDailyDrop leaves those fields unknown instead of inventing them, so those
 offers cannot become the Daily Drop until the missing buying terms are verified.
+
+Thematic shelves may include products without verified reviews, with an explicit label. Prices, stock, delivery cost, returns, links, exact model matching and dated-holiday arrival checks remain required. Verified-review recommendations retain the stricter review threshold. Catalogue matches are still selected when discovery fails; expired or invalid products are removed on every public read.
