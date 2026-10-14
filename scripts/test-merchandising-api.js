@@ -3,6 +3,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
+process.env.MERCHANDISING_FOCUS = 'halloween';
 process.env.PORT = '18137';
 process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'odd-merch-api-'));
 process.env.SUPPORTED_MARKETS = 'us,ca';
@@ -36,10 +37,13 @@ const inserted = db.prepare(`INSERT INTO products(${Object.keys(product).join(',
   .run(...Object.values(product));
 const productId = Number(inserted.lastInsertRowid);
 const signal = {id: 'api-seasonal', market: 'us', title: 'Test seasonal shelf', kind: 'seasonal',
-  confidence: 'planning', queries: ['Halloween decoration'], categories: [], sourceUrls: [],
+  metadata:{eventKey:'halloween'}, confidence: 'planning', queries: ['Halloween decoration'], categories: [], sourceUrls: [],
   startsAt: new Date(now - 60000).toISOString(), endsAt: new Date(now + 86400000).toISOString()};
 db.prepare('INSERT INTO merchandising_signals VALUES(?,?,?,?,?,?)').run('us',signal.id,'calendar',now-60000,now+86400000,JSON.stringify(signal));
 db.prepare('INSERT INTO merchandising_placements VALUES(?,?,?,?,?)').run('us',signal.id,productId,0,now+86400000);
+const unrelated = {...signal,id:'api-winter',title:'Unrelated winter shelf',metadata:{eventKey:'winter-home'}};
+db.prepare('INSERT INTO merchandising_signals VALUES(?,?,?,?,?,?)').run('us',unrelated.id,'calendar',now-60000,now+86400000,JSON.stringify(unrelated));
+db.prepare('INSERT INTO merchandising_placements VALUES(?,?,?,?,?)').run('us',unrelated.id,productId,1,now+86400000);
 require('../app');
 const base = `http://127.0.0.1:${process.env.PORT}`;
 const headers = {'X-Admin-Key':process.env.ADMIN_KEY};
@@ -66,6 +70,7 @@ async function get(route, options) {
   assert.equal(home.status,200);
   const homeHtml = await home.text();
   assert(homeHtml.includes('Test seasonal shelf'),'Homepage must render the selected shelf');
+  assert(!homeHtml.includes('Unrelated winter shelf'),'Homepage must suppress previously placed unrelated themes');
   assert(homeHtml.includes('data-merch-placement="seasonal_card"'),'Shelf cards must carry tracking attribution');
   assert(homeHtml.includes('Product reviews, price and buying terms checked'),'Homepage must explain why a product was selected');
   const categoryPage = await fetch(base+'/us/category/home-kitchen');
@@ -96,7 +101,7 @@ async function get(route, options) {
   assert.equal(run.response.status,202);
   await new Promise(resolve=>setTimeout(resolve,100));
   const status = (await get('/api/admin/merchandising?market=us',{headers})).body.status;
-  assert.equal(status.stages.research.status,'disabled');
+  assert.equal(status.stages.research.status,'paused');
   assert.equal(status.stages.placement.status,'success');
   console.log('Merchandising API: public reads, auth, categories, metrics, live expiry and no-key run passed');
   process.exit(0);

@@ -1,3 +1,4 @@
+process.env.MERCHANDISING_FOCUS = 'all';
 const assert = require('node:assert/strict');
 const { DatabaseSync } = require('node:sqlite');
 const Module = require('node:module');
@@ -97,6 +98,7 @@ function database() {
   assert.deepEqual(getMerchandisingShelves(ordered.db,{now})[0].products.map(p=>p.id),[3,1],
     'Persisted shelves must preserve selector order rather than sorting by database ID');
   ordered.native.close();
+  process.env.MERCHANDISING_FOCUS = 'halloween';
   // One end-to-end seasonal pass uses the real Agents 1–3 modules.
   process.env.EBAY_CLIENT_ID = 'merchandising-test';
   process.env.EBAY_CLIENT_SECRET = 'merchandising-test';
@@ -119,8 +121,21 @@ function database() {
   assert.equal(actualShelf[0].kind, 'seasonal');
   assert.equal(actualShelf[0].products[0].id, 10);
   assert.equal(actualShelf[0].confidence, 'planning');
-  assert(real.merchandisingStatus(realDb, { now }).stages.selection.details.gaps.length > 0,
-    'missing holiday categories are reported rather than populated with unrelated products');
+  const focused = real.merchandisingStatus(realDb, {now});
+  assert.equal(focused.stages.selection.details.signals,1,'Only Halloween reaches selection');
+  let focusQueries;
+  await real.runMerchandising(realDb,{now,research:true,discover:async({keywords})=>{focusQueries=keywords;return {status:'success',count:1};}});
+  assert.equal(focusQueries.length,6,'All six discovery slots belong to Halloween');
+  assert(focusQueries.every(q=>q.startsWith('Halloween ')));
+  assert.equal(real.merchandisingStatus(realDb,{now}).stages.research.status,'paused');
+  await real.runMerchandising(realDb,{now:now+1000,discover:async()=>{throw Error('Focused throttle should prevent a second pass');}});
+  assert.equal(real.merchandisingStatus(realDb,{now}).stages.discovery.status,'success');
+  const oldDiscovery=real.merchandisingStatus(realDb,{now}).stages.discovery.details;
+  realDb.prepare("UPDATE merchandising_status SET details=? WHERE market='us' AND stage='discovery'").run(JSON.stringify({...oldDiscovery,focus:null}));
+  await real.runMerchandising(realDb,{now:now+2000,discover:async()=>({status:'busy',reason:'server_settling'})});
+  let resumed=0;
+  await real.runMerchandising(realDb,{now:now+3000,discover:async()=>{resumed++;return {status:'success',count:1};}});
+  assert.equal(resumed,1,'Warm-up must not consume discovery after a campaign change');
   live.close();
   console.log('merchandising: throttle, lease, failed research retention, rollback, market isolation and live eligibility passed');
 })().catch(error => { console.error(error); process.exitCode = 1; });
