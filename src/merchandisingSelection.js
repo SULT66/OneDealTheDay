@@ -1,3 +1,4 @@
+const { salesEvidence } = require('./merchandisingSeeds');
 const { isIP } = require("node:net");
 const { isPublicProduct, uniqueProductsInOrder } = require("./publicCatalog");
 const { offerStatus } = require("./offerStatus");
@@ -107,6 +108,8 @@ function matchesQuery(product, query) {
 
 function signalRejectionReasons(product, signal, {market = "us", now = Date.now()} = {}) {
   if (!array(signal?.queries).some(query => matchesQuery(product, query))) return ["theme_mismatch"];
+  if (Number(signal.metadata?.minimumEbaySales) > 0 &&
+      (salesEvidence(product,{now})?.quantity ?? -1) < signal.metadata.minimumEbaySales) return ['ebay_sales_unproven'];
   // External briefs can include broad search aliases. Those aliases must not
   // put another brand or model under the specifically named research topic.
   if (signal.kind === 'trend' && array(signal.sourceUrls).length && !matchesQuery(product, signal.title)) return ["theme_mismatch"];
@@ -123,12 +126,12 @@ function signalRejectionReasons(product, signal, {market = "us", now = Date.now(
 
 // Prefer demonstrated listing sales among offers that already pass all checks.
 // Bounded tiers avoid treating an old listing as today's fastest seller.
-function salesTier(product) {
-  const sold = product.source === 'ebay' ? product.ebay_sold_quantity : null;
+function salesTier(product, now) {
+  const sold = salesEvidence(product,{now})?.quantity;
   if (!Number.isSafeInteger(sold) || sold < 0) return 0;
   return sold >= 1000 ? 3 : sold >= 100 ? 2 : sold >= 10 ? 1 : 0;
 }
-function balanced(products, limit) {
+function balanced(products, limit, now) {
   const selected = [];
   const retailers = new Map();
   const categories = new Map();
@@ -140,7 +143,7 @@ function balanced(products, limit) {
     const usage = product => (retailers.get(product.retailer_name || product.source) || 0) * 2 +
       (categories.get(product.normalized_category || product.category) || 0);
     for (let index = 1; index < remaining.length; index += 1) {
-      if (remaining[index].source === remaining[best].source && salesTier(remaining[index]) === salesTier(remaining[best]) && usage(remaining[index]) < usage(remaining[best])) best = index;
+      if (remaining[index].source === remaining[best].source && salesTier(remaining[index],now) === salesTier(remaining[best],now) && usage(remaining[index]) < usage(remaining[best])) best = index;
     }
     const [product] = remaining.splice(best, 1);
     selected.push(product);
@@ -159,10 +162,10 @@ function selectMerchandise(rows, signals, { market = "us", now = Date.now(), lim
   const eligible = array(rows).filter(product => isPromotionEligible(product, { market: code, now, requireReviews }));
   return array(signals).filter(signal => activeSignal(signal, code, now)).map(signal => {
     const matching = eligible.filter(product => !signalRejectionReasons(product, signal, {market:code, now}).length);
-    const ordered = matching.sort((left, right) => (left.source === "ebay" ? 0 : 1) - (right.source === "ebay" ? 0 : 1) || salesTier(right) - salesTier(left) || commerceQuality(right) - commerceQuality(left) ||
+    const ordered = matching.sort((left, right) => (left.source === "ebay" ? 0 : 1) - (right.source === "ebay" ? 0 : 1) || salesTier(right,now) - salesTier(left,now) || commerceQuality(right) - commerceQuality(left) ||
       Date.parse(right.checked_at) - Date.parse(left.checked_at) || Number(left.id) - Number(right.id));
     const unique = uniqueProductsInOrder(ordered);
-    return { signal, products: balanced(unique, limit), rejected: array(rows).length - unique.length };
+    return { signal, products: balanced(unique, limit, now), rejected: array(rows).length - unique.length };
   });
 }
 

@@ -74,7 +74,7 @@ function yearlyEvents(year, market) {
   add('mothers-day', market === 'uk' ? 'Mothering Sunday' : "Mother's Day", mothers, gifts, { start: -28, delivery: 7, sources: [motherSource] });
   add('summer-outdoors', 'Summer outdoors', date(year, 6, 1), ['camping tent', 'cooler', 'outdoor chair', 'sunscreen', 'luggage'], { start: -21, end: 92 });
   add('back-to-school', 'Back to school preparation', date(year, 9, 1), ['backpack', 'laptop', 'pencil case', 'notebook', 'desk lamp'], { start: -45, end: 1, delivery: 7, note: 'Planning anchor only; school opening dates vary locally.' });
-  add('halloween', 'Halloween', date(year, 10, 31), ['Halloween costume', 'Halloween decoration', 'Halloween party supplies', 'Halloween inflatable', 'Halloween lights', 'Halloween animatronic'], { start: -35, delivery: 7 });
+  add('halloween', 'Halloween', date(year, 10, 31), ['Halloween costume', 'Halloween decoration', 'Halloween party supplies', 'Halloween inflatable', 'Halloween lights', 'Halloween animatronic', 'Halloween mask', 'Halloween poster'], { start: -35, delivery: 7 });
   add('winter-home', 'Winter home preparation', date(year, 11, 1), ['blanket', 'duvet', 'humidifier', 'winter coat'], { start: -21, end: 120 });
   const thanksgiving = nthWeekday(year, 11, 4, 4);
   if (market === 'us' || market === 'ca') {
@@ -116,6 +116,7 @@ function calendarSignals({ market = 'us', now = Date.now(), horizonDays = 90 } =
         endsAt: midnight(ends, timezone), eventAt: midnight(entry.event, timezone),
         sourceUrls: (entry.sources || []).slice(),
         metadata: { queryBasis: 'editorial suggestions; not proven sales', windowBasis: 'editorial planning',
+          ...(entry.id === 'halloween' && code === 'us' ? {minimumEbaySales:100} : {}),
           timezone, eventKey: entry.id, deliveryLeadDays: entry.delivery || 0,
           deliveryGuidance: entry.delivery ? 'Conservative campaign cutoff; verify each merchant delivery estimate before promising arrival.' : 'No arrival promise; validate availability and delivery.',
           ...(entry.note ? { note: entry.note } : {}) }

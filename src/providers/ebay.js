@@ -212,6 +212,9 @@ function createEbayClient({clientId, clientSecret, campaignId, environment = "pr
     /* The numeric id printed in an ebay.com/itm/… link is the legacy one, and
        the plain item route does not accept it. A Live Drop only ever holds the
        buy link, so this is the form its stock has to be looked up by. */
+    getItemsByItemGroup(groupId, market) {
+      return request("/buy/browse/v1/item/get_items_by_item_group", market, {item_group_id:String(groupId)});
+    },
     getItemByLegacyId(legacyItemId, market) {
       return request("/buy/browse/v1/item/get_item_by_legacy_id", market, {legacy_item_id:String(legacyItemId)});
     }
@@ -392,6 +395,8 @@ function canBeScored(product) {
   return number(product.rating, 0) > 0 && number(product.review_count, 0) >= SCOREABLE_REVIEW_COUNT;
 }
 
+const candidatesFromSeeds = results => results.filter(r => r.status === "fulfilled" && r.value).length;
+
 async function searchProducts({
   clientId,
   clientSecret,
@@ -410,6 +415,7 @@ async function searchProducts({
   keywordsPerRun = 0,
   signal,
   strictQueries = false,
+  preferredItems = [],
   requestTimeoutMs, maxAttempts, searchConcurrency = SEARCH_CONCURRENCY, detailConcurrency = DETAIL_CONCURRENCY
 }) {
   if (!clientId || !clientSecret) throw new Error("eBay Production credentials are missing");
@@ -423,7 +429,25 @@ async function searchProducts({
 
   const ebayClient = client || createEbayClient({clientId, clientSecret, campaignId, environment, fetchImpl, signal, requestTimeoutMs, maxAttempts});
 
+  const detailBudget = Math.min(600, positiveInteger(detailLimit, DEFAULT_DETAIL_LIMIT));
+  const seeds = [...new Map((preferredItems || []).filter(s => /^\d{12}$/.test(s?.legacyId || '') && text(s.query))
+    .map(s => [s.legacyId, s])).values()].slice(0, Math.min(6, detailBudget));
   let quotaExhausted = null;
+  const seeded = await mapLimit(seeds, Math.max(1, Math.min(DETAIL_CONCURRENCY, Number(detailConcurrency) || DETAIL_CONCURRENCY)), async seed => {
+    try {
+      const result = seed.group ? await ebayClient.getItemsByItemGroup(seed.legacyId, market)
+        : await ebayClient.getItemByLegacyId(seed.legacyId, market);
+      const items = seed.group ? result.items || [] : [result];
+      const item = items.filter(item => candidateIsUsable(item) &&
+        String(item.legacyItemId || item.itemId?.split('|')[1]) === seed.legacyId &&
+        require('../merchandisingSelection').matchesQuery(item, seed.query))
+        .sort((a,b) => number(a.price, Infinity) - number(b.price, Infinity))[0];
+      return item ? {item:{...item, _deliveryContextCountry:item._deliveryContextCountry || result._deliveryContextCountry}, keyword:seed.query, sourceRank:1, preferred:true, detailLoaded:true, candidateScore:Infinity} : null;
+    } catch (reason) {
+      if (isQuotaError(reason)) quotaExhausted=reason;
+      throw reason;
+    }
+  });
   const searches = await mapLimit(searchTerms, Math.max(1, Math.min(SEARCH_CONCURRENCY, Number(searchConcurrency) || SEARCH_CONCURRENCY)), async (keyword) => {
     if (quotaExhausted) throw quotaExhausted;
     try {
@@ -433,13 +457,13 @@ async function searchProducts({
       throw reason;
     }
   });
-  if (quotaExhausted) {
+  if (quotaExhausted && !candidatesFromSeeds(seeded)) {
     throw new Error(
       `eBay has no calls left in its daily allowance (${quotaExhausted.message}) ` +
       "Listings already in the catalogue stay until the allowance resets.",
     );
   }
-  const candidates = new Map();
+  const candidates = new Map(seeded.filter(r => r.status === "fulfilled" && r.value).map(r => [r.value.item.itemId, r.value]));
   const failures = [];
   searches.forEach((result, keywordIndex) => {
     if (result.status === "rejected") {
@@ -459,7 +483,7 @@ async function searchProducts({
         candidateScore:candidateScore(item, sourceRank)
       };
       const existing = candidates.get(item.itemId);
-      if (!existing || candidate.candidateScore > existing.candidateScore) candidates.set(item.itemId, candidate);
+      if (!existing || (!existing.preferred && candidate.candidateScore > existing.candidateScore)) candidates.set(item.itemId, candidate);
     });
   });
   if (!candidates.size) throw new Error(`eBay returned no commissionable new fixed-price items. ${failures.join(" | ")}`.trim());
@@ -469,7 +493,7 @@ async function searchProducts({
      and with about one item in five carrying reviews the old ceiling was
      reached long before that. It remains a ceiling — the allowance, not this
      number, is what actually limits a run. */
-  const maximumDetails = Math.min(queue.length, positiveInteger(detailLimit, DEFAULT_DETAIL_LIMIT), 600);
+  const maximumDetails = Math.min(queue.length, detailBudget - seeds.length + candidatesFromSeeds(seeded));
   /* Sixty was the real limit on how many products this site could hold from
      eBay, and nothing said so. A run refreshes what it can, anything it does
      not touch ages out after 48 hours, so the catalogue settles at roughly
@@ -489,6 +513,7 @@ async function searchProducts({
    * it is one nobody has said anything about, and the site now has an honest
    * rung for exactly that. This decides what to spend the shelf space on.
    */
+  const preferred = [];
   const scoreable = [];
   const unreviewed = [];
   const products = [];
@@ -497,7 +522,7 @@ async function searchProducts({
   for (let offset = 0; offset < maximumDetails && scoreable.length < eligibleTarget; offset += detailWorkers) {
     if (signal?.aborted) break;
     const batch = queue.slice(offset, Math.min(offset + detailWorkers, maximumDetails));
-    const details = await mapLimit(batch, detailWorkers, candidate => ebayClient.getItem(candidate.item.itemId, market));
+    const details = await mapLimit(batch, detailWorkers, candidate => candidate.detailLoaded ? Promise.resolve(candidate.item) : ebayClient.getItem(candidate.item.itemId, market));
     details.forEach((result, index) => {
       if (result.status !== "fulfilled") {
         if (isQuotaError(result.reason)) quotaExhausted = result.reason;
@@ -511,7 +536,7 @@ async function searchProducts({
       };
       const product = normalizeItem(merged, candidate.keyword, candidate.sourceRank, market);
       if (hasTrustEvidence(product) && product.current_price > 0 && product.affiliate_url && product.image_url && listingAvailable(merged)) {
-        (canBeScored(product) ? scoreable : unreviewed).push(product);
+        (candidate.preferred ? preferred : canBeScored(product) ? scoreable : unreviewed).push(product);
       }
     });
     /* Once the allowance is gone every further lookup is a refusal. Keep what
@@ -522,7 +547,7 @@ async function searchProducts({
 
   /* What was found that can be scored, then as much of the rest as there is
      room for. */
-  products.push(...scoreable, ...unreviewed.slice(0, Math.max(0, eligibleTarget - scoreable.length)));
+  products.push(...[...preferred, ...scoreable, ...unreviewed].slice(0, eligibleTarget));
 
   if (!products.length) {
     if (quotaExhausted) {
