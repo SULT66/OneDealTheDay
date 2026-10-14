@@ -16,6 +16,8 @@ import { DealCard } from "@/components/deal/DealCard";
 import { NextLiveDrop } from "@/components/live/NextLiveDrop";
 import { AmazonPicks } from "@/components/site/AmazonPicks";
 import { PartnerPicks } from "@/components/site/PartnerPicks";
+import { HalloweenProducts } from "@/components/site/HalloweenProducts";
+import { getHalloweenCollection } from "@/lib/merchandising";
 import { MerchandisingShelves } from "@/components/site/MerchandisingShelves";
 
 export async function generateMetadata({
@@ -43,7 +45,7 @@ export async function generateMetadata({
   };
 }
 
-export default async function MarketHome({ params }: PageProps<"/[market]">) {
+export default async function MarketHome({ params, searchParams }: PageProps<"/[market]">) {
   const { market } = await params;
   const info = getMarket(market);
   const language = await getLanguage(market);
@@ -54,15 +56,19 @@ export default async function MarketHome({ params }: PageProps<"/[market]">) {
      lives at /[market]/daily-drop — one feature here, not the whole product. */
   /* Together, not one after the other: they ask different endpoints and
      neither needs the other's answer. */
-  const [picks, categories] = await Promise.all([
+  const search = await searchParams;
+  const q = typeof search.halloween_q === 'string' ? search.halloween_q.slice(0,120) : '';
+  const sort = typeof search.halloween_sort === 'string' ? search.halloween_sort : 'popular';
+  const [picks, categories, halloween] = await Promise.all([
     getTopPicks(market, 12),
     getCategoriesWithCounts(market, language),
+    getHalloweenCollection(market, language, Number(search.halloween_page) || 1, q, sort),
   ]);
 
   /* Honest empty state rather than a crash — no sample prices or products are
      invented while the catalog for this market is empty (a source outage, or
      before the first refresh has ever run). */
-  if (!picks.length) {
+  if (!picks.length && !halloween.active) {
     return (
       <div className="mx-auto max-w-2xl px-4 py-24 text-center sm:px-6">
         <p className="text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-fg-subtle">
@@ -85,7 +91,7 @@ export default async function MarketHome({ params }: PageProps<"/[market]">) {
             misleading the way a stale catalogue would. */}
         <div className="mt-4 text-left">
           <AmazonPicks market={market} />
-          <MerchandisingShelves market={market} language={language} />
+          <MerchandisingShelves market={market} language={language} excludeHalloween={halloween.active} />
         </div>
       </div>
     );
@@ -98,13 +104,14 @@ export default async function MarketHome({ params }: PageProps<"/[market]">) {
   return (
     <div className="mx-auto max-w-7xl px-4 pb-24 pt-8 sm:px-6 sm:pt-10">
       <StructuredData data={homeSchema} />
-      <HomeCampaigns market={market} language={language} />
+      <HomeCampaigns market={market} language={language} halloween={halloween.active} />
+      {halloween.active && <HalloweenProducts market={market} language={language} data={halloween} q={q} sort={sort} />}
 
       {/* Directly under the hero, and only when a drop is actually scheduled:
           it renders nothing the rest of the time. */}
       <NextLiveDrop market={market} />
 
-      <MerchandisingShelves market={market} language={language} />
+      <MerchandisingShelves market={market} language={language} excludeHalloween={halloween.active} />
 
       {/* ---------------------------------------------------------- categories */}
       <section aria-labelledby="categories-title" className="mt-20">
