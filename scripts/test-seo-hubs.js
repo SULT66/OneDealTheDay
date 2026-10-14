@@ -119,6 +119,22 @@ async function run() {
   assert(methodologyNodes.some(node => node["@type"] === "BreadcrumbList"));
   assert(!methodologyNodes.some(node => node["@type"] === "FAQPage"), "see the note above on FAQ rich results");
 
+  /*
+   * Pinterest has to find its proof on the homepage.
+   *
+   * Claiming the domain is what attributes pins linking here to our account:
+   * without it there is no analytics on which pin earned a visit, and no Rich
+   * Pins, which is what puts the live price on a pin from the Product markup
+   * each listing already carries. The tag is published deliberately and is not
+   * a secret; losing it silently un-claims the domain, and nothing about the
+   * site would look wrong.
+   */
+  const home = await page("/us");
+  assert(
+    home.includes(`name="p:domain_verify" content="c9896fe5c98d503467e12aaa50e2f383"`),
+    "the Pinterest domain claim is gone from the homepage, which un-claims the site without any other symptom",
+  );
+
   const robots = await page("/robots.txt");
   assert(robots.includes("Disallow: /go/"));
   assert(!robots.includes("Disallow: /us/deal/"), "Google must be able to see product noindex");

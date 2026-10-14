@@ -35,6 +35,20 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     images: ["/brand/og-default.png"],
   },
+  /*
+   * Pinterest's proof that this domain is ours.
+   *
+   * Not a secret — it is published in the HTML of every page by design, and
+   * the only thing it does is let Pinterest attribute pins that link here to
+   * our account. Without it the pins are anonymous: no analytics on which pin
+   * earned a visit, and no Rich Pins, which is what pulls the live price onto
+   * a pin from the Product markup each listing already carries.
+   *
+   * Site-wide rather than on one page: Pinterest checks the homepage, and a
+   * claim that lives on a single route is one refactor away from silently
+   * lapsing.
+   */
+  other: { "p:domain_verify": "c9896fe5c98d503467e12aaa50e2f383" },
 };
 
 /* Applies the saved theme before first paint so the page never flashes
