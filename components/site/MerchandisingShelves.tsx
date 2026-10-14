@@ -17,10 +17,10 @@ const COPY: Record<Language, { seasonal: string; trend: string; seasonalNote: st
   de: { seasonal: "Für die Saison", trend: "Steigendes Interesse", seasonalNote: "Für den Anlass ausgewählt. Liefertermine hängen von Ihrer Adresse ab; beim Händler bestätigen.", trendNote: "Basierend auf aktuellen Interessenssignalen; Beliebtheit garantiert keine Ersparnis.", sources: "Quellen" },
 };
 
-export async function MerchandisingShelves({ market, language, category }: {
-  market: string; language: Language; category?: string;
+export async function MerchandisingShelves({ market, language, category, excludeHalloween=false }: {
+  market: string; language: Language; category?: string; excludeHalloween?: boolean;
 }) {
-  const shelves = await getMerchandisingShelves(market, language, category);
+  const shelves = (await getMerchandisingShelves(market, language, category)).filter(shelf=>!excludeHalloween || !shelf.id.includes('-halloween-'));
   if (!shelves.length) return null;
   const copy = COPY[language];
   const reasons = REASONS[language];
@@ -38,11 +38,13 @@ export async function MerchandisingShelves({ market, language, category }: {
       </p>
       <MerchandisingTracking market={market}>
       <ul className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {shelf.products.map((deal, index) => <li key={deal.id}>
+        {shelf.products.map((deal, index) => <li key={deal.id} className="flex min-w-0 flex-col">
+          <div className="flex-1">
           <DealCard deal={deal} market={market} index={index}
             campaignBadge={shelf.id.includes('-halloween-') ? {en:'Halloween Pick',es:'Selección Halloween',fr:'Sélection Halloween',de:'Halloween-Tipp'}[language] : shelf.kind === 'seasonal' ? copy.seasonal : copy.trend}
             tracking={{source:category ? "category" : "home", placement:shelf.kind === "seasonal" ? "seasonal_card" : "trend_card"}} />
-          <div className="mt-2 flex flex-wrap gap-2 px-1 text-xs text-fg-muted">
+          </div>
+          <div className="mt-3 flex shrink-0 flex-wrap gap-2 px-1 text-xs text-fg-muted">
             {shelf.selectionEvidence?.[deal.id]?.ebaySoldQuantity != null && <span className="rounded-full bg-amber-100 px-3 py-1.5 font-bold text-amber-950 ring-1 ring-amber-200" title={{en:'Reported eBay lifetime sales. Listing totals may include all styles; not recent sales or a marketplace rank.',es:'Estimación de eBay para este anuncio; no ventas recientes.',fr:'Estimation eBay pour cette annonce ; pas les ventes récentes.',de:'eBay-Schätzung für dieses Angebot; keine aktuellen Verkaufszahlen.'}[language]}>
               {new Intl.NumberFormat(language).format(shelf.selectionEvidence[deal.id].ebaySoldQuantity!)} {shelf.selectionEvidence[deal.id].ebaySalesEvidence?.basis === 'listing_report' ? {en:'reported sold · listing total',es:'ventas publicadas · total del anuncio',fr:'ventes publiées · total annonce',de:'gemeldete Verkäufe · Angebot gesamt'}[language] : {en:'sold · eBay estimate',es:'vendidos · estimación eBay',fr:'vendus · estimation eBay',de:'verkauft · eBay-Schätzung'}[language]}
             </span>}
