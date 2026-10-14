@@ -46,7 +46,7 @@ ebay.searchProducts = async options => {
   assert.equal(options.strictQueries,true);
   return [{external_id:'v1|123456789012|0', title:'Halloween Decoration Pumpkin Sculpture',
     category:'Halloween decoration', source:'ebay',market:'us',currency:'USD',
-    current_price:30,image_url:'https://i.ebayimg.com/pumpkin.jpg',
+    ebay_sold_quantity:432,current_price:30,image_url:'https://i.ebayimg.com/pumpkin.jpg',
     affiliate_url:'https://www.ebay.com/itm/123456789012?campid=5339179772',retailer_name:'eBay',
     availability:'In stock',rating:4.8,review_count:40,seller_rating:4.98,seller_feedback_count:2000,
     shipping_summary:'Free shipping',shipping_cost:0,return_summary:'30 day returns accepted',
@@ -61,6 +61,7 @@ ebay.searchProducts = async options => {
   const imported=db.prepare("SELECT * FROM products WHERE external_id='us:ebay:v1|123456789012|0'").get();
   assert(imported,'Targeted products must persist in the actual catalogue');
   assert.equal(imported.delivery_country,'US');
+  assert.equal(imported.ebay_sold_quantity,432);
   assert.equal(imported.delivery_estimated_at,iso(now+4*DAY));
   assert.equal(imported.delivery_postal_code,'11201');
   assert.equal(db.prepare('SELECT status FROM products WHERE id=?').get(old.lastInsertRowid).status,'published',
@@ -80,6 +81,7 @@ ebay.searchProducts = async options => {
   let shelf=getMerchandisingShelves(db,{now:Date.now()})[0];
   assert.equal(shelf.products[0].id,imported.id);
   assert.equal(shelf.selectionEvidence[imported.id].matchedQuery,'Halloween decoration');
+  assert.equal(shelf.selectionEvidence[imported.id].ebaySoldQuantity,432);
   assert.equal(shelf.selectionEvidence[imported.id].arrivalEstimate,iso(now+4*DAY));
   await runMerchandising(db,{now:checkedNow+3600000,discover});
   assert.equal(discoveryCalls,1,'Persisted discovery throttle applies across runs');

@@ -1,7 +1,7 @@
 import { StructuredData } from "@/components/site/StructuredData";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRight, ShieldCheck } from "@phosphor-icons/react/ssr";
+import { HomeCampaigns } from "@/components/site/HomeCampaigns";
 import {
   getCategoriesWithCounts,
   getMarket,
@@ -98,77 +98,7 @@ export default async function MarketHome({ params }: PageProps<"/[market]">) {
   return (
     <div className="mx-auto max-w-7xl px-4 pb-24 pt-8 sm:px-6 sm:pt-10">
       <StructuredData data={homeSchema} />
-      {/* ---------------------------------------------------------------- hero */}
-      <section
-        aria-labelledby="hero-title"
-        className="relative grid gap-4 lg:grid-cols-[1.35fr_1fr]"
-      >
-        <div className="rounded-card bg-graphite p-7 text-white sm:p-10 lg:p-12">
-          <p className="text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-white/60">
-            {t(language, "app.home.eyebrow", { country })}
-          </p>
-          <h1
-            id="hero-title"
-            className="mt-4 max-w-lg text-4xl font-bold leading-[1.05] tracking-tight sm:text-5xl lg:text-6xl"
-          >
-            {t(language, "app.home.title")}
-          </h1>
-          <p className="mt-5 max-w-md text-base leading-relaxed text-white/75">
-            {t(language, "app.home.lede")}
-          </p>
-
-          <div className="mt-8 flex flex-wrap gap-3">
-            <Link
-              href={`/${market}/search`}
-              className="inline-flex h-14 cursor-pointer items-center gap-2 rounded-full bg-lime px-7 text-base font-semibold text-ink transition-opacity hover:opacity-88 active:scale-[0.98]"
-            >
-              {t(language, "app.home.browse")}
-              <ArrowRight size={18} weight="bold" aria-hidden="true" />
-            </Link>
-            <Link
-              href={`/${market}/how-we-select-deals`}
-              className="inline-flex h-14 cursor-pointer items-center rounded-full border border-white/30 px-7 text-base font-semibold text-white transition-colors hover:bg-white/10"
-            >
-              {t(language, "app.home.howWeSelect")}
-            </Link>
-          </div>
-
-          <ul className="mt-9 flex flex-wrap gap-x-6 gap-y-2 text-sm text-white/70">
-            {["app.signal.price", "app.signal.quality", "app.signal.seller"].map((key) => (
-              <li key={key} className="flex items-center gap-1.5">
-                <ShieldCheck size={16} weight="fill" aria-hidden="true" className="text-lime" />
-                {t(language, key)}
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        {/* The drop keeps a door on the homepage rather than the homepage. */}
-        <div className="flex flex-col justify-between gap-8 rounded-card bg-lime p-7 sm:p-10">
-          <div>
-            <p className="text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-ink/60">
-              {t(language, "app.home.alsoHere")}
-            </p>
-            <h2 className="mt-3 text-3xl font-bold leading-tight tracking-tight text-ink">
-              {t(language, "app.drop.title")}
-            </h2>
-            <p className="mt-4 max-w-xs text-sm leading-relaxed text-ink/75">
-              {t(language, "app.home.dropTeaser")}
-            </p>
-            <Link
-              href={`/${market}/daily-drop`}
-              className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-ink underline-offset-4 hover:underline"
-            >
-              {t(language, "app.home.seeDrop")}
-              <ArrowRight size={16} weight="bold" aria-hidden="true" />
-            </Link>
-          </div>
-
-          <p className="text-sm font-medium leading-relaxed text-ink/80">
-            {t(language, "app.notSeller")}
-          </p>
-        </div>
-      </section>
+      <HomeCampaigns market={market} language={language} />
 
       {/* Directly under the hero, and only when a drop is actually scheduled:
           it renders nothing the rest of the time. */}
