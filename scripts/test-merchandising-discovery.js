@@ -37,12 +37,12 @@ ebay.searchProducts = async options => {
   calls++;
   assert.deepEqual(options.keywords,terms);
   assert.equal(options.rotate,false,'Targeted themes must not rotate through the broad catalogue list');
-  assert.equal(options.detailLimit,24);
+  assert.equal(options.detailLimit,600);
   assert.equal(options.maxAttempts,2);
   assert.equal(options.requestTimeoutMs,20000);
   assert.equal(options.searchConcurrency,2);
   assert.equal(options.detailConcurrency,4);
-  assert.equal(options.targetEligible,12);
+  assert.equal(options.targetEligible,240);
   assert.equal(options.strictQueries,true);
   return [{external_id:'v1|123456789012|0', title:'Halloween Decoration Pumpkin Sculpture',
     category:'Halloween decoration', source:'ebay',market:'us',currency:'USD',
@@ -55,7 +55,7 @@ ebay.searchProducts = async options => {
 (async()=>{
   const old = db.prepare("INSERT INTO products(external_id,market,source,status,title,availability,last_seen_at) VALUES(?,?,?,?,?,?,?)")
     .run('us:ebay:old-unrelated','us','ebay','published','Existing unrelated computer desk','In stock',iso(now-10*DAY));
-  const result=await discoverEbay(config,{market:'us',keywords:terms});
+  const result=await discoverEbay(config,{market:'us',keywords:terms,signals:[{...seasonal,metadata:{...seasonal.metadata,eventKey:'halloween'}}],now});
   assert.equal(result.status,'success');
   assert.equal(calls,1);
   const imported=db.prepare("SELECT * FROM products WHERE external_id='us:ebay:v1|123456789012|0'").get();
@@ -74,7 +74,7 @@ ebay.searchProducts = async options => {
   db.prepare('INSERT INTO merchandising_signals VALUES(?,?,?,?,?,?)')
     .run('us',seasonal.id,'calendar',now-DAY,now+7*DAY,JSON.stringify(seasonal));
   db.prepare('INSERT INTO merchandising_status VALUES(?,?,?,?,?)')
-    .run('us','calendar',checkedNow,'success',JSON.stringify({policyVersion:'halloween-sales-v2'}));
+    .run('us','calendar',checkedNow,'success',JSON.stringify({policyVersion:'halloween-sales-v3-expanded'}));
   let discoveryCalls=0;
   const discover=async()=>{discoveryCalls++;return {status:'success',count:1,observedAt:iso(Date.now())};};
   assert.equal((await runMerchandising(db,{now:checkedNow,discover})).status,'success');
