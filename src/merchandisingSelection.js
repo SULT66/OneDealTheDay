@@ -101,6 +101,9 @@ function matchesQuery(product, query) {
 
 function signalRejectionReasons(product, signal, {market = "us", now = Date.now()} = {}) {
   if (!array(signal?.queries).some(query => matchesQuery(product, query))) return ["theme_mismatch"];
+  // External briefs can include broad search aliases. Those aliases must not
+  // put another brand or model under the specifically named research topic.
+  if (signal.kind === 'trend' && array(signal.sourceUrls).length && !matchesQuery(product, signal.title)) return ["theme_mismatch"];
   // Only dated occasions need arrival before the event. Longer seasonal
   // campaigns still require known shipping charges, but make no arrival claim.
   if (signal.kind !== "seasonal" || !Number(signal.metadata?.deliveryLeadDays)) return [];
