@@ -43,6 +43,7 @@ const fetchImpl = async (url, options = {}) => {
   assert(options.headers["X-EBAY-C-ENDUSERCTX"].includes(`affiliateCampaignId=${campaignId}`));
   if (parsed.pathname.endsWith("/item_summary/search")) {
     searchCalls += 1;
+    assert.strictEqual(parsed.searchParams.get("limit"), "20");
     assert.strictEqual(parsed.searchParams.get("filter"), "buyingOptions:{FIXED_PRICE},conditions:{NEW},deliveryCountry:US");
     return {
       ok:true,
@@ -321,4 +322,19 @@ assert.equal(normalizeItem(summary,'home',1,market).delivery_estimated_at,'','No
     client:{...opts.client,getItemByLegacyId:async()=>{throw Error('Gone');}}});
   assert.equal(fallback.length,1,'Unavailable seeds must not prevent ordinary discovery');
   console.log('eBay seeds: exact listing/group import, shared budget, unavailable fallback and no fabricated API sales passed');
+})().catch(error=>{console.error(error);process.exitCode=1;});
+
+(async () => {
+  const {createEbayClient} = require('../src/providers/ebay');
+  let observed;
+  const client = createEbayClient({clientId:'test',clientSecret:'test',campaignId,searchLimit:100,
+    fetchImpl:async url=>{
+      const parsed = new URL(url);
+      if(parsed.pathname.endsWith('/oauth2/token')) return {ok:true,json:async()=>({access_token:'test',expires_in:7200})};
+      observed = parsed.searchParams.get('limit');
+      return {ok:true,json:async()=>({itemSummaries:[]})};
+    }});
+  await client.search('Halloween decorations',market);
+  assert.equal(observed,'100','Halloween search must retrieve more than twenty candidates per query');
+  console.log('eBay expanded search request passed');
 })().catch(error=>{console.error(error);process.exitCode=1;});
