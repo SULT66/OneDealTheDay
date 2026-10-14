@@ -1,5 +1,4 @@
 import Link from "next/link";
-import Image from "next/image";
 import { ArrowRight } from "@phosphor-icons/react/ssr";
 import type { Language } from "@/lib/i18n";
 
@@ -17,7 +16,7 @@ export function HomeCampaigns({market,language}:{market:string;language:Language
   const search = `/${market}/search`;
   return <section aria-labelledby="hero-title" className="space-y-4">
     <div className="relative isolate overflow-hidden rounded-card bg-[#201322] text-white">
-      {halloween && <Image src="/campaigns/halloween.webp" alt="" fill priority sizes="(max-width: 1280px) 100vw, 1280px" className="object-cover object-[65%_65%] sm:object-[center_65%]" />}
+      {halloween && <div aria-hidden="true" className="absolute inset-0 bg-cover bg-no-repeat" style={{backgroundImage:'url("/campaigns/halloween.webp")', backgroundPosition:'center 65%'}} />}
       <div className="absolute inset-0 bg-gradient-to-r from-[#201322]/95 via-[#201322]/60 to-transparent" />
       <div className="relative max-w-2xl px-6 py-10 sm:px-10 sm:py-14 lg:px-12 lg:py-16">
         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-orange-200">{halloween ? copy.eyebrow : "OneDailyDrop"}</p>
