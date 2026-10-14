@@ -25,7 +25,7 @@ const { sourceSql } = require("./publicCatalog");
  * A link has to fail on FAILURES_BEFORE_ARCHIVE separate runs before anything
  * is archived on a soft error, so one flaky night cannot empty the catalog.
  */
-const FAILURES_BEFORE_ARCHIVE = 3;
+const { FAILURES_BEFORE_ARCHIVE } = require('./linkHealthPolicy');
 const REQUEST_TIMEOUT_MS = 12000;
 const DEFAULT_CONCURRENCY = 6;
 
@@ -48,6 +48,7 @@ function ensureTable() {
  * than reading a whole product page.
  */
 async function probe(url, fetchImpl, signal) {
+  let lastStatus = 405;
   for (const [method, headers] of [["HEAD", {}], ["GET", { Range: "bytes=0-0" }]]) {
     const response = await fetchImpl(url, {
       method,
@@ -55,9 +56,14 @@ async function probe(url, fetchImpl, signal) {
       signal,
       headers: { "User-Agent": "OneDailyDrop-LinkCheck/1.0", ...headers },
     });
-    if (response.status !== 405 && response.status !== 501) return response.status;
+    lastStatus = response.status;
+    await response.body?.cancel();
+    // Some retailers fail HEAD while their product page still serves GET.
+    // Do not retry access denials or rate limits through another method.
+    if (method === 'HEAD' && [405,500,501,502,503,504].includes(lastStatus)) continue;
+    return lastStatus;
   }
-  return 405;
+  return lastStatus;
 }
 
 function classify(status) {

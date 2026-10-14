@@ -131,6 +131,13 @@ const statusOf = id => db.prepare("SELECT status FROM products WHERE id=?").get(
   assert.strictEqual(statusOf(4), "published");
 
   assert(calls > 0, "the checker must actually make requests");
+  const methods=[];
+  const recovered=await checkProducts(products.filter(p=>p.id===1),{fetchImpl:async(url,options)=>{
+    methods.push(options.method);return {status:options.method==='HEAD'?500:200};
+  }});
+  assert.deepStrictEqual(methods,['HEAD','GET'],'A failing HEAD must check the actual product page once');
+  assert.equal(recovered.ok,1);
+  assert.equal(db.prepare('SELECT consecutive_failures FROM link_health WHERE product_id=1').get().consecutive_failures,0);
   console.log("Link health guards passed: dead links archived, outages tolerated.");
 })().catch(error => {
   console.error(error);
