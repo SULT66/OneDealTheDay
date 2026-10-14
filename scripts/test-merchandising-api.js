@@ -31,12 +31,13 @@ const product = {
   image_url: 'https://i.ebayimg.com/pumpkin.jpg',
   affiliate_url: 'https://www.ebay.com/itm/123456789?campid=5339179772',
   availability: 'In stock', shipping_summary: 'Free shipping', return_summary: '30 day returns accepted',
-  rating:4.7, review_count:30, seller_rating: 99.5, seller_feedback_count: 400,
+  delivery_estimated_at:new Date(now+3*86400000).toISOString(), delivery_country:'US',
+  ebay_sold_quantity:200, rating:4.7, review_count:30, seller_rating: 99.5, seller_feedback_count: 400,
 };
 const inserted = db.prepare(`INSERT INTO products(${Object.keys(product).join(',')}) VALUES(${Object.keys(product).map(() => '?').join(',')})`)
   .run(...Object.values(product));
 const productId = Number(inserted.lastInsertRowid);
-const signal = {id: 'api-seasonal', market: 'us', title: 'Test seasonal shelf', kind: 'seasonal',
+const signal = {id: 'api-us-halloween-2026', market: 'us', title: 'Test seasonal shelf', kind: 'seasonal',
   metadata:{eventKey:'halloween'}, confidence: 'planning', queries: ['Halloween decoration'], categories: [], sourceUrls: [],
   startsAt: new Date(now - 60000).toISOString(), endsAt: new Date(now + 86400000).toISOString()};
 db.prepare('INSERT INTO merchandising_signals VALUES(?,?,?,?,?,?)').run('us',signal.id,'calendar',now-60000,now+86400000,JSON.stringify(signal));
@@ -70,9 +71,20 @@ async function get(route, options) {
   assert.equal(home.status,200);
   const homeHtml = await home.text();
   assert(homeHtml.includes('Test seasonal shelf'),'Homepage must render the selected shelf');
+  assert(homeHtml.includes('Halloween Pick'),'Homepage must render the campaign badge inside the card');
+  assert(homeHtml.includes('sold · eBay estimate'),'Sales badge must preserve its evidence qualification');
   assert(!homeHtml.includes('Unrelated winter shelf'),'Homepage must suppress previously placed unrelated themes');
   assert(homeHtml.includes('data-merch-placement="seasonal_card"'),'Shelf cards must carry tracking attribution');
   assert(homeHtml.includes('Product reviews, price and buying terms checked'),'Homepage must explain why a product was selected');
+  const collection=await get('/api/merchandising?market=us&collection=halloween');
+  assert.equal(collection.body.total,1);
+  assert.equal(collection.body.products[0].id,productId);
+  assert.equal(db.prepare('SELECT COUNT(*) n FROM merchandising_runs').get().n,0,'Collection reads never trigger discovery');
+  assert.equal((await get('/api/merchandising?market=us&collection=halloween&q=unrelated')).body.total,0);
+  const cataloguePage=await fetch(base+'/us/halloween');
+  assert.equal(cataloguePage.status,200);
+  const catalogueHtml=await cataloguePage.text();
+  assert(catalogueHtml.includes('Halloween finds') && catalogueHtml.includes('Halloween Pick'),'Collection must render its real products and campaign badge');
   const categoryPage = await fetch(base+'/us/category/home-kitchen');
   assert.equal(categoryPage.status,200);
   assert((await categoryPage.text()).includes('Test seasonal shelf'),'First category page must render its matching shelf');

@@ -7,7 +7,7 @@ const { PRICE_CONFIDENT_HOURS } = require('./productPresentation');
 const { discoveryKeywords, INTERVAL_MS, RETRY_INTERVAL_MS, POLICY_VERSION } = require('./merchandisingDiscovery');
 const { withVerifiedRetailerTerms } = require('./verifiedRetailerTerms');
 const { merchandisingFocus, focusSignals } = require('./merchandisingFocus');
-const CALENDAR_POLICY_VERSION = 'halloween-sales-v2';
+const CALENDAR_POLICY_VERSION = 'halloween-sales-v3-expanded';
 const { salesEvidence } = require('./merchandisingSeeds');
 const DAY = 86400000;
 const active = new WeakMap();
@@ -78,6 +78,30 @@ function catalogRows(db, market, publishedOnly = false, now = Date.now()) {
 function priceExpiry(row) {
   return promotionExpiresAt ? stamp(promotionExpiresAt(row)) : stamp(row.checked_at || row.updated_at) + PRICE_CONFIDENT_HOURS * 3600000;
 }
+// A thematic catalogue is separate from the sales-backed featured picks.
+// Keep every buying and dated-delivery check; sales badges require evidence.
+function getHalloweenCollection(db, {market='us', now=Date.now(), page=1, q='', sort='popular'}={}) {
+  const empty={active:false,title:'Halloween',total:0,page:1,pageSize:24,pages:0,products:[],selectionEvidence:{}};
+  if(!markets.has(market) || !Number.isFinite(now)) return empty;
+  const signal=calendarSignals({market,now,horizonDays:0}).find(s=>s.metadata.eventKey==='halloween' && stamp(s.startsAt)<=now && now<stamp(s.endsAt));
+  if(!signal) return empty;
+  const theme={...signal,metadata:{...signal.metadata,minimumEbaySales:0}};
+  const terms=String(q).trim().slice(0,120).toLowerCase().split(/\s+/).filter(Boolean);
+  const matching=catalogRows(db,market).filter(row=>
+    !signalRejectionReasons(row,theme,{market,now}).length &&
+    isPromotionEligible(row,{market,now,requireReviews:false}) && priceExpiry(row)>now &&
+    terms.every(term=>String(row.title || '').toLowerCase().includes(term)));
+  matching.sort((a,b)=>sort==='price-asc' ? Number(a.current_price)-Number(b.current_price) || a.id-b.id :
+    sort==='price-desc' ? Number(b.current_price)-Number(a.current_price) || a.id-b.id :
+    (salesEvidence(b,{now})?.quantity || 0)-(salesEvidence(a,{now})?.quantity || 0) || a.id-b.id);
+  const products=require('./publicCatalog').uniqueProductsInOrder(matching).slice(0,200);
+  const pages=Math.ceil(products.length/24);
+  const selectedPage=Math.max(1,Math.min(pages || 1,Math.floor(Number(page) || 1)));
+  const visible=products.slice((selectedPage-1)*24,selectedPage*24);
+  return {active:true,title:'Halloween',total:products.length,page:selectedPage,pageSize:24,pages,endsAt:signal.endsAt,products:visible,
+    selectionEvidence:Object.fromEntries(visible.map(row=>[row.id,{arrivalEstimate:row.delivery_estimated_at,
+      ebaySoldQuantity:salesEvidence(row,{now})?.quantity ?? null}]))};
+}
 function getMerchandisingShelves(db, { market = 'us', now = Date.now(), limit = 3, category } = {}) {
   if (!markets.has(market) || !Number.isFinite(now)) return [];
   ensureMerchandisingSchema(db);
@@ -117,7 +141,7 @@ function getMerchandisingShelves(db, { market = 'us', now = Date.now(), limit = 
   return selected.slice(0, Math.max(0, Math.min(10, Number(limit) || 0)));
 }
 async function runMerchandising(db, { market = 'us', now = Date.now(), research = false,
-  horizonDays = 90, limitPerSignal = 6, researchTimeoutMs = 45000, discover, ...researchOptions } = {}) {
+  horizonDays = 90, limitPerSignal, researchTimeoutMs = 45000, discover, ...researchOptions } = {}) {
   if (!markets.has(market) || !Number.isFinite(now)) throw new Error('Invalid merchandising market or time');
   ensureMerchandisingSchema(db);
   const locks = active.get(db) || new Set(); active.set(db, locks);
@@ -150,6 +174,7 @@ async function runMerchandising(db, { market = 'us', now = Date.now(), research 
       status(db, market, 'internal', now, 'success', { count: signals.length });
     } catch { status(db, market, 'internal', now, 'failed', { reason: 'internal_interest_failed' }); }
     const focus = merchandisingFocus({market, now});
+    const placementLimit = limitPerSignal ?? (focus === 'halloween' ? 12 : 6);
     const previousResearch = storedStatus(db, market, 'research');
     if (focus) {
       status(db, market, 'research', now, 'paused', {...previousResearch?.details, reason:'campaign_focus', focus});
@@ -191,14 +216,14 @@ async function runMerchandising(db, { market = 'us', now = Date.now(), research 
     } else if (!previousDiscovery && typeof discover !== 'function') {
       status(db, market, 'discovery', now, 'disabled', {reason:'scheduled_discovery_not_enabled'});
     }
-    const groups = selectMerchandise(catalogRows(db, market), signals, { market, now, limitPerSignal });
+    const groups = selectMerchandise(catalogRows(db, market), signals, { market, now, limitPerSignal:placementLimit });
     transaction(db, () => {
       db.prepare('DELETE FROM merchandising_placements WHERE market=?').run(market);
       const insert = db.prepare('INSERT INTO merchandising_placements VALUES (?,?,?,?,?)');
       groups.forEach(({ signal, products }, index) => {
         for (const [productIndex, row] of products.entries()) {
           const expires = Math.min(stamp(signal.endsAt), priceExpiry(row));
-          if (expires > now && isPromotionEligible(row, { market, now, requireReviews:false })) insert.run(market, signal.id, row.id, index * Math.max(1, limitPerSignal) + productIndex, expires);
+          if (expires > now && isPromotionEligible(row, { market, now, requireReviews:false })) insert.run(market, signal.id, row.id, index * Math.max(1, placementLimit) + productIndex, expires);
         }
       });
     });
@@ -244,4 +269,4 @@ function merchandisingStatus(db, { market = 'us', now = Date.now() } = {}) {
     diagnostics: {...entry.value, checkedAt:new Date(entry.at).toISOString()},
     shelves: getMerchandisingShelves(db, { market, now }).map(({ products, ...s }) => ({ ...s, productCount: products.length })) };
 }
-module.exports = { ensureMerchandisingSchema, runMerchandising, getMerchandisingShelves, merchandisingStatus };
+module.exports = { ensureMerchandisingSchema, runMerchandising, getMerchandisingShelves, getHalloweenCollection, merchandisingStatus };

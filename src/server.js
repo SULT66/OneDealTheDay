@@ -73,7 +73,7 @@ const { readEbayStock, refreshDropStock, ebayItemIdFrom } = require("./liveStock
 const { comparableFor, refreshComparables } = require("./comparables");
 const { updateTrackedPrices } = require("./trackedPrice");
 const { discoverEbay } = require("./merchandisingDiscovery");
-const { runMerchandising, getMerchandisingShelves, merchandisingStatus } = require("./merchandising");
+const { runMerchandising, getMerchandisingShelves, getHalloweenCollection, merchandisingStatus } = require("./merchandising");
 const { indexEvidence, isIndexableProduct } = require("./indexability");
 const { missingQueries, pruneSearches, searchDemand } = require("./searchQueries");
 const { checkAmazonLinks } = require("./amazonLinkHealth");
@@ -648,7 +648,7 @@ app.post("/api/shopping-assistant/feedback", shoppingAssistantRateLimit, (req, r
  * they reach the catch-all at the bottom of this file instead of being
  * rewritten back onto the old bare-URL Express routes.
  */
-const nextOwnedPath = /^\/(?:about|account|saved|live|how-we-select-deals|search|daily-drop|archive|contact|privacy|terms|affiliate-disclosure|editorial-policy|for-retailers|price-disclaimer|stores|coupons|guides|guides\/[^/]+|category|deal\/[^/]+|category\/[^/]+)\/?$/;
+const nextOwnedPath = /^\/(?:about|account|saved|live|how-we-select-deals|search|daily-drop|archive|contact|privacy|terms|affiliate-disclosure|editorial-policy|for-retailers|price-disclaimer|stores|coupons|halloween|guides|guides\/[^/]+|category|deal\/[^/]+|category\/[^/]+)\/?$/;
 app.use((req, res, next) => {
   const match = req.url.match(new RegExp(`^/(${marketCodes.join("|")})(?=/|\\?|$)`));
   /* Compare the path alone, not the whole URL: `/de` was left intact for Next
@@ -3223,6 +3223,11 @@ app.get("/api/merchandising", (req, res) => {
   const marketCode = normalizeMarket(req.query.market) || req.market || "us";
   if (!merchandisingEnabled) return res.set("Cache-Control", "no-store").json({market:marketCode, shelves:[]});
   const language = resolveLanguage(req, res, marketCode);
+  if(req.query.collection === 'halloween') {
+    const collection=getHalloweenCollection(db,{market:marketCode,page:req.query.page,q:req.query.q,sort:req.query.sort});
+    return res.set('Cache-Control','no-store').json({...collection,market:marketCode,
+      products:collection.products.map(product=>presentProduct(localizeProduct({...product,deal_url:dealPath(product)},language),language))});
+  }
   const category = String(req.query.category || "").trim().toLowerCase();
   const shelves = getMerchandisingShelves(db, {market:marketCode, category:category || undefined, limit:3})
     .map(shelf => ({

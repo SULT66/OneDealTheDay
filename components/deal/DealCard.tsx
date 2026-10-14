@@ -27,6 +27,7 @@ export async function DealCard({
   priority = false,
   unavailable = false,
   tracking,
+  campaignBadge,
 }: {
   deal: Deal;
   market: string;
@@ -38,6 +39,7 @@ export async function DealCard({
   index?: number;
   priority?: boolean;
   tracking?: { source: "home" | "category"; placement: "seasonal_card" | "trend_card" };
+  campaignBadge?: string;
 }) {
   const category = getCategory(deal.category);
   const language = await getLanguage(market);
@@ -60,6 +62,7 @@ export async function DealCard({
         } : {})}
         className={cn(
           "group flex h-full flex-col overflow-hidden rounded-card border border-border bg-surface",
+          campaignBadge && "border-red-200 shadow-sm",
           unavailable
             ? "opacity-60"
             : "transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-0.5 hover:border-border-strong hover:shadow-lift",
@@ -86,6 +89,9 @@ export async function DealCard({
           <span className="absolute left-3 top-3 inline-flex items-center rounded-full bg-ink/85 px-2.5 py-1 text-[0.7rem] font-bold uppercase tracking-wide text-white tnum">
             #{index + 1}
           </span>
+          {campaignBadge && <span className="absolute right-3 top-3 rounded-full bg-red-600 px-3 py-1.5 text-[0.65rem] font-extrabold uppercase tracking-wider text-white shadow-sm">
+            {campaignBadge}
+          </span>}
 
           {/*
            * Nothing else in this corner.
