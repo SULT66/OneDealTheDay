@@ -292,6 +292,15 @@ Thematic shelves may include products without verified reviews, with an explicit
 
 ### eBay listing sales and home campaigns
 
+The Halloween catalogue (`/[market]/halloween`) pages up to 200 source-verified
+thematic products, with search and price sorting. It retains the price, stock,
+seller, returns and pre-holiday delivery checks; unlike the featured homepage
+selection it does not require 100 reported listing sales. Unknown sales stay
+unknown. The homepage shows up to 12 sales-backed picks with red campaign badges,
+sales evidence and delivery labels. Public collection reads never search eBay.
+Active Halloween discovery can inspect up to 600 item details and retain up to
+240 candidates per persisted six-hour pass; quota and deadline limits still apply.
+
 The eBay importer preserves optional `estimatedAvailabilities[].estimatedSoldQuantity` as `ebay_sold_quantity`. Missing values remain null; repeated delivery entries are not summed. Seasonal/trend selection prefers bounded sales tiers (10, 100, 1,000) among otherwise eligible eBay offers; diversity stays within a tier. This is a cumulative listing estimate, not recent sales velocity, a product-wide total, or an eBay bestseller rank. The public shelf labels the estimate explicitly.
 
 The homepage uses a generated Halloween campaign image during October, with costume/decor/party search shortcuts and compact Daily Drop/catalogue banners. Copy supports EN/ES/FR/DE. Outside October the hero switches to ordinary catalogue discovery.

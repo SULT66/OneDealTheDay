@@ -45,7 +45,7 @@
     "test:referrer": "node scripts/test-outbound-referrer.js",
     "test:weblinks": "node scripts/test-outbound-web-links.js",
     "test:routes": "node scripts/test-go-route-order.js",
-    "test:merchandising": "node scripts/test-merchandising-focus.js && node scripts/test-merchandising-calendar.js && node scripts/test-merchandising-trends.js && node scripts/test-merchandising-selection.js && node scripts/test-merchandising.js && node scripts/test-merchandising-api.js && node scripts/test-merchandising-discovery.js"
+    "test:merchandising": "node scripts/test-merchandising-focus.js && node scripts/test-halloween-collection.js && node scripts/test-merchandising-calendar.js && node scripts/test-merchandising-trends.js && node scripts/test-merchandising-selection.js && node scripts/test-merchandising.js && node scripts/test-merchandising-api.js && node scripts/test-merchandising-discovery.js"
   },
   "dependencies": {
     "@daily-co/daily-js": "^0.92.2",

@@ -431,7 +431,7 @@ async function searchProducts({
 
   const detailBudget = Math.min(600, positiveInteger(detailLimit, DEFAULT_DETAIL_LIMIT));
   const seeds = [...new Map((preferredItems || []).filter(s => /^\d{12}$/.test(s?.legacyId || '') && text(s.query))
-    .map(s => [s.legacyId, s])).values()].slice(0, Math.min(6, detailBudget));
+    .map(s => [s.legacyId, s])).values()].slice(0, Math.min(12, detailBudget));
   let quotaExhausted = null;
   const seeded = await mapLimit(seeds, Math.max(1, Math.min(DETAIL_CONCURRENCY, Number(detailConcurrency) || DETAIL_CONCURRENCY)), async seed => {
     try {
@@ -499,7 +499,7 @@ async function searchProducts({
      not touch ages out after 48 hours, so the catalogue settles at roughly
      one run of eligible items. Sixty across every category is why Electronics
      sat at ten while Gifts sat at two thousand. */
-  const eligibleTarget = Math.min(140, positiveInteger(targetEligible, DEFAULT_TARGET_ELIGIBLE));
+  const eligibleTarget = Math.min(240, positiveInteger(targetEligible, DEFAULT_TARGET_ELIGIBLE));
   /*
    * Reviewed listings first, and the rest only to fill what is left.
    *
