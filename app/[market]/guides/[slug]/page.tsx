@@ -24,9 +24,16 @@ export default async function GuidePage({ params }: Props) {
   const guide = findGuide(market, slug);
   if (!guide) notFound();
   const url = `${origin}/${market}/guides/${slug}`;
-  const all = guide.query || guide.category ? await getDeals(market, guide.category && !guide.query ? { category: guide.category } : {}) : [];
+  const brands: string[] = guide.brands ?? (guide.query ? [guide.query] : []);
+  const all = brands.length || guide.category
+    ? await getDeals(market, guide.category && !brands.length ? { category: guide.category } : {})
+    : [];
   // Exact brand token: do not fill a LEGO guide with compatible accessories.
-  const matched = guide.query ? all.filter(deal => (deal.brand || "").toLowerCase() === guide.query.toLowerCase() && !/compatible|light(?:ing)? kit|display case|replacement|watch band|strap only/i.test(deal.title)) : all;
+  const wanted = new Set(brands.map(brand => brand.toLowerCase()));
+  const matched = wanted.size
+    ? all.filter(deal => wanted.has((deal.brand || "").toLowerCase())
+        && !/compatible|light(?:ing)? kit|display case|replacement|watch band|strap only/i.test(deal.title))
+    : all;
   const deals = matched.slice(0, 6);
   const graph = [
     { "@type": "Article", "@id": `${url}#article`, headline: guide.title, description: guide.description, mainEntityOfPage: url, datePublished: EDITORIAL_DATE, dateModified: EDITORIAL_DATE, inLanguage: "en", author: { "@type": "Organization", name: "OneDailyDrop", url: `${origin}/${market}/about` }, publisher: { "@type": "Organization", name: "OneDailyDrop", url: origin } },
@@ -39,7 +46,7 @@ export default async function GuidePage({ params }: Props) {
       <p className="text-sm">By <Link className="underline" href={`/${market}/about`}>OneDailyDrop</Link> · Updated <time dateTime={EDITORIAL_DATE}>October 13, 2026</time>. Editorial guidance based on our selection system and recorded price data; we do not claim hands-on testing of these products.</p>
       {guide.sections.map(([heading, body]) => <section key={heading}><h2 className="mb-3 mt-8 text-xl font-bold text-fg">{heading}</h2><p>{body}</p></section>)}
       <p><Link className="underline" href={`/${market}/how-we-select-deals`}>Read our selection methodology</Link> · <Link className="underline" href={`/${market}/contact`}>Report a problem</Link></p>
-      {guide.query || guide.category ? <section><h2 className="mb-4 text-xl font-bold text-fg">Current catalogue listings</h2>{deals.length ? <div className="grid gap-5 sm:grid-cols-2">{deals.map(deal => <DealCard key={deal.id} deal={deal} market={market} />)}</div> : <p>No matching listings are currently available in this market. Check back after the next catalogue update.</p>}</section> : null}
+      {brands.length || guide.category ? <section><h2 className="mb-4 text-xl font-bold text-fg">Current catalogue listings</h2>{deals.length ? <div className="grid gap-5 sm:grid-cols-2">{deals.map(deal => <DealCard key={deal.id} deal={deal} market={market} />)}</div> : <p>No matching listings are currently available in this market. Check back after the next catalogue update.</p>}</section> : null}
       <h2>More deal guides</h2><ul>{guides.filter(item => item.slug !== slug).map(item => <li key={item.slug}><Link className="underline" href={`/${market}/guides/${item.slug}`}>{item.title}</Link></li>)}</ul>
     </Prose>
   </>;

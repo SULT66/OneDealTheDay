@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { countryName, getLanguage } from "@/lib/i18n";
+import { countryName, getLanguage, marketAlternates } from "@/lib/i18n";
 import { SpanishStores, spanishMeta } from "@/components/site/SpanishPages";
 import Link from "next/link";
 import { getConnectedShops, getMarket } from "@/lib/catalog";
@@ -34,7 +34,7 @@ export async function generateMetadata({
     description:
       "The retailers whose listings appear on OneDailyDrop, and how to be added.",
     ...((await getLanguage(market)) === "es" ? { title: spanishMeta.stores.title, description: spanishMeta.stores.description } : {}),
-    alternates: { canonical: `/${market}/stores` },
+    alternates: { canonical: `/${market}/stores`, languages: marketAlternates("/stores") },
   };
 }
 

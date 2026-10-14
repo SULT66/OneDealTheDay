@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight } from "@phosphor-icons/react/ssr";
 import { getArchive, getMarket } from "@/lib/catalog";
-import { countryName, getLanguage, t, tagFor } from "@/lib/i18n";
+import { countryName, getLanguage, marketAlternates, t, tagFor } from "@/lib/i18n";
 import { formatPrice } from "@/lib/format";
 import { SectionHeader } from "@/components/site/SectionHeader";
 import { DealCard } from "@/components/deal/DealCard";
@@ -36,7 +36,7 @@ export async function generateMetadata({
   return {
     title: t(language, "app.archive.title"),
     description: t(language, "app.archive.metaDescription", { country }),
-    alternates: { canonical: `/${market}/archive` },
+    alternates: { canonical: `/${market}/archive`, languages: marketAlternates("/archive") },
   };
 }
 
