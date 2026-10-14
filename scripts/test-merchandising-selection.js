@@ -131,3 +131,10 @@ const brandedFoodSignal=signal({kind:'trend',title:'Purina Dog Chow adult dry do
 const otherFood=product(130,{title:'High protein dry dog food for adult dogs',brand:'Another Brand'});
 assert.equal(selectMerchandise([otherFood],[brandedFoodSignal],{now})[0].products.length,0,
   'A broad alias cannot publish another product under a specifically named external topic');
+const temporarilyUnavailable = {...unreviewedTheme,link_last_status:500,link_consecutive_failures:1};
+assert(isPromotionEligible(temporarilyUnavailable,{now,requireReviews:false}),
+  'Fresh source-verified thematic products survive one transient retailer failure');
+assert(!isPromotionEligible({...temporarilyUnavailable,link_consecutive_failures:3},{now,requireReviews:false}));
+assert(!isPromotionEligible({...temporarilyUnavailable,link_last_status:404},{now,requireReviews:false}));
+assert(!isPromotionEligible({...temporarilyUnavailable,link_last_status:403},{now,requireReviews:false}));
+assert(!isPromotionEligible({...temporarilyUnavailable,checked_at:iso(now-3*86400000)},{now,requireReviews:false}));
