@@ -145,3 +145,21 @@ const unknownSales = product(203,{category:'Electronics',retailer_name:'Shop C'}
 assert.deepEqual(selectMerchandise([unknownSales,fewerSales,selling],[signal()],{now})[0].products.map(p=>p.id),[201,202,203], 'Sales preference survives diversity and family dedup');
 assert.equal(selectMerchandise([product(204,{ebay_sold_quantity:9000,return_summary:'No returns'}),selling],[signal()],{now})[0].products.length,1,'Sales never override buying checks');
 assert.equal(selectMerchandise([unknownSales],[signal()],{now})[0].products.length,1,'Missing sales remains unknown and does not empty the shelf');
+
+const {activeSeeds,salesEvidence}=require('../src/merchandisingSeeds');
+const seedNow=Date.parse('2026-10-14T12:00:00Z');
+const seed=activeSeeds({market:'us',now:seedNow})[0];
+const researched=product(300,{title:seed.title, external_id:`us:ebay:v1|${seed.legacyId}|123`,
+  affiliate_url:seed.sourceUrl,checked_at:iso(seedNow-1000),rating:0,review_count:0});
+assert.equal(salesEvidence(researched,{now:seedNow}).quantity,1933);
+assert.equal(salesEvidence(researched,{now:seedNow}).scope,'listing_all_variants');
+assert.equal(salesEvidence({...researched,title:'Unrelated listing'},{now:seedNow}),null);
+assert.equal(salesEvidence({...researched,source:'amazon'},{now:seedNow}),null);
+assert.equal(salesEvidence(researched,{now:Date.parse(seed.expiresAt)}),null,'Research expires with the campaign');
+assert.equal(salesEvidence({...researched,ebay_sold_quantity:8},{now:seedNow}).quantity,1933,'Parent total is distinct from a single variant estimate');
+const single=activeSeeds({market:'us',now:seedNow})[1];
+assert.equal(salesEvidence({...researched,title:single.title,external_id:`us:ebay:v1|${single.legacyId}|0`,ebay_sold_quantity:8},{now:seedNow}).quantity,8,'A newer lower single-listing API count must win');
+const popularSignal=signal({queries:['Halloween mask'],startsAt:iso(seedNow-86400000),endsAt:iso(seedNow+86400000),metadata:{minimumEbaySales:100}});
+const shelf=selectMerchandise([researched,product(301,{title:'Halloween mask',checked_at:iso(seedNow-1000)})],[popularSignal],{now:seedNow})[0];
+assert.deepEqual(shelf.products.map(p=>p.id),[300],'Unknown sales cannot fill a sales-backed shelf');
+assert.equal(selectMerchandise([{...researched,return_summary:'No returns'}],[popularSignal],{now:seedNow})[0].products.length,0,'Research evidence cannot waive buying checks');

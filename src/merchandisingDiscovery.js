@@ -1,7 +1,7 @@
 // Spend a small, separate eBay budget on active occasions, never public reads.
 const INTERVAL_MS = 6 * 3600000;
 const RETRY_INTERVAL_MS = 3600000;
-const POLICY_VERSION = "seasonal-ebay-v3-resilience";
+const POLICY_VERSION = "seasonal-ebay-v4-sales-seeds";
 function discoveryKeywords(signals, { market, now = Date.now(), limit = 6 } = {}) {
   limit = Math.max(0, Math.min(6, Math.floor(Number(limit) || 0)));
   if (!limit) return [];
@@ -30,7 +30,7 @@ function discoveryKeywords(signals, { market, now = Date.now(), limit = 6 } = {}
   return [...new Set([...seasonal, ...interests, ...collect(active, limit)])].slice(0, limit);
 }
 
-async function discoverEbay(config, { market, keywords }) {
+async function discoverEbay(config, { market, keywords, signals = [], now = Date.now() }) {
   if (!config.ebayClientId || !config.ebayClientSecret || !/^\d{10}$/.test(config.ebayCampaignId || '')) {
     return { status: 'disabled', reason: 'ebay_not_configured' };
   }
@@ -43,7 +43,8 @@ async function discoverEbay(config, { market, keywords }) {
   if (isMarketRefreshing(market)) return { status: 'busy', reason: 'catalog_refresh_running' };
   const result = await refreshMarketOnce(config, market, {
     providerIds: ['ebay'], keywords, skipDailySelection: true, skipMerchandising: true,
-    searchOptions: { detailLimit: 24, targetEligible: 12, strictQueries: true,
+    searchOptions: { preferredItems: signals.some(s => s.metadata?.eventKey === 'halloween' && Date.parse(s.startsAt) <= now && now < Date.parse(s.endsAt))
+      ? require('./merchandisingSeeds').activeSeeds({market,now}) : [], detailLimit: 24, targetEligible: 12, strictQueries: true,
       requestTimeoutMs: 20000, maxAttempts: 2, searchConcurrency: 2, detailConcurrency: 4 },
     sourceDeadlineMs: 180000,
   });

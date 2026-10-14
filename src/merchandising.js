@@ -7,7 +7,8 @@ const { PRICE_CONFIDENT_HOURS } = require('./productPresentation');
 const { discoveryKeywords, INTERVAL_MS, RETRY_INTERVAL_MS, POLICY_VERSION } = require('./merchandisingDiscovery');
 const { withVerifiedRetailerTerms } = require('./verifiedRetailerTerms');
 const { merchandisingFocus, focusSignals } = require('./merchandisingFocus');
-const CALENDAR_POLICY_VERSION = 'halloween-focus-v1';
+const CALENDAR_POLICY_VERSION = 'halloween-sales-v2';
+const { salesEvidence } = require('./merchandisingSeeds');
 const DAY = 86400000;
 const active = new WeakMap();
 const diagnosticCache = new WeakMap();
@@ -101,7 +102,8 @@ function getMerchandisingShelves(db, { market = 'us', now = Date.now(), limit = 
         arrivalEstimate: signal.kind === 'seasonal' && Number(signal.metadata?.deliveryLeadDays) ? product.delivery_estimated_at : null,
         destinationPostalCode: product.delivery_postal_code || null,
         reviewsVerified: isPromotionEligible(product, {market, now}),
-        ebaySoldQuantity: product.source === 'ebay' && Number.isSafeInteger(product.ebay_sold_quantity) && product.ebay_sold_quantity >= 0 ? product.ebay_sold_quantity : null,
+        ebaySoldQuantity: salesEvidence(product,{now})?.quantity ?? null,
+        ebaySalesEvidence: salesEvidence(product,{now}),
       }])),
       evidenceSummary: typeof signal.evidence?.summary === 'string' ? signal.evidence.summary : null,
       startsAt: signal.startsAt, endsAt: new Date(Math.min(stamp(signal.endsAt), ...products.map(priceExpiry))).toISOString(), products });
@@ -171,7 +173,7 @@ async function runMerchandising(db, { market = 'us', now = Date.now(), research 
         const attemptedAt = now;
         status(db, market, 'discovery', now, 'running', {attemptedAt, keywords});
         let result;
-        try { result = await discover({market, keywords}); }
+        try { result = await discover({market, keywords, signals, now}); }
         catch (error) { result = {status:'failed', reason:'ebay_discovery_failed',
           retryable:/timeout|timed out|aborted|fetch failed|ECONN|50[234]/i.test(error.message || '')}; }
         if (db.prepare('SELECT owner FROM merchandising_leases WHERE market=?').get(market)?.owner !== owner) return {status:'lease_lost', market};
