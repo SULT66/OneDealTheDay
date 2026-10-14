@@ -36,8 +36,12 @@ ebay.searchProducts = async options => {
   calls++;
   assert.deepEqual(options.keywords,terms);
   assert.equal(options.rotate,false,'Targeted themes must not rotate through the broad catalogue list');
-  assert.equal(options.detailLimit,60);
-  assert.equal(options.targetEligible,24);
+  assert.equal(options.detailLimit,24);
+  assert.equal(options.maxAttempts,2);
+  assert.equal(options.requestTimeoutMs,20000);
+  assert.equal(options.searchConcurrency,2);
+  assert.equal(options.detailConcurrency,4);
+  assert.equal(options.targetEligible,12);
   assert.equal(options.strictQueries,true);
   return [{external_id:'v1|123456789012|0', title:'Halloween Decoration Pumpkin Sculpture',
     category:'Halloween decoration', source:'ebay',market:'us',currency:'USD',
