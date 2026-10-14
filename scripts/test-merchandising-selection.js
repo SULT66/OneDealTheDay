@@ -126,3 +126,8 @@ assert.equal(selectMerchandise([unreviewedTheme],[signal()],{now,requireReviews:
 for (const change of [{shipping_summary:''},{availability:'out_of_stock'},{link_last_status:404},{rating:3.2},{return_summary:'No returns'}]) {
  assert(!isPromotionEligible({...unreviewedTheme,...change},{now,requireReviews:false}),'Theme mode must retain buying safeguards');
 }
+const brandedFoodSignal=signal({kind:'trend',title:'Purina Dog Chow adult dry dog food',
+  queries:['high protein dry dog food for adult dogs'],sourceUrls:['https://example.com/bestsellers']});
+const otherFood=product(130,{title:'High protein dry dog food for adult dogs',brand:'Another Brand'});
+assert.equal(selectMerchandise([otherFood],[brandedFoodSignal],{now})[0].products.length,0,
+  'A broad alias cannot publish another product under a specifically named external topic');
