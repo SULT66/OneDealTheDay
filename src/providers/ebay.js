@@ -95,7 +95,7 @@ async function mapLimit(items, concurrency, worker) {
   return results;
 }
 
-function createEbayClient({clientId, clientSecret, campaignId, environment = "production", fetchImpl = global.fetch, signal, requestTimeoutMs = 10000, maxAttempts = 1}) {
+function createEbayClient({clientId, clientSecret, campaignId, environment = "production", fetchImpl = global.fetch, signal, requestTimeoutMs = 10000, maxAttempts = 1, searchLimit = 20}) {
   const production = String(environment).toLowerCase() !== "sandbox";
   const apiOrigin = production ? "https://api.ebay.com" : "https://api.sandbox.ebay.com";
   let accessToken = "";
@@ -183,7 +183,7 @@ function createEbayClient({clientId, clientSecret, campaignId, environment = "pr
     async search(keyword, market) {
       const body = await request("/buy/browse/v1/item_summary/search", market, {
         q:keyword,
-        limit:"20",
+        limit:String(Math.min(200, positiveInteger(searchLimit, 20))),
         fieldgroups:"EXTENDED",
         filter:`buyingOptions:{FIXED_PRICE},conditions:{NEW},deliveryCountry:${market.countryCodes?.[0] || "US"}`
       });
@@ -408,6 +408,7 @@ async function searchProducts({
   fetchImpl = global.fetch,
   detailLimit = DEFAULT_DETAIL_LIMIT,
   targetEligible = DEFAULT_TARGET_ELIGIBLE,
+  searchLimit = 20,
   rotate = false,
   /* 0 or unset means the whole list. A market with the allowance to sweep
      everything should not be rotating through a slice of it and waiting three
@@ -427,7 +428,7 @@ async function searchProducts({
     ? keywordsForRun(allTerms, keywordsPerRun)
     : allTerms;
 
-  const ebayClient = client || createEbayClient({clientId, clientSecret, campaignId, environment, fetchImpl, signal, requestTimeoutMs, maxAttempts});
+  const ebayClient = client || createEbayClient({clientId, clientSecret, campaignId, environment, fetchImpl, signal, requestTimeoutMs, maxAttempts, searchLimit});
 
   const detailBudget = Math.min(600, positiveInteger(detailLimit, DEFAULT_DETAIL_LIMIT));
   const seeds = [...new Map((preferredItems || []).filter(s => /^\d{12}$/.test(s?.legacyId || '') && text(s.query))

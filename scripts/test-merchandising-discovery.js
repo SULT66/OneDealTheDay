@@ -43,6 +43,7 @@ ebay.searchProducts = async options => {
   assert.equal(options.searchConcurrency,2);
   assert.equal(options.detailConcurrency,4);
   assert.equal(options.targetEligible,240);
+  assert.equal(options.searchLimit,100);
   assert.equal(options.strictQueries,true);
   return [{external_id:'v1|123456789012|0', title:'Halloween Decoration Pumpkin Sculpture',
     category:'Halloween decoration', source:'ebay',market:'us',currency:'USD',
