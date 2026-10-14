@@ -138,3 +138,10 @@ assert(!isPromotionEligible({...temporarilyUnavailable,link_consecutive_failures
 assert(!isPromotionEligible({...temporarilyUnavailable,link_last_status:404},{now,requireReviews:false}));
 assert(!isPromotionEligible({...temporarilyUnavailable,link_last_status:403},{now,requireReviews:false}));
 assert(!isPromotionEligible({...temporarilyUnavailable,checked_at:iso(now-3*86400000)},{now,requireReviews:false}));
+
+const selling = product(201,{ebay_sold_quantity:1200,category:'Home',retailer_name:'Shop A'});
+const fewerSales = product(202,{ebay_sold_quantity:110,category:'Clothing',retailer_name:'Shop B'});
+const unknownSales = product(203,{category:'Electronics',retailer_name:'Shop C'});
+assert.deepEqual(selectMerchandise([unknownSales,fewerSales,selling],[signal()],{now})[0].products.map(p=>p.id),[201,202,203], 'Sales preference survives diversity and family dedup');
+assert.equal(selectMerchandise([product(204,{ebay_sold_quantity:9000,return_summary:'No returns'}),selling],[signal()],{now})[0].products.length,1,'Sales never override buying checks');
+assert.equal(selectMerchandise([unknownSales],[signal()],{now})[0].products.length,1,'Missing sales remains unknown and does not empty the shelf');

@@ -39,11 +39,18 @@ export async function MerchandisingShelves({ market, language, category }: {
       <ul className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {shelf.products.map((deal, index) => <li key={deal.id}>
           <DealCard deal={deal} market={market} index={index} tracking={{source:category ? "category" : "home", placement:shelf.kind === "seasonal" ? "seasonal_card" : "trend_card"}} />
-          <p className="mt-2 px-1 text-xs leading-relaxed text-fg-muted">
-            {shelf.selectionEvidence?.[deal.id]?.matchedQuery ? `${reasons.match} “${shelf.selectionEvidence[deal.id].matchedQuery}”. ` : ''}
-            {shelf.selectionEvidence?.[deal.id]?.reviewsVerified ? reasons.reviews : reasons.terms}.
-            {shelf.selectionEvidence?.[deal.id]?.arrivalEstimate ? ` ${reasons.arrival}: ${date(shelf.selectionEvidence[deal.id].arrivalEstimate!)}${shelf.selectionEvidence[deal.id].destinationPostalCode ? ` (${shelf.selectionEvidence[deal.id].destinationPostalCode})` : ''}.` : ''}
-          </p>
+          <div className="mt-2 flex flex-wrap gap-2 px-1 text-xs text-fg-muted">
+            {shelf.selectionEvidence?.[deal.id]?.ebaySoldQuantity != null && <span className="rounded-full bg-surface px-2.5 py-1 ring-1 ring-border" title={{en:'eBay estimate for this listing, across its lifetime; not recent sales or a marketplace rank.',es:'Estimación de eBay para este anuncio; no ventas recientes.',fr:'Estimation eBay pour cette annonce ; pas les ventes récentes.',de:'eBay-Schätzung für dieses Angebot; keine aktuellen Verkaufszahlen.'}[language]}>
+              {new Intl.NumberFormat(language).format(shelf.selectionEvidence[deal.id].ebaySoldQuantity!)} {{en:'sold · eBay estimate',es:'vendidos · estimación eBay',fr:'vendus · estimation eBay',de:'verkauft · eBay-Schätzung'}[language]}
+            </span>}
+            {shelf.selectionEvidence?.[deal.id]?.arrivalEstimate && <span className="rounded-full bg-surface px-2.5 py-1 ring-1 ring-border">{reasons.arrival}: {date(shelf.selectionEvidence[deal.id].arrivalEstimate!)}</span>}
+          </div>
+          <details className="mt-2 px-1 text-xs leading-relaxed text-fg-muted">
+            <summary className="cursor-pointer">{{en:'Why this pick',es:'Por qué lo elegimos',fr:'Pourquoi ce choix',de:'Warum dieser Tipp'}[language]}</summary>
+            <p className="mt-1">{shelf.selectionEvidence?.[deal.id]?.matchedQuery ? `${reasons.match} “${shelf.selectionEvidence[deal.id].matchedQuery}”. ` : ''}
+              {shelf.selectionEvidence?.[deal.id]?.reviewsVerified ? reasons.reviews : reasons.terms}.
+            </p>
+          </details>
         </li>)}
       </ul>
       </MerchandisingTracking>

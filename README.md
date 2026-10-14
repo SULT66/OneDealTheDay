@@ -286,3 +286,9 @@ OneDailyDrop leaves those fields unknown instead of inventing them, so those
 offers cannot become the Daily Drop until the missing buying terms are verified.
 
 Thematic shelves may include products without verified reviews, with an explicit label. Prices, stock, delivery cost, returns, links, exact model matching and dated-holiday arrival checks remain required. Verified-review recommendations retain the stricter review threshold. Catalogue matches are still selected when discovery fails; expired or invalid products are removed on every public read.
+
+### eBay listing sales and home campaigns
+
+The eBay importer preserves optional `estimatedAvailabilities[].estimatedSoldQuantity` as `ebay_sold_quantity`. Missing values remain null; repeated delivery entries are not summed. Seasonal/trend selection prefers bounded sales tiers (10, 100, 1,000) among otherwise eligible eBay offers; diversity stays within a tier. This is a cumulative listing estimate, not recent sales velocity, a product-wide total, or an eBay bestseller rank. The public shelf labels the estimate explicitly.
+
+The homepage uses a generated Halloween campaign image during October, with costume/decor/party search shortcuts and compact Daily Drop/catalogue banners. Copy supports EN/ES/FR/DE. Outside October the hero switches to ordinary catalogue discovery.
