@@ -923,6 +923,7 @@ for (const [column, type] of [
   ["delivery_estimated_at", "TEXT"],
   ["delivery_country", "TEXT"],
   ["delivery_postal_code", "TEXT"],
+  ["ebay_sold_quantity", "INTEGER"],
   ["landed_cost", "REAL"],
   ["relevance_score", "REAL"],
   ["commerce_quality", "REAL"],

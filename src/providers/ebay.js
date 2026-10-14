@@ -245,6 +245,15 @@ function candidateIsUsable(item) {
   );
 }
 
+// A cumulative estimate for this listing, not recent velocity or market rank.
+// Availability entries can repeat the same quantity for different delivery modes.
+function estimatedSoldQuantity(item) {
+  const values = (Array.isArray(item?.estimatedAvailabilities) ? item.estimatedAvailabilities : [])
+    .map(entry => number(entry?.estimatedSoldQuantity))
+    .filter(value => Number.isSafeInteger(value) && value >= 0);
+  return values.length ? Math.max(...values) : null;
+}
+
 function candidateScore(item, sourceRank) {
   const discount = number(item?.marketingPrice?.discountPercentage, 0);
   const feedback = number(item?.seller?.feedbackPercentage, 0);
@@ -333,6 +342,7 @@ function normalizeItem(item, keyword, sourceRank, market) {
     description:text(item?.shortDescription || item?.subtitle || `${item?.condition || "New"} item listed on eBay.`),
     rating:number(review.averageRating, 0),
     review_count:Math.round(number(review.reviewCount, 0)),
+    ebay_sold_quantity:estimatedSoldQuantity(item),
     current_price:currentPrice,
     original_price:originalPrice > currentPrice ? originalPrice : null,
     currency:text(item?.price?.currency || market?.currency).toUpperCase(),
@@ -534,5 +544,6 @@ module.exports = {
   isQuotaError,
   keywordsForRun,
   normalizeItem,
+  estimatedSoldQuantity,
   searchProducts
 };

@@ -1,5 +1,5 @@
 const assert = require("assert");
-const { candidateIsUsable, hasTrustEvidence, normalizeItem, searchProducts } = require("../src/providers/ebay");
+const { candidateIsUsable, hasTrustEvidence, normalizeItem, estimatedSoldQuantity, searchProducts } = require("../src/providers/ebay");
 
 const market = {
   code:"us",
@@ -58,6 +58,7 @@ const fetchImpl = async (url, options = {}) => {
     status:200,
     json:async () => ({
       ...summary,
+      estimatedAvailabilities:[{estimatedSoldQuantity:1234},{estimatedSoldQuantity:1234}],
       brand:"Example Brand",
       gtin:"012345678905",
       mpn:"MODEL-100",
@@ -89,6 +90,11 @@ const fetchImpl = async (url, options = {}) => {
   });
   assert.strictEqual(products.length, 1);
   assert.strictEqual(products[0].source, "ebay");
+  assert.strictEqual(products[0].ebay_sold_quantity,1234);
+  assert.equal(estimatedSoldQuantity({}),null);
+  assert.equal(estimatedSoldQuantity({estimatedAvailabilities:[{}]}),null);
+  assert.equal(estimatedSoldQuantity({estimatedAvailabilities:[{estimatedSoldQuantity:0}]}),0);
+  for (const value of [-1, 3.5, 'NaN']) assert.equal(estimatedSoldQuantity({estimatedAvailabilities:[{estimatedSoldQuantity:value}]}),null);
   assert.strictEqual(products[0].source_rank, 1);
   assert.strictEqual(products[0].rating, 4.7);
   assert.strictEqual(products[0].review_count, 321);

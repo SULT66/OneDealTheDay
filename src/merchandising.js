@@ -101,6 +101,7 @@ function getMerchandisingShelves(db, { market = 'us', now = Date.now(), limit = 
         arrivalEstimate: signal.kind === 'seasonal' && Number(signal.metadata?.deliveryLeadDays) ? product.delivery_estimated_at : null,
         destinationPostalCode: product.delivery_postal_code || null,
         reviewsVerified: isPromotionEligible(product, {market, now}),
+        ebaySoldQuantity: product.source === 'ebay' && Number.isSafeInteger(product.ebay_sold_quantity) && product.ebay_sold_quantity >= 0 ? product.ebay_sold_quantity : null,
       }])),
       evidenceSummary: typeof signal.evidence?.summary === 'string' ? signal.evidence.summary : null,
       startsAt: signal.startsAt, endsAt: new Date(Math.min(stamp(signal.endsAt), ...products.map(priceExpiry))).toISOString(), products });
