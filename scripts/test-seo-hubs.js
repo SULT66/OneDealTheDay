@@ -51,6 +51,23 @@ async function run() {
     try { await page("/api/status"); break; } catch (error) { if (attempt > 100) throw error; }
     await new Promise(resolve => setTimeout(resolve, 100));
   }
+  /*
+   * The sitemap is built once and kept.
+   *
+   * It read the whole products table twice and ran the evidence gate — which
+   * queries the database per product — over everything that survived. Measured
+   * from outside on 2026-10-14: thirteen seconds, twenty-nine under load, and a
+   * 502 when two requests overlapped. Search Console reported "Couldn’t fetch"
+   * and zero discovered pages for a file that serves 505 of them correctly.
+   * Googlebot does not wait that long, so the cost of losing this cache is the
+   * whole of search discovery, silently.
+   */
+  const firstSitemap = await fetch(base + "/sitemap.xml");
+  assert.equal(firstSitemap.headers.get("x-odd-sitemap"), "MISS", "the first build should say so");
+  const secondSitemap = await fetch(base + "/sitemap.xml");
+  assert.equal(secondSitemap.headers.get("x-odd-sitemap"), "HIT", "the sitemap is being rebuilt on every request again");
+  assert.equal(await firstSitemap.text(), await secondSitemap.text(), "the cached sitemap differs from the built one");
+
   const sitemap = await page("/sitemap.xml");
   assert(sitemap.includes("/us/category/office</loc>"), "a hub must survive when its only product is noindex");
   assert(!sitemap.includes(`-${id}</loc>`), "a bare product must stay out of the sitemap");

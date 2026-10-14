@@ -2398,16 +2398,39 @@ app.get("/robots.txt", (req, res) => res
   .set("Cache-Control", "public, max-age=3600")
   .type("text/plain")
   .send(`User-agent: *\nAllow: /\nDisallow: /admin\nDisallow: /api/\nDisallow: /go/\nDisallow: /us/go/\nDisallow: /ca/go/\nDisallow: /uk/go/\nDisallow: /fr/go/\nDisallow: /de/go/\n\nSitemap: ${SITE}/sitemap.xml\n`));
+/*
+ * The sitemap, built once an hour rather than once a request.
+ *
+ * It read the whole products table twice and then ran the evidence gate over
+ * every surviving row, and that gate asks the database about comparables and
+ * scores the listing. Across five markets that is thousands of queries, and on
+ * one core it took thirteen seconds — twenty-nine when something else was
+ * running. Measured from outside on 2026-10-14, a second request arriving
+ * while the first was still working returned 502.
+ *
+ * Google gave up long before any of that finished: Search Console reported
+ * "Couldn't fetch" and zero discovered pages for a file that serves 505 of
+ * them correctly. The catalogue changes four to six times a day, so a file
+ * rebuilt every hour is never meaningfully stale, and the first request after
+ * each hour is the only one that pays.
+ */
+const SITEMAP_TTL_MS = 60 * 60 * 1000;
+let sitemapCache = null;
+
 app.get("/sitemap.xml", (req, res) => {
-  const products = capPerSourceAndCategory(
-    uniqueProductsInOrder(db.prepare(`SELECT * FROM products WHERE status='published' AND ${sourceSql()} ORDER BY market,COALESCE(ranking_score,score) DESC,score DESC,updated_at DESC`).all())
-      .filter(isPubliclyIndexable),
-  ).filter(productIsIndexable);
+  if (sitemapCache && sitemapCache.expiresAt > Date.now()) {
+    return res.set("Cache-Control", "public, max-age=1800")
+      .set("X-ODD-Sitemap", "HIT")
+      .type("application/xml").send(sitemapCache.xml);
+  }
+  /* One read, two views of it. The second query was identical to the first and
+     differed only in what was filtered out afterwards. */
+  const published = uniqueProductsInOrder(db.prepare(`SELECT * FROM products WHERE status='published' AND ${sourceSql()} ORDER BY market,COALESCE(ranking_score,score) DESC,score DESC,updated_at DESC`).all())
+    .filter(isPubliclyIndexable);
+  const products = capPerSourceAndCategory(published).filter(productIsIndexable);
   // Category hubs add editorial value even when their products are noindex.
   // Product URLs below retain the existing evidence gate.
-  const hubProducts = capPerSourceAndCategory(
-    uniqueProductsInOrder(db.prepare(`SELECT * FROM products WHERE status='published' AND ${sourceSql()} ORDER BY market,COALESCE(ranking_score,score) DESC,score DESC,updated_at DESC`).all()).filter(isPubliclyIndexable)
-  );
+  const hubProducts = capPerSourceAndCategory(published);
   const urls = [];
   const localizedAlternates = (pathname, codes = marketCodes) => {
     const supported = [...new Set(codes.map(normalizeMarket).filter(Boolean))];
@@ -2482,9 +2505,11 @@ app.get("/sitemap.xml", (req, res) => {
       alternates: localizedAlternates(pathname)
     }));
   }
-  res.set("Cache-Control", "public, max-age=1800").type("application/xml").send(
-    `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">${urls.map(item => `<url><loc>${esc(item.loc)}</loc>${item.alternates || ""}${item.lastmod ? `<lastmod>${item.lastmod}</lastmod>` : ""}${item.image ? `<image:image><image:loc>${esc(item.image)}</image:loc><image:title>${esc(item.imageTitle)}</image:title></image:image>` : ""}</url>`).join("")}</urlset>`
-  );
+  const xml = `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">${urls.map(item => `<url><loc>${esc(item.loc)}</loc>${item.alternates || ""}${item.lastmod ? `<lastmod>${item.lastmod}</lastmod>` : ""}${item.image ? `<image:image><image:loc>${esc(item.image)}</image:loc><image:title>${esc(item.imageTitle)}</image:title></image:image>` : ""}</url>`).join("")}</urlset>`;
+  sitemapCache = { xml, expiresAt: Date.now() + SITEMAP_TTL_MS };
+  res.set("Cache-Control", "public, max-age=1800")
+    .set("X-ODD-Sitemap", "MISS")
+    .type("application/xml").send(xml);
 });
 
 const secretMatches = (provided, expected) => {
