@@ -130,13 +130,16 @@ The ranking compares landed price, product evidence, seller reliability, demand 
 
 ## Four-agent merchandising
 
-The current editorial focus is Halloween (`MERCHANDISING_FOCUS=halloween`, the
-shipped default). Public shelves, selection and targeted eBay discovery accept
-only the matching calendar event, including before the next scheduled run.
-External trend research is paused during the campaign; the ordinary catalogue
-and Daily Drop retain their own selection rules. Set `MERCHANDISING_FOCUS=all`
-to restore multi-theme rotation, or use a calendar event key for another campaign.
-A focus change permits one fresh discovery pass and then resumes the usual throttle.
+The shipped focus is automatic (`MERCHANDISING_FOCUS=auto`). The nearest active
+regional holiday or shopping event gets priority in public shelves, selection and
+targeted eBay discovery. Priority expires at the calendar campaign's existing
+buying/delivery cutoff, not at a hard-coded year. Evergreen winter/summer themes
+do not suppress the normal rotation. Between campaigns, seasonal and trend
+shelves return and external research resumes its daily throttle. During a focused
+campaign, external trend research is paused; the ordinary catalogue and Daily
+Drop always retain their own rules. `MERCHANDISING_FOCUS=all` disables priority;
+an explicit event key remains available as a manual override. Focus changes allow
+one fresh discovery pass, without spending the allowance during server warm-up.
 
 
 The existing Azure server runs four coordinated roles: regional holiday planning,

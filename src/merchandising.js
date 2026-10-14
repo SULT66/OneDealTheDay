@@ -62,8 +62,9 @@ function replaceSignals(db, market, origin, signals, now) {
   });
 }
 function signalsFor(db, market, now, future = false) {
-  return focusSignals(db.prepare(`SELECT payload FROM merchandising_signals WHERE market=? AND ends_at>? ${future ? '' : 'AND starts_at<=?'} ORDER BY starts_at,id`)
-    .all(...(future ? [market, now] : [market, now, now])).map(row => json(row.payload)).filter(Boolean));
+  const signals = db.prepare(`SELECT payload FROM merchandising_signals WHERE market=? AND ends_at>? ${future ? '' : 'AND starts_at<=?'} ORDER BY starts_at,id`)
+    .all(...(future ? [market, now] : [market, now, now])).map(row => json(row.payload)).filter(Boolean);
+  return future ? signals : focusSignals(signals, merchandisingFocus({market, now}));
 }
 function catalogRows(db, market, publishedOnly = false, now = Date.now()) {
   const hasHealth = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='link_health'").get();
@@ -148,7 +149,7 @@ async function runMerchandising(db, { market = 'us', now = Date.now(), research 
       replaceSignals(db, market, 'internal', signals, now);
       status(db, market, 'internal', now, 'success', { count: signals.length });
     } catch { status(db, market, 'internal', now, 'failed', { reason: 'internal_interest_failed' }); }
-    const focus = merchandisingFocus();
+    const focus = merchandisingFocus({market, now});
     const previousResearch = storedStatus(db, market, 'research');
     if (focus) {
       status(db, market, 'research', now, 'paused', {...previousResearch?.details, reason:'campaign_focus', focus});
@@ -232,12 +233,12 @@ function merchandisingStatus(db, { market = 'us', now = Date.now() } = {}) {
   let cache = diagnosticCache.get(db);
   if (!cache) { cache = new Map(); diagnosticCache.set(db, cache); }
   let entry = cache.get(market);
-  const runKey = `${merchandisingFocus() || 'all'}:${lastRun?.id || ''}:${lastRun?.finished_at || ''}`;
+  const runKey = `${merchandisingFocus({market, now}) || 'all'}:${lastRun?.id || ''}:${lastRun?.finished_at || ''}`;
   if (!entry || entry.runKey !== runKey || now < entry.at || now - entry.at >= 60000) {
     entry = {at:now,runKey,value:merchandisingDiagnostics(catalogRows(db, market, false, now), signalsFor(db, market, now), {market, now})};
     cache.set(market, entry);
   }
-  return { market, focus:merchandisingFocus(), stages, roles: { holiday: stages.calendar, demand: { internal: stages.internal, research: stages.research }, catalog: {discovery: stages.discovery, selection: stages.selection}, placement: stages.placement },
+  return { market, focus:merchandisingFocus({market, now}), stages, roles: { holiday: stages.calendar, demand: { internal: stages.internal, research: stages.research }, catalog: {discovery: stages.discovery, selection: stages.selection}, placement: stages.placement },
     futureEvents: signalsFor(db, market, now, true).filter(s => stamp(s.startsAt) > now).map(({ id, title, preparationAt, startsAt, endsAt }) => ({ id, title, preparationAt, startsAt, endsAt })),
     lastRun,
     diagnostics: {...entry.value, checkedAt:new Date(entry.at).toISOString()},
