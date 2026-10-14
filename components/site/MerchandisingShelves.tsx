@@ -3,11 +3,11 @@ import { getMerchandisingShelves } from "@/lib/merchandising";
 import type { Language } from "@/lib/i18n";
 import { MerchandisingTracking } from "./MerchandisingTracking";
 
-const REASONS: Record<Language, {match:string; reviews:string; arrival:string; interest:string; external:string; retailer:string}> = {
-  en: {match:'Matches', reviews:'Product reviews, price and buying terms checked', arrival:'Estimated arrival', interest:'Based on recent searches on OneDailyDrop across several days.', external:'Based on cited shopping-interest evidence.', retailer:'Based on a retailer-specific bestseller list.'},
-  es: {match:'Coincide con', reviews:'Reseñas del producto, precio y condiciones comprobados', arrival:'Llegada estimada', interest:'Basado en búsquedas recientes en OneDailyDrop durante varios días.', external:'Basado en fuentes citadas de interés de compra.', retailer:'Basado en la lista de más vendidos de una tienda.'},
-  fr: {match:'Correspond à', reviews:'Avis produit, prix et conditions vérifiés', arrival:'Arrivée estimée', interest:'Selon les recherches récentes sur OneDailyDrop sur plusieurs jours.', external:'Selon des sources citées sur l’intérêt d’achat.', retailer:'Selon le classement des meilleures ventes d’une boutique.'},
-  de: {match:'Passend zu', reviews:'Produktbewertungen, Preis und Kaufbedingungen geprüft', arrival:'Voraussichtliche Ankunft', interest:'Basierend auf aktuellen Suchanfragen auf OneDailyDrop über mehrere Tage.', external:'Basierend auf belegtem Kaufinteresse.', retailer:'Basierend auf der Bestsellerliste eines Händlers.'},
+const REASONS: Record<Language, {match:string; reviews:string; terms:string; arrival:string; interest:string; external:string; retailer:string}> = {
+  en: {terms:'Price and buying terms checked; product reviews not verified', match:'Matches', reviews:'Product reviews, price and buying terms checked', arrival:'Estimated arrival', interest:'Based on recent searches on OneDailyDrop across several days.', external:'Based on cited shopping-interest evidence.', retailer:'Based on a retailer-specific bestseller list.'},
+  es: {terms:'Precio y condiciones comprobados; reseñas no verificadas', match:'Coincide con', reviews:'Reseñas del producto, precio y condiciones comprobados', arrival:'Llegada estimada', interest:'Basado en búsquedas recientes en OneDailyDrop durante varios días.', external:'Basado en fuentes citadas de interés de compra.', retailer:'Basado en la lista de más vendidos de una tienda.'},
+  fr: {terms:'Prix et conditions vérifiés ; avis produit non vérifiés', match:'Correspond à', reviews:'Avis produit, prix et conditions vérifiés', arrival:'Arrivée estimée', interest:'Selon les recherches récentes sur OneDailyDrop sur plusieurs jours.', external:'Selon des sources citées sur l’intérêt d’achat.', retailer:'Selon le classement des meilleures ventes d’une boutique.'},
+  de: {terms:'Preis und Kaufbedingungen geprüft; Produktbewertungen nicht verifiziert', match:'Passend zu', reviews:'Produktbewertungen, Preis und Kaufbedingungen geprüft', arrival:'Voraussichtliche Ankunft', interest:'Basierend auf aktuellen Suchanfragen auf OneDailyDrop über mehrere Tage.', external:'Basierend auf belegtem Kaufinteresse.', retailer:'Basierend auf der Bestsellerliste eines Händlers.'},
 };
 const COPY: Record<Language, { seasonal: string; trend: string; seasonalNote: string; trendNote: string; sources: string }> = {
   en: { seasonal: "For the season", trend: "Growing interest", seasonalNote: "Selected for the occasion. Delivery estimates depend on your address; confirm at the shop.", trendNote: "Based on recent interest signals; popularity does not guarantee a saving.", sources: "Sources" },
@@ -41,7 +41,7 @@ export async function MerchandisingShelves({ market, language, category }: {
           <DealCard deal={deal} market={market} index={index} tracking={{source:category ? "category" : "home", placement:shelf.kind === "seasonal" ? "seasonal_card" : "trend_card"}} />
           <p className="mt-2 px-1 text-xs leading-relaxed text-fg-muted">
             {shelf.selectionEvidence?.[deal.id]?.matchedQuery ? `${reasons.match} “${shelf.selectionEvidence[deal.id].matchedQuery}”. ` : ''}
-            {reasons.reviews}.
+            {shelf.selectionEvidence?.[deal.id]?.reviewsVerified ? reasons.reviews : reasons.terms}.
             {shelf.selectionEvidence?.[deal.id]?.arrivalEstimate ? ` ${reasons.arrival}: ${date(shelf.selectionEvidence[deal.id].arrivalEstimate!)}${shelf.selectionEvidence[deal.id].destinationPostalCode ? ` (${shelf.selectionEvidence[deal.id].destinationPostalCode})` : ''}.` : ''}
           </p>
         </li>)}

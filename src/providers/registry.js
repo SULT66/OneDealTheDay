@@ -26,7 +26,7 @@ function nativeProviders(config) {
       /* No keywords passed means the broad scheduled sweep, which takes a
          rotating slice of the list. A shopper's own query arrives with its
          keywords and is searched in full. */
-      search:({market, keywords, detailLimit, targetEligible, keywordsPerRun, strictQueries, signal}) => require("./ebay").searchProducts({
+      search:({market, keywords, detailLimit, targetEligible, keywordsPerRun, strictQueries, requestTimeoutMs, maxAttempts, searchConcurrency, detailConcurrency, signal}) => require("./ebay").searchProducts({
         clientId:config.ebayClientId,
         clientSecret:config.ebayClientSecret,
         campaignId:config.ebayCampaignId,
@@ -37,6 +37,7 @@ function nativeProviders(config) {
         detailLimit,
         targetEligible,
         strictQueries,
+        requestTimeoutMs, maxAttempts, searchConcurrency, detailConcurrency,
         signal
       })
     });

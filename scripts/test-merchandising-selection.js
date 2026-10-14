@@ -103,7 +103,7 @@ assert.equal(isPromotionEligible(archived,{now}),false,'Eligibility must stop be
 const {signalRejectionReasons}=require('../src/merchandisingSelection');
 const dated=signal({eventAt:iso(now+18*86400000),metadata:{deliveryLeadDays:7}});
 const onTime=product(100,{delivery_estimated_at:iso(now+7*86400000),delivery_country:'US'});
-assert.equal(selectMerchandise([onTime, product(101,{rating:0,review_count:0}), product(102,{review_count:2})],[dated],{now})[0].products.length,1);
+assert.equal(selectMerchandise([onTime, product(101,{rating:0,review_count:0}), product(102,{review_count:2})],[dated],{now,requireReviews:true})[0].products.length,1);
 assert.deepEqual(signalRejectionReasons(product(103),dated,{now}),['holiday_delivery_unknown']);
 assert.deepEqual(signalRejectionReasons({...onTime,delivery_country:'CA'},dated,{now}),['holiday_delivery_unknown']);
 assert.deepEqual(signalRejectionReasons({...onTime,delivery_estimated_at:iso(now+17*86400000)},dated,{now}),['holiday_delivery_late']);
@@ -117,3 +117,12 @@ assert.deepEqual(selectMerchandise([oldConsole,newConsole],[consoleSignal],{now}
   'Product generations must not be discarded as if they were price constraints');
 const phoneSignal=signal({kind:'trend',queries:['iPhone 15']});
 assert.equal(selectMerchandise([product(112,{title:'Apple iPhone 14 Unlocked Smartphone'})],[phoneSignal],{now})[0].products.length,0);
+
+const unreviewedTheme = product(120,{rating:0,review_count:0});
+assert(isPromotionEligible(unreviewedTheme,{now,requireReviews:false}),'Thematic browsing accepts honest unreviewed products with valid buying terms');
+assert(!isPromotionEligible(unreviewedTheme,{now}),'Recommendations still require product reviews');
+assert.equal(selectMerchandise([unreviewedTheme],[signal()],{now})[0].products.length,1);
+assert.equal(selectMerchandise([unreviewedTheme],[signal()],{now,requireReviews:true})[0].products.length,0);
+for (const change of [{shipping_summary:''},{availability:'out_of_stock'},{link_last_status:404},{rating:3.2},{return_summary:'No returns'}]) {
+ assert(!isPromotionEligible({...unreviewedTheme,...change},{now,requireReviews:false}),'Theme mode must retain buying safeguards');
+}

@@ -4649,7 +4649,13 @@ app.use((error, req, res, next) => {
   await bootstrapPersonalPostgres(db);
   app.listen(c.port, () => {
     console.log(`http://localhost:${c.port}`);
-    if (merchandisingEnabled && c.liveRefreshEnabled) setImmediate(merchandisingSweep);
+    if (merchandisingEnabled && c.liveRefreshEnabled) {
+      setImmediate(merchandisingSweep);
+      // Revisit discovery after warm-up instead of waiting for the hourly tick.
+      if (c.isProduction && SETTLING_SECONDS > process.uptime()) {
+        setTimeout(merchandisingSweep, (SETTLING_SECONDS - process.uptime()) * 1000 + 1000).unref();
+      }
+    }
     /*
      * Keep the entry pages rendered so a visitor does not have to be the
      * one who renders them. Only in production: locally the cost is a

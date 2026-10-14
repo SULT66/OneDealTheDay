@@ -271,3 +271,25 @@ assert.equal(normalizeItem(summary,'home',1,market).delivery_estimated_at,'','No
   assert.deepEqual(lookedUp,[wanted.itemId],'Irrelevant listings must not spend the targeted detail budget');
   assert.equal(strict[0].title,wanted.title);
 })().catch(error=>{console.error(error);process.exitCode=1;});
+
+(async()=>{
+ const {createEbayClient}=require('../src/providers/ebay');
+ let tokens=0, searches=0;
+ const client=createEbayClient({clientId:'test',clientSecret:'test',campaignId,maxAttempts:2,fetchImpl:async url=>{
+  if(String(url).includes('oauth2')){tokens++;await Promise.resolve();return {ok:true,json:async()=>({access_token:'test',expires_in:7200})};}
+  searches++;
+  if(searches===1){const error=new Error('request timed out');error.name='TimeoutError';throw error;}
+  return {ok:true,status:200,json:async()=>({itemSummaries:[summary]})};
+ }});
+ const results=await Promise.all([client.search('one',market),client.search('two',market)]);
+ assert.equal(tokens,1,'Concurrent searches share one OAuth exchange');
+ assert.equal(searches,3,'Only transient failures get one retry');
+ assert.equal(results.length,2);
+ let deniedCalls=0;
+ const denied=createEbayClient({clientId:'test',clientSecret:'test',campaignId,maxAttempts:2,fetchImpl:async()=>{deniedCalls++;return {ok:false,status:429,json:async()=>({errors:[{message:'Daily limit'}]})};}});
+ await assert.rejects(()=>denied.search('one',market));assert.equal(deniedCalls,1,'Rate limits must not be retried');
+ const controller=new AbortController();controller.abort();
+ const stopped=createEbayClient({clientId:'test',clientSecret:'test',campaignId,maxAttempts:2,signal:controller.signal,fetchImpl:async()=>{throw Error('Must not run');}});
+ await assert.rejects(()=>stopped.search('one',market));
+ console.log('eBay resilience: shared OAuth, bounded transient retry, quota and abort safeguards passed');
+})().catch(error=>{console.error(error);process.exitCode=1;});

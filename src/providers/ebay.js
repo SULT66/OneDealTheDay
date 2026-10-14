@@ -95,13 +95,31 @@ async function mapLimit(items, concurrency, worker) {
   return results;
 }
 
-function createEbayClient({clientId, clientSecret, campaignId, environment = "production", fetchImpl = global.fetch, signal}) {
+function createEbayClient({clientId, clientSecret, campaignId, environment = "production", fetchImpl = global.fetch, signal, requestTimeoutMs = 10000, maxAttempts = 1}) {
   const production = String(environment).toLowerCase() !== "sandbox";
   const apiOrigin = production ? "https://api.ebay.com" : "https://api.sandbox.ebay.com";
   let accessToken = "";
   let tokenExpiresAt = 0;
+  let tokenPending = null;
+  const timeoutMs = Math.max(1000, Math.min(30000, Number(requestTimeoutMs) || 10000));
+  const attempts = Math.max(1, Math.min(2, Number(maxAttempts) || 1));
+  async function fetchBounded(url, options) {
+    for (let attempt = 0; attempt < attempts; attempt++) {
+      signal?.throwIfAborted();
+      try {
+        const response = await fetchImpl(url, {...options, signal:deadline(timeoutMs)});
+        if (attempt + 1 < attempts && [502,503,504].includes(response.status)) {
+          await response.body?.cancel();
+          continue;
+        }
+        return response;
+      } catch (error) {
+        if (signal?.aborted || attempt + 1 >= attempts || !['TimeoutError','AbortError','TypeError'].includes(error.name)) throw error;
+      }
+    }
+  }
 
-  /* Each call keeps its own ten second timeout, and also gives up the moment
+  /* Each call keeps a bounded timeout, and also gives up the moment
      the refresh that asked for it has stopped waiting. Without this a source
      that missed its deadline carried on calling eBay in the background, on an
      allowance the next run still needed. */
@@ -109,7 +127,12 @@ function createEbayClient({clientId, clientSecret, campaignId, environment = "pr
 
   async function token() {
     if (accessToken && Date.now() < tokenExpiresAt) return accessToken;
-    const response = await fetchImpl(`${apiOrigin}/identity/v1/oauth2/token`, {
+    if (!tokenPending) tokenPending = obtainToken().finally(() => { tokenPending = null; });
+    return tokenPending;
+  }
+
+  async function obtainToken() {
+    const response = await fetchBounded(`${apiOrigin}/identity/v1/oauth2/token`, {
       method:"POST",
       headers:{
         Authorization:`Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`,
@@ -118,8 +141,7 @@ function createEbayClient({clientId, clientSecret, campaignId, environment = "pr
       body:new URLSearchParams({
         grant_type:"client_credentials",
         scope:"https://api.ebay.com/oauth/api_scope"
-      }),
-      signal:deadline(10000)
+      })
     });
     const body = await response.json().catch(() => ({}));
     if (!response.ok) {
@@ -137,15 +159,14 @@ function createEbayClient({clientId, clientSecret, campaignId, environment = "pr
     if (!market?.ebayMarketplaceId) throw new Error(`eBay marketplace is missing for ${market?.code || "unknown market"}`);
     const url = new URL(`${apiOrigin}${path}`);
     if (query) for (const [key, value] of Object.entries(query)) url.searchParams.set(key, value);
-    const response = await fetchImpl(url, {
+    const response = await fetchBounded(url, {
       headers:{
         Authorization:`Bearer ${await token()}`,
         Accept:"application/json",
         "Accept-Language":market.locale || "en-US",
         "X-EBAY-C-MARKETPLACE-ID":market.ebayMarketplaceId,
         "X-EBAY-C-ENDUSERCTX":`affiliateCampaignId=${campaignId},affiliateReferenceId=odd-${market.code},contextualLocation=${encodeURIComponent(`country=${market.countryCodes?.[0] || "US"}`)}`
-      },
-      signal:deadline(10000)
+      }
     });
     const body = await response.json().catch(() => ({}));
     if (!response.ok) {
@@ -378,7 +399,8 @@ async function searchProducts({
      hours for the rest. */
   keywordsPerRun = 0,
   signal,
-  strictQueries = false
+  strictQueries = false,
+  requestTimeoutMs, maxAttempts, searchConcurrency = SEARCH_CONCURRENCY, detailConcurrency = DETAIL_CONCURRENCY
 }) {
   if (!clientId || !clientSecret) throw new Error("eBay Production credentials are missing");
   if (!/^\d{10}$/.test(String(campaignId || ""))) throw new Error("EBAY_CAMPAIGN_ID must contain exactly 10 digits");
@@ -389,10 +411,10 @@ async function searchProducts({
     ? keywordsForRun(allTerms, keywordsPerRun)
     : allTerms;
 
-  const ebayClient = client || createEbayClient({clientId, clientSecret, campaignId, environment, fetchImpl, signal});
+  const ebayClient = client || createEbayClient({clientId, clientSecret, campaignId, environment, fetchImpl, signal, requestTimeoutMs, maxAttempts});
 
   let quotaExhausted = null;
-  const searches = await mapLimit(searchTerms, SEARCH_CONCURRENCY, async (keyword) => {
+  const searches = await mapLimit(searchTerms, Math.max(1, Math.min(SEARCH_CONCURRENCY, Number(searchConcurrency) || SEARCH_CONCURRENCY)), async (keyword) => {
     if (quotaExhausted) throw quotaExhausted;
     try {
       return await ebayClient.search(keyword, market);
@@ -461,10 +483,11 @@ async function searchProducts({
   const unreviewed = [];
   const products = [];
 
-  for (let offset = 0; offset < maximumDetails && scoreable.length < eligibleTarget; offset += DETAIL_CONCURRENCY) {
+  const detailWorkers = Math.max(1, Math.min(DETAIL_CONCURRENCY, Number(detailConcurrency) || DETAIL_CONCURRENCY));
+  for (let offset = 0; offset < maximumDetails && scoreable.length < eligibleTarget; offset += detailWorkers) {
     if (signal?.aborted) break;
-    const batch = queue.slice(offset, Math.min(offset + DETAIL_CONCURRENCY, maximumDetails));
-    const details = await mapLimit(batch, DETAIL_CONCURRENCY, candidate => ebayClient.getItem(candidate.item.itemId, market));
+    const batch = queue.slice(offset, Math.min(offset + detailWorkers, maximumDetails));
+    const details = await mapLimit(batch, detailWorkers, candidate => ebayClient.getItem(candidate.item.itemId, market));
     details.forEach((result, index) => {
       if (result.status !== "fulfilled") {
         if (isQuotaError(result.reason)) quotaExhausted = result.reason;

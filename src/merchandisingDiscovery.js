@@ -1,6 +1,7 @@
 // Spend a small, separate eBay budget on active occasions, never public reads.
 const INTERVAL_MS = 6 * 3600000;
-const POLICY_VERSION = "seasonal-ebay-v2";
+const RETRY_INTERVAL_MS = 3600000;
+const POLICY_VERSION = "seasonal-ebay-v3-resilience";
 function discoveryKeywords(signals, { market, now = Date.now(), limit = 6 } = {}) {
   limit = Math.max(0, Math.min(6, Math.floor(Number(limit) || 0)));
   if (!limit) return [];
@@ -33,14 +34,20 @@ async function discoverEbay(config, { market, keywords }) {
   if (!config.ebayClientId || !config.ebayClientSecret || !/^\d{10}$/.test(config.ebayCampaignId || '')) {
     return { status: 'disabled', reason: 'ebay_not_configured' };
   }
+  // Share the existing production warm-up window with catalogue refreshes.
+  // A postponed pass must not consume the persisted discovery allowance.
+  if (config.isProduction && process.uptime() < Number(process.env.REFRESH_SETTLING_SECONDS ?? 600)) {
+    return { status: 'busy', reason: 'server_settling' };
+  }
   const { isMarketRefreshing, refreshMarketOnce } = require('./refresh');
   if (isMarketRefreshing(market)) return { status: 'busy', reason: 'catalog_refresh_running' };
   const result = await refreshMarketOnce(config, market, {
     providerIds: ['ebay'], keywords, skipDailySelection: true, skipMerchandising: true,
-    searchOptions: { detailLimit: 60, targetEligible: 24, strictQueries: true },
-    sourceDeadlineMs: 75000,
+    searchOptions: { detailLimit: 24, targetEligible: 12, strictQueries: true,
+      requestTimeoutMs: 20000, maxAttempts: 2, searchConcurrency: 2, detailConcurrency: 4 },
+    sourceDeadlineMs: 180000,
   });
   return { status: 'success', count: result.eligible, keywords, observedAt:new Date().toISOString() };
 }
 
-module.exports = { POLICY_VERSION, INTERVAL_MS, discoveryKeywords, discoverEbay };
+module.exports = { POLICY_VERSION, INTERVAL_MS, RETRY_INTERVAL_MS, discoveryKeywords, discoverEbay };

@@ -13,7 +13,7 @@ export type MerchandiseShelf = {
   eventAt?: string | null;
   evidenceType?: string;
   interestSessions?: number | null;
-  selectionEvidence?: Record<string, {matchedQuery: string; arrivalEstimate?: string | null; destinationPostalCode?: string | null}>;
+  selectionEvidence?: Record<string, {matchedQuery: string; reviewsVerified?: boolean; arrivalEstimate?: string | null; destinationPostalCode?: string | null}>;
   products: Deal[];
 };
 
