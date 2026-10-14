@@ -13,7 +13,7 @@ export type MerchandiseShelf = {
   eventAt?: string | null;
   evidenceType?: string;
   interestSessions?: number | null;
-  selectionEvidence?: Record<string, {matchedQuery: string; reviewsVerified?: boolean; ebaySoldQuantity?: number | null; arrivalEstimate?: string | null; destinationPostalCode?: string | null}>;
+  selectionEvidence?: Record<string, {matchedQuery: string; reviewsVerified?: boolean; ebaySoldQuantity?: number | null; ebaySalesEvidence?: {basis: 'api_estimate' | 'listing_report'; sourceUrl?: string | null; retrievedAt?: string; snapshot?: string; scope?: string} | null; arrivalEstimate?: string | null; destinationPostalCode?: string | null}>;
   products: Deal[];
 };
 

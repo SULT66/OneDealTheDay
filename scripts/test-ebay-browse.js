@@ -299,3 +299,26 @@ assert.equal(normalizeItem(summary,'home',1,market).delivery_estimated_at,'','No
  await assert.rejects(()=>stopped.search('one',market));
  console.log('eBay resilience: shared OAuth, bounded transient retry, quota and abort safeguards passed');
 })().catch(error=>{console.error(error);process.exitCode=1;});
+
+(async()=>{
+  const wanted={...summary,itemId:'v1|323493717418|123',legacyItemId:'323493717418',
+    title:'Black Lace Mask Masquerade Eye Face Eyemask Women Party Halloween',
+    shippingOptions:[{shippingCost:{value:'0',currency:'USD'}}], returnTerms:{returnsAccepted:true}};
+  let grouped=0,details=0;
+  const opts={clientId:'test',clientSecret:'test',campaignId,market,keywords:['Halloween mask'],
+    detailLimit:2,targetEligible:1,strictQueries:true,
+    preferredItems:[{legacyId:'323493717418',group:true,query:'Halloween mask'}],
+    client:{getItemsByItemGroup:async()=>{grouped++;return {items:[{...wanted,itemId:'v1|wrong|0',legacyItemId:'000000000000'},wanted],_deliveryContextCountry:'US'};},
+      search:async()=>[{...summary,title:'Halloween mask',itemId:'v1|123456789012|0'}],
+      getItem:async()=>{details++;return {...summary,title:'Halloween mask',primaryProductReviewRating:{averageRating:4.9,reviewCount:100}};}}};
+  const result=await searchProducts(opts);
+  assert.equal(grouped,1);
+  assert.equal(details,1,'Group lookup shares the detail budget and is not repeated');
+  assert.equal(result[0].external_id,wanted.itemId,'Researched unreviewed seed survives reviewed generic candidates');
+  assert.equal(result[0].delivery_country,'US','Group items inherit the request destination');
+  assert.equal(result[0].ebay_sold_quantity,null,'Research must not invent an API estimate');
+  const fallback=await searchProducts({...opts,detailLimit:2,targetEligible:2,preferredItems:[{legacyId:'111111111111',query:'Halloween mask'}],
+    client:{...opts.client,getItemByLegacyId:async()=>{throw Error('Gone');}}});
+  assert.equal(fallback.length,1,'Unavailable seeds must not prevent ordinary discovery');
+  console.log('eBay seeds: exact listing/group import, shared budget, unavailable fallback and no fabricated API sales passed');
+})().catch(error=>{console.error(error);process.exitCode=1;});

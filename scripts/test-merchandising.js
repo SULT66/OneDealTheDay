@@ -111,7 +111,7 @@ function database() {
     retailer_name: 'eBay', status: 'published', current_price: 40, checked_at: new Date(now).toISOString(),
     image_url: 'https://i.ebayimg.com/pumpkin.jpg', affiliate_url: 'https://www.ebay.com/itm/10',
     availability: 'In stock', shipping_summary: 'Free shipping', return_summary: '30 day returns accepted',
-    rating:4.7, review_count:30, delivery_estimated_at:new Date(now+3*DAY).toISOString(), delivery_country:'US',
+    ebay_sold_quantity:200, rating:4.7, review_count:30, delivery_estimated_at:new Date(now+3*DAY).toISOString(), delivery_country:'US',
     seller_rating: 99.5, seller_feedback_count: 400, category: 'Home' };
   live.exec(`CREATE TABLE products(${Object.keys(p).map(key => `${key} ${typeof p[key] === 'number' ? 'REAL' : 'TEXT'}`).join(',')})`);
   live.prepare(`INSERT INTO products VALUES (${Object.keys(p).map(() => '?').join(',')})`).run(...Object.values(p));
