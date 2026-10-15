@@ -198,12 +198,12 @@ assert(
 assert.strictEqual(primary.keywordsPerRun, 0, "the primary market is back to rotating a slice of its keywords");
 assert(secondary.keywordsPerRun > 0, "a secondary market sweeps its whole list, which is what overspent the allowance");
 
-/* And the smaller markets are refreshed less often rather than closed: they
-   carry more than half the site's clicks. */
-assert.notStrictEqual(
+/* All markets now use four six-hour slots. Their per-run budgets still
+   prioritize the primary market; the duplicate external sweeps were removed. */
+assert.strictEqual(
   config.offerCheckCron,
   config.secondaryOfferCheckCron,
-  "every market is back on the same refresh schedule",
+  "the six-hour policy must apply to secondary markets too",
 );
 
 /* The whole point is that a run can now sweep the list rather than a slice. */
