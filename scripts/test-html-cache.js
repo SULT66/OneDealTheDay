@@ -268,6 +268,28 @@ async function withServer(build, run) {
     });
   }
 
+  // A plain warmer response still gives browsers compressed HTML on a hit.
+  {
+    let renders=0;
+    const plain='<html>'+('Halloween checked products '.repeat(10000))+'</html>';
+    await withServer(app=>{
+      app.use(htmlCache());
+      app.use((req,res)=>{renders++;res.type('html').end(plain);});
+    },async port=>{
+      await get(port,'/us');
+      const compressed=await get(port,'/us',{'accept-encoding':'gzip'});
+      assert.equal(compressed.headers['x-odd-cache'],'HIT');
+      assert.equal(compressed.headers['content-encoding'],'gzip');
+      assert.equal(zlib.gunzipSync(compressed.body).toString(),plain);
+      assert(compressed.body.length<Buffer.byteLength(plain)/10,'Repeated HTML compresses substantially');
+      const identity=await get(port,'/us');
+      assert.equal(identity.headers['content-encoding'],undefined);
+      assert.equal(identity.body.toString(),plain,'Clients without gzip keep the plain copy');
+      assert.equal((await get(port,'/us',{'accept-encoding':'gzip;q=0, *;q=1'})).headers['content-encoding'],undefined,'Explicit gzip refusal wins over wildcard');
+      assert.equal(renders,1,'Both encodings reuse one render');
+    });
+  }
+
   console.log("html cache: ok");
 })().catch(error => {
   console.error(error);

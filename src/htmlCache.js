@@ -94,11 +94,14 @@ const PUBLIC_VARY = "Cookie, Accept-Encoding, RSC, Next-Router-State-Tree, Next-
 function encodingAccepted(entry, acceptEncoding) {
   const encoding = entry.headers["content-encoding"];
   if (!encoding) return true;
-  return String(acceptEncoding || "")
-    .toLowerCase()
-    .split(",")
-    .map(part => part.split(";")[0].trim())
-    .includes(String(encoding).toLowerCase());
+  const accepted=String(acceptEncoding || "").toLowerCase().split(',').map(part=>{
+    const [name,...parameters]=part.split(';').map(value=>value.trim());
+    const quality=parameters.find(value=>value.startsWith('q='));
+    return {name,quality:quality ? Number(quality.slice(2)) : 1};
+  });
+  const match=accepted.find(value=>value.name===String(encoding).toLowerCase()) || accepted.find(value=>value.name==='*');
+  return Boolean(match && match.quality>0);
+
 }
 
 function htmlCache(options = {}) {
@@ -131,12 +134,16 @@ function htmlCache(options = {}) {
       entries.delete(key);
       entries.set(key, hit);
       for (const [name, value] of Object.entries(hit.headers)) res.set(name, value);
+      // A warm render may be captured as plain HTML. Keep its gzip variant
+      // too, so filling the cache cannot turn a small page into a large download.
+      const gzip = hit.gzipBody && encodingAccepted({headers:{"content-encoding":"gzip"}}, req.headers["accept-encoding"]);
+      if (gzip) res.set("Content-Encoding", "gzip");
       return res
         .set("Cache-Control", cacheControl)
         .set("Vary", PUBLIC_VARY)
         .set("X-ODD-Cache", "HIT")
         .status(200)
-        .end(hit.body);
+        .end(gzip ? hit.gzipBody : hit.body);
     }
     if (hit && hit.expiresAt <= now()) entries.delete(key);
 
@@ -231,6 +238,7 @@ function htmlCache(options = {}) {
       if (entries.size >= maxEntries) entries.delete(entries.keys().next().value);
       entries.set(key, {
         body,
+        gzipBody: !headers["content-encoding"] ? zlib.gzipSync(body) : null,
         headers,
         expiresAt: now() + (isSearch(path) ? searchTtlMs : ttlMs),
       });
