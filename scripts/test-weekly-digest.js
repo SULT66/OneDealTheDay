@@ -66,7 +66,6 @@ const {
   emailThumbnail,
   isDigestDay,
   recentlySentIds,
-  sendDigestInvitations,
   sendWeeklyDigest,
 } = require("../src/weeklyDigest");
 
@@ -244,7 +243,7 @@ const catalogue = [
 ];
 
 async function main() {
-  const onlyLiveDrops = addSubscriber({ email: "livedrop@example.test", token: "token_livedrop_0123456789" });
+  addSubscriber({ email: "livedrop@example.test", token: "token_livedrop_0123456789" });
   const wantsSundays = addSubscriber({ email: "sunday@example.test", digest: 1, token: "token_sunday_0123456789ab" });
 
   const sentTo = [];
@@ -358,42 +357,6 @@ async function main() {
     "nobody-opted-in",
     "somebody told about a Live Drop the day before was also sent the digest",
   );
-
-  /* ------------------------------------------------------- the invitation */
-
-  const invites = [];
-  const askedOnce = await sendDigestInvitations({
-    db,
-    sendInvite: async (message) => { invites.push(message); },
-    joinUrlFor: (subscriber) => `https://example.test/digest/join?token=${subscriber.unsubscribe_token}`,
-    now,
-  });
-  assert.strictEqual(askedOnce, 1, "the Live Drop subscriber was not invited to the Sunday list");
-  assert.deepStrictEqual(
-    invites.map((message) => message.email),
-    ["livedrop@example.test"],
-    "the invitation went to somebody already on the Sunday list",
-  );
-  assert.ok(invites[0].joinUrl.includes("digest/join"), "the invitation carried no way to accept it");
-
-  const askedTwice = await sendDigestInvitations({
-    db,
-    sendInvite: async () => { throw new Error("nobody should be asked twice"); },
-    joinUrlFor: () => "",
-    now: now + 864e5,
-  });
-  assert.strictEqual(askedTwice, 0, "a subscriber was asked twice, which is a newsletter nobody agreed to");
-
-  /* And an address that left is asked nothing at all. */
-  db.prepare("UPDATE subscribers SET status = 'unsubscribed', digest_invited_at = NULL WHERE id = ?")
-    .run(onlyLiveDrops);
-  const afterLeaving = await sendDigestInvitations({
-    db,
-    sendInvite: async () => { throw new Error("an unsubscribed address was written to"); },
-    joinUrlFor: () => "",
-    now,
-  });
-  assert.strictEqual(afterLeaving, 0, "somebody who unsubscribed was invited to a second list");
 
   console.log("Weekly digest checks passed.");
 }

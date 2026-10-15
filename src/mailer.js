@@ -140,10 +140,13 @@ const paragraphHtml = (text) =>
  * @param {string} [message.tip]
  * @param {object[]} [message.items]  a numbered list of listings; each is
  *   { title, href, price, imageUrl, category, reasons[] }
+ * @param {string[]} [message.note]  paragraphs between the listing and the
+ *   button. `after` sits under the button, which is the wrong side of it for
+ *   anything the reader needs before deciding to press it.
  * @param {string} [message.footer]  HTML
  * @param {boolean} [message.live]  the LIVE mark beside the wordmark
  */
-function composeEmail({ preheader, eyebrow, heading, paragraphs = [], product, items = [], cta, after, signature, tip, footer, live = false }) {
+function composeEmail({ preheader, eyebrow, heading, paragraphs = [], product, items = [], note = [], cta, after, signature, tip, footer, live = false }) {
   const productCard = product && product.title ? `
       <tr><td style="padding:6px 32px 4px">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f6f7f2;border-radius:16px">
@@ -215,6 +218,10 @@ function composeEmail({ preheader, eyebrow, heading, paragraphs = [], product, i
 
         ${productCard}
         ${itemList}
+
+        ${(note || []).length ? `<tr><td style="padding:18px 32px 0">
+          ${note.map(paragraphHtml).join("")}
+        </td></tr>` : ""}
 
         ${cta ? `<tr><td style="padding:22px 32px 4px">
           <a href="${cta.href}" style="display:inline-block;background:${LIME};color:${INK};text-decoration:none;padding:15px 30px;border-radius:999px;font-weight:bold;font-size:16px">${escapeHtml(cta.label)}</a>
@@ -530,19 +537,93 @@ const deliveryTestEmail = ({ to }) => sendEmail({
 });
 
 /*
- * The name both of these arrive under.
+ * The name every letter on this side arrives under.
  *
- * Declared here rather than left to sendEmail's default so it is one line to
- * change, and so it is obvious that it was chosen. A person's name outperforms
- * a brand in an inbox — "Nijat at OneDailyDrop" would open better than this —
- * but whose name goes on the Sunday letter is the owner's call to make, not a
- * default to inherit quietly.
+ * A person outperforms a brand in an inbox: "Nick" is somebody who wrote to
+ * you, "OneDailyDrop" is a company that sent you something, and the reader
+ * decides which it is before opening anything. The owner chose Nick rather
+ * than his own name, and these letters are signed the same way so the name on
+ * the envelope and the name at the bottom are one person.
  *
  * Chloe is deliberately not used. She hosts the Live Drops; she does not host
  * this, and lending her to a weekly list makes her a mascot attached to
  * whatever is being sent.
  */
-const DIGEST_FROM = "OneDailyDrop";
+const NICK_FROM = "Nick from OneDailyDrop";
+const NICK_SIGNATURE = `Nick<br><span style="font-size:13px;color:${MUTED}">OneDailyDrop</span>`;
+
+/*
+ * Day one: what this site actually does.
+ *
+ * The confirmation says "you're on the list" and nothing else, so somebody who
+ * signed up on a Monday and waits weeks for a drop never learns why they
+ * should care. This is the one idea worth their attention, written once,
+ * plainly, and never repeated: we do not repeat a shop's crossed-out number,
+ * we record the price ourselves.
+ *
+ * It names the consequence as well as the claim — most listings here show no
+ * discount at all — because a promise with no cost attached reads like every
+ * other marketing line, and this one has a real cost.
+ */
+const introEmail = ({ email, market = "us", unsubscribeUrl }) => sendEmail({
+  to: email,
+  subject: "What we actually check",
+  unsubscribeUrl,
+  fromName: NICK_FROM,
+  ...composeEmail({
+    preheader: "Why most listings on our site show no discount at all.",
+    eyebrow: "Day one",
+    heading: "We don't repeat the shop's number",
+    paragraphs: [
+      "You're on the list, so here is the one thing worth knowing about us.",
+      "When a shop crosses out a price, we do not repeat that figure as a saving. We record the price ourselves, every day, for sixty days. If today's price is below the highest we have seen in that time, we say by how much. If it is not, we say nothing.",
+      "That is why most listings on this site show no discount at all. Not because we could not find one — because we could not prove one.",
+      "The shop's own crossed-out price is still shown, labelled as the shop's. It is their claim, not ours.",
+    ],
+    cta: { label: "How we pick what to show", href: `${SITE}/${encodeURIComponent(market)}/how-we-select-deals` },
+    signature: NICK_SIGNATURE,
+    footer: unsubscribeFooter(unsubscribeUrl, "You are receiving this because you signed up for Live Drop emails."),
+  }),
+});
+
+/*
+ * Day three: how to read the number, including what it does not mean.
+ *
+ * The listing is passed in rather than written into the copy. A hard-coded
+ * example is true the day it is written and wrong a fortnight later, at which
+ * point the one email whose whole point is "we only say what we checked"
+ * is quoting a price nobody checked.
+ *
+ * The number of reviews is stated out loud even when it is small — eight
+ * reviews is eight reviews — because the argument of this letter is that we
+ * show the weak parts, and an email that only shows the strong ones is making
+ * the opposite case.
+ */
+const scoreExplainerEmail = ({ email, market = "us", product, unsubscribeUrl }) => sendEmail({
+  to: email,
+  subject: `${product?.score ? `${product.score}/100` : "Our Score"} is not a guarantee`,
+  unsubscribeUrl,
+  fromName: NICK_FROM,
+  ...composeEmail({
+    preheader: "What the Score measures, and what it does not.",
+    eyebrow: "Day three",
+    heading: "What the Score means",
+    paragraphs: [
+      "One listing from the site this week, with everything we know about it.",
+    ],
+    items: product ? [product] : [],
+    note: [
+      "The Score is not a star rating. It reads the whole offer: how good the price is against what we recorded, how much product feedback exists, how reliable the seller is, and what the delivery and returns say.",
+      (product?.reasons || []).some((reason) => /reviews/.test(reason))
+        ? "Look at the number of reviews above rather than the stars alone. A high rating from a handful of buyers is thinner evidence than a slightly lower one from hundreds, and we print the count so you can tell them apart."
+        : "This listing shows no product reviews at all, and we say so rather than leaving the gap for you to find.",
+      "Most listings on the site publish no Score. They did not clear the floor, and we would rather show nothing than a number we cannot stand behind.",
+    ].filter(Boolean),
+    cta: { label: "How the Score is built", href: `${SITE}/${encodeURIComponent(market)}/how-we-select-deals` },
+    signature: NICK_SIGNATURE,
+    footer: unsubscribeFooter(unsubscribeUrl, "You are receiving this because you signed up for Live Drop emails."),
+  }),
+});
 
 /*
  * The invitation to the second list.
@@ -556,7 +637,7 @@ const digestInviteEmail = ({ email, market = "us", joinUrl, unsubscribeUrl }) =>
   to: email,
   subject: "Want five finds every Sunday?",
   unsubscribeUrl,
-  fromName: DIGEST_FROM,
+  fromName: NICK_FROM,
   ...composeEmail({
     preheader: "A separate list, and only if you say so.",
     eyebrow: "One question",
@@ -568,7 +649,7 @@ const digestInviteEmail = ({ email, market = "us", joinUrl, unsubscribeUrl }) =>
     ],
     cta: { label: "Yes, send me Sundays", href: joinUrl },
     after: "Ignore this and nothing changes — you will keep getting only Live Drop emails.",
-    signature: "The OneDailyDrop team",
+    signature: NICK_SIGNATURE,
     footer: unsubscribeFooter(unsubscribeUrl, "You are receiving this because you signed up for Live Drop emails."),
   }),
 });
@@ -588,7 +669,7 @@ const weeklyDigestEmail = ({ email, market = "us", items = [], unconfirmed = 0, 
     ? "One find this week"
     : `${items.length} finds this week`,
   unsubscribeUrl,
-  fromName: DIGEST_FROM,
+  fromName: NICK_FROM,
   ...composeEmail({
     preheader: items.length
       ? `${items[0].title}${items[0].price ? ` — ${items[0].price}` : ""}, and ${items.length - 1} more.`
@@ -603,9 +684,9 @@ const weeklyDigestEmail = ({ email, market = "us", items = [], unconfirmed = 0, 
     after: unconfirmed > 0
       ? `We also found <strong>${unconfirmed}</strong> listings this week showing a crossed-out price we could not confirm. None of them are above. That is the whole job.`
       : "",
-    signature: "Until Sunday,<br>The OneDailyDrop team",
+    signature: `Until Sunday,<br>${NICK_SIGNATURE}`,
     footer: unsubscribeFooter(unsubscribeUrl, "You are receiving this because you asked for the Sunday finds."),
   }),
 });
 
-module.exports = { digestInviteEmail, weeklyDigestEmail, welcomeEmail, liveDropLiveNowEmail, liveDropSaveTheDateEmail, liveDropStartingSoonEmail, liveDropAnnouncementEmail, priceDropEmail, priceWatchStartedEmail, passwordResetEmail, subscriptionEmail, clubWaitlistEmail, liveDropReminderEmail, deliveryTestEmail };
+module.exports = { digestInviteEmail, weeklyDigestEmail, introEmail, scoreExplainerEmail, welcomeEmail, liveDropLiveNowEmail, liveDropSaveTheDateEmail, liveDropStartingSoonEmail, liveDropAnnouncementEmail, priceDropEmail, priceWatchStartedEmail, passwordResetEmail, subscriptionEmail, clubWaitlistEmail, liveDropReminderEmail, deliveryTestEmail };

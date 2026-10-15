@@ -717,10 +717,32 @@ if (!subscriberColumns.has("digest_opt_in")) {
   db.exec("ALTER TABLE subscribers ADD COLUMN digest_opt_in INTEGER NOT NULL DEFAULT 0");
   db.exec("ALTER TABLE subscribers ADD COLUMN digest_opt_in_at TEXT");
 }
-/* When the invitation to that list was last sent, so nobody is asked twice. */
-if (!subscriberColumns.has("digest_invited_at")) {
-  db.exec("ALTER TABLE subscribers ADD COLUMN digest_invited_at TEXT");
-}
+/*
+ * The welcome letters, and which of them each subscriber has had.
+ *
+ * Confirming a subscription and then saying nothing until a Live Drop happens
+ * is how a list forgets who you are: somebody who signs up on a Monday can
+ * wait weeks for the next email, and by then the first one reads as spam. So
+ * three letters go out over the first week — what we check, how to read the
+ * Score, and the invitation to the Sunday list — and this table is the record
+ * of who has had which.
+ *
+ * One row per subscriber per step, with a unique index behind it, so a restart
+ * or an overlapping sweep cannot send the same letter twice. It is the only
+ * record of that: the alternative, a column on the subscriber mirroring it,
+ * is two facts that can disagree.
+ */
+db.exec(`
+  CREATE TABLE IF NOT EXISTS subscriber_sequence(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    subscriber_id INTEGER NOT NULL,
+    step TEXT NOT NULL,
+    sent_at TEXT NOT NULL,
+    FOREIGN KEY(subscriber_id) REFERENCES subscribers(id)
+  );
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_subscriber_sequence_once
+    ON subscriber_sequence(subscriber_id, step);
+`);
 
 /*
  * One reminder was not an announcement.

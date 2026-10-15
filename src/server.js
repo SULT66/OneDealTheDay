@@ -66,8 +66,11 @@ const {
   liveDropSaveTheDateEmail, liveDropStartingSoonEmail, liveDropAnnouncementEmail, liveDropLiveNowEmail, priceDropEmail,
   priceWatchStartedEmail,
   passwordResetEmail, subscriptionEmail, clubWaitlistEmail, liveDropReminderEmail, deliveryTestEmail,
-  digestInviteEmail, weeklyDigestEmail } = require("./mailer");
-const { sendWeeklyDigest, sendDigestInvitations } = require("./weeklyDigest");
+  digestInviteEmail, weeklyDigestEmail, introEmail, scoreExplainerEmail } = require("./mailer");
+const { sendWeeklyDigest } = require("./weeklyDigest");
+const { sendWelcomeSequence } = require("./welcomeSequence");
+const { chooseDigestItems } = require("./digestSelection");
+const { digestItemFor } = require("./weeklyDigest");
 const { emailHealth } = require("./emailHealth");
 const { htmlCache } = require("./htmlCache");
 const { startCacheWarmer, pathsFor } = require("./cacheWarmer");
@@ -4731,15 +4734,36 @@ cron.schedule(
       /* Watched prices, on the same minute. The refresh has already written
          today's prices by the time this runs; nothing else reads them for
          this purpose. */
-      /* Asking the Live Drop list whether they also want Sundays. Once per
-         subscriber, ever; the column records that they were asked. */
-      const invited = await sendDigestInvitations({
+      /*
+       * The first week's three letters, one per subscriber per sweep. On the
+       * same minute sweep as the drop reminders because it is the same kind
+       * of work: look at what is owed, send at most one thing, record it.
+       */
+      const welcomed = await sendWelcomeSequence({
         db,
-        sendInvite: digestInviteEmail,
+        senders: {
+          intro: introEmail,
+          score: scoreExplainerEmail,
+          digest_invite: digestInviteEmail,
+        },
+        featuredFor: (code) => {
+          const pick = chooseDigestItems(
+            uniqueProductsInOrder(
+              db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()}
+                           ORDER BY COALESCE(ranking_score,score) DESC, score DESC LIMIT 400`).all(code),
+            )
+              .filter(isPubliclyIndexable)
+              .map(product => presentProduct(product, defaultLanguages[code] || "en")),
+            { limit: 1 },
+          )[0];
+          return pick ? digestItemFor(pick, { market: code, siteOrigin: SITE }) : null;
+        },
         joinUrlFor: (subscriber) => `${SITE}/digest/join?token=${encodeURIComponent(subscriber.unsubscribe_token)}`,
         unsubscribeUrlFor: (subscriber) => `${SITE}/unsubscribe?token=${encodeURIComponent(subscriber.unsubscribe_token)}`,
       });
-      if (invited) console.log(`[digest] invited ${invited} subscriber${invited === 1 ? "" : "s"} to the Sunday list`);
+      for (const [step, count] of Object.entries(welcomed)) {
+        console.log(`[welcome] sent ${count} "${step}" letter${count === 1 ? "" : "s"}`);
+      }
 
       const drops = await sendDuePriceDrops({
         db,

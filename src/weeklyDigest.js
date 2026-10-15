@@ -204,58 +204,6 @@ async function sendWeeklyDigest({
   return { status: "sent", sent, items: items.length, edition, unconfirmed };
 }
 
-/**
- * Ask the Live Drop list whether they want the Sunday one.
- *
- * Once per subscriber, ever. A second ask is a newsletter nobody agreed to,
- * which is the thing this whole arrangement exists to avoid.
- */
-async function sendDigestInvitations({
-  db,
-  sendInvite,
-  joinUrlFor,
-  unsubscribeUrlFor = () => "",
-  now = Date.now(),
-  minimumAgeHours = 0,
-  limit = 200,
-} = {}) {
-  if (typeof sendInvite !== "function") throw new TypeError("sendDigestInvitations needs a sendInvite function");
-  if (typeof joinUrlFor !== "function") throw new TypeError("sendDigestInvitations needs a joinUrlFor function");
-
-  const waiting = db
-    .prepare(
-      `SELECT id, email, market, unsubscribe_token
-         FROM subscribers
-        WHERE status = 'active'
-          AND digest_opt_in = 0
-          AND digest_invited_at IS NULL
-          AND unsubscribe_token <> ''
-          AND created_at <= ?
-        ORDER BY id
-        LIMIT ?`,
-    )
-    .all(daysAgo(minimumAgeHours / 24, now), limit);
-
-  const mark = db.prepare("UPDATE subscribers SET digest_invited_at = ? WHERE id = ?");
-  let sent = 0;
-  for (const subscriber of waiting) {
-    try {
-      await sendInvite({
-        email: subscriber.email,
-        market: subscriber.market || "us",
-        joinUrl: joinUrlFor(subscriber),
-        unsubscribeUrl: unsubscribeUrlFor(subscriber),
-      });
-      mark.run(iso(now), subscriber.id);
-      sent += 1;
-    } catch (error) {
-      /* Left unmarked, so the next sweep tries again. */
-      console.error(`[digest-invite] ${subscriber.email}: ${error.message}`);
-    }
-  }
-  return sent;
-}
-
 module.exports = {
   DIGEST_TIME_ZONE,
   DROP_QUIET_DAYS,
@@ -265,6 +213,5 @@ module.exports = {
   editionFor,
   isDigestDay,
   recentlySentIds,
-  sendDigestInvitations,
   sendWeeklyDigest,
 };
