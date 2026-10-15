@@ -370,6 +370,70 @@ const fetchDealPage = cache(
   },
 );
 
+/**
+ * A listing that has left the catalogue, and what is worth looking at instead.
+ *
+ * Archiving sets a status rather than deleting the row, so a page whose
+ * listing has gone can still say so by name and hand the visitor the current
+ * listings in the same category. Without this it is a 404 — which is what a
+ * pin posted six months ago, or a guide linking out, eventually finds.
+ */
+export type EndedDeal = {
+  id: string;
+  title: string;
+  image: string;
+  category: string;
+  retailer: string;
+  lastCheckedAt: string | null;
+  alternatives: {
+    id: string;
+    title: string;
+    href: string;
+    image: string;
+    price: number;
+    currency: string;
+    score: number | null;
+  }[];
+};
+
+export const getEndedDeal = cache(
+  async (marketCode: string, id: string): Promise<EndedDeal | undefined> => {
+    const params = new URLSearchParams({ market: marketCode });
+    const res = await fetch(
+      `${BACKEND_URL}/api/products/${encodeURIComponent(id)}/ended?${params}`,
+      { next: { revalidate: 600 } },
+    );
+    if (!res.ok) return undefined;
+    const payload = (await res.json()) as {
+      product: {
+        id: number; title: string; image_url: string; public_category: string;
+        retailer_name: string; last_checked_at: string | null;
+      };
+      alternatives: {
+        id: number; title: string; deal_url: string; image_url: string;
+        current_price: number; currency: string; display_score: number | null;
+      }[];
+    };
+    return {
+      id: String(payload.product.id),
+      title: payload.product.title,
+      image: payload.product.image_url,
+      category: payload.product.public_category,
+      retailer: payload.product.retailer_name,
+      lastCheckedAt: payload.product.last_checked_at,
+      alternatives: (payload.alternatives || []).map((item) => ({
+        id: String(item.id),
+        title: item.title,
+        href: item.deal_url,
+        image: item.image_url,
+        price: Number(item.current_price) || 0,
+        currency: item.currency || "USD",
+        score: item.display_score == null ? null : Number(item.display_score),
+      })),
+    };
+  },
+);
+
 export const getDeal = cache(
   async (marketCode: string, id: string): Promise<Deal | undefined> => {
     const payload = await fetchDealPage(marketCode, id);
