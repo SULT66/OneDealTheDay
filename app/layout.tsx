@@ -38,11 +38,25 @@ export const metadata: Metadata = {
   /*
    * Pinterest's proof that this domain is ours.
    *
-   * Not a secret — it is published in the HTML of every page by design, and
-   * the only thing it does is let Pinterest attribute pins that link here to
-   * our account. Without it the pins are anonymous: no analytics on which pin
-   * earned a visit, and no Rich Pins, which is what pulls the live price onto
-   * a pin from the Product markup each listing already carries.
+   * Not a secret — it is published in the HTML of every page by design. What
+   * it buys is attribution: pins linking here are credited to our account, so
+   * Pinterest Analytics can report which pin earned a visit. Without it those
+   * pins are anonymous and the channel cannot be measured at all.
+   *
+   * It does not buy Product Rich Pins. An earlier version of this comment
+   * said it did, and that the live price would be pulled from the Product
+   * markup each listing carries; both were wrong. Pinterest requires that
+   * people be able to buy the product on the claimed site, and every listing
+   * here hands the buyer to eBay, Newegg or AliExpress. The Product markup on
+   * a listing page is there for Google, and Pinterest will not read a price
+   * out of it.
+   *
+   * Article Rich Pins are the type actually open to us: the guides under
+   * app/[market]/guides/[slug] already declare `openGraph.type = "article"`,
+   * so a pin pointing at a guide can carry its headline and description. A
+   * pin pointing at a listing carries whatever the pin itself says, which is
+   * why a pin should not have a price baked into its image — nothing updates
+   * it when the price moves.
    *
    * Site-wide rather than on one page: Pinterest checks the homepage, and a
    * claim that lives on a single route is one refactor away from silently
