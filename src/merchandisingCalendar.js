@@ -129,4 +129,9 @@ function calendarSignals({ market = 'us', now = Date.now(), horizonDays = 90 } =
   return results.sort((a, b) => a.eventAt.localeCompare(b.eventAt) || a.id.localeCompare(b.id));
 }
 
-module.exports = { calendarSignals };
+function activeHalloween({market = 'us', now = Date.now()} = {}) {
+  return calendarSignals({market,now,horizonDays:0}).find(signal =>
+    signal.metadata.eventKey === 'halloween' && Date.parse(signal.startsAt) <= now && now < Date.parse(signal.endsAt));
+}
+
+module.exports = { calendarSignals, activeHalloween };

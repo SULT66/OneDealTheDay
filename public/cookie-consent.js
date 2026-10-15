@@ -229,6 +229,78 @@
     });
   };
 
+  /*
+   * The six things worth counting, and the one function that reports them.
+   *
+   * GA4 was receiving page views and nothing else, so every question past
+   * "how many people came" had no answer: not which pages sent a visitor to a
+   * shop, not whether anyone uses the assistant, not whether search finds
+   * anything. These six say what somebody did, and they are a closed set on
+   * purpose — a typo in an event name is a metric that silently never arrives,
+   * and GA4's own 500-name limit is not something to spend on misspellings.
+   *
+   * Nothing here carries an email address, a question somebody typed, or
+   * anything else that identifies a person. See lib/measure.ts, which is what
+   * the pages actually call, for what each event is allowed to say.
+   */
+  const EVENTS = new Set([
+    "view_item",
+    "search",
+    "delia_open",
+    "delia_query_submit",
+    "email_signup",
+    "retailer_click"
+  ]);
+
+  /* Enough to hold a first page's worth of events while a European visitor
+     reads the consent banner, and small enough that a page left open with
+     consent refused cannot grow it. */
+  const QUEUE_LIMIT = 20;
+  let queued = [];
+  let consentRefused = false;
+
+  /* GA4 takes strings and numbers. Anything else is a mistake at the call
+     site, and an object arriving here would be sent as "[object Object]". */
+  const parameter = value => {
+    if (typeof value === "number") return Number.isFinite(value) ? value : null;
+    if (typeof value === "boolean") return value;
+    if (value === null || value === undefined) return null;
+    if (typeof value === "object") return null;
+    const text = String(value).trim().slice(0, 100);
+    return text || null;
+  };
+
+  /*
+   * The stub `setConsentMode` installs makes `window.gtag` a function long
+   * before Google's script has loaded, and in Europe before the visitor has
+   * been asked. So the test is whether analytics is actually running, not
+   * whether the symbol exists: otherwise a refused banner would still have
+   * pushed every event into dataLayer, where a later acceptance would replay
+   * the lot.
+   */
+  const deliver = (name, parameters) => {
+    if (!analyticsLoaded || typeof window.gtag !== "function") return false;
+    window.gtag("event", name, parameters);
+    return true;
+  };
+
+  window.oddEvent = (name, values) => {
+    if (consentRefused || !EVENTS.has(name)) return;
+    const parameters = {};
+    for (const key of Object.keys(values || {})) {
+      const kept = parameter(values[key]);
+      if (kept !== null) parameters[key] = kept;
+    }
+    if (deliver(name, parameters)) return;
+    if (queued.length < QUEUE_LIMIT) queued.push([name, parameters]);
+  };
+
+  const flushQueuedEvents = () => {
+    const pending = queued;
+    queued = [];
+    for (const [name, parameters] of pending) deliver(name, parameters);
+  };
+
   const loadAnalytics = () => {
     if (analyticsLoaded) return;
     analyticsLoaded = true;
@@ -239,6 +311,7 @@
     document.head.appendChild(script);
     window.gtag("js", new Date());
     window.gtag("config", ANALYTICS_ID, { anonymize_ip: true });
+    flushQueuedEvents();
     loadLareoAnalytics();
   };
 
@@ -270,6 +343,8 @@
     banner.querySelector("[data-cookie-decline]").addEventListener("click", () => {
       savePreference("declined");
       setConsentMode("denied");
+      consentRefused = true;
+      queued = [];
       removeBanner();
     });
     banner.querySelector("[data-cookie-accept]").addEventListener("click", () => {
