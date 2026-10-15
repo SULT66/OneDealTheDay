@@ -10,7 +10,8 @@ import {
   Warning,
 } from "@phosphor-icons/react/ssr";
 import { WatchPrice } from "@/components/deal/WatchPrice";
-import { getCategory, getDeal, getMarket, getRelated } from "@/lib/catalog";
+import { getCategory, getDeal, getEndedDeal, getMarket, getRelated } from "@/lib/catalog";
+import { OfferEnded } from "@/components/deal/OfferEnded";
 import { categoryName, countryName, getLanguage, t } from "@/lib/i18n";
 import {
 
@@ -36,7 +37,17 @@ export async function generateMetadata({
 }: PageProps<"/[market]/deal/[id]">): Promise<Metadata> {
   const { market, id } = await params;
   const deal = await getDeal(market, id);
-  if (!deal) return {};
+  if (!deal) {
+    /* A listing that has left the catalogue still has a page; it is simply not
+       one worth ranking. See components/deal/OfferEnded.tsx. */
+    const ended = await getEndedDeal(market, id);
+    if (!ended) return {};
+    return {
+      title: `${ended.title} — this offer has ended | OneDailyDrop`,
+      alternates: { canonical: `/${market}/deal/${id}` },
+      robots: { index: false, follow: true },
+    };
+  }
   const language = await getLanguage(market);
 
   const short =
@@ -65,7 +76,19 @@ export default async function DealPage({
 }: PageProps<"/[market]/deal/[id]">) {
   const { market, id } = await params;
   const deal = await getDeal(market, id);
-  if (!deal) notFound();
+  if (!deal) {
+    /*
+     * Not a 404 when we still know what the listing was.
+     *
+     * A pin lives six months to a year and a guide links out for longer, so
+     * the end of one of those links is reached long after the offer is over.
+     * The visitor came looking for a thing of this kind and we still have
+     * those; telling them the address is wrong throws that away.
+     */
+    const ended = await getEndedDeal(market, id);
+    if (ended) return <OfferEnded market={market} deal={ended} />;
+    notFound();
+  }
 
   const category = getCategory(deal.category);
   const language = await getLanguage(market);

@@ -47,6 +47,8 @@ const { enabledProviders, searchForAssistant } = require("./providers/registry")
 const { coverage: retailerCoverage } = require("./retailerCatalog");
 const { presentProduct } = require("./productPresentation");
 const { PUBLIC_CATEGORIES, canonicalCategory, isPublicCategory } = require("./catalogTaxonomy");
+/* Aliased: this file already has an alternativesFor, for a live listing. */
+const { alternativesFor: endedAlternativesFor, endedProduct } = require("./endedOffer");
 const { deduplicationKeys, isDailyPickEligible, scoreOffers, selectUniqueProducts } = require("./ranker");
 const { parseSearchOptions, searchCatalogProducts } = require("./catalogSearch");
 const { applySearchIntent } = require("./searchIntent");
@@ -2885,6 +2887,64 @@ const compactApiProduct = product => ({
  * short ranked window, not the rest of the market. Keeping both in one response
  * also lets generateMetadata and the page render share the same memoized fetch.
  */
+/*
+ * A listing that has left the catalogue, and what to look at instead.
+ *
+ * Every other query on this table requires status='published', so the moment
+ * a listing is archived — the feed stopped carrying it, or linkHealth found
+ * its link dead — its page returns 404. Measured against production on
+ * 2026-10-15, that is what a departed listing serves.
+ *
+ * Which is fine for a shop and wrong for us. A pin lives six months to a year
+ * and a guide links out for longer than that; a 404 at the end of one wastes
+ * the visit and teaches Pinterest and Google that our links fail. The row is
+ * still there — archiving sets a status, it does not delete — so the page can
+ * say the offer ended and hand the visitor the current listings in the same
+ * category, which is what they came for anyway.
+ *
+ * Its own endpoint rather than a flag on the one below: that one is called
+ * from several places that all mean "give me a live listing", and quietly
+ * answering with a dead one would be a change none of them asked for.
+ */
+app.get("/api/products/:id/ended", (req, res) => {
+  const id = /^\d+$/.test(String(req.params.id || "")) ? String(req.params.id) : "";
+  if (!id) return res.status(404).json({error:"Product not found"});
+  const selectedMarket = normalizeMarket(req.query.market) || requestMarket(req).code;
+  const product = endedProduct(db, { id, market: selectedMarket, isPublicSource });
+  if (!product) return res.status(404).json({error:"Product not found"});
+
+  const category = clean(product.normalized_category) || "";
+  const alternatives = uniqueProductsInOrder(
+    endedAlternativesFor(db, { market: selectedMarket, category, sourceSql: sourceSql() }),
+  )
+    .filter(isPubliclyIndexable)
+    .slice(0, 4)
+    .map(row => presentProduct(localizeProduct(row, req.language), req.language));
+
+  res.set("Cache-Control", "public, max-age=600");
+  res.json({
+    ended: true,
+    product: {
+      id: product.id,
+      title: clean(product.title),
+      image_url: product.image_url || "",
+      public_category: canonicalCategory(product) || category,
+      retailer_name: storeName(product),
+      last_checked_at: product.checked_at || product.updated_at || null,
+    },
+    alternatives: alternatives.map(item => ({
+      id: item.id,
+      title: item.title,
+      deal_url: dealPath(item),
+      image_url: item.image_url,
+      current_price: item.current_price,
+      currency: item.currency,
+      display_score: item.display_score ?? null,
+      public_category: item.public_category,
+    })),
+  });
+});
+
 app.get("/api/products/:id", (req, res) => {
   const id = /^\d+$/.test(String(req.params.id || "")) ? String(req.params.id) : "";
   if (!id) return res.status(404).json({error:"Product not found"});
