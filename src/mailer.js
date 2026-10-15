@@ -138,10 +138,12 @@ const paragraphHtml = (text) =>
  * @param {string} [message.after]  a sentence under the button
  * @param {string} [message.signature]
  * @param {string} [message.tip]
+ * @param {object[]} [message.items]  a numbered list of listings; each is
+ *   { title, href, price, imageUrl, category, reasons[] }
  * @param {string} [message.footer]  HTML
  * @param {boolean} [message.live]  the LIVE mark beside the wordmark
  */
-function composeEmail({ preheader, eyebrow, heading, paragraphs = [], product, cta, after, signature, tip, footer, live = false }) {
+function composeEmail({ preheader, eyebrow, heading, paragraphs = [], product, items = [], cta, after, signature, tip, footer, live = false }) {
   const productCard = product && product.title ? `
       <tr><td style="padding:6px 32px 4px">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f6f7f2;border-radius:16px">
@@ -158,6 +160,41 @@ function composeEmail({ preheader, eyebrow, heading, paragraphs = [], product, c
             </td>
           </tr>
         </table>
+      </td></tr>` : "";
+
+  /*
+   * The digest's list.
+   *
+   * `product` above is one listing presented as a card; this is five of them
+   * presented as a letter's numbered list — a row each, the picture small, the
+   * reasons in words. Not a grid of tiles: a grid is what a sale flyer looks
+   * like, and the whole point of the digest is that it reads like somebody
+   * writing down what they found.
+   *
+   * Every row carries its evidence underneath rather than a badge, because a
+   * badge in an email cannot be checked and a sentence can.
+   */
+  const itemList = (items || []).length ? `
+      <tr><td style="padding:4px 32px 0">
+        ${items.map((item, index) => `
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 10px;background:#f6f7f2;border-radius:16px">
+          <tr>
+            ${item.imageUrl ? `<td width="92" style="padding:14px 0 14px 14px;vertical-align:top">
+              <a href="${escapeHtml(item.href || SITE)}" style="text-decoration:none">
+                <img src="${escapeHtml(item.imageUrl)}" alt="${escapeHtml(item.title || "")}" width="78" height="78"
+                  style="display:block;width:78px;height:78px;object-fit:contain;border-radius:12px;background:#ffffff;border:0">
+              </a>
+            </td>` : ""}
+            <td style="padding:14px 16px;vertical-align:top">
+              <div style="font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:${FAINT};margin-bottom:4px">
+                ${index + 1}${item.category ? ` · ${escapeHtml(item.category)}` : ""}
+              </div>
+              <a href="${escapeHtml(item.href || SITE)}" style="font-size:15px;line-height:1.35;font-weight:bold;color:${INK};text-decoration:none">${escapeHtml(item.title || "")}</a>
+              ${item.price ? `<div style="font-size:15px;font-weight:bold;color:${INK};margin-top:6px">${escapeHtml(item.price)}</div>` : ""}
+              ${(item.reasons || []).length ? `<div style="font-size:13px;line-height:1.55;color:${MUTED};margin-top:5px">${(item.reasons || []).map(escapeHtml).join(" · ")}</div>` : ""}
+            </td>
+          </tr>
+        </table>`).join("")}
       </td></tr>` : "";
 
   const html = `
@@ -177,6 +214,7 @@ function composeEmail({ preheader, eyebrow, heading, paragraphs = [], product, c
         </td></tr>
 
         ${productCard}
+        ${itemList}
 
         ${cta ? `<tr><td style="padding:22px 32px 4px">
           <a href="${cta.href}" style="display:inline-block;background:${LIME};color:${INK};text-decoration:none;padding:15px 30px;border-radius:999px;font-weight:bold;font-size:16px">${escapeHtml(cta.label)}</a>
@@ -491,4 +529,66 @@ const deliveryTestEmail = ({ to }) => sendEmail({
   }),
 });
 
-module.exports = { welcomeEmail, liveDropLiveNowEmail, liveDropSaveTheDateEmail, liveDropStartingSoonEmail, liveDropAnnouncementEmail, priceDropEmail, priceWatchStartedEmail, passwordResetEmail, subscriptionEmail, clubWaitlistEmail, liveDropReminderEmail, deliveryTestEmail };
+/*
+ * The invitation to the second list.
+ *
+ * It exists because the signup form promised "Only Live Drop emails", and the
+ * honest way past a promise is to ask rather than to quietly widen it. Both
+ * answers are a link, and ignoring it is a third answer that keeps the
+ * promise exactly as made — which is why the mail says so.
+ */
+const digestInviteEmail = ({ email, market = "us", joinUrl, unsubscribeUrl }) => sendEmail({
+  to: email,
+  subject: "Want five finds every Sunday?",
+  unsubscribeUrl,
+  ...composeEmail({
+    preheader: "A separate list, and only if you say so.",
+    eyebrow: "One question",
+    heading: "Five finds, every Sunday",
+    paragraphs: [
+      "You signed up for Live Drop alerts, and that is all you have been getting. That stays true unless you say otherwise.",
+      "We are starting something separate: five listings every Sunday morning, each with what it costs, what we recorded about its price, and what to check before buying. One email a week. No daily mail, no deal of the hour.",
+      "Only listings that clear our Score of 80 go in it, so some Sundays there will be three rather than five, and a quiet week gets no email at all.",
+    ],
+    cta: { label: "Yes, send me Sundays", href: joinUrl },
+    after: "Ignore this and nothing changes — you will keep getting only Live Drop emails.",
+    signature: "The OneDailyDrop team",
+    footer: unsubscribeFooter(unsubscribeUrl, "You are receiving this because you signed up for Live Drop emails."),
+  }),
+});
+
+/*
+ * The Sunday digest.
+ *
+ * Five listings at most and fewer when that is all there is, because a
+ * weekly email that always finds exactly five things has stopped looking.
+ * The closing count is the one claim only this site can make: how many
+ * listings printed a discount in the same week that our own sixty days of
+ * observations could not confirm.
+ */
+const weeklyDigestEmail = ({ email, market = "us", items = [], unconfirmed = 0, unsubscribeUrl }) => sendEmail({
+  to: email,
+  subject: items.length === 1
+    ? "One find this week"
+    : `${items.length} finds this week`,
+  unsubscribeUrl,
+  ...composeEmail({
+    preheader: items.length
+      ? `${items[0].title}${items[0].price ? ` — ${items[0].price}` : ""}, and ${items.length - 1} more.`
+      : "This week's finds.",
+    eyebrow: "Sunday",
+    heading: items.length === 1 ? "One find this week" : `${items.length} finds this week`,
+    paragraphs: [
+      "Everything below cleared a Score of 80. Prices were checked this morning and shops change them without telling us, so the shop's own page is always the last word.",
+    ],
+    items,
+    cta: { label: "See everything we checked", href: `${SITE}/${encodeURIComponent(market)}` },
+    after: unconfirmed > 0
+      ? `We also found <strong>${unconfirmed}</strong> listings this week showing a crossed-out price we could not confirm. None of them are above. That is the whole job.`
+      : "",
+    signature: "Until Sunday,<br>The OneDailyDrop team",
+    footer: unsubscribeFooter(unsubscribeUrl, "You are receiving this because you asked for the Sunday finds."),
+  }),
+});
+
+module.exports = { digestInviteEmail, weeklyDigestEmail, welcomeEmail, liveDropLiveNowEmail, liveDropSaveTheDateEmail, liveDropStartingSoonEmail, liveDropAnnouncementEmail, priceDropEmail, priceWatchStartedEmail, passwordResetEmail, subscriptionEmail, clubWaitlistEmail, liveDropReminderEmail, deliveryTestEmail };
