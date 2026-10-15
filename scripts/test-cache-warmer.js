@@ -31,7 +31,8 @@ const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
     let inFlight = 0;
     let maxInFlight = 0;
     const requested = [];
-    const fetchImpl = async (url) => {
+    const fetchImpl = async (url, options) => {
+      assert.equal(options.headers['x-odd-cache-refresh'],'test-refresh-token','Warmer passes the private refresh header');
       inFlight += 1;
       maxInFlight = Math.max(maxInFlight, inFlight);
       requested.push(new URL(url).pathname);
@@ -50,6 +51,7 @@ const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
       paths: ["/us", "/us/daily-drop", "/us/stores"],
       intervalMs: 10_000,
       firstRunMs: 20,
+      headers: {"x-odd-cache-refresh":"test-refresh-token"},
       spacingMs: 20,
       fetchImpl,
       onCycle: () => { cycles += 1; },

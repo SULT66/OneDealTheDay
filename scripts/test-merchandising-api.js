@@ -83,10 +83,10 @@ async function get(route, options) {
   let autoReleased=false;
   const safety=setTimeout(()=>{autoReleased=true;release();},5000);
   try {
-    const streamed=await fetch(base+'/us?probe=delayed-collection');
+    const streamed=await fetch(base+'/us/halloween?probe=delayed-collection');
     const reader=streamed.body.getReader(), decoder=new TextDecoder();
     let prefix='';
-    while(!prefix.includes('A little spooky.')) {
+    while(!prefix.includes('Loading Halloween finds')) {
       const chunk=await reader.read();
       assert(!chunk.done,'The hero must be in the initial streamed shell');
       prefix+=decoder.decode(chunk.value);
@@ -97,39 +97,50 @@ async function get(route, options) {
     while(!(await reader.read()).done) {}
   } finally {clearTimeout(safety);release();holdCollection=null;}
   failCollection=true;
-  const outage=await fetch(base+'/us?probe=collection-recovery');
+  const outage=await fetch(base+'/us/halloween?probe=collection-recovery');
   const outageHtml=await outage.text();
-  assert(outageHtml.includes('A little spooky.') && outageHtml.includes('data-odd-transient="1"'),'Source failure keeps the calendar banner and an honest retry state');
+  assert(outageHtml.includes('Halloween finds') && outageHtml.includes('data-odd-transient="1"'),'Source failure keeps the calendar banner and an honest retry state');
   assert(!outageHtml.includes('Find your next good buy.'));
   assert.match(outage.headers.get('cache-control'),/no-store/);
   failCollection=false;
-  const recovery=await fetch(base+'/us?probe=collection-recovery');
+  const recovery=await fetch(base+'/us/halloween?probe=collection-recovery');
   assert.equal(recovery.headers.get('x-odd-cache'),'MISS');
   assert((await recovery.text()).includes('Halloween Pick'),'The same URL must recover without waiting for cached failure expiry');
   global.fetch=realFetch;
   const home = await fetch(base+'/us');
   assert.equal(home.status,200);
   const homeHtml = await home.text();
-  assert(homeHtml.includes('halloween-products') && homeHtml.includes('A little spooky.'),'Homepage must place the collection below the pumpkin hero');
+  assert(homeHtml.includes('A little spooky.') && homeHtml.includes('href="/us/halloween"'),'Hero must link to the standalone collection');
+  assert(homeHtml.includes('See more Halloween finds'),'Homepage preview links to the full collection');
+  assert(!homeHtml.includes('action="/us/halloween"'),'Full collection controls stay on the dedicated page');
+  assert(homeHtml.includes('Halloween Pick'),'Homepage retains a sales-backed preview');
   assert(!homeHtml.includes('Test seasonal shelf'),'Homepage must not duplicate the Halloween shelf');
-  assert(homeHtml.includes('Halloween Pick'),'Homepage must render the campaign badge inside the card');
-  assert(homeHtml.includes('sold · eBay estimate'),'Sales badge must preserve its evidence qualification');
   assert(!homeHtml.includes('Unrelated winter shelf'),'Homepage must suppress previously placed unrelated themes');
-  assert(homeHtml.includes('data-merch-placement="seasonal_card"'),'Shelf cards must carry tracking attribution');
   assert(!homeHtml.includes('bg-gradient-to-br from-red-950'),'Homepage must have only the pumpkin campaign banner');
+  const preview=await get('/api/merchandising?market=us&collection=halloween&preview=1');
+  assert(preview.body.products.length<=5);
+  assert.equal(preview.body.products[0].id,productId);
   const collection=await get('/api/merchandising?market=us&collection=halloween');
   assert.equal(collection.body.total,1);
   assert.equal(collection.body.products[0].id,productId);
   assert.equal(db.prepare('SELECT COUNT(*) n FROM merchandising_runs').get().n,0,'Collection reads never trigger discovery');
   assert.equal((await get('/api/merchandising?market=us&collection=halloween&q=unrelated')).body.total,0);
-  const legacyPage=await fetch(base+'/us/halloween?q=mask&sort=price-asc&page=2',{redirect:'manual'});
+  const legacyPage=await fetch(base+'/us?halloween_q=mask&halloween_sort=price-asc&halloween_page=2',{redirect:'manual'});
   assert.equal(legacyPage.status,307);
-  assert(legacyPage.headers.get('location').includes('halloween_q=mask'));
-  assert(legacyPage.headers.get('location').includes('#halloween-products'));
+  assert(legacyPage.headers.get('location').includes('/us/halloween?'));
+  assert(legacyPage.headers.get('location').includes('q=mask'));
+  assert(legacyPage.headers.get('location').includes('page=2'));
   const cataloguePage=await fetch(base+'/us/halloween');
   assert.equal(cataloguePage.status,200);
   const catalogueHtml=await cataloguePage.text();
   assert(catalogueHtml.includes('Halloween finds') && catalogueHtml.includes('Halloween Pick'),'Collection must render its real products and campaign badge');
+  assert(catalogueHtml.includes('sold · eBay estimate'),'Sales badge must preserve its evidence qualification');
+  assert(catalogueHtml.includes('data-merch-placement="seasonal_card"'),'Collection cards retain attribution');
+  assert(catalogueHtml.includes('action="/us/halloween"'),'Filtering stays on the dedicated page');
+  const filtered=await fetch(base+'/us/halloween?q=unrelated&sort=price-asc');
+  assert.equal(filtered.status,200);
+  assert((await filtered.text()).includes('No matching products right now'),'Dedicated filters affect the collection');
+  assert.equal((await fetch(base+'/us/halloween')).headers.get('x-odd-cache'),'HIT','Dedicated page gets HTML caching');
   const categoryPage = await fetch(base+'/us/category/home-kitchen');
   assert.equal(categoryPage.status,200);
   assert((await categoryPage.text()).includes('Test seasonal shelf'),'First category page must render its matching shelf');

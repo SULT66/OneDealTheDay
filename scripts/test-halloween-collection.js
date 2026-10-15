@@ -15,6 +15,15 @@ const insert=native.prepare(`INSERT INTO products VALUES(${Object.keys(sample).m
 for(let i=0;i<210;i++) {const p={...sample,id:5000+i,title:`Halloween Decoration Model ${5000+i}`,affiliate_url:`https://www.ebay.com/itm/${123456789000+i}`,current_price:20+i,ebay_sold_quantity:i===1?150:null};insert.run(...Object.values(p));}
 const first=getHalloweenCollection(db,{now});
 assert.equal(first.total,200);assert.equal(first.products.length,24);assert.equal(first.pages,9);
+const preview=getHalloweenCollection(db,{now,preview:true});
+assert.equal(preview.products.length,1,'Preview only contains products with real positive sales evidence');
+assert.equal(preview.products[0].id,5001,'Best-selling verified listing comes first');
+assert.equal(preview.total,200,'Preview does not shrink the full collection');
+native.prepare('UPDATE products SET ebay_sold_quantity=1000 WHERE id BETWEEN 5002 AND 5008').run();
+const topFive=getHalloweenCollection(db,{now,preview:true});
+assert.equal(topFive.products.length,5,'Homepage preview is capped at five');
+assert(topFive.products.every(row=>row.ebay_sold_quantity===1000),'Highest sales come first');
+native.prepare('UPDATE products SET ebay_sold_quantity=NULL WHERE id BETWEEN 5002 AND 5008').run();
 const second=getHalloweenCollection(db,{now,page:2});
 assert(!second.products.some(p=>first.products.some(f=>f.id===p.id)),'Pages must not repeat products');
 assert(first.products.some(p=>first.selectionEvidence[p.id].ebaySoldQuantity===null),'General catalogue can include unknown sales without inventing evidence');
