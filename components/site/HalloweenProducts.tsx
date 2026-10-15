@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import type {Language} from '@/lib/i18n';
 import type {HalloweenCollection} from '@/lib/merchandising';
 import {DealCard} from '@/components/deal/DealCard';
@@ -43,11 +42,11 @@ export function HalloweenProducts({market,language,data,q='',sort='popular',prev
         </li>)}
       </ul>
     </MerchandisingTracking>}
-    {preview && <div className="mt-7 text-center"><Link href={`/${market}/halloween`} className="inline-flex min-h-12 items-center rounded-full bg-red-600 px-6 py-3 text-sm font-bold text-white hover:bg-red-700">{{en:'See more Halloween finds →',es:'Ver más productos Halloween →',fr:'Voir plus de produits Halloween →',de:'Mehr Halloween-Produkte →'}[language]}</Link></div>}
+    {preview && <div className="mt-7 text-center"><a href={`/${market}/halloween`} className="inline-flex min-h-12 items-center rounded-full bg-red-600 px-6 py-3 text-sm font-bold text-white hover:bg-red-700">{{en:'See more Halloween finds →',es:'Ver más productos Halloween →',fr:'Voir plus de produits Halloween →',de:'Mehr Halloween-Produkte →'}[language]}</a></div>}
     {!preview && data.pages>1 && <nav aria-label="Pagination" className="mt-10 flex items-center justify-between gap-4 text-sm font-bold">
-      {data.page>1?<Link className="rounded-full border border-border px-5 py-3" href={pageUrl(data.page-1)}>← {copy.previous}</Link>:<span/>}
+      {data.page>1?<a className="rounded-full border border-border px-5 py-3" href={pageUrl(data.page-1)}>← {copy.previous}</a>:<span/>}
       <span>{copy.page} {data.page} / {data.pages}</span>
-      {data.page<data.pages?<Link className="rounded-full bg-red-600 px-5 py-3 text-white" href={pageUrl(data.page+1)}>{copy.next} →</Link>:<span/>}
+      {data.page<data.pages?<a className="rounded-full bg-red-600 px-5 py-3 text-white" href={pageUrl(data.page+1)}>{copy.next} →</a>:<span/>}
     </nav>}
   </section>;
 }

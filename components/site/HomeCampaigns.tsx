@@ -21,13 +21,13 @@ export function HomeCampaigns({market,language,halloween=false}:{market:string;l
         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-orange-200">{halloween ? copy.eyebrow : "OneDailyDrop"}</p>
         <h1 id="hero-title" className="mt-4 whitespace-pre-line text-4xl font-bold leading-[1.05] tracking-tight sm:text-5xl lg:text-6xl">{halloween ? copy.title : copy.everyday}</h1>
         <p className="mt-5 max-w-sm text-sm leading-relaxed text-white/80 sm:text-base">{halloween ? copy.note : copy.everydayNote}</p>
-        <Link href={halloween ? `/${market}/halloween` : search} className="mt-7 inline-flex min-h-12 items-center gap-3 rounded-full bg-[#ffc07a] px-6 text-sm font-semibold text-[#201322] transition-colors hover:bg-orange-200">
+        <a href={halloween ? `/${market}/halloween` : search} className="mt-7 inline-flex min-h-12 items-center gap-3 rounded-full bg-[#ffc07a] px-6 text-sm font-semibold text-[#201322] transition-colors hover:bg-orange-200">
           {halloween ? copy.shop : copy.browse}<ArrowRight size={18} weight="bold" aria-hidden="true" />
-        </Link>
+        </a>
       </div>
     </div>
     {halloween && <nav aria-label={copy.shop} className="flex flex-wrap items-center gap-2">
-      {copy.categories.map((label,index) => <Link key={label} href={`/${market}/halloween?${new URLSearchParams({q:['costume','decor','party'][index],lang:language})}`} className="rounded-full border border-border bg-surface px-4 py-2 text-sm font-medium text-fg transition-colors hover:border-orange-300 hover:bg-orange-50 hover:text-ink">{label}</Link>)}
+      {copy.categories.map((label,index) => <a key={label} href={`/${market}/halloween?${new URLSearchParams({q:['costume','decor','party'][index],lang:language})}`} className="rounded-full border border-border bg-surface px-4 py-2 text-sm font-medium text-fg transition-colors hover:border-orange-300 hover:bg-orange-50 hover:text-ink">{label}</a>)}
     </nav>}
     <div className="grid gap-3 sm:grid-cols-2">
       <Link href={`/${market}/daily-drop`} className="group flex items-center justify-between gap-4 rounded-card bg-lime px-6 py-5 text-ink">

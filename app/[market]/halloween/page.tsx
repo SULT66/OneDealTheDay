@@ -1,5 +1,4 @@
 import { Suspense } from 'react';
-import Link from 'next/link';
 import type { Metadata } from 'next';
 import { getLanguage, type Language } from '@/lib/i18n';
 import { getHalloweenCollection } from '@/lib/merchandising';
@@ -22,7 +21,7 @@ export default async function HalloweenPage({params,searchParams}:PageProps<'/[m
   const page=Math.max(1,Math.floor(Number(search.page)||1));
   const copy=COPY[language];
   return <div className="mx-auto max-w-7xl px-4 pb-24 pt-8 sm:px-6">
-    <Link href={`/${market}`} className="text-sm font-semibold text-fg-muted hover:text-fg">← {copy.home}</Link>
+    <a href={`/${market}`} className="text-sm font-semibold text-fg-muted hover:text-fg">← {copy.home}</a>
     <h1 className="mt-5 text-4xl font-bold tracking-tight text-fg">{copy.title}</h1>
     <p className="mt-3 max-w-2xl text-sm leading-relaxed text-fg-muted">{copy.note}</p>
     <Suspense key={`${q}:${sort}:${page}`} fallback={<div aria-busy="true" className="mt-8 h-56 animate-pulse rounded-2xl bg-surface p-6 text-sm text-fg-muted">{copy.loading}</div>}>
