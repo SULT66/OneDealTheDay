@@ -65,7 +65,12 @@ const {
   welcomeEmail,
   liveDropSaveTheDateEmail, liveDropStartingSoonEmail, liveDropAnnouncementEmail, liveDropLiveNowEmail, priceDropEmail,
   priceWatchStartedEmail,
-  passwordResetEmail, subscriptionEmail, clubWaitlistEmail, liveDropReminderEmail, deliveryTestEmail } = require("./mailer");
+  passwordResetEmail, subscriptionEmail, clubWaitlistEmail, liveDropReminderEmail, deliveryTestEmail,
+  digestInviteEmail, weeklyDigestEmail, introEmail, scoreExplainerEmail } = require("./mailer");
+const { sendWeeklyDigest } = require("./weeklyDigest");
+const { sendWelcomeSequence } = require("./welcomeSequence");
+const { chooseDigestItems } = require("./digestSelection");
+const { digestItemFor } = require("./weeklyDigest");
 const { emailHealth } = require("./emailHealth");
 const { htmlCache } = require("./htmlCache");
 const { startCacheWarmer, pathsFor } = require("./cacheWarmer");
@@ -3079,6 +3084,56 @@ app.get("/unsubscribe", (req, res) => {
 </body></html>`);
 });
 
+/*
+ * Joining the Sunday list, from a link in an email.
+ *
+ * The same per-subscriber token the unsubscribe link uses: it works from an
+ * inbox with no sign-in, and it cannot be used to add somebody else by
+ * guessing their address. A GET because it is a link in an email and nothing
+ * else can be — which is why it only ever turns a flag on for the one address
+ * the token belongs to.
+ */
+const digestPage = (res, status, title, message) => res
+  .status(status)
+  .set("X-Robots-Tag", "noindex, nofollow")
+  .set("Cache-Control", "no-store")
+  .send(`<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow">
+<title>${esc(title)} - OneDailyDrop</title></head>
+<body style="font-family:system-ui,Arial,sans-serif;max-width:34rem;margin:12vh auto;padding:0 1.25rem;color:#17191d">
+<h1 style="font-size:1.5rem">${esc(title)}</h1>
+<p style="line-height:1.6">${esc(message)}</p>
+<p><a href="/" style="color:#d95600;font-weight:600">Back to OneDailyDrop</a></p>
+</body></html>`);
+
+const digestFlag = (token, on) => {
+  const value = analyticsToken(String(token || "")) || String(token || "").trim();
+  if (!value || value.length < 16 || value.length > 120) return false;
+  const result = db
+    .prepare(`UPDATE subscribers SET digest_opt_in = ?, digest_opt_in_at = ?, updated_at = ?
+               WHERE unsubscribe_token = ? AND unsubscribe_token <> '' AND status = 'active'`)
+    .run(on ? 1 : 0, on ? new Date().toISOString() : null, new Date().toISOString(), value);
+  return Number(result?.changes || 0) > 0;
+};
+
+app.get("/digest/join", (req, res) => {
+  const done = digestFlag(req.query.token, true);
+  return done
+    ? digestPage(res, 200, "You're on for Sundays",
+      "Five finds every Sunday morning, starting this week. Your Live Drop emails carry on as before, and either list can be left on its own.")
+    : digestPage(res, 404, "Link not recognised",
+      "That link is not one we recognise. If you still want the Sunday finds, reply to any of our emails and we will add you by hand.");
+});
+
+app.get("/digest/stop", (req, res) => {
+  const done = digestFlag(req.query.token, false);
+  return done
+    ? digestPage(res, 200, "No more Sundays",
+      "We will not send you the Sunday finds again. If you are also on the Live Drop list, those still arrive — the unsubscribe link in any of them stops those too.")
+    : digestPage(res, 404, "Link not recognised",
+      "That link is not one we recognise. Reply to any of our emails and we will take you off by hand.");
+});
+
 /* Rate limited: without it this form sends mail from our domain to any address
    anybody chooses, as fast as they can post to it. */
 app.post("/api/subscribe", authRateLimit, async (req,res) => {
@@ -4586,6 +4641,54 @@ cron.schedule("* * * * *", () => {
     .then((ended) => ended.length && console.log(`[live-host] ended ${ended.length} broadcast(s)`))
     .catch((error) => console.error(`[live-host] could not end broadcasts: ${error.message}`));
 });
+/*
+ * Sunday morning in New York, which is where the readers are.
+ *
+ * Hourly rather than once at ten, and the module decides whether it is
+ * actually the right day: a cron timezone is one more place for the clock
+ * changes to be wrong, and an hourly sweep that finds the week already
+ * recorded costs one indexed lookup. The unique index on digest_runs is what
+ * makes a second attempt harmless, not the schedule.
+ */
+let digestSweepRunning = false;
+cron.schedule("0 * * * *", async () => {
+  if (digestSweepRunning) return;
+  digestSweepRunning = true;
+  try {
+    const hour = Number(new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/New_York", hour: "numeric", hour12: false,
+    }).format(new Date()));
+    if (hour !== 10) return;
+
+    for (const code of marketCodes) {
+      const products = uniqueProductsInOrder(
+        db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()}
+                     ORDER BY COALESCE(ranking_score,score) DESC, score DESC`).all(code),
+      )
+        .filter(isPubliclyIndexable)
+        .map(product => presentProduct(product, defaultLanguages[code] || "en"));
+
+      const result = await sendWeeklyDigest({
+        db,
+        market: code,
+        products,
+        sendDigest: weeklyDigestEmail,
+        siteOrigin: SITE,
+        unsubscribeUrlFor: (subscriber) => (subscriber.unsubscribe_token
+          ? `${SITE}/digest/stop?token=${encodeURIComponent(subscriber.unsubscribe_token)}`
+          : ""),
+      });
+      if (result.status !== "not-sunday") {
+        console.log(`[digest] ${code}: ${result.status} (${result.sent} sent, ${result.items} items)`);
+      }
+    }
+  } catch (error) {
+    console.error(`[digest] ${error.message}`);
+  } finally {
+    digestSweepRunning = false;
+  }
+}, {timezone: "UTC"});
+
 let reminderSweepRunning = false;
 cron.schedule(
   "* * * * *",
@@ -4631,6 +4734,37 @@ cron.schedule(
       /* Watched prices, on the same minute. The refresh has already written
          today's prices by the time this runs; nothing else reads them for
          this purpose. */
+      /*
+       * The first week's three letters, one per subscriber per sweep. On the
+       * same minute sweep as the drop reminders because it is the same kind
+       * of work: look at what is owed, send at most one thing, record it.
+       */
+      const welcomed = await sendWelcomeSequence({
+        db,
+        senders: {
+          intro: introEmail,
+          score: scoreExplainerEmail,
+          digest_invite: digestInviteEmail,
+        },
+        featuredFor: (code) => {
+          const pick = chooseDigestItems(
+            uniqueProductsInOrder(
+              db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()}
+                           ORDER BY COALESCE(ranking_score,score) DESC, score DESC LIMIT 400`).all(code),
+            )
+              .filter(isPubliclyIndexable)
+              .map(product => presentProduct(product, defaultLanguages[code] || "en")),
+            { limit: 1 },
+          )[0];
+          return pick ? digestItemFor(pick, { market: code, siteOrigin: SITE }) : null;
+        },
+        joinUrlFor: (subscriber) => `${SITE}/digest/join?token=${encodeURIComponent(subscriber.unsubscribe_token)}`,
+        unsubscribeUrlFor: (subscriber) => `${SITE}/unsubscribe?token=${encodeURIComponent(subscriber.unsubscribe_token)}`,
+      });
+      for (const [step, count] of Object.entries(welcomed)) {
+        console.log(`[welcome] sent ${count} "${step}" letter${count === 1 ? "" : "s"}`);
+      }
+
       const drops = await sendDuePriceDrops({
         db,
         sendPriceDrop: priceDropEmail,
