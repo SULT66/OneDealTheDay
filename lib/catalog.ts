@@ -123,6 +123,7 @@ const fetchMarketCatalog = cache(
 
     const res = await fetch(`${BACKEND_URL}/api/products?${params}`, {
       cache: "no-store" as const,
+      signal: AbortSignal.timeout(8000),
     });
     if (!res.ok) {
       throw new Error(`Failed to load the catalog for "${marketCode}" (${res.status}).`);
@@ -205,7 +206,7 @@ async function fetchCategoryCounts(
 ): Promise<Array<{ category: string; count: number }>> {
   const res = await fetch(
     `${BACKEND_URL}/api/categories?market=${encodeURIComponent(marketCode)}`,
-    { next: { revalidate: 60 } },
+    { next: { revalidate: 60 }, signal: AbortSignal.timeout(8000) },
   );
   if (!res.ok) {
     throw new Error(`Failed to load category counts for "${marketCode}" (${res.status}).`);

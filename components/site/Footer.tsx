@@ -33,7 +33,7 @@ const SOCIAL_LINKS = [
 
 export async function Footer({ market }: { market: string }) {
   const language = await getLanguage(market);
-  const categories = await getCategoriesWithCounts(market, language);
+  const categories = await getCategoriesWithCounts(market, language).catch(() => []);
   const countries = countryOptions(market, language);
   const languages = hasLanguageChoice(market)
     ? await languageLinks(market, language)

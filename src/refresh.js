@@ -1,11 +1,12 @@
 const db = require("./db");
-const { SCORE_MODEL, deduplicationKeys, isDailyPickEligible, scoreOffers, selectUniqueProducts } = require("./ranker");
+const { SCORE_MODEL, deduplicationKeys, isDailyPickEligible, selectUniqueProducts } = require("./ranker");
 const { detectBrand, normalizeBrand, slugifyBrand } = require("./brandDetector");
 const { priceIntelligence } = require("./priceIntelligence");
 const { createPriceSnapshotWriter } = require("./priceSnapshots");
 const { searchAll } = require("./providers/registry");
 const { demandKeywords } = require("./searchQueries");
 const { planGapSearches } = require("./aliexpressGaps");
+const { scoreOffersAsync } = require("./scoreOffersAsync");
 const activeMarketRefreshes = new Map();
 
 function textValue(value) {
@@ -73,7 +74,7 @@ function qualifiedProviderId(product) {
   return raw.startsWith(`${source}:`) ? raw : `${source}:${raw}`;
 }
 
-function addPriceIntelligence(products, marketCode) {
+async function addPriceIntelligence(products, marketCode) {
   const existingProduct = db.prepare("SELECT id FROM products WHERE external_id=?");
   const history = db.prepare(`
     SELECT price, observed_at
@@ -82,7 +83,7 @@ function addPriceIntelligence(products, marketCode) {
     ORDER BY observed_at ASC
   `);
   const cutoff = new Date(Date.now() - 90 * 86400000).toISOString();
-  return products.map(product => {
+  const enrich = product => {
     const existing = existingProduct.get(`${marketCode}:${qualifiedProviderId(product)}`);
     if (!existing) return product;
     const intelligence = priceIntelligence(history.all(existing.id, cutoff));
@@ -98,7 +99,14 @@ function addPriceIntelligence(products, marketCode) {
       average_90_day_price: intelligence.day90.sufficient ? intelligence.day90.average : 0,
       lowest_90_day_price: intelligence.day90.sufficient ? intelligence.day90.low : 0
     };
-  });
+  };
+  const enriched = [];
+  for (let index=0;index<products.length;index++) {
+    // SQLite reads stay local; give pending HTTP work a turn between batches.
+    if (index && index % 50 === 0) await new Promise(resolve=>setImmediate(resolve));
+    enriched.push(enrich(products[index]));
+  }
+  return enriched;
 }
 
 /* How many picks a full drop holds, and how long a product must sit out before
@@ -270,7 +278,7 @@ async function refreshMarket(config, marketCode, options = {}) {
     recordSourceReports(runId, selectedMarket.code, started, loaded.reports);
     const failedReports = loaded.reports.filter(report => report.status === "failed");
     if (failedReports.length) console.error(`Partial ${selectedMarket.name} refresh: ${failedReports.map(report => `${report.name}: ${report.error}`).join(" | ")}`);
-    const found = addPriceIntelligence(loaded.products, selectedMarket.code);
+    const found = await addPriceIntelligence(loaded.products, selectedMarket.code);
     const eligibility = {
       currency: selectedMarket.currency,
       minimumRating: 0,
@@ -279,7 +287,7 @@ async function refreshMarket(config, marketCode, options = {}) {
       minimumEvidenceConfidence: 0,
       maximumShippingRatio: 0.5
     };
-    const scoredOffers = scoreOffers(found, eligibility);
+    const scoredOffers = await scoreOffersAsync(found, eligibility, {background:config.isProduction});
     const uniqueProducts = selectUniqueProducts(scoredOffers);
     /* Reported as the run's catalog size; the whole of scoredOffers is what
        actually gets written to the products table further down. */

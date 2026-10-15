@@ -1,4 +1,5 @@
 import { AffiliateNotice } from "@/components/site/AffiliateNotice";
+import { Suspense } from "react";
 import { getLanguage } from "@/lib/i18n";
 import { notFound } from "next/navigation";
 import { getMarket, getMarkets } from "@/lib/catalog";
@@ -49,7 +50,7 @@ export default async function MarketLayout({
         </div>
         {children}
       </main>
-      <Footer market={market} />
+      <Suspense fallback={null}><Footer market={market} /></Suspense>
       </LiveBroadcastProvider>
     </DeliaProvider>
     </CopyProvider>

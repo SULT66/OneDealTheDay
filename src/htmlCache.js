@@ -37,6 +37,17 @@ const DEFAULT_TTL_MS = 10 * 60 * 1000;
 const SEARCH_TTL_MS = 2 * 60 * 1000;
 const MAX_ENTRIES = 300;
 const MAX_BODY_BYTES = 2 * 1024 * 1024;
+const zlib = require('node:zlib');
+const isHome = path => /^(?:\/(?:us|ca|uk|fr|de))?\/?$/.test(path);
+
+function transientPage(body, encoding) {
+  try {
+    const decoded = encoding === 'gzip' ? zlib.gunzipSync(body)
+      : encoding === 'br' ? zlib.brotliDecompressSync(body)
+      : encoding === 'deflate' ? zlib.inflateSync(body) : body;
+    return decoded.includes(Buffer.from('data-odd-transient="1"'));
+  } catch { return true; }
+}
 
 /*
  * Pages that are the same for everybody who asks in the same language.
@@ -172,7 +183,10 @@ function htmlCache(options = {}) {
             if (/^cache-control$/i.test(name)) delete argument[name];
           }
         }
-        res.setHeader("Cache-Control", cacheControl);
+        // A streamed homepage may discover a source outage after headers leave.
+        // Cache only its complete, successful copy in process; a miss must not
+        // seed browsers/CDNs with a temporary unavailable state.
+        res.setHeader("Cache-Control", isHome(path) ? "private, no-store" : cacheControl);
         res.setHeader("Vary", PUBLIC_VARY);
       }
       return originalWriteHead(...args);
@@ -188,19 +202,21 @@ function htmlCache(options = {}) {
          only a real chunk is body. */
       if (typeof chunk !== "function") collect(chunk, encoding);
       store();
-      return originalEnd(chunk, encoding, callback);
+      try { return originalEnd(chunk, encoding, callback); }
+      finally { res.writeHead = originalWriteHead; }
     };
 
     function store() {
       res.write = originalWrite;
       res.end = originalEnd;
-      res.writeHead = originalWriteHead;
       if (daily || !collecting || res.statusCode !== 200) return;
       if (!/^text\/html/i.test(String(res.get("content-type") || ""))) return;
       /* A response that sets a cookie is carrying something about this one
          visitor, whatever the body looks like. Not ours to hand to the next
          person. */
       if (res.get("set-cookie")) return;
+      const body = Buffer.concat(chunks);
+      if (transientPage(body, res.get('content-encoding'))) return;
 
       const headers = {};
       for (const name of DESCRIBING_HEADERS) {
@@ -210,7 +226,7 @@ function htmlCache(options = {}) {
 
       if (entries.size >= maxEntries) entries.delete(entries.keys().next().value);
       entries.set(key, {
-        body: Buffer.concat(chunks),
+        body,
         headers,
         expiresAt: now() + (isSearch(path) ? searchTtlMs : ttlMs),
       });
