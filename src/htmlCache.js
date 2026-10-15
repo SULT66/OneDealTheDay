@@ -38,7 +38,8 @@ const SEARCH_TTL_MS = 2 * 60 * 1000;
 const MAX_ENTRIES = 300;
 const MAX_BODY_BYTES = 2 * 1024 * 1024;
 const zlib = require('node:zlib');
-const isHome = path => /^(?:\/(?:us|ca|uk|fr|de))?\/?$/.test(path);
+const { randomUUID } = require('node:crypto');
+const isStreamedEntry = path => /^(?:\/(?:us|ca|uk|fr|de))?\/?(?:halloween\/?)?$/.test(path);
 
 function transientPage(body, encoding) {
   try {
@@ -58,7 +59,7 @@ function transientPage(body, encoding) {
  * cannot quietly fall through to a different rule than /us/about.
  */
 const CACHEABLE_PATH =
-  /^(?:\/(?:us|ca|uk|fr|de))?\/?(?:|daily-drop|stores|search|archive|brands|about|contact|privacy|terms|affiliate-disclosure|editorial-policy|how-we-select-deals|price-disclaimer|for-retailers|deal\/[^/]+|category|category\/[^/]+|brand\/[^/]+)\/?$/;
+  /^(?:\/(?:us|ca|uk|fr|de))?\/?(?:|halloween|daily-drop|stores|search|archive|brands|about|contact|privacy|terms|affiliate-disclosure|editorial-policy|how-we-select-deals|price-disclaimer|for-retailers|deal\/[^/]+|category|category\/[^/]+|brand\/[^/]+)\/?$/;
 
 const isSearch = (path) => /\/search\/?$/.test(path);
 
@@ -106,6 +107,8 @@ function htmlCache(options = {}) {
   const maxEntries = options.maxEntries || MAX_ENTRIES;
   const now = options.now || (() => Date.now());
   const entries = new Map();
+  // Only our in-process warmer can bypass a valid copy to replace it.
+  const refreshToken = randomUUID();
 
   const middleware = (req, res, next) => {
     if (req.method !== "GET") return next();
@@ -121,7 +124,8 @@ function htmlCache(options = {}) {
        than being hoped away. The URL carries the market and the query. */
     const key = `${req.language || "en"}:${req.originalUrl}`;
     const hit = entries.get(key);
-    if (!daily && hit && hit.expiresAt > now() && encodingAccepted(hit, req.headers["accept-encoding"])) {
+    const refreshing = req.headers["x-odd-cache-refresh"] === refreshToken;
+    if (!refreshing && !daily && hit && hit.expiresAt > now() && encodingAccepted(hit, req.headers["accept-encoding"])) {
       /* Touch it so the eviction below drops what nobody asks for rather than
          whatever happens to be oldest. */
       entries.delete(key);
@@ -134,7 +138,7 @@ function htmlCache(options = {}) {
         .status(200)
         .end(hit.body);
     }
-    if (hit) entries.delete(key);
+    if (hit && hit.expiresAt <= now()) entries.delete(key);
 
     /*
      * Tee the response. The visitor's bytes are untouched — every call is
@@ -183,10 +187,10 @@ function htmlCache(options = {}) {
             if (/^cache-control$/i.test(name)) delete argument[name];
           }
         }
-        // A streamed homepage may discover a source outage after headers leave.
+        // A streamed entry page may discover a source outage after headers leave.
         // Cache only its complete, successful copy in process; a miss must not
         // seed browsers/CDNs with a temporary unavailable state.
-        res.setHeader("Cache-Control", isHome(path) ? "private, no-store" : cacheControl);
+        res.setHeader("Cache-Control", isStreamedEntry(path) ? "private, no-store" : cacheControl);
         res.setHeader("Vary", PUBLIC_VARY);
       }
       return originalWriteHead(...args);
@@ -241,6 +245,7 @@ function htmlCache(options = {}) {
      is worse than a slow one. */
   middleware.clear = () => entries.clear();
   middleware.size = () => entries.size;
+  middleware.refreshHeaders = Object.freeze({"x-odd-cache-refresh":refreshToken});
   return middleware;
 }
 

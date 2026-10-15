@@ -3304,7 +3304,7 @@ app.get("/api/merchandising", (req, res) => {
   if (!merchandisingEnabled) return res.set("Cache-Control", "no-store").json({market:marketCode, shelves:[]});
   const language = resolveLanguage(req, res, marketCode);
   if(req.query.collection === 'halloween') {
-    const collection=getHalloweenCollection(db,{market:marketCode,page:req.query.page,q:req.query.q,sort:req.query.sort});
+    const collection=getHalloweenCollection(db,{market:marketCode,page:req.query.page,q:req.query.q,sort:req.query.preview==='1'?'popular':req.query.sort,preview:req.query.preview==='1'});
     return res.set('Cache-Control','no-store').json({...collection,market:marketCode,
       products:collection.products.map(product=>presentProduct(localizeProduct({...product,deal_url:dealPath(product)},language),language))});
   }
@@ -4854,10 +4854,12 @@ app.use((error, req, res, next) => {
          same page twice is a render nobody reads. */
       const warmPaths = [...new Set(warmestCategories)];
       startCacheWarmer({
+        headers: publicHtmlCache.refreshHeaders,
         baseUrl: `http://127.0.0.1:${c.port}`,
         market: c.primaryMarket,
         paths: [
           ...pathsFor(c.primaryMarket, process.env.WARM_PATHS),
+          ...(!process.env.WARM_PATHS && require("./merchandisingCalendar").activeHalloween({market:c.primaryMarket}) ? [`/${c.primaryMarket}/halloween`] : []),
           ...(process.env.WARM_PATHS ? [] : warmPaths),
         ],
       });

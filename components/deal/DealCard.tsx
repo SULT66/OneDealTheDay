@@ -54,7 +54,7 @@ export async function DealCard({
       style={{ animationDelay: `${Math.min(index, 11) * 45}ms` }}
     >
       <Body
-        {...(unavailable ? {} : { href: `/${market}/deal/${deal.id}` })}
+        {...(unavailable ? {} : { href: `/${market}/deal/${deal.id}`, prefetch: false })}
         {...(!unavailable && tracking ? {
           "data-merch-product": deal.id,
           "data-merch-source": tracking.source,

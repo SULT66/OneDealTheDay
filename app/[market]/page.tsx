@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { activeHalloween } from "@/src/merchandisingCalendar";
+import { redirect } from "next/navigation";
 import type { Language } from "@/lib/i18n";
 import { StructuredData } from "@/components/site/StructuredData";
 import type { Metadata } from "next";
@@ -52,22 +53,26 @@ export default async function MarketHome({ params, searchParams }: PageProps<"/[
   const {market} = await params;
   const language = await getLanguage(market);
   const search = await searchParams;
-  const q = typeof search.halloween_q === 'string' ? search.halloween_q.slice(0,120) : '';
-  const sort = typeof search.halloween_sort === 'string' ? search.halloween_sort : 'popular';
+  // Preserve old campaign filter bookmarks after moving the collection.
+  if (['halloween_q','halloween_sort','halloween_page'].some(key => typeof search[key] === 'string')) {
+    const query = new URLSearchParams({lang:language});
+    for (const [oldKey,key] of [['halloween_q','q'],['halloween_sort','sort'],['halloween_page','page']]) {
+      if (typeof search[oldKey] === 'string') query.set(key,search[oldKey]);
+    }
+    redirect(`/${market}/halloween?${query}`);
+  }
   const halloween = Boolean(activeHalloween({market}));
   return <div className="mx-auto max-w-7xl px-4 pb-24 pt-8 sm:px-6 sm:pt-10">
     <HomeCampaigns market={market} language={language} halloween={halloween} />
-    {halloween && <Suspense fallback={<div id="halloween-products" aria-busy="true" className="mt-8 h-56 animate-pulse rounded-2xl bg-surface p-6 text-sm text-fg-muted">{{en:'Loading Halloween finds…',es:'Cargando productos Halloween…',fr:'Chargement des produits Halloween…',de:'Halloween-Produkte werden geladen…'}[language]}</div>}>
-      <HalloweenCollectionSection market={market} language={language} q={q} sort={sort} page={Number(search.halloween_page) || 1} />
-    </Suspense>}
+    {halloween && <Suspense fallback={<div aria-busy="true" className="mt-8 h-56 animate-pulse rounded-2xl bg-surface"/>}><HalloweenPreview market={market} language={language}/></Suspense>}
     <Suspense fallback={null}><HomeCatalog market={market} language={language} halloween={halloween} /></Suspense>
     <DeliaTrigger variant="floating" />
   </div>;
 }
 
-async function HalloweenCollectionSection({market,language,page,q,sort}:{market:string;language:Language;page:number;q:string;sort:string}) {
-  const data = await getHalloweenCollection(market,language,page,q,sort);
-  return <HalloweenProducts market={market} language={language} data={data} q={q} sort={sort} />;
+async function HalloweenPreview({market,language}:{market:string;language:Language}) {
+  const data=await getHalloweenCollection(market,language,1,'','popular',true);
+  return <HalloweenProducts market={market} language={language} data={data} preview/>;
 }
 
 async function HomeCatalog({market,language,halloween}:{market:string;language:Language;halloween:boolean}) {

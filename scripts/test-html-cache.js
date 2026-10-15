@@ -239,6 +239,35 @@ async function withServer(build, run) {
     });
   }
 
+  // Warmers replace a still-valid copy without removing it for visitors.
+  {
+    const refreshCache=htmlCache();
+    let version=1, fail=false, release, pending;
+    await withServer(app=>{
+      app.use(refreshCache);
+      app.use(async(req,res)=>{
+        if(pending) await pending;
+        res.type('html').send(fail?'<div data-odd-transient="1">Unavailable</div>':`<h1>Version ${version}</h1>`);
+      });
+    },async port=>{
+      await get(port,'/us/halloween');
+      version=2;
+      pending=new Promise(resolve=>{release=resolve;});
+      const warming=get(port,'/us/halloween',refreshCache.refreshHeaders);
+      const existing=await get(port,'/us/halloween');
+      assert.equal(existing.headers['x-odd-cache'],'HIT');
+      assert.match(existing.body.toString(),/Version 1/);
+      release(); pending=null;
+      assert.equal((await warming).headers['x-odd-cache'],'MISS');
+      assert.match((await get(port,'/us/halloween')).body.toString(),/Version 2/);
+      fail=true;
+      await get(port,'/us/halloween',refreshCache.refreshHeaders);
+      assert.match((await get(port,'/us/halloween')).body.toString(),/Version 2/,'Failed warm keeps the valid copy');
+      const untrusted=await get(port,'/us/halloween',{'x-odd-cache-refresh':'not-our-warmer'});
+      assert.equal(untrusted.headers['x-odd-cache'],'HIT','External headers cannot force a render');
+    });
+  }
+
   console.log("html cache: ok");
 })().catch(error => {
   console.error(error);

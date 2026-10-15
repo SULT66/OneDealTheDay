@@ -72,6 +72,7 @@ function startCacheWarmer({
   fetchImpl = global.fetch,
   log = console,
   onCycle,
+  headers = {},
 } = {}) {
   const targets = paths || pathsFor(market);
   let running = false;
@@ -82,6 +83,7 @@ function startCacheWarmer({
     try {
       const response = await fetchImpl(`${baseUrl}${path}`, {
         headers: {
+          ...headers,
           /* Says plainly what this is, in the access log and to anything that
              later wants to tell a warm request from a person. */
           "user-agent": "OneDailyDrop-CacheWarmer",
