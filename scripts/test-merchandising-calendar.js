@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const { calendarSignals } = require('../src/merchandisingCalendar');
+const { calendarSignals, activeHalloween } = require('../src/merchandisingCalendar');
 const { marketTimezones } = require('../src/marketCalendar');
 
 function signal(key, market = 'us', now = '2026-01-01T12:00:00Z', horizonDays = 365) {
@@ -51,3 +51,6 @@ assert.throws(() => calendarSignals({ now: 'invalid' }), RangeError);
 assert.throws(() => calendarSignals({ horizonDays: -1 }), RangeError);
 assert.throws(() => calendarSignals({ horizonDays: 731 }), RangeError);
 console.log('Merchandising calendar tests passed');
+
+assert(activeHalloween({market:'us',now:Date.parse('2026-10-15T04:00:00Z')}),'Halloween activity must not depend on catalogue fetches');
+assert(!activeHalloween({market:'us',now:Date.parse('2026-10-24T04:00:00Z')}),'Calendar still enforces the exclusive buying cutoff');

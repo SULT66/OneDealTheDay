@@ -216,6 +216,29 @@ async function withServer(build, run) {
     },
   );
 
+  // A temporary catalogue failure must not become the next ten-minute page.
+  for (const encoding of ['identity','gzip']) {
+    let attempts=0;
+    await withServer(app=>{
+      app.use(htmlCache());
+      app.get('/us',(req,res)=>{
+        attempts++;
+        const html=attempts===1 ? '<html><section data-odd-transient="1">Retry</section></html>' : '<html>Recovered Halloween</html>';
+        res.setHeader('Content-Type','text/html');
+        if(encoding==='gzip') res.setHeader('Content-Encoding','gzip');
+        res.end(encoding==='gzip'?zlib.gzipSync(html):html);
+      });
+    },async port=>{
+      const headers={'accept-encoding':encoding};
+      const failed=await get(port,'/us',headers);
+      assert.match(failed.headers['cache-control'],/no-store/,'Streamed misses may still discover a late outage');
+      const recovered=await get(port,'/us',headers);
+      assert.equal(recovered.headers['x-odd-cache'],'MISS','A transient page must never enter the cache');
+      assert.equal(attempts,2);
+      assert.equal((await get(port,'/us',headers)).headers['x-odd-cache'],'HIT','Successful complete homepages remain cached');
+    });
+  }
+
   console.log("html cache: ok");
 })().catch(error => {
   console.error(error);
