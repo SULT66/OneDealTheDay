@@ -406,11 +406,12 @@ module.exports = {
    * change.
    */
   amazonAssociateTag: String(process.env.AMAZON_ASSOCIATE_TAG || "onedailydrop-20").trim(),
-  refreshCron: process.env.REFRESH_CRON || "15 0 * * *",
-  offerCheckCron: process.env.OFFER_CHECK_CRON || "45 3,9,15,21 * * *",
-  /* Twice a day for a market with a hundred listings that barely move, so the
-     allowance those six extra sweeps were spending goes to the primary one. */
-  secondaryOfferCheckCron: process.env.SECONDARY_OFFER_CHECK_CRON || "45 9 * * *",
+  // One six-hour policy replaces the old independent cron overrides, which
+  // could silently add extra catalog passes after deployment.
+  refreshCron: require('./catalogSchedule').DAILY_CRON,
+  offerCheckCron: require('./catalogSchedule').OFFER_CRON,
+  secondaryOfferCheckCron: require('./catalogSchedule').OFFER_CRON,
+  merchandisingCron: require('./catalogSchedule').MERCHANDISING_CRON,
   primaryMarket,
   /* Away from the refresh and the offer checks so the two never contend for
      the same retailer's rate limit. */
