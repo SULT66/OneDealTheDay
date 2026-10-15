@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { analyticsSessionId } from "@/lib/analyticsSession";
+import { measure } from "@/lib/measure";
 
 /*
  * Stamp the visitor's anonymous session onto outbound links, in the browser.
@@ -28,6 +29,28 @@ import { analyticsSessionId } from "@/lib/analyticsSession";
 /* Both the product links and the store-front links, and nothing else. */
 const OUTBOUND = /\/go\//;
 
+/*
+ * What the outbound URL says about itself.
+ *
+ * Everything worth reporting is already in the link, because the server needs
+ * it there to record the click: /:market/go/:id carries the listing, and
+ * ?source= and ?placement= carry the page and the slot it was clicked from.
+ * The store and coupon front doors use a word where the id goes, so a numeric
+ * segment is the test for "this is a listing".
+ */
+function outboundFacts(url: URL) {
+  const parts = url.pathname.split("/").filter(Boolean);
+  const target = parts[parts.indexOf("go") + 1] || "";
+  const listing = /^\d+$/.test(target);
+  return {
+    item_id: listing ? target : undefined,
+    destination: listing ? "listing" : target.slice(0, 40) || "unknown",
+    source: url.searchParams.get("source") || undefined,
+    placement: url.searchParams.get("placement") || undefined,
+    action: url.searchParams.get("action") || undefined,
+  };
+}
+
 export function ClickAttribution() {
   useEffect(() => {
     const stamp = (event: Event) => {
@@ -47,6 +70,15 @@ export function ClickAttribution() {
         if (url.searchParams.get("sid")) return;
         url.searchParams.set("sid", analyticsSessionId());
         link.setAttribute("href", `${url.pathname}${url.search}${url.hash}`);
+        /*
+         * Reported here, next to the stamp, and for the same reason: this is
+         * the one place that sees every outbound click however it was
+         * rendered. The server records the click too, and will keep being the
+         * number to trust — it cannot be blocked and it survives the tab
+         * closing. This copy is what lets GA4 answer which page and which
+         * slot produced it, beside the visit that brought the person in.
+         */
+        measure("retailer_click", outboundFacts(url));
       } catch {
         /* A malformed href is the browser's problem, not ours: leave the link
            exactly as the page wrote it rather than risk breaking the one click

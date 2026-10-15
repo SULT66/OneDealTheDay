@@ -22,6 +22,7 @@ import {
 import { Rating } from "@/components/ui/Rating";
 import { Pill } from "@/components/ui/Pill";
 import { SectionHeader } from "@/components/site/SectionHeader";
+import { ViewItem } from "@/components/site/MeasuredPage";
 import { DeliaTrigger } from "@/components/delia/DeliaTrigger";
 import { DealCard } from "@/components/deal/DealCard";
 import { DealGallery } from "@/components/deal/DealGallery";
@@ -144,6 +145,10 @@ export default async function DealPage({
 
   return (
     <div className="mx-auto max-w-7xl px-4 pb-24 pt-8 sm:px-6">
+      {/* Which listing was opened, so clicks out to a shop can be read against
+          the pages that produced them. */}
+      <ViewItem itemId={deal.id} category={deal.category} retailer={deal.retailer} />
+
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify({ "@context": "https://schema.org", "@graph": [jsonLd, breadcrumbs] }).replace(/</g, "\\u003c") }}
