@@ -5,7 +5,10 @@ import {
   FacebookLogo,
   Globe,
   InstagramLogo,
+  PinterestLogo,
+  RedditLogo,
   TiktokLogo,
+  XLogo,
   YoutubeLogo,
 } from "@phosphor-icons/react/ssr";
 import { getCategoriesWithCounts } from "@/lib/catalog";
@@ -16,16 +19,16 @@ import { Logo } from "./Logo";
 /*
  * Where OneDailyDrop is, off its own site.
  *
- * One list, in the order the accounts are actually used: video first, then
- * the two feeds, then the one that is mostly a placeholder. Hard-coded rather
- * than configurable — four URLs that change once a decade do not need a
- * settings screen, and a missing one would be worse than an edit.
+ * Owner-confirmed profiles, with direct URLs rather than share or invite links.
  */
 const SOCIAL_LINKS = [
   { href: "https://www.youtube.com/@OneDailyDrop", label: "OneDailyDrop on YouTube", Icon: YoutubeLogo },
   { href: "https://www.instagram.com/onedailydrop/", label: "OneDailyDrop on Instagram", Icon: InstagramLogo },
   { href: "https://www.tiktok.com/@onedailydrop.com", label: "OneDailyDrop on TikTok", Icon: TiktokLogo },
   { href: "https://www.facebook.com/onedailydropcom", label: "OneDailyDrop on Facebook", Icon: FacebookLogo },
+  { href: "https://www.pinterest.com/OneDailyDrop/", label: "OneDailyDrop on Pinterest", Icon: PinterestLogo },
+  { href: "https://www.reddit.com/user/OneDailyDrop/", label: "OneDailyDrop on Reddit", Icon: RedditLogo },
+  { href: "https://x.com/OneDailyDrop", label: "OneDailyDrop on X", Icon: XLogo },
 ] as const;
 
 export async function Footer({ market }: { market: string }) {
@@ -83,11 +86,10 @@ export async function Footer({ market }: { market: string }) {
               * The accounts, in the footer where a visitor looks for them.
               *
               * Kept as one short list rather than a row of brand-coloured
-              * badges: this is a site about not shouting, and four logos in
-              * four different reds would be the loudest thing on the page.
+              * badges, so they sit quietly alongside the rest of the footer.
               * They inherit the footer's own colour and lift on hover.
               */}
-            <ul aria-label="OneDailyDrop on social media" className="mt-6 flex items-center gap-1">
+            <ul aria-label="OneDailyDrop on social media" className="mt-6 flex flex-wrap items-center gap-1">
               {SOCIAL_LINKS.map(({ href, label, Icon }) => (
                 <li key={href}>
                   <a
