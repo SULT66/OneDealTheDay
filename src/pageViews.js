@@ -152,15 +152,37 @@ function visitorNumbers(db, since) {
 
   /* Where each visitor came from is where their first page came from: a
      person who arrived from TikTok and then clicked around is one TikTok
-     visitor, not a TikTok visitor and five direct ones. */
+     visitor, not a TikTok visitor and five direct ones.
+   *
+   * `clicked_visitors` is how many of them went on to a shop, and it is the
+   * only column here that says whether a channel is worth the hours. Visitors
+   * per source answered "did anyone see the post"; a channel can send five
+   * hundred people who never open a listing, and over four weeks of posting
+   * that reads as success until somebody checks the earnings. The clicks have
+   * been recorded all along — the clicks table has carried session_id since
+   * ClickAttribution started stamping it — and nothing joined them to where
+   * the visit came from, so the question had an answer in the database and no
+   * way to ask it.
+   *
+   * Counted as visitors who clicked, not clicks: ten clicks from one person
+   * comparing listings is one interested shopper, and a per-source average
+   * built from click totals is moved more by a single browser than by a
+   * channel. The retailer clicks the server records are the numbers to trust
+   * for volume; this is about which channel produces them. */
   const sources = all(
-    `SELECT source, COUNT(*) AS visitors, SUM(live) AS live_visitors FROM (
+    `SELECT source, COUNT(*) AS visitors, SUM(live) AS live_visitors,
+             SUM(clicked) AS clicked_visitors FROM (
        SELECT p.session_id,
               (SELECT source FROM page_views f WHERE f.session_id = p.session_id AND f.viewed_at >= ?
                 ORDER BY f.viewed_at, f.id LIMIT 1) AS source,
-              MAX(CASE WHEN p.path LIKE '%/live' OR p.path LIKE '%/live/%' THEN 1 ELSE 0 END) AS live
+              MAX(CASE WHEN p.path LIKE '%/live' OR p.path LIKE '%/live/%' THEN 1 ELSE 0 END) AS live,
+              EXISTS(SELECT 1 FROM clicks c
+                      WHERE c.session_id = p.session_id
+                        AND c.destination_type = 'retailer'
+                        AND c.clicked_at >= ?) AS clicked
        FROM page_views p WHERE p.viewed_at >= ? GROUP BY p.session_id
      ) GROUP BY source ORDER BY visitors DESC LIMIT 8`,
+    since,
     since,
     since,
   );
@@ -195,6 +217,7 @@ function visitorNumbers(db, since) {
       source: String(row.source || "direct"),
       visitors: number(row.visitors),
       liveVisitors: number(row.live_visitors),
+      clickedVisitors: number(row.clicked_visitors),
     })),
     campaigns: campaigns.map((row) => ({ campaign: String(row.campaign), visitors: number(row.visitors) })),
     pages,

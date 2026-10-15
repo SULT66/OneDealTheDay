@@ -27,7 +27,7 @@ type Overview = {
     pageViews: number;
     liveVisitors: number;
     countingSince: string | null;
-    sources: { source: string; visitors: number; liveVisitors: number }[];
+    sources: { source: string; visitors: number; liveVisitors: number; clickedVisitors: number }[];
     campaigns: { campaign: string; visitors: number }[];
     pages: { page: string; visitors: number }[];
   };
@@ -185,12 +185,24 @@ export function Numbers({ adminKey }: { adminKey: string }) {
             />
           </Group>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            {/*
+              "→ shop" is the column to read. Visitors per source says a post
+              was seen; it does not say whether anyone who came was shopping,
+              and a channel sending people who never open a listing looks like
+              success for as long as nobody checks the earnings.
+            */}
             <MiniTable
               title="Where they came from"
-              hint="first page of each visit · add ?utm_source=tiktok to your links"
+              hint="first page of each visit · → shop means they opened a retailer link"
               rows={data.visits.sources.map((row) => [
                 row.source,
-                `${count(row.visitors)}${row.liveVisitors ? ` · ${count(row.liveVisitors)} to Live` : ""}`,
+                [
+                  count(row.visitors),
+                  row.clickedVisitors ? `${count(row.clickedVisitors)} → shop` : "",
+                  row.liveVisitors ? `${count(row.liveVisitors)} to Live` : "",
+                ]
+                  .filter(Boolean)
+                  .join(" · "),
               ])}
             />
             <MiniTable
