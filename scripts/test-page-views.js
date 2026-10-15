@@ -142,4 +142,66 @@ assert.strictEqual(byPage.Home, 2);
 assert.strictEqual(byPage["Live Drop"], 1);
 assert.strictEqual(numbers.countingSince, "2026-06-01T12:00:00.000Z");
 
+/* ------------------------------------------- which channel sends shoppers */
+
+/*
+ * Visitors per source said a post had been seen. It could not say whether
+ * anybody who arrived was shopping, and that is the number the whole content
+ * plan turns on: a channel can send five hundred people who never open a
+ * listing, and over four weeks that reads as success until the earnings are
+ * checked. The clicks were already stored with the session on them; nothing
+ * joined them to where the visit came from.
+ */
+const click = (name, { at = now, destination = "retailer" } = {}) =>
+  db
+    .prepare(
+      `INSERT INTO clicks(event_id,session_id,product_id,market,retailer_name,source_page,
+         placement,action_type,destination_type,clicked_at,referrer,user_agent)
+       VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,
+    )
+    .run(
+      `event_${name}_${at.getTime()}_${destination}`,
+      session(name),
+      1,
+      "us",
+      "eBay",
+      "product",
+      "product_cta",
+      "view_deal",
+      destination,
+      at.toISOString(),
+      "",
+      browser,
+    );
+
+/* Two clicks from the one TikTok visitor: one interested shopper, not two. */
+click("tiktok", { at: new Date("2026-09-14T17:10:00Z") });
+click("tiktok", { at: new Date("2026-09-14T17:12:00Z") });
+/* The Google visitor browsed internally and never left for a shop. */
+click("google", { destination: "internal" });
+/* And one from before the window, which belongs to no report shown here. */
+click("direct", { at: new Date("2026-06-02T12:00:00Z") });
+
+const withClicks = Object.fromEntries(
+  overview(db, { days: 7, now: now.getTime() }).visits.sources.map((item) => [item.source, item]),
+);
+assert.strictEqual(
+  withClicks.tiktok.clickedVisitors,
+  1,
+  "two clicks from one visitor were counted as two interested shoppers",
+);
+assert.strictEqual(
+  withClicks.google.clickedVisitors,
+  0,
+  "a click that stayed on the site was counted as a visit to a shop",
+);
+assert.strictEqual(
+  withClicks.direct.clickedVisitors,
+  0,
+  "a click from outside the window was counted inside it",
+);
+/* The counts it sits beside must not have moved. */
+assert.strictEqual(withClicks.tiktok.visitors, 1, "joining the clicks multiplied the visitors");
+assert.strictEqual(withClicks.tiktok.liveVisitors, 1);
+
 console.log("Page views and visitor sources passed.");
