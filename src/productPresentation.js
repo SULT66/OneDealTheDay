@@ -412,14 +412,18 @@ function list(values, product, language) {
 
 function presentationReason(product, language) {
   const reasons = [];
-  const discount = discountPercent(product);
+  /* The drop we recorded ourselves, behind the same freshness gate the badge
+     uses. The seller's struck-through figure used to open this sentence; it is
+     stated in the offer section, where it is attributed to the seller, and it
+     is not a reason we chose anything. */
+  const trackedDrop = priceIsCurrentFor(product) ? trackedDropPercent(product) : 0;
   const rating = number(product?.rating);
   const reviews = Math.round(number(product?.review_count));
   const breakdown = scoreBreakdown(product);
   const shipping = clean(product?.shipping_summary);
   const returns = clean(product?.return_summary);
 
-  if (discount > 0) reasons.push(t(language, "product.reasonDiscount", { percent: discount }));
+  if (trackedDrop > 0) reasons.push(t(language, "product.reasonTrackedDrop", { percent: trackedDrop }));
   if (rating > 0 && reviews > 0) {
     reasons.push(t(language, "product.reasonRating", {
       rating: rating.toFixed(1),

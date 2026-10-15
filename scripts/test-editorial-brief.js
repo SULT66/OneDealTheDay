@@ -75,4 +75,64 @@ assert(unknownText.includes("does not add unverified features"), "Missing descri
 assert(unknownText.includes("not supplied for this listing"), "Missing product and seller evidence must remain unknown");
 assert(!unknownText.includes("Price history is still building"), "Editorial copy must not attach price-history confidence language to the Score");
 
+/*
+ * What may be called a verified strength.
+ *
+ * The retailer's struck-through figure used to be the first entry under
+ * "Verified strengths", which put the one number beside a listing that nobody
+ * checked under a heading promising the opposite. It is still reported in
+ * "What the current offer says", attributed to the retailer, because that is
+ * a true statement about the offer; it is not evidence of a saving.
+ *
+ * The three cases below are the three that matter: a seller discount we cannot
+ * corroborate, a fall we measured ourselves, and a fall we measured against a
+ * price that has since gone stale.
+ */
+const briefFor = extra => createEditorialBrief(
+  { ...product, ...extra },
+  { ...display, ...extra },
+  { language: "en", store: "eBay", marketName: "United States", reason: display.display_selection_reason }
+);
+
+const freshly = () => new Date().toISOString();
+const sellerDiscountOnly = briefFor({ checked_at: freshly(), tracked_drop_percent: 0 });
+const measuredDrop = briefFor({ checked_at: freshly(), tracked_drop_percent: 12 });
+const staleDrop = briefFor({
+  checked_at: new Date(Date.now() - 21 * 24 * 3600 * 1000).toISOString(),
+  tracked_drop_percent: 12
+});
+
+for (const [label, brief] of [
+  ["an unverifiable seller discount", sellerDiscountOnly],
+  ["a measured fall", measuredDrop],
+  ["a fall against a stale price", staleDrop]
+]) {
+  assert(
+    !/reference price/i.test(brief.strengths.join(" ")),
+    `with ${label}, the retailer's reference price is offered as a verified strength`
+  );
+}
+
+assert(
+  /12%/.test(measuredDrop.strengths.join(" ")),
+  "a fall OneDailyDrop measured itself is not named among the verified strengths"
+);
+assert(
+  /\b60\b/.test(measuredDrop.strengths.join(" ")),
+  "the strength states a fall without naming the window it was measured over"
+);
+assert(
+  !/12%/.test(staleDrop.strengths.join(" ")),
+  "a fall measured against a price checked three weeks ago is still stated as current"
+);
+assert(
+  /has not recorded this price falling/.test(staleDrop.watchouts.join(" ")),
+  "a listing with no statable fall does not say so among the watch-outs"
+);
+/* The seller's figure keeps its one honest home. */
+assert(
+  /retailer reference price/.test(sellerDiscountOnly.sections.flatMap(section => section.paragraphs).join(" ")),
+  "the retailer's reference price vanished from the offer section, where it is attributed and belongs"
+);
+
 console.log("Stage 4 editorial buying brief checks passed.");
