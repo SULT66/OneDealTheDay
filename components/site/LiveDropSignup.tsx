@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/cn";
 import { useCopy, useLanguage } from "@/components/site/CopyProvider";
+import { measure } from "@/lib/measure";
 
 /*
  * Get told before every Live Drop.
@@ -72,6 +73,19 @@ export function LiveDropSignup({
       }
       setStatus("done");
       setMessage(tr("app.signup.onList"));
+      /*
+       * After the server accepted it, never on submit: a rejected address that
+       * counted as a signup is how a list appears to grow while nobody joins.
+       *
+       * Named `email_signup` and not `email_signup_confirmed` because there
+       * is nothing to confirm — /api/subscribe adds the address and sends a
+       * welcome, with no second click to prove the mailbox is real. Calling it
+       * confirmed would be a claim about deliverability we cannot make.
+       *
+       * No address, hashed or otherwise. `source` is where on the site the
+       * form was.
+       */
+      measure("email_signup", { signup_type: "live_drop", placement: source || "unknown" });
     } catch {
       setStatus("error");
       setMessage(tr("app.signup.wentWrong"));
