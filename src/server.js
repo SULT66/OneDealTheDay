@@ -3388,7 +3388,7 @@ app.get("/api/admin/merchandising", admin, (req, res) => {
     market:marketCode, enabled:merchandisingEnabled,
     researchEnabled:merchandisingResearchMarkets.has(marketCode),
     discoveryEnabled:c.liveRefreshEnabled && merchandisingDiscoveryMarkets.has(marketCode),
-    schedule:{catalog:"hourly", ebayDiscovery:"at most once per 6 hours; up to 6 searches and 60 details", externalResearch:"at most once per 24 hours", calendar:"weekly"},
+    schedule:{catalog:"every 6 hours", ebayDiscovery:"at most once per 6 hours; up to 6 searches and 60 details", externalResearch:"at most once per 24 hours", calendar:"weekly"},
     status:merchandisingStatus(db, {market:marketCode}),
     performance:merchandisingPerformance(marketCode)
   });
@@ -4457,24 +4457,31 @@ function merchandisingPerformance(marketCode) {
   }))};
 }
 let merchandisingSweepRunning = false;
-async function merchandisingSweep() {
+async function merchandisingSweep({startup=false} = {}) {
   if (!merchandisingEnabled || merchandisingSweepRunning) return;
   merchandisingSweepRunning = true;
+  let updated=false;
   try {
+    require("./merchandising").ensureMerchandisingSchema(db);
     for (const marketCode of c.markets) {
       try {
-        await runMerchandisingForMarket(marketCode);
+        if (startup) {
+          const previous=db.prepare('SELECT started_at FROM merchandising_runs WHERE market=? ORDER BY started_at DESC LIMIT 1').get(marketCode);
+          if (!require('./catalogSchedule').startupSelectionDue(previous?.started_at)) continue;
+        }
+        const result=await runMerchandisingForMarket(marketCode);
+        if (result.status === "success") updated=true;
       } catch (error) {
         console.error(`[merchandising] ${marketCode}: ${error.message}`);
       }
     }
-    publicHtmlCache.clear();
+    if (updated) publicHtmlCache.clear();
   } finally {
     merchandisingSweepRunning = false;
   }
 }
 if (merchandisingEnabled && c.liveRefreshEnabled) {
-  cron.schedule("23 * * * *", merchandisingSweep, {timezone:"UTC"});
+  cron.schedule(c.merchandisingCron, merchandisingSweep, {timezone:c.marketConfig(c.primaryMarket).timezone});
 }
 
 for (const marketCode of c.markets) {
@@ -4486,10 +4493,7 @@ for (const marketCode of c.markets) {
   );
   if (c.offerCheckEnabled) {
     cron.schedule(
-      /* The primary market sweeps four times a day; the others twice, because
-         a hundred slow-moving listings do not need eight sweeps and the
-         allowance those sweeps spent is what the primary market was short of.
-         See searchBudgetFor in src/config.js. */
+      // Together with the midnight Daily Drop run: 00:15, 06:15, 12:15, 18:15.
       marketCode === c.primaryMarket ? c.offerCheckCron : c.secondaryOfferCheckCron,
       () => refreshProducts(c, {market:marketCode,preserveDailySelection:true}).then(() => publicHtmlCache.clear()).catch(error => console.error(error.message)),
       {timezone:selectedMarket.timezone}
@@ -4874,11 +4878,12 @@ app.use((error, req, res, next) => {
   app.listen(c.port, () => {
     console.log(`http://localhost:${c.port}`);
     if (merchandisingEnabled && c.liveRefreshEnabled) {
-      setImmediate(merchandisingSweep);
-      // Revisit discovery after warm-up instead of waiting for the hourly tick.
+      // A single recovery pass after settling, not an immediate rebuild plus
+      // another one ten minutes later. Recent persisted runs are left alone.
+      const initializeSelection=() => merchandisingSweep({startup:true});
       if (c.isProduction && SETTLING_SECONDS > process.uptime()) {
-        setTimeout(merchandisingSweep, (SETTLING_SECONDS - process.uptime()) * 1000 + 1000).unref();
-      }
+        setTimeout(initializeSelection, (SETTLING_SECONDS - process.uptime()) * 1000 + 1000).unref();
+      } else setImmediate(initializeSelection);
     }
     /*
      * Keep the entry pages rendered so a visitor does not have to be the
