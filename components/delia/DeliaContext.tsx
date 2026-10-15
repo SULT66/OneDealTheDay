@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { DeliaPanel } from "./DeliaPanel";
+import { measure, pageType } from "@/lib/measure";
 
 type DeliaState = {
   open: boolean;
@@ -56,6 +57,16 @@ export function DeliaProvider({
     setSeed(next ?? null);
     setSeedProductId(productId ?? null);
     setOpen(true);
+    /* Every trigger on the site — header, hero, a deal card — comes through
+       here, so one call covers them all, and `page_type` is what says which
+       of them it was. Opening the panel is not asking it anything; the
+       question is a separate event, and the gap between the two is the
+       interesting number. */
+    measure("delia_open", {
+      page_type: pageType(window.location.pathname),
+      item_id: productId || undefined,
+      seeded: Boolean(next),
+    });
   }, []);
 
   const closeDelia = useCallback(() => setOpen(false), []);

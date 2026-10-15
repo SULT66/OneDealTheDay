@@ -80,7 +80,7 @@ function priceExpiry(row) {
 }
 // A thematic catalogue is separate from the sales-backed featured picks.
 // Keep every buying and dated-delivery check; sales badges require evidence.
-function getHalloweenCollection(db, {market='us', now=Date.now(), page=1, q='', sort='popular'}={}) {
+function getHalloweenCollection(db, {market='us', now=Date.now(), page=1, q='', sort='popular', preview=false}={}) {
   const empty={active:false,title:'Halloween',total:0,page:1,pageSize:24,pages:0,products:[],selectionEvidence:{}};
   if(!markets.has(market) || !Number.isFinite(now)) return empty;
   const signal=calendarSignals({market,now,horizonDays:0}).find(s=>s.metadata.eventKey==='halloween' && stamp(s.startsAt)<=now && now<stamp(s.endsAt));
@@ -97,7 +97,7 @@ function getHalloweenCollection(db, {market='us', now=Date.now(), page=1, q='', 
   const products=require('./publicCatalog').uniqueProductsInOrder(matching).slice(0,200);
   const pages=Math.ceil(products.length/24);
   const selectedPage=Math.max(1,Math.min(pages || 1,Math.floor(Number(page) || 1)));
-  const visible=products.slice((selectedPage-1)*24,selectedPage*24);
+  const visible=preview ? products.filter(row=>(salesEvidence(row,{now})?.quantity || 0)>0).slice(0,5) : products.slice((selectedPage-1)*24,selectedPage*24);
   return {active:true,title:'Halloween',total:products.length,page:selectedPage,pageSize:24,pages,endsAt:signal.endsAt,products:visible,
     selectionEvidence:Object.fromEntries(visible.map(row=>[row.id,{arrivalEstimate:row.delivery_estimated_at,
       ebaySoldQuantity:salesEvidence(row,{now})?.quantity ?? null}]))};

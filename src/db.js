@@ -701,6 +701,48 @@ if (!subscriberColumns.has("unsubscribe_token")) {
 if (!subscriberColumns.has("unsubscribed_at")) {
   db.exec("ALTER TABLE subscribers ADD COLUMN unsubscribed_at TEXT");
 }
+/*
+ * A second list, because the first one made a narrower promise.
+ *
+ * The signup form says "Only Live Drop emails. Unsubscribe in one click.", so
+ * a weekly digest cannot be sent to that list — not as a legal nicety but
+ * because the first thing an unexpected newsletter earns is a spam report,
+ * and spam reports are charged to the domain, not to the email. Everybody
+ * else's mail lands in Promotions afterwards.
+ *
+ * So the digest has its own opt-in, asked for separately and defaulting to
+ * off. A subscriber can be on one list, the other, or both.
+ */
+if (!subscriberColumns.has("digest_opt_in")) {
+  db.exec("ALTER TABLE subscribers ADD COLUMN digest_opt_in INTEGER NOT NULL DEFAULT 0");
+  db.exec("ALTER TABLE subscribers ADD COLUMN digest_opt_in_at TEXT");
+}
+/*
+ * The welcome letters, and which of them each subscriber has had.
+ *
+ * Confirming a subscription and then saying nothing until a Live Drop happens
+ * is how a list forgets who you are: somebody who signs up on a Monday can
+ * wait weeks for the next email, and by then the first one reads as spam. So
+ * three letters go out over the first week — what we check, how to read the
+ * Score, and the invitation to the Sunday list — and this table is the record
+ * of who has had which.
+ *
+ * One row per subscriber per step, with a unique index behind it, so a restart
+ * or an overlapping sweep cannot send the same letter twice. It is the only
+ * record of that: the alternative, a column on the subscriber mirroring it,
+ * is two facts that can disagree.
+ */
+db.exec(`
+  CREATE TABLE IF NOT EXISTS subscriber_sequence(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    subscriber_id INTEGER NOT NULL,
+    step TEXT NOT NULL,
+    sent_at TEXT NOT NULL,
+    FOREIGN KEY(subscriber_id) REFERENCES subscribers(id)
+  );
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_subscriber_sequence_once
+    ON subscriber_sequence(subscriber_id, step);
+`);
 
 /*
  * One reminder was not an announcement.
@@ -765,6 +807,43 @@ if (!dropColumns.has("stock_verified_at")) {
  * Its own table because a subscriber is not a reminder: they never asked about
  * this particular drop, so they are told once, well ahead, and never chased.
  */
+/*
+ * What the Sunday digest has already used.
+ *
+ * Ninety-eight listings currently clear the digest's Score floor, which is
+ * nineteen Sundays of five. Without a record of what went out, week two is
+ * week one again — the catalogue turns over slowly and the highest Scores
+ * move least of all, so the same five would be the best five for a month.
+ */
+db.exec(`
+  CREATE TABLE IF NOT EXISTS digest_items(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    product_id INTEGER NOT NULL,
+    market TEXT NOT NULL DEFAULT 'us',
+    position INTEGER NOT NULL DEFAULT 0,
+    score INTEGER,
+    sent_at TEXT NOT NULL
+    /* No foreign key to products on purpose. This is a record of what was
+       emailed, and an email that has been sent stays sent after the listing
+       behind it is gone. A reference here would also make the catalogue
+       impossible to tidy: removing a product would be refused by a row in a
+       log, which is the wrong way round. */
+  );
+  CREATE INDEX IF NOT EXISTS idx_digest_items_sent ON digest_items(market, sent_at DESC);
+
+  /* One row per send, so a crash mid-sweep cannot post a second copy of the
+     same Sunday and the admin can see what went out and to how many. */
+  CREATE TABLE IF NOT EXISTS digest_runs(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    market TEXT NOT NULL DEFAULT 'us',
+    edition TEXT NOT NULL,
+    item_count INTEGER NOT NULL DEFAULT 0,
+    recipients INTEGER NOT NULL DEFAULT 0,
+    sent_at TEXT NOT NULL
+  );
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_digest_runs_edition ON digest_runs(market, edition);
+`);
+
 db.exec(`
   CREATE TABLE IF NOT EXISTS live_drop_announcements(
     id INTEGER PRIMARY KEY AUTOINCREMENT,

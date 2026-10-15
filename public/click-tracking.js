@@ -36,6 +36,31 @@
     }).catch(() => {});
   };
 
+  /*
+   * A search term reduced to something we are willing to send to GA4: contact
+   * details stripped, case and spacing flattened, hard length limit.
+   *
+   * The same rule as searchTerm() in lib/measure.ts, written twice because
+   * this file is plain script served to the browser and that one is a
+   * TypeScript module. If one changes, change both.
+   */
+  const searchTerm = raw => String(raw || "")
+    .replace(/[^\s@]+@[^\s@]+|\+?\d[\d\s().-]{7,}/g, " ")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 60);
+
+  /* Defined by cookie-consent.js, which loads first and knows whether a
+     European visitor has agreed yet. Absent means nothing is reported. */
+  const measure = (name, values) => {
+    try {
+      window.oddEvent?.(name, values);
+    } catch {
+      /* Counting is never worth breaking the page it is on. */
+    }
+  };
+
   const analyticsEvent = payload => send(analyticsEndpoint, {
     ...payload,
     eventId:token(),
@@ -51,9 +76,26 @@
       try {
         const url = new URL(outbound.href, location.href);
         if (url.origin === location.origin) {
+          const eventId = token();
           url.searchParams.set("sid", sessionId);
-          url.searchParams.set("eid", token());
+          url.searchParams.set("eid", eventId);
           outbound.href = url.toString();
+          /* The server records this click when it does the redirecting, which
+             stays the number to trust. This copy is what lets GA4 put it
+             beside the visit that brought the person in. The store and coupon
+             front doors put a word where the id goes, so a numeric segment is
+             the test for "this is a listing". */
+          const parts = url.pathname.split("/").filter(Boolean);
+          const target = parts[parts.indexOf("go") + 1] || "";
+          const listing = /^\d+$/.test(target);
+          measure("retailer_click", {
+            item_id: listing ? target : undefined,
+            destination: listing ? "listing" : target.slice(0, 40) || "unknown",
+            source: url.searchParams.get("source") || undefined,
+            placement: url.searchParams.get("placement") || undefined,
+            action: url.searchParams.get("action") || undefined,
+            click_id: eventId
+          });
         }
       } catch {}
       return;
@@ -75,12 +117,20 @@
 
   const context = document.querySelector("main[data-analytics-page]");
   if (context?.dataset.analyticsPage === "search" && context.dataset.analyticsQuery) {
+    const resultCount = Number(context.dataset.analyticsResultCount || 0);
     analyticsEvent({
       eventType:"search",
       sourcePage:"search",
       placement:"unknown",
       query:context.dataset.analyticsQuery,
-      resultCount:Number(context.dataset.analyticsResultCount || 0)
+      resultCount
+    });
+    /* A search that finds nothing is the most useful thing the catalogue says
+       and the one thing a page-view report cannot show: the URL of a search
+       with no results looks exactly like one with forty. */
+    measure("search", {
+      search_term: searchTerm(context.dataset.analyticsQuery),
+      result_count: Math.max(0, Math.round(resultCount) || 0)
     });
   }
 

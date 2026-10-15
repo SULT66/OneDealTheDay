@@ -1,4 +1,6 @@
 const { categoryLabel, languageTag } = require("./i18n");
+const { trackedDropPercent, priceIsCurrentFor } = require("./productPresentation");
+const { WINDOW_DAYS } = require("./trackedPrice");
 
 const clean = value => String(value || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
 const number = (value, fallback = 0) => {
@@ -19,7 +21,7 @@ const content = {
     quickVerdict: "Quick verdict",
     strengths: "Verified strengths",
     watchouts: "Watch-outs",
-    discountStrength: "Current price is {discount}% below the retailer reference price.",
+    trackedDropStrength: "OneDailyDrop recorded this price {drop}% below the highest daily price it saw in the last {window} days.",
     ratingStrength: "Product rating is {rating}/5 across {reviews} reviews.",
     sellerStrength: "Seller feedback is {rating} positive.",
     freeDeliveryStrength: "The listing reports free delivery.",
@@ -28,7 +30,7 @@ const content = {
     noReturnsWatch: "The listing says returns are not accepted.",
     paidDeliveryWatch: "Delivery is not listed as free and can change the final cost.",
     missingRatingWatch: "The marketplace did not supply a product rating for this listing.",
-    noReferenceWatch: "No verified reference-price discount is shown; compare the current price directly.",
+    noTrackedDropWatch: "OneDailyDrop has not recorded this price falling, so it states no saving of its own here.",
     checkoutWatch: "Confirm the exact model, condition and total at retailer checkout.",
     overview: "What this listing is",
     fit: "Who it may suit",
@@ -79,7 +81,7 @@ const content = {
     eyebrow: "GUÍA DE COMPRA ONEDAILYDROP",
     heading: "Lo útil, sin el ruido de una página de venta",
     verifiedNote: "Esta guía usa datos verificados del anuncio y cálculos de OneDailyDrop. No completamos ni inventamos especificaciones desconocidas.",
-    quickVerdict: "Veredicto rápido", strengths: "Puntos fuertes verificados", watchouts: "Aspectos a comprobar", discountStrength: "El precio actual está un {discount}% por debajo del precio de referencia.", ratingStrength: "El producto tiene {rating}/5 según {reviews} reseñas.", sellerStrength: "Las opiniones positivas del vendedor son del {rating}.", freeDeliveryStrength: "El anuncio indica entrega gratuita.", returnsStrength: "El anuncio indica que acepta devoluciones.", checkedStrength: "El precio y las condiciones se comprobaron con la tienda.", noReturnsWatch: "El anuncio indica que no acepta devoluciones.", paidDeliveryWatch: "La entrega no figura como gratuita y puede cambiar el coste final.", missingRatingWatch: "La plataforma no facilitó una valoración del producto.", noReferenceWatch: "No aparece un descuento de referencia verificado; compara directamente el precio actual.", checkoutWatch: "Confirma modelo, estado y total exactos al pagar en la tienda.",
+    quickVerdict: "Veredicto rápido", strengths: "Puntos fuertes verificados", watchouts: "Aspectos a comprobar", trackedDropStrength: "OneDailyDrop registró este precio un {drop}% por debajo del precio diario más alto observado en los últimos {window} días.", ratingStrength: "El producto tiene {rating}/5 según {reviews} reseñas.", sellerStrength: "Las opiniones positivas del vendedor son del {rating}.", freeDeliveryStrength: "El anuncio indica entrega gratuita.", returnsStrength: "El anuncio indica que acepta devoluciones.", checkedStrength: "El precio y las condiciones se comprobaron con la tienda.", noReturnsWatch: "El anuncio indica que no acepta devoluciones.", paidDeliveryWatch: "La entrega no figura como gratuita y puede cambiar el coste final.", missingRatingWatch: "La plataforma no facilitó una valoración del producto.", noTrackedDropWatch: "OneDailyDrop no ha registrado una bajada de este precio, por lo que no indica ningún ahorro propio.", checkoutWatch: "Confirma modelo, estado y total exactos al pagar en la tienda.",
     overview: "Qué es este anuncio",
     fit: "Para quién puede ser adecuado",
     why: "Por qué entró en la selección",
@@ -111,7 +113,7 @@ const content = {
     eyebrow: "GUIDE D’ACHAT ONEDAILYDROP",
     heading: "L’essentiel, sans le bruit d’une page commerciale",
     verifiedNote: "Ce guide utilise les données vérifiées de l’annonce et les calculs OneDailyDrop. Les caractéristiques inconnues ne sont ni complétées ni inventées.",
-    quickVerdict: "Verdict rapide", strengths: "Points forts vérifiés", watchouts: "Points à vérifier", discountStrength: "Le prix actuel est inférieur de {discount}% au prix marchand de référence.", ratingStrength: "La note produit est de {rating}/5 sur {reviews} avis.", sellerStrength: "Les évaluations positives du vendeur atteignent {rating}.", freeDeliveryStrength: "L’annonce indique une livraison gratuite.", returnsStrength: "L’annonce indique que les retours sont acceptés.", checkedStrength: "Le prix et les conditions ont été vérifiés auprès du marchand.", noReturnsWatch: "L’annonce indique que les retours ne sont pas acceptés.", paidDeliveryWatch: "La livraison n’est pas indiquée comme gratuite et peut modifier le coût final.", missingRatingWatch: "La place de marché n’a pas fourni de note produit.", noReferenceWatch: "Aucune remise de référence vérifiée n’est affichée ; comparez directement le prix actuel.", checkoutWatch: "Confirmez le modèle, l’état et le total exacts lors du paiement.", overview: "Ce qu’est cette annonce", fit: "À qui elle peut convenir", why: "Pourquoi elle a été retenue", offer: "Ce que dit l’offre actuelle", check: "À vérifier avant l’achat", score: "Comment lire le Score", alternatives: "Alternatives à comparer", related: "Sélections associées",
+    quickVerdict: "Verdict rapide", strengths: "Points forts vérifiés", watchouts: "Points à vérifier", trackedDropStrength: "OneDailyDrop a relevé ce prix inférieur de {drop}% au prix journalier le plus élevé observé sur les {window} derniers jours.", ratingStrength: "La note produit est de {rating}/5 sur {reviews} avis.", sellerStrength: "Les évaluations positives du vendeur atteignent {rating}.", freeDeliveryStrength: "L’annonce indique une livraison gratuite.", returnsStrength: "L’annonce indique que les retours sont acceptés.", checkedStrength: "Le prix et les conditions ont été vérifiés auprès du marchand.", noReturnsWatch: "L’annonce indique que les retours ne sont pas acceptés.", paidDeliveryWatch: "La livraison n’est pas indiquée comme gratuite et peut modifier le coût final.", missingRatingWatch: "La place de marché n’a pas fourni de note produit.", noTrackedDropWatch: "OneDailyDrop n’a pas relevé de baisse de ce prix ; aucune économie de notre part n’est annoncée.", checkoutWatch: "Confirmez le modèle, l’état et le total exacts lors du paiement.", overview: "Ce qu’est cette annonce", fit: "À qui elle peut convenir", why: "Pourquoi elle a été retenue", offer: "Ce que dit l’offre actuelle", check: "À vérifier avant l’achat", score: "Comment lire le Score", alternatives: "Alternatives à comparer", related: "Sélections associées",
     alternativesIntro: "Voici d’autres sélections {category} actuelles en {market}. Ce sont des options de comparaison, pas des produits dont les caractéristiques seraient nécessairement identiques.", compareOffers: "Comparer les offres actuelles", compareOffersIntro: "Ces annonces partagent un identifiant produit fiable. Le prix, la livraison, les retours et le vendeur peuvent néanmoins différer.",
     currentPrice: "Prix actuel", retailer: "Marchand", seller: "Vendeur", delivery: "Livraison", returns: "Retours", availability: "Disponibilité", viewOffer: "Voir l’offre",
     priceQuality: "Qualité du prix", productQuality: "Qualité du produit", reviewConfidence: "Confiance dans les avis", sellerReliability: "Fiabilité du vendeur", demandUsefulness: "Demande et utilité", shippingReturns: "Livraison et retours",
@@ -130,7 +132,7 @@ const content = {
     verdict: "Une offre notée {score}/100 chez {store}, retenue pour {reason} Vérifiez les conditions exactes avant le paiement."
   },
   de: {
-    eyebrow: "ONEDAILYDROP KAUFÜBERSICHT", heading: "Die wichtigen Details ohne Verkaufsseiten-Lärm", verifiedNote: "Diese Übersicht nutzt geprüfte Angebotsdaten und OneDailyDrop-Berechnungen. Unbekannte Eigenschaften werden nicht ergänzt oder erraten.", quickVerdict: "Kurzfazit", strengths: "Geprüfte Stärken", watchouts: "Darauf achten", discountStrength: "Der aktuelle Preis liegt {discount}% unter dem Händler-Referenzpreis.", ratingStrength: "Die Produktbewertung beträgt {rating}/5 aus {reviews} Bewertungen.", sellerStrength: "Die positiven Verkäuferbewertungen betragen {rating}.", freeDeliveryStrength: "Das Angebot nennt kostenlose Lieferung.", returnsStrength: "Das Angebot nennt akzeptierte Rückgaben.", checkedStrength: "Preis und Angebotsbedingungen wurden beim Händler geprüft.", noReturnsWatch: "Laut Angebot sind Rückgaben ausgeschlossen.", paidDeliveryWatch: "Die Lieferung ist nicht als kostenlos angegeben und kann die Endkosten verändern.", missingRatingWatch: "Der Marktplatz hat keine Produktbewertung geliefert.", noReferenceWatch: "Es wird kein geprüfter Referenzrabatt angezeigt; vergleichen Sie den aktuellen Preis direkt.", checkoutWatch: "Prüfen Sie Modell, Zustand und Gesamtbetrag beim Händler-Checkout.", overview: "Was dieses Angebot ist", fit: "Für wen es passen kann", why: "Warum es ausgewählt wurde", offer: "Was das aktuelle Angebot sagt", check: "Vor dem Kauf prüfen", score: "So ist der Score zu lesen", alternatives: "Vergleichbare Alternativen", related: "Ähnliche Drops",
+    eyebrow: "ONEDAILYDROP KAUFÜBERSICHT", heading: "Die wichtigen Details ohne Verkaufsseiten-Lärm", verifiedNote: "Diese Übersicht nutzt geprüfte Angebotsdaten und OneDailyDrop-Berechnungen. Unbekannte Eigenschaften werden nicht ergänzt oder erraten.", quickVerdict: "Kurzfazit", strengths: "Geprüfte Stärken", watchouts: "Darauf achten", trackedDropStrength: "OneDailyDrop hat diesen Preis {drop}% unter dem höchsten Tagespreis der letzten {window} Tage erfasst.", ratingStrength: "Die Produktbewertung beträgt {rating}/5 aus {reviews} Bewertungen.", sellerStrength: "Die positiven Verkäuferbewertungen betragen {rating}.", freeDeliveryStrength: "Das Angebot nennt kostenlose Lieferung.", returnsStrength: "Das Angebot nennt akzeptierte Rückgaben.", checkedStrength: "Preis und Angebotsbedingungen wurden beim Händler geprüft.", noReturnsWatch: "Laut Angebot sind Rückgaben ausgeschlossen.", paidDeliveryWatch: "Die Lieferung ist nicht als kostenlos angegeben und kann die Endkosten verändern.", missingRatingWatch: "Der Marktplatz hat keine Produktbewertung geliefert.", noTrackedDropWatch: "OneDailyDrop hat keinen Preisrückgang erfasst und nennt daher keine eigene Ersparnis.", checkoutWatch: "Prüfen Sie Modell, Zustand und Gesamtbetrag beim Händler-Checkout.", overview: "Was dieses Angebot ist", fit: "Für wen es passen kann", why: "Warum es ausgewählt wurde", offer: "Was das aktuelle Angebot sagt", check: "Vor dem Kauf prüfen", score: "So ist der Score zu lesen", alternatives: "Vergleichbare Alternativen", related: "Ähnliche Drops",
     alternativesIntro: "Dies sind weitere aktuelle {category}-Empfehlungen in {market}. Sie dienen zum Vergleich; identische Spezifikationen werden nicht behauptet.", compareOffers: "Aktuelle Angebote vergleichen", compareOffersIntro: "Diese Angebote teilen eine verlässliche Produktkennung. Preis, Lieferung, Rückgabe und Verkäuferbedingungen können dennoch abweichen.",
     currentPrice: "Aktueller Preis", retailer: "Händler", seller: "Verkäufer", delivery: "Lieferung", returns: "Rückgabe", availability: "Verfügbarkeit", viewOffer: "Angebot ansehen",
     priceQuality: "Preisqualität", productQuality: "Produktqualität", reviewConfidence: "Bewertungssicherheit", sellerReliability: "Verkäuferzuverlässigkeit", demandUsefulness: "Nachfrage und Nutzen", shippingReturns: "Lieferung und Rückgabe",
@@ -239,6 +241,16 @@ function createEditorialBrief(product, display, {
   }));
   const strongest = [...components].sort((a, b) => (b.points / b.max) - (a.points / a.max))[0];
   const weakest = [...components].sort((a, b) => (a.points / a.max) - (b.points / b.max))[0];
+  /*
+   * The fall we measured, behind the gate the badge uses.
+   *
+   * "Verified strengths" opened with the retailer's own struck-through figure
+   * — the one number beside a listing that nobody checked — while the card
+   * above it had already stopped publishing that percentage. The reference
+   * price is still named in "What the current offer says", attributed to the
+   * retailer, which is where an unverified figure belongs.
+   */
+  const trackedDrop = priceIsCurrentFor(product) ? trackedDropPercent(product) : 0;
   const rawReturns = clean(product?.return_summary);
   const rawShipping = clean(product?.shipping_summary);
   const caution = /returns not accepted/i.test(rawReturns)
@@ -247,7 +259,7 @@ function createEditorialBrief(product, display, {
       ? copy.cautionDelivery
       : copy.cautionNeutral;
   const strengths = [
-    discount > 0 ? fill(copy.discountStrength, { discount }) : "",
+    trackedDrop > 0 ? fill(copy.trackedDropStrength, { drop: trackedDrop, window: WINDOW_DAYS }) : "",
     Number.isFinite(rating) && rating > 0 && reviews > 0 ? fill(copy.ratingStrength, { rating: rating.toFixed(1), reviews: reviews.toLocaleString(languageTag(product?.market, lang)) }) : "",
     sellerScore ? fill(copy.sellerStrength, { rating: sellerScore }) : "",
     /^free shipping/i.test(rawShipping) ? copy.freeDeliveryStrength : "",
@@ -258,7 +270,7 @@ function createEditorialBrief(product, display, {
     /returns not accepted/i.test(rawReturns) ? copy.noReturnsWatch : "",
     rawShipping && !/^free shipping/i.test(rawShipping) ? copy.paidDeliveryWatch : "",
     !(Number.isFinite(rating) && rating > 0 && reviews > 0) ? copy.missingRatingWatch : "",
-    discount <= 0 ? copy.noReferenceWatch : "",
+    trackedDrop <= 0 ? copy.noTrackedDropWatch : "",
     copy.checkoutWatch
   ].filter(Boolean).slice(0, 3);
   const values = { title, category, store, market: marketName, score, reason: shortReason, price, reference, availability, seller, delivery, returns, description: usableDescription, productEvidence, sellerEvidence, caution };

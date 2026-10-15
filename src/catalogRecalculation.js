@@ -27,7 +27,7 @@ function needsRecalculation(db) {
       OR commerce_quality IS NULL
       OR average_30_day_price IS NULL
       OR ranking_score IS NULL
-      OR landed_cost IS NULL
+      OR (landed_cost IS NULL AND current_price>0 AND shipping_cost IS NOT NULL)
       OR COALESCE(normalized_category,'')=''
       OR COALESCE(taxonomy_version,'')<>?
       OR LOWER(COALESCE(product_key,'')) LIKE 'gtin:%does%apply%'

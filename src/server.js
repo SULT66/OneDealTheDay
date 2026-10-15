@@ -47,6 +47,8 @@ const { enabledProviders, searchForAssistant } = require("./providers/registry")
 const { coverage: retailerCoverage } = require("./retailerCatalog");
 const { presentProduct } = require("./productPresentation");
 const { PUBLIC_CATEGORIES, canonicalCategory, isPublicCategory } = require("./catalogTaxonomy");
+/* Aliased: this file already has an alternativesFor, for a live listing. */
+const { alternativesFor: endedAlternativesFor, endedProduct } = require("./endedOffer");
 const { deduplicationKeys, isDailyPickEligible, scoreOffers, selectUniqueProducts } = require("./ranker");
 const { parseSearchOptions, searchCatalogProducts } = require("./catalogSearch");
 const { applySearchIntent } = require("./searchIntent");
@@ -65,7 +67,12 @@ const {
   welcomeEmail,
   liveDropSaveTheDateEmail, liveDropStartingSoonEmail, liveDropAnnouncementEmail, liveDropLiveNowEmail, priceDropEmail,
   priceWatchStartedEmail,
-  passwordResetEmail, subscriptionEmail, clubWaitlistEmail, liveDropReminderEmail, deliveryTestEmail } = require("./mailer");
+  passwordResetEmail, subscriptionEmail, clubWaitlistEmail, liveDropReminderEmail, deliveryTestEmail,
+  digestInviteEmail, weeklyDigestEmail, introEmail, scoreExplainerEmail } = require("./mailer");
+const { sendWeeklyDigest } = require("./weeklyDigest");
+const { sendWelcomeSequence } = require("./welcomeSequence");
+const { chooseDigestItems } = require("./digestSelection");
+const { digestItemFor } = require("./weeklyDigest");
 const { emailHealth } = require("./emailHealth");
 const { htmlCache } = require("./htmlCache");
 const { startCacheWarmer, pathsFor } = require("./cacheWarmer");
@@ -1966,11 +1973,11 @@ const shell = (title, description, canonical, body, schema = null, image = "", r
     ]
   };
   const ogType = suppliedNodes.some(node => node?.["@type"] === "Product") ? "product" : "website";
-  const html = `<!doctype html><html lang="${esc(locale)}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0a1020"><title>${esc(title)}</title><meta name="description" content="${esc(description.slice(0,160))}"><meta name="robots" content="${esc(robotsContent)}"><link rel="canonical" href="${esc(canonical)}"><link rel="icon" href="/favicon.svg" type="image/svg+xml">${alternates}${imageConnectionHints(image)}<meta property="og:type" content="${ogType}"><meta property="og:site_name" content="OneDailyDrop"><meta property="og:locale" content="${esc(ogLocale)}"><meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(description.slice(0,180))}"><meta property="og:url" content="${esc(canonical)}">${image ? `<meta property="og:image" content="${esc(image)}"><meta property="og:image:alt" content="${esc(title)}">` : ""}<meta name="twitter:card" content="${image ? "summary_large_image" : "summary"}"><meta name="twitter:title" content="${esc(title)}"><meta name="twitter:description" content="${esc(description.slice(0,180))}">${image ? `<meta name="twitter:image" content="${esc(image)}">` : ""}<link rel="stylesheet" href="/styles.css?v=20260731-brand-lockup"><link rel="stylesheet" href="/brand-theme.css?v=20260731-brand-lockup"><link rel="stylesheet" href="/liquid-glass.css?v=20260731-brand-lockup"><script type="application/ld+json">${JSON.stringify(pageSchema).replace(/</g,"\\u003c")}</script><script>window.__ODD_LANGUAGE__=${JSON.stringify(language)};window.__ODD_LOCALE__=${JSON.stringify(locale)};window.__ODD_TEXT__=${JSON.stringify(clientCopy(language)).replace(/</g, "\\u003c")};</script></head><body>${sharedHeader(code, language, req)}${body}${sharedFooter(code, language)}<script src="/theme.js?v=20260728-i18n2"></script><script src="/site-shell.js?v=20260728-i18n2"></script><script src="/click-tracking.js?v=20260814-day5"></script></body></html>`;
+  const html = `<!doctype html><html lang="${esc(locale)}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0a1020"><title>${esc(title)}</title><meta name="description" content="${esc(description.slice(0,160))}"><meta name="robots" content="${esc(robotsContent)}"><link rel="canonical" href="${esc(canonical)}"><link rel="icon" href="/favicon.svg" type="image/svg+xml">${alternates}${imageConnectionHints(image)}<meta property="og:type" content="${ogType}"><meta property="og:site_name" content="OneDailyDrop"><meta property="og:locale" content="${esc(ogLocale)}"><meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(description.slice(0,180))}"><meta property="og:url" content="${esc(canonical)}">${image ? `<meta property="og:image" content="${esc(image)}"><meta property="og:image:alt" content="${esc(title)}">` : ""}<meta name="twitter:card" content="${image ? "summary_large_image" : "summary"}"><meta name="twitter:title" content="${esc(title)}"><meta name="twitter:description" content="${esc(description.slice(0,180))}">${image ? `<meta name="twitter:image" content="${esc(image)}">` : ""}<link rel="stylesheet" href="/styles.css?v=20260731-brand-lockup"><link rel="stylesheet" href="/brand-theme.css?v=20260731-brand-lockup"><link rel="stylesheet" href="/liquid-glass.css?v=20260731-brand-lockup"><script type="application/ld+json">${JSON.stringify(pageSchema).replace(/</g,"\\u003c")}</script><script>window.__ODD_LANGUAGE__=${JSON.stringify(language)};window.__ODD_LOCALE__=${JSON.stringify(locale)};window.__ODD_TEXT__=${JSON.stringify(clientCopy(language)).replace(/</g, "\\u003c")};</script></head><body>${sharedHeader(code, language, req)}${body}${sharedFooter(code, language)}<script src="/theme.js?v=20260728-i18n2"></script><script src="/site-shell.js?v=20260728-i18n2"></script><script src="/cookie-consent.js?v=20260912-startup-fix"></script><script src="/click-tracking.js?v=20260814-day5"></script></body></html>`;
   const versionedHtml = html
     .replace("/styles.css?v=20260731-brand-lockup", "/styles.css?v=20260815-public-taxonomy-v2")
     .replace("/site-shell.js?v=20260728-i18n2", "/site-shell.js?v=20260814-day11-prefetch")
-    .replace("</head>", '<link rel="stylesheet" href="/i18n.css?v=20260808-assistant"><link rel="stylesheet" href="/shopping-assistant.css?v=20260812-all-markets-v2"></head>')
+    .replace("</head>", '<link rel="stylesheet" href="/i18n.css?v=20260808-assistant"><link rel="stylesheet" href="/shopping-assistant.css?v=20260812-all-markets-v2"><link rel="stylesheet" href="/cookie-consent.css?v=20260730"></head>')
     .replace("</body>", `${shoppingAssistantPanel(code, language)}<script src="/shopping-assistant.js?v=20260814-day12-product-gate"></script></body>`);
   return localizeHtml(versionedHtml, language);
 };
@@ -2880,6 +2887,64 @@ const compactApiProduct = product => ({
  * short ranked window, not the rest of the market. Keeping both in one response
  * also lets generateMetadata and the page render share the same memoized fetch.
  */
+/*
+ * A listing that has left the catalogue, and what to look at instead.
+ *
+ * Every other query on this table requires status='published', so the moment
+ * a listing is archived — the feed stopped carrying it, or linkHealth found
+ * its link dead — its page returns 404. Measured against production on
+ * 2026-10-15, that is what a departed listing serves.
+ *
+ * Which is fine for a shop and wrong for us. A pin lives six months to a year
+ * and a guide links out for longer than that; a 404 at the end of one wastes
+ * the visit and teaches Pinterest and Google that our links fail. The row is
+ * still there — archiving sets a status, it does not delete — so the page can
+ * say the offer ended and hand the visitor the current listings in the same
+ * category, which is what they came for anyway.
+ *
+ * Its own endpoint rather than a flag on the one below: that one is called
+ * from several places that all mean "give me a live listing", and quietly
+ * answering with a dead one would be a change none of them asked for.
+ */
+app.get("/api/products/:id/ended", (req, res) => {
+  const id = /^\d+$/.test(String(req.params.id || "")) ? String(req.params.id) : "";
+  if (!id) return res.status(404).json({error:"Product not found"});
+  const selectedMarket = normalizeMarket(req.query.market) || requestMarket(req).code;
+  const product = endedProduct(db, { id, market: selectedMarket, isPublicSource });
+  if (!product) return res.status(404).json({error:"Product not found"});
+
+  const category = clean(product.normalized_category) || "";
+  const alternatives = uniqueProductsInOrder(
+    endedAlternativesFor(db, { market: selectedMarket, category, sourceSql: sourceSql() }),
+  )
+    .filter(isPubliclyIndexable)
+    .slice(0, 4)
+    .map(row => presentProduct(localizeProduct(row, req.language), req.language));
+
+  res.set("Cache-Control", "public, max-age=600");
+  res.json({
+    ended: true,
+    product: {
+      id: product.id,
+      title: clean(product.title),
+      image_url: product.image_url || "",
+      public_category: canonicalCategory(product) || category,
+      retailer_name: storeName(product),
+      last_checked_at: product.checked_at || product.updated_at || null,
+    },
+    alternatives: alternatives.map(item => ({
+      id: item.id,
+      title: item.title,
+      deal_url: dealPath(item),
+      image_url: item.image_url,
+      current_price: item.current_price,
+      currency: item.currency,
+      display_score: item.display_score ?? null,
+      public_category: item.public_category,
+    })),
+  });
+});
+
 app.get("/api/products/:id", (req, res) => {
   const id = /^\d+$/.test(String(req.params.id || "")) ? String(req.params.id) : "";
   if (!id) return res.status(404).json({error:"Product not found"});
@@ -3079,6 +3144,56 @@ app.get("/unsubscribe", (req, res) => {
 </body></html>`);
 });
 
+/*
+ * Joining the Sunday list, from a link in an email.
+ *
+ * The same per-subscriber token the unsubscribe link uses: it works from an
+ * inbox with no sign-in, and it cannot be used to add somebody else by
+ * guessing their address. A GET because it is a link in an email and nothing
+ * else can be — which is why it only ever turns a flag on for the one address
+ * the token belongs to.
+ */
+const digestPage = (res, status, title, message) => res
+  .status(status)
+  .set("X-Robots-Tag", "noindex, nofollow")
+  .set("Cache-Control", "no-store")
+  .send(`<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow">
+<title>${esc(title)} - OneDailyDrop</title></head>
+<body style="font-family:system-ui,Arial,sans-serif;max-width:34rem;margin:12vh auto;padding:0 1.25rem;color:#17191d">
+<h1 style="font-size:1.5rem">${esc(title)}</h1>
+<p style="line-height:1.6">${esc(message)}</p>
+<p><a href="/" style="color:#d95600;font-weight:600">Back to OneDailyDrop</a></p>
+</body></html>`);
+
+const digestFlag = (token, on) => {
+  const value = analyticsToken(String(token || "")) || String(token || "").trim();
+  if (!value || value.length < 16 || value.length > 120) return false;
+  const result = db
+    .prepare(`UPDATE subscribers SET digest_opt_in = ?, digest_opt_in_at = ?, updated_at = ?
+               WHERE unsubscribe_token = ? AND unsubscribe_token <> '' AND status = 'active'`)
+    .run(on ? 1 : 0, on ? new Date().toISOString() : null, new Date().toISOString(), value);
+  return Number(result?.changes || 0) > 0;
+};
+
+app.get("/digest/join", (req, res) => {
+  const done = digestFlag(req.query.token, true);
+  return done
+    ? digestPage(res, 200, "You're on for Sundays",
+      "Five finds every Sunday morning, starting this week. Your Live Drop emails carry on as before, and either list can be left on its own.")
+    : digestPage(res, 404, "Link not recognised",
+      "That link is not one we recognise. If you still want the Sunday finds, reply to any of our emails and we will add you by hand.");
+});
+
+app.get("/digest/stop", (req, res) => {
+  const done = digestFlag(req.query.token, false);
+  return done
+    ? digestPage(res, 200, "No more Sundays",
+      "We will not send you the Sunday finds again. If you are also on the Live Drop list, those still arrive — the unsubscribe link in any of them stops those too.")
+    : digestPage(res, 404, "Link not recognised",
+      "That link is not one we recognise. Reply to any of our emails and we will take you off by hand.");
+});
+
 /* Rate limited: without it this form sends mail from our domain to any address
    anybody chooses, as fast as they can post to it. */
 app.post("/api/subscribe", authRateLimit, async (req,res) => {
@@ -3249,7 +3364,7 @@ app.get("/api/merchandising", (req, res) => {
   if (!merchandisingEnabled) return res.set("Cache-Control", "no-store").json({market:marketCode, shelves:[]});
   const language = resolveLanguage(req, res, marketCode);
   if(req.query.collection === 'halloween') {
-    const collection=getHalloweenCollection(db,{market:marketCode,page:req.query.page,q:req.query.q,sort:req.query.sort});
+    const collection=getHalloweenCollection(db,{market:marketCode,page:req.query.page,q:req.query.q,sort:req.query.preview==='1'?'popular':req.query.sort,preview:req.query.preview==='1'});
     return res.set('Cache-Control','no-store').json({...collection,market:marketCode,
       products:collection.products.map(product=>presentProduct(localizeProduct({...product,deal_url:dealPath(product)},language),language))});
   }
@@ -3273,7 +3388,7 @@ app.get("/api/admin/merchandising", admin, (req, res) => {
     market:marketCode, enabled:merchandisingEnabled,
     researchEnabled:merchandisingResearchMarkets.has(marketCode),
     discoveryEnabled:c.liveRefreshEnabled && merchandisingDiscoveryMarkets.has(marketCode),
-    schedule:{catalog:"hourly", ebayDiscovery:"at most once per 6 hours; up to 6 searches and 60 details", externalResearch:"at most once per 24 hours", calendar:"weekly"},
+    schedule:{catalog:"every 6 hours", ebayDiscovery:"at most once per 6 hours; up to 6 searches and 60 details", externalResearch:"at most once per 24 hours", calendar:"weekly"},
     status:merchandisingStatus(db, {market:marketCode}),
     performance:merchandisingPerformance(marketCode)
   });
@@ -4342,24 +4457,31 @@ function merchandisingPerformance(marketCode) {
   }))};
 }
 let merchandisingSweepRunning = false;
-async function merchandisingSweep() {
+async function merchandisingSweep({startup=false} = {}) {
   if (!merchandisingEnabled || merchandisingSweepRunning) return;
   merchandisingSweepRunning = true;
+  let updated=false;
   try {
+    require("./merchandising").ensureMerchandisingSchema(db);
     for (const marketCode of c.markets) {
       try {
-        await runMerchandisingForMarket(marketCode);
+        if (startup) {
+          const previous=db.prepare('SELECT started_at FROM merchandising_runs WHERE market=? ORDER BY started_at DESC LIMIT 1').get(marketCode);
+          if (!require('./catalogSchedule').startupSelectionDue(previous?.started_at)) continue;
+        }
+        const result=await runMerchandisingForMarket(marketCode);
+        if (result.status === "success") updated=true;
       } catch (error) {
         console.error(`[merchandising] ${marketCode}: ${error.message}`);
       }
     }
-    publicHtmlCache.clear();
+    if (updated) publicHtmlCache.clear();
   } finally {
     merchandisingSweepRunning = false;
   }
 }
 if (merchandisingEnabled && c.liveRefreshEnabled) {
-  cron.schedule("23 * * * *", merchandisingSweep, {timezone:"UTC"});
+  cron.schedule(c.merchandisingCron, merchandisingSweep, {timezone:c.marketConfig(c.primaryMarket).timezone});
 }
 
 for (const marketCode of c.markets) {
@@ -4371,10 +4493,7 @@ for (const marketCode of c.markets) {
   );
   if (c.offerCheckEnabled) {
     cron.schedule(
-      /* The primary market sweeps four times a day; the others twice, because
-         a hundred slow-moving listings do not need eight sweeps and the
-         allowance those sweeps spent is what the primary market was short of.
-         See searchBudgetFor in src/config.js. */
+      // Together with the midnight Daily Drop run: 00:15, 06:15, 12:15, 18:15.
       marketCode === c.primaryMarket ? c.offerCheckCron : c.secondaryOfferCheckCron,
       () => refreshProducts(c, {market:marketCode,preserveDailySelection:true}).then(() => publicHtmlCache.clear()).catch(error => console.error(error.message)),
       {timezone:selectedMarket.timezone}
@@ -4586,6 +4705,54 @@ cron.schedule("* * * * *", () => {
     .then((ended) => ended.length && console.log(`[live-host] ended ${ended.length} broadcast(s)`))
     .catch((error) => console.error(`[live-host] could not end broadcasts: ${error.message}`));
 });
+/*
+ * Sunday morning in New York, which is where the readers are.
+ *
+ * Hourly rather than once at ten, and the module decides whether it is
+ * actually the right day: a cron timezone is one more place for the clock
+ * changes to be wrong, and an hourly sweep that finds the week already
+ * recorded costs one indexed lookup. The unique index on digest_runs is what
+ * makes a second attempt harmless, not the schedule.
+ */
+let digestSweepRunning = false;
+cron.schedule("0 * * * *", async () => {
+  if (digestSweepRunning) return;
+  digestSweepRunning = true;
+  try {
+    const hour = Number(new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/New_York", hour: "numeric", hour12: false,
+    }).format(new Date()));
+    if (hour !== 10) return;
+
+    for (const code of marketCodes) {
+      const products = uniqueProductsInOrder(
+        db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()}
+                     ORDER BY COALESCE(ranking_score,score) DESC, score DESC`).all(code),
+      )
+        .filter(isPubliclyIndexable)
+        .map(product => presentProduct(product, defaultLanguages[code] || "en"));
+
+      const result = await sendWeeklyDigest({
+        db,
+        market: code,
+        products,
+        sendDigest: weeklyDigestEmail,
+        siteOrigin: SITE,
+        unsubscribeUrlFor: (subscriber) => (subscriber.unsubscribe_token
+          ? `${SITE}/digest/stop?token=${encodeURIComponent(subscriber.unsubscribe_token)}`
+          : ""),
+      });
+      if (result.status !== "not-sunday") {
+        console.log(`[digest] ${code}: ${result.status} (${result.sent} sent, ${result.items} items)`);
+      }
+    }
+  } catch (error) {
+    console.error(`[digest] ${error.message}`);
+  } finally {
+    digestSweepRunning = false;
+  }
+}, {timezone: "UTC"});
+
 let reminderSweepRunning = false;
 cron.schedule(
   "* * * * *",
@@ -4631,6 +4798,37 @@ cron.schedule(
       /* Watched prices, on the same minute. The refresh has already written
          today's prices by the time this runs; nothing else reads them for
          this purpose. */
+      /*
+       * The first week's three letters, one per subscriber per sweep. On the
+       * same minute sweep as the drop reminders because it is the same kind
+       * of work: look at what is owed, send at most one thing, record it.
+       */
+      const welcomed = await sendWelcomeSequence({
+        db,
+        senders: {
+          intro: introEmail,
+          score: scoreExplainerEmail,
+          digest_invite: digestInviteEmail,
+        },
+        featuredFor: (code) => {
+          const pick = chooseDigestItems(
+            uniqueProductsInOrder(
+              db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()}
+                           ORDER BY COALESCE(ranking_score,score) DESC, score DESC LIMIT 400`).all(code),
+            )
+              .filter(isPubliclyIndexable)
+              .map(product => presentProduct(product, defaultLanguages[code] || "en")),
+            { limit: 1 },
+          )[0];
+          return pick ? digestItemFor(pick, { market: code, siteOrigin: SITE }) : null;
+        },
+        joinUrlFor: (subscriber) => `${SITE}/digest/join?token=${encodeURIComponent(subscriber.unsubscribe_token)}`,
+        unsubscribeUrlFor: (subscriber) => `${SITE}/unsubscribe?token=${encodeURIComponent(subscriber.unsubscribe_token)}`,
+      });
+      for (const [step, count] of Object.entries(welcomed)) {
+        console.log(`[welcome] sent ${count} "${step}" letter${count === 1 ? "" : "s"}`);
+      }
+
       const drops = await sendDuePriceDrops({
         db,
         sendPriceDrop: priceDropEmail,
@@ -4680,11 +4878,12 @@ app.use((error, req, res, next) => {
   app.listen(c.port, () => {
     console.log(`http://localhost:${c.port}`);
     if (merchandisingEnabled && c.liveRefreshEnabled) {
-      setImmediate(merchandisingSweep);
-      // Revisit discovery after warm-up instead of waiting for the hourly tick.
+      // A single recovery pass after settling, not an immediate rebuild plus
+      // another one ten minutes later. Recent persisted runs are left alone.
+      const initializeSelection=() => merchandisingSweep({startup:true});
       if (c.isProduction && SETTLING_SECONDS > process.uptime()) {
-        setTimeout(merchandisingSweep, (SETTLING_SECONDS - process.uptime()) * 1000 + 1000).unref();
-      }
+        setTimeout(initializeSelection, (SETTLING_SECONDS - process.uptime()) * 1000 + 1000).unref();
+      } else setImmediate(initializeSelection);
     }
     /*
      * Keep the entry pages rendered so a visitor does not have to be the
@@ -4720,10 +4919,12 @@ app.use((error, req, res, next) => {
          same page twice is a render nobody reads. */
       const warmPaths = [...new Set(warmestCategories)];
       startCacheWarmer({
+        headers: publicHtmlCache.refreshHeaders,
         baseUrl: `http://127.0.0.1:${c.port}`,
         market: c.primaryMarket,
         paths: [
           ...pathsFor(c.primaryMarket, process.env.WARM_PATHS),
+          ...(!process.env.WARM_PATHS && require("./merchandisingCalendar").activeHalloween({market:c.primaryMarket}) ? [`/${c.primaryMarket}/halloween`] : []),
           ...(process.env.WARM_PATHS ? [] : warmPaths),
         ],
       });

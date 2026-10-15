@@ -1,3 +1,7 @@
+import { Suspense } from "react";
+import { activeHalloween } from "@/src/merchandisingCalendar";
+import { redirect } from "next/navigation";
+import type { Language } from "@/lib/i18n";
 import { StructuredData } from "@/components/site/StructuredData";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -46,37 +50,53 @@ export async function generateMetadata({
 }
 
 export default async function MarketHome({ params, searchParams }: PageProps<"/[market]">) {
-  const { market } = await params;
-  const info = getMarket(market);
+  const {market} = await params;
   const language = await getLanguage(market);
-  const country = info ? countryName(market, language) : t(language, "app.yourMarket");
-
-  /* The homepage is the catalog now, not the daily drop: it leads with search
-     and the best-scoring picks. The drop still runs on its own schedule and
-     lives at /[market]/daily-drop — one feature here, not the whole product. */
-  /* Together, not one after the other: they ask different endpoints and
-     neither needs the other's answer. */
   const search = await searchParams;
-  const q = typeof search.halloween_q === 'string' ? search.halloween_q.slice(0,120) : '';
-  const sort = typeof search.halloween_sort === 'string' ? search.halloween_sort : 'popular';
-  const [picks, categories, halloween] = await Promise.all([
-    getTopPicks(market, 12),
-    getCategoriesWithCounts(market, language),
-    getHalloweenCollection(market, language, Number(search.halloween_page) || 1, q, sort),
-  ]);
+  // Preserve old campaign filter bookmarks after moving the collection.
+  if (['halloween_q','halloween_sort','halloween_page'].some(key => typeof search[key] === 'string')) {
+    const query = new URLSearchParams({lang:language});
+    for (const [oldKey,key] of [['halloween_q','q'],['halloween_sort','sort'],['halloween_page','page']]) {
+      if (typeof search[oldKey] === 'string') query.set(key,search[oldKey]);
+    }
+    redirect(`/${market}/halloween?${query}`);
+  }
+  const halloween = Boolean(activeHalloween({market}));
+  return <div className="mx-auto max-w-7xl px-4 pb-24 pt-8 sm:px-6 sm:pt-10">
+    <HomeCampaigns market={market} language={language} halloween={halloween} />
+    {halloween && <Suspense fallback={<div aria-busy="true" className="mt-8 h-56 animate-pulse rounded-2xl bg-surface"/>}><HalloweenPreview market={market} language={language}/></Suspense>}
+    <Suspense fallback={null}><HomeCatalog market={market} language={language} halloween={halloween} /></Suspense>
+    <DeliaTrigger variant="floating" />
+  </div>;
+}
 
+async function HalloweenPreview({market,language}:{market:string;language:Language}) {
+  const data=await getHalloweenCollection(market,language,1,'','popular',true);
+  return <HalloweenProducts market={market} language={language} data={data} preview/>;
+}
+
+async function HomeCatalog({market,language,halloween}:{market:string;language:Language;halloween:boolean}) {
+  const info = getMarket(market);
+  const country = info ? countryName(market, language) : t(language, "app.yourMarket");
+  const [picksResult,categoriesResult] = await Promise.allSettled([
+    getTopPicks(market,12),
+    getCategoriesWithCounts(market,language),
+  ]);
+  const picks = picksResult.status === 'fulfilled' ? picksResult.value : [];
+  const categories = categoriesResult.status === 'fulfilled' ? categoriesResult.value : [];
+  const unavailable = picksResult.status === 'rejected' || categoriesResult.status === 'rejected';
   /* Honest empty state rather than a crash — no sample prices or products are
      invented while the catalog for this market is empty (a source outage, or
      before the first refresh has ever run). */
-  if (!picks.length && !halloween.active) {
+  if (!picks.length && !halloween) {
     return (
-      <div className="mx-auto max-w-2xl px-4 py-24 text-center sm:px-6">
+      <div className="mx-auto max-w-2xl px-4 py-12 text-center sm:px-6" data-odd-transient="1">
         <p className="text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-fg-subtle">
           {country}
         </p>
-        <h1 className="mt-4 text-3xl font-bold tracking-tight text-fg sm:text-4xl">
+        <h2 className="mt-4 text-3xl font-bold tracking-tight text-fg sm:text-4xl">
           {t(language, "app.home.emptyTitle")}
-        </h1>
+        </h2>
         <p className="mt-4 text-base leading-relaxed text-fg-muted">
           {t(language, "app.home.emptyText")}
         </p>
@@ -91,7 +111,7 @@ export default async function MarketHome({ params, searchParams }: PageProps<"/[
             misleading the way a stale catalogue would. */}
         <div className="mt-4 text-left">
           <AmazonPicks market={market} />
-          <MerchandisingShelves market={market} language={language} excludeHalloween={halloween.active} />
+          <MerchandisingShelves market={market} language={language} excludeHalloween={halloween} />
         </div>
       </div>
     );
@@ -102,16 +122,14 @@ export default async function MarketHome({ params, searchParams }: PageProps<"/[
     { "@type": "ItemList", name: "Best right now", numberOfItems: picks.length, itemListElement: picks.map((deal, index) => ({ "@type": "ListItem", position: index + 1, name: deal.title, url: `https://www.onedailydrop.com/${market}/deal/${deal.id}` })) }
   ] };
   return (
-    <div className="mx-auto max-w-7xl px-4 pb-24 pt-8 sm:px-6 sm:pt-10">
+    <div data-odd-transient={unavailable ? "1" : undefined}>
       <StructuredData data={homeSchema} />
-      <HomeCampaigns market={market} language={language} halloween={halloween.active} />
-      {halloween.active && <HalloweenProducts market={market} language={language} data={halloween} q={q} sort={sort} />}
 
       {/* Directly under the hero, and only when a drop is actually scheduled:
           it renders nothing the rest of the time. */}
       <NextLiveDrop market={market} />
 
-      <MerchandisingShelves market={market} language={language} excludeHalloween={halloween.active} />
+      <MerchandisingShelves market={market} language={language} excludeHalloween={halloween} />
 
       {/* ---------------------------------------------------------- categories */}
       <section aria-labelledby="categories-title" className="mt-20">
@@ -187,7 +205,6 @@ export default async function MarketHome({ params, searchParams }: PageProps<"/[
           used to sit on the seam between the two hero cards read as a stray
           floating button, so desktop leans on this and the header pill
           instead, same as every other page. */}
-      <DeliaTrigger variant="floating" />
     </div>
   );
 }

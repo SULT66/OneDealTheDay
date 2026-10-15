@@ -2,6 +2,7 @@ import { cache } from "react";
 import { adaptProduct, type RawProduct } from "./backendAdapter";
 import { BACKEND_URL } from "./catalog";
 import type { Deal } from "./types";
+import { activeHalloween } from "@/src/merchandisingCalendar";
 
 export type MerchandiseShelf = {
   id: string;
@@ -42,15 +43,16 @@ export const getMerchandisingShelves = cache(async (
   }
 });
 
-export type HalloweenCollection={active:boolean;total:number;page:number;pages:number;products:Deal[];
+export type HalloweenCollection={active:boolean;unavailable?:boolean;total:number;page:number;pages:number;products:Deal[];
   selectionEvidence:Record<string,{arrivalEstimate?:string;ebaySoldQuantity?:number|null}>};
-export async function getHalloweenCollection(market:string,language:string,page:number,q:string,sort:string):Promise<HalloweenCollection> {
-  const empty={active:false,total:0,page:1,pages:0,products:[],selectionEvidence:{}};
+export async function getHalloweenCollection(market:string,language:string,page:number,q:string,sort:string,preview=false):Promise<HalloweenCollection> {
+  const empty={active:Boolean(activeHalloween({market})),unavailable:true,total:0,page:1,pages:0,products:[],selectionEvidence:{}};
   try {
     const params=new URLSearchParams({market,lang:language,collection:'halloween',page:String(page),q,sort});
+    if(preview) params.set('preview','1');
     const response=await fetch(`${BACKEND_URL}/api/merchandising?${params}`,{cache:'no-store',signal:AbortSignal.timeout(8000)});
     if(!response.ok) return empty;
     const body=await response.json();
-    return {...empty,...body,products:(body.products || []).map((p:RawProduct,index:number)=>({...adaptProduct(p),rank:index+1}))};
+    return {...empty,...body,unavailable:false,products:(body.products || []).map((p:RawProduct,index:number)=>({...adaptProduct(p),rank:index+1}))};
   } catch {return empty;}
 }

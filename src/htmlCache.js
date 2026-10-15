@@ -37,6 +37,18 @@ const DEFAULT_TTL_MS = 10 * 60 * 1000;
 const SEARCH_TTL_MS = 2 * 60 * 1000;
 const MAX_ENTRIES = 300;
 const MAX_BODY_BYTES = 2 * 1024 * 1024;
+const zlib = require('node:zlib');
+const { randomUUID } = require('node:crypto');
+const isStreamedEntry = path => /^(?:\/(?:us|ca|uk|fr|de))?\/?(?:halloween\/?)?$/.test(path);
+
+function transientPage(body, encoding) {
+  try {
+    const decoded = encoding === 'gzip' ? zlib.gunzipSync(body)
+      : encoding === 'br' ? zlib.brotliDecompressSync(body)
+      : encoding === 'deflate' ? zlib.inflateSync(body) : body;
+    return decoded.includes(Buffer.from('data-odd-transient="1"'));
+  } catch { return true; }
+}
 
 /*
  * Pages that are the same for everybody who asks in the same language.
@@ -47,7 +59,7 @@ const MAX_BODY_BYTES = 2 * 1024 * 1024;
  * cannot quietly fall through to a different rule than /us/about.
  */
 const CACHEABLE_PATH =
-  /^(?:\/(?:us|ca|uk|fr|de))?\/?(?:|daily-drop|stores|search|archive|brands|about|contact|privacy|terms|affiliate-disclosure|editorial-policy|how-we-select-deals|price-disclaimer|for-retailers|deal\/[^/]+|category|category\/[^/]+|brand\/[^/]+)\/?$/;
+  /^(?:\/(?:us|ca|uk|fr|de))?\/?(?:|halloween|daily-drop|stores|search|archive|brands|about|contact|privacy|terms|affiliate-disclosure|editorial-policy|how-we-select-deals|price-disclaimer|for-retailers|deal\/[^/]+|category|category\/[^/]+|brand\/[^/]+)\/?$/;
 
 const isSearch = (path) => /\/search\/?$/.test(path);
 
@@ -82,11 +94,14 @@ const PUBLIC_VARY = "Cookie, Accept-Encoding, RSC, Next-Router-State-Tree, Next-
 function encodingAccepted(entry, acceptEncoding) {
   const encoding = entry.headers["content-encoding"];
   if (!encoding) return true;
-  return String(acceptEncoding || "")
-    .toLowerCase()
-    .split(",")
-    .map(part => part.split(";")[0].trim())
-    .includes(String(encoding).toLowerCase());
+  const accepted=String(acceptEncoding || "").toLowerCase().split(',').map(part=>{
+    const [name,...parameters]=part.split(';').map(value=>value.trim());
+    const quality=parameters.find(value=>value.startsWith('q='));
+    return {name,quality:quality ? Number(quality.slice(2)) : 1};
+  });
+  const match=accepted.find(value=>value.name===String(encoding).toLowerCase()) || accepted.find(value=>value.name==='*');
+  return Boolean(match && match.quality>0);
+
 }
 
 function htmlCache(options = {}) {
@@ -95,6 +110,8 @@ function htmlCache(options = {}) {
   const maxEntries = options.maxEntries || MAX_ENTRIES;
   const now = options.now || (() => Date.now());
   const entries = new Map();
+  // Only our in-process warmer can bypass a valid copy to replace it.
+  const refreshToken = randomUUID();
 
   const middleware = (req, res, next) => {
     if (req.method !== "GET") return next();
@@ -110,20 +127,25 @@ function htmlCache(options = {}) {
        than being hoped away. The URL carries the market and the query. */
     const key = `${req.language || "en"}:${req.originalUrl}`;
     const hit = entries.get(key);
-    if (!daily && hit && hit.expiresAt > now() && encodingAccepted(hit, req.headers["accept-encoding"])) {
+    const refreshing = req.headers["x-odd-cache-refresh"] === refreshToken;
+    if (!refreshing && !daily && hit && hit.expiresAt > now() && encodingAccepted(hit, req.headers["accept-encoding"])) {
       /* Touch it so the eviction below drops what nobody asks for rather than
          whatever happens to be oldest. */
       entries.delete(key);
       entries.set(key, hit);
       for (const [name, value] of Object.entries(hit.headers)) res.set(name, value);
+      // A warm render may be captured as plain HTML. Keep its gzip variant
+      // too, so filling the cache cannot turn a small page into a large download.
+      const gzip = hit.gzipBody && encodingAccepted({headers:{"content-encoding":"gzip"}}, req.headers["accept-encoding"]);
+      if (gzip) res.set("Content-Encoding", "gzip");
       return res
         .set("Cache-Control", cacheControl)
         .set("Vary", PUBLIC_VARY)
         .set("X-ODD-Cache", "HIT")
         .status(200)
-        .end(hit.body);
+        .end(gzip ? hit.gzipBody : hit.body);
     }
-    if (hit) entries.delete(key);
+    if (hit && hit.expiresAt <= now()) entries.delete(key);
 
     /*
      * Tee the response. The visitor's bytes are untouched — every call is
@@ -172,7 +194,10 @@ function htmlCache(options = {}) {
             if (/^cache-control$/i.test(name)) delete argument[name];
           }
         }
-        res.setHeader("Cache-Control", cacheControl);
+        // A streamed entry page may discover a source outage after headers leave.
+        // Cache only its complete, successful copy in process; a miss must not
+        // seed browsers/CDNs with a temporary unavailable state.
+        res.setHeader("Cache-Control", isStreamedEntry(path) ? "private, no-store" : cacheControl);
         res.setHeader("Vary", PUBLIC_VARY);
       }
       return originalWriteHead(...args);
@@ -188,19 +213,21 @@ function htmlCache(options = {}) {
          only a real chunk is body. */
       if (typeof chunk !== "function") collect(chunk, encoding);
       store();
-      return originalEnd(chunk, encoding, callback);
+      try { return originalEnd(chunk, encoding, callback); }
+      finally { res.writeHead = originalWriteHead; }
     };
 
     function store() {
       res.write = originalWrite;
       res.end = originalEnd;
-      res.writeHead = originalWriteHead;
       if (daily || !collecting || res.statusCode !== 200) return;
       if (!/^text\/html/i.test(String(res.get("content-type") || ""))) return;
       /* A response that sets a cookie is carrying something about this one
          visitor, whatever the body looks like. Not ours to hand to the next
          person. */
       if (res.get("set-cookie")) return;
+      const body = Buffer.concat(chunks);
+      if (transientPage(body, res.get('content-encoding'))) return;
 
       const headers = {};
       for (const name of DESCRIBING_HEADERS) {
@@ -210,7 +237,8 @@ function htmlCache(options = {}) {
 
       if (entries.size >= maxEntries) entries.delete(entries.keys().next().value);
       entries.set(key, {
-        body: Buffer.concat(chunks),
+        body,
+        gzipBody: !headers["content-encoding"] ? zlib.gzipSync(body) : null,
         headers,
         expiresAt: now() + (isSearch(path) ? searchTtlMs : ttlMs),
       });
@@ -225,6 +253,7 @@ function htmlCache(options = {}) {
      is worse than a slow one. */
   middleware.clear = () => entries.clear();
   middleware.size = () => entries.size;
+  middleware.refreshHeaders = Object.freeze({"x-odd-cache-refresh":refreshToken});
   return middleware;
 }
 

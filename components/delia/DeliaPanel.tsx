@@ -3,6 +3,7 @@ import { useUiCopy } from "@/components/site/CopyProvider";
 
 import Link from "next/link";
 import { AffiliateNotice } from "@/components/site/AffiliateNotice";
+import { measure, pageType } from "@/lib/measure";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowRight,
@@ -1071,6 +1072,20 @@ export function DeliaPanel() {
     async (transcript: string, skipClarification = false) => {
       const requestId = ++requestSeqRef.current;
       const stillCurrent = () => requestId === requestSeqRef.current;
+      /*
+       * Somebody asked something. Not what they asked: a question put to a
+       * shopping assistant is as personal as anything on this site, and it
+       * goes nowhere near GA4. The length is kept because it separates
+       * "tapped a suggested chip" from "typed out a real problem", which is
+       * the distinction worth having, and the product id because a question
+       * about a listing is a different act from a question about nothing in
+       * particular.
+       */
+      measure("delia_query_submit", {
+        page_type: pageType(window.location.pathname),
+        item_id: seedProductId || undefined,
+        term_length: transcript.trim().length,
+      });
       setLoading(true);
       setErrorMsg(null);
       setPendingQuestion(transcript);

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { filterFromSearchParams, getMarket, searchDeals } from "@/lib/catalog";
 import { countryName, getLanguage, t } from "@/lib/i18n";
 import { DealListing } from "@/components/catalog/DealListing";
+import { SearchEvent } from "@/components/site/MeasuredPage";
 
 export async function generateMetadata({
   params,
@@ -56,27 +57,36 @@ export default async function SearchPage({
   ) : null;
 
   return (
-    <DealListing
-      market={market}
-      basePath={`/${market}/search`}
-      filter={filter}
-      deals={deals}
-      page={page}
-      searchParams={query}
-      title={
-        filter.query
-          ? t(language, "app.search.resultsFor", { query: filter.query })
-          : t(language, "app.list.allCheckedDeals")
-      }
-      intro={
-        <>
-          {correction}
-          {filter.query
-            ? t(language, "app.search.matchingIntro")
-            : t(language, "app.search.allIntro")}
-        </>
-      }
-      crumb={filter.query ? t(language, "nav.search") : t(language, "app.list.allDeals")}
-    />
+    <>
+      {/*
+        What was searched for, and how many listings answered it. A search that
+        finds nothing is the most useful thing the catalogue can tell us and the
+        one thing a page-view report cannot show, because its URL looks exactly
+        like a search that found forty.
+      */}
+      <SearchEvent query={filter.query || ""} resultCount={deals.length} />
+      <DealListing
+        market={market}
+        basePath={`/${market}/search`}
+        filter={filter}
+        deals={deals}
+        page={page}
+        searchParams={query}
+        title={
+          filter.query
+            ? t(language, "app.search.resultsFor", { query: filter.query })
+            : t(language, "app.list.allCheckedDeals")
+        }
+        intro={
+          <>
+            {correction}
+            {filter.query
+              ? t(language, "app.search.matchingIntro")
+              : t(language, "app.search.allIntro")}
+          </>
+        }
+        crumb={filter.query ? t(language, "nav.search") : t(language, "app.list.allDeals")}
+      />
+    </>
   );
 }
