@@ -113,19 +113,11 @@ function chooseDigestItems(products = [], {
   const perCategoryCount = new Map();
 
   /*
-   * The cap holds even when it means a shorter email.
-   *
-   * The tempting second pass — fill the remaining slots with whatever scores
-   * highest, cap ignored — defeats the cap exactly when it matters: a week
-   * whose best listings are five board games is precisely the week a reader
-   * who does not play board games gets nothing from. Three of five being one
-   * category is the thing the cap exists to prevent, so a four-item email is
-   * the better answer, and the invitation says as much in advance: "some
-   * Sundays there will be three rather than five".
-   *
-   * With fifteen categories represented among the ninety-eight eligible
-   * listings, a cap of two reaches five without difficulty — four dry runs
-   * over the live catalogue produced a full email every week.
+   * Spread first: no category takes a third slot while another category still
+   * has something to offer. Toys & Games alone holds sixteen of the
+   * ninety-eight eligible listings, so without this a Sunday can be five
+   * board games — which is the week a reader who does not play board games
+   * gets nothing from.
    */
   for (const item of candidates) {
     if (chosen.length >= limit) break;
@@ -134,6 +126,29 @@ function chooseDigestItems(products = [], {
     if (taken >= perCategory) continue;
     perCategoryCount.set(category, taken + 1);
     chosen.push(item);
+  }
+
+  /*
+   * Then fill the rest, cap set aside, in Score order.
+   *
+   * Five is the shape the invitation promises, and a slot left empty because
+   * the only listing that could fill it shares a category with two others
+   * makes a worse email than one with three board games in it. The spread
+   * pass still decides the first picks, so the cap shapes every Sunday the
+   * catalogue allows it to and yields only when the alternative is a shorter
+   * email.
+   *
+   * The Score floor is never set aside. The email says every listing in it
+   * cleared 80, so filling a slot from below that would make the email itself
+   * untrue — which is the one thing worth sending four for.
+   */
+  if (chosen.length < limit) {
+    const already = new Set(chosen.map((item) => String(item.id)));
+    for (const item of candidates) {
+      if (chosen.length >= limit) break;
+      if (already.has(String(item.id))) continue;
+      chosen.push(item);
+    }
   }
 
   return chosen;

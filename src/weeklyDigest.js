@@ -89,6 +89,27 @@ function digestRecipients(db, { market = "us", now = Date.now(), quietDays = DRO
     .all(market, daysAgo(quietDays, now));
 }
 
+/*
+ * A picture the size the email actually draws it.
+ *
+ * eBay's feed hands over s-l1600, and the digest renders each one in a 78px
+ * square: measured on the live catalogue, that is 122 KB of photograph per
+ * listing, 600 KB for a Sunday, to fill five thumbnails. On a phone over
+ * mobile data that is the difference between an email that appears and one
+ * that is still grey when the reader has moved on.
+ *
+ * s-l300 is 19 KB and still three times the drawn size, so it stays sharp on
+ * any screen. The same substitution the site already makes twice — app.js
+ * uses s-l500 for the API's thumbnails and lib/backendAdapter.ts s-l800 for
+ * card images — just smaller, because an email thumbnail is smaller.
+ *
+ * Any other host is left exactly as it came: this is one retailer's URL
+ * convention, not a general resizer, and guessing at Newegg's would break
+ * the picture rather than shrink it.
+ */
+const emailThumbnail = (url) =>
+  String(url || "").replace(/\/s-l1600\.(jpe?g|png|webp)$/i, "/s-l300.$1");
+
 /** A listing as the email renders it. */
 function digestItemFor(product, { market = "us", siteOrigin = "https://www.onedailydrop.com" } = {}) {
   const price = Number(product?.current_price);
@@ -100,7 +121,7 @@ function digestItemFor(product, { market = "us", siteOrigin = "https://www.oneda
     price: Number.isFinite(price) && price > 0
       ? new Intl.NumberFormat("en-US", { style: "currency", currency }).format(price)
       : "",
-    imageUrl: product.image_url || "",
+    imageUrl: emailThumbnail(product.image_url),
     category: product.public_category || "",
     reasons: digestEvidence(product),
     score: product.display_score == null ? null : Math.round(Number(product.display_score)),
@@ -239,6 +260,7 @@ module.exports = {
   DIGEST_TIME_ZONE,
   DROP_QUIET_DAYS,
   digestItemFor,
+  emailThumbnail,
   digestRecipients,
   editionFor,
   isDigestDay,

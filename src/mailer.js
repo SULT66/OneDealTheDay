@@ -530,6 +530,21 @@ const deliveryTestEmail = ({ to }) => sendEmail({
 });
 
 /*
+ * The name both of these arrive under.
+ *
+ * Declared here rather than left to sendEmail's default so it is one line to
+ * change, and so it is obvious that it was chosen. A person's name outperforms
+ * a brand in an inbox — "Nijat at OneDailyDrop" would open better than this —
+ * but whose name goes on the Sunday letter is the owner's call to make, not a
+ * default to inherit quietly.
+ *
+ * Chloe is deliberately not used. She hosts the Live Drops; she does not host
+ * this, and lending her to a weekly list makes her a mascot attached to
+ * whatever is being sent.
+ */
+const DIGEST_FROM = "OneDailyDrop";
+
+/*
  * The invitation to the second list.
  *
  * It exists because the signup form promised "Only Live Drop emails", and the
@@ -541,6 +556,7 @@ const digestInviteEmail = ({ email, market = "us", joinUrl, unsubscribeUrl }) =>
   to: email,
   subject: "Want five finds every Sunday?",
   unsubscribeUrl,
+  fromName: DIGEST_FROM,
   ...composeEmail({
     preheader: "A separate list, and only if you say so.",
     eyebrow: "One question",
@@ -572,6 +588,7 @@ const weeklyDigestEmail = ({ email, market = "us", items = [], unconfirmed = 0, 
     ? "One find this week"
     : `${items.length} finds this week`,
   unsubscribeUrl,
+  fromName: DIGEST_FROM,
   ...composeEmail({
     preheader: items.length
       ? `${items[0].title}${items[0].price ? ` — ${items[0].price}` : ""}, and ${items.length - 1} more.`

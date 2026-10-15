@@ -63,11 +63,34 @@ const {
 } = require("../src/digestSelection");
 const {
   editionFor,
+  emailThumbnail,
   isDigestDay,
   recentlySentIds,
   sendDigestInvitations,
   sendWeeklyDigest,
 } = require("../src/weeklyDigest");
+
+/* ------------------------------------------------------------ the picture */
+
+/*
+ * eBay hands over a 1600px photograph and the email draws it in a 78px
+ * square: 122 KB each, 600 KB a Sunday, to fill five thumbnails. On a phone
+ * over mobile data that is the difference between an email that appears and
+ * one that is still grey when the reader has moved on.
+ */
+assert.strictEqual(
+  emailThumbnail("https://i.ebayimg.com/images/g/abc/s-l1600.jpg"),
+  "https://i.ebayimg.com/images/g/abc/s-l300.jpg",
+  "the email is still shipping a 1600px photograph for a 78px thumbnail",
+);
+/* One retailer's URL convention, not a general resizer: guessing at another
+   host's would break the picture rather than shrink it. */
+assert.strictEqual(
+  emailThumbnail("https://c1.neweggimages.com/productimage/abcdef.jpg"),
+  "https://c1.neweggimages.com/productimage/abcdef.jpg",
+  "a URL from another retailer was rewritten and will not load",
+);
+assert.strictEqual(emailThumbnail(""), "", "a missing picture became a broken one");
 
 /* ------------------------------------------------------------- the clock */
 
@@ -130,19 +153,28 @@ const lopsided = [
   listing(7, 81, "Tools"),
 ];
 const spread = chooseDigestItems(lopsided);
+assert.strictEqual(spread.length, 5, "the email came up short while listings were waiting");
+/*
+ * The spread pass takes the other categories before any category takes a
+ * third slot, and only then is the last place filled from whatever is left.
+ * So the cap shapes the email without shortening it.
+ */
+assert.deepStrictEqual(
+  spread.slice(0, 4).map((item) => item.public_category),
+  ["Toys & Games", "Toys & Games", "Office", "Tools"],
+  "a category took a third slot while another category was still waiting",
+);
 assert.strictEqual(
   spread.filter((item) => item.public_category === "Toys & Games").length,
-  2,
-  "one category filled the digest while others were available",
+  3,
+  "the last slot was not filled from the one category that still had listings",
 );
-assert.strictEqual(spread.length, 4, "the cap was abandoned to fill the last slot");
 
-/* And the cap holds even when it is the only thing standing between the
-   reader and five of the same. A short email is the better answer. */
+/* When one category is all there is, five of it beats a two-line email. */
 assert.strictEqual(
   chooseDigestItems(lopsided.slice(0, 5)).length,
-  2,
-  "a week whose eligible listings are all one category sent five of them",
+  5,
+  "a week whose eligible listings share one category sent a short email",
 );
 
 /* Last week's five are used up. */
