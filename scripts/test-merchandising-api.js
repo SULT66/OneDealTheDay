@@ -67,6 +67,46 @@ async function get(route, options) {
   assert.equal((await get('/api/merchandising?market=ca')).body.shelves.length,0);
   assert.equal((await get('/api/merchandising?market=us&category=home%20%26%20kitchen')).body.shelves.length,1,'Case-normalized category must retain matching shelves');
   assert.equal((await get('/api/merchandising?market=us&category=Electronics')).body.shelves.length,0);
+  // Delay/fail only the server's collection read, leaving the HTTP visitor free.
+  const realFetch=global.fetch;
+  let failCollection=false, holdCollection=null;
+  global.fetch=async(input,options)=>{
+    const url=new URL(typeof input==='string'?input:input.url || input.toString());
+    if(url.origin===base && url.pathname==='/api/merchandising' && url.searchParams.get('collection')==='halloween') {
+      if(holdCollection) await holdCollection;
+      if(failCollection) return new Response('{}',{status:503,headers:{'Content-Type':'application/json'}});
+    }
+    return realFetch(input,options);
+  };
+  let release;
+  holdCollection=new Promise(resolve=>{release=resolve;});
+  let autoReleased=false;
+  const safety=setTimeout(()=>{autoReleased=true;release();},5000);
+  try {
+    const streamed=await fetch(base+'/us?probe=delayed-collection');
+    const reader=streamed.body.getReader(), decoder=new TextDecoder();
+    let prefix='';
+    while(!prefix.includes('A little spooky.')) {
+      const chunk=await reader.read();
+      assert(!chunk.done,'The hero must be in the initial streamed shell');
+      prefix+=decoder.decode(chunk.value);
+    }
+    assert(!autoReleased,'The hero must arrive while collection data is still pending');
+    assert(!prefix.includes('Find your next good buy.'),'A slow source must not replace the active hero');
+    release(); holdCollection=null;
+    while(!(await reader.read()).done) {}
+  } finally {clearTimeout(safety);release();holdCollection=null;}
+  failCollection=true;
+  const outage=await fetch(base+'/us?probe=collection-recovery');
+  const outageHtml=await outage.text();
+  assert(outageHtml.includes('A little spooky.') && outageHtml.includes('data-odd-transient="1"'),'Source failure keeps the calendar banner and an honest retry state');
+  assert(!outageHtml.includes('Find your next good buy.'));
+  assert.match(outage.headers.get('cache-control'),/no-store/);
+  failCollection=false;
+  const recovery=await fetch(base+'/us?probe=collection-recovery');
+  assert.equal(recovery.headers.get('x-odd-cache'),'MISS');
+  assert((await recovery.text()).includes('Halloween Pick'),'The same URL must recover without waiting for cached failure expiry');
+  global.fetch=realFetch;
   const home = await fetch(base+'/us');
   assert.equal(home.status,200);
   const homeHtml = await home.text();

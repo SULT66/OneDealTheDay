@@ -12,6 +12,10 @@ const COPY={
 };
 export function HalloweenProducts({market,language,data,q='',sort='popular'}:{market:string;language:Language;data:HalloweenCollection;q?:string;sort?:string}) {
   const copy=COPY[language];
+  if(data.unavailable) return <section id="halloween-products" data-odd-transient="1" className="mt-8 scroll-mt-32 rounded-2xl border border-border p-6 text-sm text-fg-muted">
+    {{en:'Halloween products are temporarily unavailable. Please try again.',es:'Los productos Halloween no están disponibles temporalmente. Inténtalo de nuevo.',fr:'Les produits Halloween sont temporairement indisponibles. Réessayez.',de:'Halloween-Produkte sind vorübergehend nicht verfügbar. Bitte erneut versuchen.'}[language]}
+    {' '}<a className="font-semibold underline" href={`/${market}#halloween-products`}>{{en:'Retry',es:'Reintentar',fr:'Réessayer',de:'Erneut versuchen'}[language]}</a>
+  </section>;
   const pageUrl=(page:number)=>`/${market}?${new URLSearchParams({halloween_page:String(page),halloween_q:q,halloween_sort:sort,lang:language})}#halloween-products`;
   const date=(value:string)=>new Intl.DateTimeFormat(language,{month:'short',day:'numeric',timeZone:'UTC'}).format(new Date(value));
   return <section id="halloween-products" aria-labelledby="halloween-products-title" className="mt-8 scroll-mt-32">
