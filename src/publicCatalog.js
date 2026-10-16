@@ -89,7 +89,7 @@ const isPublicProduct = product => Boolean(product) &&
  * second offer for the same product from a *different* retailer is the price
  * comparison, and the retailer is part of that key so those never collide.
  */
-const uniqueProductsInOrder = products => {
+const uniqueProductsInOrder = (products, limit = Infinity) => {
   const { deduplicationKeys, offerRepeatKey } = require("./ranker");
   const used = new Set();
   const unique = [];
@@ -103,6 +103,7 @@ const uniqueProductsInOrder = products => {
     ].map(key => `${marketPrefix}:${key}`);
     if (keys.some(key => used.has(key))) continue;
     unique.push(product);
+    if (unique.length >= limit) break;
     keys.forEach(key => used.add(key));
   }
   return unique;

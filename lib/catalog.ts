@@ -123,7 +123,10 @@ const fetchMarketCatalog = cache(
 
     const res = await fetch(`${BACKEND_URL}/api/products?${params}`, {
       cache: "no-store" as const,
-      signal: AbortSignal.timeout(8000),
+      // A complete cold catalogue can exceed eight seconds on the small
+      // production instance. Keep it bounded without turning a valid read
+      // into a 500; shared backend snapshots make subsequent views cheap.
+      signal: AbortSignal.timeout(20000),
     });
     if (!res.ok) {
       throw new Error(`Failed to load the catalog for "${marketCode}" (${res.status}).`);
@@ -300,7 +303,11 @@ export async function searchDeals(
   const lang = await languageParam();
   if (lang) params.set("lang", lang);
 
-  const res = await fetch(`${BACKEND_URL}/api/search?${params}`, { next: { revalidate: 120 } });
+  // Backend and rendered-page caches already bound freshness. A separate Next
+  // data cache survived deployments and served the previous search algorithm.
+  const res = await fetch(`${BACKEND_URL}/api/search?${params}`, {
+    cache: "no-store", signal: AbortSignal.timeout(20000),
+  });
   if (!res.ok) {
     throw new Error(`Search failed for "${query}" in "${marketCode}" (${res.status}).`);
   }

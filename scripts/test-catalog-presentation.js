@@ -120,7 +120,7 @@ assert(
   "category counts are back to counting table rows, duplicates and all",
 );
 assert(
-  /uniqueProductsInOrder\(/.test(categoriesRoute[0]),
+  /catalogSnapshot\(/.test(categoriesRoute[0]) && /uniqueProductsInOrder\(selected\)/.test(read("src", "catalogSnapshot.js")),
   "category counts no longer go through the deduplication the listings they describe use",
 );
 
