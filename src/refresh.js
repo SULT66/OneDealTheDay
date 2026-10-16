@@ -5,7 +5,7 @@ const { priceIntelligence } = require("./priceIntelligence");
 const { createPriceSnapshotWriter } = require("./priceSnapshots");
 const { searchAll } = require("./providers/registry");
 const { demandKeywords } = require("./searchQueries");
-const { planGapSearches } = require("./aliexpressGaps");
+const { gapKeywords, planGapSearches } = require("./categoryGaps");
 const { scoreOffersAsync } = require("./scoreOffersAsync");
 const activeMarketRefreshes = new Map();
 
@@ -236,15 +236,36 @@ async function refreshMarket(config, marketCode, options = {}) {
    */
   const wanted = demandKeywords(db, {market:marketCode, limit:config.demandKeywordLimit})
     .filter(keyword => !configuredKeywords.some(existing => String(existing).toLowerCase() === keyword));
-  const selectedMarket = {
-    ...config.marketConfig(marketCode),
-    searchKeywords: options.keywords || [...configuredKeywords, ...wanted]
-  };
-  selectedMarket.aliexpressGapPlan = planGapSearches(db.prepare(`
+  /*
+   * How many live listings each category holds, which is what makes a gap a
+   * gap. Read once and used twice: AliExpress gets a plan of category and
+   * keyword, eBay gets the same thinking as extra search terms.
+   */
+  const categoryCounts = db.prepare(`
     SELECT normalized_category AS category, COUNT(*) AS count
     FROM products WHERE market=? AND status='published'
     GROUP BY normalized_category
-  `).all(marketCode));
+  `).all(marketCode);
+
+  /*
+   * The thin categories reach eBay, not only AliExpress.
+   *
+   * Measured a week after the gap plan started running, Travel was still at 5
+   * listings and Automotive at 11 — the plan was computing gaps for AliExpress,
+   * which sits at its ALIEXPRESS_MAX_PRODUCTS ceiling and has no room to add
+   * anything. It is also the wrong source: eBay is the only one that returns
+   * product reviews and sold counts, and its importer already refuses listings
+   * with no trust evidence. So the gaps become search terms on the list eBay
+   * is handed, ahead of the general ones.
+   */
+  const gapTerms = options.keywords ? [] : gapKeywords(categoryCounts);
+  const selectedMarket = {
+    ...config.marketConfig(marketCode),
+    searchKeywords: options.keywords
+      || [...new Set([...gapTerms, ...configuredKeywords, ...wanted])]
+  };
+  selectedMarket.aliexpressGapPlan = planGapSearches(categoryCounts);
+  selectedMarket.categoryGapTerms = gapTerms;
   const started = new Date().toISOString();
   const runId = Number(db.prepare(
     "INSERT INTO refresh_runs(provider,market,started_at,status,message) VALUES(?,?,?,'running','')"
@@ -272,6 +293,9 @@ async function refreshMarket(config, marketCode, options = {}) {
     console.log(`[refresh] ${selectedMarket.code}: also looking for what shoppers could not find — ${wanted.join(", ")}`);
   }
   console.log(`[refresh] ${selectedMarket.code}: AliExpress category gaps — ${selectedMarket.aliexpressGapPlan.map(row => `${row.category} (${row.count}/100): ${row.keyword}`).join(", ") || "none"}`);
+  if (gapTerms.length) {
+    console.log(`[refresh] ${selectedMarket.code}: filling thin categories on eBay — ${gapTerms.join(", ")}`);
+  }
 
   try {
     const loaded = await loadProducts(config, selectedMarket, options);
