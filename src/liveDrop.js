@@ -415,6 +415,10 @@ async function announceDropToSubscribers({
     const audience = db.prepare(`
       SELECT s.id, s.email, s.unsubscribe_token FROM subscribers s
       WHERE s.status = 'active' AND s.market = ?
+        /* "Fewer emails" means this one. Somebody who chose the Sunday letter
+           instead of every drop is not on this list any more; see
+           subscribers.drop_opt_in in src/db.js. */
+        AND s.drop_opt_in = 1
         AND NOT EXISTS (
           SELECT 1 FROM live_drop_announcements a
           WHERE a.drop_id = ? AND a.subscriber_id = s.id
@@ -482,7 +486,8 @@ async function sendLiveNowNotices({
        me gets the one without marketing wording. */
     const reminded = db.prepare("SELECT lower(email) AS email FROM live_drop_reminders WHERE drop_id=?").all(drop.id);
     const subscribers = db.prepare(`
-      SELECT lower(email) AS email, unsubscribe_token FROM subscribers WHERE status='active' AND market=?
+      SELECT lower(email) AS email, unsubscribe_token FROM subscribers
+      WHERE status='active' AND market=? AND drop_opt_in = 1
     `).all(drop.market);
     const recipients = new Map();
     for (const row of reminded) if (!recipients.has(row.email)) recipients.set(row.email, { asked: true });

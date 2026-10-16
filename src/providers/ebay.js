@@ -417,6 +417,8 @@ async function searchProducts({
   signal,
   strictQueries = false,
   preferredItems = [],
+  gapPlan = [],
+  existingProviderIds = [],
   requestTimeoutMs, maxAttempts, searchConcurrency = SEARCH_CONCURRENCY, detailConcurrency = DETAIL_CONCURRENCY
 }) {
   if (!clientId || !clientSecret) throw new Error("eBay Production credentials are missing");
@@ -489,7 +491,25 @@ async function searchProducts({
   });
   if (!candidates.size) throw new Error(`eBay returned no commissionable new fixed-price items. ${failures.join(" | ")}`.trim());
 
-  const queue = [...candidates.values()].sort((left, right) => right.candidateScore - left.candidateScore);
+  const gapCategories = new Set((gapPlan || []).map(row => row.category));
+  const existing = new Set(existingProviderIds || []);
+  const { normalizeCatalogProduct } = require('../catalogTaxonomy');
+  const categoryOf = product => normalizeCatalogProduct({...product, category:''}).normalized_category;
+  const sortedQueue = [...candidates.values()].sort((left, right) => right.candidateScore - left.candidateScore);
+  // Round-robin the thin shelves before the broad sweep. A high-scoring
+  // Electronics pool cannot spend the entire detail budget before Travel.
+  const buckets = new Map([...gapCategories].map(category => [category, []]));
+  const ordinary = [];
+  for (const candidate of sortedQueue) {
+    const category = categoryOf(normalizeItem(candidate.item, candidate.keyword, candidate.sourceRank, market));
+    if (!candidate.preferred && buckets.has(category)) buckets.get(category).push(candidate);
+    else ordinary.push(candidate);
+  }
+  const queue = [];
+  while ([...buckets.values()].some(bucket => bucket.length)) {
+    for (const bucket of buckets.values()) if (bucket.length) queue.push(bucket.shift());
+  }
+  queue.push(...ordinary);
   /* 600 rather than 260: the run stops when it has enough scoreable listings,
      and with about one item in five carrying reviews the old ceiling was
      reached long before that. It remains a ceiling — the allowance, not this
@@ -520,7 +540,7 @@ async function searchProducts({
   const products = [];
 
   const detailWorkers = Math.max(1, Math.min(DETAIL_CONCURRENCY, Number(detailConcurrency) || DETAIL_CONCURRENCY));
-  for (let offset = 0; offset < maximumDetails && scoreable.length < eligibleTarget; offset += detailWorkers) {
+  for (let offset = 0; offset < maximumDetails && (gapCategories.size || scoreable.length < eligibleTarget); offset += detailWorkers) {
     if (signal?.aborted) break;
     const batch = queue.slice(offset, Math.min(offset + detailWorkers, maximumDetails));
     const details = await mapLimit(batch, detailWorkers, candidate => candidate.detailLoaded ? Promise.resolve(candidate.item) : ebayClient.getItem(candidate.item.itemId, market));
@@ -537,6 +557,16 @@ async function searchProducts({
       };
       const product = normalizeItem(merged, candidate.keyword, candidate.sourceRank, market);
       if (hasTrustEvidence(product) && product.current_price > 0 && product.affiliate_url && product.image_url && listingAvailable(merged)) {
+        const category = categoryOf(product);
+        const isNewGap = gapCategories.has(category) && !existing.has(`ebay:${product.external_id}`);
+        if (isNewGap) {
+          // Use exactly the Score the public card publishes, not seller
+          // feedback or an internal ranking number masquerading as a Score.
+          const publicScore = require('../productPresentation').publishedScore(product);
+          if (publicScore == null) return;
+          product._gapCategory = category;
+          product._gapScore = publicScore;
+        }
         (candidate.preferred ? preferred : canBeScored(product) ? scoreable : unreviewed).push(product);
       }
     });
@@ -548,7 +578,24 @@ async function searchProducts({
 
   /* What was found that can be scored, then as much of the rest as there is
      room for. */
-  products.push(...[...preferred, ...scoreable, ...unreviewed].slice(0, eligibleTarget));
+  const gapPicks = [];
+  for (const category of gapCategories) {
+    const seenKeys = new Set();
+    const chosen = scoreable.filter(product => product._gapCategory === category)
+      .sort((a,b) => b._gapScore - a._gapScore || b.rating - a.rating || b.review_count - a.review_count)
+      .filter(product => {
+        const keys = require('../ranker').deduplicationKeys(product);
+        const duplicate = keys.some(key => seenKeys.has(key));
+        keys.forEach(key => seenKeys.add(key));
+        return !duplicate;
+      }).slice(0, 50);
+    gapPicks.push(...chosen);
+    console.log(`[eBay gaps] ${category}: ${chosen.length}/50 new listings with public Score`);
+  }
+  const ordinaryPicks = [...preferred, ...scoreable, ...unreviewed]
+    .filter(product => !product._gapCategory).slice(0, eligibleTarget);
+  products.push(...gapPicks, ...ordinaryPicks);
+  for (const product of products) { delete product._gapCategory; delete product._gapScore; }
 
   if (!products.length) {
     if (quotaExhausted) {

@@ -276,6 +276,8 @@ async function searchProducts({
   maxProducts = 120,
   maxProductsPerKeyword = Infinity,
   keywordCategories = {},
+  existingProviderIds = [],
+  keywordNewLimits = {},
   minSellerPercent = DEFAULT_MIN_SELLER_PERCENT,
   minOrders = DEFAULT_MIN_ORDERS,
   minPrice = DEFAULT_MIN_PRICE,
@@ -293,6 +295,7 @@ async function searchProducts({
   const country = String(market?.code || "us").toUpperCase();
   const collected = [];
   const seen = new Set();
+  const existing = new Set(existingProviderIds || []);
   /* The sweep's own clock, independent of the deadline the refresh sets. */
   const expiresAt = Date.now() + budgetMs;
   let firstFailure = null;
@@ -339,6 +342,9 @@ async function searchProducts({
       if (!isAcceptable(item, { minSellerPercent, minOrders, maxDeliveryDays, minPrice })) continue;
       const id = text(item?.product_id);
       if (!id || seen.has(id)) continue;
+      const isExisting = existing.has(`aliexpress:${id}`);
+      const newLimit = keywordNewLimits[keyword] ?? maxProductsPerKeyword;
+      if (!isExisting && acceptedForKeyword >= newLimit) continue;
       const product = normalizeItem(item, keyword, collected.length + 1, market);
       const targetCategory = keywordCategories[keyword];
       const titleCategory = normalizeCatalogProduct({...product, category:""}).normalized_category;
@@ -353,10 +359,10 @@ async function searchProducts({
       if (targetCategory && normalizeCatalogProduct(product).normalized_category !== targetCategory) continue;
       seen.add(id);
       collected.push(product);
-      acceptedForKeyword += 1;
+      if (!isExisting) acceptedForKeyword += 1;
       if (collected.length >= maxProducts) return collected;
-      if (acceptedForKeyword >= maxProductsPerKeyword) break;
     }
+    if (keywordCategories[keyword]) console.log(`[AliExpress gaps] ${keywordCategories[keyword]}: ${acceptedForKeyword}/${keywordNewLimits[keyword] ?? maxProductsPerKeyword} new listings`);
   }
   /*
    * Nothing at all, and every attempt failed: say why. A source that reports

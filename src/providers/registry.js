@@ -38,6 +38,8 @@ function nativeProviders(config) {
         targetEligible,
         searchLimit,
         strictQueries, preferredItems,
+        gapPlan:!keywords ? market.ebayGapPlan : [],
+        existingProviderIds:market.existingProviderIds,
         requestTimeoutMs, maxAttempts, searchConcurrency, detailConcurrency,
         signal
       })
@@ -51,23 +53,32 @@ function nativeProviders(config) {
       /* Only where it has been turned on. The programme covers far more
          countries than the catalogue should. */
       markets:config.aliexpressMarkets,
-      search:({market, keywords, keywordsPerRun, signal}) => require("./aliexpress").searchProducts({
-        appKey:config.aliexpressAppKey,
-        appSecret:config.aliexpressAppSecret,
-        trackingId:config.aliexpressTrackingId,
-        keywords:keywords || (market.aliexpressGapPlan ? market.aliexpressGapPlan.map(row => row.keyword) : market.searchKeywords),
-        rotate:!keywords && !market.aliexpressGapPlan,
-        keywordsPerRun:6,
-        keywordCategories:!keywords && market.aliexpressGapPlan ? Object.fromEntries(market.aliexpressGapPlan.map(row => [row.keyword, row.category])) : {},
-        maxProductsPerKeyword:!keywords && market.aliexpressGapPlan ? Math.min(20, Math.ceil(config.aliexpressMaxProducts / Math.max(1, market.aliexpressGapPlan.length))) : Infinity,
-        market,
-        maxProducts:config.aliexpressMaxProducts,
-        maxDeliveryDays:config.aliexpressMaxDeliveryDays,
-        minSellerPercent:config.aliexpressMinSellerPercent,
-        minOrders:config.aliexpressMinOrders,
-        minPrice:config.aliexpressMinPrice,
-        signal
-      })
+      search:({market, keywords, keywordsPerRun, signal}) => {
+        const gapPlan = !keywords && market.aliexpressGapPlan;
+        const refreshPlan = gapPlan ? market.aliexpressRefreshPlan || [] : [];
+        const plan = gapPlan ? [...gapPlan, ...refreshPlan] : [];
+        return require("./aliexpress").searchProducts({
+          appKey:config.aliexpressAppKey,
+          appSecret:config.aliexpressAppSecret,
+          trackingId:config.aliexpressTrackingId,
+          keywords:keywords || (gapPlan ? [...new Set(plan.map(row => row.keyword))] : market.searchKeywords),
+          rotate:!keywords && !gapPlan,
+          keywordsPerRun:6,
+          keywordCategories:gapPlan ? Object.fromEntries(plan.map(row => [row.keyword, row.category])) : {},
+          keywordNewLimits:gapPlan ? Object.fromEntries([
+            ...refreshPlan.map(row => [row.keyword, 0]), ...gapPlan.map(row => [row.keyword, 20]),
+          ]) : {},
+          maxProductsPerKeyword:gapPlan ? 20 : Infinity,
+          existingProviderIds:gapPlan ? market.existingProviderIds : [],
+          market,
+          maxProducts:config.aliexpressMaxProducts,
+          maxDeliveryDays:config.aliexpressMaxDeliveryDays,
+          minSellerPercent:config.aliexpressMinSellerPercent,
+          minOrders:config.aliexpressMinOrders,
+          minPrice:config.aliexpressMinPrice,
+          signal
+        });
+      }
     });
   }
   if (config.rainforestApiKey) {

@@ -247,24 +247,21 @@ async function refreshMarket(config, marketCode, options = {}) {
     GROUP BY normalized_category
   `).all(marketCode);
 
-  /*
-   * The thin categories reach eBay, not only AliExpress.
-   *
-   * Measured a week after the gap plan started running, Travel was still at 5
-   * listings and Automotive at 11 — the plan was computing gaps for AliExpress,
-   * which sits at its ALIEXPRESS_MAX_PRODUCTS ceiling and has no room to add
-   * anything. It is also the wrong source: eBay is the only one that returns
-   * product reviews and sold counts, and its importer already refuses listings
-   * with no trust evidence. So the gaps become search terms on the list eBay
-   * is handed, ahead of the general ones.
-   */
+  // Discovery targets every category below 50, including a category at 49.
   const gapTerms = options.keywords ? [] : gapKeywords(categoryCounts);
   const selectedMarket = {
     ...config.marketConfig(marketCode),
     searchKeywords: options.keywords
       || [...new Set([...gapTerms, ...configuredKeywords, ...wanted])]
   };
-  selectedMarket.aliexpressGapPlan = planGapSearches(categoryCounts);
+  selectedMarket.aliexpressGapPlan = options.keywords ? [] : planGapSearches(categoryCounts);
+  selectedMarket.ebayGapPlan = selectedMarket.aliexpressGapPlan;
+  selectedMarket.existingProviderIds = db.prepare(
+    "SELECT provider_external_id FROM products WHERE market=? AND status='published'"
+  ).all(marketCode).map(row => row.provider_external_id);
+  selectedMarket.aliexpressRefreshPlan = db.prepare(
+    "SELECT DISTINCT category AS keyword, normalized_category AS category FROM products WHERE market=? AND source='aliexpress' AND status='published'"
+  ).all(marketCode);
   selectedMarket.categoryGapTerms = gapTerms;
   const started = new Date().toISOString();
   const runId = Number(db.prepare(
@@ -292,7 +289,7 @@ async function refreshMarket(config, marketCode, options = {}) {
   if (wanted.length) {
     console.log(`[refresh] ${selectedMarket.code}: also looking for what shoppers could not find — ${wanted.join(", ")}`);
   }
-  console.log(`[refresh] ${selectedMarket.code}: AliExpress category gaps — ${selectedMarket.aliexpressGapPlan.map(row => `${row.category} (${row.count}/100): ${row.keyword}`).join(", ") || "none"}`);
+  console.log(`[refresh] ${selectedMarket.code}: AliExpress category gaps — ${selectedMarket.aliexpressGapPlan.map(row => `${row.category} (${row.count}/50): ${row.keyword}`).join(", ") || "none"}`);
   if (gapTerms.length) {
     console.log(`[refresh] ${selectedMarket.code}: filling thin categories on eBay — ${gapTerms.join(", ")}`);
   }
@@ -492,7 +489,9 @@ async function refreshMarket(config, marketCode, options = {}) {
         );
       });
       const staleCutoff = new Date(Date.now() - Number(config.staleOfferHours || 48) * 3600000).toISOString();
-      for (const report of loaded.reports.filter(item => item.status === "success" && !options.keywords)) {
+      // AliExpress runs category discovery, not an exhaustive stock check.
+      // A category leaving the <50 plan must not archive its earlier imports.
+      for (const report of loaded.reports.filter(item => item.status === "success" && !options.keywords && item.source !== "aliexpress")) {
         db.prepare(`
           UPDATE products
           SET availability='Unavailable',status='archived',checked_at=?,updated_at=?

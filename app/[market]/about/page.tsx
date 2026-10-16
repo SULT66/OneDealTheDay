@@ -13,7 +13,10 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { market } = await params;
   return {
-    title: "About OneDailyDrop",
+    /* The root layout appends "| OneDailyDrop" to every title, so naming the
+       brand here printed it twice. The words it leaves room for are better
+       spent on what the page answers. */
+    title: "Who we are and how we check a price",
     description:
     "What OneDailyDrop checks before it recommends anything, how it makes money, and what it deliberately does not do.",
     ...((await getLanguage(market)) === "es" ? { title: spanishMeta.about.title, description: spanishMeta.about.description } : {}),

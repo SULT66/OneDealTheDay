@@ -689,4 +689,53 @@ const weeklyDigestEmail = ({ email, market = "us", items = [], unconfirmed = 0, 
   }),
 });
 
-module.exports = { digestInviteEmail, weeklyDigestEmail, introEmail, scoreExplainerEmail, welcomeEmail, liveDropLiveNowEmail, liveDropSaveTheDateEmail, liveDropStartingSoonEmail, liveDropAnnouncementEmail, priceDropEmail, priceWatchStartedEmail, passwordResetEmail, subscriptionEmail, clubWaitlistEmail, liveDropReminderEmail, deliveryTestEmail };
+/*
+ * The letter to somebody who has never come back.
+ *
+ * Every word in it has to survive the fact that we do not know whether they
+ * have read a single email. There is no open tracking here and there is not
+ * going to be (see sendEmail above, which turns SendGrid's pixel off), so the
+ * letter cannot say "you have not been opening these" — it can only say what
+ * is true, which is that nothing has come back from this address that we can
+ * see. src/reactivation.js is the rule; this is the wording of it.
+ *
+ * The three listings are ones the Sunday email actually carried after this
+ * reader joined, so "you missed these" is a record rather than a flourish, and
+ * each one carries only the evidence we measured: a percentage appears under a
+ * listing when our own observations recorded the fall, and not otherwise.
+ *
+ * Two answers, and both are a link. "Fewer" is the one this letter exists for:
+ * a list that only offers all-or-nothing loses the people who would have
+ * stayed at a slower pace. Doing nothing is the third answer and the mail says
+ * what it means, because a letter that implies silence will be punished is a
+ * letter that gets reported.
+ */
+const reactivationEmail = ({ email, market = "us", items = [], months = 2, fewerUrl, unsubscribeUrl }) => sendEmail({
+  to: email,
+  subject: "Three you missed, and a slower setting",
+  unsubscribeUrl,
+  fromName: NICK_FROM,
+  ...composeEmail({
+    preheader: "Or tell us to write less often — both are one click.",
+    eyebrow: "Still there?",
+    heading: "Three you missed",
+    paragraphs: [
+      `You joined about ${months === 1 ? "a month" : `${months} months`} ago and we have not heard anything back since — no saved price, no drop you asked to be reminded about. We do not track whether our emails get opened, so this is genuinely all we know, and it may well mean nothing.`,
+      "Either way, here are three the Sunday letter carried while you were on the list. Each one says what we measured about its price, which is the only thing we ever claim about it.",
+    ],
+    items,
+    note: [
+      "If the mail is simply too much, there is a setting between all of it and none of it:",
+    ],
+    cta: fewerUrl
+      ? { label: "Send me the Sunday five only", href: fewerUrl }
+      : { label: "See everything we checked", href: `${SITE}/${encodeURIComponent(market)}` },
+    after: fewerUrl
+      ? `One email a week instead of one for every drop. Or <a href="${escapeHtml(`${SITE}/${encodeURIComponent(market)}`)}" style="color:${MUTED}">see everything we checked</a> — and doing nothing at all is fine too, nothing changes if you ignore this.`
+      : "Doing nothing is fine too — nothing changes if you ignore this.",
+    signature: NICK_SIGNATURE,
+    footer: unsubscribeFooter(unsubscribeUrl, "You are receiving this because you signed up for Live Drop emails."),
+  }),
+});
+
+module.exports = { reactivationEmail, digestInviteEmail, weeklyDigestEmail, introEmail, scoreExplainerEmail, welcomeEmail, liveDropLiveNowEmail, liveDropSaveTheDateEmail, liveDropStartingSoonEmail, liveDropAnnouncementEmail, priceDropEmail, priceWatchStartedEmail, passwordResetEmail, subscriptionEmail, clubWaitlistEmail, liveDropReminderEmail, deliveryTestEmail };

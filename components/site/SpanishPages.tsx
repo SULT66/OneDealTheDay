@@ -30,7 +30,7 @@ const TranslationNote = () => (
 
 export const spanishMeta: Record<string, { title: string; description: string }> = {
   about: {
-    title: "Sobre OneDailyDrop",
+    title: "Quiénes somos y cómo comprobamos un precio",
     description: "Qué comprueba OneDailyDrop antes de recomendar algo, cómo gana dinero y qué no hace a propósito.",
   },
   howWeSelect: {

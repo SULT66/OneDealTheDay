@@ -16,6 +16,10 @@ import { measure } from "@/lib/measure";
  * sends another is how a list learns to mark mail as spam, so it now promises
  * exactly what is sent.
  *
+ * The empty `categories` the body still carried went with it: the route no
+ * longer reads the field and the column it filled is retired, so sending it
+ * only kept the idea alive in a reader of this file.
+ *
  * The same list and the same endpoint as before, so nobody already on it is
  * affected. When a drop is on the calendar the form names it, because "the
  * next drop is Thursday at 8 PM" is a much better reason to leave an address
@@ -63,7 +67,7 @@ export function LiveDropSignup({
       const response = await fetch("/api/subscribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, categories: [], market, source }),
+        body: JSON.stringify({ email, market, source }),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
