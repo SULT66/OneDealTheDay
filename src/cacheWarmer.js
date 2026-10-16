@@ -56,7 +56,7 @@ const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 function pathsFor(market, override) {
   const configured = String(override || "").trim();
   if (configured) return configured.split(",").map(part => part.trim()).filter(Boolean);
-  return [`/${market}`, `/${market}/daily-drop`];
+  return [`/${market}`, `/${market}/black-friday`, `/${market}/daily-drop`];
 }
 
 /**

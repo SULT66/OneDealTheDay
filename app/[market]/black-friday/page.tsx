@@ -187,7 +187,9 @@ async function Diary({ market, language }: { market: string; language: Language 
   /* Settled, not all: one withdrawn listing must not empty the page. */
   const results = await Promise.allSettled(PRICE_DIARY.entries.map(entry => getDeal(market, entry.id)));
 
-  return <section aria-labelledby="diary-title" className="mt-10">
+  // A backend outage is temporary; do not cache it as ten withdrawn listings.
+  const unavailable = results.some(result => result.status === "rejected");
+  return <section aria-labelledby="diary-title" className="mt-10" data-odd-transient={unavailable ? "1" : undefined}>
     <div className="flex flex-wrap items-baseline justify-between gap-3">
       <h2 id="diary-title" className="text-2xl font-bold tracking-tight text-fg">{copy.watching} {PRICE_DIARY.startedAt}</h2>
     </div>
