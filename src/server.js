@@ -105,6 +105,8 @@ const {
   outboundPath
 } = require("./retailerLinks");
 const { storefrontUrl, storeDirectoryDestination } = require("./storefrontLinks");
+const {ratingSummary, summarizeBrands} = require("./brandSummary");
+const {formatter} = require("./intlFormatters");
 const { hostLabel, verifyOutbound, withSignedLinks } = require("./outboundLinks");
 const { matchConversations, normalizeQuery: normalizeConversationQuery } = require("./deliaConversationSearch");
 const { labelClick, liveDropLabel } = require("./clickLabels");
@@ -2048,34 +2050,10 @@ const sameProductOffers = product => {
 const significantWords = value => new Set(clean(value).toLowerCase().split(/[^a-z0-9]+/).filter(word => word.length > 3 && !new Set([
   "with","from","this","that","pack","new","black","white","blue","red","for","and","the","your","plus","free"
 ]).has(word)));
-const summarizeBrands = products => {
-  const groups = new Map();
-  for (const product of uniqueProductsInOrder(products)) {
-    const key = clean(product.brand_slug);
-    if (!key) continue;
-    const group = groups.get(key) || {
-      brand:product.brand,
-      brand_slug:key,
-      product_count:0,
-      price_total:0,
-      rating_total:0,
-      discount_total:0
-    };
-    group.product_count += 1;
-    group.price_total += Number(product.current_price || 0);
-    group.rating_total += Number(product.rating || 0);
-    group.discount_total += discountPercent(product);
-    groups.set(key, group);
-  }
-  return [...groups.values()].map(group => ({
-    brand:group.brand,
-    brand_slug:group.brand_slug,
-    product_count:group.product_count,
-    avg_price:group.product_count ? group.price_total / group.product_count : 0,
-    avg_rating:group.product_count ? group.rating_total / group.product_count : 0,
-    avg_discount:group.product_count ? group.discount_total / group.product_count : 0
-  })).sort((left, right) => right.product_count - left.product_count || left.brand.localeCompare(right.brand));
-};
+const brandRatingText = (average, marketCode, language) => average == null
+  ? t(language, "page.noRatingData")
+  : `${formatter("NumberFormat", languageTag(marketCode, language), {minimumFractionDigits:1, maximumFractionDigits:1}).format(average)} / 5`;
+const brandRatingCoverage = (rated, total, language) => t(language, "page.ratingCoverage", {rated, total});
 const alternativesFor = (product, limit = 3) => {
   const words = significantWords(product?.canonical_title || product?.title);
   const price = Number(product?.current_price);
@@ -2381,11 +2359,12 @@ app.get("/brand/:slug", (req, res) => {
   }
   const products = uniqueProductsInOrder(db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()} AND brand_slug=? ORDER BY COALESCE(ranking_score,score) DESC,score DESC,updated_at DESC`).all(selectedMarket.code, req.params.slug)).filter(isPubliclyIndexable);
   if (!products.length) return sendNotFound(req, res);
-  const brand = products[0].brand, canonical = SITE + brandPath(brand, selectedMarket.code), avgPrice = products.reduce((sum,p)=>sum+Number(p.current_price||0),0)/products.length, avgRating = products.reduce((sum,p)=>sum+Number(p.rating||0),0)/products.length, avgDiscount = products.reduce((sum,p)=>sum+discountPercent(p),0)/products.length;
+  const brand = products[0].brand, canonical = SITE + brandPath(brand, selectedMarket.code), avgPrice = products.reduce((sum,p)=>sum+Number(p.current_price||0),0)/products.length, avgDiscount = products.reduce((sum,p)=>sum+discountPercent(p),0)/products.length;
+  const ratings = ratingSummary(products);
   const alternateCodes = marketCodes.filter(code => db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()} AND brand_slug=?`).all(code, req.params.slug).some(isPubliclyIndexable));
   const description = t(req.language,"page.brandDescription",{count:products.length,brand});
   const schema = {"@context":"https://schema.org","@graph":[{"@type":"Brand",name:brand,url:canonical},{"@type":"ItemList",name:`Best ${brand} Deals`,numberOfItems:products.length,itemListElement:products.map((product,index)=>({"@type":"ListItem",position:index+1,url:SITE+dealPath(product),name:shortTitle(product.title)}))},{"@type":"BreadcrumbList",itemListElement:[{"@type":"ListItem",position:1,name:"Home",item:SITE+marketPath(selectedMarket.code)},{"@type":"ListItem",position:2,name:"Brands",item:SITE+marketPath(selectedMarket.code,"/brands")},{"@type":"ListItem",position:3,name:brand,item:canonical}]}]};
-  const stats = `<div class="detail-grid"><section><h3>${esc(t(req.language,"page.products"))}</h3><p>${products.length}</p></section><section><h3>${esc(t(req.language,"page.averagePrice"))}</h3><p>${money(avgPrice,products[0].currency,languageTag(selectedMarket.code,req.language))}</p></section><section><h3>${esc(t(req.language,"page.averageRating"))}</h3><p>${avgRating.toFixed(1)} / 5</p></section><section><h3>${esc(t(req.language,"page.averageDiscount"))}</h3><p>${Math.round(avgDiscount)}%</p></section></div>`;
+  const stats = `<div class="detail-grid"><section><h3>${esc(t(req.language,"page.products"))}</h3><p>${products.length}</p></section><section><h3>${esc(t(req.language,"page.averagePrice"))}</h3><p>${money(avgPrice,products[0].currency,languageTag(selectedMarket.code,req.language))}</p></section><section><h3>${esc(t(req.language,"page.averageProductRating"))}</h3><p>${esc(brandRatingText(ratings.average_rating, selectedMarket.code, req.language))}</p><p>${esc(brandRatingCoverage(ratings.rated_products, products.length, req.language))}</p></section><section><h3>${esc(t(req.language,"page.averageDiscount"))}</h3><p>${Math.round(avgDiscount)}%</p></section></div>`;
   res.send(shell(`${brand} | OneDailyDrop`, description, canonical, `<main><section class="deals-section"><nav class="breadcrumb"><a href="${marketPath(selectedMarket.code)}">${esc(t(req.language,"page.home"))}</a><span>›</span><a href="${marketPath(selectedMarket.code, "/brands")}">${esc(t(req.language,"page.brands"))}</a><span>›</span><span>${esc(brand)}</span></nav><div class="section-heading"><div><p class="eyebrow">${esc(marketName(selectedMarket.code,req.language).toUpperCase())} · ${esc(t(req.language,"page.brands").toUpperCase())}</p><h1>${esc(t(req.language,"page.moreBrandDeals",{brand}))}</h1><p>${esc(description)}</p></div></div>${stats}<div class="grid">${products.map((product,index)=>productCard(product,index+1,req.language,"brand")).join("")}</div></section></main>`, schema, "", "", selectedMarket.code, alternateCodes, req));
 });
 
@@ -2399,7 +2378,7 @@ app.get("/brands", (req, res) => {
   const canonical = SITE + marketPath(selectedMarket.code, "/brands"), description = t(req.language,"page.brandDescription",{count:brands.length,brand:marketName(selectedMarket.code,req.language)});
   const alternateCodes = marketCodes.filter(code => db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()} AND brand_slug<>''`).all(code).some(product => isPubliclyIndexable(product) && !isGenericBrand(product.brand_slug)));
   const schema = {"@context":"https://schema.org","@type":"ItemList",name:"Popular Brands",numberOfItems:brands.length,itemListElement:brands.map((brand,index)=>({"@type":"ListItem",position:index+1,url:SITE+brandPath(brand.brand,selectedMarket.code),name:brand.brand}))};
-  const cards = brands.map(brand => `<article class="card"><div class="card-content"><p class="eyebrow">${esc(t(req.language,"search.products",{count:brand.product_count}).toUpperCase())}</p><h2><a href="${brandPath(brand.brand, selectedMarket.code)}">${esc(brand.brand)}</a></h2><p>${esc(t(req.language,"page.averagePrice"))}: ${money(brand.avg_price, selectedMarket.currency,languageTag(selectedMarket.code,req.language))} · ${esc(t(req.language,"page.averageRating"))}: ${Number(brand.avg_rating||0).toFixed(1)}</p></div></article>`).join("");
+  const cards = brands.map(brand => `<article class="card"><div class="card-content"><p class="eyebrow">${esc(t(req.language,"search.products",{count:brand.product_count}).toUpperCase())}</p><h2><a href="${brandPath(brand.brand, selectedMarket.code)}">${esc(brand.brand)}</a></h2><p>${esc(t(req.language,"page.averagePrice"))}: ${money(brand.avg_price, selectedMarket.currency,languageTag(selectedMarket.code,req.language))} · ${esc(t(req.language,"page.averageProductRating"))}: ${esc(brandRatingText(brand.avg_rating, selectedMarket.code, req.language))}</p><p>${esc(brandRatingCoverage(brand.rated_products, brand.product_count, req.language))}</p></div></article>`).join("");
   res.send(shell(`${t(req.language,"page.popularBrands")} | OneDailyDrop`, description, canonical, `<main><section class="deals-section"><div class="section-heading"><div><p class="eyebrow">${esc(marketName(selectedMarket.code,req.language).toUpperCase())}</p><h1>${esc(t(req.language,"page.popularBrands"))}</h1></div><p class="result-count">${esc(t(req.language,"search.products",{count:brands.length}))}</p></div><div class="grid">${cards}</div></section></main>`, schema, "", brands.length ? "" : "noindex,follow", selectedMarket.code, alternateCodes, req));
 });
 
@@ -2842,7 +2821,19 @@ app.get("/api/brands", (req,res) => {
   const brands = summarizeBrands(db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()} AND brand_slug<>'' ORDER BY COALESCE(ranking_score,score) DESC,score DESC,updated_at DESC`).all(selectedMarket).filter(product => isPubliclyIndexable(product) && !isGenericBrand(product.brand_slug)));
   res.json(brands.map(brand => ({...brand,url:brandPath(brand.brand, selectedMarket)})));
 });
-app.get("/api/brands/:slug", (req,res) => { const products = uniqueProductsInOrder(db.prepare(`SELECT * FROM products WHERE status='published' AND ${sourceSql()} AND brand_slug=? ORDER BY COALESCE(ranking_score,score) DESC,score DESC`).all(req.params.slug)).filter(isPubliclyIndexable); if (!products.length) return res.status(404).json({error:"Brand not found"}); const brand = products[0].brand; res.json({brand,slug:req.params.slug,url:brandPath(brand),summary:{products:products.length,average_price:products.reduce((s,p)=>s+Number(p.current_price||0),0)/products.length,average_rating:products.reduce((s,p)=>s+Number(p.rating||0),0)/products.length,average_discount:products.reduce((s,p)=>s+discountPercent(p),0)/products.length,total_clicks:db.prepare(`SELECT COUNT(*) n FROM clicks c JOIN products p ON p.id=c.product_id WHERE c.destination_type='retailer' AND ${sourceSql("p")} AND p.brand_slug=?`).get(req.params.slug).n},products:products.map(p=>({...p,deal_url:dealPath(p)}))}); });
+app.get("/api/brands/:slug", (req,res) => {
+  const selectedMarket = normalizeMarket(req.query.market) || requestMarket(req).code;
+  const products = uniqueProductsInOrder(db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()} AND brand_slug=? ORDER BY COALESCE(ranking_score,score) DESC,score DESC`).all(selectedMarket, req.params.slug)).filter(isPubliclyIndexable);
+  if (!products.length) return res.status(404).json({error:"Brand not found"});
+  const brand = products[0].brand;
+  res.json({brand, market:selectedMarket, slug:req.params.slug, url:brandPath(brand, selectedMarket), summary:{
+    products:products.length,
+    average_price:products.reduce((sum,p)=>sum+Number(p.current_price||0),0)/products.length,
+    ...ratingSummary(products),
+    average_discount:products.reduce((sum,p)=>sum+discountPercent(p),0)/products.length,
+    total_clicks:db.prepare(`SELECT COUNT(*) n FROM clicks c JOIN products p ON p.id=c.product_id WHERE c.destination_type='retailer' AND ${sourceSql("p")} AND p.market=? AND p.brand_slug=?`).get(selectedMarket, req.params.slug).n,
+  }, products:products.map(p=>({...p,deal_url:dealPath(p)}))});
+});
 const compactApiProduct = product => ({
   id:product.id,
   title:product.title,
