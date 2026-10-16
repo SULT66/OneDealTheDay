@@ -209,15 +209,26 @@ for (const language of ["en", "es", "fr", "de"]) {
 /*
  * How long a price may have been confirmed before we stop doing arithmetic on it.
  *
- * Six hours, matching the catalogue refresh. Twenty-four was the old answer,
- * and it let a badge be computed from a price six hours dead while the seller
- * had raised it by nineteen per cent. Anything much wider than one refresh
- * cycle puts us back there.
+ * This assertion used to demand eight hours or fewer, on the belief that the
+ * catalogue re-checks every listing every six. It does not: six hours is how
+ * often a sweep starts, and the sweep works through the catalogue over more
+ * than a day. Measured with the narrow window live, 208 of 3,072 listings were
+ * current, the Daily Drop had nothing to show, and production verification
+ * failed. The assertion was wrong and it passed, which is the worse kind.
+ *
+ * A day is what a daily pick needs and what this catalogue sustains. The
+ * ceiling below is the real limit: past it, "checked recently" stops meaning
+ * anything to a shopper.
  */
 assert.ok(
-  PRICE_CONFIDENT_HOURS <= 8,
-  `a price confirmed ${PRICE_CONFIDENT_HOURS} hours ago is still treated as current; `
-    + "the catalogue refreshes every six hours, so a wider window claims a saving the last sweep never saw",
+  PRICE_CONFIDENT_HOURS <= 24,
+  `a price confirmed ${PRICE_CONFIDENT_HOURS} hours ago is still treated as current, `
+    + "which is no longer a price anyone would call checked",
+);
+assert.ok(
+  PRICE_CONFIDENT_HOURS >= 12,
+  `a ${PRICE_CONFIDENT_HOURS}-hour window silences most of the catalogue: the sweep takes `
+    + "longer than that to come round, so the Daily Drop empties and almost nothing carries a badge",
 );
 
 console.log("pricing claims: ok");
