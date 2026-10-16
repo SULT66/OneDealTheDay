@@ -43,7 +43,7 @@ if (!app.includes('forwardedHost === "onedailydrop.com"') || !app.includes("CANO
 for (const required of ["AZURE_PRODUCTION_HOST", "normalizedMarketPath", "normalizedPath", "insecureCanonicalRequest"]) {
   if (!app.includes(required)) throw new Error(`Canonical URL normalization is missing: ${required}`);
 }
-if (!app.includes("responseLimit") || !app.includes("catalogRowLimit") || !app.includes("compactResponse") || !app.includes("Math.min(1000")) {
+if (!app.includes("responseLimit") || !app.includes("...catalog], responseLimit") || !app.includes("compactResponse") || !app.includes("Math.min(1000")) {
   throw new Error("Production products API cannot cap large homepage responses");
 }
 

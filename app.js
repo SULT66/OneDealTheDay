@@ -36,7 +36,7 @@ const db = require("./src/db");
 const { health: personalPostgresHealth } = require("./src/personalPostgres");
 const config = require("./src/config");
 const { localizeProduct } = require("./src/demoTranslations");
-const { presentProduct } = require("./src/productPresentation");
+const { presentProduct, presentListingProduct } = require("./src/productPresentation");
 const { codes: marketCodes, normalizeMarket, marketFromIp, marketPath } = require("./src/markets");
 const { resolveLanguage } = require("./src/i18n");
 const { sourceSql, isPublicProduct, uniqueProductsInOrder } = require("./src/publicCatalog");
@@ -52,6 +52,7 @@ const { recordSearch, searchDemand } = require("./src/searchQueries");
 const { categoryLabel } = require("./src/i18n");
 const { storefrontUrl } = require("./src/storefrontLinks");
 const { presentCatalogBatch } = require("./src/catalogBatch");
+const { catalogSnapshot } = require("./src/catalogSnapshot");
 const asyncRoute = handler => (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next);
 const { applySearchIntent } = require("./src/searchIntent");
 const createExpressApp = express;
@@ -59,6 +60,14 @@ const CANONICAL_HOST = "www.onedailydrop.com";
 const AZURE_PRODUCTION_HOST = "onedealtheday-g3dme0aghzerc3a2.centralus-01.azurewebsites.net";
 const apiResponseCache = new Map();
 const searchCatalogCache = new Map();
+// Keys are the cached raw rows, so refresh/expiry also expires these values.
+const listingPresentations = new WeakMap();
+const presentListingRow = (product, language) => {
+  let translations = listingPresentations.get(product);
+  if (!translations) { translations = new Map(); listingPresentations.set(product, translations); }
+  if (!translations.has(language)) translations.set(language, presentListingProduct(localizeProduct(product, language), language));
+  return translations.get(language);
+};
 /* The catalogue's own vocabulary, per market. Built from the same rows the
    search itself reads and thrown away as often, so the box can never propose a
    word the results page has stopped carrying. See src/searchSuggest.js. */
@@ -472,15 +481,10 @@ function expressWithHomepage(...args) {
     const cached = cachedValue(cacheKey);
     res.set("Cache-Control", "private, max-age=60, stale-while-revalidate=300");
     if (cached) return res.set("X-ODD-Cache", "HIT").json(cached);
-    const catalogRowLimit = responseLimit < Number.MAX_SAFE_INTEGER
-      ? ` LIMIT ${Math.min(2000, responseLimit * 2)}`
-      : "";
-    const sourceCondition = sourceSql();
     const present = product => {
-      const shaped = presentProduct(localizeProduct({
-        ...product,
-        deal_url:dealPath(product)
-      }, language), language);
+      const shaped = compactResponse
+        ? { ...presentListingRow(product, language), deal_url: dealPath(product) }
+        : presentProduct(localizeProduct({ ...product, deal_url: dealPath(product) }, language), language);
       if (!compactResponse) return shaped;
       return {
         id:shaped.id,
@@ -537,12 +541,9 @@ function expressWithHomepage(...args) {
       // A category page wants its own slice, ranked by score — the "today's
       // drop leads" ordering below is a homepage concern that does not apply
       // once the request is already scoped to one category.
-      const products = uniqueProductsInOrder(db.prepare(`
-        SELECT * FROM products
-        WHERE market=? AND status='published' AND normalized_category=? AND ${sourceCondition}
-        ORDER BY score DESC,updated_at DESC
-        ${catalogRowLimit}
-      `).all(selectedMarket, categoryFilter)).slice(0, responseLimit);
+      const products = catalogSnapshot(searchRowsForMarket(selectedMarket), {
+        category: categoryFilter, ranking: false,
+      }).slice(0, responseLimit);
       presented = await presentCatalogBatch(cacheKey, products, present);
     } else {
       const daily = db.prepare(`
@@ -554,16 +555,13 @@ function expressWithHomepage(...args) {
         ORDER BY d.rank
       `).all(selectedMarket, selectedMarket);
       const dailyIds = new Set(daily.map(product => product.id));
-      const catalog = db.prepare(`
-        SELECT * FROM products
-        WHERE market=? AND status='published' AND ${sourceCondition}
-        ORDER BY score DESC,updated_at DESC
-        ${catalogRowLimit}
-      `).all(selectedMarket).filter(product => !dailyIds.has(product.id));
+      const catalog = catalogSnapshot(searchRowsForMarket(selectedMarket), {
+        ranking: false, unique: false,
+      }).filter(product => !dailyIds.has(product.id));
       const products = uniqueProductsInOrder([...daily.map(product => ({
         ...product,
         selection_reason: product.daily_selection_reason || product.selection_reason
-      })), ...catalog]).slice(0, responseLimit);
+      })), ...catalog], responseLimit);
       presented = await presentCatalogBatch(cacheKey, products, present);
     }
 
@@ -625,10 +623,7 @@ function expressWithHomepage(...args) {
        Reading rows to deduplicate costs more than an aggregate, but it happens
        once a minute behind the cache below rather than once a page. */
     const listingsByRetailer = new Map();
-    for (const product of uniqueProductsInOrder(db.prepare(`
-      SELECT * FROM products WHERE ${where}
-      ORDER BY COALESCE(ranking_score,score) DESC,score DESC,updated_at DESC
-    `).all(...whereValues))) {
+    for (const product of catalogSnapshot(searchRowsForMarket(selectedMarket), { category: facetCategory })) {
       const retailer = product.retailer_name || product.source;
       if (!retailer) continue;
       listingsByRetailer.set(retailer, (listingsByRetailer.get(retailer) || 0) + 1);
@@ -741,11 +736,7 @@ function expressWithHomepage(...args) {
      * to avoid.
      */
     const counts = new Map();
-    for (const product of uniqueProductsInOrder(db.prepare(`
-      SELECT * FROM products
-      WHERE market=? AND status='published' AND ${sourceSql()}
-      ORDER BY COALESCE(ranking_score,score) DESC,score DESC,updated_at DESC
-    `).all(selectedMarket))) {
+    for (const product of catalogSnapshot(searchRowsForMarket(selectedMarket))) {
       counts.set(product.normalized_category, (counts.get(product.normalized_category) || 0) + 1);
     }
     const rows = [...counts.entries()]

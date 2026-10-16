@@ -518,6 +518,45 @@ function evidenceCount(product) {
   ].filter(Boolean).length;
 }
 
+// Listing cards do not consume formatted money, checked-date sentences,
+// archive snapshots or evidence labels. Do not build those for thousands of
+// records only to discard them in the compact API projection.
+function presentListingProduct(product, language = "en") {
+  product = withVerifiedRetailerTerms(product);
+  if (!product) return product;
+  const publicCategory = canonicalCategory(product);
+  const priceIsCurrent = priceIsCurrentFor(product);
+  const shipping = localizeShipping(product.shipping_summary, product, language);
+  const returns = localizeReturns(product.return_summary, language);
+  const availability = localizeAvailability(product.availability, language);
+  const reason = presentationReason(product, language);
+  const rating = number(product.rating, NaN);
+  const sellerPercent = sellerRatingPercent(product);
+  const feedback = Math.max(0, Math.round(number(product.seller_feedback_count)));
+  return {
+    ...product,
+    coupons: require("./coupons").publicCoupons(product, priceIsCurrent),
+    shipping_summary: shipping, return_summary: returns, availability, selection_reason: reason,
+    public_category: publicCategory,
+    display_category: categoryLabel(publicCategory, language),
+    display_shipping_summary: shipping, display_return_summary: returns,
+    display_availability: availability, display_selection_reason: reason,
+    display_badge: badge(product, language),
+    display_shop_all: Boolean(storefrontUrl(product)),
+    display_price_is_current: priceIsCurrent,
+    display_score: publishedScore(product, { priceIsCurrent }),
+    display_product_rating: Number.isFinite(rating) && rating > 0 ? `${rating.toFixed(1)}/5` : "",
+    display_product_rating_label: t(language, "product.productRating"),
+    display_seller_rating: sellerPercent == null ? "" : t(language, "product.sellerRatingSummary", {
+      percent: formatter("NumberFormat", languageTag(product.market, language), {maximumFractionDigits: 1}).format(sellerPercent),
+    }),
+    display_seller_rating_label: t(language, "product.sellerRating"),
+    display_seller_feedback: feedback > 0 ? t(language, "product.sellerFeedbackCount", {
+      count: formatter("NumberFormat", languageTag(product.market, language)).format(feedback),
+    }) : "",
+  };
+}
+
 function presentProduct(product, language = "en") {
   product = withVerifiedRetailerTerms(product);
   const publicCategory = canonicalCategory(product);
@@ -649,6 +688,7 @@ module.exports = {
   publicOneDailyDropScore,
   publishedScore,
   presentProduct,
+  presentListingProduct,
   presentationReason,
   sellerRatingPercent,
   scoreBreakdown
