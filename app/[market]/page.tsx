@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { activeHalloween } from "@/src/merchandisingCalendar";
+import { activeHalloween, activeCampaign } from "@/src/merchandisingCalendar";
 import { redirect } from "next/navigation";
 import type { Language } from "@/lib/i18n";
 import { StructuredData } from "@/components/site/StructuredData";
@@ -61,9 +61,19 @@ export default async function MarketHome({ params, searchParams }: PageProps<"/[
     }
     redirect(`/${market}/halloween?${query}`);
   }
+  /* Two clocks, deliberately. The collection below sells, so it closes at the
+     delivery cutoff; the banner above only talks, so it runs to Halloween
+     itself and changes what it promises once the cutoff has passed. Black
+     Friday appears from its preparation window, which is where the price
+     records that make it worth anything are being written. */
   const halloween = Boolean(activeHalloween({market}));
+  const halloweenBanner = activeCampaign({eventKey:'halloween', market, throughEvent:true});
+  const blackFriday = Boolean(activeCampaign({eventKey:'black-friday', market, fromPreparation:true}));
   return <div className="mx-auto max-w-7xl px-4 pb-24 pt-8 sm:px-6 sm:pt-10">
-    <HomeCampaigns market={market} language={language} halloween={halloween} />
+    <HomeCampaigns market={market} language={language}
+      halloween={Boolean(halloweenBanner)}
+      halloweenLate={Boolean(halloweenBanner?.pastDeliveryCutoff)}
+      blackFriday={blackFriday} />
     {halloween && <Suspense fallback={<div aria-busy="true" className="mt-8 h-56 animate-pulse rounded-2xl bg-surface"/>}><HalloweenPreview market={market} language={language}/></Suspense>}
     <Suspense fallback={null}><HomeCatalog market={market} language={language} halloween={halloween} /></Suspense>
     <DeliaTrigger variant="floating" />

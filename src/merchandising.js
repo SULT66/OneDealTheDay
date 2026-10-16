@@ -1,6 +1,6 @@
 // Agent 4: durable, market-scoped shelves. Catalogue prices/scores stay untouched.
 const { randomUUID } = require('node:crypto');
-const { calendarSignals } = require('./merchandisingCalendar');
+const { calendarSignals, activeCampaign } = require('./merchandisingCalendar');
 const { internalTrendSignals, researchTrendSignals } = require('./merchandisingTrends');
 const { selectMerchandise, isPromotionEligible, promotionExpiresAt, merchandisingDiagnostics, matchesQuery, signalRejectionReasons } = require('./merchandisingSelection');
 const { PRICE_CONFIDENT_HOURS } = require('./productPresentation');
@@ -83,7 +83,13 @@ function priceExpiry(row) {
 function getHalloweenCollection(db, {market='us', now=Date.now(), page=1, q='', sort='popular', preview=false}={}) {
   const empty={active:false,title:'Halloween',total:0,page:1,pageSize:24,pages:0,products:[],selectionEvidence:{}};
   if(!markets.has(market) || !Number.isFinite(now)) return empty;
-  const signal=calendarSignals({market,now,horizonDays:0}).find(s=>s.metadata.eventKey==='halloween' && stamp(s.startsAt)<=now && now<stamp(s.endsAt));
+  /* The collection runs to Halloween itself, not to the delivery cutoff a week
+     earlier. Closing it on the 24th emptied the page while the holiday was
+     still days away and while the banner was still inviting people to it.
+     What the cutoff really marks is the end of a promise, not the end of the
+     interest, so past it the page keeps its products and says plainly that
+     arrival before the 31st is no longer something we can stand behind. */
+  const signal=activeCampaign({eventKey:'halloween',market,now,throughEvent:true});
   if(!signal) return empty;
   const theme={...signal,metadata:{...signal.metadata,minimumEbaySales:0}};
   const terms=String(q).trim().slice(0,120).toLowerCase().split(/\s+/).filter(Boolean);
@@ -98,7 +104,8 @@ function getHalloweenCollection(db, {market='us', now=Date.now(), page=1, q='', 
   const pages=Math.ceil(products.length/24);
   const selectedPage=Math.max(1,Math.min(pages || 1,Math.floor(Number(page) || 1)));
   const visible=preview ? products.filter(row=>(salesEvidence(row,{now})?.quantity || 0)>0).slice(0,5) : products.slice((selectedPage-1)*24,selectedPage*24);
-  return {active:true,title:'Halloween',total:products.length,page:selectedPage,pageSize:24,pages,endsAt:signal.endsAt,products:visible,
+  return {active:true,title:'Halloween',total:products.length,page:selectedPage,pageSize:24,pages,endsAt:signal.endsAt,
+    pastDeliveryCutoff:Boolean(signal.pastDeliveryCutoff),eventAt:signal.eventAt,products:visible,
     selectionEvidence:Object.fromEntries(visible.map(row=>[row.id,{arrivalEstimate:row.delivery_estimated_at,
       ebaySoldQuantity:salesEvidence(row,{now})?.quantity ?? null}]))};
 }

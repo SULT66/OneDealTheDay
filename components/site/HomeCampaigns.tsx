@@ -1,31 +1,72 @@
 import Link from "next/link";
 import { ArrowRight } from "@phosphor-icons/react/ssr";
 import type { Language } from "@/lib/i18n";
+import { CampaignCarousel, type CampaignSlide } from "@/components/site/CampaignCarousel";
 
-const COPY: Record<Language, {eyebrow:string; title:string; note:string; shop:string; categories:string[]; browse:string; drop:string; dropNote:string; daily:string; everyday:string; everydayNote:string}> = {
-  en: {eyebrow:"Halloween · October 31",title:"A little spooky.\nA lot of fun.",note:"Costumes, decorations & party finds for October 31.",shop:"Explore Halloween",categories:["Costumes","Decorations","Party supplies"],browse:"Browse all finds",drop:"One day. One pick.",dropNote:"Meet today's Daily Drop.",daily:"See today's pick",everyday:"Find your next good buy.",everydayNote:"Explore products with price, seller and buying terms checked."},
-  es: {eyebrow:"Halloween · 31 de octubre",title:"Un poco de miedo.\nMucha diversión.",note:"Disfraces, decoración e ideas para tu fiesta.",shop:"Explorar Halloween",categories:["Disfraces","Decoración","Fiesta"],browse:"Ver todos los productos",drop:"Un día. Una selección.",dropNote:"Descubre el Daily Drop de hoy.",daily:"Ver la selección de hoy",everyday:"Encuentra tu próxima compra.",everydayNote:"Productos con precio, vendedor y condiciones comprobados."},
-  fr: {eyebrow:"Halloween · 31 octobre",title:"Un peu de frisson.\nBeaucoup de plaisir.",note:"Costumes, décorations et idées pour votre fête.",shop:"Explorer Halloween",categories:["Costumes","Décorations","Fête"],browse:"Voir tous les produits",drop:"Un jour. Une sélection.",dropNote:"Découvrez le Daily Drop du jour.",daily:"Voir la sélection du jour",everyday:"Votre prochaine belle trouvaille.",everydayNote:"Des produits au prix, vendeur et conditions vérifiés."},
-  de: {eyebrow:"Halloween · 31. Oktober",title:"Ein wenig gruselig.\nJede Menge Spaß.",note:"Kostüme, Deko und Partyideen für den 31. Oktober.",shop:"Halloween entdecken",categories:["Kostüme","Dekoration","Partybedarf"],browse:"Alle Produkte ansehen",drop:"Ein Tag. Ein Tipp.",dropNote:"Entdecke den heutigen Daily Drop.",daily:"Heutigen Tipp ansehen",everyday:"Finde deinen nächsten guten Kauf.",everydayNote:"Produkte mit geprüftem Preis, Verkäufer und Kaufbedingungen."},
+type Copy = {
+  eyebrow: string; title: string; note: string; lateNote: string; shop: string; categories: string[];
+  bfEyebrow: string; bfTitle: string; bfNote: string; bfShop: string;
+  browse: string; drop: string; dropNote: string; daily: string;
+  everyday: string; everydayNote: string; hero: string;
 };
 
-export function HomeCampaigns({market,language,halloween=false}:{market:string;language:Language;halloween?:boolean}) {
+const COPY: Record<Language, Copy> = {
+  en: {eyebrow:"Halloween · October 31",title:"A little spooky.\nA lot of fun.",note:"Costumes, decorations & party finds for October 31.",lateNote:"October 31 is close. Check each seller's delivery estimate before you count on it arriving.",shop:"Explore Halloween",categories:["Costumes","Decorations","Party supplies"],
+    bfEyebrow:"Black Friday · November 27",bfTitle:"We are already\nwriting the prices down.",bfNote:"Eight weeks of our own records, so on the day you can see which discounts are real and which were always that price.",bfShop:"See the price diary",
+    browse:"Browse all finds",drop:"One day. One pick.",dropNote:"Meet today's Daily Drop.",daily:"See today's pick",everyday:"Find your next good buy.",everydayNote:"Explore products with price, seller and buying terms checked.",hero:"Campaigns"},
+  es: {eyebrow:"Halloween · 31 de octubre",title:"Un poco de miedo.\nMucha diversión.",note:"Disfraces, decoración e ideas para tu fiesta.",lateNote:"El 31 de octubre está cerca. Comprueba el plazo de entrega de cada vendedor antes de contar con él.",shop:"Explorar Halloween",categories:["Disfraces","Decoración","Fiesta"],
+    bfEyebrow:"Black Friday · 27 de noviembre",bfTitle:"Ya estamos\napuntando los precios.",bfNote:"Ocho semanas de registros propios para que ese día veas qué descuentos son reales y cuáles siempre costaron lo mismo.",bfShop:"Ver el diario de precios",
+    browse:"Ver todos los productos",drop:"Un día. Una selección.",dropNote:"Descubre el Daily Drop de hoy.",daily:"Ver la selección de hoy",everyday:"Encuentra tu próxima compra.",everydayNote:"Productos con precio, vendedor y condiciones comprobados.",hero:"Campañas"},
+  fr: {eyebrow:"Halloween · 31 octobre",title:"Un peu de frisson.\nBeaucoup de plaisir.",note:"Costumes, décorations et idées pour votre fête.",lateNote:"Le 31 octobre approche. Vérifiez le délai de livraison de chaque vendeur avant d'y compter.",shop:"Explorer Halloween",categories:["Costumes","Décorations","Fête"],
+    bfEyebrow:"Black Friday · 27 novembre",bfTitle:"Nous notons déjà\nles prix, jour après jour.",bfNote:"Huit semaines de relevés qui nous sont propres : le jour venu, vous verrez quelles remises sont réelles.",bfShop:"Voir le journal des prix",
+    browse:"Voir tous les produits",drop:"Un jour. Une sélection.",dropNote:"Découvrez le Daily Drop du jour.",daily:"Voir la sélection du jour",everyday:"Votre prochaine belle trouvaille.",everydayNote:"Des produits au prix, vendeur et conditions vérifiés.",hero:"Campagnes"},
+  de: {eyebrow:"Halloween · 31. Oktober",title:"Ein wenig gruselig.\nJede Menge Spaß.",note:"Kostüme, Deko und Partyideen für den 31. Oktober.",lateNote:"Der 31. Oktober ist nah. Prüfe die Lieferzeit des jeweiligen Verkäufers, bevor du damit rechnest.",shop:"Halloween entdecken",categories:["Kostüme","Dekoration","Partybedarf"],
+    bfEyebrow:"Black Friday · 27. November",bfTitle:"Wir schreiben die Preise\nschon jetzt mit.",bfNote:"Acht Wochen eigene Aufzeichnungen — am Tag selbst siehst du, welche Rabatte echt sind und welche schon immer so hießen.",bfShop:"Zum Preistagebuch",
+    browse:"Alle Produkte ansehen",drop:"Ein Tag. Ein Tipp.",dropNote:"Entdecke den heutigen Daily Drop.",daily:"Heutigen Tipp ansehen",everyday:"Finde deinen nächsten guten Kauf.",everydayNote:"Produkte mit geprüftem Preis, Verkäufer und Kaufbedingungen.",hero:"Kampagnen"},
+};
+
+/*
+ * The hero, as a rotation rather than a single banner.
+ *
+ * Two campaigns legitimately overlap for most of October: Halloween is being
+ * bought now, and Black Friday is being recorded now. A single banner forces a
+ * choice between them and the loser disappears from the home page entirely; a
+ * rotation lets each have the whole hero in turn. When only one campaign is
+ * live, or none, this renders exactly what a single banner did.
+ *
+ * Which campaigns are live is the calendar's decision, taken upstream and
+ * passed in here, so the copy in this file never has a date of its own to go
+ * stale.
+ */
+export function HomeCampaigns({market,language,halloween=false,halloweenLate=false,blackFriday=false}:{market:string;language:Language;halloween?:boolean;halloweenLate?:boolean;blackFriday?:boolean}) {
   const copy = COPY[language];
-  // The campaign calendar supplies activity, including its delivery cutoff.
   const search = `/${market}/search`;
+  const slides: CampaignSlide[] = [];
+
+  if (halloween) slides.push({
+    key:"halloween", eyebrow:copy.eyebrow, title:copy.title,
+    /* Past the delivery cutoff the invitation stands and the promise does not:
+       the window to order and have it arrive has closed, the day has not. */
+    note: halloweenLate ? copy.lateNote : copy.note,
+    cta:copy.shop, href:`/${market}/halloween`,
+    image:"/campaigns/halloween.webp", imagePosition:"center 65%",
+    ground:"#201322", accent:"#ffc07a", accentText:"#201322", eyebrowText:"#fed7aa", dots:"#ffc07a",
+  });
+
+  if (blackFriday) slides.push({
+    key:"black-friday", eyebrow:copy.bfEyebrow, title:copy.bfTitle, note:copy.bfNote,
+    cta:copy.bfShop, href:`/${market}/black-friday`,
+    ground:"#101208", accent:"#b8ec44", accentText:"#010101", eyebrowText:"#cdf07a", dots:"#b8ec44",
+  });
+
+  if (!slides.length) slides.push({
+    key:"everyday", eyebrow:"OneDailyDrop", title:copy.everyday, note:copy.everydayNote,
+    cta:copy.browse, href:search,
+    ground:"#201322", accent:"#ffc07a", accentText:"#201322", eyebrowText:"#fed7aa", dots:"#ffc07a",
+  });
+
   return <section aria-labelledby="hero-title" className="space-y-4">
-    <div className="relative isolate overflow-hidden rounded-card bg-[#201322] text-white">
-      {halloween && <div aria-hidden="true" className="absolute inset-0 bg-cover bg-no-repeat" style={{backgroundImage:'url("/campaigns/halloween.webp")', backgroundPosition:'center 65%'}} />}
-      <div className="absolute inset-0 bg-gradient-to-r from-[#201322]/95 via-[#201322]/60 to-transparent" />
-      <div className="relative max-w-2xl px-6 py-10 sm:px-10 sm:py-14 lg:px-12 lg:py-16">
-        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-orange-200">{halloween ? copy.eyebrow : "OneDailyDrop"}</p>
-        <h1 id="hero-title" className="mt-4 whitespace-pre-line text-4xl font-bold leading-[1.05] tracking-tight sm:text-5xl lg:text-6xl">{halloween ? copy.title : copy.everyday}</h1>
-        <p className="mt-5 max-w-sm text-sm leading-relaxed text-white/80 sm:text-base">{halloween ? copy.note : copy.everydayNote}</p>
-        <a href={halloween ? `/${market}/halloween` : search} className="mt-7 inline-flex min-h-12 items-center gap-3 rounded-full bg-[#ffc07a] px-6 text-sm font-semibold text-[#201322] transition-colors hover:bg-orange-200">
-          {halloween ? copy.shop : copy.browse}<ArrowRight size={18} weight="bold" aria-hidden="true" />
-        </a>
-      </div>
-    </div>
+    <CampaignCarousel slides={slides} label={copy.hero} />
     {halloween && <nav aria-label={copy.shop} className="flex flex-wrap items-center gap-2">
       {copy.categories.map((label,index) => <a key={label} href={`/${market}/halloween?${new URLSearchParams({q:['costume','decor','party'][index],lang:language})}`} className="rounded-full border border-border bg-surface px-4 py-2 text-sm font-medium text-fg transition-colors hover:border-orange-300 hover:bg-orange-50 hover:text-ink">{label}</a>)}
     </nav>}

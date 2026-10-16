@@ -8,7 +8,9 @@ function signal(market, id = 'external') { return { id: `${market}-${id}`, marke
 const load = Module._load;
 Module._load = function(request, parent, ...rest) {
   if (parent?.filename.endsWith('/src/merchandising.js')) {
-    if (request === './merchandisingCalendar') return { calendarSignals: () => [] };
+    // A calendar with no signals in it has no active campaign either; saying so
+    // here keeps the stub a complete stand-in for the module it replaces.
+    if (request === './merchandisingCalendar') return { calendarSignals: () => [], activeCampaign: () => null };
     if (request === './merchandisingTrends') return { internalTrendSignals: () => [], researchTrendSignals: async ({ market }) => { calls++; if (gate) await gate; return failResearch ? { status: 'failed', signals: [], reason: 'timeout' } : { status: 'success', signals: [signal(market)] }; } };
     if (request === './merchandisingSelection') return {
       matchesQuery: () => true, signalRejectionReasons: () => [],
