@@ -68,9 +68,11 @@ const {
   liveDropSaveTheDateEmail, liveDropStartingSoonEmail, liveDropAnnouncementEmail, liveDropLiveNowEmail, priceDropEmail,
   priceWatchStartedEmail,
   passwordResetEmail, subscriptionEmail, clubWaitlistEmail, liveDropReminderEmail, deliveryTestEmail,
-  digestInviteEmail, weeklyDigestEmail, introEmail, scoreExplainerEmail } = require("./mailer");
+  digestInviteEmail, weeklyDigestEmail, introEmail, scoreExplainerEmail,
+  reactivationEmail } = require("./mailer");
 const { sendWeeklyDigest } = require("./weeklyDigest");
 const { sendWelcomeSequence } = require("./welcomeSequence");
+const { sendReactivationEmails } = require("./reactivation");
 const { chooseDigestItems } = require("./digestSelection");
 const { digestItemFor } = require("./weeklyDigest");
 const { emailHealth } = require("./emailHealth");
@@ -655,7 +657,7 @@ app.post("/api/shopping-assistant/feedback", shoppingAssistantRateLimit, (req, r
  * they reach the catch-all at the bottom of this file instead of being
  * rewritten back onto the old bare-URL Express routes.
  */
-const nextOwnedPath = /^\/(?:about|account|saved|live|how-we-select-deals|search|daily-drop|archive|contact|privacy|terms|affiliate-disclosure|editorial-policy|for-retailers|price-disclaimer|stores|coupons|halloween|guides|guides\/[^/]+|category|deal\/[^/]+|category\/[^/]+)\/?$/;
+const nextOwnedPath = /^\/(?:about|account|saved|live|how-we-select-deals|search|daily-drop|archive|contact|privacy|terms|affiliate-disclosure|editorial-policy|for-retailers|price-disclaimer|stores|coupons|halloween|black-friday|guides|guides\/[^/]+|category|deal\/[^/]+|category\/[^/]+)\/?$/;
 app.use((req, res, next) => {
   const match = req.url.match(new RegExp(`^/(${marketCodes.join("|")})(?=/|\\?|$)`));
   /* Compare the path alone, not the whole URL: `/de` was left intact for Next
@@ -1733,8 +1735,8 @@ app.post("/api/club/interest", authRateLimit, async (req, res) => {
   }
   const now = new Date().toISOString();
   db.prepare(`
-    INSERT INTO subscribers(email,categories,status,source,market,created_at,updated_at)
-    VALUES(?,?,'active','club-waitlist',?,?,?)
+    INSERT INTO subscribers(email,status,source,market,created_at,updated_at)
+    VALUES(?,'active','club-waitlist',?,?,?)
     ON CONFLICT(email) DO UPDATE SET
       status='active',
       market=excluded.market,
@@ -1744,7 +1746,7 @@ app.post("/api/club/interest", authRateLimit, async (req, res) => {
         ELSE subscribers.source||',club-waitlist'
       END,
       updated_at=excluded.updated_at
-  `).run(email, "[]", selectedMarket.code, now, now);
+  `).run(email, selectedMarket.code, now, now);
   let emailSent = false;
   try {
     await clubWaitlistEmail({email});
@@ -3185,6 +3187,38 @@ app.get("/digest/join", (req, res) => {
       "That link is not one we recognise. If you still want the Sunday finds, reply to any of our emails and we will add you by hand.");
 });
 
+/*
+ * "Send me fewer."
+ *
+ * The third answer, and until now the list did not have one. A reader who
+ * wanted the site but not an email for every drop could only choose between
+ * all of it and the unsubscribe link, and a list offering that choice loses
+ * the people who would have stayed at a slower pace.
+ *
+ * It turns the per-drop announcement off and the Sunday letter on in one
+ * click, which is about one email a week instead of one per drop, and it is
+ * the offer the reactivation letter in src/reactivation.js makes. Same tokened
+ * GET as /digest/join, for the same reasons: it has to work from an inbox with
+ * no sign-in, and it can only ever change the one address its token belongs to.
+ */
+app.get("/email/less", (req, res) => {
+  const value = analyticsToken(String(req.query.token || "")) || String(req.query.token || "").trim();
+  const nowIso = new Date().toISOString();
+  const changed = value && value.length >= 16 && value.length <= 120
+    ? Number(db.prepare(`UPDATE subscribers
+             SET drop_opt_in = 0, drop_opt_in_changed_at = ?,
+                 digest_opt_in = 1, digest_opt_in_at = COALESCE(digest_opt_in_at, ?),
+                 updated_at = ?
+           WHERE unsubscribe_token = ? AND unsubscribe_token <> '' AND status = 'active'`)
+        .run(nowIso, nowIso, nowIso, value)?.changes || 0) > 0
+    : false;
+  return changed
+    ? digestPage(res, 200, "Sundays only, from now on",
+      "No more emails about individual drops. You will get the Sunday five and nothing else, and the unsubscribe link in any of them still stops everything.")
+    : digestPage(res, 404, "Link not recognised",
+      "That link is not one we recognise. Reply to any of our emails and we will set your pace by hand.");
+});
+
 app.get("/digest/stop", (req, res) => {
   const done = digestFlag(req.query.token, false);
   return done
@@ -3203,8 +3237,17 @@ app.post("/api/subscribe", authRateLimit, async (req,res) => {
   const requestedMarket = normalizeMarket(req.body?.market);
   const selectedMarket = requestedMarket ? market(requestedMarket) : requestMarket(req);
   const email = String(req.body?.email || "").trim().toLowerCase();
-  const requested = Array.isArray(req.body?.categories) ? req.body.categories : [];
-  const categories = [...new Set(requested.map(value => String(value).trim()).filter(Boolean))].slice(0, 12);
+  /*
+   * Categories are not read here, and the body is not asked for them.
+   *
+   * The form used to collect interests and this route used to store them in
+   * subscribers.categories, where nothing in the repository ever looked at
+   * them again — see the comment on the table in src/db.js. The picker is
+   * already gone from components/site/LiveDropSignup.tsx; this is the other
+   * half of that removal. A caller may still send the field, and it is
+   * ignored rather than rejected, because an old page in somebody's tab
+   * should still be able to subscribe them.
+   */
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i.test(email) || email.length > 254) {
     return res.status(400).json({error:"Enter a valid email address."});
   }
@@ -3216,21 +3259,22 @@ app.post("/api/subscribe", authRateLimit, async (req,res) => {
      the same working link — including the ones sent after they resubscribe. */
   const unsubscribeToken = crypto.randomBytes(24).toString("base64url");
   db.prepare(`
-    INSERT INTO subscribers(email,categories,status,source,market,unsubscribe_token,created_at,updated_at)
-    VALUES(?,?,?,?,?,?,?,?)
+    INSERT INTO subscribers(email,status,source,market,unsubscribe_token,created_at,updated_at)
+    VALUES(?,?,?,?,?,?,?)
     ON CONFLICT(email) DO UPDATE SET
-      /* The Live Drop form sends no categories, and signing up again from it
-         must not wipe the ones an earlier form recorded. */
-      categories=CASE WHEN excluded.categories='[]' THEN subscribers.categories ELSE excluded.categories END,
       status='active',market=excluded.market,updated_at=excluded.updated_at,
+      /* Asking again is asking for the mail, so it undoes an earlier "fewer
+         emails" — but only that. A subscriber who turned the Sunday letter on
+         keeps it on. */
+      drop_opt_in=1,
+      drop_opt_in_changed_at=excluded.updated_at,
       unsubscribe_token=CASE WHEN subscribers.unsubscribe_token='' THEN excluded.unsubscribe_token ELSE subscribers.unsubscribe_token END
-  `).run(email, JSON.stringify(categories), "active", signupSource, selectedMarket.code, unsubscribeToken, now, now);
+  `).run(email, "active", signupSource, selectedMarket.code, unsubscribeToken, now, now);
   const storedToken = db.prepare("SELECT unsubscribe_token AS token FROM subscribers WHERE email=?").get(email)?.token;
   let emailSent = false;
   try {
     await subscriptionEmail({
       email,
-      categories,
       market: selectedMarket.code,
       unsubscribeUrl: storedToken ? `${SITE}/unsubscribe?token=${encodeURIComponent(storedToken)}` : "",
     });
@@ -3241,7 +3285,6 @@ app.post("/api/subscribe", authRateLimit, async (req,res) => {
   res.status(201).json({
     ok:true,
     message:emailSent ? t(req.language, "form.subscribedEmail") : t(req.language, "form.subscribed"),
-    categories,
     market:selectedMarket.code,
     emailSent
   });
@@ -4750,6 +4793,57 @@ cron.schedule("0 * * * *", async () => {
     console.error(`[digest] ${error.message}`);
   } finally {
     digestSweepRunning = false;
+  }
+}, {timezone: "UTC"});
+
+/*
+ * The letter to subscribers nothing has ever come back from.
+ *
+ * Once a day rather than once a minute: it is a judgement about sixty days of
+ * silence, and nothing about it changes between one hour and the next. Tuesday
+ * at eleven in New York, so it never shares a morning with the Sunday digest
+ * — two uninvited emails on the same day is how a list learns to filter us.
+ *
+ * The unique index on subscriber_sequence(subscriber_id, step) is what makes a
+ * second attempt harmless, not the schedule; see src/reactivation.js.
+ */
+let reactivationSweepRunning = false;
+cron.schedule("0 * * * *", async () => {
+  if (reactivationSweepRunning) return;
+  reactivationSweepRunning = true;
+  try {
+    const when = new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/New_York", weekday: "short", hour: "numeric", hour12: false,
+    }).formatToParts(new Date());
+    const weekday = when.find(part => part.type === "weekday")?.value;
+    const hour = Number(when.find(part => part.type === "hour")?.value);
+    if (weekday !== "Tue" || hour !== 11) return;
+
+    for (const code of marketCodes) {
+      const products = uniqueProductsInOrder(
+        db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()}
+                     ORDER BY COALESCE(ranking_score,score) DESC, score DESC`).all(code),
+      )
+        .filter(isPubliclyIndexable)
+        .map(product => presentProduct(product, defaultLanguages[code] || "en"));
+
+      const result = await sendReactivationEmails({
+        db,
+        market: code,
+        products,
+        sendReactivation: reactivationEmail,
+        siteOrigin: SITE,
+        fewerUrlFor: (subscriber) => `${SITE}/email/less?token=${encodeURIComponent(subscriber.unsubscribe_token)}`,
+        unsubscribeUrlFor: (subscriber) => `${SITE}/unsubscribe?token=${encodeURIComponent(subscriber.unsubscribe_token)}`,
+      });
+      if (result.candidates) {
+        console.log(`[reactivation] ${code}: ${result.sent} sent, ${result.skipped} skipped for want of three missed listings (${result.candidates} dormant)`);
+      }
+    }
+  } catch (error) {
+    console.error(`[reactivation] ${error.message}`);
+  } finally {
+    reactivationSweepRunning = false;
   }
 }, {timezone: "UTC"});
 

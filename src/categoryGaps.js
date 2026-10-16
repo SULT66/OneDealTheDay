@@ -1,26 +1,7 @@
-/*
- * Which categories are thin, and what to search to fill them.
- *
- * This began as an AliExpress-only list, and that is why the thin categories
- * stayed thin. Measured on 2026-10-15, a week after the gap plan started
- * running: Travel 5 listings, Automotive 11, Mattresses & Sleep 13 — the same
- * numbers as the week before. AliExpress sits at 132 listings against an
- * ALIEXPRESS_MAX_PRODUCTS ceiling of 120, so the plan was computing gaps for a
- * source with no room to add anything.
- *
- * It is also the wrong source for the job. Of the catalogue's 3,072 listings,
- * eBay is the only one that returns product reviews and sold counts; AliExpress
- * returns neither. Filling Travel with fifty reviewless listings would make the
- * category look full while making the share of listings that can carry a Score
- * worse. So the plan now drives eBay, whose importer already refuses anything
- * without trust evidence (src/providers/ebay.js: a 4-plus rating with 25
- * reviews, or a seller at 4.8 with 100 feedback).
- *
- * The keyword lists below are longer than the three-apiece they started with,
- * because three terms cannot fill fifty slots with anything but near-duplicates.
- * They are ordinary shopping phrases on purpose: the point is to reach listings
- * that many people have already bought and reviewed, not to find obscure ones.
- */
+/* Categories below 50 receive a bounded discovery batch: up to 20 new
+ * AliExpress listings and 50 new eBay listings with a real public Score.
+ * API budgets remain bounded; a shortfall is reported, never filled with
+ * duplicate listings or invented scores. */
 
 const SHELVES = Object.freeze({
   /* The eight below fifty, with the most room to fill. */
@@ -82,7 +63,7 @@ const SHELVES = Object.freeze({
  * different phrases and the catalogue does not fill with ten versions of the
  * same product.
  */
-function planGapSearches(rows = [], { target = 100, limit = 6, now = Date.now() } = {}) {
+function planGapSearches(rows = [], { target = 50, limit = 17, now = Date.now() } = {}) {
   const counts = new Map(rows.map(row => [row.category, Number(row.count) || 0]));
   const slot = Math.floor(now / (3 * 3600 * 1000));
   return Object.entries(SHELVES)
@@ -106,7 +87,7 @@ function planGapSearches(rows = [], { target = 100, limit = 6, now = Date.now() 
  * each, offset by the same clock slot, so a run covers several angles on a
  * thin category instead of one.
  */
-function gapKeywords(rows = [], { target = 100, limit = 8, perCategory = 2, now = Date.now() } = {}) {
+function gapKeywords(rows = [], { target = 50, limit = 17, perCategory = 3, now = Date.now() } = {}) {
   const slot = Math.floor(now / (3 * 3600 * 1000));
   const terms = [];
   for (const shelf of planGapSearches(rows, { target, limit, now })) {

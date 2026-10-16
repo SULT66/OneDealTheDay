@@ -287,6 +287,32 @@ db.exec(`
     UNIQUE(ingestion_run_id,external_id,reason_code),
     FOREIGN KEY(ingestion_run_id) REFERENCES refresh_runs(id)
   );
+  /*
+   * The mailing list.
+   *
+   * The 'categories' column below is retired. It held the interests a signup form used to
+   * ask for, and in the whole repository nothing ever read it: not the welcome
+   * letters, not the Sunday digest, not the drop announcement, not one
+   * template in mailer.js. The form that asked was removed earlier —
+   * components/site/LiveDropSignup.tsx now sends an empty list and says in its
+   * own comment why — so by the time anybody looked, the column was neither
+   * collecting anything nor serving anything, and only looked like a feature
+   * that had merely not been wired up yet.
+   *
+   * It is not waiting to be wired up. Segmenting would mean splitting five
+   * listings a week across seventeen categories, and the Sunday selection
+   * already caps itself at two per category precisely so that one reader's
+   * email is not five board games. What a reader can honestly be promised
+   * here is the letter we actually send, and that promise needs no column.
+   *
+   * So nothing writes it and nothing reads it, and scripts/test-subscribe-
+   * safety.js fails if that changes. The column itself stays where it is: the
+   * PostgreSQL mirror in src/personalPostgres.js restores a snapshot by
+   * inserting each row under the column names that snapshot carries, so
+   * removing a column here breaks recovery from every snapshot taken before
+   * today — the one path that only matters on the worst day. Removing it is
+   * its own migration, and it has to retire the mirrored snapshot with it.
+   */
   CREATE TABLE IF NOT EXISTS subscribers(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     email TEXT NOT NULL UNIQUE COLLATE NOCASE,
@@ -716,6 +742,23 @@ if (!subscriberColumns.has("unsubscribed_at")) {
 if (!subscriberColumns.has("digest_opt_in")) {
   db.exec("ALTER TABLE subscribers ADD COLUMN digest_opt_in INTEGER NOT NULL DEFAULT 0");
   db.exec("ALTER TABLE subscribers ADD COLUMN digest_opt_in_at TEXT");
+}
+/*
+ * Fewer emails, as an answer somebody can actually give.
+ *
+ * Until now this list offered two choices: everything, or the unsubscribe
+ * link. Somebody who likes the site but not three announcements a fortnight
+ * had no button except the one that ends it, so the quiet half of a list
+ * leaves rather than slows down.
+ *
+ * `drop_opt_in` is the per-drop announcement; `digest_opt_in` above is the
+ * Sunday letter. Off here and on there is "just the Sunday five", which is the
+ * offer the reactivation letter makes. It defaults to 1, so everybody already
+ * on the list stays exactly where they were.
+ */
+if (!subscriberColumns.has("drop_opt_in")) {
+  db.exec("ALTER TABLE subscribers ADD COLUMN drop_opt_in INTEGER NOT NULL DEFAULT 1");
+  db.exec("ALTER TABLE subscribers ADD COLUMN drop_opt_in_changed_at TEXT");
 }
 /*
  * The welcome letters, and which of them each subscriber has had.

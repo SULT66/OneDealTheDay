@@ -81,9 +81,44 @@ db.exec("ALTER TABLE subscribers ADD COLUMN unsubscribed_at TEXT");
 const now = new Date().toISOString();
 const token = crypto.randomBytes(24).toString("base64url");
 db.prepare(`
-  INSERT INTO subscribers(email,categories,status,source,market,unsubscribe_token,created_at,updated_at)
-  VALUES(?,?,?,?,?,?,?,?)
-`).run("someone@example.com", "[]", "active", "homepage", "us", token, now, now);
+  INSERT INTO subscribers(email,status,source,market,unsubscribe_token,created_at,updated_at)
+  VALUES(?,?,?,?,?,?,?)
+`).run("someone@example.com", "active", "homepage", "us", token, now, now);
+
+/* ------------------------------------------------- and the promise is kept */
+
+/*
+ * subscribers.categories is retired and must stay retired.
+ *
+ * It held the interests a signup form asked for, and nothing in the repository
+ * ever read them: every subscriber on the list got exactly the same email
+ * whatever they had ticked. The picker is gone from the form; this is what
+ * stops the column quietly filling up again behind it, which is the state
+ * that makes the next reader assume the feature works.
+ */
+assert(
+  !/INSERT INTO subscribers\([^)]*\bcategories\b/.test(serverSource),
+  "a route writes subscribers.categories again, and nothing anywhere reads it",
+);
+const subscribeBody = /app\.post\("\/api\/subscribe"[\s\S]*?\n\}\);/.exec(serverSource)[0];
+assert(
+  !/\bcategories\b/.test(subscribeBody.replace(/\/\*[\s\S]*?\*\//g, "")),
+  "the subscribe route collects categories again; the form promises nothing of the kind",
+);
+
+/*
+ * And the third answer stays on the table. A list whose only alternative to
+ * everything is the unsubscribe link loses the readers who would have stayed
+ * at a slower pace.
+ */
+assert(
+  /app\.get\("\/email\/less"/.test(serverSource),
+  "there is no way to ask for fewer emails short of leaving altogether",
+);
+assert(
+  /drop_opt_in = 1/.test(read("src", "liveDrop.js")),
+  "drop announcements ignore the subscriber who asked for fewer of them",
+);
 
 const unsubscribe = (value) => {
   db.prepare(`

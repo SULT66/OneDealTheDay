@@ -26,7 +26,7 @@ db.exec(`
     id INTEGER PRIMARY KEY, drop_id INTEGER, email TEXT,
     reminded_at TEXT, reminded_day_before_at TEXT, reminded_hour_before_at TEXT
   );
-  CREATE TABLE subscribers(id INTEGER PRIMARY KEY, email TEXT, status TEXT, market TEXT, unsubscribe_token TEXT);
+  CREATE TABLE subscribers(id INTEGER PRIMARY KEY, email TEXT, status TEXT, market TEXT, unsubscribe_token TEXT, drop_opt_in INTEGER NOT NULL DEFAULT 1);
   CREATE TABLE live_drop_announcements(
     id INTEGER PRIMARY KEY AUTOINCREMENT, drop_id INTEGER, subscriber_id INTEGER, sent_at TEXT,
     UNIQUE(drop_id, subscriber_id)
@@ -79,9 +79,13 @@ db.prepare("INSERT INTO live_drop_reminders(id,drop_id,email) VALUES(2,2,'onadra
 
   /* --------------------------------------------- the subscriber list */
 
-  db.prepare("INSERT INTO subscribers VALUES(1,'sub@example.com','active','us','tok-1')").run();
-  db.prepare("INSERT INTO subscribers VALUES(2,'gone@example.com','unsubscribed','us','tok-2')").run();
-  db.prepare("INSERT INTO subscribers VALUES(3,'uk@example.com','active','uk','tok-3')").run();
+  db.prepare("INSERT INTO subscribers VALUES(1,'sub@example.com','active','us','tok-1',1)").run();
+  db.prepare("INSERT INTO subscribers VALUES(2,'gone@example.com','unsubscribed','us','tok-2',1)").run();
+  db.prepare("INSERT INTO subscribers VALUES(3,'uk@example.com','active','uk','tok-3',1)").run();
+  /* Asked for fewer emails: still on the list, still gets the Sunday letter,
+     and is not told about every drop. Without this the only answer the list
+     offered was the unsubscribe link. */
+  db.prepare("INSERT INTO subscribers VALUES(4,'slower@example.com','active','us','tok-4',0)").run();
 
   const announced = [];
   const announce = () => announceDropToSubscribers({
@@ -98,6 +102,10 @@ db.prepare("INSERT INTO live_drop_reminders(id,drop_id,email) VALUES(2,2,'onadra
      is not somebody else's audience. */
   assert(!announced.some((m) => m.email === "gone@example.com"), "an unsubscribed address was mailed");
   assert(!announced.some((m) => m.email === "uk@example.com"), "another market's subscribers were mailed");
+  assert(
+    !announced.some((m) => m.email === "slower@example.com"),
+    "somebody who asked for fewer emails was told about a drop anyway",
+  );
   /* Marketing, so it carries the way out. */
   assert(/unsubscribe\?token=tok-1/.test(announced[0].unsubscribeUrl), "the announcement has no unsubscribe link");
 
