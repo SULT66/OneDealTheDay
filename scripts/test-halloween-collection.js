@@ -39,7 +39,17 @@ native.prepare('UPDATE products SET checked_at=? WHERE id=5010').run(iso(now-3*D
 assert.equal(getHalloweenCollection(db,{now,q:'5010'}).total,0);
 native.prepare('UPDATE products SET delivery_estimated_at=? WHERE id=5011').run(iso(now+20*DAY));
 assert.equal(getHalloweenCollection(db,{now,q:'5011'}).total,0);
-assert.equal(getHalloweenCollection(db,{now:Date.parse('2026-10-24T04:00:00Z')}).active,false);
+/* The delivery cutoff ends a promise, not the holiday. On 24 October the
+   collection stays open and flags itself instead, so the page can go on
+   showing Halloween without implying anything ordered that evening arrives in
+   time; it closes for real once the 31st is over. */
+const atCutoff=getHalloweenCollection(db,{now:Date.parse('2026-10-24T04:00:00Z')});
+assert.equal(atCutoff.active,true,'The collection runs to Halloween, not to the delivery cutoff');
+assert.equal(atCutoff.pastDeliveryCutoff,true,'Past the cutoff the page must say so');
+const beforeCutoff=getHalloweenCollection(db,{now:Date.parse('2026-10-20T04:00:00Z')});
+assert.equal(beforeCutoff.pastDeliveryCutoff,false,'Before the cutoff nothing is withdrawn');
+assert.equal(getHalloweenCollection(db,{now:Date.parse('2026-10-31T04:00:00Z')}).active,true,'Halloween itself is still Halloween');
+assert.equal(getHalloweenCollection(db,{now:Date.parse('2026-11-01T12:00:00Z')}).active,false,'And it is over the day after');
 (async()=>{await runMerchandising(db,{now});const shelves=getMerchandisingShelves(db,{now});
   assert.equal(shelves[0].products.length,1,'Sales-backed homepage must still reject unproven sales');
   assert.equal(shelves[0].products[0].id,5001);native.close();
