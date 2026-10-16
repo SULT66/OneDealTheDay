@@ -1,10 +1,19 @@
 const assert = require("assert");
 const { categoryLabel } = require("../src/i18n");
-const { presentProduct, publicOneDailyDropScore, PUBLIC_SCORE_FLOOR } = require("../src/productPresentation");
+const { presentProduct, publishedScore, publicOneDailyDropScore, PUBLIC_SCORE_FLOOR } = require("../src/productPresentation");
 /* By constant, not by name: these fixtures mean "scored with the model in
    force", and spelling the version out turned them into legacy records the
    moment the model was bumped. */
 const { SCORE_MODEL } = require("../src/ranker");
+
+// These rows cannot publish a score under evidenceCeiling. Do not inspect or
+// recalculate their model only to throw the result away on the catalogue path.
+for (const review_count of [0, 1, 4]) {
+  assert.strictEqual(publishedScore({
+    review_count, rating: 4.8,
+    get score_breakdown() { throw new Error("unnecessary model recalculation"); },
+  }), null);
+}
 
 /*
  * These three moved when the band did. It used to run 82 to 95, so a
