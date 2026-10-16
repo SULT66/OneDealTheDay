@@ -15,6 +15,12 @@ export function HalloweenProducts({market,language,data,q='',sort='popular',prev
     {{en:'Halloween products are temporarily unavailable. Please try again.',es:'Los productos Halloween no están disponibles temporalmente. Inténtalo de nuevo.',fr:'Les produits Halloween sont temporairement indisponibles. Réessayez.',de:'Halloween-Produkte sind vorübergehend nicht verfügbar. Bitte erneut versuchen.'}[language]}
     {' '}<a className="font-semibold underline" href={`/${market}/halloween?${new URLSearchParams({q,sort,lang:language})}`}>{{en:'Retry',es:'Reintentar',fr:'Réessayer',de:'Erneut versuchen'}[language]}</a>
   </section>;
+  const late={
+    en:'Ordering now may not arrive before October 31. Check the delivery estimate at the shop before you count on it.',
+    es:'Lo que compres ahora puede no llegar antes del 31 de octubre. Comprueba el plazo de entrega en la tienda.',
+    fr:'Une commande passée maintenant peut ne pas arriver avant le 31 octobre. Vérifiez le délai auprès de la boutique.',
+    de:'Eine Bestellung jetzt kommt womöglich nicht vor dem 31. Oktober an. Prüfe die Lieferzeit beim Händler.',
+  }[language];
   const pageUrl=(page:number)=>`/${market}/halloween?${new URLSearchParams({page:String(page),q,sort,lang:language})}`;
   const date=(value:string)=>new Intl.DateTimeFormat(language,{month:'short',day:'numeric',timeZone:'UTC'}).format(new Date(value));
   return <section id="halloween-products" aria-labelledby="halloween-products-title" className="mt-8 scroll-mt-32">
@@ -22,6 +28,7 @@ export function HalloweenProducts({market,language,data,q='',sort='popular',prev
       <h2 id="halloween-products-title" className="text-2xl font-bold tracking-tight">{copy.title}</h2>
       <p className="text-sm font-semibold text-fg-muted">{data.total} {copy.count}</p>
     </div>
+    {data.pastDeliveryCutoff && <p className="mt-4 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-700/60 dark:bg-amber-950/40 dark:text-amber-100">{late}</p>}
     {!preview && <form className="my-7 flex flex-col gap-3 rounded-2xl border border-border bg-surface p-4 sm:flex-row" method="get" action={`/${market}/halloween`}>
       <input type="hidden" name="lang" value={language} />
       <label className="flex flex-1 flex-col gap-1 text-xs font-bold text-fg-muted">{copy.search}<input name="q" defaultValue={q} maxLength={120} placeholder={copy.search} className="rounded-xl border border-border bg-surface px-4 py-3 text-sm text-fg" /></label>

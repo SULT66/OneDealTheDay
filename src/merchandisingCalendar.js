@@ -92,7 +92,14 @@ function yearlyEvents(year, market) {
   return entries;
 }
 
-function calendarSignals({ market = 'us', now = Date.now(), horizonDays = 90 } = {}) {
+/*
+ * includePastCutoff keeps a window that has passed its delivery cutoff but not
+ * its date. Selling and talking are different jobs: a Halloween order placed on
+ * the 29th cannot arrive, so the buying window shuts on the 24th, but the site
+ * still has something to say about Halloween until Halloween. Callers that sell
+ * leave this off and see the cutoff they had before.
+ */
+function calendarSignals({ market = 'us', now = Date.now(), horizonDays = 90, includePastCutoff = false } = {}) {
   const code = String(market).toLowerCase();
   if (!marketTimezones[code]) throw new RangeError('Unsupported merchandising market');
   const timestamp = new Date(now).getTime();
@@ -123,7 +130,10 @@ function calendarSignals({ market = 'us', now = Date.now(), horizonDays = 90 } =
       };
       // Future briefs may be prepared now; storefront must separately enforce
       // startsAt <= now < endsAt. Ends are exclusive.
-      if (Date.parse(signal.endsAt) > timestamp && Date.parse(signal.preparationAt) < horizonEnd) results.push(signal);
+      const closes = includePastCutoff
+        ? Math.max(Date.parse(signal.endsAt), Date.parse(signal.eventAt) + DAY)
+        : Date.parse(signal.endsAt);
+      if (closes > timestamp && Date.parse(signal.preparationAt) < horizonEnd) results.push(signal);
     }
   }
   return results.sort((a, b) => a.eventAt.localeCompare(b.eventAt) || a.id.localeCompare(b.id));
@@ -134,4 +144,35 @@ function activeHalloween({market = 'us', now = Date.now()} = {}) {
     signal.metadata.eventKey === 'halloween' && Date.parse(signal.startsAt) <= now && now < Date.parse(signal.endsAt));
 }
 
-module.exports = { calendarSignals, activeHalloween };
+/*
+ * A campaign the storefront may speak about, by its own clock.
+ *
+ * activeHalloween answers the selling question: is the window open in which a
+ * purchase can still arrive in time. That window shuts a week before the day.
+ *
+ * Two other questions are worth asking, and each is a flag here.
+ *
+ * fromPreparation opens a campaign at its preparation date rather than its
+ * sale date. Black Friday is the case that needs it: the thing worth saying
+ * starts eight weeks early, because recording prices for eight weeks is the
+ * only way to know on the day which of them actually fell.
+ *
+ * throughEvent keeps a campaign open until the date itself, past the delivery
+ * cutoff. The returned signal then carries pastDeliveryCutoff, so a caller can
+ * keep talking about Halloween on the 29th without implying that anything
+ * ordered that evening will be at the door by the 31st.
+ */
+function activeCampaign({ eventKey = '', market = 'us', now = Date.now(), fromPreparation = false, throughEvent = false } = {}) {
+  if (!eventKey) return null;
+  const signal = calendarSignals({ market, now, horizonDays: 120, includePastCutoff: throughEvent })
+    .find(entry => entry.metadata.eventKey === eventKey);
+  if (!signal) return null;
+  const opens = Date.parse(fromPreparation && signal.preparationAt ? signal.preparationAt : signal.startsAt);
+  const cutoff = Date.parse(signal.endsAt);
+  const closes = throughEvent ? Math.max(cutoff, Date.parse(signal.eventAt) + DAY) : cutoff;
+  if (!Number.isFinite(opens) || !Number.isFinite(closes)) return null;
+  if (!(opens <= now && now < closes)) return null;
+  return { ...signal, pastDeliveryCutoff: now >= cutoff };
+}
+
+module.exports = { calendarSignals, activeHalloween, activeCampaign };
