@@ -22,8 +22,21 @@ const EDITORIAL_QUALITY_FLOOR = 0.45;
  * it, because a two-day-old price is useful information. What stops is the
  * arithmetic performed on it: a discount is a claim about right now, and this
  * is the line past which we no longer know.
+ *
+ * Twenty-four hours was the first answer and it was not enough. On 2026-10-15
+ * the day's top pick — a Mainstays pillow — was shown at $5.84 under a "9%
+ * below our tracked high" badge while eBay was charging $6.98: the listing had
+ * run down to its last unit and the seller had raised the price. Our check was
+ * six hours and sixteen minutes old, comfortably inside the old window, so the
+ * badge was computed with full confidence from a price that no longer existed.
+ *
+ * Six hours, because that is how often the catalogue refreshes
+ * (fix/six-hour-catalog-schedule). A price older than one refresh cycle is one
+ * the latest sweep did not confirm, and that is exactly the price not to do
+ * arithmetic on. It costs us badges — most of the catalogue sits between the
+ * sweeps at any moment — and that is the trade the whole site is built to make.
  */
-const PRICE_CONFIDENT_HOURS = 24;
+const PRICE_CONFIDENT_HOURS = 6;
 
 /*
  * What a published score is allowed to reach, given what is actually known
