@@ -23,20 +23,33 @@ const EDITORIAL_QUALITY_FLOOR = 0.45;
  * arithmetic performed on it: a discount is a claim about right now, and this
  * is the line past which we no longer know.
  *
- * Twenty-four hours was the first answer and it was not enough. On 2026-10-15
- * the day's top pick — a Mainstays pillow — was shown at $5.84 under a "9%
- * below our tracked high" badge while eBay was charging $6.98: the listing had
- * run down to its last unit and the seller had raised the price. Our check was
- * six hours and sixteen minutes old, comfortably inside the old window, so the
- * badge was computed with full confidence from a price that no longer existed.
+ * Briefly six, and that was a mistake worth recording. On 2026-10-15 the day's
+ * top pick — a Mainstays pillow — was shown at $5.84 under a saving badge while
+ * eBay was charging $6.98: the listing had run down to its last unit and the
+ * seller had raised the price. Our check was six hours old, inside the window,
+ * so the badge was computed with full confidence from a price that had gone.
  *
- * Six hours, because that is how often the catalogue refreshes
- * (fix/six-hour-catalog-schedule). A price older than one refresh cycle is one
- * the latest sweep did not confirm, and that is exactly the price not to do
- * arithmetic on. It costs us badges — most of the catalogue sits between the
- * sweeps at any moment — and that is the trade the whole site is built to make.
+ * The window was narrowed to six hours on the belief that the catalogue
+ * re-checks every listing every six hours. It does not. Six hours is how often
+ * a sweep starts; the sweep works through the catalogue over more than a day.
+ * Measured an hour after that change deployed: of 3,072 listings, 208 had been
+ * checked within six hours, 1,737 within twelve, 2,346 within twenty-four, and
+ * the median age was ten hours. So the narrow window silenced ninety-three per
+ * cent of the catalogue and emptied the Daily Drop, which shows the first
+ * listing in the day's shortlist whose price is still current — production
+ * verification caught it as "No freshly checked drop today".
+ *
+ * Twenty-four hours is what this catalogue can actually sustain, and it is the
+ * number a daily pick needs: the selection is made once a day and has to stay
+ * showable until the next one.
+ *
+ * Which leaves the pillow unsolved by this constant, because it was never a
+ * staleness problem. The price moved because the listing was down to its last
+ * unit, and the fix is to stop claiming a saving on near-exhausted stock —
+ * eBay reports the remaining quantity and src/liveStock.js already reads it.
+ * Widening or narrowing a global window is the wrong instrument for it.
  */
-const PRICE_CONFIDENT_HOURS = 6;
+const PRICE_CONFIDENT_HOURS = 24;
 
 /*
  * What a published score is allowed to reach, given what is actually known
