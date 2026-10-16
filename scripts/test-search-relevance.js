@@ -90,6 +90,17 @@ assert.strictEqual(search("").length, CATALOGUE.length);
 console.log("search relevance: ok");
 
 const { parseSearchOptions } = require("../src/catalogSearch");
+const coffee = searchCatalogProducts([
+  listing(301, "FED Fitness Elliptical Exercise Machine", 300),
+  listing(302, "Precision Milling Machine", 500),
+  listing(303, "AIRMSEN 12 Cup Drip Coffee Maker", 80),
+  listing(304, "Keurig Coffee Machine", 90),
+  {...listing(305, "Coffee Decorative Pillow", 15), description: "Machine washable cover"},
+  listing(306, "Coffee Table with Drawers", 100),
+  listing(307, "Compact Coffeemaker", 60),
+], parseSearchOptions({ q: "coffee machine" }));
+assert.deepStrictEqual(coffee.products.map(p => p.id).sort(), [303, 304, 307], "compound queries must identify the requested product, including retailer naming variants");
+assert.equal(searchCatalogProducts([listing(308, "Useful Product Found", 10)], parseSearchOptions({q: "zzzz-no-product-found"})).pagination.total, 0, "a single generic word must not answer an unknown compound query");
 const laptops = searchCatalogProducts([
   {...listing(101,"Arctic Thermal Paste for Laptop CPU",8), ranking_score:99, rating:5, review_count:100},
   {...listing(102,"Laptop Backpack",35), ranking_score:98},

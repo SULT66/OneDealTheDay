@@ -1,5 +1,5 @@
 const assert = require("assert");
-const { storefrontUrl } = require("../src/storefrontLinks");
+const { storefrontUrl, storeDirectoryDestination } = require("../src/storefrontLinks");
 
 /*
  * Every link below was copied out of the live catalogue on 4 September 2026,
@@ -29,6 +29,14 @@ const giftlab = {
   retailer_shop_url:"https://www.giftlab.com/products/custom-air-fresheners-with-name",
   affiliate_url:"https://www.awin1.com/pclick.php?p=41887621589&a=3018019&m=95201"
 };
+
+const opaqueAli = { source: "aliexpress", retailer_name: "AliExpress", retailer_shop_url: "https://www.aliexpress.com/store/1105059426", affiliate_url: "https://s.click.aliexpress.com/s/opaque-token" };
+assert.equal(storefrontUrl(opaqueAli), null, "never cut the tracking token off an AliExpress short link");
+assert.deepStrictEqual(storeDirectoryDestination([opaqueAli], {market: "us", retailer: "AliExpress"}), {product: null, url: "/us/search?retailer=AliExpress"});
+const olderWorkingLink = storeDirectoryDestination([...Array(60).fill(opaqueAli), ebay], {market: "us", retailer: "eBay"});
+assert.strictEqual(olderWorkingLink.product, ebay, "a run of opaque links must not hide a usable older storefront");
+assert.equal(new URL(olderWorkingLink.url).searchParams.get("campid"), "5339179772");
+assert.equal(storeDirectoryDestination([ebay], {market: "fr", retailer: "A&B Shop", isPublicSource: () => false}).url, "/fr/search?retailer=A%26B%20Shop");
 
 /* ------------------------------------------------ the front door, not a product */
 

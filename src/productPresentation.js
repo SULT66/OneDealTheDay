@@ -3,6 +3,7 @@ const { SCORE_MODEL, scoreProduct, isDailyPickEligible, commerceQuality } = requ
 const { canonicalCategory } = require("./catalogTaxonomy");
 const { storefrontUrl } = require("./storefrontLinks");
 const { withVerifiedRetailerTerms } = require('./verifiedRetailerTerms');
+const { formatter } = require("./intlFormatters");
 
 const EDITORIAL_SCORE_FLOOR = 60;
 const EDITORIAL_CONFIDENCE_FLOOR = 55;
@@ -381,7 +382,7 @@ function money(value, currency, marketCode, language) {
   const amount = number(value, NaN);
   if (!Number.isFinite(amount)) return clean(value);
   try {
-    return new Intl.NumberFormat(languageTag(marketCode, language), {
+    return formatter("NumberFormat", languageTag(marketCode, language), {
       style: "currency",
       currency: String(currency || "USD").toUpperCase()
     }).format(amount);
@@ -430,7 +431,7 @@ function localizeAvailability(value, language) {
 function list(values, product, language) {
   const filtered = values.filter(Boolean);
   try {
-    return new Intl.ListFormat(languageTag(product?.market, language), { style: "long", type: "conjunction" }).format(filtered);
+    return formatter("ListFormat", languageTag(product?.market, language), { style: "long", type: "conjunction" }).format(filtered);
   } catch {
     return filtered.join(", ");
   }
@@ -453,7 +454,7 @@ function presentationReason(product, language) {
   if (rating > 0 && reviews > 0) {
     reasons.push(t(language, "product.reasonRating", {
       rating: rating.toFixed(1),
-      count: reviews.toLocaleString(languageTag(product?.market, language))
+      count: formatter("NumberFormat", languageTag(product?.market, language)).format(reviews)
     }));
   }
   if (number(breakdown.seller_reliability) >= 12) reasons.push(t(language, "product.reasonEstablishedSeller"));
@@ -526,7 +527,7 @@ function presentProduct(product, language = "en") {
   const trackedDrop = trackedDropPercent(product);
   const checkedAt = clean(product.checked_at || product.updated_at);
   const checkedDate = checkedAt && !Number.isNaN(new Date(checkedAt).getTime())
-    ? new Date(checkedAt).toLocaleString(languageTag(product.market, language))
+    ? formatter("DateTimeFormat", languageTag(product.market, language), { year: "numeric", month: "numeric", day: "numeric", hour: "numeric", minute: "numeric", second: "numeric" }).format(new Date(checkedAt))
     : "";
   const checkedTime = checkedAt ? new Date(checkedAt).getTime() : NaN;
   /* Unknown counts as not current: a listing with no check date is the one we
@@ -562,7 +563,7 @@ function presentProduct(product, language = "en") {
   const sellerFeedbackCount = Math.max(0, Math.round(number(product.seller_feedback_count)));
   const localizedSellerPercent = sellerPercent == null
     ? ""
-    : new Intl.NumberFormat(languageTag(product.market, language), { maximumFractionDigits: 1 }).format(sellerPercent);
+    : formatter("NumberFormat", languageTag(product.market, language), { maximumFractionDigits: 1 }).format(sellerPercent);
   return {
     ...product,
     coupons: require("./coupons").publicCoupons(product, priceIsCurrent),
@@ -604,7 +605,7 @@ function presentProduct(product, language = "en") {
        instead of each re-deriving "how old is too old" from checked_at. */
     display_price_is_current: priceIsCurrent,
     display_reviews_label: t(language, "product.reviews"),
-    display_review_count: Math.round(number(product.review_count)).toLocaleString(languageTag(product.market, language)),
+    display_review_count: formatter("NumberFormat", languageTag(product.market, language)).format(Math.round(number(product.review_count))),
     display_score: dealScore,
     display_score_label: t(language, "product.oneDailyDropScore"),
     display_score_context: t(language, "product.overallDealScore"),
@@ -622,7 +623,7 @@ function presentProduct(product, language = "en") {
     display_seller_rating_label: t(language, "product.sellerRating"),
     display_seller_feedback: sellerFeedbackCount > 0
       ? t(language, "product.sellerFeedbackCount", {
-        count: sellerFeedbackCount.toLocaleString(languageTag(product.market, language))
+        count: formatter("NumberFormat", languageTag(product.market, language)).format(sellerFeedbackCount)
       })
       : "",
     evidence_count: count,

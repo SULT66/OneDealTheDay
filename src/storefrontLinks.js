@@ -143,4 +143,14 @@ function storefrontUrl(product) {
   return {url:labelClick(link.toString(), CLICK_REF), network:link.hostname.replace(/^www\./, "")};
 }
 
-module.exports = { storefrontUrl, CLICK_REF };
+function storeDirectoryDestination(products, { market, retailer, isPublicSource = () => true }) {
+  for (const product of products) {
+    if (!isPublicSource(product.source)) continue;
+    const link = storefrontUrl(product);
+    if (link) return { product, url: link.url };
+  }
+  // Opaque short links remain intact on the product cards.
+  return { product: null, url: `/${market}/search?retailer=${encodeURIComponent(retailer)}` };
+}
+
+module.exports = { storefrontUrl, storeDirectoryDestination, CLICK_REF };

@@ -1,5 +1,5 @@
 const {
-  headTerm, landedCost, matchesAnySearchTerm, matchesHeadTerm, queryBudget,
+  headTerm, landedCost, matchesAnySearchTerm, matchesHeadTerm, normalizedTitle, queryBudget,
   scoreOffers, searchTokens, selectUniqueProducts, looksLikeAccessory, matchesMainProduct, isMainProductQuery,
 } = require("./ranker");
 
@@ -91,6 +91,25 @@ function isUnavailable(product) {
   return /\b(?:out of stock|unavailable|expired|ended|sold out)\b/i.test(clean(product.availability));
 }
 
+// A shared noun alone is not an answer to a compound product request.
+// Keep descriptive modifiers optional, but require each identifying word.
+const OPTIONAL_MODIFIERS = new Set(["wireless", "bluetooth", "portable", "rechargeable", "gaming", "smart", "mini", "compact", "noise", "cancelling", "canceling", "waterproof", "cordless", "usb", "wired", "digital", "electric", "automatic", "black", "white", "silver", "cheap", "budget", "premium", "professional", "heavy", "duty", "large", "small"]);
+function matchesQuery(product, query) {
+  const terms = searchTokens(query).filter(term => !OPTIONAL_MODIFIERS.has(term));
+  if (terms.length < 2) return matchesHeadTerm(product, headTerm(query));
+  const headline = normalizedTitle(`${product.title || ""} ${product.brand || ""} ${product.normalized_category || product.category || ""}`);
+  return terms.every(term => {
+    // Retailers call the same appliance a coffee machine, maker or brewer.
+    if (terms.includes("coffee") && /^(machine|maker|brewer)s?$/.test(term)) {
+      return /\b(?:machines?|makers?|brewers?|espresso|coffeemakers?)\b/.test(headline);
+    }
+    if (term === "coffee" && /\bcoffeemakers?\b/.test(headline)) return true;
+    const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const stem = escaped.endsWith("ies") ? `${escaped.slice(0, -3)}y` : escaped.endsWith("s") && !escaped.endsWith("ss") ? escaped.slice(0, -1) : escaped;
+    return new RegExp(`\\b(?:${escaped}|${stem}|${stem}s|${stem}es)\\b`).test(headline);
+  });
+}
+
 function stableTieBreak(left, right) {
   return fold(left.title).localeCompare(fold(right.title)) || Number(left.id || 0) - Number(right.id || 0);
 }
@@ -147,12 +166,10 @@ function searchCatalogProducts(rows, options) {
   /*
    * The thing asked for has to be there.
    *
-   * Matching any one term let "wireless earbuds under 50" answer with
-   * speakers, router antennas and printer cables. The head term — the last
-   * word that names a thing rather than describing it — is required in the
-   * title, brand or category. See headTerm in src/ranker.js.
+   * One-word requests retain the head-term rules. Compound requests also
+   * require their identifying words in the headline: "coffee machine" must
+   * not match an exercise machine or a machine-washable coffee pillow.
    */
-  const head = headTerm(options.query);
   /*
    * And a budget in the words is a budget, not a hint. "under 50" used to
    * multiply a listing's relevance rather than exclude it, so $180 headphones
@@ -163,7 +180,7 @@ function searchCatalogProducts(rows, options) {
   const matching = options.query
     ? candidates.filter(product =>
       matchesAnySearchTerm(product, searchTerms) &&
-      matchesHeadTerm(product, head) &&
+      matchesQuery(product, options.query) &&
       (!mainProduct || matchesMainProduct(product, options.query)) &&
       (budget.max == null || landedCost(product) <= budget.max) &&
       (budget.min == null || landedCost(product) >= budget.min))

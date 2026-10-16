@@ -211,7 +211,10 @@ export function priceBuckets<T extends DealLike>(deals: T[]): PriceBucket[] {
 }
 
 /** Every option on the panel, with the number it would leave behind. */
-export function listingCounts<T extends DealLike>(deals: T[], filter: DealFilter = {}) {
+export function listingCounts<T extends DealLike>(deals: T[], filter: DealFilter = {}, { queryApplied = false } = {}) {
+  // Backend search already resolved word order, synonyms and corrections.
+  // Applying a literal phrase again would turn real results into zero counts.
+  if (queryApplied) filter = { ...filter, query: undefined };
   const size = (patch: Partial<DealFilter>) =>
     applyFilter(deals, { ...filter, ...patch }).length;
   const withoutPrice = { minPrice: undefined, maxPrice: undefined };

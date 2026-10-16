@@ -33,7 +33,7 @@ execFileSync(
   ],
   { stdio: "pipe" },
 );
-const { applyFilter, sortDeals } = require(path.join(out, "filter.js"));
+const { applyFilter, sortDeals, listingCounts } = require(path.join(out, "filter.js"));
 
 /* What the backend returned for "office chair", in its order: chairs, none of
    which carries a score, and one high-scoring stationery listing further down
@@ -52,6 +52,20 @@ const results = [
 ];
 
 const firstTitle = (list) => list[0].title;
+
+const semanticResults = [
+  {...deal(1, "Drip Coffee Maker", 89), retailer: "eBay", rating: 4.6},
+  {...deal(2, "Coffee Machine", null), retailer: "AliExpress", rating: 0},
+];
+const coffeeCounts = listingCounts(semanticResults, {query: "coffee machine"}, {queryApplied: true});
+assert.equal(coffeeCounts.total, 2);
+assert.deepStrictEqual(coffeeCounts.retailers.map(r => r.value), ["AliExpress", "eBay"]);
+assert.equal(coffeeCounts.score.find(r => r.value === 85).count, 1);
+assert.equal(coffeeCounts.rating.find(r => r.value === 4).count, 1);
+const filteredCounts = listingCounts(semanticResults, {query: "coffee machine", retailer: "eBay", minScore: 85}, {queryApplied: true});
+assert.equal(filteredCounts.total, 1);
+assert.equal(filteredCounts.score.find(r => r.value === undefined).count, 1);
+assert.equal(listingCounts(semanticResults, {query: "unmatched"}).total, 0, "ordinary local query filtering must still work");
 
 /* No sort chosen — the case every visitor arriving from an ad is in. */
 assert.match(
@@ -98,7 +112,7 @@ assert.strictEqual(applyFilter(matching,{maxPrice:1500}).length,2,"Explicit ceil
  * shops that publishes reviews" — it removed 86% of the shelf and nothing said
  * so until it was pressed.
  */
-const { listingCounts, priceBuckets, PRICE_FILTER_MIN_LISTINGS } = require(path.join(out, "filter.js"));
+const { priceBuckets, PRICE_FILTER_MIN_LISTINGS } = require(path.join(out, "filter.js"));
 
 const shelf = [
   { ...deal(1, "Chair", 90), retailer: "Newegg", price: 20, rating: 0, reviewCount: 0, referencePrice: null },
