@@ -28,7 +28,7 @@ const {
   signParams,
 } = require("../src/providers/aliexpress");
 const { isIndexableProduct } = require("../src/indexability");
-const { planGapSearches, SHELVES } = require("../src/aliexpressGaps");
+const { planGapSearches, SHELVES } = require("../src/categoryGaps");
 const { canonicalCategory } = require("../src/catalogTaxonomy");
 
 const categoryRows = Object.keys(SHELVES).map(category => ({ category, count: 150 }));
