@@ -266,6 +266,11 @@ function priceIsCurrentFor(product = {}) {
  * window — gets its answer, not a second opinion.
  */
 function publishedScore(product = {}, { priceIsCurrent } = {}) {
+  // evidenceCeiling already forbids a public score without meaningful buyer
+  // reviews. Most catalogue rows have none: stop before recalculating their
+  // eligibility/model only to discard the number at the final gate.
+  const hasReviews = number(product.review_count) >= MEANINGFUL_REVIEW_COUNT && number(product.rating) > 0;
+  if (!hasReviews) return null;
   const rawDealScore = oneDailyDropScore(product);
   const confidence = oneDailyDropEvidenceConfidence(product);
   const drop = trackedDropPercent(product);
@@ -287,7 +292,7 @@ function publishedScore(product = {}, { priceIsCurrent } = {}) {
   return publicOneDailyDropScore(rawDealScore, confidence, commerceQuality(pricedAs(product, false)), {
     /* Reviews of the product, not of the seller. A shop with a spotless
        feedback record has still told us nothing about this thing. */
-    hasReviews: number(product.review_count) >= MEANINGFUL_REVIEW_COUNT && number(product.rating) > 0,
+    hasReviews,
     /* The same test the badge uses, so the number and the badge cannot
        disagree about whether there is a saving. */
     hasTrackedDrop: drop > 0 && fresh,
