@@ -17,14 +17,14 @@ const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 (async () => {
   /* --- Which pages, and how they can be overridden. --- */
-  assert.deepStrictEqual(pathsFor("us"), ["/us", "/us/daily-drop"]);
-  assert.deepStrictEqual(pathsFor("de"), ["/de", "/de/daily-drop"]);
+  assert.deepStrictEqual(pathsFor("us"), ["/us", "/us/black-friday", "/us/daily-drop"]);
+  assert.deepStrictEqual(pathsFor("de"), ["/de", "/de/black-friday", "/de/daily-drop"]);
   assert.deepStrictEqual(
     pathsFor("us", "/us, /us/stores ,/us/about"),
     ["/us", "/us/stores", "/us/about"],
     "WARM_PATHS overrides the list without a deploy",
   );
-  assert.deepStrictEqual(pathsFor("us", "   "), ["/us", "/us/daily-drop"], "blank falls back to the default");
+  assert.deepStrictEqual(pathsFor("us", "   "), ["/us", "/us/black-friday", "/us/daily-drop"], "blank falls back to the default");
 
   /* --- One page at a time, never two. --- */
   {

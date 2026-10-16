@@ -39,7 +39,7 @@ const MAX_ENTRIES = 300;
 const MAX_BODY_BYTES = 2 * 1024 * 1024;
 const zlib = require('node:zlib');
 const { randomUUID } = require('node:crypto');
-const isStreamedEntry = path => /^(?:\/(?:us|ca|uk|fr|de))?\/?(?:halloween\/?)?$/.test(path);
+const isStreamedEntry = path => /^(?:\/(?:us|ca|uk|fr|de))?\/?(?:(?:halloween|black-friday)\/?)?$/.test(path);
 
 function transientPage(body, encoding) {
   try {
@@ -59,7 +59,7 @@ function transientPage(body, encoding) {
  * cannot quietly fall through to a different rule than /us/about.
  */
 const CACHEABLE_PATH =
-  /^(?:\/(?:us|ca|uk|fr|de))?\/?(?:|halloween|daily-drop|stores|search|archive|brands|about|contact|privacy|terms|affiliate-disclosure|editorial-policy|how-we-select-deals|price-disclaimer|for-retailers|deal\/[^/]+|category|category\/[^/]+|brand\/[^/]+)\/?$/;
+  /^(?:\/(?:us|ca|uk|fr|de))?\/?(?:|halloween|black-friday|daily-drop|stores|search|archive|brands|about|contact|privacy|terms|affiliate-disclosure|editorial-policy|how-we-select-deals|price-disclaimer|for-retailers|deal\/[^/]+|category|category\/[^/]+|brand\/[^/]+)\/?$/;
 
 const isSearch = (path) => /\/search\/?$/.test(path);
 
