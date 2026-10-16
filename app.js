@@ -51,6 +51,8 @@ const { rescueQuery } = require("./src/searchFallback");
 const { recordSearch, searchDemand } = require("./src/searchQueries");
 const { categoryLabel } = require("./src/i18n");
 const { storefrontUrl } = require("./src/storefrontLinks");
+const { presentCatalogBatch } = require("./src/catalogBatch");
+const asyncRoute = handler => (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next);
 const { applySearchIntent } = require("./src/searchIntent");
 const createExpressApp = express;
 const CANONICAL_HOST = "www.onedailydrop.com";
@@ -352,7 +354,7 @@ function expressWithHomepage(...args) {
     return res.set("X-ODD-Cache", "MISS").json(payload);
   });
 
-  app.get("/api/search", (req, res) => {
+  app.get("/api/search", asyncRoute(async (req, res) => {
     const selectedMarket = normalizeMarket(req.query.market) || marketFromIp(req).code;
     const language = resolveLanguage(req, res, selectedMarket);
     const rows = searchRowsForMarket(selectedMarket);
@@ -418,7 +420,7 @@ function expressWithHomepage(...args) {
         resultCount:result.pagination.total
       });
     }
-    const products = result.products.map(product => presentProduct(localizeProduct(product, language), language));
+    const products = await presentCatalogBatch(cacheKey, result.products, product => presentProduct(localizeProduct(product, language), language));
     res.set("X-Robots-Tag", "noindex, nofollow");
     res.set("Cache-Control", "private, max-age=30, stale-while-revalidate=120");
     const payload = cacheValue(cacheKey, {
@@ -451,9 +453,9 @@ function expressWithHomepage(...args) {
       products
     }, 30000);
     return res.set("X-ODD-Cache", "MISS").json(payload);
-  });
+  }));
 
-  app.get("/api/products", (req, res, next) => {
+  app.get("/api/products", asyncRoute(async (req, res, next) => {
     if (!config.isProduction) return next();
     const selectedMarket = normalizeMarket(req.query.market) || marketFromIp(req).code;
     const language = resolveLanguage(req, res, selectedMarket);
@@ -541,7 +543,7 @@ function expressWithHomepage(...args) {
         ORDER BY score DESC,updated_at DESC
         ${catalogRowLimit}
       `).all(selectedMarket, categoryFilter)).slice(0, responseLimit);
-      presented = products.map(present);
+      presented = await presentCatalogBatch(cacheKey, products, present);
     } else {
       const daily = db.prepare(`
         SELECT p.*,d.rank AS daily_rank,d.selection_reason AS daily_selection_reason
@@ -562,12 +564,12 @@ function expressWithHomepage(...args) {
         ...product,
         selection_reason: product.daily_selection_reason || product.selection_reason
       })), ...catalog]).slice(0, responseLimit);
-      presented = products.map(present);
+      presented = await presentCatalogBatch(cacheKey, products, present);
     }
 
     cacheValue(cacheKey, presented, 60000);
     return res.set("X-ODD-Cache", "MISS").json(presented);
-  });
+  }));
 
   /*
    * What the filter panel needs, which is a list of shops and two numbers.

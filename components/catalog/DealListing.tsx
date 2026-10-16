@@ -109,12 +109,12 @@ export async function DealListing({
   const backendCategory =
     scopeCategory || (filter.category ? getCategory(filter.category)?.name : undefined);
 
-  const baseFilter = { ...filter, category: backendCategory ? slugifyCategory(backendCategory) : undefined, retailer: undefined, minPrice: undefined, maxPrice: undefined };
+  const baseFilter = { query: filter.query, category: backendCategory ? slugifyCategory(backendCategory) : undefined, sort: filter.sort };
   const exact = searchParams.exact === "1";
   const baseDeals = filter.query ? (await searchDeals(market, baseFilter, { exact })).deals : await getDeals(market, baseFilter);
   /* What every option on the panel would leave behind. Counted here, on the
      server, over the same list the page is drawn from. See listingCounts. */
-  const counts = listingCounts(baseDeals, filter);
+  const counts = listingCounts(baseDeals, filter, { queryApplied: Boolean(filter.query) });
   const currency = getMarket(market)?.currency ?? "USD";
 
   return (

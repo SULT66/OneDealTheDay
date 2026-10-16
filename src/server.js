@@ -104,7 +104,7 @@ const {
   normalizeSourcePage,
   outboundPath
 } = require("./retailerLinks");
-const { storefrontUrl } = require("./storefrontLinks");
+const { storefrontUrl, storeDirectoryDestination } = require("./storefrontLinks");
 const { hostLabel, verifyOutbound, withSignedLinks } = require("./outboundLinks");
 const { matchConversations, normalizeQuery: normalizeConversationQuery } = require("./deliaConversationSearch");
 const { labelClick, liveDropLabel } = require("./clickLabels");
@@ -3506,32 +3506,20 @@ app.get("/go/store/:retailer", (req,res) => {
   const marketCode = req.market || marketFromIp(req).code;
   const slug = String(req.params.retailer || "").toLowerCase();
   const shopName = db
-    .prepare("SELECT DISTINCT retailer_name FROM products WHERE market=? AND status='published' AND retailer_name<>''")
+    .prepare(`SELECT DISTINCT retailer_name FROM products WHERE market=? AND status='published' AND retailer_name<>'' AND ${sourceSql()}`)
     .all(marketCode)
     .map(row => row.retailer_name)
     .find(name => categorySlug(name) === slug);
   if (!shopName) return res.sendStatus(404);
-  /* Newest first, so the listing that lends its link is one the feed has
-     confirmed recently rather than the oldest row we ever imported. Fifty is
-     enough to get past a run of listings whose links cannot be converted
-     without reading the whole shop. */
+  /* Search every current listing: newer short links must not hide an older
+     usable storefront link. iterate() stops as soon as one is found. */
   const candidates = db
-    .prepare("SELECT * FROM products WHERE market=? AND status='published' AND retailer_name=? ORDER BY id DESC LIMIT 50")
-    .all(marketCode, shopName);
-  let chosen = null;
-  let destination = null;
-  for (const product of candidates) {
-    if (!isPublicSource(product.source)) continue;
-    const link = storefrontUrl(product);
-    if (!link) continue;
-    chosen = product;
-    destination = link.url;
-    break;
-  }
-  /* No commissionable front door for this shop. Nothing is shown to send the
-     visitor here, so arriving is already unusual; sending them out through a
-     link that pays nobody would be worse than the 404. */
-  if (!chosen) return res.sendStatus(404);
+    .prepare("SELECT * FROM products WHERE market=? AND status='published' AND retailer_name=? ORDER BY id DESC")
+    .iterate(marketCode, shopName);
+  const { product: chosen, url: destination } = storeDirectoryDestination(candidates, {
+    market: marketCode, retailer: shopName, isPublicSource,
+  });
+  if (!chosen) return res.redirect(302, destination);
   recordClick(req, chosen, {
     sourcePage:"stores",
     placement:"store_directory",
