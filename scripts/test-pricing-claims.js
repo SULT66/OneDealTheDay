@@ -77,6 +77,7 @@ assert(/app\.price\.sellerList/.test(block), "the struck-through figure is no lo
 assert(/app\.card\.trackedDropShort/.test(block), "the pill beside the price is no longer our own measurement");
 
 /* --- The strings themselves, in every language the site speaks. --- */
+const { PRICE_CONFIDENT_HOURS } = require("../src/productPresentation");
 const { appCopy } = require("../src/i18n-app");
 for (const language of ["en", "es", "fr", "de"]) {
   const words = appCopy[language];
@@ -147,5 +148,76 @@ const reviewed = presentProduct({
   ...knives, id: 3, rating: 4.8, review_count: 3000, tracked_drop_percent: 22,
 }, "en");
 assert.strictEqual(reviewed.display_badge, "STRONG REVIEWS", "reviews lost their place to the price again");
+
+/*
+ * The badge has to say whose observation it is.
+ *
+ * "DOWN 9%" was the wording, and a shopper reads that as a shop taking 9% off
+ * — the one thing it is not. The number compares today's price with the
+ * highest price we recorded ourselves; nobody is discounting anything. On
+ * 2026-10-15 the day's top pick carried that badge over a price the seller had
+ * already raised to $6.98, which is what made the ambiguity worth settling
+ * rather than arguing about.
+ */
+const OBSERVER = /\bwe\b|nous|wir|registramos|visto|relevé|notiert|erfasst|recorded|saw/i;
+const DISCOUNT_WORD = /\b(off|discount|rabatt|descuento|remise|sale|baja|down)\b/i;
+
+for (const language of ["en", "es", "fr", "de"]) {
+  for (const key of ["app.card.trackedDrop", "app.card.trackedDropShort"]) {
+    const phrase = String(appCopy[language][key] || "");
+    assert.ok(phrase, `${language} is missing ${key}`);
+    assert.ok(
+      OBSERVER.test(phrase),
+      `${language} ${key} does not say who saw the higher price: "${phrase}"`,
+    );
+    assert.ok(
+      !DISCOUNT_WORD.test(phrase),
+      `${language} ${key} reads as a retailer's discount rather than our own measurement: "${phrase}"`,
+    );
+  }
+  for (const key of ["product.trackedDropPercent", "product.trackedDropShort"]) {
+    const phrase = String(copy[language][key] || "");
+    assert.ok(phrase, `${language} is missing ${key}`);
+    assert.ok(
+      OBSERVER.test(phrase),
+      `${language} ${key} does not say who saw the higher price: "${phrase}"`,
+    );
+    assert.ok(
+      !DISCOUNT_WORD.test(phrase),
+      `${language} ${key} reads as a retailer's discount: "${phrase}"`,
+    );
+  }
+}
+
+/*
+ * The window named in the copy is the window actually measured.
+ *
+ * The long badge says "in the last 60 days" in four languages, and WINDOW_DAYS
+ * in src/trackedPrice.js is what the measurement uses. They live far enough
+ * apart to drift silently, and the drift would simply start telling people the
+ * wrong period.
+ */
+const { WINDOW_DAYS } = require("../src/trackedPrice");
+for (const language of ["en", "es", "fr", "de"]) {
+  const phrase = String(appCopy[language]["app.card.trackedDrop"] || "");
+  assert.ok(
+    phrase.includes(String(WINDOW_DAYS)),
+    `${language} promises a window that is not ${WINDOW_DAYS} days: "${phrase}"`,
+  );
+}
+
+/*
+ * How long a price may have been confirmed before we stop doing arithmetic on it.
+ *
+ * Six hours, matching the catalogue refresh. Twenty-four was the old answer,
+ * and it let a badge be computed from a price six hours dead while the seller
+ * had raised it by nineteen per cent. Anything much wider than one refresh
+ * cycle puts us back there.
+ */
+assert.ok(
+  PRICE_CONFIDENT_HOURS <= 8,
+  `a price confirmed ${PRICE_CONFIDENT_HOURS} hours ago is still treated as current; `
+    + "the catalogue refreshes every six hours, so a wider window claims a saving the last sweep never saw",
+);
 
 console.log("pricing claims: ok");

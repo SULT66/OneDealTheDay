@@ -337,8 +337,8 @@ const appCopy = {
     "app.deal.comparableSame": "The same price on {store}",
     "app.deal.comparableMatched": "Matched by barcode, checked {date}. The price and the rating belong to the {store} listing, not to this one.",
     "app.deal.comparableRating": "{rating}/5 from {count} reviews on {store}",
-    "app.card.trackedDrop": "{percent}% below our tracked high",
-    "app.card.trackedDropShort": "Down {percent}%",
+    "app.card.trackedDrop": "We recorded this price {percent}% higher in the last 60 days",
+    "app.card.trackedDropShort": "We saw it {percent}% higher",
   },
 
   es: {
@@ -662,8 +662,8 @@ const appCopy = {
     "app.deal.comparableSame": "El mismo precio en {store}",
     "app.deal.comparableMatched": "Emparejado por código de barras, comprobado el {date}. El precio y la valoración son del anuncio de {store}, no de este.",
     "app.deal.comparableRating": "{rating}/5 con {count} opiniones en {store}",
-    "app.card.trackedDrop": "{percent}% por debajo de nuestro máximo registrado",
-    "app.card.trackedDropShort": "Baja {percent}%",
+    "app.card.trackedDrop": "Registramos este precio un {percent}% más alto en los últimos 60 días",
+    "app.card.trackedDropShort": "Visto un {percent}% más caro",
     "app.price.sellerList": "precio de lista del vendedor",
   },
 
@@ -800,8 +800,8 @@ const appCopy = {
     "app.deal.comparableSame": "Le même prix sur {store}",
     "app.deal.comparableMatched": "Apparié par code-barres, vérifié le {date}. Le prix et la note appartiennent à l'annonce {store}, pas à celle-ci.",
     "app.deal.comparableRating": "{rating}/5 sur {count} avis sur {store}",
-    "app.card.trackedDrop": "{percent}% sous notre plus haut relevé",
-    "app.card.trackedDropShort": "-{percent}%",
+    "app.card.trackedDrop": "Nous avons relevé ce prix {percent}% plus haut sur les 60 derniers jours",
+    "app.card.trackedDropShort": "Relevé {percent}% plus cher",
     "app.price.sellerList": "prix de liste du vendeur",
   },
 
@@ -938,8 +938,8 @@ const appCopy = {
     "app.deal.comparableSame": "Derselbe Preis bei {store}",
     "app.deal.comparableMatched": "Über den Barcode zugeordnet, geprüft am {date}. Preis und Bewertung gehören zum Angebot bei {store}, nicht zu diesem.",
     "app.deal.comparableRating": "{rating}/5 aus {count} Bewertungen bei {store}",
-    "app.card.trackedDrop": "{percent}% unter unserem erfassten Höchstpreis",
-    "app.card.trackedDropShort": "-{percent}%",
+    "app.card.trackedDrop": "Wir haben diesen Preis in den letzten 60 Tagen {percent}% höher erfasst",
+    "app.card.trackedDropShort": "{percent}% teurer notiert",
     "app.price.sellerList": "Listenpreis des Verkäufers",
   },
 };
