@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { ProgressLink as Link } from "./ProgressLink";
 import { usePathname } from "next/navigation";
 import { Tag } from "@phosphor-icons/react";
 

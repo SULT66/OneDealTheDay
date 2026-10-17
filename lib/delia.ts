@@ -241,6 +241,8 @@ export async function askAssistant(
      * `shortlistFromTurns`.
      */
     shortlist?: DeliaShortlistItem[];
+    signal?: AbortSignal;
+    onPreview?: (result:DeliaResult)=>void;
   },
   /*
    * Called as the search reaches each milestone. Optional, and the request
@@ -249,11 +251,14 @@ export async function askAssistant(
    */
   onProgress?: (event: DeliaProgress) => void,
 ): Promise<DeliaResult> {
+  const signal=AbortSignal.any([...(opts.signal?[opts.signal]:[]),AbortSignal.timeout(opts.productId?35000:65000)]);
+  opts={...opts,signal};
   if (onProgress) {
     const streamed = await askAssistantStreaming(transcript, opts, onProgress);
     if (streamed) return streamed;
   }
   const res = await fetch("/api/shopping-assistant", {
+    signal,
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -298,6 +303,7 @@ async function askAssistantStreaming(
   let response: Response;
   try {
     response = await fetch("/api/shopping-assistant/stream", {
+      signal:opts.signal,
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -312,10 +318,12 @@ async function askAssistantStreaming(
         shortlist: opts.shortlist?.length ? opts.shortlist : undefined,
       }),
     });
-  } catch {
+  } catch(error) {
+    if(opts.signal?.aborted)throw error;
     return null;
   }
-  if (!response.ok || !response.body) return null;
+  if ([404,405,501].includes(response.status)) return null;
+  if (!response.ok || !response.body)throw new DeliaError("Delia could not answer that. Try again.");
 
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
@@ -335,21 +343,25 @@ async function askAssistantStreaming(
       return;
     }
     if (event.type === "progress") onProgress(event);
+    if (event.type === "preview" && event.result) opts.onPreview?.(toResult(transcript,event.result));
     if (event.type === "result" && event.result) result = toResult(transcript, event.result);
     if (event.type === "error") failure = event.error || "Delia could not answer that. Try again.";
   };
 
-  for (;;) {
+  try { for (;;) {
     const { done, value } = await reader.read();
     if (done) break;
     buffer += decoder.decode(value, { stream: true });
     const lines = buffer.split("\n");
     buffer = lines.pop() ?? "";
     for (const line of lines) consume(line);
+    if(result)break;
   }
   consume(buffer);
+  } finally { await reader.cancel().catch(()=>{}); reader.releaseLock(); }
 
   if (failure) throw new DeliaError(failure);
+  if(!result)throw new DeliaError("Delia could not finish that search. Try again.");
   return result;
 }
 

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useNavigationProgress } from "./NavigationProgress";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { ArrowUpRight, ClockCounterClockwise, MagnifyingGlass } from "@phosphor-icons/react";
 import { useCopy } from "./CopyProvider";
@@ -98,7 +98,7 @@ export function SearchBox({
   action: string;
   className?: string;
 }) {
-  const router = useRouter();
+  const {pending,navigate} = useNavigationProgress();
   const copy = useCopy();
   const listId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -218,7 +218,7 @@ export function SearchBox({
       const option = options[active];
       remember(option.term);
       close();
-      router.push(option.href);
+      navigate(option.href);
     }
   };
 
@@ -231,6 +231,7 @@ export function SearchBox({
       <li key={key}>
         <Link
           href={href}
+          onNavigate={event=>{event.preventDefault();navigate(href);}}
           id={optionId(index)}
           role="option"
           aria-selected={index === active}
@@ -265,6 +266,7 @@ export function SearchBox({
     <div ref={rootRef} className={`relative ${className || ""}`}>
       <form
         role="search"
+        aria-busy={pending}
         action={`/${market}/search`}
         method="get"
         onSubmit={e => {
@@ -272,7 +274,7 @@ export function SearchBox({
           const q = value.trim();
           remember(q);
           close();
-          router.push(q ? `/${market}/search?q=${encodeURIComponent(q)}` : `/${market}`);
+          navigate(q ? `/${market}/search?q=${encodeURIComponent(q)}` : `/${market}/search`);
         }}
       >
         {/* Focus shows on the pill, not as a ring around the field inside it;
@@ -322,6 +324,7 @@ export function SearchBox({
           />
           <button
             type="submit"
+            disabled={pending}
             className="hidden h-9 cursor-pointer items-center rounded-full bg-surface-inverse px-4 text-sm font-medium text-fg-on-inverse transition-opacity hover:opacity-88 sm:inline-flex"
           >
             {action}

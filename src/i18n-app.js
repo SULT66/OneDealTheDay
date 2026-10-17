@@ -1034,3 +1034,59 @@ Object.assign(appCopy.de, {
 for (const [language, labels] of Object.entries({en:["Coupon code","Coupon terms"], es:["Código de cupón","Condiciones del cupón"], fr:["Code promo","Conditions du coupon"], de:["Gutscheincode","Gutscheinbedingungen"]})) {
   Object.assign(appCopy[language], {"app.coupon.code":labels[0], "app.coupon.terms":labels[1]});
 }
+
+Object.assign(appCopy.en, {
+  "app.navigation.loading": "Updating products…",
+  "app.navigation.failed": "This page could not be loaded. Please try again.",
+  "app.navigation.retry": "Try again",
+  "app.brands.search": "Search brands",
+  "app.brands.count": "{count} brands",
+  "app.delia.preview": "From our catalogue. Checking other shops next…",
+  "app.delia.partial": "The external comparison did not finish. These are our catalogue records; check the price and availability at the shop.",
+  "app.filter.heading": "Filters and sorting",
+  "app.filter.show": "Show",
+  "app.filter.hide": "Hide",
+  "app.brands.countOne": "1 brand"
+});
+
+Object.assign(appCopy.es, {
+  "app.navigation.loading": "Actualizando productos…",
+  "app.navigation.failed": "No se pudo cargar esta página. Inténtalo de nuevo.",
+  "app.navigation.retry": "Reintentar",
+  "app.brands.search": "Buscar marcas",
+  "app.brands.count": "{count} marcas",
+  "app.delia.preview": "Datos de nuestro catálogo. Ahora comprobamos otras tiendas…",
+  "app.delia.partial": "La comparación externa no terminó. Estos son nuestros registros; consulta el precio y la disponibilidad en la tienda.",
+  "app.filter.heading": "Filtros y ordenación",
+  "app.filter.show": "Mostrar",
+  "app.filter.hide": "Ocultar",
+  "app.brands.countOne": "1 marca"
+});
+
+Object.assign(appCopy.fr, {
+  "app.navigation.loading": "Mise à jour des produits…",
+  "app.navigation.failed": "Cette page n’a pas pu être chargée. Réessayez.",
+  "app.navigation.retry": "Réessayer",
+  "app.brands.search": "Rechercher des marques",
+  "app.brands.count": "{count} marques",
+  "app.delia.preview": "Données de notre catalogue. Vérification des autres boutiques…",
+  "app.delia.partial": "La comparaison externe n’a pas abouti. Voici nos relevés ; vérifiez le prix et la disponibilité en boutique.",
+  "app.filter.heading": "Filtres et tri",
+  "app.filter.show": "Afficher",
+  "app.filter.hide": "Masquer",
+  "app.brands.countOne": "1 marque"
+});
+
+Object.assign(appCopy.de, {
+  "app.navigation.loading": "Produkte werden aktualisiert…",
+  "app.navigation.failed": "Diese Seite konnte nicht geladen werden. Bitte erneut versuchen.",
+  "app.navigation.retry": "Erneut versuchen",
+  "app.brands.search": "Marken suchen",
+  "app.brands.count": "{count} Marken",
+  "app.delia.preview": "Aus unserem Katalog. Andere Shops werden geprüft…",
+  "app.delia.partial": "Der externe Vergleich wurde nicht abgeschlossen. Das sind unsere Katalogdaten; bitte Preis und Verfügbarkeit im Shop prüfen.",
+  "app.filter.heading": "Filter und Sortierung",
+  "app.filter.show": "Anzeigen",
+  "app.filter.hide": "Ausblenden",
+  "app.brands.countOne": "1 Marke"
+});

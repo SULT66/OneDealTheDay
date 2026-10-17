@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { ProgressLink as Link } from "@/components/site/ProgressLink";
 import { CaretLeft, CaretRight } from "@phosphor-icons/react/ssr";
 import { cn } from "@/lib/cn";
 

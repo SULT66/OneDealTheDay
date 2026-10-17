@@ -45,7 +45,7 @@ const { priceIntelligence } = require("./priceIntelligence");
 const { capPerSourceAndCategory, sourceSql, isPublicSource, uniqueProductsInOrder } = require("./publicCatalog");
 const { enabledProviders, searchForAssistant } = require("./providers/registry");
 const { coverage: retailerCoverage } = require("./retailerCatalog");
-const { presentProduct } = require("./productPresentation");
+const { presentProduct, presentListingProduct } = require("./productPresentation");
 const { PUBLIC_CATEGORIES, canonicalCategory, isPublicCategory } = require("./catalogTaxonomy");
 /* Aliased: this file already has an alternativesFor, for a live listing. */
 const { alternativesFor: endedAlternativesFor, endedProduct } = require("./endedOffer");
@@ -106,7 +106,7 @@ const {
 } = require("./retailerLinks");
 const { storefrontUrl, storeDirectoryDestination } = require("./storefrontLinks");
 const {ratingSummary, summarizeBrands} = require("./brandSummary");
-const {formatter} = require("./intlFormatters");
+const {catalogPreview} = require("./deliaPreview");
 const { hostLabel, verifyOutbound, withSignedLinks } = require("./outboundLinks");
 const { matchConversations, normalizeQuery: normalizeConversationQuery } = require("./deliaConversationSearch");
 const { labelClick, liveDropLabel } = require("./clickLabels");
@@ -438,7 +438,7 @@ app.post("/api/shopping-assistant/stream", shoppingAssistantRateLimit, async (re
     "X-Accel-Buffering": "no",
   });
   const send = (payload) => {
-    if (res.writableEnded) return;
+    if (res.writableEnded || res.destroyed) return;
     res.write(`${JSON.stringify(withSignedLinks(payload))}\n`);
   };
 
@@ -458,6 +458,9 @@ app.post("/api/shopping-assistant/stream", shoppingAssistantRateLimit, async (re
     return res.end();
   }
 
+  let preview=null;
+  try{preview=catalogPreview({db,sourceSql,productId:req.body?.product_id,market:selectedMarket.code,language,t});}catch(error){console.error("Delia catalogue preview unavailable:",error.message);}
+  if(preview){send({type:"preview",result:preview});res.flushHeaders();}
   let hardTimeoutTimer;
   try {
     const assistantTask = shoppingAssistant.respond({
@@ -482,7 +485,7 @@ app.post("/api/shopping-assistant/stream", shoppingAssistantRateLimit, async (re
           req.body?.message,
           false,
         );
-        resolve(timeoutResponse(
+        resolve(preview ? {...preview,message:t(language,"app.delia.partial")} : timeoutResponse(
           req.body?.message,
           language,
           [],
@@ -492,11 +495,12 @@ app.post("/api/shopping-assistant/stream", shoppingAssistantRateLimit, async (re
           shoppingMissionText(timeoutMission, req.body?.message),
         ));
         requestController.abort();
-      }, SHOPPING_ASSISTANT_HARD_TIMEOUT_MS);
+      }, preview ? 25000 : SHOPPING_ASSISTANT_HARD_TIMEOUT_MS);
     });
     const result = await Promise.race([assistantTask, hardTimeoutTask]);
     clearTimeout(hardTimeoutTimer);
-    if (key) {
+    if(res.destroyed)return;
+    if (key && !result.partial) {
       try {
         writeCachedAnswer(db, key, result);
       } catch (error) {
@@ -508,6 +512,12 @@ app.post("/api/shopping-assistant/stream", shoppingAssistantRateLimit, async (re
     return res.end();
   } catch (error) {
     clearTimeout(hardTimeoutTimer);
+    if(requestController.signal.aborted && res.destroyed)return;
+    if(preview){
+      const result={...preview,message:t(language,"app.delia.partial")};
+      rememberExchange(req,selectedMarket.code,result);
+      send({type:"result",result});return res.end();
+    }
     const status = Number(error.statusCode) || 502;
     if (status >= 500) console.error("Shopping assistant stream failed:", error.message);
     /* The status line has already gone out with a 200, so the failure has to
@@ -659,7 +669,7 @@ app.post("/api/shopping-assistant/feedback", shoppingAssistantRateLimit, (req, r
  * they reach the catch-all at the bottom of this file instead of being
  * rewritten back onto the old bare-URL Express routes.
  */
-const nextOwnedPath = /^\/(?:about|account|saved|live|how-we-select-deals|search|daily-drop|archive|contact|privacy|terms|affiliate-disclosure|editorial-policy|for-retailers|price-disclaimer|stores|coupons|halloween|black-friday|guides|guides\/[^/]+|category|deal\/[^/]+|category\/[^/]+)\/?$/;
+const nextOwnedPath = /^\/(?:about|account|saved|live|how-we-select-deals|search|daily-drop|archive|contact|privacy|terms|affiliate-disclosure|editorial-policy|for-retailers|price-disclaimer|stores|coupons|halloween|black-friday|guides|guides\/[^/]+|brands|brand\/[^/]+|category|deal\/[^/]+|category\/[^/]+)\/?$/;
 app.use((req, res, next) => {
   const match = req.url.match(new RegExp(`^/(${marketCodes.join("|")})(?=/|\\?|$)`));
   /* Compare the path alone, not the whole URL: `/de` was left intact for Next
@@ -1923,7 +1933,7 @@ const sharedHeader = (code, language = "en", req = null) => {
       ${req ? languageSwitcher(req, code, language) : ""}
       <button class="mobile-menu-toggle" type="button" aria-expanded="false" aria-controls="mainNavigation" aria-label="${esc(t(language,"menu.open"))}"><span></span><span></span><span></span></button>
     </div>
-    <nav id="mainNavigation" class="main-nav" aria-label="${esc(t(language,"nav.primary"))}"><a href="${home}">${esc(t(language,"nav.todayShort"))}</a><div class="category-menu"><button type="button" aria-expanded="false">${esc(t(language,"nav.categories"))} <span>⌄</span></button><div class="mega-menu" hidden>${navCategories(code).map(category => `<a href="${catPath(category, code)}">${esc(categoryLabel(category, language))}</a>`).join("")}</div></div><a href="${home}#top">${esc(t(language,"nav.more"))}</a><a href="${marketPath(code, "/archive")}">${esc(t(language,"nav.archive"))}</a><a href="${marketPath(code, "/about")}">${esc(t(language,"nav.about"))}</a></nav>
+    <nav id="mainNavigation" class="main-nav" aria-label="${esc(t(language,"nav.primary"))}"><a href="${home}">${esc(t(language,"nav.todayShort"))}</a><div class="category-menu"><button type="button" aria-expanded="false">${esc(t(language,"nav.categories"))} <span>⌄</span></button><div class="mega-menu" hidden>${navCategories(code).map(category => `<a href="${catPath(category, code)}">${esc(categoryLabel(category, language))}</a>`).join("")}</div></div><a href="${marketPath(code, "/search")}">${esc(t(language,"nav.more"))}</a><a href="${marketPath(code, "/archive")}">${esc(t(language,"nav.archive"))}</a><a href="${marketPath(code, "/about")}">${esc(t(language,"nav.about"))}</a></nav>
   </header>`;
 };
 const sharedFooter = (code, language = "en") => `<footer><div class="footer-brand"><b>OneDailyDrop</b><p>${esc(t(language,"brand.seoTagline"))}</p><div class="footer-links"><a href="${marketPath(code, "/about")}">${esc(t(language,"footer.about"))}</a><a href="${marketPath(code, "/contact")}">${esc(t(language,"footer.contact"))}</a><a href="${marketPath(code, "/privacy")}">${esc(t(language,"footer.privacy"))}</a><a href="${marketPath(code, "/terms")}">${esc(t(language,"footer.terms"))}</a><a href="${marketPath(code, "/affiliate-disclosure")}">${esc(t(language,"footer.affiliate"))}</a><a href="${marketPath(code, "/editorial-policy")}">${esc(t(language,"footer.editorial"))}</a></div></div><p class="disclosure">${esc(t(language,"footer.preview"))}</p></footer>`;
@@ -2050,10 +2060,6 @@ const sameProductOffers = product => {
 const significantWords = value => new Set(clean(value).toLowerCase().split(/[^a-z0-9]+/).filter(word => word.length > 3 && !new Set([
   "with","from","this","that","pack","new","black","white","blue","red","for","and","the","your","plus","free"
 ]).has(word)));
-const brandRatingText = (average, marketCode, language) => average == null
-  ? t(language, "page.noRatingData")
-  : `${formatter("NumberFormat", languageTag(marketCode, language), {minimumFractionDigits:1, maximumFractionDigits:1}).format(average)} / 5`;
-const brandRatingCoverage = (rated, total, language) => t(language, "page.ratingCoverage", {rated, total});
 const alternativesFor = (product, limit = 3) => {
   const words = significantWords(product?.canonical_title || product?.title);
   const price = Number(product?.current_price);
@@ -2343,43 +2349,6 @@ app.get("/archive", (req, res) => {
   }).join("");
   const body = `<main><section class="deals-section"><div class="section-heading"><div><p class="eyebrow">${esc(marketName(selectedMarket.code, req.language).toUpperCase())} · ${esc(t(req.language,"nav.archive").toUpperCase())}</p><h1>${esc(t(req.language,"page.pastDrops"))}</h1><p class="description">${esc(t(req.language,"page.archiveDescription"))}</p></div></div><div class="archive-list">${dates || `<div class="empty-state">${esc(t(req.language,"page.archivePreparing"))}</div>`}</div></section></main>`;
   res.send(shell(`${t(req.language,"page.pastDrops")} | OneDailyDrop`, t(req.language,"page.archiveDescription"), `${SITE}${marketPath(selectedMarket.code, "/archive")}`, body, null, "", products.length ? "" : "noindex,follow", selectedMarket.code, marketCodes, req));
-});
-
-app.get("/brand/:slug", (req, res) => {
-  const selectedMarket = requestMarket(req);
-  /* "Unbranded", "Generic", "Branded", "Unknown" are placeholder values a
-     marketplace puts in the brand column when the seller left it empty. They
-     are not brands, and a page called "More Branded offers" is a thin
-     programmatic page that costs crawl budget and earns nothing. The sitemap
-     and /brands already skip them; this route did not, so they stayed
-     reachable and linkable. */
-  if (isGenericBrand(req.params.slug)) {
-    res.set("X-Robots-Tag", "noindex, nofollow");
-    return sendNotFound(req, res);
-  }
-  const products = uniqueProductsInOrder(db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()} AND brand_slug=? ORDER BY COALESCE(ranking_score,score) DESC,score DESC,updated_at DESC`).all(selectedMarket.code, req.params.slug)).filter(isPubliclyIndexable);
-  if (!products.length) return sendNotFound(req, res);
-  const brand = products[0].brand, canonical = SITE + brandPath(brand, selectedMarket.code), avgPrice = products.reduce((sum,p)=>sum+Number(p.current_price||0),0)/products.length, avgDiscount = products.reduce((sum,p)=>sum+discountPercent(p),0)/products.length;
-  const ratings = ratingSummary(products);
-  const alternateCodes = marketCodes.filter(code => db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()} AND brand_slug=?`).all(code, req.params.slug).some(isPubliclyIndexable));
-  const description = t(req.language,"page.brandDescription",{count:products.length,brand});
-  const schema = {"@context":"https://schema.org","@graph":[{"@type":"Brand",name:brand,url:canonical},{"@type":"ItemList",name:`Best ${brand} Deals`,numberOfItems:products.length,itemListElement:products.map((product,index)=>({"@type":"ListItem",position:index+1,url:SITE+dealPath(product),name:shortTitle(product.title)}))},{"@type":"BreadcrumbList",itemListElement:[{"@type":"ListItem",position:1,name:"Home",item:SITE+marketPath(selectedMarket.code)},{"@type":"ListItem",position:2,name:"Brands",item:SITE+marketPath(selectedMarket.code,"/brands")},{"@type":"ListItem",position:3,name:brand,item:canonical}]}]};
-  const stats = `<div class="detail-grid"><section><h3>${esc(t(req.language,"page.products"))}</h3><p>${products.length}</p></section><section><h3>${esc(t(req.language,"page.averagePrice"))}</h3><p>${money(avgPrice,products[0].currency,languageTag(selectedMarket.code,req.language))}</p></section><section><h3>${esc(t(req.language,"page.averageProductRating"))}</h3><p>${esc(brandRatingText(ratings.average_rating, selectedMarket.code, req.language))}</p><p>${esc(brandRatingCoverage(ratings.rated_products, products.length, req.language))}</p></section><section><h3>${esc(t(req.language,"page.averageDiscount"))}</h3><p>${Math.round(avgDiscount)}%</p></section></div>`;
-  res.send(shell(`${brand} | OneDailyDrop`, description, canonical, `<main><section class="deals-section"><nav class="breadcrumb"><a href="${marketPath(selectedMarket.code)}">${esc(t(req.language,"page.home"))}</a><span>›</span><a href="${marketPath(selectedMarket.code, "/brands")}">${esc(t(req.language,"page.brands"))}</a><span>›</span><span>${esc(brand)}</span></nav><div class="section-heading"><div><p class="eyebrow">${esc(marketName(selectedMarket.code,req.language).toUpperCase())} · ${esc(t(req.language,"page.brands").toUpperCase())}</p><h1>${esc(t(req.language,"page.moreBrandDeals",{brand}))}</h1><p>${esc(description)}</p></div></div>${stats}<div class="grid">${products.map((product,index)=>productCard(product,index+1,req.language,"brand")).join("")}</div></section></main>`, schema, "", "", selectedMarket.code, alternateCodes, req));
-});
-
-app.get("/brands", (req, res) => {
-  const selectedMarket = requestMarket(req);
-  const brands = summarizeBrands(db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()} AND brand_slug<>'' ORDER BY COALESCE(ranking_score,score) DESC,score DESC,updated_at DESC`).all(selectedMarket.code).filter(product => isPubliclyIndexable(product) && !isGenericBrand(product.brand_slug)));
-  if (!brands.length) {
-    res.set("X-Robots-Tag", "noindex, follow");
-    return sendNotFound(req, res);
-  }
-  const canonical = SITE + marketPath(selectedMarket.code, "/brands"), description = t(req.language,"page.brandDescription",{count:brands.length,brand:marketName(selectedMarket.code,req.language)});
-  const alternateCodes = marketCodes.filter(code => db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()} AND brand_slug<>''`).all(code).some(product => isPubliclyIndexable(product) && !isGenericBrand(product.brand_slug)));
-  const schema = {"@context":"https://schema.org","@type":"ItemList",name:"Popular Brands",numberOfItems:brands.length,itemListElement:brands.map((brand,index)=>({"@type":"ListItem",position:index+1,url:SITE+brandPath(brand.brand,selectedMarket.code),name:brand.brand}))};
-  const cards = brands.map(brand => `<article class="card"><div class="card-content"><p class="eyebrow">${esc(t(req.language,"search.products",{count:brand.product_count}).toUpperCase())}</p><h2><a href="${brandPath(brand.brand, selectedMarket.code)}">${esc(brand.brand)}</a></h2><p>${esc(t(req.language,"page.averagePrice"))}: ${money(brand.avg_price, selectedMarket.currency,languageTag(selectedMarket.code,req.language))} · ${esc(t(req.language,"page.averageProductRating"))}: ${esc(brandRatingText(brand.avg_rating, selectedMarket.code, req.language))}</p><p>${esc(brandRatingCoverage(brand.rated_products, brand.product_count, req.language))}</p></div></article>`).join("");
-  res.send(shell(`${t(req.language,"page.popularBrands")} | OneDailyDrop`, description, canonical, `<main><section class="deals-section"><div class="section-heading"><div><p class="eyebrow">${esc(marketName(selectedMarket.code,req.language).toUpperCase())}</p><h1>${esc(t(req.language,"page.popularBrands"))}</h1></div><p class="result-count">${esc(t(req.language,"search.products",{count:brands.length}))}</p></div><div class="grid">${cards}</div></section></main>`, schema, "", brands.length ? "" : "noindex,follow", selectedMarket.code, alternateCodes, req));
 });
 
 app.get("/robots.txt", (req, res) => res
@@ -2823,7 +2792,8 @@ app.get("/api/brands", (req,res) => {
 });
 app.get("/api/brands/:slug", (req,res) => {
   const selectedMarket = normalizeMarket(req.query.market) || requestMarket(req).code;
-  const products = uniqueProductsInOrder(db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()} AND brand_slug=? ORDER BY COALESCE(ranking_score,score) DESC,score DESC`).all(selectedMarket, req.params.slug)).filter(isPubliclyIndexable);
+  if(isGenericBrand(req.params.slug))return res.status(404).json({error:"Brand not found"});
+  const products = uniqueProductsInOrder(db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()} AND brand_slug=? ORDER BY COALESCE(ranking_score,score) DESC,score DESC,updated_at DESC`).all(selectedMarket, req.params.slug).filter(isPubliclyIndexable));
   if (!products.length) return res.status(404).json({error:"Brand not found"});
   const brand = products[0].brand;
   res.json({brand, market:selectedMarket, slug:req.params.slug, url:brandPath(brand, selectedMarket), summary:{
@@ -2832,7 +2802,7 @@ app.get("/api/brands/:slug", (req,res) => {
     ...ratingSummary(products),
     average_discount:products.reduce((sum,p)=>sum+discountPercent(p),0)/products.length,
     total_clicks:db.prepare(`SELECT COUNT(*) n FROM clicks c JOIN products p ON p.id=c.product_id WHERE c.destination_type='retailer' AND ${sourceSql("p")} AND p.market=? AND p.brand_slug=?`).get(selectedMarket, req.params.slug).n,
-  }, products:products.map(p=>({...p,deal_url:dealPath(p)}))});
+  }, products:products.map(p=>({...req.query.view==="listing"?presentListingProduct(p,req.language):p,deal_url:dealPath(p)}))});
 });
 const compactApiProduct = product => ({
   id:product.id,
