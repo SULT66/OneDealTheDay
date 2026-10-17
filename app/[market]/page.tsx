@@ -82,11 +82,11 @@ export default async function MarketHome({ params, searchParams }: PageProps<"/[
 async function RegionalCampaigns({market,language,halloween,halloweenLate,blackFriday}:{market:string;language:Language;halloween:boolean;halloweenLate:boolean;blackFriday:boolean}) {
   const data=halloween ? await getHalloweenCollection(market,language,1,'','popular',true) : null;
   const hasCollection=Boolean(data && !data.unavailable && data.total>0);
-  return <>
+  return <div data-odd-transient={data?.unavailable ? "1" : undefined}>
     <HomeCampaigns market={market} language={language} halloween={hasCollection}
       halloweenLate={halloweenLate} blackFriday={blackFriday} halloweenQueries={data?.availableQueries || []}/>
     {hasCollection && data && data.products.length>0 && <HalloweenProducts market={market} language={language} data={data} preview/>}
-  </>;
+  </div>;
 }
 
 async function HomeCatalog({market,language,halloween}:{market:string;language:Language;halloween:boolean}) {

@@ -6,6 +6,7 @@ function packCount(value) {
     || text.match(/(?<![\d.])\b(\d{1,4})\s*(?:pillows?|штук[аи]?|подушк[аи])\b/iu);
   const count = Number(match?.[1]);
   if (Number.isInteger(count) && count > 0 && count <= 1000) return count;
+  if (/\b(?:single (?:pack|item)|one (?:pillow|item))\b|,\s*single\s*$/i.test(text)) return 1;
   return /\b(?:a pair of|pair of|one pair of)\b/i.test(text) ? 2 : null;
 }
 
