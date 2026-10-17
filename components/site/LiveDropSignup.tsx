@@ -9,12 +9,9 @@ import { measure } from "@/lib/measure";
 /*
  * Get told before every Live Drop.
  *
- * This replaces a form that promised "your Daily Drop, in the categories you
- * care about". No such email exists: the list it filled receives a welcome and
- * an announcement of each Live Drop, and nothing else, and the categories it
- * asked for were stored and never used. A form that promises one thing and
- * sends another is how a list learns to mark mail as spam, so it now promises
- * exactly what is sent.
+ * The copy describes Live alerts, the first-week welcome series and the
+ * possible inactivity check-in. The Sunday digest is a separate opt-in.
+ * Categories are not collected: no email uses those preferences.
  *
  * The empty `categories` the body still carried went with it: the route no
  * longer reads the field and the column it filled is retired, so sending it

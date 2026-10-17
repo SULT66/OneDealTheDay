@@ -82,7 +82,7 @@ async function sendWelcomeSequence({
     .prepare(
       `SELECT id, email, market, created_at, unsubscribe_token
          FROM subscribers
-        WHERE status = 'active' AND unsubscribe_token <> ''
+        WHERE status = 'active' AND unsubscribe_token <> '' AND drop_opt_in = 1
         ORDER BY id
         LIMIT ?`,
     )
