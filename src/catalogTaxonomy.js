@@ -8,7 +8,8 @@
    The version is what makes the catalogue re-file itself — app.js recalculates
    every product whose stamp does not match on boot — so bumping it is how
    corrected rules reach the listings already stored. */
-const TAXONOMY_VERSION = "catalog-taxonomy-v9";
+const {seasonalProductCategory} = require("./seasonalProductTypes");
+const TAXONOMY_VERSION = "catalog-taxonomy-v10";
 
 // This is the only taxonomy exposed to shoppers. Source-feed category paths are
 // preserved in `category` for auditing, but must never be used as navigation.
@@ -246,6 +247,8 @@ function canonicalCategory(product = {}) {
   if (source.includes("mooncool")) return "Bikes & Mobility";
 
   const title = fold(product.title);
+  const seasonalType = seasonalProductCategory(title);
+  if (seasonalType) return seasonalType;
   const productType = firstMatch(title, PRODUCT_TYPE_RULES);
   // AliExpress stores OUR search/shelf, not a verified source department.
   // It cannot be used as evidence about what the returned item actually is.

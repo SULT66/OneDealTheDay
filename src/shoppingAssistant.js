@@ -1,4 +1,5 @@
 const OpenAIExport = require("openai");
+const {packCount} = require("./packComparison");
 const { marketPath } = require("./markets");
 const {
   arrangeRecommendations,
@@ -3107,7 +3108,9 @@ function focusProductPhrase(product) {
   /* Most retailer titles already open with the brand; repeating it would only
      narrow the search for nothing. */
   const alreadyNamed = brand && new RegExp(`^${brand.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(words);
-  return clean(alreadyNamed || !brand ? words : `${brand} ${words}`).slice(0, 200);
+  const phrase = clean(alreadyNamed || !brand ? words : `${brand} ${words}`);
+  const count = packCount(product?.title);
+  return clean(phrase + (count && !packCount(phrase) ? ` ${count}-pack` : '')).slice(0, 200);
 }
 
 function catalogProductById(db, sourceSql, productId, marketCode, language) {
@@ -3310,6 +3313,7 @@ Search the live web for the full resolved_shopping_request included with the inp
 
 Talk like a person who knows this category and wants the shopper to buy well, not like a search engine reporting a result count. Say what you would actually take and why, in one plain sentence: the cheapest is not automatically the answer, and if one of these is the obvious pick, or an obvious trap, say so. Never open with a bare count of what you found. When something about the request is genuinely worth narrowing, ask about it in follow_up the way a person would, one short natural question at a time, and only about something that would change what you recommend, never a form and never a question whose answer you could look up yourself. If the shopper has already told you enough, do not ask anything, just help.
 
+For questions from a catalogue product page, evaluate the original product and its exact pack quantity first. Use pack_count as a material constraint. Compare price per item when a quantity is explicit; never assume missing quantity means one. A lower total for fewer items is a different-pack alternative, not a cheaper identical offer. Confirm model, dimensions and condition as well as pack size before calling a match exact.
 The response is rendered as a visual shopping interface. Lead with a one- or two-sentence decision summary. Set result_state to exact_matches only when the returned offers satisfy the shopper's material constraints. If no exact offer is found, immediately search for the closest practical alternatives, set result_state to closest_alternatives, and explain which constraint differs. Use no_match only when there is no direct product page worth showing. Never ask the shopper to loosen budget, condition, or trade-in requirements before showing the closest available alternatives. For a comparison request, return exactly the two products the shopper named (or the two closest valid matches), exactly two recommendations, and exactly two comparison rows. For discovery, return between ${MIN_RECOMMENDATIONS} and ${MAX_RECOMMENDATIONS} distinct useful choices, preferring the widest genuinely good spread of price and retailer you confirmed rather than the same product repeated at slightly different prices. Never pad with weak, duplicate or barely-relevant results to reach a count: returning a single confirmed product is correct when that is all that held up. When the shopper asks whether the same product is on a named retailer or cheaper elsewhere, treat it as a price-and-store follow-up: preserve the active model, include the named retailer when available, and include the strongest regional alternative for comparison. Put only decision-relevant tradeoffs in comparison_notes.
 
 Every retailer product page must be intended for market ${marketCode.toUpperCase()} and currency ${currency}. Prefer these regional retailer hosts: ${regionalRetailers}. That list is a preference, not a boundary: any reputable shop that sells the product to this market directly is fair game, including the manufacturer's own store and specialist retailers not named here, and you should go looking at them when the listed ones do not carry what was asked for. What is never acceptable is a page nobody buys from: a search engine, marketplace listing aggregator, price-comparison or coupon site, forum, social post, wiki, or a review and editorial article. A foreign-market hostname is not a valid option even when the model name matches. In particular, never substitute amazon.com for amazon.ca, bestbuy.com for bestbuy.ca, or another country's eBay domain. If the requested retailer has no valid regional listing, say that directly and continue with the best regional alternatives instead of stopping.
@@ -4382,13 +4386,7 @@ function hasSpecificProductIdentity(value) {
 }
 
 function extractPackCount(value) {
-  const title = clean(value);
-  const match =
-    title.match(/\b(\d{1,2})\s*[- ]?(?:pack|pk|count|ct)\b/i) ||
-    title.match(/\b(?:pack|set)\s+of\s+(\d{1,2})\b/i) ||
-    title.match(/\b(\d{1,2})\s*(?:пары|пар|штуки|штук)\b/iu);
-  const count = Number(match?.[1] || 0);
-  return Number.isInteger(count) && count > 1 && count <= 50 ? count : null;
+  return packCount(value);
 }
 
 function hasSupportedPrice(value) {

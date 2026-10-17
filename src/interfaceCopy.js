@@ -1,4 +1,5 @@
 const interfaceCopy = {
+  "Original offer": {es:"Oferta original",fr:"Offre d’origine",de:"Ursprüngliches Angebot"},
   "Loading your saved products...": {
     "es": "Cargando tus productos guardados…",
     "fr": "Chargement de vos produits enregistrés…",

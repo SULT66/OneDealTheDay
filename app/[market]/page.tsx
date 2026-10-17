@@ -70,19 +70,23 @@ export default async function MarketHome({ params, searchParams }: PageProps<"/[
   const halloweenBanner = activeCampaign({eventKey:'halloween', market, throughEvent:true});
   const blackFriday = Boolean(activeCampaign({eventKey:'black-friday', market, fromPreparation:true}));
   return <div className="mx-auto max-w-7xl px-4 pb-24 pt-8 sm:px-6 sm:pt-10">
-    <HomeCampaigns market={market} language={language}
-      halloween={Boolean(halloweenBanner)}
-      halloweenLate={Boolean(halloweenBanner?.pastDeliveryCutoff)}
-      blackFriday={blackFriday} />
-    {halloween && <Suspense fallback={<div aria-busy="true" className="mt-8 h-56 animate-pulse rounded-2xl bg-surface"/>}><HalloweenPreview market={market} language={language}/></Suspense>}
+    <Suspense fallback={<HomeCampaigns market={market} language={language} blackFriday={blackFriday}/> }>
+      <RegionalCampaigns market={market} language={language} halloween={Boolean(halloweenBanner)}
+        halloweenLate={Boolean(halloweenBanner?.pastDeliveryCutoff)} blackFriday={blackFriday}/>
+    </Suspense>
     <Suspense fallback={null}><HomeCatalog market={market} language={language} halloween={halloween} /></Suspense>
     <DeliaTrigger variant="floating" />
   </div>;
 }
 
-async function HalloweenPreview({market,language}:{market:string;language:Language}) {
-  const data=await getHalloweenCollection(market,language,1,'','popular',true);
-  return <HalloweenProducts market={market} language={language} data={data} preview/>;
+async function RegionalCampaigns({market,language,halloween,halloweenLate,blackFriday}:{market:string;language:Language;halloween:boolean;halloweenLate:boolean;blackFriday:boolean}) {
+  const data=halloween ? await getHalloweenCollection(market,language,1,'','popular',true) : null;
+  const hasCollection=Boolean(data && !data.unavailable && data.total>0);
+  return <>
+    <HomeCampaigns market={market} language={language} halloween={hasCollection}
+      halloweenLate={halloweenLate} blackFriday={blackFriday} halloweenQueries={data?.availableQueries || []}/>
+    {hasCollection && data && data.products.length>0 && <HalloweenProducts market={market} language={language} data={data} preview/>}
+  </>;
 }
 
 async function HomeCatalog({market,language,halloween}:{market:string;language:Language;halloween:boolean}) {

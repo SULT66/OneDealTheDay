@@ -107,6 +107,7 @@ const {
 const { storefrontUrl, storeDirectoryDestination } = require("./storefrontLinks");
 const {ratingSummary, summarizeBrands} = require("./brandSummary");
 const {catalogPreview} = require("./deliaPreview");
+const {focusedPackComparison} = require("./packComparison");
 const { hostLabel, verifyOutbound, withSignedLinks } = require("./outboundLinks");
 const { matchConversations, normalizeQuery: normalizeConversationQuery } = require("./deliaConversationSearch");
 const { labelClick, liveDropLabel } = require("./clickLabels");
@@ -497,7 +498,9 @@ app.post("/api/shopping-assistant/stream", shoppingAssistantRateLimit, async (re
         requestController.abort();
       }, preview ? 25000 : SHOPPING_ASSISTANT_HARD_TIMEOUT_MS);
     });
-    const result = await Promise.race([assistantTask, hardTimeoutTask]);
+    const rawResult = await Promise.race([assistantTask, hardTimeoutTask]);
+    const originalPreview = catalogPreview({db,sourceSql,productId:req.body?.product_id,market:selectedMarket.code,language,t});
+    const result = rawResult.partial ? rawResult : focusedPackComparison(rawResult,originalPreview?.recommendations[0],req.body?.message,language);
     clearTimeout(hardTimeoutTimer);
     if(res.destroyed)return;
     if (key && !result.partial) {
@@ -604,7 +607,9 @@ app.post("/api/shopping-assistant", shoppingAssistantRateLimit, async (req, res)
         requestController.abort();
       }, SHOPPING_ASSISTANT_HARD_TIMEOUT_MS);
     });
-    const result = await Promise.race([assistantTask, hardTimeoutTask]);
+    const rawResult = await Promise.race([assistantTask, hardTimeoutTask]);
+    const originalPreview = catalogPreview({db,sourceSql,productId:req.body?.product_id,market:selectedMarket.code,language,t});
+    const result = rawResult.partial ? rawResult : focusedPackComparison(rawResult,originalPreview?.recommendations[0],req.body?.message,language);
     clearTimeout(hardTimeoutTimer);
     /* Kept only if it is worth keeping: a search that found nothing is the
        answer that most deserves another try. */

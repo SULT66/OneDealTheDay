@@ -38,7 +38,7 @@ const COPY: Record<Language, Copy> = {
  * passed in here, so the copy in this file never has a date of its own to go
  * stale.
  */
-export function HomeCampaigns({market,language,halloween=false,halloweenLate=false,blackFriday=false}:{market:string;language:Language;halloween?:boolean;halloweenLate?:boolean;blackFriday?:boolean}) {
+export function HomeCampaigns({market,language,halloween=false,halloweenLate=false,blackFriday=false,halloweenQueries=[]}:{market:string;language:Language;halloween?:boolean;halloweenLate?:boolean;blackFriday?:boolean;halloweenQueries?:string[]}) {
   const copy = COPY[language];
   const search = `/${market}/search`;
   const slides: CampaignSlide[] = [];
@@ -67,8 +67,8 @@ export function HomeCampaigns({market,language,halloween=false,halloweenLate=fal
 
   return <section aria-labelledby="hero-title" className="space-y-4">
     <CampaignCarousel slides={slides} label={copy.hero} />
-    {halloween && <nav aria-label={copy.shop} className="flex flex-wrap items-center gap-2">
-      {copy.categories.map((label,index) => <a key={label} href={`/${market}/halloween?${new URLSearchParams({q:['costume','decor','party'][index],lang:language})}`} className="rounded-full border border-border bg-surface px-4 py-2 text-sm font-medium text-fg transition-colors hover:border-orange-300 hover:bg-orange-50 hover:text-ink">{label}</a>)}
+    {halloween && halloweenQueries.length>0 && <nav aria-label={copy.shop} className="flex flex-wrap items-center gap-2">
+      {copy.categories.map((label,index) => halloweenQueries.includes(['costume','decor','party'][index]) && <a key={label} href={`/${market}/halloween?${new URLSearchParams({q:['costume','decor','party'][index],lang:language})}`} className="rounded-full border border-border bg-surface px-4 py-2 text-sm font-medium text-fg transition-colors hover:border-orange-300 hover:bg-orange-50 hover:text-ink">{label}</a>)}
     </nav>}
     <div className="grid gap-3 sm:grid-cols-2">
       <Link href={`/${market}/daily-drop`} className="group flex items-center justify-between gap-4 rounded-card bg-lime px-6 py-5 text-ink">

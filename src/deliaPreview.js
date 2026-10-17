@@ -1,3 +1,4 @@
+const {quantityDetails} = require("./packComparison");
 const {assistantProduct} = require("./shoppingAssistant");
 
 function catalogPreview({db, sourceSql, productId, market, language, t}) {
@@ -8,6 +9,7 @@ function catalogPreview({db, sourceSql, productId, market, language, t}) {
   return {
     message: t(language, "app.delia.preview"), message_source: "template", result_state: "exact_matches", partial: true,
     recommendations: [{
+      ...quantityDetails({title:p.title,price_value:p.price,currency:p.currency},language),
       title: p.title, retailer: p.retailer, price: "", price_value: p.price, currency: p.currency,
       source_type: "catalog", catalog_product_id: p.id, url: p.url, image_url: p.image_url,
       score: p.score, rating: p.rating, reviews: p.reviews, delivery: p.delivery,

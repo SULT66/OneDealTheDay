@@ -284,6 +284,7 @@ function OfferRow({
         {/* Her reason on her pick, and anything about a card worth knowing
             before the click: a different edition, a bundle, a size the page
             does not state. */}
+        {rec.quantity_label && <span className="mt-1 block text-xs font-semibold text-fg">{rec.quantity_label}</span>}
         {(rec.pick_reason || rec.note) && (
           <span className="mt-1 block text-xs leading-snug text-fg-muted">
             {rec.pick_reason || rec.note}
@@ -349,6 +350,7 @@ function OfferRow({
               >
                 {offer.retailer}
                 {otherPrice && <span className="tnum text-fg-muted"> · {otherPrice}</span>}
+                {offer.quantity_note && <span className="text-fg-muted"> · {offer.quantity_note}</span>}
               </a>
             );
           })}
@@ -378,6 +380,8 @@ const CONDITION_LABEL: Record<string, string> = {
    second-hand one gets a group named for what it is. */
 function groupHeading(rec: DeliaRecommendation): string {
   switch (rec.position_role) {
+    case "original_offer":
+      return "Original offer";
     case "best_overall":
       return "Delia’s pick";
     case "cheaper_option":
