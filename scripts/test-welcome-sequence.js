@@ -149,6 +149,8 @@ async function main() {
   addSubscriber({ email: "yesterday@example.test", token: "token_yesterday_012345678", joinedDaysAgo: 1 });
   addSubscriber({ email: "today@example.test", token: "token_today_0123456789abc", joinedDaysAgo: 0 });
   addSubscriber({ email: "left@example.test", token: "token_left_0123456789abcd", joinedDaysAgo: 40, status: "unsubscribed" });
+  const slower = addSubscriber({ email: "sunday-only@example.test", token: "token_slow_0123456789abcd", joinedDaysAgo: 3 });
+  db.prepare("UPDATE subscribers SET drop_opt_in=0, digest_opt_in=1 WHERE id=?").run(slower);
 
   /* -------------------------------------------- one letter per sweep, in order */
 
@@ -157,7 +159,7 @@ async function main() {
   assert.deepStrictEqual(
     first.map((message) => message.email).sort(),
     ["veteran@example.test", "yesterday@example.test"],
-    "somebody who joined today, or who has left, was written to",
+    "somebody who joined today, left, or chose Sunday-only mail was written to",
   );
   assert.ok(
     !first.some((message) => message.email === "left@example.test"),

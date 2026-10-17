@@ -27,6 +27,8 @@ const COPY: Record<Language, {
   now: string; low: string; high: string; days: string; observations: string;
   gone: string; goneNote: string; soon: string; countdown: string; noDrop: string;
   tableNote: string; see: string;  
+  regionalLede: string; regionalTitle: string; regionalBody: string; regionalLink: string;
+  temporary: string; temporaryNote: string;
 }> = {
   en: {
     home: "Home", title: "Black Friday, checked against our own records",
@@ -50,6 +52,12 @@ const COPY: Record<Language, {
     noDrop: "Not yet below where it started.",
     tableNote: "Prices are ours, recorded four to six times a day. Shops change prices without telling anyone, including us.",
     see: "See the product", 
+    regionalLede: "Price tracking for this market has not started yet.",
+    regionalTitle: "The current price diary covers the United States",
+    regionalBody: "We are following ten U.S. listings, with prices in U.S. dollars. We do not yet have a separate diary for this country.",
+    regionalLink: "View the U.S. price diary (USD)",
+    temporary: "Price temporarily unavailable",
+    temporaryNote: "We could not load this listing right now. Please try again later; this does not mean the product has been removed.",
     
   },
   es: {
@@ -74,6 +82,12 @@ const COPY: Record<Language, {
     noDrop: "Todavía no por debajo de donde empezó.",
     tableNote: "Los precios son nuestros, registrados de cuatro a seis veces al día. Las tiendas los cambian sin avisar a nadie, tampoco a nosotros.",
     see: "Ver el producto", 
+    regionalLede: "El seguimiento de precios para este mercado aún no ha comenzado.",
+    regionalTitle: "El diario de precios actual cubre Estados Unidos",
+    regionalBody: "Seguimos diez productos de tiendas de Estados Unidos, con precios en dólares estadounidenses. Aún no tenemos un diario independiente para este país.",
+    regionalLink: "Ver el diario de Estados Unidos (USD)",
+    temporary: "Precio temporalmente no disponible",
+    temporaryNote: "No hemos podido cargar este producto. Inténtalo más tarde; esto no significa que se haya retirado.",
     
   },
   fr: {
@@ -98,6 +112,12 @@ const COPY: Record<Language, {
     noDrop: "Pas encore sous son prix de départ.",
     tableNote: "Les prix sont les nôtres, relevés quatre à six fois par jour. Les boutiques les changent sans prévenir personne, nous compris.",
     see: "Voir le produit", 
+    regionalLede: "Le suivi des prix pour ce marché n’a pas encore commencé.",
+    regionalTitle: "Le journal de prix actuel couvre les États-Unis",
+    regionalBody: "Nous suivons dix produits de boutiques américaines, avec des prix en dollars américains. Nous n’avons pas encore de journal distinct pour ce pays.",
+    regionalLink: "Voir le journal des États-Unis (USD)",
+    temporary: "Prix temporairement indisponible",
+    temporaryNote: "Nous n’avons pas pu charger ce produit. Réessayez plus tard ; cela ne signifie pas qu’il a été retiré.",
     
   },
   de: {
@@ -122,6 +142,12 @@ const COPY: Record<Language, {
     noDrop: "Noch nicht unter dem Startpreis.",
     tableNote: "Die Preise sind unsere eigenen, vier- bis sechsmal täglich gemessen. Shops ändern sie, ohne jemandem Bescheid zu geben, uns eingeschlossen.",
     see: "Produkt ansehen", 
+    regionalLede: "Die Preisbeobachtung für diesen Markt hat noch nicht begonnen.",
+    regionalTitle: "Das aktuelle Preistagebuch gilt für die USA",
+    regionalBody: "Wir beobachten zehn Angebote aus US-Shops mit Preisen in US-Dollar. Für dieses Land gibt es noch kein eigenes Preistagebuch.",
+    regionalLink: "US-Preistagebuch ansehen (USD)",
+    temporary: "Preis vorübergehend nicht verfügbar",
+    temporaryNote: "Dieses Angebot konnte gerade nicht geladen werden. Bitte versuche es später erneut; das bedeutet nicht, dass das Produkt entfernt wurde.",
     
   },
 };
@@ -132,7 +158,7 @@ export async function generateMetadata({ params }: PageProps<'/[market]/black-fr
   const copy = COPY[language];
   return {
     title: copy.title,
-    description: copy.lede,
+    description: market === PRICE_DIARY.market ? copy.lede : copy.regionalLede,
     alternates: { canonical: `/${market}/black-friday` },
   };
 }
@@ -141,6 +167,8 @@ export default async function BlackFridayPage({ params }: PageProps<'/[market]/b
   const { market } = await params;
   const language = await getLanguage(market);
   const copy = COPY[language];
+  const hasDiary = market === PRICE_DIARY.market;
+  const description = hasDiary ? copy.lede : copy.regionalLede;
   const campaign = activeCampaign({ eventKey: 'black-friday', market, fromPreparation: true });
   const eventAt = campaign?.eventAt;
   const daysAway = eventAt ? Math.max(0, Math.ceil((Date.parse(eventAt) - Date.now()) / 86400000)) : null;
@@ -153,7 +181,7 @@ export default async function BlackFridayPage({ params }: PageProps<'/[market]/b
         {copy.soon}{daysAway !== null && daysAway > 0 ? ` · ${daysAway} ${copy.countdown}` : ""}
       </p>
       <h1 className="mt-3 text-4xl font-bold leading-[1.08] tracking-tight text-fg sm:text-5xl">{copy.title}</h1>
-      <p className="mt-5 max-w-2xl text-base leading-relaxed text-fg-muted">{copy.lede}</p>
+      <p className="mt-5 max-w-2xl text-base leading-relaxed text-fg-muted">{description}</p>
     </header>
 
     <section className="mt-10 rounded-card border border-border bg-surface p-6">
@@ -161,9 +189,13 @@ export default async function BlackFridayPage({ params }: PageProps<'/[market]/b
       {copy.methodBody.map(line => <p key={line} className="mt-3 text-sm leading-relaxed text-fg-muted">{line}</p>)}
     </section>
 
-    <Suspense fallback={<div aria-busy="true" className="mt-8 h-96 animate-pulse rounded-card bg-surface" />}>
-      <Diary market={market} language={language} />
-    </Suspense>
+    {hasDiary ? <Suspense fallback={<div aria-busy="true" className="mt-8 h-96 animate-pulse rounded-card bg-surface" />}>
+      <Diary language={language} />
+    </Suspense> : <section className="mt-10 rounded-card border border-border bg-surface p-6">
+      <h2 className="text-lg font-bold tracking-tight text-fg">{copy.regionalTitle}</h2>
+      <p className="mt-3 text-sm leading-relaxed text-fg-muted">{copy.regionalBody}</p>
+      <a href={`/${PRICE_DIARY.market}/black-friday`} className="mt-4 inline-block text-sm font-semibold underline underline-offset-4">{copy.regionalLink}</a>
+    </section>}
 
     <section className="mt-12 rounded-card border border-border bg-surface p-6">
       <h2 className="text-lg font-bold tracking-tight text-fg">{copy.how}</h2>
@@ -176,13 +208,14 @@ export default async function BlackFridayPage({ params }: PageProps<'/[market]/b
 
     <StructuredData data={{
       "@context": "https://schema.org", "@type": "Article",
-      headline: copy.title, description: copy.lede,
+      headline: copy.title, description,
       about: { "@type": "Event", name: "Black Friday 2026", ...(eventAt ? { startDate: eventAt } : {}) },
     }} />
   </div>;
 }
 
-async function Diary({ market, language }: { market: string; language: Language }) {
+async function Diary({ language }: { language: Language }) {
+  const market = PRICE_DIARY.market;
   const copy = COPY[language];
   /* Settled, not all: one withdrawn listing must not empty the page. */
   const results = await Promise.allSettled(PRICE_DIARY.entries.map(entry => getDeal(market, entry.id)));
@@ -197,16 +230,17 @@ async function Diary({ market, language }: { market: string; language: Language 
       {PRICE_DIARY.entries.map((entry, index) => {
         const settled = results[index];
         const deal = settled.status === "fulfilled" ? settled.value : undefined;
-        return <li key={entry.id}><DiaryRow entry={entry} deal={deal} copy={copy} language={language} market={market} /></li>;
+        return <li key={entry.id}><DiaryRow entry={entry} deal={deal} temporary={settled.status === "rejected"} copy={copy} language={language} market={market} /></li>;
       })}
     </ul>
     <p className="mt-6 text-xs leading-relaxed text-fg-subtle">{copy.tableNote}</p>
   </section>;
 }
 
-function DiaryRow({ entry, deal, copy, language, market }: {
+function DiaryRow({ entry, deal, temporary, copy, language, market }: {
   entry: typeof PRICE_DIARY.entries[number];
   deal: Deal | undefined;
+  temporary: boolean;
   copy: (typeof COPY)[Language];
   language: Language;
   market: string;
@@ -214,8 +248,8 @@ function DiaryRow({ entry, deal, copy, language, market }: {
   if (!deal) return <div className="rounded-card border border-dashed border-border p-5">
     <p className="text-xs font-semibold uppercase tracking-[0.14em] text-fg-subtle">{entry.bucket}</p>
     <p className="mt-2 text-sm font-semibold text-fg">{entry.note}</p>
-    <p className="mt-1 text-sm font-semibold text-amber-700 dark:text-amber-300">{copy.gone}</p>
-    <p className="mt-2 text-xs leading-relaxed text-fg-subtle">{copy.goneNote}</p>
+    <p className="mt-1 text-sm font-semibold text-amber-700 dark:text-amber-300">{temporary ? copy.temporary : copy.gone}</p>
+    <p className="mt-2 text-xs leading-relaxed text-fg-subtle">{temporary ? copy.temporaryNote : copy.goneNote}</p>
   </div>;
 
   const days = dailyPrices(deal.priceHistory || []);

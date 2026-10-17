@@ -256,6 +256,15 @@ const unsubscribeFooter = (unsubscribeUrl, because) => (unsubscribeUrl
   ? `${escapeHtml(because)} <a href="${escapeHtml(unsubscribeUrl)}" style="color:${FAINT}">Unsubscribe</a> in one click.`
   : "");
 
+const subscriberFooter = unsubscribeUrl => {
+  const footer = unsubscribeFooter(unsubscribeUrl, "You signed up for Live alerts and the welcome series.");
+  if (!unsubscribeUrl) return footer;
+  const token = new URL(unsubscribeUrl, SITE).searchParams.get("token");
+  if (!token) return footer;
+  const fewerUrl = `${SITE}/email/less?token=${encodeURIComponent(token)}`;
+  return `${footer} <a href="${escapeHtml(fewerUrl)}" style="color:${FAINT}">Receive fewer emails (Sunday digest only)</a>.`;
+};
+
 /* "Thursday, September 17 at 8:00 PM ET" rather than "Thu, 17 Sep 2026 00:00:00 GMT". */
 function dropTime(startsAt, market = "us") {
   const time = Date.parse(String(startsAt || ""));
@@ -330,12 +339,13 @@ const subscriptionEmail = ({email, market = "us", unsubscribeUrl}) => sendEmail(
     paragraphs: [
       "Hi, I'm Chloe, and I host OneDailyDrop Live.",
       "Every drop is one great product at one price, revealed live on the page and open for just ten minutes. I'll email you before each one, so you're there when the price appears.",
-      "That's the only email this list sends. No daily newsletters, no noise.",
+      "You will also receive three short welcome emails, scheduled for days 1, 3 and 7: how we check prices, how to read the Score, and an invitation to the optional Sunday digest.",
+      "If we record no activity for 60 days, we may send one check-in. The Sunday digest starts only if you choose it; you can switch to Sunday-only emails or unsubscribe using the links below.",
     ],
     cta: { label: "See the next drop", href: dropUrl(market) },
     signature: `See you there,<br>${CHLOE}`,
     tip: PRIMARY_TIP,
-    footer: unsubscribeFooter(unsubscribeUrl, "You are receiving this because you signed up for Live Drop emails."),
+    footer: subscriberFooter(unsubscribeUrl),
   }),
 });
 
@@ -582,7 +592,7 @@ const introEmail = ({ email, market = "us", unsubscribeUrl }) => sendEmail({
     ],
     cta: { label: "How we pick what to show", href: `${SITE}/${encodeURIComponent(market)}/how-we-select-deals` },
     signature: NICK_SIGNATURE,
-    footer: unsubscribeFooter(unsubscribeUrl, "You are receiving this because you signed up for Live Drop emails."),
+    footer: subscriberFooter(unsubscribeUrl),
   }),
 });
 
@@ -621,17 +631,15 @@ const scoreExplainerEmail = ({ email, market = "us", product, unsubscribeUrl }) 
     ].filter(Boolean),
     cta: { label: "How the Score is built", href: `${SITE}/${encodeURIComponent(market)}/how-we-select-deals` },
     signature: NICK_SIGNATURE,
-    footer: unsubscribeFooter(unsubscribeUrl, "You are receiving this because you signed up for Live Drop emails."),
+    footer: subscriberFooter(unsubscribeUrl),
   }),
 });
 
 /*
  * The invitation to the second list.
  *
- * It exists because the signup form promised "Only Live Drop emails", and the
- * honest way past a promise is to ask rather than to quietly widen it. Both
- * answers are a link, and ignoring it is a third answer that keeps the
- * promise exactly as made — which is why the mail says so.
+ * The Sunday digest remains a separate opt-in. Receiving the welcome series
+ * or ignoring this invitation does not subscribe somebody to weekly mail.
  */
 const digestInviteEmail = ({ email, market = "us", joinUrl, unsubscribeUrl }) => sendEmail({
   to: email,
@@ -643,14 +651,14 @@ const digestInviteEmail = ({ email, market = "us", joinUrl, unsubscribeUrl }) =>
     eyebrow: "One question",
     heading: "Five finds, every Sunday",
     paragraphs: [
-      "You signed up for Live Drop alerts, and that is all you have been getting. That stays true unless you say otherwise.",
+      "You signed up for Live Drop alerts and our short welcome series. This is the last welcome email, with an invitation to a separate Sunday list.",
       "We are starting something separate: five listings every Sunday morning, each with what it costs, what we recorded about its price, and what to check before buying. One email a week. No daily mail, no deal of the hour.",
       "Only listings that clear our Score of 80 go in it, so some Sundays there will be three rather than five, and a quiet week gets no email at all.",
     ],
     cta: { label: "Yes, send me Sundays", href: joinUrl },
-    after: "Ignore this and nothing changes — you will keep getting only Live Drop emails.",
+    after: "Ignore this and you will not join the Sunday list. Live Drop alerts continue; we may send one check-in after 60 days without recorded activity.",
     signature: NICK_SIGNATURE,
-    footer: unsubscribeFooter(unsubscribeUrl, "You are receiving this because you signed up for Live Drop emails."),
+    footer: subscriberFooter(unsubscribeUrl),
   }),
 });
 
