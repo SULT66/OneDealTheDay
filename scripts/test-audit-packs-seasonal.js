@@ -4,7 +4,7 @@ const {canonicalCategory,TAXONOMY_VERSION} = require('../src/catalogTaxonomy');
 const {diverseSeasonalProducts,matchesHalloweenQuery} = require('../src/seasonalProductTypes');
 const {focusProductPhrase} = require('../src/shoppingAssistant');
 
-for(const [title,count] of [['2-Pack Bed Pillows',2],['Pillows, pack of 2',2],['1 pillow',1],['Pair of pillows',2],['Pillow Queen 20 x 28',null],['Pillow 1.5 inches',null],['Pillow 1.5-pack',null],['Pillow 0-pack',null]]) assert.equal(packCount(title),count,title);
+for(const [title,count] of [['2-Pack Bed Pillows',2],['Pillows, pack of 2',2],['1 pillow',1],['Pair of pillows',2],['Pillow Queen 20 x 28',null],['Mainstays Pillow, Single',1],['Single Serve Coffee Machine',null],['Pillow 1.5 inches',null],['Pillow 1.5-pack',null],['Pillow 0-pack',null]]) assert.equal(packCount(title),count,title);
 assert.equal(quantityDetails({title:'Pillows 2-Pack',price_value:5.84,currency:'USD'}).unit_price_value,2.92);
 assert.equal(quantityDetails({title:'Pillow',price_value:3.44,currency:'USD'}).unit_price_value,null,'Unknown quantity is not one');
 assert.equal(quantityDetails({title:'Pillows 2-Pack',price_value:null,currency:'USD'}).unit_price_value,null);
