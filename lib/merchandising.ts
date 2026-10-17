@@ -47,6 +47,7 @@ export type HalloweenCollection={active:boolean;unavailable?:boolean;total:numbe
   /* Set once ordering can no longer be expected to arrive by the 31st. The
      collection stays open; only the promise is withdrawn. */
   pastDeliveryCutoff?:boolean;
+  availableQueries?:string[];
   selectionEvidence:Record<string,{arrivalEstimate?:string;ebaySoldQuantity?:number|null}>};
 export async function getHalloweenCollection(market:string,language:string,page:number,q:string,sort:string,preview=false):Promise<HalloweenCollection> {
   const empty={active:Boolean(activeHalloween({market})),unavailable:true,total:0,page:1,pages:0,products:[],selectionEvidence:{}};

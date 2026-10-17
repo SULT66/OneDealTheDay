@@ -9,6 +9,7 @@ const { withVerifiedRetailerTerms } = require('./verifiedRetailerTerms');
 const { merchandisingFocus, focusSignals } = require('./merchandisingFocus');
 const CALENDAR_POLICY_VERSION = 'halloween-sales-v3-expanded';
 const { salesEvidence } = require('./merchandisingSeeds');
+const {matchesHalloweenQuery, diverseSeasonalProducts} = require('./seasonalProductTypes');
 const DAY = 86400000;
 const active = new WeakMap();
 const diagnosticCache = new WeakMap();
@@ -92,20 +93,22 @@ function getHalloweenCollection(db, {market='us', now=Date.now(), page=1, q='', 
   const signal=activeCampaign({eventKey:'halloween',market,now,throughEvent:true});
   if(!signal) return empty;
   const theme={...signal,metadata:{...signal.metadata,minimumEbaySales:0}};
-  const terms=String(q).trim().slice(0,120).toLowerCase().split(/\s+/).filter(Boolean);
+  const query=String(q).trim().slice(0,120);
   const matching=catalogRows(db,market).filter(row=>
     !signalRejectionReasons(row,theme,{market,now}).length &&
     isPromotionEligible(row,{market,now,requireReviews:false}) && priceExpiry(row)>now &&
-    terms.every(term=>String(row.title || '').toLowerCase().includes(term)));
+    matchesHalloweenQuery(row,query));
   matching.sort((a,b)=>sort==='price-asc' ? Number(a.current_price)-Number(b.current_price) || a.id-b.id :
     sort==='price-desc' ? Number(b.current_price)-Number(a.current_price) || a.id-b.id :
     (salesEvidence(b,{now})?.quantity || 0)-(salesEvidence(a,{now})?.quantity || 0) || a.id-b.id);
-  const products=require('./publicCatalog').uniqueProductsInOrder(matching).slice(0,200);
+  const ranked=require('./publicCatalog').uniqueProductsInOrder(matching);
+  const products=(sort==='popular' ? diverseSeasonalProducts(ranked) : ranked).slice(0,200);
+  const availableQueries=['costume','decor','party'].filter(query=>products.some(row=>matchesHalloweenQuery(row,query)));
   const pages=Math.ceil(products.length/24);
   const selectedPage=Math.max(1,Math.min(pages || 1,Math.floor(Number(page) || 1)));
-  const visible=preview ? products.filter(row=>(salesEvidence(row,{now})?.quantity || 0)>0).slice(0,5) : products.slice((selectedPage-1)*24,selectedPage*24);
+  const visible=preview ? ranked.filter(row=>(salesEvidence(row,{now})?.quantity || 0)>0).slice(0,5) : products.slice((selectedPage-1)*24,selectedPage*24);
   return {active:true,title:'Halloween',total:products.length,page:selectedPage,pageSize:24,pages,endsAt:signal.endsAt,
-    pastDeliveryCutoff:Boolean(signal.pastDeliveryCutoff),eventAt:signal.eventAt,products:visible,
+    pastDeliveryCutoff:Boolean(signal.pastDeliveryCutoff),eventAt:signal.eventAt,availableQueries,products:visible,
     selectionEvidence:Object.fromEntries(visible.map(row=>[row.id,{arrivalEstimate:row.delivery_estimated_at,
       ebaySoldQuantity:salesEvidence(row,{now})?.quantity ?? null}]))};
 }

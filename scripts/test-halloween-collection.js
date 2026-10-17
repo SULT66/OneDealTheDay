@@ -13,7 +13,9 @@ native.exec(`CREATE TABLE products(${Object.entries(sample).map(([key,value])=>`
 const db={exec:sql=>native.exec(sql),prepare:sql=>native.prepare(sql)};
 const insert=native.prepare(`INSERT INTO products VALUES(${Object.keys(sample).map(()=>'?').join(',')})`);
 for(let i=0;i<210;i++) {const p={...sample,id:5000+i,title:`Halloween Decoration Model ${5000+i}`,affiliate_url:`https://www.ebay.com/itm/${123456789000+i}`,current_price:20+i,ebay_sold_quantity:i===1?150:null};insert.run(...Object.values(p));}
+assert.equal(getHalloweenCollection(db,{now,market:'ca'}).total,0,'US stock cannot populate another market');
 const first=getHalloweenCollection(db,{now});
+assert.deepEqual(first.availableQueries,['decor']);
 assert.equal(first.total,200);assert.equal(first.products.length,24);assert.equal(first.pages,9);
 const preview=getHalloweenCollection(db,{now,preview:true});
 assert.equal(preview.products.length,1,'Preview only contains products with real positive sales evidence');

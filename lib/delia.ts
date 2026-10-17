@@ -11,6 +11,10 @@
 
 export type DeliaRecommendation = {
   title: string;
+  pack_count?: number | null;
+  unit_price_value?: number | null;
+  quantity_label?: string;
+  original_offer?: boolean;
   retailer: string;
   /** Backend-formatted price string — often empty; fall back to `price_value`. */
   price: string;
@@ -43,7 +47,7 @@ export type DeliaRecommendation = {
   /* Which offer this is within the shortlist. The backend has worked this out
      all along and nothing was reading it, so a shopper scanning six shops had
      no idea which one Delia would take or which one was simply cheapest. */
-  position_role?: "best_overall" | "cheaper_option" | "lowest_price" | "lowest_used_price" | "alternative";
+  position_role?: "original_offer" | "best_overall" | "cheaper_option" | "lowest_price" | "lowest_used_price" | "alternative";
   /* Delia's pick that also happens to be the cheapest: one card, two labels. */
   lowest_price?: boolean;
   /* The lowest price among new stock only, because something second-hand on
@@ -61,6 +65,7 @@ export type DeliaRecommendation = {
      duplicate check rather than shown as a second product. */
   other_offers?: {
     retailer: string;
+    quantity_note?: string;
     price?: string;
     price_value?: number | null;
     currency?: string;

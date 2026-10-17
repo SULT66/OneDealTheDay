@@ -15,7 +15,10 @@ let aborted = 0;
 const assistant = require("../src/shoppingAssistant");
 assistant.createShoppingAssistant = () => ({
   configured: true, model: "fixture",
-  respond: ({signal}) => new Promise((_resolve, reject) => signal.addEventListener("abort", () => {
+  respond: ({signal,message}) => String(message).includes('fixture-pack') ? Promise.resolve({
+    scope:'shopping',message:'Nothing matched exactly. Buy one pillow for less.',message_source:'delia',
+    result_state:'closest_alternatives',recommendations:[{title:'Mainstays 1 Pillow',price_value:3.44,currency:'USD',retailer:'Walmart',url:'https://www.walmart.com/ip/pillow/1234',lowest_price:true,position_role:'lowest_price'}],comparison:[],comparison_notes:[]
+  }) : new Promise((_resolve, reject) => signal.addEventListener("abort", () => {
     aborted++;
     reject(new Error("Fixture cancelled"));
   }, {once: true}))
@@ -112,6 +115,24 @@ async function get(route) {
     assert.match(final.message, /external comparison did not finish/i);
     assert.equal(aborted, 2, "deadline must stop external work and retain catalogue facts");
   } finally {global.setTimeout = realTimeout;}
+  db.prepare("UPDATE products SET title='Acme Bed Pillows 2-Pack',current_price=5.84 WHERE id=1").run();
+  for(const endpoint of ['/api/shopping-assistant','/api/shopping-assistant/stream']) {
+    const r=await fetch(base+endpoint,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({message:'Is this a good price? fixture-pack '+endpoint,product_id:1,market:'us'})});
+    assert.equal(r.status,200);
+    const result=endpoint.endsWith('/stream') ? (await r.text()).trim().split('\n').map(line=>JSON.parse(line)).find(e=>e.type==='result').result : await r.json();
+    assert.equal(result.recommendations[0].catalog_product_id,1,'Both transports must retain the original pack first');
+    assert.equal(result.recommendations[0].unit_price_value,2.92);
+    assert.equal(result.recommendations[1].unit_price_value,3.44);
+    assert.match(result.recommendations[1].note,/Different pack size/);
+    assert.equal(result.result_state,'exact_matches');
+    assert(!result.message.includes('Nothing matched exactly'));
+  }
+  const caHome=await get('/ca');
+  assert(!caHome.includes('Explore Halloween'),'Do not advertise an empty regional collection');
+  assert(!caHome.includes('See more Halloween finds'),'Do not render an empty homepage preview');
+  const caHalloween=await get('/ca/halloween');
+  assert(caHalloween.includes('Browse available products'),'Empty direct collection must offer a useful alternative');
   console.log("Audit brands: shared layout, compact search, 24-card paging, matching averages, regions, redirects, previews, cancellation and bounded partial fallback passed.");
   process.exit(0);
 })().catch(error => {console.error(error); process.exit(1);});
