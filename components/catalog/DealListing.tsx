@@ -33,6 +33,7 @@ export async function DealListing({
   page = 1,
   scopeCategory,
   searchParams = {},
+  scopedDeals,
 }: {
   market: string;
   /** Path without a query string; the filter panel appends its own. */
@@ -50,6 +51,7 @@ export async function DealListing({
   scopeCategory?: string;
   /** Everything else in the query string, so paging keeps the filters. */
   searchParams?: Record<string, string | string[] | undefined>;
+  scopedDeals?: Deal[];
 }) {
   const totalPages = Math.max(1, Math.ceil(deals.length / PER_PAGE));
   const currentPage = Math.min(Math.max(1, page), totalPages);
@@ -111,10 +113,10 @@ export async function DealListing({
 
   const baseFilter = { query: filter.query, category: backendCategory ? slugifyCategory(backendCategory) : undefined, sort: filter.sort };
   const exact = searchParams.exact === "1";
-  const baseDeals = filter.query ? (await searchDeals(market, baseFilter, { exact })).deals : await getDeals(market, baseFilter);
+  const baseDeals = scopedDeals ?? (filter.query ? (await searchDeals(market, baseFilter, { exact })).deals : await getDeals(market, baseFilter));
   /* What every option on the panel would leave behind. Counted here, on the
      server, over the same list the page is drawn from. See listingCounts. */
-  const counts = listingCounts(baseDeals, filter, { queryApplied: Boolean(filter.query) });
+  const counts = listingCounts(baseDeals, filter, { queryApplied: Boolean(filter.query) && !scopedDeals });
   const currency = getMarket(market)?.currency ?? "USD";
 
   return (

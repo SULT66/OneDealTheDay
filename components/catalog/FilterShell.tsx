@@ -3,6 +3,7 @@
 import { useId, useState, type ReactNode } from "react";
 import { SlidersHorizontal } from "@phosphor-icons/react";
 import { cn } from "@/lib/cn";
+import {useCopy} from "@/components/site/CopyProvider";
 
 /**
  * Collapses the filters behind a button on narrow screens and leaves them
@@ -14,6 +15,7 @@ import { cn } from "@/lib/cn";
  * fighting over the same label ids.
  */
 export function FilterShell({ children }: { children: ReactNode }) {
+  const tr=useCopy();
   const [open, setOpen] = useState(false);
   const panelId = useId();
 
@@ -27,8 +29,8 @@ export function FilterShell({ children }: { children: ReactNode }) {
         className="flex h-11 w-full cursor-pointer items-center gap-2 text-sm font-semibold text-fg lg:hidden"
       >
         <SlidersHorizontal size={18} weight="bold" aria-hidden="true" />
-        Filters and sorting
-        <span className="ml-auto text-fg-subtle">{open ? "Hide" : "Show"}</span>
+        {tr("app.filter.heading")}
+        <span className="ml-auto text-fg-subtle">{tr(open?"app.filter.hide":"app.filter.show")}</span>
       </button>
 
       <div

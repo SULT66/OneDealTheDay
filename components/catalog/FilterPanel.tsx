@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+import { useNavigationProgress } from "@/components/site/NavigationProgress";
 import { PriceBands } from "./PriceBands";
 import { X } from "@phosphor-icons/react";
 import { cn } from "@/lib/cn";
@@ -98,15 +98,17 @@ export function FilterPanel({
   copy: FilterCopy;
 }) {
   const tr = useCopy();
-  const router = useRouter();
+  const {pending,navigate} = useNavigationProgress();
+  const [optimisticFilter,setOptimisticFilter]=useState(filter);
+  const appliedFilter=filter;
   const requested = useRef(filter);
-  useEffect(() => { requested.current = filter; }, [filter]);
+  useEffect(() => { requested.current = appliedFilter; setOptimisticFilter(appliedFilter); }, [appliedFilter]);
+  filter = pending ? optimisticFilter : filter;
 
   function go(next: DealFilter) {
     requested.current = next;
-    router.replace(`${basePath}${searchParamsFromFilter(next)}`, {
-      scroll: false,
-    });
+    setOptimisticFilter(next);
+    navigate(`${basePath}${searchParamsFromFilter(next)}`, {replace:true,scroll:false});
   }
 
   const update = (patch: Partial<DealFilter>) => go({ ...requested.current, ...patch });
@@ -130,7 +132,7 @@ export function FilterPanel({
     },
     filter.minScore !== undefined && {
       key: "minScore" as const,
-      label: copy.scoreAtLeast,
+      label: tr("app.filter.scoreAtLeast",{score:filter.minScore}),
     },
     filter.discountedOnly && {
       key: "discountedOnly" as const,
@@ -140,7 +142,7 @@ export function FilterPanel({
   ].filter(Boolean) as Array<{ key: keyof DealFilter; label: string }>;
 
   return (
-    <div className="space-y-7">
+    <div className="space-y-7" aria-busy={pending}>
       {active.length > 0 && (
         <div>
           <div className="flex items-baseline justify-between gap-3">
@@ -153,7 +155,7 @@ export function FilterPanel({
                  active filter, so keeping it made "Clear all" clear all but
                  one — and the one it kept was the only one the shopper had
                  typed. Sort is not a filter and is not listed, so it stays. */
-              onClick={() => go({ sort: filter.sort })}
+              onClick={() => go({ sort: requested.current.sort })}
               className="cursor-pointer text-xs font-semibold text-fg-muted underline underline-offset-2 hover:text-fg"
             >
               {copy.clearAll}
@@ -165,7 +167,7 @@ export function FilterPanel({
                 <button
                   type="button"
                   onClick={() => {
-                    const next = { ...filter };
+                    const next = { ...requested.current };
                     delete next[a.key];
                     go(next);
                   }}
@@ -294,7 +296,7 @@ export function FilterPanel({
       </div>
 
       <p className="text-sm text-fg-muted tnum" role="status">
-        {copy.matchCount}
+        {pending?tr("app.navigation.loading"):copy.matchCount}
       </p>
     </div>
   );

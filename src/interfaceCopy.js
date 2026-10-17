@@ -607,3 +607,21 @@ Object.assign(interfaceCopy, {
   "Searching…": { es: "Buscando…", fr: "Recherche…", de: "Suche…" },
   "No conversations mention {query}.": { es: "Ninguna conversación menciona «{query}».", fr: "Aucune conversation ne mentionne « {query} ».", de: "Keine Unterhaltung erwähnt „{query}“." }
 });
+
+Object.assign(interfaceCopy, {
+  "Cancel search": {
+    "es": "Cancelar búsqueda",
+    "fr": "Annuler la recherche",
+    "de": "Suche abbrechen"
+  },
+  "Search cancelled. You can retry.": {
+    "es": "Búsqueda cancelada. Puedes reintentar.",
+    "fr": "Recherche annulée. Vous pouvez réessayer.",
+    "de": "Suche abgebrochen. Du kannst es erneut versuchen."
+  },
+  "The search took too long. Try again.": {
+    "es": "La búsqueda tardó demasiado. Inténtalo de nuevo.",
+    "fr": "La recherche a pris trop de temps. Réessayez.",
+    "de": "Die Suche hat zu lange gedauert. Bitte erneut versuchen."
+  }
+});

@@ -11,6 +11,7 @@ import { PageViews } from "@/components/site/PageViews";
 import { LiveDropBar } from "@/components/live/LiveDropBar";
 import { LiveBroadcastProvider } from "@/components/live/LiveBroadcast";
 import { CopyProvider } from "@/components/site/CopyProvider";
+import { NavigationProgress } from "@/components/site/NavigationProgress";
 
 /**
  * Everything lives under a market segment, mirroring the live site's /us URLs
@@ -32,6 +33,7 @@ export default async function MarketLayout({
   return (
     /* The language for components that run in the browser. See CopyProvider. */
     <CopyProvider language={language}>
+    <NavigationProgress>
     <DeliaProvider market={market} language={language}>
       {/* Holds Chloe's call above the pages, so she follows the viewer. */}
       <LiveBroadcastProvider market={market}>
@@ -53,6 +55,7 @@ export default async function MarketLayout({
       <Suspense fallback={null}><Footer market={market} /></Suspense>
       </LiveBroadcastProvider>
     </DeliaProvider>
+    </NavigationProgress>
     </CopyProvider>
   );
 }

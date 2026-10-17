@@ -1008,6 +1008,10 @@ export function DeliaPanel() {
   // message disappeared."
   const [pendingQuestion, setPendingQuestion] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [preview,setPreview]=useState<DeliaResult|null>(null);
+  const controllerRef=useRef<AbortController|null>(null);
+  const lastQuestionRef=useRef("");
+  useEffect(()=>()=>controllerRef.current?.abort(),[]);
   /* Null until /api/me answers. Guessing either way flashes the wrong header
      at somebody for half a second, and guessing "signed out" tells a signed-in
      shopper they have been logged out. */
@@ -1071,6 +1075,10 @@ export function DeliaPanel() {
   const ask = useCallback(
     async (transcript: string, skipClarification = false) => {
       const requestId = ++requestSeqRef.current;
+      controllerRef.current?.abort();
+      const controller=new AbortController();controllerRef.current=controller;
+      lastQuestionRef.current=transcript;
+      setPreview(null);setProgress(null);
       const stillCurrent = () => requestId === requestSeqRef.current;
       /*
        * Somebody asked something. Not what they asked: a question put to a
@@ -1099,6 +1107,9 @@ export function DeliaPanel() {
           transcript,
           {
             market,
+            language,
+            signal:controller.signal,
+            onPreview:(result)=>{if(stillCurrent())setPreview(result);},
             history: historyRef.current,
             shoppingMission: missionRef.current,
             skipClarification,
@@ -1141,7 +1152,7 @@ export function DeliaPanel() {
         /* A failure nobody is waiting for any more is not worth showing. */
         if (!stillCurrent()) return;
         setErrorMsg(
-          error instanceof DeliaError
+          controller.signal.aborted ? ui("Search cancelled. You can retry.") : error instanceof Error && error.name==="TimeoutError" ? ui("The search took too long. Try again.") : error instanceof DeliaError
             ? error.message
             : "Delia could not answer that. Check your connection and try again.",
         );
@@ -1150,6 +1161,7 @@ export function DeliaPanel() {
            finishing would switch the spinner off under a newer question. */
         if (stillCurrent()) {
           setLoading(false);
+          setPreview(null);
           setPendingQuestion(null);
           /* The backend has just written this exchange, so the sidebar is one
              request behind until it is asked again. A search in progress is
@@ -1164,12 +1176,14 @@ export function DeliaPanel() {
         }
       }
     },
-    [market, signedIn],
+    [market, language, seedProductId, signedIn, ui],
   );
 
   /* Leaving the current conversation, for any reason, stops waiting on it. */
   const abandonPendingQuestion = () => {
     requestSeqRef.current += 1;
+    controllerRef.current?.abort();
+    setPreview(null);
     setLoading(false);
     setPendingQuestion(null);
     setProgress(null);
@@ -1563,6 +1577,10 @@ export function DeliaPanel() {
                 {loading && pendingQuestion && (
                   <div className={cn("space-y-5", turns.length > 0 && "mt-8")} aria-live="polite">
                     <UserBubble>{pendingQuestion}</UserBubble>
+                    {preview&&<div className="space-y-3 rounded-2xl border border-border p-4">
+                      <p className="text-sm text-fg-muted">{preview.message}</p>
+                      {preview.recommendations.map((rec,index)=><OfferRow key={rec.catalog_product_id??index} rec={rec} market={market} onClose={closeDelia} position={index+1}/>)}
+                    </div>}
                     <div className="flex items-start gap-3">
                       <DeliaMark />
                       <span className="inline-flex items-center gap-2.5 pt-1.5">
@@ -1572,15 +1590,19 @@ export function DeliaPanel() {
                           <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-fg-subtle" />
                         </span>
                         <SearchProgress progress={progress} />
+                        <button type="button" className="text-xs font-semibold underline" onClick={()=>{
+                          abandonPendingQuestion();setTyped(lastQuestionRef.current);setErrorMsg(ui("Search cancelled. You can retry."));
+                        }}>{ui("Cancel search")}</button>
                       </span>
                     </div>
                   </div>
                 )}
 
                 {errorMsg && !loading && (
-                  <p role="alert" className="mt-4 rounded-2xl bg-bg p-4 text-sm text-fg-muted">
+                  <div role="alert" className="mt-4 rounded-2xl bg-bg p-4 text-sm text-fg-muted">
                     {errorMsg}
-                  </p>
+                    {lastQuestionRef.current&&<button type="button" className="ml-3 font-semibold underline" onClick={()=>ask(lastQuestionRef.current)}>{ui("Try again")}</button>}
+                  </div>
                 )}
 
                 <div ref={bottomRef} />

@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { ProgressLink as Link } from "@/components/site/ProgressLink";
 import { useEffect, useState } from "react";
 
 type Live = { state: string; secondsUntilStart: number | null; secondsUntilEnd: number | null };

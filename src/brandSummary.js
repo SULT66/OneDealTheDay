@@ -18,14 +18,15 @@ function ratingSummary(products) {
 
 function summarizeBrands(products) {
   const groups = new Map();
-  for (const product of uniqueProductsInOrder(products)) {
+  for (const product of products) {
     const key = String(product.brand_slug || "").trim();
     if (!key) continue;
     const group = groups.get(key) || [];
     group.push(product);
     groups.set(key, group);
   }
-  return [...groups.entries()].map(([brand_slug, products]) => {
+  return [...groups.entries()].map(([brand_slug, rows]) => {
+    const products = uniqueProductsInOrder(rows);
     const ratings = ratingSummary(products);
     return {
       brand: products[0].brand, brand_slug, product_count: products.length,
