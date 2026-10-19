@@ -29,5 +29,14 @@ jobs:
             const deployments=await get('/api/deployments');
             let rows=[];try{rows=JSON.parse(deployments.body);}catch{}
             console.log(JSON.stringify({deploymentsStatus:deployments.status,deployments:Array.isArray(rows)?rows.slice(0,4).map(x=>({id:x.id,status:x.status,active:x.active,complete:x.complete,end_time:x.end_time})):[]}));
+            const index=await get('/api/logs/docker');
+            let files=[];try{files=JSON.parse(index.body);}catch{}
+            for(const entry of (Array.isArray(files)?files:[]).filter(x=>x.href).sort((a,b)=>String(a.lastUpdated).localeCompare(String(b.lastUpdated))).slice(-3)){
+              const u=new URL(entry.href);
+              if(u.hostname!==hostname)continue;
+              const log=await get(u.pathname+u.search);
+              const lines=log.body.split('\n').filter(x=>/error|failed|starting|started|listening|ready|container|evenskyn|outin|module|exception|release/i.test(x)).filter(x=>!/password|secret|token|connectionstring|authorization|apikey/i.test(x));
+              console.log(JSON.stringify({log:entry.name,lines:lines.slice(-45).map(x=>x.replace(/https?:\\/\\/\\S+/g,'[url]').replace(/[a-f0-9]{32,}/gi,'[id]'))}));
+            }
           })().catch(e=>{console.error(e.name);process.exitCode=1});
           JS
