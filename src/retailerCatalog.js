@@ -163,6 +163,24 @@ const RETAILERS = Object.freeze([
     feedPolicy:{spreadAcrossFeed:true, excludeTitleTerms:["not sold separately", "not for sale", "non-delivery"]}
   },
   {
+    id:"evenskyn", name:"EVENSKYN", network:"Awin", markets:["us"],
+    storefrontHost:"evenskyn.com", awinFeedId:"103460", awinFeedFormat:"legacy", maxCatalogProducts:100,
+    feedPolicy:{spreadAcrossFeed:true, excludeTitleTerms:["custom payment", "price difference link", "purchase protection", "gift card", "not sold separately", "not for sale", "non-delivery"]}
+  },
+  {
+    id:"outin", name:"OutIn", network:"Awin", markets:["us"],
+    storefrontHost:"outin.com", awinFeedId:"F2951", maxCatalogProducts:100,
+    feedPolicy:{spreadAcrossFeed:true, excludeTitleTerms:["custom payment", "price difference link", "purchase protection", "gift card", "not sold separately", "not for sale", "non-delivery"]}
+  },
+  {
+    id:"cozeware", name:"Cozeware", network:"Awin", markets:["us"],
+    storefrontHost:"cozeware.com",
+    // Joined, but the advertiser supplies no product feed. Remain unconfigured
+    // until an explicit feed URL is supplied; never invent products or prices.
+    maxCatalogProducts:100,
+    feedPolicy:{spreadAcrossFeed:true, excludeTitleTerms:["purchase protection", "gift card", "not sold separately", "not for sale", "non-delivery"]}
+  },
+  {
     id:"toputure", name:"Toputure", network:"Awin", markets:["us"],
     storefrontHost:"toputure.com", awinFeedId:"F3285", maxCatalogProducts:100,
     feedPolicy:{spreadAcrossFeed:true, excludeTitleTerms:["custom payment", "price difference link", "not a product sale", "purchase protection", "gift card", "not sold separately", "not for sale", "non-delivery"]}
@@ -271,6 +289,10 @@ function joinedAwinFeedUrl(retailer, env) {
     } catch { /* An unrelated or invalid configured feed is not a credential. */ }
   }
   if (!/^[a-f0-9]{32}$/i.test(key)) return "";
+  if (retailer.awinFeedFormat === "legacy") {
+    const columns = "aw_deep_link,product_name,aw_product_id,merchant_product_id,merchant_image_url,description,merchant_category,search_price,merchant_name,merchant_id,category_name,currency,delivery_cost,merchant_deep_link,last_updated,brand_name,rrp_price,in_stock,stock_status";
+    return `https://productdata.awin.com/datafeed/download/apikey/${key}/language/en/fid/${retailer.awinFeedId}/rid/0/hasEnhancedFeeds/0/columns/${columns}/format/csv/delimiter/%2C/compression/gzip/adultcontent/0/`;
+  }
   return `https://ui.awin.com/productdata-darwin-download/publisher/3018019/${key}/1/feed/${retailer.awinFeedId}.csv.gz`;
 }
 
