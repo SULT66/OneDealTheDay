@@ -32,7 +32,7 @@ export async function generateMetadata({
   return {
     title: "Stores we work with",
     description:
-      "The retailers whose listings appear on OneDailyDrop, and how to be added.",
+      "Shop the retailers connected to OneDailyDrop, and learn how to be added.",
     ...((await getLanguage(market)) === "es" ? { title: spanishMeta.stores.title, description: spanishMeta.stores.description } : {}),
     alternates: { canonical: `/${market}/stores`, languages: marketAlternates("/stores") },
   };
@@ -62,6 +62,12 @@ export default async function StoresPage({
   const tiles = [
     ...shops,
     { retailer: "Amazon", listings: 0, host: "amazon.com", href: `/${market}/amazon/go/store` },
+    ...(market === "us" && !shops.some((shop) => shop.retailer.toLowerCase() === "cozeware")
+      ? [{
+          retailer: "Cozeware", listings: 0, host: "cozeware.com",
+          href: "https://www.awin1.com/cread.php?awinmid=123618&awinaffid=3018019&clickref=odd-store&ued=https%3A%2F%2Fwww.cozeware.com%2F",
+        }]
+      : []),
   ];
 
   if ((await getLanguage(market)) === "es") {
@@ -75,7 +81,7 @@ export default async function StoresPage({
       market={market}
       crumb="Stores"
       title="Stores we work with"
-      lede="Every retailer whose listings appear here."
+      lede="Shop our connected retailers."
     >
       <p>
         These are the shops connected to OneDailyDrop in{" "}
@@ -85,6 +91,13 @@ export default async function StoresPage({
       </p>
 
       <StoreMarquee market={market} shops={tiles} />
+
+      {market === "us" && !shops.some((shop) => shop.retailer.toLowerCase() === "cozeware") && (
+        <p className="text-sm text-fg-muted">
+          Visit Cozeware directly to browse its products. Individual Cozeware
+          products are not yet listed on OneDailyDrop.
+        </p>
+      )}
 
       {/* Required, and kept to one sentence. The FTC asks for a disclosure a
           visitor can find near the links it describes, and an affiliate manager
@@ -98,7 +111,8 @@ export default async function StoresPage({
 
       <h2>What being here does and does not mean</h2>
       <p>
-        A shop appearing on this page supplies us with its listings. It does not
+        Some shops supply product listings; others are available through a
+        direct store link. Appearing here does not
         mean the shop pays for placement, chooses which of its products appear,
         or has any say in how they are scored &mdash; none of those are things
         we sell. A retailer sees the same ranking rules as every other retailer,
