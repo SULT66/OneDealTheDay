@@ -36,7 +36,7 @@ jobs:
               if(u.hostname!==hostname)continue;
               const log=await get(u.pathname+u.search);
               const lines=log.body.split('\n').filter(x=>/error|failed|starting|started|listening|ready|container|evenskyn|outin|module|exception|release/i.test(x)).filter(x=>!/password|secret|token|connectionstring|authorization|apikey/i.test(x));
-              console.log(JSON.stringify({log:entry.name,lines:lines.slice(-45).map(x=>x.replace(/https?:\\/\\/\\S+/g,'[url]').replace(/[a-f0-9]{32,}/gi,'[id]'))}));
+              console.log(JSON.stringify({log:entry.name,lines:lines.slice(-45).map(x=>x.split(' ').map(part=>part.startsWith('http')?'[url]':part).join(' ').replace(/[a-f0-9]{32,}/gi,'[id]'))}));
             }
           })().catch(e=>{console.error(e.name);process.exitCode=1});
           JS
