@@ -38,7 +38,7 @@ jobs:
               const lines=log.body.split('\n').filter(x=>/error|failed|starting|started|listening|ready|container|evenskyn|outin|module|exception|release|tar:|zstd|Killed|cannot|No such|npm|WARN/i.test(x)).filter(x=>!/password|secret|token|connectionstring|authorization|apikey/i.test(x));
               console.log(JSON.stringify({log:entry.name,lines:lines.slice(-45).map(x=>x.split(' ').map(part=>part.startsWith('http')?'[url]':part).join(' ').replace(/[a-f0-9]{32,}/gi,'[id]'))}));
             }
-            const body=JSON.stringify({command:"ls -ld node_modules; tar -I zstd -tf node_modules.tar.zst | head -15",dir:"/home/site/wwwroot"});
+            const body=JSON.stringify({command:"tar -I zstd -tf node_modules.tar.zst",dir:"/home/site/wwwroot"});
             const inspected=await new Promise((resolve,reject)=>{const request=https.request({hostname,path:'/api/command',method:'POST',headers:{Authorization:auth,'Content-Type':'application/json','Content-Length':Buffer.byteLength(body)}},res=>{let text='';res.on('data',x=>text+=x);res.on('end',()=>resolve({status:res.statusCode,body:text}));});request.setTimeout(25000,()=>request.destroy(Error('Archive inspection timed out')));request.on('error',reject);request.end(body);});
             let listing={};try{listing=JSON.parse(inspected.body);}catch{}
             console.log(JSON.stringify({archiveStatus:inspected.status,output:String(listing.Output||'').slice(0,4000),error:String(listing.Error||'').slice(0,1000)}));
