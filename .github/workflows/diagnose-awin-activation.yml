@@ -1,0 +1,33 @@
+name: Diagnose Awin release activation
+on:
+  push:
+    branches: [ops/import-outin-evenskyn-20261019]
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Inspect deployed release without exposing credentials
+        env:
+          PROFILE: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+        run: |
+          node <<'JS'
+          const https = require('https');
+          const xml = process.env.PROFILE || '';
+          const dec=s=>s.replaceAll('&amp;','&').replaceAll('&quot;','"').replaceAll('&lt;','<').replaceAll('&gt;','>').replaceAll('&apos;',"'");
+          const profiles=[...xml.matchAll(/<publishProfile\b([^>]*)>/g)].map(m=>Object.fromEntries([...m[1].matchAll(/([\w-]+)="([^"]*)"/g)].map(a=>[a[1],dec(a[2])])));
+          const p=profiles.find(x=>/scm\./i.test(x.publishUrl||'') && /^(ZipDeploy|MSDeploy)$/i.test(x.publishMethod||''));
+          if(!p) throw Error('Deployment profile unavailable');
+          const hostname=p.publishUrl.replace(/^https?:\/\//i,'').split('/')[0].replace(/:443$/,'');
+          const auth='Basic '+Buffer.from(p.userName+':'+p.userPWD).toString('base64');
+          function get(path){return new Promise((resolve,reject)=>{const r=https.get({hostname,path,headers:{Authorization:auth}},res=>{let body='';res.on('data',x=>body+=x);res.on('end',()=>resolve({status:res.statusCode,body}));});r.setTimeout(20000,()=>r.destroy(Error('Request timed out')));r.on('error',reject);});}
+          (async()=>{
+            const release=await get('/api/vfs/site/wwwroot/.release-sha');
+            console.log(JSON.stringify({releaseFileStatus:release.status,release:/^[a-f0-9]{40}\s*$/.test(release.body)?release.body.trim():'not-readable'}));
+            const deployments=await get('/api/deployments');
+            let rows=[];try{rows=JSON.parse(deployments.body);}catch{}
+            console.log(JSON.stringify({deploymentsStatus:deployments.status,deployments:Array.isArray(rows)?rows.slice(0,4).map(x=>({id:x.id,status:x.status,active:x.active,complete:x.complete,end_time:x.end_time})):[]}));
+          })().catch(e=>{console.error(e.name);process.exitCode=1});
+          JS
