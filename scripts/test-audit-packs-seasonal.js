@@ -31,15 +31,28 @@ assert.equal(focusedPackComparison({...raw,turn_kind:'discussion'},original,'Com
 for(const language of ['es','fr','de']) assert.notEqual(focusedPackComparison(raw,original,'price',language).message,fixed.message);
 
 for(const [title,category] of [
-  ['HALLOWEEN II Movie Poster RARE TV Ad Horror','Home & Kitchen'],
-  ['Animated Skeleton Dog Halloween Decoration','Home & Kitchen'],
-  ['Halloween Dog Costume Vampire Cape','Pet Supplies'],
-  ['Halloween Michael Myers Costume Mask','Fashion'],
-  ['Dog Chew Toy Halloween Pumpkin','Pet Supplies'],
+  ['HALLOWEEN II Movie Poster RARE TV Ad Horror','Halloween'],
+  ['Animated Skeleton Dog Halloween Decoration','Halloween'],
+  ['Halloween Dog Costume Vampire Cape','Halloween'],
+  ['Halloween Michael Myers Costume Mask','Halloween'],
+  ['Dog Chew Toy Halloween Pumpkin','Halloween'],
   ['Samsung OLED TV 55 inch','Electronics'],
   ['Dog Automatic Feeder','Pet Supplies'],
 ]) assert.equal(canonicalCategory({title,source:'ebay',category:'electronics',taxonomy_version:'old'}),category,title);
-assert.notEqual(TAXONOMY_VERSION,'catalog-taxonomy-v9','Existing stored listings must be recategorized');
+assert.notEqual(TAXONOMY_VERSION,'catalog-taxonomy-v10','Existing stored listings must be recategorized');
+for (const source of ['ebay','aliexpress','feed-giftlab','feed-silver-brush','feed-mooncool','newegg']) {
+  assert.equal(canonicalCategory({title:'Halloween LED Pumpkin Lights',source,category:'Electronics',normalized_category:'Home & Kitchen',taxonomy_version:'catalog-taxonomy-v10'}),'Halloween');
+}
+for (const [title,expected] of [
+  ['Spooky Ghost Hanging Decoration','Halloween'],
+  ['Jack-O-Lantern String Lights','Halloween'],
+  ['Animated Skeleton Dog Decoration','Halloween'],
+  ['Pumpkin Soup Kitchen Bowl','Home & Kitchen'],
+  ['Medical Anatomical Skeleton Teaching Model','Other Deals'],
+  ['Protective Face Mask','Other Deals'],
+  ['Party Balloons','Home & Kitchen'],
+]) assert.equal(canonicalCategory({title,source:'ebay',category:''}),expected,title);
+assert.notEqual(canonicalCategory({title:'Samsung OLED Television',source:'ebay',category:'Halloween decorations'}),'Halloween','Search keywords cannot turn an unrelated product into Halloween');
 const rows=[...Array.from({length:30},(_,i)=>({id:i,title:'Halloween Movie Poster TV Ad '+i})),{id:30,title:'Halloween Costume Mask'},{id:31,title:'Halloween Animated Skeleton Dog Decoration'},{id:32,title:'Halloween Party Balloons'}];
 const diverse=diverseSeasonalProducts(rows);
 assert.deepEqual(diverse.slice(0,4).map(row=>row.id),[0,30,31,32]);

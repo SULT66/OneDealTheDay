@@ -8,12 +8,13 @@
    The version is what makes the catalogue re-file itself — app.js recalculates
    every product whose stamp does not match on boot — so bumping it is how
    corrected rules reach the listings already stored. */
-const {seasonalProductCategory} = require("./seasonalProductTypes");
-const TAXONOMY_VERSION = "catalog-taxonomy-v10";
+const {isHalloweenProduct, seasonalProductCategory} = require("./seasonalProductTypes");
+const TAXONOMY_VERSION = "catalog-taxonomy-v11";
 
 // This is the only taxonomy exposed to shoppers. Source-feed category paths are
 // preserved in `category` for auditing, but must never be used as navigation.
 const PUBLIC_CATEGORIES = Object.freeze([
+  "Halloween",
   "Electronics",
   "Home & Kitchen",
   "Furniture",
@@ -36,6 +37,7 @@ const PUBLIC_CATEGORIES = Object.freeze([
 const FALLBACK_CATEGORY = "Other Deals";
 
 const EXACT = new Map([
+  ["halloween", "Halloween"],
   ["electronics", "Electronics"],
   ["smart home", "Electronics"],
   ["home", "Home & Kitchen"],
@@ -232,6 +234,9 @@ function firstMatch(evidence, rules) {
 }
 
 function canonicalCategory(product = {}) {
+  // The themed aisle takes precedence over merchant defaults, source search
+  // terms and previously normalized categories, for imports and stored rows.
+  if (isHalloweenProduct(product)) return "Halloween";
   const current = product.taxonomy_version === TAXONOMY_VERSION
     ? EXACT.get(fold(product.normalized_category))
     : "";

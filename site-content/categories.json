@@ -1,5 +1,13 @@
 [
   {
+    "slug": "halloween",
+    "name": "Halloween",
+    "noun": "Halloween find",
+    "nounPlural": "Halloween finds",
+    "icon": "Gift",
+    "blurb": "Halloween decorations, costumes, party supplies and spooky finds."
+  },
+  {
     "slug": "office",
     "name": "Office",
     "noun": "office pick",
