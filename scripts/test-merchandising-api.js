@@ -142,9 +142,14 @@ async function get(route, options) {
   assert.equal(filtered.status,200);
   assert((await filtered.text()).includes('No matching products right now'),'Dedicated filters affect the collection');
   assert.equal((await fetch(base+'/us/halloween')).headers.get('x-odd-cache'),'HIT','Dedicated page gets HTML caching');
-  const categoryPage = await fetch(base+'/us/category/home-kitchen');
+  const categoryPage = await fetch(base+'/us/category/halloween');
   assert.equal(categoryPage.status,200);
-  assert((await categoryPage.text()).includes('Test seasonal shelf'),'First category page must render its matching shelf');
+  const categoryHtml = await categoryPage.text();
+  assert(categoryHtml.includes('Test seasonal shelf'),'First category page must render its matching shelf');
+  assert(categoryHtml.includes('Pumpkin Halloween Decoration Sculpture'),'Halloween category must render the migrated product');
+  const homeKitchenHtml = await (await fetch(base+'/us/category/home-kitchen')).text();
+  assert(!homeKitchenHtml.includes('Pumpkin Halloween Decoration Sculpture'),'Home & Kitchen must not render a migrated Halloween product');
+  assert(!homeKitchenHtml.includes('Test seasonal shelf'),'Home & Kitchen must not render the Halloween shelf');
   assert.equal((await get('/api/admin/merchandising?market=us')).response.status,401);
   const admin = await get('/api/admin/merchandising?market=us',{headers});
   assert.equal(admin.response.status,200);
