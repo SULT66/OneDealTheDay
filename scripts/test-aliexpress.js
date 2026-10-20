@@ -42,7 +42,7 @@ setCount("Pet Supplies", 42);
 const gapPlan = planGapSearches(categoryRows, { now: 0 });
 assert.deepStrictEqual(gapPlan.map(row => row.category), ["Baby & Kids", "Bikes & Mobility", "Fashion", "Automotive", "Furniture", "Pet Supplies"]);
 assert(!gapPlan.some(row => row.category === "Electronics"), "a full shelf must not compete with a gap");
-assert.notStrictEqual(planGapSearches(categoryRows, { now: 3 * 3600 * 1000 })[0].keyword, gapPlan[0].keyword);
+assert.notStrictEqual(planGapSearches(categoryRows, { now: 6 * 3600 * 1000 })[0].keyword, gapPlan[0].keyword);
 assert.deepStrictEqual(planGapSearches(categoryRows.map(row => ({...row, count:100}))), []);
 for (const [category, keywords] of Object.entries(SHELVES)) {
   for (const title of keywords) assert.strictEqual(canonicalCategory({title, category}), category);

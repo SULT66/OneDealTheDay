@@ -89,7 +89,7 @@ assert.strictEqual(new Set(terms).size, terms.length, "the same phrase was searc
  * Without this a category fills with ten versions of whatever the single
  * keyword returns, which is a thin category wearing a different hat.
  */
-const later = gapKeywords(rows, { target: 100, limit: 8, perCategory: 2, now: now + 3 * 3600 * 1000 });
+const later = gapKeywords(rows, { target: 100, limit: 8, perCategory: 2, now: now + 6 * 3600 * 1000 });
 assert.notDeepStrictEqual(terms, later, "every run searches the same phrases");
 assert.ok(
   later.some(term => !terms.includes(term)),
@@ -128,5 +128,18 @@ assert.ok(
   !fs.existsSync(path.join(__dirname, "..", "src", "aliexpressGaps.js")),
   "the AliExpress-only version of this module is back",
 );
+
+
+// Every phrase must get a turn under the actual six-hour schedule. The old
+// three-hour rotation visited only even positions in ten-keyword shelves.
+for (const category of ['Travel', 'Automotive', 'Mattresses & Sleep']) {
+  const visited = new Set();
+  for (let run = 0; run < SHELVES[category].length; run++) {
+    const entry = planGapSearches(rows, {now:run * 6 * 3600 * 1000})
+      .find(entry => entry.category === category);
+    visited.add(entry.keyword);
+  }
+  assert.deepStrictEqual([...visited].sort(), [...SHELVES[category]].sort());
+}
 
 console.log("category gap checks passed.");
