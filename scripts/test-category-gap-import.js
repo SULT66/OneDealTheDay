@@ -49,6 +49,16 @@ function item(id, title='Travel Packing Cubes Set', rating=4.9) {
     'one category must not consume the entire shared budget');
   assert.strictEqual(looked.length,10);
 
+  // A familiar, highly ranked first page must not exhaust the detail budget
+  // before a new Travel offer can be inspected.
+  const knownPool = pool.slice(0, 20);
+  const unseen = item(300000000001);
+  const discovery = await searchProducts({clientId:'test',clientSecret:'test',campaignId:'5339179772',
+    market, keywords:['packing cubes'], gapPlan, detailLimit:1, targetEligible:1,
+    existingProviderIds:knownPool.map(row => `ebay:${row.itemId}`),
+    client:{search:async()=>[...knownPool,unseen],getItem:async id=>[...knownPool,unseen].find(row=>row.itemId===id)}});
+  assert.strictEqual(discovery[0].external_id,unseen.itemId,'known listings must not starve new category offers');
+
   const ali=require('../src/providers/aliexpress');
   const aliItem = i=>({product_id:String(i),product_title:'Travel Packing Cubes Set',target_sale_price:'15',
     target_sale_price_currency:'USD',target_original_price:'20',evaluate_rate:'98',lastest_volume:500,

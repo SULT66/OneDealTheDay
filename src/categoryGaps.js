@@ -3,6 +3,9 @@
  * API budgets remain bounded; a shortfall is reported, never filled with
  * duplicate listings or invented scores. */
 
+const { HOURS } = require("./catalogSchedule");
+const ROTATION_PERIOD_MS = HOURS * 3600 * 1000;
+
 const SHELVES = Object.freeze({
   /* The eight below fifty, with the most room to fill. */
   "Travel": [
@@ -65,7 +68,7 @@ const SHELVES = Object.freeze({
  */
 function planGapSearches(rows = [], { target = 50, limit = 17, now = Date.now() } = {}) {
   const counts = new Map(rows.map(row => [row.category, Number(row.count) || 0]));
-  const slot = Math.floor(now / (3 * 3600 * 1000));
+  const slot = Math.floor(now / ROTATION_PERIOD_MS);
   return Object.entries(SHELVES)
     .map(([category, keywords]) => ({ category, count: counts.get(category) || 0, keywords }))
     .filter(shelf => shelf.count < target)
@@ -88,7 +91,7 @@ function planGapSearches(rows = [], { target = 50, limit = 17, now = Date.now() 
  * thin category instead of one.
  */
 function gapKeywords(rows = [], { target = 50, limit = 17, perCategory = 3, now = Date.now() } = {}) {
-  const slot = Math.floor(now / (3 * 3600 * 1000));
+  const slot = Math.floor(now / ROTATION_PERIOD_MS);
   const terms = [];
   for (const shelf of planGapSearches(rows, { target, limit, now })) {
     const keywords = SHELVES[shelf.category] || [];

@@ -498,11 +498,13 @@ async function searchProducts({
   const sortedQueue = [...candidates.values()].sort((left, right) => right.candidateScore - left.candidateScore);
   // Round-robin the thin shelves before the broad sweep. A high-scoring
   // Electronics pool cannot spend the entire detail budget before Travel.
+  // Discover unseen listings first; repeating known offers cannot grow a shelf.
+  // Known listings remain in the refresh queue after the discovery buckets.
   const buckets = new Map([...gapCategories].map(category => [category, []]));
   const ordinary = [];
   for (const candidate of sortedQueue) {
     const category = categoryOf(normalizeItem(candidate.item, candidate.keyword, candidate.sourceRank, market));
-    if (!candidate.preferred && buckets.has(category)) buckets.get(category).push(candidate);
+    if (!candidate.preferred && buckets.has(category) && !existing.has(`ebay:${candidate.item.itemId}`)) buckets.get(category).push(candidate);
     else ordinary.push(candidate);
   }
   const queue = [];
