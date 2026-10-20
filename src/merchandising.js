@@ -9,7 +9,7 @@ const { withVerifiedRetailerTerms } = require('./verifiedRetailerTerms');
 const { merchandisingFocus, focusSignals } = require('./merchandisingFocus');
 const CALENDAR_POLICY_VERSION = 'halloween-sales-v3-expanded';
 const { salesEvidence } = require('./merchandisingSeeds');
-const {matchesHalloweenQuery, diverseSeasonalProducts} = require('./seasonalProductTypes');
+const {isHalloweenProduct, matchesHalloweenQuery, diverseSeasonalProducts} = require('./seasonalProductTypes');
 const DAY = 86400000;
 const active = new WeakMap();
 const diagnosticCache = new WeakMap();
@@ -94,12 +94,11 @@ function getHalloweenCollection(db, {market='us', now=Date.now(), page=1, q='', 
   if(!signal) return empty;
   const theme={...signal,metadata:{...signal.metadata,minimumEbaySales:0}};
   const query=String(q).trim().slice(0,120);
-  // Every current Halloween query requires this word. Reject unrelated rows
-  // before the costly token/model/accessory checks, preserving brand matches.
-  const requiresHalloween=theme.queries.every(query=>/\bhalloween\b/i.test(query));
+  // Use the same theme evidence as the catalogue category. A ghost prop need
+  // not literally say "Halloween decoration" to belong in this collection.
   const matching=catalogRows(db,market).filter(row=>
-    (!requiresHalloween || /\bhalloween\b/i.test(`${row.title || ''} ${row.brand || ''}`)) &&
-    !signalRejectionReasons(row,theme,{market,now}).length &&
+    isHalloweenProduct(row) &&
+    !signalRejectionReasons(row,theme,{market,now,themeMatched:true}).length &&
     isPromotionEligible(row,{market,now,requireReviews:false}) && priceExpiry(row)>now &&
     matchesHalloweenQuery(row,query));
   matching.sort((a,b)=>sort==='price-asc' ? Number(a.current_price)-Number(b.current_price) || a.id-b.id :

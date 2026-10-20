@@ -106,8 +106,8 @@ function matchesQuery(product, query) {
   return (budget.max == null || cost <= budget.max) && (budget.min == null || cost >= budget.min);
 }
 
-function signalRejectionReasons(product, signal, {market = "us", now = Date.now()} = {}) {
-  if (!array(signal?.queries).some(query => matchesQuery(product, query))) return ["theme_mismatch"];
+function signalRejectionReasons(product, signal, {market = "us", now = Date.now(), themeMatched = false} = {}) {
+  if (!themeMatched && !array(signal?.queries).some(query => matchesQuery(product, query))) return ["theme_mismatch"];
   if (Number(signal.metadata?.minimumEbaySales) > 0 &&
       (salesEvidence(product,{now})?.quantity ?? -1) < signal.metadata.minimumEbaySales) return ['ebay_sales_unproven'];
   // External briefs can include broad search aliases. Those aliases must not

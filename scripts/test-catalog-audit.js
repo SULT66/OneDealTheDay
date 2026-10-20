@@ -39,3 +39,16 @@ assert.strictEqual(db.prepare('SELECT rank FROM daily_drops WHERE product_id=1')
 assert.strictEqual(refreshCatalogTaxonomy(db), 0, 'category migration is idempotent');
 db.close();
 console.log('Fast taxonomy migration preserves scores and daily selection order.');
+
+const seasonalDb = new Database(':memory:');
+seasonalDb.exec('CREATE TABLE products (id INTEGER PRIMARY KEY,title TEXT,category TEXT,source TEXT,normalized_category TEXT,taxonomy_version TEXT,status TEXT,score REAL)');
+const oldRow = seasonalDb.prepare('INSERT INTO products VALUES (?,?,?,?,?,?,?,?)');
+oldRow.run(1,'Halloween Pumpkin LED String Lights','lighting','ebay','Electronics','catalog-taxonomy-v10','published',81);
+oldRow.run(2,'Halloween Personalized Ghost Plaque','Gifts','feed-giftlab','Gifts','catalog-taxonomy-v10','published',75);
+oldRow.run(3,'Everyday Kitchen Mixing Bowl','Kitchen','ebay','Home & Kitchen','catalog-taxonomy-v10','published',79);
+assert.equal(refreshCatalogTaxonomy(seasonalDb),3);
+assert.deepStrictEqual(seasonalDb.prepare('SELECT normalized_category,score FROM products ORDER BY id').all(),[
+  {normalized_category:'Halloween',score:81},{normalized_category:'Halloween',score:75},{normalized_category:'Home & Kitchen',score:79}
+]);
+assert.equal(refreshCatalogTaxonomy(seasonalDb),0);
+seasonalDb.close();

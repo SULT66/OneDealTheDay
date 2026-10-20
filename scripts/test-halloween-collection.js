@@ -41,6 +41,10 @@ native.prepare('UPDATE products SET checked_at=? WHERE id=5010').run(iso(now-3*D
 assert.equal(getHalloweenCollection(db,{now,q:'5010'}).total,0);
 native.prepare('UPDATE products SET delivery_estimated_at=? WHERE id=5011').run(iso(now+20*DAY));
 assert.equal(getHalloweenCollection(db,{now,q:'5011'}).total,0);
+native.prepare("UPDATE products SET title='Spooky Ghost Hanging Decoration Model 5008' WHERE id=5008").run();
+assert.equal(getHalloweenCollection(db,{now,q:'5008'}).total,1,'The category and collection agree even without the literal Halloween keyword');
+native.prepare("UPDATE products SET title='Halloween Samsung OLED TV Model 5011' WHERE id=5011").run();
+assert.equal(getHalloweenCollection(db,{now,q:'5011'}).total,0,'Theme membership must not bypass delivery checks');
 /* The delivery cutoff ends a promise, not the holiday. On 24 October the
    collection stays open and flags itself instead, so the page can go on
    showing Halloween without implying anything ordered that evening arrives in

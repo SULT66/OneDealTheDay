@@ -1,5 +1,15 @@
 // Product nouns outrank incidental words: a TV poster is not a television,
 // and an animated skeleton dog is decor rather than equipment for a pet.
+function isHalloweenProduct(product = {}) {
+  const title = String(product.title || "");
+  if (/\bhallowe['’]?en\b|\bhalloween\b|\bjack[ -]o[ -]lanterns?\b/i.test(title)) return true;
+  // A pumpkin, costume, protective mask or anatomical skeleton alone is not
+  // enough. Require a seasonal motif paired with its decorative purpose.
+  return /\b(?:spooky|haunted|witch|witches|ghosts?|skeletons?|grim reaper)\b/i.test(title) &&
+    /\b(?:decorations?|decor|props?|animatronics?|inflatables?|costumes?|hanging|lawn stakes?)\b/i.test(title) &&
+    !/\b(?:anatomical|anatomy|medical|teaching)\b/i.test(title);
+}
+
 function seasonalProductType(value) {
   const title = String(value || "").toLowerCase();
   if (/\bposters?\b/.test(title) && !/\bposter boards?\b/.test(title)) return "posters";
@@ -11,6 +21,7 @@ function seasonalProductType(value) {
 }
 
 function seasonalProductCategory(title) {
+  if (isHalloweenProduct({title})) return "Halloween";
   const type = seasonalProductType(title);
   if (type === "posters" || type === "decor" || type === "party") return "Home & Kitchen";
   if (type === "pet-costumes") return "Pet Supplies";
@@ -43,4 +54,4 @@ function diverseSeasonalProducts(rows) {
   }
   return result;
 }
-module.exports = {seasonalProductType, seasonalProductCategory, matchesHalloweenQuery, diverseSeasonalProducts};
+module.exports = {isHalloweenProduct, seasonalProductType, seasonalProductCategory, matchesHalloweenQuery, diverseSeasonalProducts};
