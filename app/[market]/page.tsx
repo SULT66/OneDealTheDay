@@ -69,7 +69,7 @@ export default async function MarketHome({ params, searchParams }: PageProps<"/[
   const halloween = Boolean(activeHalloween({market}));
   const halloweenBanner = activeCampaign({eventKey:'halloween', market, throughEvent:true});
   const blackFriday = Boolean(activeCampaign({eventKey:'black-friday', market, fromPreparation:true}));
-  return <div className="mx-auto max-w-7xl px-4 pb-24 pt-8 sm:px-6 sm:pt-10">
+  return <div className="mx-auto max-w-7xl px-4 pb-24 pt-4 sm:px-6 sm:pt-5">
     <Suspense fallback={<HomeCampaigns market={market} language={language} blackFriday={blackFriday}/> }>
       <RegionalCampaigns market={market} language={language} halloween={Boolean(halloweenBanner)}
         halloweenLate={Boolean(halloweenBanner?.pastDeliveryCutoff)} blackFriday={blackFriday}/>
