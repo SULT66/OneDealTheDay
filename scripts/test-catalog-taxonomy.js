@@ -89,7 +89,7 @@ const cases = [
   [{source:"ebay", category:"", title:"Infant Optics Baby Monitor"}, "Baby & Kids"]
 ];
 
-assert.strictEqual(PUBLIC_CATEGORIES.length, 18, "The shopper taxonomy includes a dedicated Halloween aisle");
+assert.strictEqual(PUBLIC_CATEGORIES.length, 19, "The shopper taxonomy includes a dedicated Halloween aisle");
 assert.strictEqual(new Set(PUBLIC_CATEGORIES).size, PUBLIC_CATEGORIES.length, "Public categories must be unique");
 assert(!PUBLIC_CATEGORIES.some(category => category.includes(">")), "A raw feed hierarchy escaped into public navigation");
 
@@ -152,7 +152,7 @@ assert.strictEqual(feedRows[0].return_summary, "", "Capability reporting must no
 
 console.log("Catalog taxonomy and honest source capability coverage passed.");
 
-for (const [title, category] of [["Crawlspace Dehumidifier with Pump","Home & Kitchen"],["Under Desk Walking Pad","Sports & Outdoors"],["Waterproof Chest Waders","Sports & Outdoors"],["Hunting Boots","Sports & Outdoors"]]) {
+for (const [title, category] of [["Crawlspace Dehumidifier with Pump","Heating, Cooling & Air Quality"],["Under Desk Walking Pad","Sports & Outdoors"],["Waterproof Chest Waders","Sports & Outdoors"],["Hunting Boots","Sports & Outdoors"]]) {
   assert.strictEqual(canonicalCategory({title,category:"Electronics"}),category);
 }
 
@@ -161,3 +161,23 @@ for (const title of ["Heated Hunting Chair Adjustable Height 360° Swivel Blind 
 }
 
 assert.strictEqual(canonicalCategory({title:"Toputure TEB4 Foldable Recumbent Exercise Bike with Resistance Bands",category:"Sporting Goods > Exercise Bikes"}),"Sports & Outdoors");
+
+// Climate equipment must leave Home & Kitchen when the stored v11 rows migrate.
+for (const title of [
+  'Alorair Combo Package for Crawl Spaces,Basements | Sentinel HD35',
+  'AlorAir Wholesale Packs Ventipro 540 Crawl Space Fan (pack of 8)',
+  'AlorAir Wholesale Packs VentirMax 300SD Ventilator Fan (pack of 8)',
+  'Crawlspace Dehumidifier with Pump', 'HEPA Air Scrubber',
+  'HEPA Air Purifier', 'Portable Air Conditioner', 'Duct Fan',
+]) {
+  assert.strictEqual(canonicalCategory({title, source:'feed-alorair-crawlspace-us', category:'Home & Kitchen', normalized_category:'Home & Kitchen', taxonomy_version:'catalog-taxonomy-v11'}), 'Heating, Cooling & Air Quality', title);
+}
+for (const title of ['Dehumidifier', 'Air Scrubber', 'Air Purifier', 'Crawl Space Fan', 'Ventilation Fan', 'Space Heater']) {
+  assert.strictEqual(canonicalCategory({title, source:'ebay', category:'Home & Kitchen'}), 'Heating, Cooling & Air Quality', title);
+}
+for (const [title, expected] of [['Motherboard Cooling Fan','Electronics'], ['KitchenAid Stand Mixer','Home & Kitchen'], ['Handheld Fan','Home & Kitchen']]) {
+  assert.strictEqual(canonicalCategory({title, source:'ebay', category:'Home & Kitchen'}), expected, title);
+}
+const climate = require('../site-content/categories.json').find(row => row.name === 'Heating, Cooling & Air Quality');
+assert.strictEqual(climate.slug, 'heating-cooling-air-quality');
+for (const language of ['en','es','fr','de']) assert(require('../src/i18n').categoryLabel(climate.name, language));

@@ -32,6 +32,14 @@
     "blurb": "Cookware, small appliances and the everyday things a home runs on."
   },
   {
+    "slug": "heating-cooling-air-quality",
+    "name": "Heating, Cooling & Air Quality",
+    "noun": "air quality pick",
+    "nounPlural": "air quality picks",
+    "icon": "HouseLine",
+    "blurb": "Dehumidifiers, air purifiers, heating, cooling and ventilation equipment."
+  },
+  {
     "slug": "electronics",
     "name": "Electronics",
     "noun": "electronics deal",
