@@ -3456,7 +3456,13 @@ function outboundHeaders(res) {
 app.get("/api/coupons", (req, res) => {
   const market = String(req.query.market || req.market || "us").toLowerCase();
   res.set("Cache-Control", "no-store");
-  res.json({market, refresh:require("./couponSchedule").couponRefreshService().status(), coupons:[...require("./merchantCoupons").listCoupons(market), ...require("./marketplaceCoupons").listMarketplaceCoupons(db,market), ...require("./publicCoupons").listPublicCoupons(market)]});
+  const coupons=[...require("./merchantCoupons").listCoupons(market), ...require("./publicCoupons").listPublicCoupons(market), ...require("./marketplaceCoupons").listMarketplaceCoupons(db,market)];
+  const seen=new Set();
+  res.json({market, refresh:require("./couponSchedule").couponRefreshService().status(), coupons:coupons.filter(coupon=>{
+    const key=`${coupon.merchant.toLowerCase()}:${coupon.code.toUpperCase()}`;
+    if(seen.has(key)) return false;
+    seen.add(key); return true;
+  })});
 });
 
 app.get("/go/coupon/:id", (req, res) => {

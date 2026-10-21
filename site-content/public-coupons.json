@@ -5,12 +5,16 @@
       "host": "iherb.com"
     },
     "kohls": {
-      "name": "Kohl’s",
+      "name": "Kohl\u2019s",
       "host": "kohls.com"
     },
     "jcpenney": {
       "name": "JCPenney",
       "host": "jcpenney.com"
+    },
+    "ebay": {
+      "name": "eBay",
+      "host": "ebay.com"
     }
   },
   "offers": [
@@ -94,7 +98,7 @@
       "store": "kohls",
       "code": "10HOME",
       "title": "$10 off qualifying home purchases of $50 or more",
-      "description": "Available to Kohl’s Rewards members.",
+      "description": "Available to Kohl\u2019s Rewards members.",
       "terms": "Rewards membership required. Sign into the linked account online. Minimum $50 qualifying spend before tax; one use per customer. Exclusions apply.",
       "url": "https://www.kohls.com/sale-event/todays-deals.jsp",
       "sourceUrl": "https://www.kohls.com/ecom/PrintPass/10HOME_GENPUB/20261005.html",
@@ -113,9 +117,9 @@
       "id": "kohls-october30",
       "store": "kohls",
       "code": "OCTOBER30",
-      "title": "Extra 30% off with a Kohl’s Card",
+      "title": "Extra 30% off with a Kohl\u2019s Card",
       "description": "For existing cardholders buying coupon-eligible items.",
-      "terms": "Payment with a Kohl’s Card required. One use per customer. Cannot combine with another percentage coupon. Sephora and other item exclusions apply.",
+      "terms": "Payment with a Kohl\u2019s Card required. One use per customer. Cannot combine with another percentage coupon. Sephora and other item exclusions apply.",
       "url": "https://www.kohls.com/sale-event/todays-deals.jsp",
       "sourceUrl": "https://www.kohls.com/ecom/PrintPass/OCTOBER30/20261009.html",
       "markets": [

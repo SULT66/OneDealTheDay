@@ -1,0 +1,139 @@
+{
+  "offers": [
+    {
+      "id": "iherb-new20",
+      "store": "iherb",
+      "code": "NEW20",
+      "title": "20% off your first order",
+      "description": "New customers can use this one-time welcome code online or in the app.",
+      "terms": "For first orders only; discount excludes delivery and tax. Product exclusions apply. Cannot be combined with another offer.",
+      "url": "https://www.iherb.com/info/sales-and-offers",
+      "sourceUrl": "https://www.iherb.com/info/sales-and-offers",
+      "markets": [
+        "us"
+      ],
+      "checkedAt": "2026-10-21T18:02:02.390Z",
+      "evidence": [
+        "20%",
+        "first order"
+      ]
+    },
+    {
+      "id": "iherb-goldus",
+      "store": "iherb",
+      "code": "GOLDUS",
+      "title": "10% off orders over $80",
+      "description": "A public discount for eligible US orders above $80.",
+      "terms": "Order value must exceed $80. Savings capped at $100. Additional exclusions appear at checkout.",
+      "url": "https://www.iherb.com/info/sales-and-offers",
+      "sourceUrl": "https://www.iherb.com/info/sales-and-offers",
+      "markets": [
+        "us"
+      ],
+      "checkedAt": "2026-10-21T18:02:02.390Z",
+      "evidence": [
+        "10%",
+        "$80",
+        "$100"
+      ]
+    },
+    {
+      "id": "jcpenney-savebig7",
+      "store": "jcpenney",
+      "code": "SAVEBIG7",
+      "title": "Extra 30% off selected jewelry",
+      "description": "Cardholders may qualify for 35% off instead.",
+      "terms": "Selected fine and fashion jewelry only. The higher discount requires a JCPenney Credit Card or Mastercard. Check official dates and exclusions.",
+      "url": "https://www.jcpenney.com/m/jcpenney-coupons",
+      "sourceUrl": "https://www.jcpenney.com/m/jcpenney-coupons",
+      "markets": [
+        "us"
+      ],
+      "checkedAt": "2026-10-21T18:02:02.390Z",
+      "evidence": [
+        "35%",
+        "30%",
+        "jewelry"
+      ],
+      "expiresOn": "2026-10-25",
+      "expiresAt": "2026-10-26T04:59:59.999Z"
+    },
+    {
+      "id": "jcpenney-mascara",
+      "store": "jcpenney",
+      "code": "MASCARA",
+      "title": "Extra 10% off select beauty and salon products",
+      "description": "Use the online code for eligible JCPenney Beauty and Salon products.",
+      "terms": "Selected products only. Check the official coupon details for brand exclusions and expiration.",
+      "url": "https://www.jcpenney.com/m/jcpenney-coupons",
+      "sourceUrl": "https://www.jcpenney.com/m/jcpenney-coupons",
+      "markets": [
+        "us"
+      ],
+      "checkedAt": "2026-10-21T18:02:02.390Z",
+      "evidence": [
+        "10%",
+        "beauty"
+      ],
+      "expiresOn": "2026-10-31",
+      "expiresAt": "2026-11-01T04:59:59.999Z"
+    },
+    {
+      "id": "jcpenney-ghosts",
+      "store": "jcpenney",
+      "code": "GHOSTS",
+      "title": "EXTRA 30% OFF ANY WAY YOU PAY select bedding, bath, curtains",
+      "description": "EXTRA 25% OFF WITH YOUR JCPENNEY CREDIT CARD OR JCPENNEY MASTERCARD select apparel, shoes, accessories, fine jewelry; EXTRA 20% OFF ANY OTHER WAY YOU PAY select apparel, shoes, accessories, fine jewelry",
+      "terms": "*Extra 30% off select original, regular and sale-priced bedding, bath and curtain purchase any way you pay. Extra 25% off select original, regular and sale-priced apparel, shoes, accessories and fine jewelry purchase with your JCPenney Credit Card or JCPenney Mastercard or extra 20% off any other way you pay. Extra 10% off select home, furniture, mattresses, watches, salon products, JCPenney Beauty, Clearance, Deal Edit, Limited-Time Deals** and Specials. Each offer good in store or at jcp.com, excluding taxes and shipping charges, 10/19/26-10/25/26. Dollar-off offers (including JCPenney CashPass Rewards) applied prior to companywide percent-off discounts or coupons. Additional Exclusions may apply, see jcpenney.com/exclusions or store associate for details. Full amount of purchase must be on the JCPenney Credit Card or JCPenney Mastercard to get the stated discount(s). Subject to credit approval. Does not apply to Best Value, Aéropostale, ArtCarved Personalized Jewelry, Athletic Shoes, Billabong, Carter’s, Caterpillar, Citizen Quartz Watches, Clarks, Columbia, Dickies, Disney Collection, Electronics, Forever 21, Fragrances and select JCPenney Beauty, Hurley, Jewelry Trunk Shows, Keds, KitchenAid, Lee, Levi's, Modern Bride Design Your Dream Ring, Nike, Ninja, Premium Athletic Apparel and Shoes, Quiksilver, Roxy, Shark, Stearns & Foster, Team Sports Merchandise, Tempur-Pedic, Toys, Volcom, Wrangler, In-Store Services, Service Plans, Gift Cards, Closing Store Purchases, current orders and prior purchases, or in combination with other coupon(s). In Puerto Rico stores, does not apply to Fossil and Michael Kors Watches, Puerto Rico Exclusive Cosmetics, Bassett, Optical, and Universal Sunglasses in Plaza las Americas. Some third-party seller items may be excluded from this offer. Coupon can be combined with earned JCPenney CashPass Rewards. Coupon cannot be used for payment on account. Coupon cannot be redeemed as cash or merchandise credit if merchandise is returned. No cash value. JCPenney may refuse, or limit the use of, any coupon and/or return for any reason, including reoccurring disruptive behavior. REPRODUCTIONS WILL NOT BE ACCEPTED. **Limited-Time Deals refer to (Black Friday Deals, Cyber Deals, Daily Deals, Doorbusters, Limited Time Specials, Power Penney Deals, Price Lock, Really Big Deals, Weekend/Holiday Hot Deals). INSTRUCTIONS FOR JCP.COM ORDERS: Enter online code GHOSTS when prompted at checkout or call 1.800.322.1189 and mention the code.",
+      "url": "https://www.jcpenney.com/m/jcpenney-coupons",
+      "sourceUrl": "https://www.jcpenney.com/m/jcpenney-coupons",
+      "markets": [
+        "us"
+      ],
+      "expiresAt": "2026-10-26T04:59:59.000Z",
+      "checkedAt": "2026-10-21T18:02:02.390Z"
+    },
+    {
+      "id": "ebay-wheels10",
+      "store": "ebay",
+      "code": "WHEELS10",
+      "title": "10% off wheels and tires",
+      "terms": "Selected eligible items only. Spending limits, account eligibility and other exclusions may apply. Check the official promotion before buying.",
+      "url": "https://www.ebay.com/e/tire-wheel-coupon-101526",
+      "sourceUrl": "https://www.ebay.com/b/eBay-Coupons/bn_7109765183",
+      "markets": [
+        "us"
+      ],
+      "expiresOn": "2026-10-28",
+      "checkedAt": "2026-10-21T18:02:02.390Z"
+    },
+    {
+      "id": "ebay-shopnow15",
+      "store": "ebay",
+      "code": "SHOPNOW15",
+      "title": "Explore new faves with 15% off",
+      "terms": "Selected eligible items only. Spending limits, account eligibility and other exclusions may apply. Check the official promotion before buying.",
+      "url": "https://www.ebay.com/e/daily-deals/26-rw42-apac-sfc-main",
+      "sourceUrl": "https://www.ebay.com/b/eBay-Coupons/bn_7109765183",
+      "markets": [
+        "us"
+      ],
+      "expiresOn": "2026-11-01",
+      "checkedAt": "2026-10-21T18:02:02.390Z"
+    },
+    {
+      "id": "ebay-newstyle15",
+      "store": "ebay",
+      "code": "NEWSTYLE15",
+      "title": "15% off styles you'll love",
+      "terms": "Selected eligible items only. Spending limits, account eligibility and other exclusions may apply. Check the official promotion before buying.",
+      "url": "https://www.ebay.com/e/fashion/fashion-sfc-102126-total",
+      "sourceUrl": "https://www.ebay.com/b/eBay-Coupons/bn_7109765183",
+      "markets": [
+        "us"
+      ],
+      "expiresOn": "2026-11-04",
+      "checkedAt": "2026-10-21T18:02:02.390Z"
+    }
+  ]
+}
