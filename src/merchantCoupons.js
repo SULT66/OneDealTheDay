@@ -3,7 +3,6 @@ const path = require("path");
 const seed = require("../site-content/merchant-coupons.json");
 const DAY = 86400000;
 const MAX_AGE = 7 * DAY;
-const REFRESH_INTERVAL = 6 * 3600000;
 const SHOPS = {
   99907: {name:"Grommet", host:"thegrommet.com"},
   45751: {name:"GMKtec", host:"gmktec.com"},
@@ -73,7 +72,7 @@ try {
   const saved = JSON.parse(fs.readFileSync(snapshotPath,"utf8"));
   if (Date.parse(saved.checkedAt) > Date.parse(seed.checkedAt) && Array.isArray(saved.offers)) snapshot = saved;
 } catch {}
-let pending = null, lastAttempt = 0;
+let pending = null;
 async function fetchOffers(fetchImpl=fetch, token=process.env.AWIN_API_TOKEN, publisherId=process.env.AWIN_PUBLISHER_ID || "3018019") {
   if (!token || publisherId !== "3018019") throw new Error("Awin coupon credentials unavailable");
   const offers = [];
@@ -83,7 +82,7 @@ async function fetchOffers(fetchImpl=fetch, token=process.env.AWIN_API_TOKEN, pu
       headers:{Authorization:`Bearer ${token}`,"Content-Type":"application/json"},
       body:JSON.stringify({filters:{membership:"joined",status:"active",type:"voucher",regionCodes:["US"],advertiserIds:Object.keys(SHOPS).map(Number)},pagination:{page,pageSize:200}}),
     });
-    if (!response.ok) throw new Error(`Awin coupon request failed (${response.status})`);
+    if (!response.ok) { const error = new Error(`Awin coupon request failed (${response.status})`); error.status = response.status; throw error; }
     const payload = await response.json();
     const rows = Array.isArray(payload) ? payload : payload.data;
     if (!Array.isArray(rows)) throw new Error("Unexpected Awin coupon response");
@@ -92,27 +91,28 @@ async function fetchOffers(fetchImpl=fetch, token=process.env.AWIN_API_TOKEN, pu
   }
   throw new Error("Awin coupon pagination limit exceeded");
 }
-function refreshIfDue() {
-  if (!process.env.AWIN_API_TOKEN || pending || Date.now()-lastAttempt < REFRESH_INTERVAL) return;
-  lastAttempt = Date.now();
+function isConfigured() {
+  return Boolean(process.env.AWIN_API_TOKEN) && (process.env.AWIN_PUBLISHER_ID || "3018019") === "3018019";
+}
+function refreshCoupons() {
+  if (pending) return pending;
+  if (!isConfigured()) return Promise.resolve({status:"not_configured", errorCode:"missing_credentials"});
   pending = fetchOffers().then(next => {
+    // Only a successful API response can renew verification, even if empty.
     snapshot = next;
-    try {
-      fs.mkdirSync(dataDir,{recursive:true});
-      fs.writeFileSync(`${snapshotPath}.tmp`,JSON.stringify(next),{mode:0o600});
-      fs.renameSync(`${snapshotPath}.tmp`,snapshotPath);
-    } catch { console.warn("[coupons] Could not persist coupon snapshot"); }
-  }).catch(() => console.warn("[coupons] Awin refresh unavailable; retaining recent offers"))
-    .finally(() => {pending=null;});
+    fs.mkdirSync(dataDir,{recursive:true});
+    fs.writeFileSync(`${snapshotPath}.tmp`,JSON.stringify(next),{mode:0o600});
+    fs.renameSync(`${snapshotPath}.tmp`,snapshotPath);
+    return {status:"success", received:next.offers.length, active:activeOffers(snapshot).length};
+  }).finally(() => {pending=null;});
+  return pending;
 }
 function listCoupons(market="us") {
   if (market !== "us") return [];
-  refreshIfDue();
   return activeOffers(snapshot).map(({trackingUrl,...publicOffer})=>publicOffer);
 }
 function couponDestination(id,market="us") {
   if (market !== "us") return null;
-  refreshIfDue();
   return activeOffers(snapshot).find(o=>o.id===String(id))?.trackingUrl || null;
 }
-module.exports = {normalizeOffer,activeOffers,fetchOffers,listCoupons,couponDestination,discountPercentage};
+module.exports = {normalizeOffer,activeOffers,fetchOffers,listCoupons,couponDestination,discountPercentage,refreshCoupons,isConfigured};

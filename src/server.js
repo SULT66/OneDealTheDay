@@ -3456,7 +3456,7 @@ function outboundHeaders(res) {
 app.get("/api/coupons", (req, res) => {
   const market = String(req.query.market || req.market || "us").toLowerCase();
   res.set("Cache-Control", "no-store");
-  res.json({market, coupons:[...require("./merchantCoupons").listCoupons(market), ...require("./marketplaceCoupons").listMarketplaceCoupons(db,market), ...require("./publicCoupons").listPublicCoupons(market)]});
+  res.json({market, refresh:require("./couponSchedule").couponRefreshService().status(), coupons:[...require("./merchantCoupons").listCoupons(market), ...require("./marketplaceCoupons").listMarketplaceCoupons(db,market), ...require("./publicCoupons").listPublicCoupons(market)]});
 });
 
 app.get("/go/coupon/:id", (req, res) => {
@@ -4477,6 +4477,16 @@ async function merchandisingSweep({startup=false} = {}) {
     merchandisingSweepRunning = false;
   }
 }
+// Independent of page views and product-feed refreshes. The persisted source
+// deadlines keep restarts from resetting the 6h cadence or 1h failure retry.
+async function refreshCouponSources() {
+  const result=await require("./couponSchedule").couponRefreshService().run();
+  if (result.changed) publicHtmlCache.clear();
+}
+if (c.liveRefreshEnabled) {
+  cron.schedule("*/15 * * * *", () => refreshCouponSources().catch(()=>console.warn("[coupons] Scheduled refresh failed")));
+}
+
 if (merchandisingEnabled && c.liveRefreshEnabled) {
   cron.schedule(c.merchandisingCron, merchandisingSweep, {timezone:c.marketConfig(c.primaryMarket).timezone});
 }
@@ -4925,6 +4935,9 @@ app.use((error, req, res, next) => {
   await bootstrapPersonalPostgres(db);
   app.listen(c.port, () => {
     console.log(`http://localhost:${c.port}`);
+    if (c.liveRefreshEnabled) {
+      setTimeout(() => refreshCouponSources().catch(()=>console.warn("[coupons] Startup refresh failed")),30000).unref();
+    }
     if (merchandisingEnabled && c.liveRefreshEnabled) {
       // A single recovery pass after settling, not an immediate rebuild plus
       // another one ten minutes later. Recent persisted runs are left alone.

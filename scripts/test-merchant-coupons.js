@@ -94,3 +94,16 @@ assert.equal(confirmsOffer('<h2>20% off your first order</h2><p>NEW200</p>',publ
   assert.equal(changed[0].checkedAt,publicBase.checkedAt,"changed terms need a new review");
   console.log("Public source rechecks preserve dates on failures and changed claims.");
 })().catch(error=>{console.error(error);process.exitCode=1;});
+
+(async()=>{
+  let calls=0;
+  const redirected=await reviewOffers(async()=>++calls===1
+    ? {status:302,headers:{get:()=>'/info/new-offers'}}
+    : {ok:true,text:async()=>'<p>NEW20 20% off your first order</p>'},[publicBase],publicNow);
+  assert.equal(calls,2);assert.equal(redirected[0].checkedAt,new Date(publicNow).toISOString());
+  calls=0;
+  const unsafe=await reviewOffers(async()=>{calls++;return {status:302,headers:{get:()=> 'https://other.example/'}};},[publicBase],publicNow);
+  assert.equal(calls,1,'never fetch an unapproved redirected source');
+  assert.equal(unsafe[0].checkedAt,publicBase.checkedAt);
+  console.log('Coupon source redirects stay on the approved official merchant domain.');
+})().catch(error=>{console.error(error);process.exitCode=1;});
