@@ -9,7 +9,7 @@
    every product whose stamp does not match on boot — so bumping it is how
    corrected rules reach the listings already stored. */
 const {isHalloweenProduct, seasonalProductCategory} = require("./seasonalProductTypes");
-const TAXONOMY_VERSION = "catalog-taxonomy-v11";
+const TAXONOMY_VERSION = "catalog-taxonomy-v12";
 
 // This is the only taxonomy exposed to shoppers. Source-feed category paths are
 // preserved in `category` for auditing, but must never be used as navigation.
@@ -17,6 +17,7 @@ const PUBLIC_CATEGORIES = Object.freeze([
   "Halloween",
   "Electronics",
   "Home & Kitchen",
+  "Heating, Cooling & Air Quality",
   "Furniture",
   "Office",
   "Tools & DIY",
@@ -40,6 +41,7 @@ const EXACT = new Map([
   ["halloween", "Halloween"],
   ["electronics", "Electronics"],
   ["smart home", "Electronics"],
+  ["heating, cooling & air quality", "Heating, Cooling & Air Quality"],
   ["home", "Home & Kitchen"],
   ["home gadgets", "Home & Kitchen"],
   ["kitchen", "Home & Kitchen"],
@@ -146,7 +148,7 @@ const TITLE_RULES = [
 // label maker is still office equipment; a table-tennis bat is not a table.
 // Keep these specific: bare "car", "USB", "gift", and "table" are not types.
 const PRODUCT_TYPE_RULES = [
-  ["Home & Kitchen", /\b(dehumidifiers?|air scrubbers?)\b/i],
+  ["Heating, Cooling & Air Quality", /\b(dehumidifiers?|humidifiers?|air scrubbers?|air purifiers?|air conditioners?|space heaters?|air movers?|floor dryers?|(?:crawl\s?space|ventilation|exhaust|duct|basement) fans?)\b/i],
   ["Sports & Outdoors", /\b(exercise bikes?|stationary bikes?|spin bikes?|treadmills?|walking pads?|waders?|hunting blinds?|hunting boots?|hunting chairs?|hunting bibs|binocular harness|rangefinders?)\b/i],
   ["Toys & Games", /\b(lego|building blocks?|building bricks|action figures?|board games?|jigsaw puzzles?)\b/i],
   ["Pet Supplies", /\b(?:dog|cat|pet|puppy|kitten)\b.{0,50}\b(?:harness|leash|collar|feeder|fountain|bowl|pee pad|urine mat|bed|toy|scratching mat|grooming brush)\b/i],
@@ -261,6 +263,8 @@ function canonicalCategory(product = {}) {
   // Narrow, named product types also repair incorrectly labelled source feeds.
   // Preserve intentionally curated gifts and specialist merchant accessories.
   if (productType && exact !== "Gifts") return productType;
+  // This specialist merchant also supplies filters, controllers and combo kits.
+  if (source.includes("alorair-crawlspace")) return "Heating, Cooling & Air Quality";
   const titleMatch = firstMatch(title, TITLE_RULES);
   if (exact === "Tools & DIY" && titleMatch === "Electronics") return titleMatch;
   if (titleMatch && exact && contradictsCategory(exact, title)) return titleMatch;

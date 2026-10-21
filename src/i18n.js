@@ -1497,6 +1497,7 @@ const copy = {
 
 const categoryNames = {
   en: {
+    "Heating, Cooling & Air Quality": "Heating, Cooling & Air Quality",
     "Electronics": "Electronics", "Home & Kitchen": "Home & Kitchen", "Furniture": "Furniture",
     "Office": "Office", "Arts & Crafts": "Arts & Crafts", "Tools & DIY": "Tools & DIY", "Automotive": "Automotive",
     "Sports & Outdoors": "Sports & Outdoors", "Bikes & Mobility": "Bikes & Mobility",
@@ -1505,6 +1506,7 @@ const categoryNames = {
     "Gifts": "Gifts", "Mattresses & Sleep": "Mattresses & Sleep", "Other Deals": "Other Deals"
   },
   es: {
+    "Heating, Cooling & Air Quality": "Calefacción, refrigeración y calidad del aire",
     "Electronics": "Electrónica", "Home & Kitchen": "Hogar y cocina", "Furniture": "Muebles",
     "Office": "Oficina", "Arts & Crafts": "Arte y manualidades", "Tools & DIY": "Herramientas y bricolaje", "Automotive": "Automóvil",
     "Sports & Outdoors": "Deportes y aire libre", "Bikes & Mobility": "Bicicletas y movilidad",
@@ -1513,6 +1515,7 @@ const categoryNames = {
     "Gifts": "Regalos", "Mattresses & Sleep": "Colchones y descanso", "Other Deals": "Otras ofertas"
   },
   fr: {
+    "Heating, Cooling & Air Quality": "Chauffage, climatisation et qualité de l’air",
     "Electronics": "Électronique", "Home & Kitchen": "Maison et cuisine", "Furniture": "Meubles",
     "Office": "Bureau", "Arts & Crafts": "Arts et loisirs créatifs", "Tools & DIY": "Outils et bricolage", "Automotive": "Auto",
     "Sports & Outdoors": "Sports et plein air", "Bikes & Mobility": "Vélos et mobilité",
@@ -1521,6 +1524,7 @@ const categoryNames = {
     "Gifts": "Cadeaux", "Mattresses & Sleep": "Matelas et sommeil", "Other Deals": "Autres offres"
   },
   de: {
+    "Heating, Cooling & Air Quality": "Heizen, Kühlen und Luftqualität",
     "Electronics": "Elektronik", "Home & Kitchen": "Wohnen und Küche", "Furniture": "Möbel",
     "Office": "Büro", "Arts & Crafts": "Kunst und Basteln", "Tools & DIY": "Werkzeuge und Heimwerken", "Automotive": "Auto",
     "Sports & Outdoors": "Sport und Outdoor", "Bikes & Mobility": "Fahrräder und Mobilität",

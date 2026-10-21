@@ -52,3 +52,11 @@ assert.deepStrictEqual(seasonalDb.prepare('SELECT normalized_category,score FROM
 ]);
 assert.equal(refreshCatalogTaxonomy(seasonalDb),0);
 seasonalDb.close();
+
+const climateDb = new Database(':memory:');
+climateDb.exec('CREATE TABLE products (id INTEGER PRIMARY KEY,title TEXT,category TEXT,source TEXT,normalized_category TEXT,taxonomy_version TEXT,status TEXT,score REAL)');
+climateDb.prepare('INSERT INTO products VALUES (?,?,?,?,?,?,?,?)').run(1,'AlorAir Wholesale Packs VentirMax 300SD Ventilator Fan (pack of 8)','Home & Kitchen','feed-alorair-crawlspace','Home & Kitchen','catalog-taxonomy-v11','published',83);
+assert.equal(refreshCatalogTaxonomy(climateDb),1);
+assert.deepEqual(climateDb.prepare('SELECT normalized_category,taxonomy_version,status,score FROM products').get(),{normalized_category:'Heating, Cooling & Air Quality',taxonomy_version:TAXONOMY_VERSION,status:'published',score:83});
+assert.equal(refreshCatalogTaxonomy(climateDb),0);
+climateDb.close();
