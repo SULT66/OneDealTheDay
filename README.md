@@ -304,3 +304,22 @@ Active Halloween discovery can inspect up to 600 item details and retain up to
 The eBay importer preserves optional `estimatedAvailabilities[].estimatedSoldQuantity` as `ebay_sold_quantity`. Missing values remain null; repeated delivery entries are not summed. Seasonal/trend selection prefers bounded sales tiers (10, 100, 1,000) among otherwise eligible eBay offers; diversity stays within a tier. This is a cumulative listing estimate, not recent sales velocity, a product-wide total, or an eBay bestseller rank. The public shelf labels the estimate explicitly.
 
 The homepage uses a generated Halloween campaign image during October, with costume/decor/party search shortcuts and compact Daily Drop/catalogue banners. Copy supports EN/ES/FR/DE. Outside October the hero switches to ordinary catalogue discovery.
+
+## Automatic coupon updates
+
+The Azure process checks coupon source deadlines every 15 minutes and once
+30 seconds after startup, independently of visits to the coupon page. Awin
+retrieves newly published active US voucher codes from joined merchants every
+six hours; the official public source list is rechecked on the same cadence.
+Failures retry after one hour. Verification dates only advance after source
+confirmation; existing freshness and expiration gates remain in force.
+
+Set `AWIN_API_TOKEN` in Azure App Settings for the Promotions API, separately
+from product-feed URLs. `AWIN_PUBLISHER_ID` is `3018019`. Without these credentials,
+Awin reports `not_configured` instead of silently failing. `/api/coupons?market=us`
+and `/api/status` expose safe source status, last attempt, last success and next
+attempt times. Source deadlines and successful snapshots persist across restarts.
+The official public list revalidates existing entries; new public merchants and
+codes require a reviewed addition. Ordinary eBay/AliExpress product refreshes
+continue to supply their API-reported coupons. The server must remain running
+for its scheduler to execute.

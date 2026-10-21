@@ -131,6 +131,7 @@ function catalogStatus(marketCode = "") {
   return {
     releaseId: RELEASE_ID,
     taxonomyVersion: TAXONOMY_VERSION,
+    couponRefresh: require("./src/couponSchedule").couponRefreshService().status(),
     siteMode: config.siteMode,
     provider: config.provider,
     requestedProvider: config.requestedProvider,

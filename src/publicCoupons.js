@@ -15,7 +15,7 @@ try {
     return reviewed && Date.parse(reviewed.checkedAt) > Date.parse(raw.checkedAt) ? {...raw,checkedAt:reviewed.checkedAt} : raw;
   });
 } catch {}
-let pending=null, lastAttempt=0;
+let pending=null;
 function officialUrl(value, host) {
   try {
     const url = new URL(value);
@@ -56,7 +56,6 @@ function activePublicCoupons(rows,market="us", now=Date.now()) {
 }
 function listPublicCoupons(market="us") {
   if (market !== "us") return [];
-  refreshIfDue();
   return activePublicCoupons(offers,market);
 }
 const sourceText = html=>String(html).replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi," ")
@@ -72,34 +71,47 @@ function confirmsOffer(html, raw) {
   }
   return false;
 }
-async function reviewOffers(fetchImpl=fetch, rows=offers, now=Date.now()) {
+async function fetchOfficialPage(url,host,fetchImpl) {
+  // Follow ordinary merchant redirects, never a redirect to another domain.
+  for (let hop=0;hop<4;hop++) {
+    if (!officialUrl(url,host)) throw new Error("Untrusted coupon source");
+    const response=await fetchImpl(url,{redirect:"manual",signal:AbortSignal.timeout(15000),headers:{"Cache-Control":"no-cache"}});
+    if ([301,302,303,307,308].includes(response.status)) {
+      const location=response.headers?.get("location");
+      if (!location) throw new Error("Coupon source redirect unavailable");
+      url=new URL(location,url).href;
+      continue;
+    }
+    if (!response.ok) throw new Error("Coupon source unavailable");
+    const html=await response.text();
+    if (html.length>5000000) throw new Error("Coupon source too large");
+    return html;
+  }
+  throw new Error("Coupon source redirect limit exceeded");
+}
+async function reviewOffers(fetchImpl=fetch, rows=offers, now=Date.now(), report=()=>{}) {
   const sources = [...new Set(rows.map(raw=>raw.sourceUrl))];
   const pages = await Promise.allSettled(sources.map(async url=>{
     const raw = rows.find(row=>row.sourceUrl===url);
-    if (!officialUrl(url,seed.stores[raw.store]?.host)) throw new Error("Untrusted coupon source");
-    const response = await fetchImpl(url,{redirect:"error",signal:AbortSignal.timeout(15000),headers:{"Cache-Control":"no-cache"}});
-    if (!response.ok) throw new Error("Coupon source unavailable");
-    const html = await response.text();
-    if (html.length>5000000) throw new Error("Coupon source too large");
-    return html;
+    return fetchOfficialPage(url,seed.stores[raw.store]?.host,fetchImpl);
   }));
+  report({sources:sources.length, failedSources:pages.filter(page=>page.status === "rejected").length});
   return rows.map(raw=>{
     const page = pages[sources.indexOf(raw.sourceUrl)];
     return page.status === "fulfilled" && confirmsOffer(page.value,raw)
       ? {...raw,checkedAt:new Date(now).toISOString()} : raw;
   });
 }
-function refreshIfDue() {
-  if (pending || Date.now()-lastAttempt<6*3600000) return;
-  lastAttempt=Date.now();
-  pending=reviewOffers().then(next=>{
+function refreshCoupons() {
+  if (pending) return pending;
+  let result;
+  pending=reviewOffers(fetch,offers,Date.now(),value=>{result=value;}).then(next=>{
     offers=next;
-    try {
-      fs.mkdirSync(dataDir,{recursive:true});
-      fs.writeFileSync(`${snapshotPath}.tmp`,JSON.stringify(next),{mode:0o600});
-      fs.renameSync(`${snapshotPath}.tmp`,snapshotPath);
-    } catch { console.warn("[coupons] Could not persist public source reviews"); }
-  }).catch(()=>console.warn("[coupons] Public source review unavailable; retaining recent offers"))
-    .finally(()=>{pending=null;});
+    fs.mkdirSync(dataDir,{recursive:true});
+    fs.writeFileSync(`${snapshotPath}.tmp`,JSON.stringify(next),{mode:0o600});
+    fs.renameSync(`${snapshotPath}.tmp`,snapshotPath);
+    return {status:result.failedSources ? "partial" : "success", ...result, active:activePublicCoupons(offers).length};
+  }).finally(()=>{pending=null;});
+  return pending;
 }
-module.exports = {listPublicCoupons, activePublicCoupons, normalizePublicCoupon, confirmsOffer, reviewOffers};
+module.exports = {listPublicCoupons, activePublicCoupons, normalizePublicCoupon, confirmsOffer, reviewOffers, refreshCoupons};
