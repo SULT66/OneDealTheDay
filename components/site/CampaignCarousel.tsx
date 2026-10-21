@@ -87,19 +87,21 @@ export function CampaignCarousel({ slides, intervalMs = 6000, label }: { slides:
         >
           {slide.image && <div aria-hidden="true" className="absolute inset-0 bg-cover bg-no-repeat" style={{ backgroundImage: `url("${slide.image}")`, backgroundPosition: slide.imagePosition || "center 65%" }} />}
           <div className="absolute inset-0" style={{ backgroundImage: `linear-gradient(to right, ${slide.ground}f2, ${slide.ground}99, transparent)` }} />
-          <div className="relative max-w-2xl px-6 py-10 sm:px-10 sm:py-14 lg:px-12 lg:py-16">
+          <div className="relative max-w-3xl px-5 py-6 sm:px-8 lg:px-10">
             <p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: slide.eyebrowText }}>{slide.eyebrow}</p>
-            <Heading id={position === 0 ? "hero-title" : undefined} className="mt-4 whitespace-pre-line text-4xl font-bold leading-[1.05] tracking-tight sm:text-5xl lg:text-6xl">{slide.title}</Heading>
-            <p className="mt-5 max-w-sm text-sm leading-relaxed text-white/80 sm:text-base">{slide.note}</p>
-            <a href={slide.href} tabIndex={shown ? undefined : -1} className="mt-7 inline-flex min-h-12 items-center gap-3 rounded-full px-6 text-sm font-semibold transition-opacity hover:opacity-90" style={{ backgroundColor: slide.accent, color: slide.accentText }}>
-              {slide.cta}<ArrowRight size={18} weight="bold" aria-hidden="true" />
-            </a>
+            <Heading id={position === 0 ? "hero-title" : undefined} className="mt-2 whitespace-pre-line text-3xl font-bold leading-[1.08] tracking-tight sm:text-4xl">{slide.title}</Heading>
+            <div className="mt-3 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:gap-5">
+              <p className="max-w-md text-sm leading-relaxed text-white/80">{slide.note}</p>
+              <a href={slide.href} tabIndex={shown ? undefined : -1} className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-full px-5 text-sm font-semibold transition-opacity hover:opacity-90" style={{ backgroundColor: slide.accent, color: slide.accentText }}>
+                {slide.cta}<ArrowRight size={18} weight="bold" aria-hidden="true" />
+              </a>
+            </div>
           </div>
         </div>;
       })}
     </div>
 
-    {slides.length > 1 && <div className="absolute bottom-5 right-6 flex gap-2 sm:bottom-6 sm:right-10">
+    {slides.length > 1 && <div className="absolute bottom-3 right-5 flex gap-2 sm:bottom-4 sm:right-6">
       {slides.map((slide, position) => <button
         key={slide.key}
         type="button"

@@ -65,20 +65,22 @@ export function HomeCampaigns({market,language,halloween=false,halloweenLate=fal
     ground:"#201322", accent:"#ffc07a", accentText:"#201322", eyebrowText:"#fed7aa", dots:"#ffc07a",
   });
 
-  return <section aria-labelledby="hero-title" className="space-y-4">
+  return <section aria-labelledby="hero-title" className="space-y-3">
     <CampaignCarousel slides={slides} label={copy.hero} />
-    {halloween && halloweenQueries.length>0 && <nav aria-label={copy.shop} className="flex flex-wrap items-center gap-2">
-      {copy.categories.map((label,index) => halloweenQueries.includes(['costume','decor','party'][index]) && <a key={label} href={`/${market}/halloween?${new URLSearchParams({q:['costume','decor','party'][index],lang:language})}`} className="rounded-full border border-border bg-surface px-4 py-2 text-sm font-medium text-fg transition-colors hover:border-orange-300 hover:bg-orange-50 hover:text-ink">{label}</a>)}
-    </nav>}
-    <div className="grid gap-3 sm:grid-cols-2">
-      <Link href={`/${market}/daily-drop`} className="group flex items-center justify-between gap-4 rounded-card bg-lime px-6 py-5 text-ink">
-        <div><p className="text-lg font-bold tracking-tight">{copy.drop}</p><p className="mt-1 text-sm text-ink/75">{copy.dropNote}</p><span className="mt-3 block text-xs font-semibold">{copy.daily}</span></div>
-        <ArrowRight size={24} className="shrink-0 transition-transform group-hover:translate-x-1" aria-hidden="true" />
-      </Link>
-      <Link href={search} className="group flex items-center justify-between gap-4 rounded-card border border-border bg-surface px-6 py-5 text-fg">
-        <div><p className="text-lg font-bold tracking-tight">{copy.browse}</p><p className="mt-1 max-w-sm text-sm text-fg-muted">{copy.everydayNote}</p></div>
-        <ArrowRight size={24} className="shrink-0 transition-transform group-hover:translate-x-1" aria-hidden="true" />
-      </Link>
+    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+      {halloween && halloweenQueries.length>0 && <nav aria-label={copy.shop} className="flex flex-wrap items-center gap-2">
+        {copy.categories.map((label,index) => halloweenQueries.includes(['costume','decor','party'][index]) && <a key={label} href={`/${market}/halloween?${new URLSearchParams({q:['costume','decor','party'][index],lang:language})}`} className="rounded-full border border-border bg-surface px-4 py-2 text-sm font-medium text-fg transition-colors hover:border-orange-300 hover:bg-orange-50 hover:text-ink">{label}</a>)}
+      </nav>}
+      <div className="grid gap-2 sm:grid-cols-2 lg:ml-auto">
+        <Link href={`/${market}/daily-drop`} className="group flex min-h-11 items-center justify-between gap-4 rounded-xl bg-lime px-4 py-2.5 text-ink">
+          <span className="text-sm font-bold tracking-tight">{copy.drop}<span className="sr-only"> {copy.dropNote} {copy.daily}</span></span>
+          <ArrowRight size={18} className="shrink-0 transition-transform group-hover:translate-x-1" aria-hidden="true" />
+        </Link>
+        <Link href={search} className="group flex min-h-11 items-center justify-between gap-4 rounded-xl border border-border bg-surface px-4 py-2.5 text-fg">
+          <span className="text-sm font-bold tracking-tight">{copy.browse}<span className="sr-only"> {copy.everydayNote}</span></span>
+          <ArrowRight size={18} className="shrink-0 transition-transform group-hover:translate-x-1" aria-hidden="true" />
+        </Link>
+      </div>
     </div>
   </section>;
 }
