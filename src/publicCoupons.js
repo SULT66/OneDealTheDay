@@ -7,13 +7,11 @@ const {discountPercentage} = require("./merchantCoupons");
 const DAY = 86400000;
 const dataDir = process.env.DATA_DIR || (process.env.WEBSITE_SITE_NAME ? "/home/data/onedealtheday" : path.join(__dirname,"..","data"));
 const snapshotPath = path.join(dataDir,"public-coupons-reviewed.json");
-let offers = seed.offers;
+let offers = [...seed.offers, ...require('../site-content/public-coupons-current.json').offers];
 try {
   const saved = JSON.parse(fs.readFileSync(snapshotPath,"utf8"));
-  if (Array.isArray(saved)) offers = seed.offers.map(raw=>{
-    const reviewed = saved.find(row=>row.id===raw.id && row.code===raw.code && row.sourceUrl===raw.sourceUrl);
-    return reviewed && Date.parse(reviewed.checkedAt) > Date.parse(raw.checkedAt) ? {...raw,checkedAt:reviewed.checkedAt} : raw;
-  });
+  if (Array.isArray(saved)) offers = [...new Map([...offers,...saved.filter(raw=>normalizePublicCoupon(raw))]
+    .sort((a,b)=>Date.parse(a.checkedAt)-Date.parse(b.checkedAt)).map(raw=>[`${raw.store}:${raw.code}`,raw])).values()];
 } catch {}
 let pending=null;
 function officialUrl(value, host) {
@@ -82,7 +80,7 @@ async function fetchOfficialPage(url,host,fetchImpl) {
       url=new URL(location,url).href;
       continue;
     }
-    if (!response.ok) throw new Error("Coupon source unavailable");
+    if (!response.ok) { const error=new Error("Coupon source unavailable"); error.status=response.status; throw error; }
     const html=await response.text();
     if (html.length>5000000) throw new Error("Coupon source too large");
     return html;
@@ -105,7 +103,10 @@ async function reviewOffers(fetchImpl=fetch, rows=offers, now=Date.now(), report
 function refreshCoupons() {
   if (pending) return pending;
   let result;
-  pending=reviewOffers(fetch,offers,Date.now(),value=>{result=value;}).then(next=>{
+  pending=require("./publicCouponDiscovery").collectPublicCoupons(fetch,offers).then(value=>{
+    const next=value.offers;
+    result=value;
+
     offers=next;
     fs.mkdirSync(dataDir,{recursive:true});
     fs.writeFileSync(`${snapshotPath}.tmp`,JSON.stringify(next),{mode:0o600});
@@ -114,4 +115,4 @@ function refreshCoupons() {
   }).finally(()=>{pending=null;});
   return pending;
 }
-module.exports = {listPublicCoupons, activePublicCoupons, normalizePublicCoupon, confirmsOffer, reviewOffers, refreshCoupons};
+module.exports = {fetchOfficialPage, listPublicCoupons, activePublicCoupons, normalizePublicCoupon, confirmsOffer, reviewOffers, refreshCoupons};

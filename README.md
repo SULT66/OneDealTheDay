@@ -310,7 +310,7 @@ The homepage uses a generated Halloween campaign image during October, with cost
 The Azure process checks coupon source deadlines every 15 minutes and once
 30 seconds after startup, independently of visits to the coupon page. Awin
 retrieves newly published active US voucher codes from joined merchants every
-six hours; the official public source list is rechecked on the same cadence.
+six hours; official public pages are checked on the same cadence.
 Failures retry after one hour. Verification dates only advance after source
 confirmation; existing freshness and expiration gates remain in force.
 
@@ -319,7 +319,13 @@ from product-feed URLs. `AWIN_PUBLISHER_ID` is `3018019`. Without these credenti
 Awin reports `not_configured` instead of silently failing. `/api/coupons?market=us`
 and `/api/status` expose safe source status, last attempt, last success and next
 attempt times. Source deadlines and successful snapshots persist across restarts.
-The official public list revalidates existing entries; new public merchants and
-codes require a reviewed addition. Ordinary eBay/AliExpress product refreshes
+Official eBay coupon tables and JCPenney offer data discover new codes, dates
+and terms automatically; iHerb offers are revalidated against its official page.
+The `Verify public coupons` GitHub workflow independently collects a verified
+snapshot every six hours on the `coupon-data` branch. Azure falls back to that
+snapshot when merchant pages are unavailable. Original verification timestamps
+are preserved, and stale snapshots cannot extend coupon life. This data branch
+does not deploy the storefront. Merchant availability, eligibility and quantity
+are not guaranteed. Ordinary eBay/AliExpress product refreshes
 continue to supply their API-reported coupons. The server must remain running
 for its scheduler to execute.
