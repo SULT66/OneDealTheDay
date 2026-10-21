@@ -19,7 +19,6 @@ import { DeliaTrigger } from "@/components/delia/DeliaTrigger";
 import { DealCard } from "@/components/deal/DealCard";
 import { NextLiveDrop } from "@/components/live/NextLiveDrop";
 import { AmazonPicks } from "@/components/site/AmazonPicks";
-import { PartnerPicks } from "@/components/site/PartnerPicks";
 import { HalloweenProducts } from "@/components/site/HalloweenProducts";
 import { getHalloweenCollection } from "@/lib/merchandising";
 import { MerchandisingShelves } from "@/components/site/MerchandisingShelves";
@@ -200,8 +199,6 @@ async function HomeCatalog({market,language,halloween}:{market:string;language:L
           invites the reader to assume it was checked the same way. Renders
           nothing at all until a pick is added. */}
       <AmazonPicks market={market} />
-      {/* Same terms as the shelf above, for shops reached through Sovrn. */}
-      <PartnerPicks market={market} />
 
       {/* scroll-mt clears the sticky header when a visitor arrives via the
           header's CTA — on this page that's a same-page jump straight to
