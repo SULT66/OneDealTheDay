@@ -1,5 +1,5 @@
 import { comparisonItem } from "@/lib/comparison";
-import { CompareButton } from "@/components/compare/CompareProvider";
+import { CompareProvider } from "@/components/compare/CompareProvider";
 import { schemaAvailability } from "@/lib/schemaAvailability";
 import { productPhrase } from "@/lib/productPhrase";
 import type { Metadata } from "next";
@@ -271,7 +271,6 @@ export default async function DealPage({
           />
 
           <TrustSignals deal={deal} language={language} />
-          <CompareButton deal={comparisonItem(deal)} />
 
           <div className="flex flex-col gap-3 sm:flex-row">
             <a
@@ -547,6 +546,7 @@ export default async function DealPage({
 
       {/* ------------------------------------------------------- related */}
       {related.length > 0 && (
+        <CompareProvider key={deal.id} market={market} allowedItems={related.map(comparisonItem)}>
         <section aria-labelledby="related-title" className="mt-20">
           <SectionHeader
             id="related-title"
@@ -560,11 +560,12 @@ export default async function DealPage({
           <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {related.map((r, i) => (
               <li key={r.id}>
-                <DealCard deal={r} market={market} index={i} />
+                <DealCard deal={r} market={market} index={i} comparison />
               </li>
             ))}
           </ul>
         </section>
+        </CompareProvider>
       )}
 
       <DeliaTrigger variant="floating" />

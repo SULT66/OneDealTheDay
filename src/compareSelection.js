@@ -1,4 +1,4 @@
-const MAX_COMPARE_ITEMS = 3;
+const MAX_COMPARE_ITEMS = 4;
 function restoreCompareItems(value) {
   if (!Array.isArray(value)) return [];
   const seen = new Set();
@@ -11,7 +11,8 @@ function restoreCompareItems(value) {
     return true;
   }).slice(0, MAX_COMPARE_ITEMS).map(({id, title, image, category, currency}) => ({id:String(id), title, image, category, currency}));
 }
-function toggleCompareItem(items, item) {
+function toggleCompareItem(items, item, allowedItems) {
+  if (allowedItems && !allowedItems.some(row => row.id === item.id)) return items;
   if (items.some(row => row.id === item.id)) return items.filter(row => row.id !== item.id);
   if (items.length >= MAX_COMPARE_ITEMS || (items[0] && (items[0].category !== item.category || items[0].currency !== item.currency))) return items;
   return restoreCompareItems([...items, item]);

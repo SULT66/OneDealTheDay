@@ -6,22 +6,21 @@ import { adaptProduct } from "@/lib/backendAdapter";
 import { formatDateTime, formatPrice, retailerLabel } from "@/lib/format";
 import { useLanguage } from "@/components/site/CopyProvider";
 import { ProductImage } from "@/components/ui/ProductImage";
-import { MAX_COMPARE_ITEMS, restoreCompareItems, toggleCompareItem, comparisonResults } from "@/src/compareSelection";
+import { MAX_COMPARE_ITEMS, toggleCompareItem, comparisonResults } from "@/src/compareSelection";
 
 type Context = {items:Item[]; toggle:(item:Item)=>void; copy:typeof words.en; register:(id:string,offer:ComparisonOffer)=>void};
 const CompareContext = createContext<Context | null>(null);
 const words = {
-  en:{add:"Compare",selected:"Added to comparison",title:"Compare products",close:"Close comparison",remove:"Remove",clear:"Clear all",choose:"Choose 2–3 products in the same category",limit:"Maximum 3 products",category:"Choose products in the same category and currency",loading:"Checking current offers…",error:"Could not refresh this offer. Open the product to check it.",unknown:"Not provided",price:"Price",store:"Retailer",brand:"Brand",rating:"Product rating",seller:"Seller",score:"OneDailyDrop Score",delivery:"Delivery",returns:"Returns",stock:"Availability",checked:"Last checked",view:"View product",buy:"View at retailer",note:"Prices and terms can change. Confirm the final total at the retailer. Missing information is not estimated.",stale:"Price needs rechecking",reviews:"reviews"},
-  es:{add:"Comparar",selected:"Añadido a la comparación",title:"Comparar productos",close:"Cerrar comparación",remove:"Quitar",clear:"Borrar todo",choose:"Elige 2–3 productos de la misma categoría",limit:"Máximo 3 productos",category:"Elige productos de la misma categoría y moneda",loading:"Comprobando ofertas actuales…",error:"No se pudo actualizar esta oferta. Abre el producto para comprobarlo.",unknown:"No disponible",price:"Precio",store:"Tienda",brand:"Marca",rating:"Valoración del producto",seller:"Vendedor",score:"OneDailyDrop Score",delivery:"Entrega",returns:"Devoluciones",stock:"Disponibilidad",checked:"Última comprobación",view:"Ver producto",buy:"Ver en la tienda",note:"Los precios y condiciones pueden cambiar. Confirma el total en la tienda. No estimamos los datos que faltan.",stale:"Hay que comprobar el precio",reviews:"reseñas"},
-  fr:{add:"Comparer",selected:"Ajouté à la comparaison",title:"Comparer les produits",close:"Fermer la comparaison",remove:"Retirer",clear:"Tout effacer",choose:"Choisissez 2–3 produits de la même catégorie",limit:"3 produits maximum",category:"Choisissez la même catégorie et la même devise",loading:"Vérification des offres actuelles…",error:"Impossible d’actualiser cette offre. Ouvrez le produit pour vérifier.",unknown:"Non renseigné",price:"Prix",store:"Boutique",brand:"Marque",rating:"Note du produit",seller:"Vendeur",score:"OneDailyDrop Score",delivery:"Livraison",returns:"Retours",stock:"Disponibilité",checked:"Dernière vérification",view:"Voir le produit",buy:"Voir chez le marchand",note:"Les prix et conditions peuvent changer. Vérifiez le total chez le marchand. Les données manquantes ne sont pas estimées.",stale:"Prix à revérifier",reviews:"avis"},
-  de:{add:"Vergleichen",selected:"Zum Vergleich hinzugefügt",title:"Produkte vergleichen",close:"Vergleich schließen",remove:"Entfernen",clear:"Alles löschen",choose:"Wähle 2–3 Produkte derselben Kategorie",limit:"Maximal 3 Produkte",category:"Wähle dieselbe Kategorie und Währung",loading:"Aktuelle Angebote werden geprüft…",error:"Angebot konnte nicht aktualisiert werden. Öffne das Produkt zur Prüfung.",unknown:"Nicht angegeben",price:"Preis",store:"Händler",brand:"Marke",rating:"Produktbewertung",seller:"Verkäufer",score:"OneDailyDrop Score",delivery:"Lieferung",returns:"Rückgabe",stock:"Verfügbarkeit",checked:"Zuletzt geprüft",view:"Produkt ansehen",buy:"Beim Händler ansehen",note:"Preise und Bedingungen können sich ändern. Prüfe den Endbetrag beim Händler. Fehlende Angaben werden nicht geschätzt.",stale:"Preis erneut prüfen",reviews:"Bewertungen"},
+  en:{add:"Compare",selected:"Added to comparison",title:"Compare products",close:"Close comparison",remove:"Remove",clear:"Clear all",choose:"Choose 2–4 products from these related picks",limit:"Maximum 4 products",category:"Choose products in the same category and currency",loading:"Checking current offers…",error:"Could not refresh this offer. Open the product to check it.",unknown:"Not provided",price:"Price",store:"Retailer",brand:"Brand",rating:"Product rating",seller:"Seller",score:"OneDailyDrop Score",delivery:"Delivery",returns:"Returns",stock:"Availability",checked:"Last checked",view:"View product",buy:"View at retailer",note:"Prices and terms can change. Confirm the final total at the retailer. Missing information is not estimated.",stale:"Price needs rechecking",reviews:"reviews"},
+  es:{add:"Comparar",selected:"Añadido a la comparación",title:"Comparar productos",close:"Cerrar comparación",remove:"Quitar",clear:"Borrar todo",choose:"Elige 2–4 productos de estas recomendaciones",limit:"Máximo 4 productos",category:"Elige productos de la misma categoría y moneda",loading:"Comprobando ofertas actuales…",error:"No se pudo actualizar esta oferta. Abre el producto para comprobarlo.",unknown:"No disponible",price:"Precio",store:"Tienda",brand:"Marca",rating:"Valoración del producto",seller:"Vendedor",score:"OneDailyDrop Score",delivery:"Entrega",returns:"Devoluciones",stock:"Disponibilidad",checked:"Última comprobación",view:"Ver producto",buy:"Ver en la tienda",note:"Los precios y condiciones pueden cambiar. Confirma el total en la tienda. No estimamos los datos que faltan.",stale:"Hay que comprobar el precio",reviews:"reseñas"},
+  fr:{add:"Comparer",selected:"Ajouté à la comparaison",title:"Comparer les produits",close:"Fermer la comparaison",remove:"Retirer",clear:"Tout effacer",choose:"Choisissez 2–4 produits parmi ces suggestions",limit:"4 produits maximum",category:"Choisissez la même catégorie et la même devise",loading:"Vérification des offres actuelles…",error:"Impossible d’actualiser cette offre. Ouvrez le produit pour vérifier.",unknown:"Non renseigné",price:"Prix",store:"Boutique",brand:"Marque",rating:"Note du produit",seller:"Vendeur",score:"OneDailyDrop Score",delivery:"Livraison",returns:"Retours",stock:"Disponibilité",checked:"Dernière vérification",view:"Voir le produit",buy:"Voir chez le marchand",note:"Les prix et conditions peuvent changer. Vérifiez le total chez le marchand. Les données manquantes ne sont pas estimées.",stale:"Prix à revérifier",reviews:"avis"},
+  de:{add:"Vergleichen",selected:"Zum Vergleich hinzugefügt",title:"Produkte vergleichen",close:"Vergleich schließen",remove:"Entfernen",clear:"Alles löschen",choose:"Wähle 2–4 Produkte aus diesen Empfehlungen",limit:"Maximal 4 Produkte",category:"Wähle dieselbe Kategorie und Währung",loading:"Aktuelle Angebote werden geprüft…",error:"Angebot konnte nicht aktualisiert werden. Öffne das Produkt zur Prüfung.",unknown:"Nicht angegeben",price:"Preis",store:"Händler",brand:"Marke",rating:"Produktbewertung",seller:"Verkäufer",score:"OneDailyDrop Score",delivery:"Lieferung",returns:"Rückgabe",stock:"Verfügbarkeit",checked:"Zuletzt geprüft",view:"Produkt ansehen",buy:"Beim Händler ansehen",note:"Preise und Bedingungen können sich ändern. Prüfe den Endbetrag beim Händler. Fehlende Angaben werden nicht geschätzt.",stale:"Preis erneut prüfen",reviews:"Bewertungen"},
 };
 
-export function CompareProvider({market,children}:{market:string;children:React.ReactNode}) {
+export function CompareProvider({market,allowedItems,children}:{market:string;allowedItems:Item[];children:React.ReactNode}) {
   const language = useLanguage();
   const copy = words[language as keyof typeof words] || words.en;
   const [items,setItems] = useState<Item[]>([]);
-  const [ready,setReady] = useState(false);
   const [open,setOpen] = useState(false);
   const [offers,setOffers] = useState<Array<ComparisonOffer | null>>([]);
   const [unrefreshed,setUnrefreshed] = useState<boolean[]>([]);
@@ -29,9 +28,6 @@ export function CompareProvider({market,children}:{market:string;children:React.
   const register = useCallback((id:string,offer:ComparisonOffer)=>{snapshots.current.set(id,offer);},[]);
   const [loading,setLoading] = useState(false);
   const dialog = useRef<HTMLDialogElement>(null);
-  const storageKey = `odd-compare-${market}`;
-  useEffect(()=>{try {setItems(restoreCompareItems(JSON.parse(sessionStorage.getItem(storageKey)||"[]")));} catch {} setReady(true);},[storageKey]);
-  useEffect(()=>{if(ready) try {sessionStorage.setItem(storageKey,JSON.stringify(items));} catch {}},[items,ready,storageKey]);
   useEffect(()=>{if(open) dialog.current?.showModal(); else dialog.current?.close();},[open]);
   useEffect(()=>{
     if(!open) return;
@@ -48,7 +44,7 @@ export function CompareProvider({market,children}:{market:string;children:React.
     })).then(result=>{if(!abort.signal.aborted){const resolved:Array<{offer:ComparisonOffer|null;refreshed:boolean}> = comparisonResults(items,result,snapshots.current);setOffers(resolved.map(row=>row.offer));setUnrefreshed(resolved.map(row=>!row.refreshed));setLoading(false);}});
     return ()=>abort.abort();
   },[open,items,market,language]);
-  const toggle = (item:Item)=>setItems(current=>toggleCompareItem(current,item));
+  const toggle = (item:Item)=>setItems(current=>toggleCompareItem(current,item,allowedItems));
   const rows:Array<[string,(deal:ComparisonOffer)=>React.ReactNode]> = [
     [copy.price,d=>Number.isFinite(d.price)&&d.price>0?<>{formatPrice(d.price,d.currency,market)}{!d.priceIsCurrent&&<span className="mt-1 block text-xs text-fg-muted">{copy.stale}</span>}</>:copy.unknown],
     [copy.store,d=>retailerLabel(d.retailer)], [copy.brand,d=>d.brand||copy.unknown],
@@ -62,7 +58,7 @@ export function CompareProvider({market,children}:{market:string;children:React.
     {children}
     {items.length>0&&!open&&<aside aria-label={copy.title} className="fixed bottom-4 left-4 right-24 z-40 mx-auto max-w-3xl rounded-2xl border border-border bg-surface p-3 shadow-xl sm:left-8 sm:right-28">
       <div className="flex flex-wrap items-center gap-3">
-        <p className="text-sm font-semibold">{copy.title} · {items.length}/3</p>
+        <p className="text-sm font-semibold">{copy.title} · {items.length}/{MAX_COMPARE_ITEMS}</p>
         <div className="flex flex-1 gap-2">{items.map(item=><button key={item.id} type="button" onClick={()=>toggle(item)} aria-label={`${copy.remove}: ${item.title}`} title={`${copy.remove}: ${item.title}`} className="max-w-36 truncate rounded-full bg-bg px-3 py-1.5 text-xs">{item.title} ×</button>)}</div>
         <button type="button" disabled={items.length<2} onClick={()=>setOpen(true)} className="rounded-full bg-lime px-5 py-2 text-sm font-bold text-ink disabled:opacity-40">{copy.add}</button>
         <button type="button" onClick={()=>setItems([])} className="text-xs underline">{copy.clear}</button>

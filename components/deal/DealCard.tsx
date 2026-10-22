@@ -30,6 +30,7 @@ export async function DealCard({
   unavailable = false,
   tracking,
   campaignBadge,
+  comparison = false,
 }: {
   deal: Deal;
   market: string;
@@ -42,6 +43,7 @@ export async function DealCard({
   priority?: boolean;
   tracking?: { source: "home" | "category"; placement: "seasonal_card" | "trend_card" };
   campaignBadge?: string;
+  comparison?: boolean;
 }) {
   const category = getCategory(deal.category);
   const language = await getLanguage(market);
@@ -149,7 +151,7 @@ export async function DealCard({
           </div>
         </div>
       </Body>
-      {!unavailable && <div className="mt-2"><CompareButton deal={comparisonItem(deal)} /></div>}
+      {comparison && !unavailable && <div className="mt-2"><CompareButton deal={comparisonItem(deal)} /></div>}
     </article>
   );
 }
