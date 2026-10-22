@@ -1,15 +1,14 @@
 "use client";
 
-import { createContext, useContext, useEffect, useRef, useState } from "react";
-import type { Deal } from "@/lib/types";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import type { ComparisonItem as Item, ComparisonOffer } from "@/lib/comparison";
 import { adaptProduct } from "@/lib/backendAdapter";
 import { formatDateTime, formatPrice, retailerLabel } from "@/lib/format";
 import { useLanguage } from "@/components/site/CopyProvider";
 import { ProductImage } from "@/components/ui/ProductImage";
-import { MAX_COMPARE_ITEMS, restoreCompareItems, toggleCompareItem } from "@/src/compareSelection";
+import { MAX_COMPARE_ITEMS, restoreCompareItems, toggleCompareItem, comparisonResults } from "@/src/compareSelection";
 
-type Item = Pick<Deal, "id" | "title" | "image" | "category" | "currency">;
-type Context = {items:Item[]; toggle:(item:Item)=>void; copy:typeof words.en};
+type Context = {items:Item[]; toggle:(item:Item)=>void; copy:typeof words.en; register:(id:string,offer:ComparisonOffer)=>void};
 const CompareContext = createContext<Context | null>(null);
 const words = {
   en:{add:"Compare",selected:"Added to comparison",title:"Compare products",close:"Close comparison",remove:"Remove",clear:"Clear all",choose:"Choose 2–3 products in the same category",limit:"Maximum 3 products",category:"Choose products in the same category and currency",loading:"Checking current offers…",error:"Could not refresh this offer. Open the product to check it.",unknown:"Not provided",price:"Price",store:"Retailer",brand:"Brand",rating:"Product rating",seller:"Seller",score:"OneDailyDrop Score",delivery:"Delivery",returns:"Returns",stock:"Availability",checked:"Last checked",view:"View product",buy:"View at retailer",note:"Prices and terms can change. Confirm the final total at the retailer. Missing information is not estimated.",stale:"Price needs rechecking",reviews:"reviews"},
@@ -24,7 +23,10 @@ export function CompareProvider({market,children}:{market:string;children:React.
   const [items,setItems] = useState<Item[]>([]);
   const [ready,setReady] = useState(false);
   const [open,setOpen] = useState(false);
-  const [offers,setOffers] = useState<Array<Omit<Deal,"rank"> | null>>([]);
+  const [offers,setOffers] = useState<Array<ComparisonOffer | null>>([]);
+  const [unrefreshed,setUnrefreshed] = useState<boolean[]>([]);
+  const snapshots = useRef(new Map<string,ComparisonOffer>());
+  const register = useCallback((id:string,offer:ComparisonOffer)=>{snapshots.current.set(id,offer);},[]);
   const [loading,setLoading] = useState(false);
   const dialog = useRef<HTMLDialogElement>(null);
   const storageKey = `odd-compare-${market}`;
@@ -37,17 +39,17 @@ export function CompareProvider({market,children}:{market:string;children:React.
     setLoading(true); setOffers([]);
     Promise.all(items.map(async item=>{
       try {
-        const response = await fetch(`/api/products/${encodeURIComponent(item.id)}?market=${encodeURIComponent(market)}&lang=${encodeURIComponent(language)}`,{signal:abort.signal,cache:"no-store"});
+        const response = await fetch(`/api/products/${encodeURIComponent(item.id)}?market=${encodeURIComponent(market)}&lang=${encodeURIComponent(language)}`,{signal:AbortSignal.any([abort.signal,AbortSignal.timeout(12000)]),cache:"no-store",headers:{Accept:"application/json"}});
         if(!response.ok) return null;
         const body = await response.json();
         if(String(body.product?.id)!==item.id) return null;
         return adaptProduct(body.product);
       } catch {return null;}
-    })).then(result=>{if(!abort.signal.aborted){setOffers(result);setLoading(false);}});
+    })).then(result=>{if(!abort.signal.aborted){const resolved:Array<{offer:ComparisonOffer|null;refreshed:boolean}> = comparisonResults(items,result,snapshots.current);setOffers(resolved.map(row=>row.offer));setUnrefreshed(resolved.map(row=>!row.refreshed));setLoading(false);}});
     return ()=>abort.abort();
   },[open,items,market,language]);
   const toggle = (item:Item)=>setItems(current=>toggleCompareItem(current,item));
-  const rows:Array<[string,(deal:Omit<Deal,"rank">)=>React.ReactNode]> = [
+  const rows:Array<[string,(deal:ComparisonOffer)=>React.ReactNode]> = [
     [copy.price,d=>Number.isFinite(d.price)&&d.price>0?<>{formatPrice(d.price,d.currency,market)}{!d.priceIsCurrent&&<span className="mt-1 block text-xs text-fg-muted">{copy.stale}</span>}</>:copy.unknown],
     [copy.store,d=>retailerLabel(d.retailer)], [copy.brand,d=>d.brand||copy.unknown],
     [copy.rating,d=>d.reviewCount>0&&d.rating>0?`${d.rating.toFixed(1)}/5 · ${d.reviewCount} ${copy.reviews}`:copy.unknown],
@@ -56,7 +58,7 @@ export function CompareProvider({market,children}:{market:string;children:React.
     [copy.returns,d=>d.returns||copy.unknown], [copy.stock,d=>d.availability||copy.unknown],
     [copy.checked,d=>d.checkedAt&&Number.isFinite(Date.parse(d.checkedAt))?formatDateTime(d.checkedAt,market):copy.unknown],
   ];
-  return <CompareContext.Provider value={{items,toggle,copy}}>
+  return <CompareContext.Provider value={{items,toggle,copy,register}}>
     {children}
     {items.length>0&&!open&&<aside aria-label={copy.title} className="fixed bottom-4 left-4 right-24 z-40 mx-auto max-w-3xl rounded-2xl border border-border bg-surface p-3 shadow-xl sm:left-8 sm:right-28">
       <div className="flex flex-wrap items-center gap-3">
@@ -78,7 +80,7 @@ export function CompareProvider({market,children}:{market:string;children:React.
           <thead><tr><th scope="col" className="w-36"><span className="sr-only">{copy.title}</span></th>{items.map((item,index)=><th key={item.id} scope="col" className="min-w-52 max-w-80 px-3 pb-5 align-top">
             <div className="relative mb-3 h-32 overflow-hidden rounded-xl bg-white"><ProductImage src={offers[index]?.image||item.image} alt={item.title} categoryIcon="Package" sizes="260px" className="p-3" /></div>
             <a href={`/${market}/deal/${item.id}`} className="line-clamp-3 font-semibold hover:underline">{offers[index]?.title||item.title}</a>
-            {!offers[index]&&<p role="status" className="mt-2 text-xs font-normal text-fg-muted">{copy.error}</p>}
+            {unrefreshed[index]&&<p role="status" className="mt-2 text-xs font-normal text-fg-muted">{copy.error}</p>}
           </th>)}</tr></thead>
           <tbody>{rows.map(([label,value])=><tr key={label} className="border-t border-border"><th scope="row" className="py-4 pr-3 text-xs font-medium text-fg-muted">{label}</th>{items.map((item,index)=><td key={item.id} className="px-3 py-4 align-top">{offers[index]?value(offers[index]!):"—"}</td>)}</tr>)}</tbody>
           <tfoot><tr className="border-t border-border"><td />{items.map((item,index)=><td key={item.id} className="px-3 py-5">{offers[index]?<a href={`/${market}/go/${item.id}?source=product&placement=product_compare&action=view_deal`} target="_blank" rel="sponsored noopener" className="inline-flex rounded-full bg-lime px-4 py-2 font-semibold text-ink">{copy.buy} ↗</a>:<a href={`/${market}/deal/${item.id}`} className="underline">{copy.view}</a>}</td>)}</tr></tfoot>
@@ -91,6 +93,8 @@ export function CompareProvider({market,children}:{market:string;children:React.
 
 export function CompareButton({deal}:{deal:Item}) {
   const context = useContext(CompareContext);
+  const register = context?.register;
+  useEffect(()=>{if(register&&deal.offer) register(deal.id,deal.offer);},[register,deal.id,deal.offer]);
   if(!context) return null;
   const {items,toggle,copy} = context;
   const selected = items.some(item=>item.id===deal.id);

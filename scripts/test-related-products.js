@@ -30,3 +30,9 @@ assert.deepStrictEqual(relatedProducts(p(1,"Acme Premium Wireless Device",{brand
 // Conservative fallback works for types the explicit dictionary does not know.
 assert.deepStrictEqual(relatedProducts(p(1,"Ceramic Matcha Whisk Holder"),[p(2,"Ceramic Matcha Whisk Holder Green"),p(3,"Ceramic Garden Gnome")]).map(x=>x.id),[2]);
 console.log("Related picks: 12 product families, accessories, empty states, duplicates and market boundaries passed.");
+
+// Real retailer title: descriptive words can sit between the product nouns.
+const storageBag = p(217497, 'WORKPRO 16" Zipper Wide Mouth Tool Storage Bag Case Large Capacity w/21 Pockets', {brand:'Workpro', normalized_category:'Tools & DIY'});
+assert.deepStrictEqual(relatedProducts(storageBag,[p(2,'DEWALT Medium Tool Bag Organizer',{normalized_category:'Tools & DIY'}),p(3,'WORKPRO Cordless Drill',{brand:'Workpro',normalized_category:'Tools & DIY'})]).map(x=>x.id),[2]);
+// An unknown source title can still match a known candidate by strong overlap.
+assert.deepStrictEqual(relatedProducts(p(1,'Watercolor Fine Artist Brush Round'),[p(2,'Watercolor Artist Brush Flat')]).map(x=>x.id),[2]);

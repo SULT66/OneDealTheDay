@@ -1,3 +1,4 @@
+import { comparisonItem } from "@/lib/comparison";
 import { CompareButton } from "@/components/compare/CompareProvider";
 import Link from "next/link";
 import type React from "react";
@@ -148,7 +149,7 @@ export async function DealCard({
           </div>
         </div>
       </Body>
-      {!unavailable && <div className="mt-2"><CompareButton deal={{id:deal.id,title:deal.title,image:deal.thumbnail||deal.image,category:deal.category,currency:deal.currency}} /></div>}
+      {!unavailable && <div className="mt-2"><CompareButton deal={comparisonItem(deal)} /></div>}
     </article>
   );
 }

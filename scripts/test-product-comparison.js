@@ -15,3 +15,13 @@ assert.deepEqual(restoreCompareItems([null,{},item('invalid'),item(1),item(1),it
 assert.equal(restoreCompareItems([item(1),item(2),item(3),item(4)]).length,3);
 assert.deepEqual(Object.keys(restoreCompareItems([item(1,{price:1,delivery:'unverified'})])[0]).sort(),['category','currency','id','image','title']);
 console.log('Product comparison selection: limit, removal, persistence validation and market currency boundaries passed.');
+
+const {comparisonResults}=require('../src/compareSelection');
+const snapshots=new Map([['1',{price:30,checkedAt:'2026-10-21'}],['2',{price:40,checkedAt:'2026-10-21'}]]);
+const resolved=comparisonResults([item(1),item(2),item(3)],[{price:25},null,null],snapshots);
+assert.equal(resolved[0].offer.price,25,'A refreshed price must override a page snapshot');
+assert.equal(resolved[0].refreshed,true);
+assert.equal(resolved[1].offer.price,40,'API failure must retain the verified page snapshot');
+assert.equal(resolved[1].offer.checkedAt,'2026-10-21');
+assert.equal(resolved[1].refreshed,false,'A fallback must not claim it was refreshed');
+assert.equal(resolved[2].offer,null,'Missing data must not be invented');

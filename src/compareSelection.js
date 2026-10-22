@@ -16,4 +16,10 @@ function toggleCompareItem(items, item) {
   if (items.length >= MAX_COMPARE_ITEMS || (items[0] && (items[0].category !== item.category || items[0].currency !== item.currency))) return items;
   return restoreCompareItems([...items, item]);
 }
-module.exports = {MAX_COMPARE_ITEMS, restoreCompareItems, toggleCompareItem};
+function comparisonResults(items, fresh, snapshots) {
+  return items.map((item,index) => ({
+    offer:fresh[index] || snapshots.get(item.id) || null,
+    refreshed:Boolean(fresh[index]),
+  }));
+}
+module.exports = {MAX_COMPARE_ITEMS, restoreCompareItems, toggleCompareItem, comparisonResults};

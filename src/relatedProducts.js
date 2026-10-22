@@ -36,7 +36,7 @@ const TYPES = [
   ["blender", /\bblenders?\b/],
   ["pan", /\b(?:frying pans?|skillets?)\b/],
   ["drill", /\b(?:drills?|drill drivers?)\b/],
-  ["tool bag", /\b(?:tool bags?|toolboxes?|tool boxes?)\b/],
+  ["tool bag", /\b(?:tool (?:storage )?bags?|tool totes?|toolboxes?|tool boxes?)\b/],
   ["paintbrush", /\b(?:paintbrush(?:es)?|paint brushes?|watercolor (?:artist )?brush(?:es)?|artist brushes?)\b/],
   ["heater", /\b(?:space heaters?|heaters?)\b/],
   ["dehumidifier", /\bdehumidifiers?\b/],
@@ -91,7 +91,7 @@ function relatedProducts(product, candidates, limit = 12) {
     return !category || !candidateCategory || category === candidateCategory;
   }).map(p => {
     const candidateType = productType(p);
-    if (type ? candidateType !== type : candidateType) return null;
+    if (type && candidateType !== type) return null;
     const words = new Set(meaningfulTerms(p));
     const shared = terms.filter(word => words.has(word)).length;
     // Unknown types need substantial overlap; a brand or generic adjective
