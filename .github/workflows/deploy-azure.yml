@@ -62,19 +62,22 @@ jobs:
       # Trace the custom server and ship only files it can load in production.
       # In particular, do not send the Turbopack cache, test suite, repository
       # history, unused packages or devDependencies.
-      # The .deployment file tells App Service not to run Oryx a second time;
-      # that redundant build created node_modules.tar.gz and left the site on
-      # 503 while every cold start tried to extract more than 500 MB.
+      # Package the complete traced release as one archive. The bootstrap
+      # extracts it locally so module loads and Next manifests never read
+      # mutable deployment files from Azure network storage.
       - name: Prepare lean production package
         run: |
           release_dir="${RUNNER_TEMP}/onedailydrop-release"
           node scripts/build-runtime-package.js "${release_dir}"
 
+          test -s "${release_dir}/runtime.tar.gz"
+          test ! -e "${release_dir}/node_modules"
           test ! -e "${release_dir}/.next/cache"
           test ! -e "${release_dir}/scripts"
           test ! -e "${release_dir}/node_modules.tar.gz"
           test ! -e "${release_dir}/oryx-manifest.toml"
           du -sh "${release_dir}"
+          node scripts/test-runtime-package.js "${release_dir}"
 
       # v3/OneDeploy can report success while leaving the previous Linux App
       # Service package active. v2 uses the stable zip-deploy path here.
