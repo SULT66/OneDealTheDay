@@ -2942,12 +2942,13 @@ app.get("/api/products/:id", (req, res) => {
       : null
   };
 
+  // Filter by product type before limiting the shelf. The highest-scoring 80
+  // items can all be unrelated while valid alternatives sit further down.
   const relatedRows = db.prepare(`
     SELECT * FROM products
     WHERE market=? AND status='published' AND ${sourceSql()}
       AND normalized_category=? AND id<>?
     ORDER BY COALESCE(ranking_score,score) DESC,score DESC,updated_at DESC
-    LIMIT 80
   `).all(selectedMarket, product.normalized_category, product.id);
   const related = relatedProducts(product, uniqueProductsInOrder(relatedRows));
 

@@ -36,3 +36,26 @@ const storageBag = p(217497, 'WORKPRO 16" Zipper Wide Mouth Tool Storage Bag Cas
 assert.deepStrictEqual(relatedProducts(storageBag,[p(2,'DEWALT Medium Tool Bag Organizer',{normalized_category:'Tools & DIY'}),p(3,'WORKPRO Cordless Drill',{brand:'Workpro',normalized_category:'Tools & DIY'})]).map(x=>x.id),[2]);
 // An unknown source title can still match a known candidate by strong overlap.
 assert.deepStrictEqual(relatedProducts(p(1,'Watercolor Fine Artist Brush Round'),[p(2,'Watercolor Artist Brush Flat')]).map(x=>x.id),[2]);
+
+// Retailer naming variants across categories, including bundled products.
+const expanded = [
+  ['Stanley Fatmax Tape Measure 25 ft', 'Stanley 35ft FatMax Measuring Tape', 'Milwaukee Hammer Drill'],
+  ['Michael Myers Halloween Mask', 'Latex Horror Face Mask', 'Halloween Pumpkin Statue'],
+  ['LEGO Icons Kingfisher Bird Model', 'LEGO Technic Submarine Building Toy', 'Board Game Ticket to Ride'],
+  ['Power Bank External Battery Backup For Cell Phone', 'Portable Powerbank 20000mAh', 'Tire Inflator Portable Power Bank'],
+  ['Google Nest Smart Thermostat', 'Ecobee for Pro Smart Thermostat', 'Bluetooth Speaker'],
+  ['MILWAUKEE DRILL DRIVER COMBO KIT 2 BATTERIES NEW', 'Hammer Drill Driver Tool Only', 'Drill Replacement Battery'],
+  ['Video Baby Monitor with Camera', 'HelloBaby Video Baby Monitor', 'Laptop Computer Monitor'],
+  ['HP Printer Paper 500 Sheets', 'Hammermill Copy Paper 3 Reams', 'HP Ink Cartridge for Printer'],
+  ['Gotham Steel Frying Pan and Cookware Set', 'Nonstick Ceramic Cookware Set', 'Single Frying Pan'],
+  ['Sonic Electric Toothbrush 8 Brush Heads Travel Case', 'Rechargeable Electric Toothbrush', 'Toothbrush Replacement Brush Heads'],
+];
+for (const [title,wanted,unrelated] of expanded) {
+  assert.deepStrictEqual(relatedProducts(p(1,title),[p(2,wanted),p(3,unrelated)]).map(x=>x.id),[2],title);
+}
+const deeperCandidates = [...Array.from({length:100},(_,i)=>p(i+10,'Cordless Hammer Drill',{score:99})),...Array.from({length:4},(_,i)=>p(i+200,'Stanley Measuring Tape',{score:70}))];
+assert.equal(relatedProducts(p(1,'Stanley Tape Measure'),deeperCandidates,4).length,4,'Low-ranked relevant alternatives must remain eligible');
+assert.equal(relatedProducts(p(1,'Stanley Tape Measure'),[p(2,'Stanley Measuring Tape')],4).length,1,'A sparse catalog must not fabricate four alternatives');
+console.log('Expanded related picks: retailer variants, bundles, deep candidates and honest sparse shelves passed.');
+
+assert.deepStrictEqual(relatedProducts(p(1,'Professional Chef Kitchen Knife'),[p(2,'Stainless Steel Kitchen Knives'),p(3,'Knife Sharpener Whetstone'),p(4,'Miniature Dollhouse Kitchen Knife')]).map(x=>x.id),[2]);
