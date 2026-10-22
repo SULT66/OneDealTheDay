@@ -93,12 +93,14 @@ function isUnavailable(product) {
 
 // A shared noun alone is not an answer to a compound product request.
 // Keep descriptive modifiers optional, but require each identifying word.
-const OPTIONAL_MODIFIERS = new Set(["wireless", "bluetooth", "portable", "rechargeable", "gaming", "smart", "mini", "compact", "noise", "cancelling", "canceling", "waterproof", "cordless", "usb", "wired", "digital", "electric", "automatic", "black", "white", "silver", "cheap", "budget", "premium", "professional", "heavy", "duty", "large", "small"]);
+const OPTIONAL_MODIFIERS = new Set(["wireless", "bluetooth", "portable", "rechargeable", "gaming", "smart", "mini", "compact", "noise", "cancelling", "canceling", "waterproof", "cordless", "wired", "digital", "electric", "automatic", "black", "white", "silver", "cheap", "budget", "premium", "professional", "heavy", "duty", "large", "small"]);
 function matchesQuery(product, query) {
   const terms = searchTokens(query).filter(term => !OPTIONAL_MODIFIERS.has(term));
   if (terms.length < 2) return matchesHeadTerm(product, headTerm(query));
   const headline = normalizedTitle(`${product.title || ""} ${product.brand || ""} ${product.normalized_category || product.category || ""}`);
   return terms.every(term => {
+    // USB is an identifying connection type, including common USBC spelling.
+    if (term === "usb") return /\busb(?:c|[234])?\b/.test(headline);
     // Retailers call the same appliance a coffee machine, maker or brewer.
     if (terms.includes("coffee") && /^(machine|maker|brewer)s?$/.test(term)) {
       return /\b(?:machines?|makers?|brewers?|espresso|coffeemakers?)\b/.test(headline);

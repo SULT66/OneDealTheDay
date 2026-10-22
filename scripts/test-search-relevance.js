@@ -133,3 +133,19 @@ const onlyLaptops = searchCatalogProducts([
 assert.deepStrictEqual(onlyLaptops.products.map(p=>p.id),[303,304]);
 assert.strictEqual(searchCatalogProducts([listing(301,"Laptop Cooling Pad Gaming Laptop Cooler",59)],parseSearchOptions({q:"laptop cooling pad"})).products[0].id,301);
 assert.strictEqual(searchCatalogProducts([listing(305,"Wireless Headphones Earbuds",20)],parseSearchOptions({q:"earbuds"})).products[0].id,305);
+
+// USB identifies the product family: a hunting blind with a hub in its
+// description and a professional Videohub are not USB hubs.
+const hubListings = [
+  listing(401, "Anker 7-in-1 USB C Hub MultiPort Adapter", 20.79),
+  listing(402, "8 in 1 USB Hub Docking Station", 39.99),
+  listing(403, "USBC Hub 4 Ports", 33.77),
+  {...listing(404, "See Through Hunting Blind", 179.99), description: "Strong hub construction"},
+  listing(405, "Blackmagic Design Videohub 20x20 Video Router", 2769),
+  listing(406, "Smart Home Hub", 49.99),
+];
+for (const q of ["usb hub", "USB-C hub", "portable usb hub"]) {
+  const result = searchCatalogProducts(hubListings, parseSearchOptions({q}));
+  assert.deepStrictEqual(result.products.map(p => p.id).sort(), [401, 402, 403], q);
+  assert.strictEqual(result.pagination.total, 3);
+}
