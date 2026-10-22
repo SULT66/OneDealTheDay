@@ -281,6 +281,16 @@ export function dealIdFromParam(value: string): string {
  */
 export type SearchOutcome = { deals: Deal[]; correction: { from: string; to: string } | null };
 
+// The results and facet counts ask for the same backend response in one
+// render. Share the fetch and JSON parsing even when their UI filters differ.
+const fetchSearchCatalog = cache(async (params: string) => {
+  const res = await fetch(`${BACKEND_URL}/api/search?${params}`, {
+    cache: "no-store", signal: AbortSignal.timeout(20000),
+  });
+  if (!res.ok) throw new Error(`Search failed (${res.status}).`);
+  return (await res.json()) as {products?:RawProduct[];corrected_from?:string|null;search_query?:string};
+});
+
 export async function searchDeals(
   marketCode: string,
   filter: DealFilter,
@@ -303,15 +313,7 @@ export async function searchDeals(
   const lang = await languageParam();
   if (lang) params.set("lang", lang);
 
-  // Backend and rendered-page caches already bound freshness. A separate Next
-  // data cache survived deployments and served the previous search algorithm.
-  const res = await fetch(`${BACKEND_URL}/api/search?${params}`, {
-    cache: "no-store", signal: AbortSignal.timeout(20000),
-  });
-  if (!res.ok) {
-    throw new Error(`Search failed for "${query}" in "${marketCode}" (${res.status}).`);
-  }
-  const body = (await res.json()) as { products?: RawProduct[]; corrected_from?: string | null; search_query?: string };
+  const body = await fetchSearchCatalog(params.toString());
   const found = (body.products ?? []).map((product, index) => ({
     ...adaptProduct(product),
     rank: index + 1,

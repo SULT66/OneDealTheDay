@@ -1,0 +1,37 @@
+const searchCard = product => ({
+  id:product.id,
+  title:product.title,
+  brand:product.brand,
+  public_category:product.public_category,
+  retailer_name:product.retailer_name,
+  source:product.source,
+  image_url:product.image_url,
+  current_price:product.current_price,
+  original_price:product.original_price,
+  currency:product.currency,
+  coupons:product.coupons,
+  display_score:product.display_score,
+  /* How far below our own tracked high this price is, and the lowest we
+     recorded. Zero when the price has not moved, which is most of them. */
+  tracked_drop_percent:product.tracked_drop_percent || 0,
+  tracked_low:product.tracked_low || 0,
+  rating:product.rating,
+  review_count:product.review_count,
+  seller_name:product.seller_name,
+  seller_rating:product.seller_rating,
+  seller_feedback_count:product.seller_feedback_count,
+  display_seller_rating:product.display_seller_rating,
+  display_shipping_summary:product.display_shipping_summary,
+  shipping_summary:product.shipping_summary,
+  display_return_summary:product.display_return_summary,
+  return_summary:product.return_summary,
+  display_availability:product.display_availability,
+  display_shop_all:product.display_shop_all,
+  display_price_is_current:product.display_price_is_current,
+  availability:product.availability,
+  selection_reason:product.selection_reason,
+  display_selection_reason:product.display_selection_reason,
+  daily_rank:product.daily_rank,
+  checked_at:product.checked_at
+});
+module.exports = {searchCard};

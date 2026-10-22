@@ -47,6 +47,8 @@ const { TAXONOMY_VERSION } = require("./src/catalogTaxonomy");
 const { RELEASE_ID } = require("./src/release");
 const { isUnavailable, parseSearchOptions, searchCatalogProducts } = require("./src/catalogSearch");
 const { buildSuggestIndex, knowsPhrase, suggestTerms } = require("./src/searchSuggest");
+const { autocompleteVocabulary } = require("./src/searchAutocomplete");
+const { searchCard } = require("./src/searchCard");
 const { rescueQuery } = require("./src/searchFallback");
 const { recordSearch, searchDemand } = require("./src/searchQueries");
 const { categoryLabel } = require("./src/i18n");
@@ -212,7 +214,9 @@ function expressWithHomepage(...args) {
   const suggestIndexForMarket = marketCode => {
     const cached = suggestIndexCache.get(marketCode);
     if (cached && cached.expiresAt > Date.now()) return cached.index;
-    const index = buildSuggestIndex(searchRowsForMarket(marketCode).filter(row => !isUnavailable(row)));
+    const vocabularyRows = db.prepare(`SELECT title,category,availability FROM products
+      WHERE market=? AND status='published' AND ${sourceSql()}`).all(marketCode);
+    const index = buildSuggestIndex(vocabularyRows.filter(row => !isUnavailable(row)));
     /* What people have actually been asking for, so the box can rank by what
        shoppers want rather than only by how much of a thing we happen to hold.
        Read on the same five-minute clock as the vocabulary itself. */
@@ -244,6 +248,18 @@ function expressWithHomepage(...args) {
    * calls, with the same options. The dropdown and the page it leads to cannot
    * disagree, because there is only one search.
    */
+  // Download once on focus; every subsequent keystroke filters locally.
+  app.get("/api/search/vocabulary", (req,res) => {
+    const market = normalizeMarket(req.query.market) || marketFromIp(req).code;
+    const key = `vocabulary:${market}`;
+    const cached = cachedValue(key);
+    res.set("X-Robots-Tag","noindex, nofollow");
+    res.set("Cache-Control","private, max-age=300");
+    if (cached) return res.set("X-ODD-Cache","HIT").json(cached);
+    const payload = cacheValue(key,{market,terms:autocompleteVocabulary(suggestIndexForMarket(market))},300000);
+    return res.set("X-ODD-Cache","MISS").json(payload);
+  });
+
   app.get("/api/search/suggest", (req, res) => {
     const selectedMarket = normalizeMarket(req.query.market) || marketFromIp(req).code;
     const language = resolveLanguage(req, res, selectedMarket);
@@ -367,12 +383,13 @@ function expressWithHomepage(...args) {
   app.get("/api/search", asyncRoute(async (req, res) => {
     const selectedMarket = normalizeMarket(req.query.market) || marketFromIp(req).code;
     const language = resolveLanguage(req, res, selectedMarket);
+    const compact = String(req.query.catalog || "") === "1";
     const rows = searchRowsForMarket(selectedMarket);
     const interpreted = applySearchIntent(req.query, rows);
     let options;
     try {
       options = parseSearchOptions(interpreted.query);
-      if (String(req.query.catalog || "") === "1") options.limit = Math.max(1, rows.length);
+      if (compact) options.limit = Math.max(1, rows.length);
     } catch (error) {
       res.set("X-Robots-Tag", "noindex, nofollow");
       return res.status(400).json({error:error.message});
@@ -380,7 +397,7 @@ function expressWithHomepage(...args) {
     /* A shopper who insisted on their own words must not be handed the
        corrected answer somebody else's search left in the cache. */
     const exact = String(req.query.exact || "") === "1";
-    const cacheKey = `search:${selectedMarket}:${language}:${JSON.stringify({options, exact, originalQuery:interpreted.intent.originalQuery})}`;
+    const cacheKey = `search:${selectedMarket}:${language}:${JSON.stringify({options, exact, compact, originalQuery:interpreted.intent.originalQuery})}`;
     const cached = cachedValue(cacheKey);
     if (cached) {
       res.set("X-Robots-Tag", "noindex, nofollow");
@@ -402,7 +419,7 @@ function expressWithHomepage(...args) {
       if (rescue) {
         try {
           const rescued = parseSearchOptions({...interpreted.query, q:rescue.query});
-          if (String(req.query.catalog || "") === "1") rescued.limit = Math.max(1, rows.length);
+          if (compact) rescued.limit = Math.max(1, rows.length);
           const attempt = searchCatalogProducts(rows, rescued);
           if (attempt.pagination.total) {
             correctedFrom = options.query;
@@ -430,7 +447,10 @@ function expressWithHomepage(...args) {
         resultCount:result.pagination.total
       });
     }
-    const products = await presentCatalogBatch(cacheKey, result.products, product => presentProduct(localizeProduct(product, language), language));
+    const products = await presentCatalogBatch(cacheKey, result.products, product => {
+      if (!compact) return presentProduct(localizeProduct(product, language), language);
+      return searchCard(presentListingRow(product,language));
+    });
     res.set("X-Robots-Tag", "noindex, nofollow");
     res.set("Cache-Control", "private, max-age=30, stale-while-revalidate=120");
     const payload = cacheValue(cacheKey, {

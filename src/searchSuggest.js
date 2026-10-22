@@ -61,7 +61,7 @@ function isNoise(word) {
 }
 
 function phraseWords(value) {
-  return normalizedTitle(value).split(" ").filter(word => word.length > 1 && !isNoise(word));
+  return normalizedTitle(value).split(" ").filter((word,index,words) => (word.length > 1 || (word === "c" && words[index-1] === "usb")) && !isNoise(word));
 }
 
 /** Every one-to-three word phrase in a title, without the broken ones. */
@@ -113,7 +113,9 @@ function keepFrequent(counts) {
 function buildSuggestIndex(rows = []) {
   const keywordCounts = new Map();
   const titleCounts = new Map();
-  const heads = new Set();
+  // Feed categories such as "Electronics" do not name product nouns. Keep
+  // real title phrases like "wireless headphones" discoverable nevertheless.
+  const heads = new Set("headphone headphones headset headsets earbud earbuds earphone earphones hub hubs chair chairs table tables desk desks laptop laptops notebook notebooks monitor monitors keyboard keyboards mouse mice speaker speakers watch watches drill drills mask masks costume costumes bookshelf bookshelves bookcase bookcases vacuum vacuums thermostat thermostats printer printers paper shredder shredders maker makers machine machines kettle kettles blender blenders mixer mixers cookware pan pans knife knives feeder feeders fountain fountains bag bags backpack backpacks blanket blankets pillow pillows mattress mattresses shoe shoes jacket jackets phone phones tablet tablets camera cameras router routers ssd drive drives charger chargers powerbank powerbanks measure measures tape tapes screwdriver screwdrivers ladder ladders toothbrush toothbrushes sunglasses mug mugs tumbler tumblers necklace necklaces bracelet bracelets ring rings earrings cabinet cabinets shelf shelves lights light figurine figurines statue statues toy toys game games lego bicycle bicycles bike bikes inflator inflators purifier purifiers heater heaters dehumidifier dehumidifiers humidifier humidifiers".split(" "));
 
   for (const row of rows) {
     /*

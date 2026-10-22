@@ -1,5 +1,5 @@
 const {
-  headTerm, landedCost, matchesAnySearchTerm, matchesSearchWord, normalizedTitle, queryBudget,
+  headTerm, landedCost, matchesSearchWord, normalizedTitle, queryBudget,
   scoreOffers, searchTokens, selectUniqueProducts, looksLikeAccessory, matchesMainProduct, isMainProductQuery,
 } = require("./ranker");
 
@@ -157,13 +157,6 @@ function searchCatalogProducts(rows, options) {
     .filter(product => updatedAfter == null || timestamp(product) >= updatedAfter);
 
   /*
-   * Everything that cannot match is dropped before anything is scored. The
-   * terms are the query's own plus the requested category's, which is the
-   * full set textMatchScore builds for these options.
-   */
-  const intentCategory = options.categories.length === 1 ? options.categories[0] : "";
-  const searchTerms = [...new Set([...searchTokens(options.query), ...searchTokens(intentCategory)])];
-  /*
    * The thing asked for has to be there.
    *
    * All requests require their identifying words in the headline: "coffee machine" must
@@ -178,7 +171,6 @@ function searchCatalogProducts(rows, options) {
   const mainProduct = isMainProductQuery(options.query);
   const matching = options.query
     ? candidates.filter(product =>
-      matchesAnySearchTerm(product, searchTerms) &&
       matchesQuery(product, options.query) &&
       (!mainProduct || matchesMainProduct(product, options.query)) &&
       (budget.max == null || landedCost(product) <= budget.max) &&

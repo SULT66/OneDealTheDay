@@ -130,3 +130,7 @@ assert.ok(box.includes('role="combobox"') && box.includes('role="listbox"'), "th
 assert.ok(box.includes("AbortController"), "a slow answer could overtake a newer one");
 
 console.log("search suggestions: ok");
+
+require("./test-search-autocomplete");
+
+require("./test-search-autocomplete-api");
