@@ -397,7 +397,7 @@ function expressWithHomepage(...args) {
     /* A shopper who insisted on their own words must not be handed the
        corrected answer somebody else's search left in the cache. */
     const exact = String(req.query.exact || "") === "1";
-    const cacheKey = `search:${selectedMarket}:${language}:${JSON.stringify({options, exact, compact, originalQuery:interpreted.intent.originalQuery})}`;
+    const cacheKey = `search:${selectedMarket}:${language}:${JSON.stringify({options, exact, originalQuery:interpreted.intent.originalQuery, compact})}`;
     const cached = cachedValue(cacheKey);
     if (cached) {
       res.set("X-Robots-Tag", "noindex, nofollow");
