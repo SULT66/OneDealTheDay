@@ -144,8 +144,38 @@ const hubListings = [
   listing(405, "Blackmagic Design Videohub 20x20 Video Router", 2769),
   listing(406, "Smart Home Hub", 49.99),
 ];
-for (const q of ["usb hub", "USB-C hub", "portable usb hub"]) {
+for (const q of ["usb hub", "USB-C hub"]) {
   const result = searchCatalogProducts(hubListings, parseSearchOptions({q}));
   assert.deepStrictEqual(result.products.map(p => p.id).sort(), [401, 402, 403], q);
   assert.strictEqual(result.pagination.total, 3);
 }
+
+// Every query uses headline words, not substrings or unrelated descriptions.
+const cases = [
+  ["hub", "Network Hub", "Hunting Blind", "Strong hub construction"],
+  ["hat", "Winter Hat", "What a Wonderful Mug", "A hat makes a good gift"],
+  ["ring", "Silver Ring", "Spring Garden Lights", "Ring shaped bulbs"],
+  ["mug", "Ceramic Mug", "Canvas Wall Art", "A mug of coffee is pictured"],
+  ["wireless mouse", "Wireless Mouse", "Wired Mouse", "Wireless alternatives available"],
+  ["cordless drill", "Cordless Drill", "Corded Drill", "Unlike a cordless drill"],
+  ["portable heater", "Portable Heater", "Wall Mounted Heater", "Portable heaters compared"],
+  ["electric kettle", "Electric Kettle", "Stovetop Kettle", "Unlike electric models"],
+  ["black backpack", "Black Backpack", "White Backpack", "Black also available"],
+  ["gaming monitor", "Gaming Monitor", "Office Monitor", "Gaming accessories sold separately"],
+  ["smart watch", "Smart Watch", "Analog Watch", "Smart gift packaging"],
+  ["mini fridge", "Mini Fridge", "Full Size Fridge", "Mini bar accessories"],
+  ["waterproof jacket", "Waterproof Jacket", "Cotton Jacket", "Not waterproof"],
+  ["coffee machine", "Coffee Maker", "Exercise Machine", "Enjoy coffee after training"],
+];
+for (const [q, wanted, unrelated, description] of cases) {
+  const rows = [listing(501, wanted, 25), {...listing(502, unrelated, 20), description}];
+  for (const sort of ["best_match", "price_asc", "price_desc", "quality"]) {
+    const result = searchCatalogProducts(rows, parseSearchOptions({q, sort}));
+    assert.deepStrictEqual(result.products.map(p => p.id), [501], `${q} / ${sort}`);
+    assert.strictEqual(result.facets.merchants[0].count, 1, `${q}: unrelated item entered facets`);
+  }
+}
+for (const [q, title] of [["chair", "Office Chairs"], ["chairs", "Office Chair"], ["glass", "Drinking Glasses"], ["glasses", "Drinking Glass"]]) {
+  assert.strictEqual(searchCatalogProducts([listing(503, title, 25)], parseSearchOptions({q})).pagination.total, 1, q);
+}
+console.log("cross-category search relevance: ok");

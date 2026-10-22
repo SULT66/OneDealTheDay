@@ -289,15 +289,8 @@ assert.strictEqual(
 );
 
 /*
- * The cheap test that decides what gets scored has to agree with the real one.
- *
- * Search used to score the whole market on every query — every listing put
- * through identity normalization, offer comparison, six score components and a
- * ranking layer, to answer something sixteen of them matched. Now anything
- * that cannot match is dropped first. The risk in that is a listing the
- * prefilter throws away and the scorer would have kept, and the place it hides
- * is the description: relevance counts a description hit at 0.55, so a listing
- * whose title never says "tripod" is still a real result for "tripod".
+ * Description-only mentions do not identify the item. A normalized category
+ * can supply the product name when a retailer title omits it.
  */
 const describedOnly = {
   id:9912,
@@ -327,9 +320,10 @@ const describedOnly = {
 const byDescription = searchCatalogProducts([describedOnly], parseSearchOptions({q:"tripod"}));
 assert.strictEqual(
   byDescription.products.length,
-  1,
-  "a listing that matches only in its description is being dropped before it is scored",
+  0,
+  "a description-only mention must not qualify an unrelated headline",
 );
+assert.strictEqual(searchCatalogProducts([{...describedOnly, normalized_category:"Tripods"}], parseSearchOptions({q:"tripod"})).products.length, 1);
 /* And the other direction: something sharing no term with the query must not
    arrive just because the prefilter was generous. */
 assert.strictEqual(

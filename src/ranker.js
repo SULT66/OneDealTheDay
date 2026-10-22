@@ -143,7 +143,7 @@ const ACCESSORY_WORDS = [
 
 function singularForm(word) {
   if (word.length > 4 && word.endsWith("ies")) return `${word.slice(0, -3)}y`;
-  if (word.length > 4 && word.endsWith("es")) return word.slice(0, -2);
+  if (/(?:sses|shes|ches|xes|zes)$/.test(word)) return word.slice(0, -2);
   if (word.length > 3 && word.endsWith("s") && !word.endsWith("ss")) return word.slice(0, -1);
   return word;
 }
@@ -163,6 +163,17 @@ function headVariants(head) {
   return [...new Set([head, stem, `${stem}s`, `${stem}es`])].filter(Boolean);
 }
 
+// Complete words prevent "ring" matching "spring"; inflections keep
+// "chair" and "chairs" searchable in either direction.
+function matchesSearchWord(text, term) {
+  if (term === "coffee" && /\bcoffeemakers?\b/.test(text)) return true;
+  if (term === "usb") return /\busb(?:c|[234])?\b/.test(text);
+  return headVariants(term).some(word => {
+    const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return new RegExp(`\\b${escaped}\\b`).test(text);
+  });
+}
+
 /*
  * Somewhere in the listing, the thing itself.
  *
@@ -174,7 +185,7 @@ function headVariants(head) {
 function matchesHeadTerm(product, head) {
   if (!head) return true;
   const haystack = `${normalizedTitle(product?.title)} ${normalizedTitle(product?.brand)} ${normalizedTitle(product?.normalized_category || product?.category)} ${normalizedTitle(product?.description)}`;
-  return headVariants(head).some(variant => haystack.includes(variant));
+  return matchesSearchWord(haystack, head);
 }
 
 /* Named in the title, the brand or the category — where a shopper reading a
@@ -182,7 +193,7 @@ function matchesHeadTerm(product, head) {
 function headInHeadline(product, head) {
   if (!head) return true;
   const haystack = `${normalizedTitle(product?.title)} ${normalizedTitle(product?.brand)} ${normalizedTitle(product?.normalized_category || product?.category)}`;
-  return headVariants(head).some(variant => haystack.includes(variant));
+  return matchesSearchWord(haystack, head);
 }
 
 const MAIN_PRODUCT_HEADS = new Set([
@@ -283,7 +294,7 @@ function queryBudget(query, intent = {}) {
 function matchesAnySearchTerm(product, terms) {
   if (!terms.length) return true;
   const haystack = `${normalizedTitle(product?.title)} ${normalizedTitle(product?.brand)} ${normalizedTitle(product?.normalized_category || product?.category)} ${normalizedTitle(product?.description)}`;
-  return terms.some(term => haystack.includes(term));
+  return terms.some(term => matchesSearchWord(haystack, term));
 }
 
 function textMatchScore(product, query, intent = {}) {
@@ -305,10 +316,10 @@ function textMatchScore(product, query, intent = {}) {
   };
   let relevance = terms.length
     ? terms.reduce((sum, term) => {
-      if (fields.title.includes(term)) return sum + 1;
-      if (fields.brand.includes(term)) return sum + 0.95;
-      if (fields.category.includes(term)) return sum + 0.9;
-      if (fields.description.includes(term)) return sum + 0.55;
+      if (matchesSearchWord(fields.title, term)) return sum + 1;
+      if (matchesSearchWord(fields.brand, term)) return sum + 0.95;
+      if (matchesSearchWord(fields.category, term)) return sum + 0.9;
+      if (matchesSearchWord(fields.description, term)) return sum + 0.55;
       return sum;
     }, 0) / terms.length
     : 1;
@@ -971,3 +982,5 @@ exports.RANKING_MODEL = RANKING_MODEL;
 exports.scoreOffers = scoreOffers;
 exports.selectUniqueProducts = selectUniqueProducts;
 exports.rankProducts = (items, limit = 10, options = {}) => selectUniqueProducts(scoreOffers(items, options)).slice(0, limit);
+
+exports.matchesSearchWord = matchesSearchWord;
