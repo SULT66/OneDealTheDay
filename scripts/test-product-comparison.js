@@ -1,0 +1,17 @@
+const assert = require('assert');
+const {restoreCompareItems,toggleCompareItem}=require('../src/compareSelection');
+const item=(id,extra={})=>({id:String(id),title:'Tool bag',image:'https://example.com/bag.jpg',category:'tools-diy',currency:'USD',...extra});
+let rows=[];
+for(const id of [1,2,3]) rows=toggleCompareItem(rows,item(id));
+assert.equal(rows.length,3);
+assert.strictEqual(toggleCompareItem(rows,item(4)),rows,'A fourth item must not replace a selection');
+rows=toggleCompareItem(rows,item(2));
+assert.deepEqual(rows.map(x=>x.id),['1','3']);
+assert.deepEqual(toggleCompareItem(rows,item(4)).map(x=>x.id),['1','3','4']);
+assert.strictEqual(toggleCompareItem(rows,item(5,{currency:'CAD'})),rows);
+assert.strictEqual(toggleCompareItem(rows,item(5,{category:'electronics'})),rows);
+assert.deepEqual(restoreCompareItems(null),[]);
+assert.deepEqual(restoreCompareItems([null,{},item('invalid'),item(1),item(1),item(2,{category:'electronics'}),item(3)]).map(x=>x.id),['1','3']);
+assert.equal(restoreCompareItems([item(1),item(2),item(3),item(4)]).length,3);
+assert.deepEqual(Object.keys(restoreCompareItems([item(1,{price:1,delivery:'unverified'})])[0]).sort(),['category','currency','id','image','title']);
+console.log('Product comparison selection: limit, removal, persistence validation and market currency boundaries passed.');

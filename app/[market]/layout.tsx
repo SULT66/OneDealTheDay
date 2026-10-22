@@ -1,3 +1,4 @@
+import { CompareProvider } from "@/components/compare/CompareProvider";
 import { AffiliateNotice } from "@/components/site/AffiliateNotice";
 import { Suspense } from "react";
 import { getLanguage } from "@/lib/i18n";
@@ -33,6 +34,7 @@ export default async function MarketLayout({
   return (
     /* The language for components that run in the browser. See CopyProvider. */
     <CopyProvider language={language}>
+    <CompareProvider key={market} market={market}>
     <NavigationProgress>
     <DeliaProvider market={market} language={language}>
       {/* Holds Chloe's call above the pages, so she follows the viewer. */}
@@ -56,6 +58,7 @@ export default async function MarketLayout({
       </LiveBroadcastProvider>
     </DeliaProvider>
     </NavigationProgress>
+    </CompareProvider>
     </CopyProvider>
   );
 }

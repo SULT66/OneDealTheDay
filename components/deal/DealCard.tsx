@@ -1,3 +1,4 @@
+import { CompareButton } from "@/components/compare/CompareProvider";
 import Link from "next/link";
 import type React from "react";
 import { getCategory } from "@/lib/catalog";
@@ -11,8 +12,8 @@ import { PriceBlock } from "./PriceBlock";
 
 /**
  * Grid card. The whole card is one link — the score, price and rating are
- * evidence inside it rather than separate controls — which keeps a single tap
- * target per card and avoids nested interactive elements.
+ * evidence inside it rather than separate controls. Compare is a sibling
+ * button outside the link, keeping interactive elements unnested.
  *
  * Async so it can resolve the visitor's language itself. Threading it down as a
  * prop from six call sites is the version where one of them gets forgotten and
@@ -50,7 +51,7 @@ export async function DealCard({
 
   return (
     <article
-      className="rise-in h-full"
+      className="rise-in flex h-full flex-col"
       style={{ animationDelay: `${Math.min(index, 11) * 45}ms` }}
     >
       <Body
@@ -61,7 +62,7 @@ export async function DealCard({
           "data-merch-placement": tracking.placement,
         } : {})}
         className={cn(
-          "group flex h-full flex-col overflow-hidden rounded-card border border-border bg-surface",
+          "group flex flex-1 flex-col overflow-hidden rounded-card border border-border bg-surface",
           campaignBadge && "border-red-200 shadow-sm",
           unavailable
             ? "opacity-60"
@@ -147,6 +148,7 @@ export async function DealCard({
           </div>
         </div>
       </Body>
+      {!unavailable && <div className="mt-2"><CompareButton deal={{id:deal.id,title:deal.title,image:deal.thumbnail||deal.image,category:deal.category,currency:deal.currency}} /></div>}
     </article>
   );
 }

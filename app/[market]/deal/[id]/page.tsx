@@ -1,3 +1,4 @@
+import { CompareButton } from "@/components/compare/CompareProvider";
 import { schemaAvailability } from "@/lib/schemaAvailability";
 import { productPhrase } from "@/lib/productPhrase";
 import type { Metadata } from "next";
@@ -269,6 +270,7 @@ export default async function DealPage({
           />
 
           <TrustSignals deal={deal} language={language} />
+          <CompareButton deal={{id:deal.id,title:deal.title,image:deal.image,category:deal.category,currency:deal.currency}} />
 
           <div className="flex flex-col gap-3 sm:flex-row">
             <a
