@@ -25,14 +25,22 @@ export function DigestSignup({
 }: {
   market: string;
   /* panel: a bordered block that sits in the page flow.
-     band: the large dark treatment, for a page that leads with this. */
-  variant?: "panel" | "band";
+     band: the large dark treatment, for a page that leads with this.
+     quiet: a line of text under the Live Drop form that opens the form when
+       asked. Live Drop is the thing the site leads with and promotes, so the
+       weekly letter is the alternative for somebody who finds an email before
+       every drop too much — an alternative, not a rival. Two email boxes side
+       by side made a visitor work out how the product is organised before
+       they would hand over an address. */
+  variant?: "panel" | "band" | "quiet";
   source?: string;
 }) {
   const tr = useCopy();
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<"idle" | "sending" | "done" | "error">("idle");
   const [message, setMessage] = useState<string | null>(null);
+  const quiet = variant === "quiet";
+  const [open, setOpen] = useState(false);
 
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -64,18 +72,49 @@ export function DigestSignup({
 
   const dark = variant === "band";
 
+  /*
+   * Closed, this is one line of text and nothing else — no border, no box, no
+   * second button competing with the one the site leads on. It opens in place
+   * rather than going to a page of its own, so the Live Drop form a visitor
+   * was reading does not disappear under them.
+   */
+  if (quiet && !open && status !== "done") {
+    return (
+      <p className="mt-3 text-sm text-fg-muted">
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="cursor-pointer font-semibold text-fg underline underline-offset-4 hover:opacity-80"
+        >
+          {tr("app.sunday.link")}
+        </button>
+      </p>
+    );
+  }
+
   return (
     <form
       onSubmit={onSubmit}
       className={cn(
         "rounded-card",
-        dark ? "bg-surface-inverse p-6 text-fg-on-inverse sm:p-10" : "border border-border bg-surface p-5 text-fg sm:p-6",
+        dark && "bg-surface-inverse p-6 text-fg-on-inverse sm:p-10",
+        variant === "panel" && "border border-border bg-surface p-5 text-fg sm:p-6",
+        quiet && "mt-3 text-fg",
       )}
     >
-      <p className={cn("text-[0.7rem] font-semibold uppercase tracking-[0.18em]", dark ? "opacity-60" : "text-fg-subtle")}>
-        {tr("app.sunday.eyebrow")}
-      </p>
-      <h2 className={cn("mt-2 max-w-xl font-bold tracking-tight", dark ? "text-2xl sm:text-3xl" : "text-xl")}>
+      {!quiet && (
+        <p className={cn("text-[0.7rem] font-semibold uppercase tracking-[0.18em]", dark ? "opacity-60" : "text-fg-subtle")}>
+          {tr("app.sunday.eyebrow")}
+        </p>
+      )}
+      <h2
+        className={cn(
+          "max-w-xl font-bold tracking-tight",
+          dark && "mt-2 text-2xl sm:text-3xl",
+          variant === "panel" && "mt-2 text-xl",
+          quiet && "text-base",
+        )}
+      >
         {tr("app.sunday.title")}
       </h2>
       <p className={cn("mt-3 max-w-xl text-sm", dark ? "opacity-70" : "text-fg-muted")}>

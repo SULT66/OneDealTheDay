@@ -249,6 +249,7 @@ const appCopy = {
     "app.signup.submit": "Tell me before every drop",
     "app.signup.fineprint": "After 60 days without recorded activity, we may send one check-in. The Sunday digest is optional. Your welcome email has links to receive fewer emails or unsubscribe in one click.",
     /* The Sunday list: a separate opt-in, and until now one with no form. */
+    "app.sunday.link": "Prefer one email a week? Join the Sunday list",
     "app.sunday.eyebrow": "The Sunday list",
     "app.sunday.title": "Five finds, every Sunday.",
     "app.sunday.lede": "Five listings that cleared our Score of 80, each with what we recorded about its price. One email a week, nothing in between.",
@@ -581,6 +582,7 @@ const appCopy = {
     "app.signup.submit": "Avísame antes de cada drop",
     "app.signup.fineprint": "Tras 60 días sin actividad registrada, podemos enviar un único recordatorio. El resumen del domingo es opcional. El email de bienvenida incluye enlaces para recibir menos correos o darte de baja con un clic.",
     /* The Sunday list: a separate opt-in, and until now one with no form. */
+    "app.sunday.link": "¿Prefieres un correo por semana? Únete a la lista de los domingos",
     "app.sunday.eyebrow": "La lista de los domingos",
     "app.sunday.title": "Cinco hallazgos, cada domingo.",
     "app.sunday.lede": "Cinco productos que superan nuestra Puntuación de 80, cada uno con lo que registramos sobre su precio. Un correo por semana, nada entre medias.",
@@ -687,6 +689,7 @@ const appCopy = {
     "app.signup.lede": "Des alertes Live Drop, un email de confirmation et trois emails de bienvenue prévus aux jours 1, 3 et 7.",
     "app.signup.fineprint": "Après 60 jours sans activité enregistrée, nous pouvons envoyer un unique rappel. Le récapitulatif du dimanche est facultatif. L’email de bienvenue contient des liens pour recevoir moins d’emails ou se désabonner en un clic.",
     /* The Sunday list: a separate opt-in, and until now one with no form. */
+    "app.sunday.link": "Plutôt un e-mail par semaine ? Rejoignez la liste du dimanche",
     "app.sunday.eyebrow": "La liste du dimanche",
     "app.sunday.title": "Cinq trouvailles, chaque dimanche.",
     "app.sunday.lede": "Cinq produits qui atteignent notre Score de 80, chacun avec ce que nous avons relevé sur son prix. Un e-mail par semaine, rien entre les deux.",
@@ -843,6 +846,7 @@ const appCopy = {
     "app.signup.lede": "Live-Drop-Hinweise, eine Bestätigungsmail und drei Willkommensmails, geplant für Tag 1, 3 und 7.",
     "app.signup.fineprint": "Nach 60 Tagen ohne erfasste Aktivität können wir einmal nachfragen. Die Sonntagsübersicht ist freiwillig. Die Willkommensmail enthält Links für weniger E-Mails oder die Abmeldung mit einem Klick.",
     /* The Sunday list: a separate opt-in, and until now one with no form. */
+    "app.sunday.link": "Lieber eine E-Mail pro Woche? Zur Sonntagsliste",
     "app.sunday.eyebrow": "Die Sonntagsliste",
     "app.sunday.title": "Fünf Funde, jeden Sonntag.",
     "app.sunday.lede": "Fünf Angebote, die unseren Score von 80 erreichen, jedes mit dem, was wir zu seinem Preis aufgezeichnet haben. Eine E-Mail pro Woche, dazwischen nichts.",

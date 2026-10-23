@@ -11,6 +11,7 @@ import { DeliaTrigger } from "@/components/delia/DeliaTrigger";
 import { FilterPanel, type FilterCopy } from "./FilterPanel";
 import { FilterShell } from "./FilterShell";
 import { LiveDropSignup } from "@/components/site/LiveDropSignup";
+import { DigestSignup } from "@/components/site/DigestSignup";
 import { Pagination } from "./Pagination";
 
 /* Two dozen fits three rows on a laptop and reaches the bottom on a phone
@@ -210,6 +211,11 @@ export async function DealListing({
           {deals.length > 0 && (
             <div className="mt-12">
               <LiveDropSignup market={market} source="listing" />
+              {/* The weekly letter, as one line under the drop form. Category
+                  pages are where arriving traffic lands, so the quieter option
+                  has to be reachable here too — without becoming a second form
+                  competing with the one the site leads on. */}
+              <DigestSignup market={market} variant="quiet" source="listing" />
             </div>
           )}
 

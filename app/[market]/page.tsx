@@ -218,12 +218,15 @@ async function HomeCatalog({market,language,halloween}:{market:string;language:L
         {/* The other list, which had no form at all until now: its only door
             was a tokened link in the day-seven welcome letter, so a visitor
             could not reach it without first joining the drop list and waiting
-            a week. A drop is rare and unscheduled; this is the one that can
-            be promised to arrive, so it gets its own place rather than a line
-            of small print under the other form. */}
-        <div className="mt-4">
-          <DigestSignup market={market} source="homepage" />
-        </div>
+            a week.
+
+            A line rather than a second form. Live Drop is what the site leads
+            with and what it will be promoted on, so this is the alternative
+            for somebody who finds an email before every drop too much — and
+            an alternative does not get equal billing. Two email boxes stacked
+            here made a visitor work out how the product is organised before
+            they would give an address at all. */}
+        <DigestSignup market={market} variant="quiet" source="homepage" />
       </section>
 
       {/* Follows the visitor down every page now — the large hero circle that
