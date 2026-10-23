@@ -31,7 +31,7 @@ function page({ search = "", stored = false, blocked = false, cookies = true, re
     createElement: make, getElementById: id => nodes.get(id), querySelector: () => null,
     addEventListener() {},
   };
-  let cookie = "";
+  let cookie = stored ? "odd_internal_browser=1" : "";
   Object.defineProperty(document, "cookie", {
     get() { return cookie; },
     set(value) { if (cookies) cookie = /Max-Age=0(?:;|$)/.test(value) ? "" : value.split(";")[0]; },
@@ -50,69 +50,34 @@ function page({ search = "", stored = false, blocked = false, cookies = true, re
   sandbox.window = sandbox;
   sandbox.globalThis = sandbox;
   const context = vm.createContext(sandbox);
+  if (stored && !blocked) values.set("odd_analytics_session", "internal_11111111-2222-3333-4444-555555555555");
   vm.runInContext(source("public/internal-traffic.js"), context);
   const bootConsent = () => vm.runInContext(source("public/cookie-consent.js"), context);
   return { sandbox, context, values, nodes, scripts, fetches, bootConsent };
 }
 
-// A real visitor following a ChatGPT recommendation must still be measured.
-const external = page({ referrer: "https://chatgpt.com/", search: "?utm_source=chatgpt.com" });
-external.bootConsent();
-assert.equal(external.sandbox.oddInternalTraffic.isInternal(), false);
-assert.equal(external.scripts.length, 1);
-external.sandbox.oddEvent("retailer_click", { item_id: "1" });
-assert.ok(external.sandbox.dataLayer.some(row => row[0] === "event"));
-
+// Legacy links and saved preferences must never disable measurement again.
 for (const options of [
-  { search: "?odd_internal=1&utm_source=chatgpt.com" },
-  { stored: true },
-  { search: "?odd_internal=1", blocked: true },
-  { search: "?odd_internal=1", blocked: true, cookies: false },
+  {}, { stored: true }, { search: "?odd_internal=1&utm_source=instagram" },
+  { stored: true, search: "?odd_internal=1" },
+  { stored: true, blocked: true }, { blocked: true, cookies: false, search: "?odd_internal=1" },
+  { referrer: "https://chatgpt.com/", search: "?utm_source=chatgpt.com" },
 ]) {
-  const internal = page(options);
-  internal.sandbox.__LAREO_ANALYTICS__ = { endpoint: "https://collector.example", writeKey: "public-test" };
-  internal.bootConsent();
-  internal.sandbox.oddEvent("view_item", { item_id: "1" });
-  assert.equal(internal.sandbox.oddInternalTraffic.isInternal(), true);
-  assert.equal(internal.sandbox["ga-disable-G-1L69NBBDV2"], true);
-  assert.equal(internal.scripts.length, 0, "internal visitor loaded GA");
-  assert.equal(internal.fetches.length, 0, "internal visitor reached Lareo");
-  assert.ok(internal.nodes.has("oddInternalTrafficStatus"), "missing visible status");
-  assert.ok(!internal.sandbox.location.search.includes("odd_internal"), "opt-out leaked into copied URL");
+  const visitor = page(options);
+  visitor.bootConsent();
+  assert.equal(visitor.scripts.length, 1, "GA must load even for legacy owner browsers/links");
+  assert.equal(visitor.sandbox["ga-disable-G-1L69NBBDV2"], false);
+  assert.equal(visitor.nodes.size, 0, "owner badge must not return");
+  assert.equal(visitor.sandbox.oddInternalTraffic, undefined);
+  assert.ok(!visitor.sandbox.location.search.includes("odd_internal"));
+  if (options.search?.includes("utm_source")) assert.ok(visitor.sandbox.location.search.includes("utm_source"));
+  if (!options.blocked) assert.equal(visitor.values.has("odd_internal_browser"), false);
+  if (options.cookies !== false) assert.equal(visitor.sandbox.document.cookie, "");
+  visitor.sandbox.oddEvent("retailer_click", { item_id: "1" });
+  assert.ok(visitor.sandbox.dataLayer.some(row => row[0] === "event"));
+  const ts = require("typescript");
+  visitor.sandbox.exports = {};
+  vm.runInContext(ts.transpileModule(source("lib/analyticsSession.ts"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText, visitor.context);
+  assert.ok(!visitor.sandbox.exports.analyticsSessionId().startsWith("internal_"));
 }
-
-// Existing GA sessions must stop immediately when admin marks the browser.
-external.sandbox.oddInternalTraffic.set(true);
-const before = external.sandbox.dataLayer.length;
-external.sandbox.oddEvent("retailer_click", { item_id: "2" });
-assert.equal(external.sandbox.dataLayer.length, before);
-assert.equal(external.sandbox["ga-disable-G-1L69NBBDV2"], true);
-assert.equal(external.values.get("odd_internal_browser"), "1");
-
-// Explicit opt-in reverses the exclusion, while a normal reload preserves it.
-const enabled = page({ stored: true, search: "?odd_internal=0" });
-enabled.bootConsent();
-assert.equal(enabled.sandbox.oddInternalTraffic.isInternal(), false);
-assert.equal(enabled.scripts.length, 1);
-assert.equal(enabled.nodes.has("oddInternalTrafficStatus"), false);
-const reloaded = page({ stored: true });
-reloaded.bootConsent();
-assert.equal(reloaded.scripts.length, 0);
-const admin = page({ pathname: "/us/admin" });
-admin.bootConsent();
-assert.equal(admin.scripts.length, 0, "admin page loaded GA before unlocking");
-
-// Both renderers load the preference before any consent/measurement code.
-for (const file of ["app/layout.tsx", "src/server.js"]) {
-  const code = source(file);
-  assert.ok(code.indexOf("/internal-traffic.js") < code.indexOf("/cookie-consent.js"), file);
-}
-
-// The shared session helper must honour the same preference in React pages.
-const ts = require("typescript");
-const compiled = ts.transpileModule(source("lib/analyticsSession.ts"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText;
-reloaded.sandbox.exports = {};
-vm.runInContext(compiled, reloaded.context);
-assert.equal(reloaded.sandbox.exports.isInternalBrowser(), true);
-assert.match(reloaded.sandbox.exports.analyticsSessionId(), /^internal_/);
-console.log("Internal browser exclusion checks passed (GA, Lareo, consent, storage fallback, external ChatGPT, React session).");
+console.log("Retired owner-mode links and browser flags no longer suppress analytics.");

@@ -12,52 +12,6 @@
 const KEY = "odd_analytics_session";
 const VALID = /^[A-Za-z0-9_-]{16,80}$/;
 
-/*
- * The owner's own browser.
- *
- * While real visitors number in single figures, the person testing the site
- * is most of the traffic. A browser that has unlocked the admin console keeps
- * this flag (a flag, never the key), and its session ids carry a prefix every
- * count on the server skips. See src/growthMetrics.js.
- */
-const INTERNAL_KEY = "odd_internal_browser";
-export const INTERNAL_PREFIX = "internal_";
-
-declare global {
-  interface Window {
-    oddInternalTraffic?: { isInternal: () => boolean; set: (enabled: boolean) => boolean };
-  }
-}
-
-export function isInternalBrowser(): boolean {
-  if (typeof window === "undefined") return false;
-  if (window.oddInternalTraffic?.isInternal()) return true;
-  const choice = new URLSearchParams(window.location.search).get("odd_internal");
-  if (choice === "1") return true;
-  if (choice === "0") return false;
-  try {
-    if (localStorage.getItem(INTERNAL_KEY) === "1") return true;
-  } catch {}
-  return /(?:^|;\s*)odd_internal_browser=1(?:;|$)/.test(document.cookie || "");
-}
-
-export function setInternalBrowser(internal: boolean) {
-  if (window.oddInternalTraffic) {
-    window.oddInternalTraffic.set(internal);
-    return;
-  }
-  try {
-    if (internal) localStorage.setItem(INTERNAL_KEY, "1");
-    else localStorage.removeItem(INTERNAL_KEY);
-    /* The id in this tab changes with it, so the switch applies straight away. */
-    sessionStorage.removeItem(KEY);
-  } catch {
-    /* Storage blocked: nothing to remember, and nothing to break. */
-  }
-  document.cookie = `${INTERNAL_KEY}=${internal ? "1" : ""}; Path=/; SameSite=Lax; Max-Age=${internal ? 31536000 : 0}${location.protocol === "https:" ? "; Secure" : ""}`;
-  window.dispatchEvent(new Event("odd:internal-traffic"));
-}
-
 const newToken = () => {
   if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
   const bytes = new Uint8Array(18);
@@ -66,9 +20,8 @@ const newToken = () => {
 };
 
 export function analyticsSessionId(): string {
-  const internal = isInternalBrowser();
-  const fits = (token: string) => VALID.test(token) && token.startsWith(INTERNAL_PREFIX) === internal;
-  const make = () => (internal ? `${INTERNAL_PREFIX}${newToken()}` : newToken());
+  const fits = (token: string) => VALID.test(token) && !token.startsWith("internal_");
+  const make = newToken;
   /* Private browsing and blocked storage both throw here rather than returning
      null, so a fresh token per call is the fallback. It over-counts a little,
      which is the right way to be wrong: the alternative is dropping those

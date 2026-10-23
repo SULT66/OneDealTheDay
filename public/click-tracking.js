@@ -2,11 +2,6 @@
   const clickEndpoint = "/api/click-events";
   const analyticsEndpoint = "/api/analytics/events";
   const market = String(location.pathname.split("/")[1] || window.__ODD_MARKET__ || "us").toLowerCase();
-  const internalTraffic = () => {
-    if (window.oddInternalTraffic?.isInternal()) return true;
-    try { if (localStorage.getItem("odd_internal_browser") === "1") return true; } catch {}
-    return /(?:^|;\s*)odd_internal_browser=1(?:;|$)/.test(document.cookie || "");
-  };
 
   const token = () => {
     if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
@@ -17,17 +12,16 @@
   const sessionId = (() => {
     try {
       const current = sessionStorage.getItem("odd_analytics_session");
-      if (/^[A-Za-z0-9_-]{16,80}$/.test(current || "") && current.startsWith("internal_") === internalTraffic()) return current;
-      const created = (internalTraffic() ? "internal_" : "") + token();
+      if (/^[A-Za-z0-9_-]{16,80}$/.test(current || "") && !current.startsWith("internal_")) return current;
+      const created = token();
       sessionStorage.setItem("odd_analytics_session", created);
       return created;
     } catch {
-      return (internalTraffic() ? "internal_" : "") + token();
+      return token();
     }
   })();
 
   const send = (endpoint, payload) => {
-    if (internalTraffic()) return;
     const body = JSON.stringify(payload);
     if (navigator.sendBeacon) {
       const accepted = navigator.sendBeacon(endpoint, new Blob([body], { type:"application/json" }));

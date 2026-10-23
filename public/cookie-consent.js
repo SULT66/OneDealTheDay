@@ -3,16 +3,6 @@
 
   const STORAGE_KEY = "odd_cookie_consent_v1";
   const ANALYTICS_ID = "G-1L69NBBDV2";
-  const internalTraffic = () => {
-    if (/(?:^|\/)admin(?:\/|$)/.test(location.pathname)) return true;
-    if (window.oddInternalTraffic?.isInternal()) return true;
-    // Also safe if this controller runs before the early preference script.
-    const choice = new URLSearchParams(location.search).get("odd_internal");
-    if (choice === "0") return false;
-    if (choice === "1") return true;
-    try { if (localStorage.getItem("odd_internal_browser") === "1") return true; } catch {}
-    return /(?:^|;\s*)odd_internal_browser=1(?:;|$)/.test(document.cookie || "");
-  };
   const CONSENT_MARKETS = new Set(["fr", "de"]);
   const pathMarket = location.pathname.split("/").filter(Boolean)[0] || "";
   const market = String(window.__ODD_MARKET__ || pathMarket).toLowerCase();
@@ -97,7 +87,6 @@
     };
 
     const track = async (eventName, properties = {}) => {
-      if (internalTraffic()) return;
       const payload = {
         event_id:id(),
         event_name:eventName,
@@ -191,7 +180,7 @@
   };
 
   const loadLareoAnalytics = () => {
-    if (internalTraffic() || lareoStarted) return;
+    if (lareoStarted) return;
     const config = window.__LAREO_ANALYTICS__;
     if (!config?.endpoint || !config?.writeKey) {
       if (lareoConfigAttempts < 50) {
@@ -290,13 +279,13 @@
    * the lot.
    */
   const deliver = (name, parameters) => {
-    if (internalTraffic() || !analyticsLoaded || typeof window.gtag !== "function") return false;
+    if (!analyticsLoaded || typeof window.gtag !== "function") return false;
     window.gtag("event", name, parameters);
     return true;
   };
 
   window.oddEvent = (name, values) => {
-    if (internalTraffic() || consentRefused || !EVENTS.has(name)) return;
+    if (consentRefused || !EVENTS.has(name)) return;
     const parameters = {};
     for (const key of Object.keys(values || {})) {
       const kept = parameter(values[key]);
@@ -313,7 +302,7 @@
   };
 
   const loadAnalytics = () => {
-    if (internalTraffic() || analyticsLoaded) return;
+    if (analyticsLoaded) return;
     analyticsLoaded = true;
     setConsentMode("granted");
     const script = document.createElement("script");
@@ -377,16 +366,6 @@
     button.addEventListener("click", showBanner);
     (document.querySelector("footer") || document.body).appendChild(button);
   };
-
-  window.addEventListener?.("odd:internal-traffic", () => {
-    window[`ga-disable-${ANALYTICS_ID}`] = internalTraffic();
-    if (internalTraffic()) queued = [];
-    // Turning measurement back on requires a reload, preserving consent rules.
-  });
-  if (internalTraffic()) {
-    window[`ga-disable-${ANALYTICS_ID}`] = true;
-    return;
-  }
 
   if (!needsConsent) {
     loadAnalytics();

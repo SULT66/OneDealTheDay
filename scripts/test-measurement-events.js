@@ -96,7 +96,6 @@ function openPage({ market = "us", saved = null } = {}) {
   };
 
   const window = {
-    URLSearchParams,
     __ODD_MARKET__: market,
     __ODD_LANGUAGE__: "en",
     document,
