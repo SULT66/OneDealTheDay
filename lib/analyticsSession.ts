@@ -23,15 +23,29 @@ const VALID = /^[A-Za-z0-9_-]{16,80}$/;
 const INTERNAL_KEY = "odd_internal_browser";
 export const INTERNAL_PREFIX = "internal_";
 
-export function isInternalBrowser(): boolean {
-  try {
-    return localStorage.getItem(INTERNAL_KEY) === "1";
-  } catch {
-    return false;
+declare global {
+  interface Window {
+    oddInternalTraffic?: { isInternal: () => boolean; set: (enabled: boolean) => boolean };
   }
 }
 
+export function isInternalBrowser(): boolean {
+  if (typeof window === "undefined") return false;
+  if (window.oddInternalTraffic?.isInternal()) return true;
+  const choice = new URLSearchParams(window.location.search).get("odd_internal");
+  if (choice === "1") return true;
+  if (choice === "0") return false;
+  try {
+    if (localStorage.getItem(INTERNAL_KEY) === "1") return true;
+  } catch {}
+  return /(?:^|;\s*)odd_internal_browser=1(?:;|$)/.test(document.cookie || "");
+}
+
 export function setInternalBrowser(internal: boolean) {
+  if (window.oddInternalTraffic) {
+    window.oddInternalTraffic.set(internal);
+    return;
+  }
   try {
     if (internal) localStorage.setItem(INTERNAL_KEY, "1");
     else localStorage.removeItem(INTERNAL_KEY);
@@ -40,6 +54,8 @@ export function setInternalBrowser(internal: boolean) {
   } catch {
     /* Storage blocked: nothing to remember, and nothing to break. */
   }
+  document.cookie = `${INTERNAL_KEY}=${internal ? "1" : ""}; Path=/; SameSite=Lax; Max-Age=${internal ? 31536000 : 0}${location.protocol === "https:" ? "; Secure" : ""}`;
+  window.dispatchEvent(new Event("odd:internal-traffic"));
 }
 
 const newToken = () => {

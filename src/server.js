@@ -808,6 +808,15 @@ const parseCookies = req => Object.fromEntries(String(req.headers.cookie || "").
   const index = value.indexOf("=");
   return [decodeURIComponent(value.slice(0, index)), decodeURIComponent(value.slice(index + 1))];
 }));
+// A measurement preference, never an authentication cookie. Keep retailer
+// redirects working, but do not store owner/test activity in visitor tables.
+const isInternalMeasurement = (req, sessionId = "") =>
+  /(?:^|;\s*)odd_internal_browser=1(?:;|$)/.test(String(req.headers.cookie || ""))
+  || String(sessionId).startsWith("internal_");
+app.use(["/api/analytics/page-view", "/api/analytics/events", "/api/click-events", "/api/live/events"], (req, res, next) => {
+  if (req.method === "POST" && isInternalMeasurement(req, req.body?.session_id || req.body?.sessionId)) return res.sendStatus(204);
+  next();
+});
 const tokenHash = token => crypto.createHash("sha256").update(token).digest("hex");
 const commonPasswords = new Set(["12345678", "123456789", "password", "password1", "qwerty123", "qwertyuiop", "letmein123", "onedailydrop"]);
 const passwordError = password => {
@@ -1853,6 +1862,7 @@ const recordClick = (req, product, {
   sessionId = "",
   eventId = ""
 } = {}) => {
+  if (isInternalMeasurement(req, sessionId)) return;
   db.prepare(`
     INSERT OR IGNORE INTO clicks(
       event_id,session_id,product_id,market,retailer_name,source_page,placement,action_type,
@@ -1992,7 +2002,7 @@ const shell = (title, description, canonical, body, schema = null, image = "", r
     ]
   };
   const ogType = suppliedNodes.some(node => node?.["@type"] === "Product") ? "product" : "website";
-  const html = `<!doctype html><html lang="${esc(locale)}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0a1020"><title>${esc(title)}</title><meta name="description" content="${esc(description.slice(0,160))}"><meta name="robots" content="${esc(robotsContent)}"><link rel="canonical" href="${esc(canonical)}"><link rel="icon" href="/favicon.svg" type="image/svg+xml">${alternates}${imageConnectionHints(image)}<meta property="og:type" content="${ogType}"><meta property="og:site_name" content="OneDailyDrop"><meta property="og:locale" content="${esc(ogLocale)}"><meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(description.slice(0,180))}"><meta property="og:url" content="${esc(canonical)}">${image ? `<meta property="og:image" content="${esc(image)}"><meta property="og:image:alt" content="${esc(title)}">` : ""}<meta name="twitter:card" content="${image ? "summary_large_image" : "summary"}"><meta name="twitter:title" content="${esc(title)}"><meta name="twitter:description" content="${esc(description.slice(0,180))}">${image ? `<meta name="twitter:image" content="${esc(image)}">` : ""}<link rel="stylesheet" href="/styles.css?v=20260731-brand-lockup"><link rel="stylesheet" href="/brand-theme.css?v=20260731-brand-lockup"><link rel="stylesheet" href="/liquid-glass.css?v=20260731-brand-lockup"><script type="application/ld+json">${JSON.stringify(pageSchema).replace(/</g,"\\u003c")}</script><script>window.__ODD_LANGUAGE__=${JSON.stringify(language)};window.__ODD_LOCALE__=${JSON.stringify(locale)};window.__ODD_TEXT__=${JSON.stringify(clientCopy(language)).replace(/</g, "\\u003c")};</script></head><body>${sharedHeader(code, language, req)}${body}${sharedFooter(code, language)}<script src="/theme.js?v=20260728-i18n2"></script><script src="/site-shell.js?v=20260728-i18n2"></script><script src="/cookie-consent.js?v=20260912-startup-fix"></script><script src="/click-tracking.js?v=20260814-day5"></script></body></html>`;
+  const html = `<!doctype html><html lang="${esc(locale)}"><head><script src="/internal-traffic.js?v=20261023"></script><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0a1020"><title>${esc(title)}</title><meta name="description" content="${esc(description.slice(0,160))}"><meta name="robots" content="${esc(robotsContent)}"><link rel="canonical" href="${esc(canonical)}"><link rel="icon" href="/favicon.svg" type="image/svg+xml">${alternates}${imageConnectionHints(image)}<meta property="og:type" content="${ogType}"><meta property="og:site_name" content="OneDailyDrop"><meta property="og:locale" content="${esc(ogLocale)}"><meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(description.slice(0,180))}"><meta property="og:url" content="${esc(canonical)}">${image ? `<meta property="og:image" content="${esc(image)}"><meta property="og:image:alt" content="${esc(title)}">` : ""}<meta name="twitter:card" content="${image ? "summary_large_image" : "summary"}"><meta name="twitter:title" content="${esc(title)}"><meta name="twitter:description" content="${esc(description.slice(0,180))}">${image ? `<meta name="twitter:image" content="${esc(image)}">` : ""}<link rel="stylesheet" href="/styles.css?v=20260731-brand-lockup"><link rel="stylesheet" href="/brand-theme.css?v=20260731-brand-lockup"><link rel="stylesheet" href="/liquid-glass.css?v=20260731-brand-lockup"><script type="application/ld+json">${JSON.stringify(pageSchema).replace(/</g,"\\u003c")}</script><script>window.__ODD_LANGUAGE__=${JSON.stringify(language)};window.__ODD_LOCALE__=${JSON.stringify(locale)};window.__ODD_TEXT__=${JSON.stringify(clientCopy(language)).replace(/</g, "\\u003c")};</script></head><body>${sharedHeader(code, language, req)}${body}${sharedFooter(code, language)}<script src="/theme.js?v=20260728-i18n2"></script><script src="/site-shell.js?v=20260728-i18n2"></script><script src="/cookie-consent.js?v=20261023-internal-traffic"></script><script src="/click-tracking.js?v=20261023-internal-traffic"></script></body></html>`;
   const versionedHtml = html
     .replace("/styles.css?v=20260731-brand-lockup", "/styles.css?v=20260815-public-taxonomy-v2")
     .replace("/site-shell.js?v=20260728-i18n2", "/site-shell.js?v=20260814-day11-prefetch")
@@ -3103,7 +3113,7 @@ app.get("/unsubscribe", (req, res) => {
   const message = done
     ? "You have been unsubscribed. We will not email this address about Live Drops again."
     : "That unsubscribe link is not one we recognise. If you are still receiving email from us, reply to it and we will remove you by hand.";
-  return res.status(done ? 200 : 404).send(`<!doctype html><html lang="en"><head><meta charset="utf-8">
+  return res.status(done ? 200 : 404).send(`<!doctype html><html lang="en"><head><script src="/internal-traffic.js?v=20261023"></script><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow">
 <title>Unsubscribed - OneDailyDrop</title></head>
 <body style="font-family:system-ui,Arial,sans-serif;max-width:34rem;margin:12vh auto;padding:0 1.25rem;color:#17191d">
@@ -3126,7 +3136,7 @@ const digestPage = (res, status, title, message) => res
   .status(status)
   .set("X-Robots-Tag", "noindex, nofollow")
   .set("Cache-Control", "no-store")
-  .send(`<!doctype html><html lang="en"><head><meta charset="utf-8">
+  .send(`<!doctype html><html lang="en"><head><script src="/internal-traffic.js?v=20261023"></script><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow">
 <title>${esc(title)} - OneDailyDrop</title></head>
 <body style="font-family:system-ui,Arial,sans-serif;max-width:34rem;margin:12vh auto;padding:0 1.25rem;color:#17191d">
