@@ -15,6 +15,7 @@ import { countryName, getLanguage, marketAlternates, t } from "@/lib/i18n";
 import { CategoryIcon } from "@/components/ui/CategoryIcon";
 import { SectionHeader } from "@/components/site/SectionHeader";
 import { LiveDropSignup } from "@/components/site/LiveDropSignup";
+import { DigestSignup } from "@/components/site/DigestSignup";
 import { DeliaTrigger } from "@/components/delia/DeliaTrigger";
 import { DealCard } from "@/components/deal/DealCard";
 import { NextLiveDrop } from "@/components/live/NextLiveDrop";
@@ -213,6 +214,16 @@ async function HomeCatalog({market,language,halloween}:{market:string;language:L
           here already scrolled into view. */}
       <section id="subscribe" className="mt-20 scroll-mt-32">
         <LiveDropSignup market={market} source="homepage" />
+
+        {/* The other list, which had no form at all until now: its only door
+            was a tokened link in the day-seven welcome letter, so a visitor
+            could not reach it without first joining the drop list and waiting
+            a week. A drop is rare and unscheduled; this is the one that can
+            be promised to arrive, so it gets its own place rather than a line
+            of small print under the other form. */}
+        <div className="mt-4">
+          <DigestSignup market={market} source="homepage" />
+        </div>
       </section>
 
       {/* Follows the visitor down every page now — the large hero circle that

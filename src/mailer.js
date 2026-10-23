@@ -641,6 +641,38 @@ const scoreExplainerEmail = ({ email, market = "us", product, unsubscribeUrl }) 
  * The Sunday digest remains a separate opt-in. Receiving the welcome series
  * or ignoring this invitation does not subscribe somebody to weekly mail.
  */
+/*
+ * Confirming the Sunday list, for somebody who asked for it at the form.
+ *
+ * Not subscriptionEmail: that one is Chloe introducing the Live Drops, and
+ * sending it to somebody who asked for one email a week would promise the
+ * opposite of what they chose. Not digestInviteEmail either — that letter
+ * asks a question this reader has already answered.
+ *
+ * It says what arrives and what does not, because the whole offer is its
+ * smallness: one email a week, and none at all in a week with nothing to say.
+ */
+const digestWelcomeEmail = ({ email, market = "us", unsubscribeUrl }) => sendEmail({
+  to: email,
+  subject: "You're on for Sundays",
+  unsubscribeUrl,
+  fromName: NICK_FROM,
+  ...composeEmail({
+    preheader: "Five checked listings, once a week, and nothing in between.",
+    eyebrow: "You're on the list",
+    heading: "Five finds, every Sunday",
+    paragraphs: [
+      "Hi, I'm Nick. You asked for the Sunday list, so that is all you will get from us: one email on Sunday morning, and nothing in between.",
+      "Five listings, each with what it costs, what we recorded about its price over the last sixty days, and what is worth checking before you buy.",
+      "Only listings that clear our Score of 80 go in. Some Sundays that means three rather than five, and a quiet week gets no email at all — we would rather send you nothing than pad it out.",
+      "Two short notes will follow in your first week: how we check prices, and how to read the Score.",
+    ],
+    cta: { label: "See what we have today", href: `${SITE}/${encodeURIComponent(market)}` },
+    signature: NICK_SIGNATURE,
+    footer: subscriberFooter(unsubscribeUrl),
+  }),
+});
+
 const digestInviteEmail = ({ email, market = "us", joinUrl, unsubscribeUrl }) => sendEmail({
   to: email,
   subject: "Want five finds every Sunday?",
@@ -746,4 +778,4 @@ const reactivationEmail = ({ email, market = "us", items = [], months = 2, fewer
   }),
 });
 
-module.exports = { reactivationEmail, digestInviteEmail, weeklyDigestEmail, introEmail, scoreExplainerEmail, welcomeEmail, liveDropLiveNowEmail, liveDropSaveTheDateEmail, liveDropStartingSoonEmail, liveDropAnnouncementEmail, priceDropEmail, priceWatchStartedEmail, passwordResetEmail, subscriptionEmail, clubWaitlistEmail, liveDropReminderEmail, deliveryTestEmail };
+module.exports = { reactivationEmail, digestWelcomeEmail, digestInviteEmail, weeklyDigestEmail, introEmail, scoreExplainerEmail, welcomeEmail, liveDropLiveNowEmail, liveDropSaveTheDateEmail, liveDropStartingSoonEmail, liveDropAnnouncementEmail, priceDropEmail, priceWatchStartedEmail, passwordResetEmail, subscriptionEmail, clubWaitlistEmail, liveDropReminderEmail, deliveryTestEmail };

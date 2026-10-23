@@ -68,7 +68,7 @@ const {
   liveDropSaveTheDateEmail, liveDropStartingSoonEmail, liveDropAnnouncementEmail, liveDropLiveNowEmail, priceDropEmail,
   priceWatchStartedEmail,
   passwordResetEmail, subscriptionEmail, clubWaitlistEmail, liveDropReminderEmail, deliveryTestEmail,
-  digestInviteEmail, weeklyDigestEmail, introEmail, scoreExplainerEmail,
+  digestInviteEmail, digestWelcomeEmail, weeklyDigestEmail, introEmail, scoreExplainerEmail,
   reactivationEmail } = require("./mailer");
 const { sendWeeklyDigest } = require("./weeklyDigest");
 const { sendWelcomeSequence } = require("./welcomeSequence");
@@ -3221,25 +3221,57 @@ app.post("/api/subscribe", authRateLimit, async (req,res) => {
   /* Which form it came from, so the one that works can be told from the one
      that does not. A short fixed list; anything else is the homepage. */
   const signupSource = ["homepage", "listing", "live-page"].includes(req.body?.source) ? req.body.source : "homepage";
+  /*
+   * Which list this form was for.
+   *
+   * "sunday" is the weekly digest and "drops" is the per-drop alert; they are
+   * separate opt-ins and always were, but until now only the second had a
+   * form. The Sunday list could be reached solely through the tokened link in
+   * the day-seven welcome letter, so a visitor who wanted one email a week
+   * had no way to say so and the list stood empty.
+   *
+   * Anything unrecognised is the drop list, which is what every existing page
+   * and every tab still open on one is asking for.
+   */
+  const list = req.body?.list === "sunday" ? "sunday" : "drops";
+  const alreadyKnown = Boolean(db.prepare("SELECT 1 FROM subscribers WHERE email=?").get(email));
   /* Minted once and kept, so every email this address ever receives carries
      the same working link — including the ones sent after they resubscribe. */
   const unsubscribeToken = crypto.randomBytes(24).toString("base64url");
   db.prepare(`
-    INSERT INTO subscribers(email,status,source,market,unsubscribe_token,created_at,updated_at)
-    VALUES(?,?,?,?,?,?,?)
+    INSERT INTO subscribers(email,status,source,market,unsubscribe_token,created_at,updated_at,signup_list)
+    VALUES(?,?,?,?,?,?,?,?)
     ON CONFLICT(email) DO UPDATE SET
       status='active',market=excluded.market,updated_at=excluded.updated_at,
-      /* Asking again is asking for the mail, so it undoes an earlier "fewer
-         emails" — but only that. A subscriber who turned the Sunday letter on
-         keeps it on. */
-      drop_opt_in=1,
-      drop_opt_in_changed_at=excluded.updated_at,
       unsubscribe_token=CASE WHEN subscribers.unsubscribe_token='' THEN excluded.unsubscribe_token ELSE subscribers.unsubscribe_token END
-  `).run(email, "active", signupSource, selectedMarket.code, unsubscribeToken, now, now);
+  `).run(email, "active", signupSource, selectedMarket.code, unsubscribeToken, now, now, list);
+
+  /*
+   * Which lists they are on now.
+   *
+   * Asking for the drops is asking for the mail, so it undoes an earlier
+   * "fewer emails" — but only that: somebody who turned the Sunday letter on
+   * keeps it on. Asking for Sundays adds that list and touches nothing else,
+   * except for an address we have never seen, which gets the Sunday list and
+   * only the Sunday list. Turning the drops on for them would answer a
+   * question they did not ask, with more mail than they agreed to.
+   */
+  if (list === "sunday") {
+    db.prepare(`UPDATE subscribers
+                   SET digest_opt_in=1, digest_opt_in_at=COALESCE(digest_opt_in_at,?), updated_at=?
+                 WHERE email=?`).run(now, now, email);
+    if (!alreadyKnown) {
+      db.prepare("UPDATE subscribers SET drop_opt_in=0, drop_opt_in_changed_at=? WHERE email=?").run(now, email);
+    }
+  } else {
+    db.prepare(`UPDATE subscribers
+                   SET drop_opt_in=1, drop_opt_in_changed_at=?, updated_at=?
+                 WHERE email=?`).run(now, now, email);
+  }
   const storedToken = db.prepare("SELECT unsubscribe_token AS token FROM subscribers WHERE email=?").get(email)?.token;
   let emailSent = false;
   try {
-    await subscriptionEmail({
+    await (list === "sunday" ? digestWelcomeEmail : subscriptionEmail)({
       email,
       market: selectedMarket.code,
       unsubscribeUrl: storedToken ? `${SITE}/unsubscribe?token=${encodeURIComponent(storedToken)}` : "",

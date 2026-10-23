@@ -761,6 +761,23 @@ if (!subscriberColumns.has("drop_opt_in")) {
   db.exec("ALTER TABLE subscribers ADD COLUMN drop_opt_in_changed_at TEXT");
 }
 /*
+ * Which list they joined at, as against which lists they are on now.
+ *
+ * Those are different questions, and the first week turns on telling them
+ * apart. Somebody who signed up for the Sunday letter is owed the welcome
+ * series: it is about how we check a price and how to read a Score, neither
+ * of which is about Live Drops. Somebody who joined for the drops and later
+ * clicked "fewer emails" is not. The two end up identical in drop_opt_in and
+ * digest_opt_in, so only this column separates them — and the second one
+ * asked us to write less, which three more letters would answer badly.
+ *
+ * 'drops' for everybody already here, which is what all of them signed up
+ * for: the Sunday list had no form of its own until this column did.
+ */
+if (!subscriberColumns.has("signup_list")) {
+  db.exec("ALTER TABLE subscribers ADD COLUMN signup_list TEXT NOT NULL DEFAULT 'drops'");
+}
+/*
  * The welcome letters, and which of them each subscriber has had.
  *
  * Confirming a subscription and then saying nothing until a Live Drop happens

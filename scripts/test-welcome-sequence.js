@@ -106,12 +106,22 @@ assert.strictEqual(
 
 /* ------------------------------------------------------------- the sending */
 
-const addSubscriber = ({ email, token, joinedDaysAgo, status = "active" }) => {
+const addSubscriber = ({
+  email,
+  token,
+  joinedDaysAgo,
+  status = "active",
+  /* Which form they came in at. 'drops' is everybody who joined before the
+     Sunday list had a form of its own, which is everybody until now. */
+  signupList = "drops",
+  digestOptIn = 0,
+  dropOptIn = 1,
+}) => {
   db.prepare(
     `INSERT INTO subscribers(email,categories,status,source,market,unsubscribe_token,
-       digest_opt_in,created_at,updated_at)
-     VALUES(?,'[]',?,'homepage','us',?,0,?,?)`,
-  ).run(email, status, token, iso(now - joinedDaysAgo * DAY), iso(now));
+       digest_opt_in,drop_opt_in,signup_list,created_at,updated_at)
+     VALUES(?,'[]',?,'homepage','us',?,?,?,?,?,?)`,
+  ).run(email, status, token, digestOptIn, dropOptIn, signupList, iso(now - joinedDaysAgo * DAY), iso(now));
   return db.prepare("SELECT id FROM subscribers WHERE email = ?").get(email).id;
 };
 
@@ -289,6 +299,51 @@ async function main() {
   /* Still one letter per subscriber per sweep: stepping over a letter is not
      a licence to send the rest of the sequence inside a minute. */
   assert.strictEqual(toStuck.length, 1, "more than one letter went to the same subscriber in one sweep");
+
+  /* --------------------------------------------- somebody who came in at Sundays */
+
+  /*
+   * The Sunday form is a way onto the list, so its signups get the first week.
+   *
+   * Two letters of it are about how we check a price and how to read a Score,
+   * neither of which is about Live Drops. The third asks whether they would
+   * like the Sunday list — which they joined at the form, so it has nothing
+   * left to ask and is recorded rather than sent. Left unrecorded it would be
+   * reconsidered every minute for ever.
+   *
+   * The sweep tests signup_list and not digest_opt_in because the subscriber
+   * two checks above — drop_opt_in 0, digest_opt_in 1, after clicking "fewer
+   * emails" — is in exactly the same state and must still be left alone.
+   */
+  const sundays = addSubscriber({
+    email: "sundays@example.test",
+    token: "token_sundays_0123456789a",
+    joinedDaysAgo: 30,
+    signupList: "sunday",
+    digestOptIn: 1,
+    dropOptIn: 0,
+  });
+
+  const week = [];
+  for (let sweep = 0; sweep < 4; sweep += 1) await run(week);
+  const letters = week.filter((message) => message.email === "sundays@example.test");
+  assert.deepStrictEqual(
+    letters.map((message) => message.step),
+    ["intro", "score"],
+    "a Sunday signup did not receive the first week, or was invited to a list they are already on",
+  );
+  assert.strictEqual(
+    db.prepare("SELECT COUNT(*) AS n FROM subscriber_sequence WHERE subscriber_id = ? AND step = 'digest_invite'")
+      .get(sundays).n,
+    1,
+    "the invitation was left unrecorded, so it will be reconsidered on every sweep for ever",
+  );
+
+  /* And the subscriber who asked for fewer emails is still left alone. */
+  assert.ok(
+    !week.some((message) => message.email === "sunday-only@example.test"),
+    "somebody who clicked 'fewer emails' was sent the welcome series anyway",
+  );
 
   console.log("Welcome sequence checks passed.");
 }

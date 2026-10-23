@@ -98,9 +98,23 @@ async function sendWelcomeSequence({
 } = {}) {
   const candidates = db
     .prepare(
-      `SELECT id, email, market, created_at, unsubscribe_token
+      /*
+       * Both lists, not just the drop list.
+       *
+       * The first week says who we are and how to read a Score — neither of
+       * which is about Live Drops. Somebody who signed up for the Sunday
+       * letter needs it at least as much, and while that list had no form of
+       * its own the question never came up.
+       *
+       * The test is signup_list and not digest_opt_in, because somebody who
+       * joined for the drops and later clicked "fewer emails" ends up looking
+       * exactly like a Sunday signup — and they are not one. They asked us to
+       * write less; three letters is the wrong answer to that.
+       */
+      `SELECT id, email, market, created_at, unsubscribe_token, digest_opt_in
          FROM subscribers
-        WHERE status = 'active' AND unsubscribe_token <> '' AND drop_opt_in = 1
+        WHERE status = 'active' AND unsubscribe_token <> ''
+          AND (drop_opt_in = 1 OR signup_list = 'sunday')
         ORDER BY id
         LIMIT ?`,
     )
@@ -130,6 +144,17 @@ async function sendWelcomeSequence({
     let message = null;
     for (const candidate of due) {
       if (typeof senders[candidate.key] !== "function") continue;
+
+      /*
+       * The day-seven letter asks whether they would like the Sunday list.
+       * Somebody who joined it at the form has already answered, so the step
+       * is finished and is recorded rather than sent — left unrecorded it
+       * would be reconsidered every minute for ever.
+       */
+      if (candidate.key === "digest_invite" && Number(subscriber.digest_opt_in) === 1) {
+        record.run(subscriber.id, candidate.key, iso(now));
+        continue;
+      }
 
       const draft = {
         email: subscriber.email,
