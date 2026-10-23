@@ -96,7 +96,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang={lang} className={`${outfit.variable} h-full antialiased`}>
       <head>
-        <script src="/internal-traffic.js?v=20261023" />
+        <script src="/internal-traffic.js?v=20261023-removed" />
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
         <Script id="lareo-analytics-config" strategy="beforeInteractive">
           {`window.__LAREO_ANALYTICS__=${JSON.stringify({
@@ -112,7 +112,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
             uses (public/cookie-consent.js) — self-contained, reads the
             market straight from the URL, shows the EU consent banner only
             for fr/de. */}
-        <script src="/cookie-consent.js?v=20261023-internal-traffic" />
+        <script src="/cookie-consent.js?v=20261023-owner-mode-removed" />
       </body>
     </html>
   );
