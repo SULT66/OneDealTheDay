@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
-import { analyticsSessionId } from "@/lib/analyticsSession";
+import { analyticsSessionId, isInternalBrowser } from "@/lib/analyticsSession";
 
 /*
  * Tell the site a page was opened, and where the visitor came from.
@@ -21,7 +21,7 @@ export function PageViews() {
   const pathname = usePathname();
 
   useEffect(() => {
-    if (!pathname) return;
+    if (!pathname || isInternalBrowser()) return;
     try {
       const params = new URLSearchParams(window.location.search);
       const body = JSON.stringify({

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { analyticsSessionId } from "@/lib/analyticsSession";
+import { analyticsSessionId, isInternalBrowser } from "@/lib/analyticsSession";
 
 // Events share the site's anonymous session and existing analytics endpoints.
 export function MerchandisingTracking({ market, children }: { market: string; children: React.ReactNode }) {
@@ -10,6 +10,7 @@ export function MerchandisingTracking({ market, children }: { market: string; ch
     const container = root.current;
     if (!container) return;
     const send = (link: HTMLElement, impression: boolean) => {
+      if (isInternalBrowser()) return;
       const productId = Number(link.dataset.merchProduct);
       if (!Number.isInteger(productId) || productId <= 0) return;
       const payload = {
