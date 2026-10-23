@@ -238,6 +238,58 @@ async function main() {
     "a letter that was never sent was recorded as sent, so it will never go",
   );
 
+  /*
+   * An unsendable day-three letter must not take the invitation with it.
+   *
+   * The check above uses somebody five days old, so the day-three letter is
+   * the only one owed and there is nothing behind it to hold back. This is
+   * the case that actually cost something: presentProduct never produced
+   * deal_url, so the day-three letter could never be built, and because the
+   * sweep offered only the first owed step it stood in front of the day-seven
+   * invitation for ever. That invitation is the one link to the Sunday list,
+   * so a missing card did not skip a letter — it closed the list.
+   */
+  const stuck = addSubscriber({
+    email: "stuck@example.test",
+    token: "token_stuck_0123456789abc",
+    joinedDaysAgo: 10,
+  });
+  db.prepare("DELETE FROM subscriber_sequence WHERE subscriber_id = ?").run(stuck);
+  db.prepare("INSERT INTO subscriber_sequence(subscriber_id,step,sent_at) VALUES(?,'intro',?)")
+    .run(stuck, iso(now));
+
+  const blocked = [];
+  await sendWelcomeSequence({
+    db,
+    senders: senders(blocked),
+    featuredFor: () => null,
+    joinUrlFor: (subscriber) => `https://example.test/digest/join?token=${subscriber.unsubscribe_token}`,
+    now,
+  });
+  const toStuck = blocked.filter((message) => message.email === "stuck@example.test");
+  assert.deepStrictEqual(
+    toStuck.map((message) => message.step),
+    ["digest_invite"],
+    "the day-seven invitation was held back by a day-three letter that could not be built",
+  );
+  assert.ok(
+    toStuck[0] && toStuck[0].joinUrl,
+    "the invitation went out with no link to join the Sunday list",
+  );
+
+  /* The skipped letter keeps its place: unrecorded, so it is still owed and
+     still tried first once there is something to put in it. */
+  assert.strictEqual(
+    db.prepare("SELECT COUNT(*) AS n FROM subscriber_sequence WHERE subscriber_id = ? AND step = 'score'")
+      .get(stuck).n,
+    0,
+    "the day-three letter was marked sent although it never went, so it can never be sent later",
+  );
+
+  /* Still one letter per subscriber per sweep: stepping over a letter is not
+     a licence to send the rest of the sequence inside a minute. */
+  assert.strictEqual(toStuck.length, 1, "more than one letter went to the same subscriber in one sweep");
+
   console.log("Welcome sequence checks passed.");
 }
 

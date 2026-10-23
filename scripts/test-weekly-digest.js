@@ -62,6 +62,7 @@ const {
   unconfirmedDiscountCount,
 } = require("../src/digestSelection");
 const {
+  digestItemFor,
   editionFor,
   emailThumbnail,
   isDigestDay,
@@ -186,14 +187,28 @@ assert.deepStrictEqual(
   "a listing sent in a recent digest was sent again",
 );
 
-/* A listing with nowhere to go, or nothing to show, is not a card. */
+/*
+ * A listing with nothing to show is not a card; a listing with no path still is.
+ *
+ * This used to refuse both, on the reading that a missing deal_url left the
+ * card with nowhere to go. It does not: /{market}/deal/{id} resolves on the
+ * site without a slug — the route reads the id off the end — and digestItemFor
+ * builds exactly that when the path is absent. Refusing the listing here
+ * contradicted the one function that consumes it, and because presentProduct
+ * never produced deal_url in the first place, that disagreement emptied every
+ * email in silence instead of costing a single card.
+ *
+ * A missing picture is still fatal, because nothing stands in for it.
+ */
 assert.strictEqual(
-  chooseDigestItems([
-    { ...listing(1, 95, "Office"), image_url: "" },
-    { ...listing(2, 94, "Tools"), deal_url: "" },
-  ]).length,
+  chooseDigestItems([{ ...listing(1, 95, "Office"), image_url: "" }]).length,
   0,
-  "a listing with no picture or no link was put in the email anyway",
+  "a listing with no picture was put in the email anyway",
+);
+assert.deepStrictEqual(
+  chooseDigestItems([{ ...listing(2, 94, "Tools"), deal_url: "" }]).map((item) => item.id),
+  [2],
+  "a listing with no path was dropped, although its id gives it a working link",
 );
 
 /* The evidence line says only what was measured. */
@@ -356,6 +371,56 @@ async function main() {
     third.status,
     "nobody-opted-in",
     "somebody told about a Live Drop the day before was also sent the digest",
+  );
+
+  /* ------------------------------------------- a listing with no deal_url */
+
+  /*
+   * The shape the catalogue actually had.
+   *
+   * presentProduct does not produce deal_url; the routes that need a link add
+   * it with dealPath afterwards, and all three email sweeps forgot. Every
+   * listing therefore reached the selection without one, the selection
+   * required one, and so every email — the Sunday digest, the day-three
+   * welcome letter and the reactivation letter — chose nothing out of a full
+   * catalogue, in silence, from the day it shipped.
+   *
+   * The fixture above hid it: `listing()` sets deal_url on every row, so the
+   * tests were run against a tidier object than the code was ever given. This
+   * block uses the real shape instead, and asserts the two things that make
+   * the silence impossible to repeat — the email still goes out, and the link
+   * in it still points at the listing.
+   */
+  const withoutPaths = [201, 202, 203].map((id) => {
+    const { deal_url, ...rest } = listing(id, 90, `Category ${id}`);
+    return rest;
+  });
+  assert.ok(
+    withoutPaths.every(item => item.deal_url === undefined),
+    "the fixture for this check must not carry deal_url, which is the whole point of it",
+  );
+
+  const pathless = chooseDigestItems(withoutPaths, { limit: 5 });
+  assert.strictEqual(
+    pathless.length,
+    3,
+    "listings with no deal_url were dropped, which is what emptied every email",
+  );
+
+  /* And the card still has somewhere to go, built from the id. */
+  const card = digestItemFor(pathless[0], { market: "us", siteOrigin: "https://example.test" });
+  assert.strictEqual(
+    card.href,
+    "https://example.test/us/deal/201",
+    "the fallback link digestItemFor promises was not used",
+  );
+
+  /* A listing with neither a path nor an id has nowhere to go and is still
+     refused, so the rule was loosened rather than removed. */
+  assert.strictEqual(
+    chooseDigestItems([{ ...withoutPaths[0], id: null }], { limit: 5 }).length,
+    0,
+    "a listing with no link and no id was accepted",
   );
 
   console.log("Weekly digest checks passed.");

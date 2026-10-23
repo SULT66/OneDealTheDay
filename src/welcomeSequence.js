@@ -40,21 +40,39 @@ function stepsSentTo(db, subscriberId) {
 }
 
 /**
- * The next letter owed to this subscriber, or null.
+ * Every letter this subscriber is owed, earliest first.
  *
- * Exported because the rule — first unsent step whose day has arrived — is
- * the whole of the scheduling, and it is worth being able to ask it directly
- * rather than inferring it from what a sweep happened to send.
+ * Exported alongside nextStepFor because the rule — unsent steps whose day has
+ * arrived — is the whole of the scheduling, and it is worth being able to ask
+ * it directly rather than inferring it from what a sweep happened to send.
+ *
+ * The sweep sends at most one of these. It needs the rest because the day
+ * three letter can be unsendable — it shows a listing, and a market with
+ * nothing worth showing has none to give it. Offering only the first owed
+ * step meant an unsendable one stood in front of the day seven invitation
+ * for as long as it stayed unsendable, which in practice was for ever: the
+ * invitation is the only door to the Sunday list, so a missing card closed
+ * the list rather than skipping a letter.
  */
-function nextStepFor({ createdAt, sent = new Set(), now = Date.now(), steps = WELCOME_STEPS }) {
+function dueStepsFor({ createdAt, sent = new Set(), now = Date.now(), steps = WELCOME_STEPS }) {
   const joined = new Date(createdAt).getTime();
-  if (!Number.isFinite(joined)) return null;
+  if (!Number.isFinite(joined)) return [];
+  const due = [];
   for (const step of steps) {
     if (sent.has(step.key)) continue;
-    if (now - joined < step.afterDays * 24 * 3600 * 1000) return null;
-    return step;
+    /* The steps are in order, so the first one whose day has not arrived ends
+       the list: nothing later than it can be due either. */
+    if (now - joined < step.afterDays * 24 * 3600 * 1000) break;
+    due.push(step);
   }
-  return null;
+  return due;
+}
+
+/**
+ * The next letter owed to this subscriber, or null.
+ */
+function nextStepFor(options) {
+  return dueStepsFor(options)[0] || null;
 }
 
 /**
@@ -94,30 +112,48 @@ async function sendWelcomeSequence({
   const sent = {};
 
   for (const subscriber of candidates) {
-    const step = nextStepFor({
+    const due = dueStepsFor({
       createdAt: subscriber.created_at,
       sent: stepsSentTo(db, subscriber.id),
       now,
     });
-    if (!step) continue;
-
-    const send = senders[step.key];
-    if (typeof send !== "function") continue;
 
     const market = subscriber.market || "us";
-    const message = {
-      email: subscriber.email,
-      market,
-      unsubscribeUrl: unsubscribeUrlFor(subscriber),
-    };
-    if (step.key === "digest_invite") message.joinUrl = joinUrlFor(subscriber);
-    if (step.key === "score") {
-      message.product = featuredFor(market);
-      /* Nothing worth showing means nothing worth claiming. The letter is
-         skipped for now and the subscriber keeps their place in the queue,
-         rather than going out with an empty card or an invented example. */
-      if (!message.product) continue;
+
+    /*
+     * The first owed letter that can actually be built, not simply the first
+     * owed letter. Still one per subscriber per sweep — the loop stops at the
+     * first one it sends — but a letter that cannot be built steps aside for
+     * the next instead of standing in front of it indefinitely.
+     */
+    let step = null;
+    let message = null;
+    for (const candidate of due) {
+      if (typeof senders[candidate.key] !== "function") continue;
+
+      const draft = {
+        email: subscriber.email,
+        market,
+        unsubscribeUrl: unsubscribeUrlFor(subscriber),
+      };
+      if (candidate.key === "digest_invite") draft.joinUrl = joinUrlFor(subscriber);
+      if (candidate.key === "score") {
+        draft.product = featuredFor(market);
+        /* Nothing worth showing means nothing worth claiming: rather than go
+           out with an empty card or an invented example, this letter waits.
+           It keeps its place — the step stays unsent, so it is still owed and
+           still tried first on the next sweep — but it no longer holds back
+           the letters behind it. */
+        if (!draft.product) {
+          console.warn(`[welcome] ${subscriber.email}: no listing for the day-three letter, trying the next one`);
+          continue;
+        }
+      }
+      step = candidate;
+      message = draft;
+      break;
     }
+    if (!step) continue;
 
     /*
      * Recorded first, for the same reason the digest records its run first: a
@@ -129,7 +165,7 @@ async function sendWelcomeSequence({
     if (!Number(written?.changes || 0)) continue;
 
     try {
-      await send(message);
+      await senders[step.key](message);
       sent[step.key] = (sent[step.key] || 0) + 1;
     } catch (error) {
       /* The row stays. A letter that could not be delivered is not retried
@@ -141,4 +177,4 @@ async function sendWelcomeSequence({
   return sent;
 }
 
-module.exports = { WELCOME_STEPS, nextStepFor, sendWelcomeSequence, stepsSentTo };
+module.exports = { WELCOME_STEPS, dueStepsFor, nextStepFor, sendWelcomeSequence, stepsSentTo };

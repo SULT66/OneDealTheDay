@@ -4719,6 +4719,30 @@ cron.schedule("* * * * *", () => {
     .catch((error) => console.error(`[live-host] could not end broadcasts: ${error.message}`));
 });
 /*
+ * The catalogue as an email sees it.
+ *
+ * presentProduct does not produce deal_url. Every route that needs a link
+ * adds it with dealPath afterwards, and all three email sweeps below forgot
+ * to — while chooseDigestItems drops any listing without one. So each sweep
+ * selected nothing out of a full catalogue, every time it ran, in silence:
+ * the Sunday digest sent nobody anything, the day-three welcome letter was
+ * skipped and took the day-seven invitation down with it, and the
+ * reactivation letter would have done the same when it first came due.
+ *
+ * One function now, used by all three, so they cannot drift apart again.
+ */
+const emailCatalogue = (code, { limit = 0 } = {}) => uniqueProductsInOrder(
+  db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()}
+                ORDER BY COALESCE(ranking_score,score) DESC, score DESC${limit ? ` LIMIT ${Number(limit)}` : ""}`)
+    .all(code),
+)
+  .filter(isPubliclyIndexable)
+  .map(product => ({
+    ...presentProduct(product, defaultLanguages[code] || "en"),
+    deal_url: dealPath(product),
+  }));
+
+/*
  * Sunday morning in New York, which is where the readers are.
  *
  * Hourly rather than once at ten, and the module decides whether it is
@@ -4738,12 +4762,7 @@ cron.schedule("0 * * * *", async () => {
     if (hour !== 10) return;
 
     for (const code of marketCodes) {
-      const products = uniqueProductsInOrder(
-        db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()}
-                     ORDER BY COALESCE(ranking_score,score) DESC, score DESC`).all(code),
-      )
-        .filter(isPubliclyIndexable)
-        .map(product => presentProduct(product, defaultLanguages[code] || "en"));
+      const products = emailCatalogue(code);
 
       const result = await sendWeeklyDigest({
         db,
@@ -4790,12 +4809,7 @@ cron.schedule("0 * * * *", async () => {
     if (weekday !== "Tue" || hour !== 11) return;
 
     for (const code of marketCodes) {
-      const products = uniqueProductsInOrder(
-        db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()}
-                     ORDER BY COALESCE(ranking_score,score) DESC, score DESC`).all(code),
-      )
-        .filter(isPubliclyIndexable)
-        .map(product => presentProduct(product, defaultLanguages[code] || "en"));
+      const products = emailCatalogue(code);
 
       const result = await sendReactivationEmails({
         db,
@@ -4875,15 +4889,7 @@ cron.schedule(
           digest_invite: digestInviteEmail,
         },
         featuredFor: (code) => {
-          const pick = chooseDigestItems(
-            uniqueProductsInOrder(
-              db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()}
-                           ORDER BY COALESCE(ranking_score,score) DESC, score DESC LIMIT 400`).all(code),
-            )
-              .filter(isPubliclyIndexable)
-              .map(product => presentProduct(product, defaultLanguages[code] || "en")),
-            { limit: 1 },
-          )[0];
+          const pick = chooseDigestItems(emailCatalogue(code, { limit: 400 }), { limit: 1 })[0];
           return pick ? digestItemFor(pick, { market: code, siteOrigin: SITE }) : null;
         },
         joinUrlFor: (subscriber) => `${SITE}/digest/join?token=${encodeURIComponent(subscriber.unsubscribe_token)}`,

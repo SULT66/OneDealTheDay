@@ -93,8 +93,17 @@ function chooseDigestItems(products = [], {
   const candidates = (Array.isArray(products) ? products : [])
     .filter((item) => {
       if (!item) return false;
-      /* A card in an email needs somewhere to go and something to show. */
-      if (!item.deal_url || !item.image_url) return false;
+      /*
+       * A card in an email needs somewhere to go and something to show.
+       *
+       * Somewhere to go is deal_url or, failing that, the id — digestItemFor
+       * builds "/{market}/deal/{id}" when the path is absent, so refusing the
+       * listing here contradicted the one function that consumes it. That
+       * disagreement is what let a missing deal_url empty every email in
+       * silence rather than cost one card.
+       */
+      if (!item.image_url) return false;
+      if (!item.deal_url && item.id == null) return false;
       if (number(item.current_price) <= 0) return false;
       if (item.display_score == null || number(item.display_score) < floor) return false;
       const id = String(item.id);
