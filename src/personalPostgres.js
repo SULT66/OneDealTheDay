@@ -78,6 +78,10 @@ function replacePersonalTables(db, snapshot) {
 
   let restored = 0;
   db.transaction(() => {
+    // Local delivery history can reference a subscriber while their row is
+    // replaced. Check those links against the completed restore, not the
+    // temporary empty parent table. Invalid snapshots still roll back.
+    db.pragma("defer_foreign_keys = ON");
     for (const table of DELETE_ORDER) {
       if (available.has(table)) db.prepare(`DELETE FROM ${table}`).run();
     }
