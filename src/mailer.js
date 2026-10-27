@@ -36,6 +36,7 @@ const sendEmail = async ({to, toName, subject, html, text, unsubscribeUrl, fromN
 
   const response = await fetch("https://api.sendgrid.com/v3/mail/send", {
     method: "POST",
+    signal: AbortSignal.timeout(15000),
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json"
@@ -438,7 +439,7 @@ const liveDropStartingSoonEmail = ({ email, title, market, minutes, ...product }
 });
 
 /* To people who pressed Remind me, ten minutes before. */
-const liveDropReminderEmail = ({ email, title, market, minutes }) => sendEmail({
+const liveDropReminderEmail = ({ email, title, market, minutes, ...product }) => sendEmail({
   to: email,
   subject: `Starting in ${minutes} minutes: ${title}`,
   fromName: "Chloe from OneDailyDrop",
@@ -451,6 +452,7 @@ const liveDropReminderEmail = ({ email, title, market, minutes }) => sendEmail({
       `Hi, it's Chloe. <strong>${escapeHtml(title)}</strong> goes live in ${minutes} minutes.`,
       "Open the page now so you're there the second the price appears. It's only open for ten minutes.",
     ],
+    product: productOf({ title, ...product }),
     cta: { label: "Join the Live Drop", href: dropUrl(market) },
     signature: CHLOE,
     footer: "You asked us for this reminder. There is nothing to unsubscribe from.",

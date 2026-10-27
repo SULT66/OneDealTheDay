@@ -33,6 +33,7 @@ const {
   liveDropAnnouncementEmail,
   liveDropSaveTheDateEmail,
   liveDropStartingSoonEmail,
+  liveDropReminderEmail,
 } = require("../src/mailer");
 
 const product = {
@@ -69,7 +70,8 @@ const textOf = (message) => String(message.content.find((part) => part.type === 
   });
   await liveDropStartingSoonEmail({ ...product, email: "c@example.com", minutes: 45 });
 
-  assert.strictEqual(sent.length, 3, "all three drop emails were built");
+  await liveDropReminderEmail({ ...product, email: "d@example.com", minutes: 10 });
+  assert.strictEqual(sent.length, 4, "all four pre-start drop emails were built");
 
   for (const message of sent) {
     const html = bodyOf(message);

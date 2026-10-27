@@ -269,6 +269,7 @@ async function sendDueReminders({
         title: reminder.title,
         market: reminder.market,
         minutes,
+        ...emailProduct(reminder),
       });
       stamp.run(new Date(now).toISOString(), reminder.id);
       sent += 1;
@@ -471,6 +472,7 @@ async function sendLiveNowNotices({
     SELECT id, title, market, start_at, end_at, brand, retailer_name, image_url, retail_price, currency
     FROM live_drops
     WHERE published = 1 AND start_at <= ? AND start_at > ? AND end_at > ?
+      AND (quantity_total <= 0 OR quantity_remaining > 0)
   `).all(
     new Date(now).toISOString(),
     new Date(now - withinMinutes * 60000).toISOString(),

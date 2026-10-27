@@ -18,7 +18,6 @@ import { LiveDropSignup } from "@/components/site/LiveDropSignup";
 import { DeliaTrigger } from "@/components/delia/DeliaTrigger";
 import { DealCard } from "@/components/deal/DealCard";
 import { NextLiveDrop } from "@/components/live/NextLiveDrop";
-import { AmazonPicks } from "@/components/site/AmazonPicks";
 import { PartnerPicks } from "@/components/site/PartnerPicks";
 import { HalloweenProducts } from "@/components/site/HalloweenProducts";
 import { getHalloweenCollection } from "@/lib/merchandising";
@@ -124,7 +123,6 @@ async function HomeCatalog({market,language,halloween}:{market:string;language:L
             carry no price and no score, so an outage cannot make them
             misleading the way a stale catalogue would. */}
         <div className="mt-4 text-left">
-          <AmazonPicks market={market} />
           <MerchandisingShelves market={market} language={language} excludeHalloween={halloween} />
         </div>
       </div>
@@ -203,7 +201,6 @@ async function HomeCatalog({market,language,halloween}:{market:string;language:L
           score, and a card without either sitting beside cards with both
           invites the reader to assume it was checked the same way. Renders
           nothing at all until a pick is added. */}
-      <AmazonPicks market={market} />
       {/* Same terms as the shelf above, for shops reached through Sovrn. */}
       <PartnerPicks market={market} />
 
