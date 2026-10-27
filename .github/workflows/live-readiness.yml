@@ -1,0 +1,27 @@
+name: Audit Live Drop readiness
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/audit-live-readiness.js'
+      - '.github/workflows/live-readiness.yml'
+  workflow_run:
+    workflows: ["Deploy OneDailyDrop to Azure"]
+    types: [completed]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22.x'
+      - name: Read live schedule and email configuration
+        env:
+          ADMIN_KEY: ${{ secrets.ONEDEAL_ADMIN_KEY }}
+        run: node scripts/audit-live-readiness.js

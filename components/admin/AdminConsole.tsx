@@ -6,7 +6,6 @@ import { ShopIcons } from "./ShopIcons";
 import { Numbers } from "./Numbers";
 import { SearchDemand } from "./SearchDemand";
 import { Weekly } from "./Weekly";
-import { AmazonPicks } from "./AmazonPicks";
 import { MediaUpload } from "./MediaUpload";
 import { LiveHostConsole } from "./LiveHostConsole";
 import { MerchandisingPanel } from "./MerchandisingPanel";
@@ -39,6 +38,10 @@ type AdminDrop = {
   reminders: number;
   /* Optional: absent from a server deployed before they were sent. */
   reminder_emails_sent?: number;
+  reminders_sent?: number;
+  reminder_day_before_sent?: number;
+  reminder_hour_before_sent?: number;
+  live_now_sent?: number;
   ever_published?: boolean;
   funnel: Record<string, number>;
   reached: number;
@@ -230,7 +233,7 @@ export function AdminConsole() {
    * One job per tab.
    *
    * Everything used to be one long page — numbers, email, the drop form, the
-   * schedule, Amazon picks, shop icons, the refresh — and finding the drop
+   * schedule, shop icons, the refresh — and finding the drop
    * you were about to run meant scrolling past four things that had nothing
    * to do with it. Every tab stays mounted and is only hidden, so a half-typed
    * drop or icon URL survives a look at the numbers.
@@ -551,20 +554,6 @@ export function AdminConsole() {
       </Card>
       </TabPanel>
 
-      <TabPanel id="amazon" active={tab}>
-      <Card className="mt-6">
-        <Legend>Amazon picks</Legend>
-        <p className="mt-1 max-w-prose text-sm leading-relaxed text-fg-muted">
-          Chosen by you, linked by you. Nothing here asks Amazon for anything:
-          their agreement only allows their price, availability and images to be
-          shown when they come from the Product Advertising API, and that opens
-          after three qualifying sales. Until then these appear on the homepage
-          as a name and a link, below the catalogue and never mixed into it.
-        </p>
-        <AmazonPicks adminKey={adminKey} />
-      </Card>
-      </TabPanel>
-
       <TabPanel id="icons" active={tab}>
       <Card className="mt-6">
         <Legend>Shop icons</Legend>
@@ -610,7 +599,6 @@ const TABS = [
   { id: "weekly", label: "Weekly" },
   { id: "drops", label: "Live Drops" },
   { id: "email", label: "Email" },
-  { id: "amazon", label: "Amazon picks" },
   { id: "icons", label: "Shop icons" },
   { id: "catalogue", label: "Catalogue" },
   { id: "agents", label: "Agents" },
@@ -737,9 +725,7 @@ function DropRow({
     host_script_intro: drop.host_script_intro || "",
     host_script_reveal: drop.host_script_reveal || "",
   });
-  /* Editing what a published drop shows. Deleting one that was ever public is
-     refused — rightly — so without this a wrong picture or a missing video was
-     permanent. */
+  /* Media can be corrected without recreating a drop. */
   const [media, setMedia] = useState({
     image_url: drop.image_url || "",
     secondary_image_url: drop.secondary_image_url || "",
@@ -748,9 +734,7 @@ function DropRow({
   });
   /* A published drop shows where it is in its own life. An unpublished one is
      a draft whatever the clock says, because nobody can see it. */
-  /* A drop that was public once and has been taken down is not a draft: it
-     ran, people were told, and it can no longer be deleted. Calling it a draft
-     offered a Delete button that the server then refused. */
+  /* Keep the unpublished label for a previous public drop. */
   const everPublished = drop.published || Boolean(drop.ever_published);
   const state = drop.published ? drop.state : everPublished ? "unpublished" : "draft";
   const live = drop.published && drop.state === "live";
@@ -883,6 +867,20 @@ function DropRow({
         </code>
       </p>
 
+      <details className="mt-3 rounded-xl bg-surface-2 p-3 text-xs text-fg-muted">
+        <summary className="cursor-pointer font-semibold text-fg">Email timing and send status</summary>
+        <p className="mt-2">Checks run every minute. Counts mean accepted by the email provider, not confirmed inbox delivery.</p>
+        <ul className="mt-2 space-y-1">
+          <li>Subscriber announcement: 72 hours to 1 hour before start · {drop.announced} accepted.</li>
+          <li>Requested day-before reminder: 36 to 12 hours before start · {drop.reminder_day_before_sent ?? 0} accepted.</li>
+          <li>Requested hour-before reminder: 90 to 20 minutes before start · {drop.reminder_hour_before_sent ?? 0} accepted.</li>
+          <li>Requested final reminder: within 10 minutes before start · {drop.reminders_sent ?? 0} accepted.</li>
+          <li>Live now: first 4 minutes, while the drop is open · {drop.live_now_sent ?? 0} accepted.</li>
+          <li>No automatic email after the drop ends.</li>
+        </ul>
+        <p className="mt-2">Only published drops send alerts. General subscribers receive the announcement and live-now email; the three earlier reminders require pressing Remind me for this drop.</p>
+      </details>
+
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <button
           type="button"
@@ -922,16 +920,19 @@ function DropRow({
               Set stock
             </button>
           </>
-        ) : everPublished ? (
-          <span className="px-1 text-xs text-fg-subtle">Ran once, so it is kept as a record and cannot be deleted.</span>
-        ) : (
+        ) : null}
+
+        {(!drop.published || ["ended", "sold_out"].includes(drop.state)) && (
           <button
             type="button"
             disabled={busy}
-            onClick={async () => setRowMessage(await act(`/api/admin/live-drops/${drop.drop_key}`, null, "DELETE"))}
+            onClick={async () => {
+              if (!window.confirm(`Remove "${drop.title}" from the schedule and public page?`)) return;
+              setRowMessage(await act(`/api/admin/live-drops/${drop.drop_key}`, null, "DELETE"));
+            }}
             className="inline-flex h-9 cursor-pointer items-center rounded-full border border-border px-4 text-xs font-semibold text-fg-muted transition-colors hover:bg-surface-2 disabled:opacity-55"
           >
-            Delete draft
+            {everPublished ? "Delete drop" : "Delete draft"}
           </button>
         )}
 

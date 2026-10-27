@@ -836,6 +836,9 @@ if (!dropColumns.has("first_published_at")) {
    stock_verified_at only records a useful answer, so a null there meant both
    "eBay would not give a number" and "nobody has asked yet" — and the console
    printed the first while the truth was the second. */
+if (!dropColumns.has("deleted_at")) {
+  db.exec("ALTER TABLE live_drops ADD COLUMN deleted_at TEXT");
+}
 if (!dropColumns.has("stock_checked_at")) {
   db.exec("ALTER TABLE live_drops ADD COLUMN stock_checked_at TEXT");
 }

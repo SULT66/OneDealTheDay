@@ -99,6 +99,9 @@ db.prepare("INSERT INTO live_drop_reminders(drop_id,email,created_at) VALUES(1,?
   subscriber("late@example.com");
   assert.strictEqual(await sendLiveNowNotices({ db, sendLiveNow, now: start + 7 * 60000, logger }), 0);
 
+  subscriber("soldout@example.com");
+  db.prepare("UPDATE live_drops SET quantity_total=5,quantity_remaining=0 WHERE id=1").run();
+  assert.strictEqual(await sendLiveNowNotices({db,sendLiveNow,now:start+180000,logger}),0,"sold-out drops must not announce that buying is live");
   console.log("Live-now emails passed.");
 })().catch((error) => {
   console.error(error);

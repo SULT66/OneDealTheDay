@@ -56,11 +56,11 @@ assert.ok(
 
 /*
  * And it has to be on all of them. /go/:id is the product link, /go/store the
- * shop's front door, /live/go the Buy button during a drop, and the two Amazon
- * routes the picks added by hand — a visitor leaving through any of them is a
+ * shop's front door, /live/go the Buy button during a drop, and the Amazon
+ * store link — a visitor leaving through any of them is a
  * visitor some shop is being asked to pay for.
  */
-for (const route of ["/go/store/:retailer", "/go/:id", "/live/go/:key", "/amazon/go/store", "/amazon/go/:id"]) {
+for (const route of ["/go/store/:retailer", "/go/:id", "/live/go/:key", "/amazon/go/store"]) {
   const index = server.indexOf(`app.get("${route}"`);
   assert.notStrictEqual(index, -1, `the ${route} route has moved or gone`);
   const body = server.slice(index, index + 700);

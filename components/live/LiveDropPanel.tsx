@@ -105,6 +105,7 @@ export function LiveDropPanel({
   );
   const [untilEnd, setUntilEnd] = useState<number | null>(initialDrop?.seconds_until_end ?? null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pollStateRef = useRef({state: initialDrop?.state ?? "upcoming", secondsUntilStart: initialDrop?.seconds_until_start ?? null});
   /* Buying in a drop takes a free account. Null until /api/me answers, so a
      signed-in shopper never sees the sign-up button flash in place of Buy. */
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
@@ -124,6 +125,7 @@ export function LiveDropPanel({
       return;
     }
     const body = (await response.json().catch(() => ({}))) as { drop?: LiveDropView | null };
+    pollStateRef.current = {state: body.drop?.state ?? "upcoming", secondsUntilStart: body.drop?.seconds_until_start ?? null};
     setDrop(body.drop || null);
     setUntilStart(body.drop?.seconds_until_start ?? null);
     setUntilEnd(body.drop?.seconds_until_end ?? null);
@@ -136,17 +138,15 @@ export function LiveDropPanel({
       if (cancelled) return;
       await load();
       if (cancelled) return;
-      timerRef.current = setTimeout(tick, pollInterval(drop?.state ?? "upcoming", untilStart));
+      timerRef.current = setTimeout(tick, pollInterval(pollStateRef.current.state, pollStateRef.current.secondsUntilStart));
     };
     tick();
     return () => {
       cancelled = true;
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-    /* Intentionally keyed on the market alone: the loop reschedules itself and
-       re-reads state through the closure on each pass. */
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [market]);
+    /* Read the latest response from a ref, not the first render closure. */
+  }, [market, load]);
 
   /*
    * The funnel, one line per stage.

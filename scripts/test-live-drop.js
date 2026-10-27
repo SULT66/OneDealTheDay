@@ -386,7 +386,7 @@ async function main() {
      published even once, which first_published_at records and never clears. */
   assert(
     /drop\.first_published_at/.test(serverSource),
-    "a drop that was once published can now be deleted, so the record of what was offered can vanish",
+    "the first publication timestamp is no longer tracked",
   );
 
   /* The buy link is the one field that sends a shopper off our site. */
