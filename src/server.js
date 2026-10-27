@@ -4192,6 +4192,20 @@ app.get("/api/admin/ebay-stock", admin, async (req, res) => {
     return res.status(502).json({error:error.message});
   }
 });
+app.get("/api/admin/coupons", admin, (req, res) => {
+  res.set("Cache-Control", "no-store").json({
+    ...require("./couponSchedule").couponRefreshService().status(),
+    active: require("./merchantCoupons").listCoupons("us").length + require("./publicCoupons").listPublicCoupons("us").length + require("./marketplaceCoupons").listMarketplaceCoupons(db,"us").length,
+  });
+});
+app.post("/api/admin/coupons/refresh", admin, async (req, res) => {
+  try {
+    const result = await require("./couponSchedule").couponRefreshService().run({force:true});
+    publicHtmlCache.clear();
+    res.set("Cache-Control", "no-store").json(result);
+  } catch (error) { res.status(502).json({error:"Coupon refresh could not finish."}); }
+});
+
 app.get("/api/admin/email-health", admin, async (req, res) => {
   try {
     res.json(await emailHealth());
@@ -4285,11 +4299,24 @@ app.use((req, res) => {
   return handleNextRequest(req, res);
 });
 
-function backfillBrands() {
-  const rows = db.prepare("SELECT id,title,description,brand,manufacturer FROM products WHERE status='published' AND (brand_slug IS NULL OR brand_slug='')").all();
+async function backfillBrands() {
+  let afterId = 0, reviewed = 0;
+  const batch = db.prepare("SELECT id,title,description,brand,manufacturer FROM products WHERE id>? AND status='published' AND (brand_slug IS NULL OR brand_slug='') ORDER BY id LIMIT 50");
   const update = db.prepare("UPDATE products SET brand=?,brand_slug=? WHERE id=?");
-  db.transaction(() => { for (const row of rows) { const brand = normalizeBrand(detectBrand(row)); if (brand) update.run(brand, slugifyBrand(brand), row.id); } })();
-  if (rows.length) console.log(`Brand intelligence reviewed ${rows.length} existing products`);
+  for (;;) {
+    const rows = batch.all(afterId);
+    if (!rows.length) break;
+    db.transaction(() => {
+      for (const row of rows) {
+        const brand = normalizeBrand(detectBrand(row));
+        if (brand) update.run(brand, slugifyBrand(brand), row.id);
+      }
+    })();
+    reviewed += rows.length;
+    afterId = rows[rows.length - 1].id;
+    await new Promise(resolve => setTimeout(resolve, 25));
+  }
+  if (reviewed) console.log(`Brand intelligence reviewed ${reviewed} existing products`);
 }
 
 const merchandisingEnabled = String(process.env.MERCHANDISING_ENABLED || "true").toLowerCase() !== "false";
@@ -4777,10 +4804,15 @@ app.use((error, req, res, next) => {
 });
 
 (async () => {
-  backfillBrands();
+  let phaseStarted = Date.now();
+  console.log("[startup] preparing Next.js");
   await nextApp.prepare();
+  console.log(`[startup] Next.js ready after ${Date.now() - phaseStarted}ms`);
+  phaseStarted = Date.now();
   await bootstrapPersonalPostgres(db);
+  console.log(`[startup] personal data ready after ${Date.now() - phaseStarted}ms`);
   app.listen(c.port, () => {
+    setTimeout(() => backfillBrands().catch(error => console.error(`[brands] ${error.message}`)), 30000).unref();
     console.log(`http://localhost:${c.port}`);
     if (c.liveRefreshEnabled) {
       setTimeout(() => refreshCouponSources().catch(()=>console.warn("[coupons] Startup refresh failed")),30000).unref();

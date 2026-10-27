@@ -29,6 +29,17 @@ async function main() {
     assert.throws(()=>prepareRuntime(fixture, temporary), /entry point is missing/);
     if (!process.argv[2]) return;
     const packaged = path.resolve(process.argv[2]);
+    const extracted = prepareRuntime(packaged, temporary);
+    const geoData = path.join(extracted, "node_modules/geoip-lite/data");
+    for (const name of ["geoip-city.dat","geoip-city6.dat","geoip-city-names.dat"]) {
+      assert(!fs.existsSync(path.join(geoData,name)), "unused city data still ships in production");
+    }
+    const countryProbe = JSON.parse(execFileSync(process.execPath,["-e",`
+      const geo=require(${JSON.stringify(path.join(extracted,"node_modules/geoip-lite"))});
+      console.log(JSON.stringify({country:geo.lookup('8.8.8.8').country,external:process.memoryUsage().external}));
+    `],{encoding:"utf8"}));
+    assert.equal(countryProbe.country,"US");
+    assert(countryProbe.external<20*1024*1024,"country lookup still loads the full city dataset");
     const probe = net.createServer();
     await new Promise(resolve=>probe.listen(0,"127.0.0.1",resolve));
     const port = probe.address().port;
