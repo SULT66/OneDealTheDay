@@ -1,0 +1,37 @@
+name: Diagnose startup and coupon sources
+on:
+  push:
+    branches: [codex/diagnose-runtime-20261027]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22.x'
+      - name: Read latest Azure startup logs
+        env:
+          AZURE_WEBAPP_PUBLISH_PROFILE: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+        run: node scripts/fetch-azure-startup-logs.js
+      - name: Check official coupon source responses
+        run: |
+          node <<'JS'
+          const {fetchOfficialPage}=require('./src/publicCoupons');
+          const {collectPublicCoupons}=require('./src/publicCouponDiscovery');
+          const sources=['https://www.ebay.com/b/eBay-Coupons/bn_7109765183','https://www.jcpenney.com/m/jcpenney-coupons','https://www.iherb.com/info/sales-and-offers'];
+          (async()=>{
+            for(const url of sources){
+              try{
+                const html=await fetchOfficialPage(url,new URL(url).hostname.replace(/^www\./,''),fetch);
+                console.log(JSON.stringify({url,bytes:html.length,hasCouponTable:html.includes('COUPON CODE'),hasPromoModel:html.includes('promoCode'),blocked:/access denied|verify you are human|checking your browser/i.test(html)}));
+              }catch(error){console.log(JSON.stringify({url,status:error.status || null,error:error.message}));}
+            }
+            const result=await collectPublicCoupons(fetch,[],Date.now(),{snapshot:false});
+            console.log(JSON.stringify({offers:result.offers,sources:result.sources,failedSources:result.failedSources},null,2));
+          })().catch(error=>{console.error(error.message);process.exitCode=1});
+          JS
