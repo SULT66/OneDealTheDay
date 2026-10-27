@@ -53,13 +53,17 @@ export function startStageMusic(context: AudioContext): StageMusic {
 
   let talking = false;
   let enabled = true;
+  let stopped = false;
+  const oscillators = new Set<OscillatorNode>();
   const applyLevel = () => {
+    if (stopped) return;
     const target = enabled ? (talking ? MUSIC_UNDER_VOICE : MUSIC_IN_PAUSE) : 0;
     master.gain.setTargetAtTime(target, context.currentTime, talking ? 0.25 : 0.8);
   };
 
   const voice = (type: OscillatorType, note: number, start: number, length: number, level: number, attack: number, to: AudioNode) => {
     const osc = context.createOscillator();
+    oscillators.add(osc);
     const gain = context.createGain();
     osc.type = type;
     osc.frequency.value = freq(note);
@@ -67,6 +71,11 @@ export function startStageMusic(context: AudioContext): StageMusic {
     gain.gain.linearRampToValueAtTime(level, start + attack);
     gain.gain.setTargetAtTime(0, start + Math.max(attack, length - 0.6), 0.35);
     osc.connect(gain).connect(to);
+    osc.onended = () => {
+      oscillators.delete(osc);
+      osc.disconnect();
+      gain.disconnect();
+    };
     osc.start(start);
     osc.stop(start + length + 2);
   };
@@ -107,9 +116,20 @@ export function startStageMusic(context: AudioContext): StageMusic {
       applyLevel();
     },
     stop() {
+      if (stopped) return;
+      stopped = true;
       clearInterval(timer);
-      master.gain.setTargetAtTime(0, context.currentTime, 0.2);
-      setTimeout(() => master.disconnect(), 800);
+      master.gain.cancelScheduledValues(context.currentTime);
+      master.gain.setValueAtTime(0, context.currentTime);
+      master.disconnect();
+      for (const osc of oscillators) {
+        osc.stop();
+        osc.disconnect();
+      }
+      oscillators.clear();
+      echo.disconnect();
+      feedback.disconnect();
+      tone.disconnect();
     },
   };
 }

@@ -8,7 +8,7 @@ import { formatPrice } from "@/lib/format";
 import { DeliaTrigger } from "@/components/delia/DeliaTrigger";
 import { LiveDropSignup } from "@/components/site/LiveDropSignup";
 import { analyticsSessionId, recordLiveDropEvent } from "@/lib/analyticsSession";
-import { BroadcastVideo, MusicToggle, SwapStage, useLiveBroadcast } from "./LiveBroadcast";
+import { BroadcastVideo, MusicToggle, SwapStage, useLiveBroadcast, sendPresence } from "./LiveBroadcast";
 import { PriceBoard } from "./PriceBoard";
 import { useCopy } from "@/components/site/CopyProvider";
 
@@ -192,8 +192,7 @@ export function LiveDropPanel({
    *
    * Only while the drop is actually on: a tab left open overnight on a drop
    * that ended is not an audience. The server counts rows touched in the last
-   * ninety seconds, so stopping this is all it takes to leave the count, and
-   * closing the tab stops it without anybody having to say goodbye.
+   * fifty seconds. Explicit Leave stops both heartbeats immediately.
    */
   const dropKey = drop?.drop_key;
   /* Somebody watching Chloe keeps being counted by the broadcast itself when
@@ -203,15 +202,12 @@ export function LiveDropPanel({
   const broadcastDropRef = useRef("");
   broadcastDropRef.current = broadcast.session?.dropKey || "";
   const onAir = drop?.state === "waiting" || drop?.state === "live";
+  const leftThisDrop = broadcast.leftDropKey === dropKey;
+  const broadcastOwnsPresence = broadcast.session?.dropKey === dropKey;
   useEffect(() => {
-    if (!dropKey || !onAir) return;
+    if (!dropKey || !onAir || leftThisDrop || broadcastOwnsPresence) return;
     const beat = () => {
-      void fetch("/api/live/watching", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ drop_key: dropKey, session_id: analyticsSessionId() }),
-        keepalive: true,
-      }).catch(() => {});
+      sendPresence(dropKey);
     };
     beat();
     const timer = setInterval(beat, 20000);
@@ -231,7 +227,16 @@ export function LiveDropPanel({
       window.removeEventListener("pagehide", leave);
       if (broadcastDropRef.current !== dropKey) leave();
     };
-  }, [dropKey, onAir]);
+  }, [dropKey, onAir, leftThisDrop, broadcastOwnsPresence]);
+
+  useEffect(() => {
+    const update = (event: Event) => {
+      const detail = (event as CustomEvent<{ dropKey: string; watching: number }>).detail;
+      setDrop((current) => current?.drop_key === detail.dropKey ? { ...current, watching: detail.watching } : current);
+    };
+    window.addEventListener("odd-live-presence", update);
+    return () => window.removeEventListener("odd-live-presence", update);
+  }, []);
 
   /* The local second hand between polls. */
   useEffect(() => {
@@ -294,11 +299,8 @@ export function LiveDropPanel({
             </span>
           </p>
           <StateBadge state={drop.state} />
-          {/* Only while the drop is on, and only once there is somebody to
-              count. "1 watching" on an empty page says the quiet part out
-              loud, and a number nobody is behind would be the other kind of
-              lie. */}
-          {onAir && drop.watching > 0 && (
+          {/* Keep zero visible too, so the last viewer leaving is visible. */}
+          {onAir && (
             <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-fg-muted tnum">
               <Eye size={15} weight="fill" aria-hidden="true" />
               {drop.watching.toLocaleString()}

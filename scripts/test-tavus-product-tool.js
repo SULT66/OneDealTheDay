@@ -86,12 +86,16 @@ const livePanelSource = fs.readFileSync(
   path.join(__dirname, "..", "components", "live", "LiveDropPanel.tsx"),
   "utf8",
 );
+const liveBroadcastSource = fs.readFileSync(
+  path.join(__dirname, "..", "components", "live", "LiveBroadcast.tsx"),
+  "utf8",
+);
 assert(
-  /audioSource:false/.test(livePanelSource) && /videoSource:false/.test(livePanelSource),
+  /audioSource:\s*false/.test(liveBroadcastSource) && /videoSource:\s*false/.test(liveBroadcastSource),
   "the Chloe viewer can request a shopper camera or microphone track",
 );
 assert(
-  /conversation\.respond/.test(livePanelSource) && /Text chat only/.test(livePanelSource),
+  /fetch\("\/api\/live\/chat",/.test(livePanelSource) && /session_id: analyticsSessionId\(\), text/.test(livePanelSource),
   "the receive-only Chloe view no longer provides text interaction",
 );
 assert(
@@ -99,8 +103,8 @@ assert(
   "the Chloe embed still asks the browser for camera or microphone permission",
 );
 assert(
-  /aspect-\[4\/3\]/.test(livePanelSource) && /className="h-full w-full object-contain"/.test(livePanelSource),
-  "the Chloe video is no longer a responsive, uncropped 4:3 stage",
+  /aspect-video w-full/.test(liveBroadcastSource) && /relative h-full w-full object-contain/.test(liveBroadcastSource),
+  "the shared stage must stay responsive and preserve the full product video",
 );
 
 console.log("Tavus product disclosure, expiry and endpoint security checks passed.");
