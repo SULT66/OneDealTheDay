@@ -32,6 +32,17 @@ if (require.main === module) {
   const runtime = prepareRuntime(__dirname);
   console.log(`[startup] local release ready after ${Date.now() - started}ms`);
   process.chdir(runtime);
-  require(path.join(runtime, "app.js"));
+  const Module = require("node:module");
+  const originalLoad = Module._load;
+  Module._load = function(request, parent, isMain) {
+    const before = Date.now();
+    try { return originalLoad.apply(this, arguments); }
+    finally {
+      const elapsed = Date.now() - before;
+      if (elapsed >= 1000) console.log(`[startup] module ${request}: ${elapsed}ms`);
+    }
+  };
+  try { require(path.join(runtime, "app.js")); }
+  finally { Module._load = originalLoad; }
 }
 module.exports = { prepareRuntime };

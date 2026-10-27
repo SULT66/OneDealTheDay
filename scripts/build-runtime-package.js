@@ -72,6 +72,12 @@ async function main() {
     copy(relativePath);
   }
 
+  // Market selection reads country only. geoip-lite automatically falls back
+  // to its country databases when city files are absent (about 105 MB saved).
+  for (const name of ["geoip-city.dat", "geoip-city6.dat", "geoip-city-names.dat"]) {
+    fs.rmSync(path.join(target, "node_modules/geoip-lite/data", name), {force:true});
+  }
+
   // These directories are read by name at runtime and therefore cannot all be
   // discovered by static import tracing.
   copy("node_modules/next/dist/compiled/webpack");

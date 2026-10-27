@@ -20,6 +20,8 @@ const {createCouponRefreshService}=require('../src/couponSchedule');
   assert.equal(service.status().sources.awin.status,'success');
   assert.equal(service.status().sources.awin.lastSuccessAt,new Date(clock).toISOString());
   await service.run();assert.equal(merchantCalls,1,'reads/early sweeps must not refresh');
+  await service.run({force:true});assert.equal(merchantCalls,2,'manual refresh bypasses the cadence');
+  merchantCalls=1;publicCalls=1;
   service=createCouponRefreshService(options);
   await service.run();assert.equal(merchantCalls,1,'restart preserves next-attempt deadlines');
   clock+=6*3600000;rejectMerchant=true;

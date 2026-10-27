@@ -21,13 +21,13 @@ function createCouponRefreshService({directory, merchant, publicSource, now=Date
       return [key,{...previous,configured,...(!configured ? {status:'not_configured',errorCode:'missing_credentials'} : {})}];
     }))};
   }
-  function run() {
+  function run({force=false}={}) {
     if (pending) return pending;
     pending=(async()=>{
       let changed=false;
       for (const [key,source] of Object.entries(sources)) {
         const time=now(), previous=state[key] || {};
-        if (Date.parse(previous.nextAttemptAt)>time) continue;
+        if (!force && Date.parse(previous.nextAttemptAt)>time) continue;
         state[key]={...previous,lastAttemptAt:new Date(time).toISOString()};
         try {
           const result=await source.refreshCoupons();
@@ -36,7 +36,7 @@ function createCouponRefreshService({directory, merchant, publicSource, now=Date
             lastSuccessAt:success ? new Date(now()).toISOString() : previous.lastSuccessAt || null,
             active:result.active ?? previous.active ?? 0,
             ...(result.received != null ? {received:result.received} : {}),
-            ...(result.sources != null ? {checkedSources:result.sources,failedSources:result.failedSources} : {}),
+            ...(result.sources != null ? {checkedSources:result.sources,failedSources:result.failedSources,sourceResults:result.sourceResults || []} : {}),
             nextAttemptAt:new Date(now()+(success ? INTERVAL : RETRY)).toISOString()};
           changed ||= result.status==='success' || result.status==='partial';
         } catch (error) {

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
+import { CouponStatus } from "./CouponStatus";
 import { ShopIcons } from "./ShopIcons";
 import { Numbers } from "./Numbers";
 import { SearchDemand } from "./SearchDemand";
@@ -568,6 +569,10 @@ export function AdminConsole() {
       </Card>
       </TabPanel>
 
+      <TabPanel id="coupons" active={tab}>
+        <CouponStatus adminKey={adminKey} active={tab === "coupons"} />
+      </TabPanel>
+
       <TabPanel id="catalogue" active={tab}>
       <Card className="mt-6">
         <Legend>Catalogue refresh</Legend>
@@ -600,6 +605,7 @@ const TABS = [
   { id: "drops", label: "Live Drops" },
   { id: "email", label: "Email" },
   { id: "icons", label: "Shop icons" },
+  { id: "coupons", label: "Coupons" },
   { id: "catalogue", label: "Catalogue" },
   { id: "agents", label: "Agents" },
 ] as const;
