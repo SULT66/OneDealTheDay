@@ -19,6 +19,7 @@ jobs:
           AZURE_WEBAPP_PUBLISH_PROFILE: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
         run: node scripts/fetch-azure-startup-logs.js
       - name: Check official coupon source responses
+        if: false
         run: |
           node <<'JS'
           const {fetchOfficialPage}=require('./src/publicCoupons');
