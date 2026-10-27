@@ -58,7 +58,7 @@ for (const existingUrl of [
   `https://productdata.awin.com/datafeed/download/apikey/${testAwinKey}/language/en/fid/108580/format/csv/`,
 ]) {
   const joined = feedDefinitions({AFFILIATE_FEED_MOONCOOL_US_URL:existingUrl});
-  for (const [id, feedId] of [["toputure","F3285"],["tidewe","F1386"],["alorair-crawlspace","F2715"],["lumary","F4323"]]) {
+  for (const [id, feedId] of [["toputure","F3285"],["tidewe","F1386"],["alorair-crawlspace","F2715"],["lumary","F4323"],["rockbros","F2309"],["simple-project","F2281"]]) {
     const feed = joined.find(f => f.retailerId === id);
     assert(feed, `Missing joined merchant ${id}`);
     assert.deepStrictEqual(feed.markets,["us"]);
