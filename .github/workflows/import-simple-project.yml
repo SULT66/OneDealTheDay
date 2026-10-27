@@ -1,0 +1,48 @@
+name: Import Simple Project joined feed
+on:
+  push:
+    branches: [codex/import-simple-project]
+permissions:
+  contents: read
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Inspect and refresh only Simple Project
+        env:
+          ADMIN_KEY: ${{ secrets.ONEDEAL_ADMIN_KEY }}
+        shell: bash
+        run: |
+          node <<'JS'
+          const origin = 'https://www.onedailydrop.com';
+          const headers = {'x-admin-key': process.env.ADMIN_KEY};
+          if (!process.env.ADMIN_KEY) throw new Error('Missing existing admin credential');
+          const safe = value => String(value || '').replace(/[a-f0-9]{32}/gi, '[redacted]');
+          async function request(path, method = 'GET') {
+            const response = await fetch(origin + path, {method, headers, signal:AbortSignal.timeout(60000)});
+            if (!response.ok) throw new Error(`Request ${response.status} at ${path.split('?')[0]}`);
+            return response.json();
+          }
+          async function inspect() {
+            const data = await request('/api/admin/automation-status');
+            console.log(JSON.stringify(data.sourceRuns.filter(row => /feed-(rockbros|simple-project)/.test(row.provider_id || '')).map(row => ({provider:row.provider_id,market:row.market,status:row.status,found:row.found_count,published:row.published_count,message:safe(row.message)}))));
+          }
+          (async () => {
+            await inspect();
+            const job = await request('/api/admin/refresh?market=us&source=feed-simple-project-us', 'POST');
+            console.log(JSON.stringify({accepted:job.accepted,alreadyRunning:job.alreadyRunning,status:job.status,jobId:job.jobId}));
+            if (!job.accepted) throw new Error('Targeted refresh was not started; another job may be running');
+            for (let i=0;i<40;i++) {
+              await new Promise(resolve => setTimeout(resolve,15000));
+              const state = await request('/api/admin/refresh-status');
+              if (state.jobId !== job.jobId) throw new Error('Refresh job changed');
+              console.log(JSON.stringify({status:state.status,error:safe(state.error)}));
+              if (state.status === 'running') continue;
+              await inspect();
+              if (state.status !== 'success') process.exitCode=1;
+              return;
+            }
+            throw new Error('Targeted import did not finish within 10 minutes');
+          })().catch(error => {console.error(safe(error.message));process.exitCode=1;});
+          JS
