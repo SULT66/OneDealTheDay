@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { activeHalloween, activeCampaign } from "@/src/merchandisingCalendar";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import type { Language } from "@/lib/i18n";
 import { StructuredData } from "@/components/site/StructuredData";
 import type { Metadata } from "next";
@@ -27,6 +27,7 @@ export async function generateMetadata({
   params,
 }: PageProps<"/[market]">): Promise<Metadata> {
   const { market } = await params;
+  if (!getMarket(market)) notFound();
   const info = getMarket(market);
   const language = await getLanguage(market);
   const country = info ? countryName(market, language) : t(language, "app.yourMarket");
@@ -50,6 +51,8 @@ export async function generateMetadata({
 
 export default async function MarketHome({ params, searchParams }: PageProps<"/[market]">) {
   const {market} = await params;
+  // Pages and layouts can render concurrently; validate before calendar work.
+  if (!getMarket(market)) notFound();
   const language = await getLanguage(market);
   const search = await searchParams;
   // Preserve old campaign filter bookmarks after moving the collection.
