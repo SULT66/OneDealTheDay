@@ -543,8 +543,8 @@ async function main() {
   assert(/leaving: true/.test(panel) && /pagehide/.test(panel), "closing the page no longer takes the viewer out of the count");
   assert(/req\.body\?\.leaving === true/.test(serverSource), "the server ignores a page saying it left");
   assert(
-    /onAir && drop\.watching > 0/.test(panel),
-    "the viewer count shows outside the drop, or shows a zero nobody needed to read",
+    /\{onAir && \(/.test(panel),
+    "the viewer count must stay visible at zero after the last viewer leaves",
   );
 
   console.log("Live Drop admin guards, server-side exit, broadcast priority, reminders and presence passed.");

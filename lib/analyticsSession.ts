@@ -11,6 +11,7 @@
  */
 const KEY = "odd_analytics_session";
 const VALID = /^[A-Za-z0-9_-]{16,80}$/;
+let fallbackSessionId: string | null = null;
 
 const newToken = () => {
   if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
@@ -23,9 +24,8 @@ export function analyticsSessionId(): string {
   const fits = (token: string) => VALID.test(token) && !token.startsWith("internal_");
   const make = newToken;
   /* Private browsing and blocked storage both throw here rather than returning
-     null, so a fresh token per call is the fallback. It over-counts a little,
-     which is the right way to be wrong: the alternative is dropping those
-     people out of the funnel entirely. */
+     null. Keep the fallback stable for this page so Leave deletes the same
+     presence row that its heartbeat created. */
   try {
     const current = sessionStorage.getItem(KEY);
     if (current && fits(current)) return current;
@@ -33,7 +33,7 @@ export function analyticsSessionId(): string {
     sessionStorage.setItem(KEY, created);
     return created;
   } catch {
-    return make();
+    return fallbackSessionId ??= make();
   }
 }
 
