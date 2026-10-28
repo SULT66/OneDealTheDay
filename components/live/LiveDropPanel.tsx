@@ -8,7 +8,7 @@ import { formatPrice } from "@/lib/format";
 import { DeliaTrigger } from "@/components/delia/DeliaTrigger";
 import { LiveDropSignup } from "@/components/site/LiveDropSignup";
 import { analyticsSessionId, recordLiveDropEvent } from "@/lib/analyticsSession";
-import { BroadcastVideo, MusicToggle, SwapStage, useLiveBroadcast, sendPresence } from "./LiveBroadcast";
+import { BroadcastVideo, EnableStageSound, MusicToggle, SwapStage, useLiveBroadcast, sendPresence } from "./LiveBroadcast";
 import { PriceBoard } from "./PriceBoard";
 import { useCopy } from "@/components/site/CopyProvider";
 
@@ -50,6 +50,7 @@ export type LiveDropView = {
   seconds_until_end: number | null;
   member_early_access_seconds: number;
   affiliate_url: string;
+  preroll_video_url?: string;
   video_url: string;
   stream_embed_url: string;
   /* The line the AI host is handed when the price opens. Empty until then. */
@@ -238,6 +239,16 @@ export function LiveDropPanel({
     return () => window.removeEventListener("odd-live-presence", update);
   }, []);
 
+  useEffect(() => {
+    if (untilStart === 0 && (drop?.state === "upcoming" || drop?.state === "waiting")) void load();
+  }, [untilStart, drop?.state, load]);
+
+  useEffect(() => {
+    const refresh = () => { if (document.visibilityState === "visible") void load(); };
+    document.addEventListener("visibilitychange", refresh);
+    return () => document.removeEventListener("visibilitychange", refresh);
+  }, [load]);
+
   /* The local second hand between polls. */
   useEffect(() => {
     const ticking = setInterval(() => {
@@ -307,9 +318,7 @@ export function LiveDropPanel({
               <span className="font-normal text-fg-subtle">{tr("app.live.watching")}</span>
             </span>
           )}
-          <span className="rounded-full border border-border bg-surface-2 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-fg-muted">
-            {tr("app.live.aiHost")}
-          </span>
+
         </div>
       </div>
 
@@ -453,7 +462,7 @@ function StateBadge({ state }: { state: LiveDropView["state"] }) {
   const tr = useCopy();
   const label: Record<LiveDropView["state"], string> = {
     upcoming: tr("app.live.stateUpcoming"),
-    waiting: tr("app.live.stateWaiting"),
+    waiting: tr("app.live.preShow"),
     live: tr("app.live.stateLive"),
     sold_out: tr("app.live.stateSoldOut"),
     ended: tr("app.live.stateEnded"),
@@ -704,7 +713,29 @@ function RemindMe({ dropKey }: { dropKey: string }) {
  */
 const isVideoFile = (value: string) => /\.(?:mp4|mov|webm)(?:[?#].*)?$/i.test(value || "");
 
-function BroadcastStage({
+export function PreShow({ drop, untilStart }: { drop: LiveDropView; untilStart: number | null }) {
+  const tr = useCopy();
+  const [needsSound, setNeedsSound] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const hasAd = Boolean(drop.preroll_video_url) && !failed;
+  return <div className="relative mt-4 aspect-[4/3] overflow-hidden rounded-2xl bg-[#061224] text-white sm:aspect-video">
+    {hasAd ? <div className="absolute inset-0" onError={() => setFailed(true)}>
+      <BroadcastVideo src={drop.preroll_video_url} loop label={tr("app.live.advertisement")} className="h-full w-full object-contain" onNeedsPlay={setNeedsSound} />
+      {needsSound ? <EnableStageSound onEnabled={() => setNeedsSound(false)} /> : null}
+    </div> : <div className="flex h-full flex-col items-center justify-center gap-4 px-6 pb-20 text-center">
+      {drop.image_url ? <img src={drop.image_url} alt={drop.title} className="h-24 max-w-[60%] object-contain sm:h-40" /> : null}
+      <p className="text-xl font-black sm:text-3xl">OneDailyDrop Live</p>
+      <p className="max-w-sm text-sm text-white/75">{tr("app.live.preShowMessage")}</p>
+    </div>}
+    <span className="absolute left-3 top-3 rounded-full bg-black/70 px-3 py-1 text-[10px] font-bold uppercase tracking-wider">{tr(hasAd ? "app.live.advertisement" : "app.live.preShow")}</span>
+    <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-between gap-4 bg-gradient-to-t from-black px-4 pb-4 pt-10">
+      <p className="text-xs font-semibold sm:text-sm">{tr("app.live.startsAutomatically")}</p>
+      <p className="shrink-0 text-3xl font-black tnum sm:text-5xl">{clock(untilStart)}</p>
+    </div>
+  </div>;
+}
+
+export function BroadcastStage({
   market,
   drop,
   untilStart,
@@ -723,6 +754,9 @@ function BroadcastStage({
   const watching = broadcast.session?.dropKey === drop.drop_key;
   const showable = drop.state === "waiting" || drop.state === "live" || watching;
   if (!showable) return null;
+  if (drop.state === "waiting" && !watching) {
+    return <PreShow drop={drop} untilStart={untilStart} />;
+  }
   /* The price band under the picture, whichever presenter holds the stage. */
   const board = <PriceBoard drop={drop} market={market} untilStart={untilStart} untilEnd={untilEnd} />;
 
@@ -972,11 +1006,12 @@ type HostPhase = "presenting" | "answering" | "";
  * the presentation gets its place in the line straight back, and the console
  * has her acknowledge the questions between script lines.
  */
-function TavusHost({ market, drop, board }: { market: string; drop: LiveDropView; board?: React.ReactNode }) {
+export function TavusHost({ market, drop, board }: { market: string; drop: LiveDropView; board?: React.ReactNode }) {
   const tr = useCopy();
   const live = useLiveBroadcast();
   const watching = live.session?.dropKey === drop.drop_key;
   const [starting, setStarting] = useState(false);
+  const [resume, setResume] = useState(false);
   const [error, setError] = useState("");
   const [needsPlay, setNeedsPlay] = useState(false);
   const [question, setQuestion] = useState("");
@@ -1048,27 +1083,31 @@ function TavusHost({ market, drop, board }: { market: string; drop: LiveDropView
     if (list) list.scrollTop = list.scrollHeight;
   }, [lines.length]);
 
-  const start = async () => {
-    if (starting || watching) return;
-    setStarting(true);
-    setError("");
-    const response = await fetch(`/api/live/host?market=${encodeURIComponent(market)}`).catch(() => null);
-    const body = await response?.json().catch(() => ({}));
-    setStarting(false);
-    if (!response?.ok || !body?.conversation_url) {
-      setError(body?.error || tr("app.live.couldNotJoin"));
-      return;
-    }
-    live.join({
-      conversationUrl: body.conversation_url,
-      dropKey: drop.drop_key,
-      title: drop.title,
-      market,
-      productVideo: drop.video_url,
-      productImage: drop.image_url,
-    });
-    recordLiveDropEvent(drop.drop_key, "host_started");
-  };
+  useEffect(() => {
+    if (watching) { setResume(false); return; }
+    if ((live.leftDropKey === drop.drop_key && !resume) || drop.state !== "live") return;
+    let cancelled = false;
+    let retry: ReturnType<typeof setTimeout> | undefined;
+    const controller = new AbortController();
+    const connect = async () => {
+      setStarting(true);
+      const response = await fetch(`/api/live/host?market=${encodeURIComponent(market)}`, { signal: controller.signal }).catch(() => null);
+      const body = await response?.json().catch(() => ({}));
+      if (cancelled) return;
+      if (!response?.ok || !body?.conversation_url || body.drop_key !== drop.drop_key) {
+        setError(body?.error || tr("app.live.couldNotJoin"));
+        retry = setTimeout(connect, 5000);
+        return;
+      }
+      setStarting(false);
+      setError("");
+      live.join({ conversationUrl: body.conversation_url, dropKey: drop.drop_key, title: drop.title,
+        market, productVideo: drop.video_url, productImage: drop.image_url });
+      recordLiveDropEvent(drop.drop_key, "host_started");
+    };
+    void connect();
+    return () => { cancelled = true; controller.abort(); if (retry) clearTimeout(retry); };
+  }, [watching, resume, live.leftDropKey, live.join, drop.drop_key, drop.state, drop.title, drop.video_url, drop.image_url, market, tr]);
 
   const ask = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -1219,19 +1258,7 @@ function TavusHost({ market, drop, board }: { market: string; drop: LiveDropView
               </>
             }
           />
-          {needsPlay ? (
-            <button
-              type="button"
-              onClick={(event) => {
-                const video = event.currentTarget.parentElement?.querySelector("video[aria-label^='Chloe']") as HTMLVideoElement | null;
-                void video?.play().then(() => setNeedsPlay(false));
-              }}
-              className="absolute inset-0 z-40 m-auto h-12 w-fit rounded-full bg-accent px-6 text-sm font-black text-white"
-            >
-              {tr("app.live.playChloe")}
-            </button>
-          ) : null}
-          <StageLabel>{tr("app.live.aiHost")}</StageLabel>
+          {needsPlay ? <EnableStageSound onEnabled={() => setNeedsPlay(false)} /> : null}
           <div className="absolute right-3 top-3 z-30 flex gap-1.5">
             <MusicToggle on={live.musicOn} onChange={live.setMusicOn} />
             <button
@@ -1264,21 +1291,12 @@ function TavusHost({ market, drop, board }: { market: string; drop: LiveDropView
               <p className="mt-1.5 hidden max-w-xs text-xs leading-relaxed text-white/65 sm:block sm:text-sm">
                 {tr("app.live.watchWithEveryone")}
               </p>
-              <button
-                type="button"
-                onClick={start}
-                disabled={starting}
-                className="relative z-40 mt-3 rounded-full bg-accent px-5 py-2 text-xs font-black text-white shadow-lg transition hover:brightness-110 disabled:cursor-wait disabled:opacity-60 sm:mt-4 sm:px-6 sm:py-2.5 sm:text-sm"
-              >
-                {starting ? tr("app.live.connectingChloe") : tr("app.live.watchChloe")}
-              </button>
+              {live.leftDropKey === drop.drop_key && !resume ? <button type="button" onClick={() => setResume(true)} className="mt-3 rounded-full bg-lime px-5 py-2 text-sm font-bold text-ink">{tr("app.live.watchChloe")}</button> : <p role="status" className="mt-3 text-sm font-bold text-white">{starting ? tr("app.live.connectingChloe") : tr("app.live.presentingLive")}</p>}
               {error ? <p className="relative z-20 mt-2 text-xs font-semibold text-red-300">{error}</p> : null}
             </div>
           }
         />
-        <StageLabel>{tr("app.live.aiHost")}</StageLabel>
-        {/* Before joining, the join button needs the middle of a small phone
-            stage, so the lines show from tablet width up; the box is always there. */}
+        {/* Connection is automatic; the shared chat remains available. */}
         {chatOverlay(false)}
       </div>
       {board}

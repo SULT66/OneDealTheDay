@@ -60,7 +60,7 @@ const create = async (title, startAt) => {
     headers: admin,
     body: JSON.stringify({
       title, market: "us", quantity_total: "5", start_at: startAt,
-      duration_minutes: "10", currency: "USD", drop_price: "9.99",
+      duration_minutes: "10", currency: "USD", drop_price: "9.99", preroll_video_url: "/media/ad.mp4",
     }),
   });
   const body = await response.json();
@@ -90,7 +90,16 @@ const iso = (offsetMs) => new Date(Date.now() + offsetMs).toISOString();
   /* --- A published drop is on the site, and a stray click must not take it
      out from under the people looking at it. --- */
   const livePublished = await create("Published one", iso(3 * 3600 * 1000));
+  const mediaPatch = async body => fetch(`${base}/api/admin/live-drops/${livePublished}/media`, {method:"PATCH",headers:admin,body:JSON.stringify(body)});
+  assert.equal(db.prepare("SELECT preroll_video_url FROM live_drops WHERE drop_key=?").get(livePublished).preroll_video_url, "/media/ad.mp4");
+  assert.equal((await mediaPatch({preroll_video_url:"/media/new-ad.mp4"})).status, 200);
+  assert.equal((await mediaPatch({video_url:"/media/demo.mp4"})).status, 200);
+  assert.equal(db.prepare("SELECT preroll_video_url FROM live_drops WHERE drop_key=?").get(livePublished).preroll_video_url, "/media/new-ad.mp4", "editing the demo erased the ad");
+  assert.equal((await mediaPatch({preroll_video_url:"javascript:alert(1)"})).status, 400);
   await publish(livePublished, true);
+  const publicDrop = await (await fetch(`${base}/api/live/current?market=us`)).json();
+  assert.equal(publicDrop.drop.preroll_video_url, "/media/new-ad.mp4");
+  assert.equal(publicDrop.drop.drop_price, null, "pre-show revealed the price early");
   const refused = await remove(livePublished);
   assert.strictEqual(refused.status, 409);
   const refusal = await refused.json();

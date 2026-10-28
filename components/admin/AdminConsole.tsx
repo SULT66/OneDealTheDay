@@ -55,6 +55,7 @@ type AdminDrop = {
   secondary_image_url?: string;
   host_script_intro?: string;
   host_script_reveal?: string;
+  preroll_video_url?: string;
   video_url: string;
   stream_embed_url: string;
   click_label: string;
@@ -75,6 +76,7 @@ const BLANK = {
   image_url: "",
   secondary_image_url: "",
   affiliate_url: "",
+  preroll_video_url: "",
   video_url: "",
   stream_embed_url: "",
   terms: "",
@@ -511,6 +513,7 @@ export function AdminConsole() {
             <FormGroup title="What people see" columns={2}>
               <MediaUpload adminKey={adminKey} kind="image" label="Product photo" hint="The product on its own, clean background." value={form.image_url} onChange={(v) => setForm({ ...form, image_url: v })} disabled={!unlocked || busy} />
               <MediaUpload adminKey={adminKey} kind="image" label="Product in use - photo" hint="Somebody using it. Optional." value={form.secondary_image_url} onChange={(v) => setForm({ ...form, secondary_image_url: v })} disabled={!unlocked || busy} />
+              <MediaUpload adminKey={adminKey} kind="video" label="Pre-show advertisement" hint="Optional. Plays automatically in the five minutes before the start. The show starts on schedule." value={form.preroll_video_url} onChange={(v) => setForm({ ...form, preroll_video_url: v })} disabled={!unlocked || busy} />
               <MediaUpload adminKey={adminKey} kind="video" label="Product footage" hint="The product up close. Plays beside Chloe." value={form.video_url} onChange={(v) => setForm({ ...form, video_url: v })} disabled={!unlocked || busy} />
             </FormGroup>
 
@@ -738,6 +741,7 @@ function DropRow({
   const [media, setMedia] = useState({
     image_url: drop.image_url || "",
     secondary_image_url: drop.secondary_image_url || "",
+    preroll_video_url: drop.preroll_video_url || "",
     video_url: drop.video_url || "",
     stream_embed_url: drop.stream_embed_url || "",
   });
@@ -987,6 +991,7 @@ function DropRow({
       <div className="mt-3 grid gap-x-4 sm:grid-cols-2">
         <MediaUpload adminKey={adminKey} kind="image" label="Product photo" value={media.image_url} onChange={(v) => setMedia({ ...media, image_url: v })} disabled={busy} />
         <MediaUpload adminKey={adminKey} kind="image" label="Product in use - photo" value={media.secondary_image_url} onChange={(v) => setMedia({ ...media, secondary_image_url: v })} disabled={busy} />
+        <MediaUpload adminKey={adminKey} kind="video" label="Pre-show advertisement" hint="Optional. Ends automatically when the drop starts." value={media.preroll_video_url} onChange={(v) => setMedia({ ...media, preroll_video_url: v })} disabled={busy} />
         <MediaUpload adminKey={adminKey} kind="video" label="Product footage" value={media.video_url} onChange={(v) => setMedia({ ...media, video_url: v })} disabled={busy} />
         {/* Only shown to take one away: a presenter video replaces live Chloe
             on the page, and an old drop may still carry one. */}

@@ -272,8 +272,9 @@ export function LiveHostConsole({ adminKey, dropKey }: { adminKey: string; dropK
         }
         return;
       }
-      if (!autopilot || !["waiting", "live"].includes(host.state)) return;
+      if (!autopilot || host.state !== "live") return;
       const now = Date.now();
+      const openingJustQueued = !introQueuedRef.current && Boolean(host.intro_script);
       if (!introQueuedRef.current && host.intro_script && ["waiting", "live"].includes(host.state)) {
         introQueuedRef.current = true;
         queueScript(host.intro_script);
@@ -282,7 +283,7 @@ export function LiveHostConsole({ adminKey, dropKey }: { adminKey: string; dropK
         stoppedAt: lastStoppedRef.current, speaking: speakingRef.current,
         sawEvents: sawSpeakingEventsRef.current });
       if (!finishedTurn || busyRef.current) return;
-      if (host.state === "live" && !revealSentRef.current) {
+      if (host.state === "live" && !openingJustQueued && !revealSentRef.current && (host.reveal_script || host.reveal_cue)) {
         revealSentRef.current = true;
         if (host.reveal_script) {
           /* Announce the reveal next, then resume the remaining presentation. */
@@ -368,7 +369,7 @@ export function LiveHostConsole({ adminKey, dropKey }: { adminKey: string; dropK
               ? "Loading…"
               : !host.conversation_url
                 ? host.state === "upcoming"
-                  ? "Chloe goes on air when the waiting room opens (5 minutes before). Keep this open."
+                  ? "The five-minute pre-show plays before the start. Chloe presents at the scheduled start. Keep this open."
                   : "Chloe is not on air."
                 : joined
                   ? speaking

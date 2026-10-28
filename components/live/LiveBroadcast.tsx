@@ -121,8 +121,7 @@ export function LiveBroadcastProvider({ market, children }: { market: string; ch
     setClosing(false);
     setFading(false);
     setLeftDropKey("");
-    /* Called from the viewer's click, which is the only moment a browser lets
-       sound start. */
+    /* Start automatically; suspended audio is handled by the video fallback. */
     try {
       if (!audioRef.current) {
         const Context = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
@@ -365,12 +364,11 @@ export function LiveBroadcastProvider({ market, children }: { market: string; ch
 
 /* A video element for a MediaStream, which React cannot set as an attribute. */
 export function BroadcastVideo({
-  stream,
-  className,
-  label,
-  onNeedsPlay,
+  stream = null, src, loop = false, className, label, onNeedsPlay,
 }: {
-  stream: MediaStream | null;
+  stream?: MediaStream | null;
+  src?: string;
+  loop?: boolean;
   className?: string;
   label: string;
   onNeedsPlay?: (needs: boolean) => void;
@@ -379,16 +377,42 @@ export function BroadcastVideo({
   useEffect(() => {
     const element = ref.current;
     if (!element) return;
+    let cancelled = false;
     if (element.srcObject !== stream) element.srcObject = stream;
-    if (stream) {
-      void element.play().then(() => onNeedsPlay?.(false)).catch(() => onNeedsPlay?.(true));
-    }
+    const play = async () => {
+      if (!stream && !src) return;
+      element.muted = false;
+      try {
+        await element.play();
+        if (!cancelled) onNeedsPlay?.(false);
+      } catch {
+        if (cancelled) return;
+        element.muted = true;
+        await element.play().catch(() => {});
+        if (!cancelled) onNeedsPlay?.(true);
+      }
+    };
+    void play();
     return () => {
+      cancelled = true;
       element.pause();
       element.srcObject = null;
     };
-  }, [stream, onNeedsPlay]);
-  return <video ref={ref} autoPlay playsInline className={className} aria-label={label} />;
+  }, [stream, src, onNeedsPlay]);
+  return <video ref={ref} src={src} loop={loop} autoPlay playsInline data-broadcast-video className={className} aria-label={label} />;
+}
+
+/** Sound is optional; it must never block the automatically playing picture. */
+export function EnableStageSound({ onEnabled }: { onEnabled: () => void }) {
+  const tr = useCopy();
+  return <button type="button" onClick={(event) => {
+    const video = event.currentTarget.parentElement?.querySelector("video[data-broadcast-video]") as HTMLVideoElement | null;
+    if (!video) return;
+    video.muted = false;
+    void video.play().then(onEnabled).catch(() => { video.muted = true; });
+  }} className="absolute bottom-16 right-3 z-40 rounded-full border border-white/30 bg-black/80 px-3 py-2 text-xs font-bold text-white shadow-lg">
+    {tr("app.live.enableSound")}
+  </button>;
 }
 
 const isVideoFile = (value: string) => /\.(?:mp4|mov|webm)(?:[?#].*)?$/i.test(value || "");
@@ -490,7 +514,7 @@ export function SwapStage({
           describes is — and it follows her into the corner when the product
           takes the stage.
         */}
-        <span className="pointer-events-none absolute bottom-1.5 left-1.5 z-30 rounded-full bg-black/65 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-white/90">
+        <span className="pointer-events-none absolute top-2 left-2 z-30 rounded-full bg-black/65 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-white/90">
           {tr("app.live.aiBadge")}
         </span>
       </div>
@@ -536,19 +560,8 @@ function MiniPlayer({ market }: { market: string }) {
             </>
           }
         />
-        {needsPlay && (
-          <button
-            type="button"
-            onClick={(event) => {
-              const video = event.currentTarget.parentElement?.querySelector("video[aria-label^='Chloe']") as HTMLVideoElement | null;
-              void video?.play().then(() => setNeedsPlay(false));
-            }}
-            className="absolute inset-0 z-30 m-auto h-9 w-fit rounded-full bg-accent px-4 text-xs font-black text-white"
-          >
-            {tr("app.live.playChloe")}
-          </button>
-        )}
-        <span className="absolute left-2 top-2 z-30 inline-flex items-center gap-1.5 rounded-full bg-danger px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-white">
+          {needsPlay ? <EnableStageSound onEnabled={() => setNeedsPlay(false)} /> : null}
+        <span className="absolute left-2 bottom-2 z-30 inline-flex items-center gap-1.5 rounded-full bg-danger px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-white">
           <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" aria-hidden="true" />
           {tr("app.player.live")}
         </span>

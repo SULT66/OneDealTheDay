@@ -168,6 +168,7 @@ function presentDrop(drop, now = Date.now(), { earlyAccessSeconds = 0 } = {}) {
     /* A drop can run with no broadcast at all: the event is the time and the
        limit, not the picture. The slot takes a recorded file or an embed when
        there is one. */
+    preroll_video_url: drop.preroll_video_url || "",
     video_url: drop.video_url || "",
     stream_embed_url: drop.stream_embed_url || "",
     terms: drop.terms || "",
