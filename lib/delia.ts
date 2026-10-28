@@ -381,12 +381,12 @@ async function askAssistantStreaming(
 function toResult(transcript: string, data: AssistantResponse): DeliaResult {
   return {
     transcript,
-    message: data.message || "",
+    message: (data.message || "").replace(/[\u2013\u2014]/g, "-"),
     messageSource: data.message_source,
     turnKind: data.turn_kind,
     referencedPositions: data.referenced_positions || [],
     resultState: data.result_state || "no_match",
-    followUp: data.follow_up || "",
+    followUp: (data.follow_up || "").replace(/[\u2013\u2014]/g, "-"),
     recommendations: data.recommendations || [],
     partialOffers: data.partial_offers || [],
     comparisonNotes: data.comparison_notes || [],

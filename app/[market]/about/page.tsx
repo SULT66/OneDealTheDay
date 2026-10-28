@@ -74,7 +74,7 @@ export default async function AboutPage({
         {info?.country ?? "your market"}: {catalogSize} listings across{" "}
         {categoryCount} categories, each one checked before it is published.
         Delia, the assistant, searches those checked listings first, and will
-        also look beyond them and say so when it does — the shops we have
+        also look beyond them and say so when it does; the shops we have
         agreements with cannot cover every question yet. Once a day we also
         publish a Daily Drop, the picks that came out highest that morning, but
         that is one feature of the site rather than the whole of it.
@@ -140,8 +140,8 @@ export default async function AboutPage({
             true. */}
         Delia searches the checked catalog first, so anything she offers from
         it has already been through the same checks as everything else here.
-        She will also look further afield when the catalog cannot answer —
-        we have agreements with a handful of shops, not with every shop — and
+        She will also look further afield when the catalog cannot answer,
+        we have agreements with a handful of shops, not with every shop, and
         she says which is which, because a listing we have checked and a page
         we have merely found are not the same thing. Speech recognition runs in
         your browser and needs no account; where a browser has none, the same

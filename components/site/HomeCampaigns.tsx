@@ -21,7 +21,7 @@ const COPY: Record<Language, Copy> = {
     bfEyebrow:"Black Friday · 27 novembre",bfTitle:"Nous notons déjà\nles prix, jour après jour.",bfNote:"Huit semaines de relevés qui nous sont propres : le jour venu, vous verrez quelles remises sont réelles.",bfShop:"Voir le journal des prix",
     browse:"Voir tous les produits",drop:"Un jour. Une sélection.",dropNote:"Découvrez le Daily Drop du jour.",daily:"Voir la sélection du jour",everyday:"Votre prochaine belle trouvaille.",everydayNote:"Des produits au prix, vendeur et conditions vérifiés.",hero:"Campagnes"},
   de: {eyebrow:"Halloween · 31. Oktober",title:"Ein wenig gruselig.\nJede Menge Spaß.",note:"Kostüme, Deko und Partyideen für den 31. Oktober.",lateNote:"Der 31. Oktober ist nah. Prüfe die Lieferzeit des jeweiligen Verkäufers, bevor du damit rechnest.",shop:"Halloween entdecken",categories:["Kostüme","Dekoration","Partybedarf"],
-    bfEyebrow:"Black Friday · 27. November",bfTitle:"Wir schreiben die Preise\nschon jetzt mit.",bfNote:"Acht Wochen eigene Aufzeichnungen — am Tag selbst siehst du, welche Rabatte echt sind und welche schon immer so hießen.",bfShop:"Zum Preistagebuch",
+    bfEyebrow:"Black Friday · 27. November",bfTitle:"Wir schreiben die Preise\nschon jetzt mit.",bfNote:"Acht Wochen eigene Aufzeichnungen. Am Tag selbst siehst du, welche Rabatte echt sind und welche schon immer so hießen.",bfShop:"Zum Preistagebuch",
     browse:"Alle Produkte ansehen",drop:"Ein Tag. Ein Tipp.",dropNote:"Entdecke den heutigen Daily Drop.",daily:"Heutigen Tipp ansehen",everyday:"Finde deinen nächsten guten Kauf.",everydayNote:"Produkte mit geprüftem Preis, Verkäufer und Kaufbedingungen.",hero:"Kampagnen"},
 };
 

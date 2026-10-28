@@ -108,7 +108,7 @@ function presentDrop(drop, now = Date.now(), { earlyAccessSeconds = 0 } = {}) {
   return {
     drop_key: drop.drop_key,
     market: drop.market,
-    title: drop.title,
+    title: String(drop.title || "").replace(/[\u2013\u2014]/g, "-"),
     brand: drop.brand,
     retailer_name: drop.retailer_name,
     image_url: drop.image_url,
@@ -218,7 +218,7 @@ function hostGreeting(view) {
   const opening = `Hi, I'm Chloe and this is OneDailyDrop Live. Today's drop is the ${product}.${shop}`;
 
   if (view.state !== "live") {
-    return `${opening} The price opens in a moment — stay with me and I'll tell you the second it does. Ask me anything about it while we wait.`;
+    return `${opening} The price opens in a moment. Stay with me and I'll tell you the second it does. Ask me anything about it while we wait.`;
   }
   /*
    * The price, and no comparison to it.
@@ -265,7 +265,7 @@ function hostRevealLine(view) {
    * The clock does the same job and is ours to state.
    */
   const minutes = Math.max(1, Math.round(number(view.seconds_until_end, 0) / 60));
-  return `The drop just opened at ${view.currency} ${view.drop_price}, and this price is only live for the next ${minutes} minutes. Announce it to the viewers now, in one or two lively sentences: say the price, say how little time is left, and tell them the buy button is right below you. Push the urgency of the clock as hard as you like. Never say or imply how many are left or that they will run out — you cannot see the shop's stock, and the offer ends when the countdown does. Never say the price is a discount, a saving, or a percentage off anything: you have no figure to compare it with, and claiming one is the single thing this show must not do.`;
+  return `The drop just opened at ${view.currency} ${view.drop_price}, and this price is only live for the next ${minutes} minutes. Announce it to the viewers now, in one or two lively sentences: say the price, say how little time is left, and tell them the buy button is right below you. Push the urgency of the clock as hard as you like. Never say or imply how many are left or that they will run out; you cannot see the shop's stock, and the offer ends when the countdown does. Never say the price is a discount, a saving, or a percentage off anything: you have no figure to compare it with, and claiming one is the single thing this show must not do.`;
 }
 
 /**

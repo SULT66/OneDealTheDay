@@ -37,7 +37,7 @@ const COPY: Record<Language, {
     method: "Why this page has no deals on it yet",
     methodBody: [
       "A discount is a comparison, and the number shops print is a comparison with a price they chose. Ours is a comparison with what we recorded, four to six times a day, every day, from October.",
-      "That is the whole product. It also means there is nothing to show on this page in October except the watching itself — and that is the honest state of it.",
+      "That is the whole product. It also means there is nothing to show on this page in October except the watching itself, and that is the honest state of it.",
     ],
     how: "How to read a Black Friday price anywhere",
     howBody: [
@@ -126,7 +126,7 @@ const COPY: Record<Language, {
     watching: "Beobachtet seit", 
     method: "Warum hier noch keine Angebote stehen",
     methodBody: [
-      "Ein Rabatt ist ein Vergleich, und die Zahl der Shops vergleicht mit einem Preis, den sie selbst gewählt haben. Unsere vergleicht mit dem, was wir aufgezeichnet haben — vier- bis sechsmal am Tag, seit Oktober.",
+      "Ein Rabatt ist ein Vergleich, und die Zahl der Shops vergleicht mit einem Preis, den sie selbst gewählt haben. Unsere vergleicht mit dem, was wir aufgezeichnet haben, vier- bis sechsmal am Tag, seit Oktober.",
       "Das ist das ganze Produkt. Es heißt auch: im Oktober gibt es hier nichts zu zeigen außer dem Mitschreiben selbst. Das ist der ehrliche Stand.",
     ],
     how: "Wie man einen Black-Friday-Preis überall liest",
@@ -269,8 +269,8 @@ function DiaryRow({ entry, deal, temporary, copy, language, market }: {
     </div>
     <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-border pt-4 sm:grid-cols-4">
       <div><dt className="text-xs text-fg-subtle">{copy.now}</dt><dd className="mt-0.5 text-base font-bold text-fg">{money(deal.price)}</dd></div>
-      <div><dt className="text-xs text-fg-subtle">{copy.low}</dt><dd className="mt-0.5 text-base font-semibold text-fg">{low !== null ? money(low) : "—"}</dd></div>
-      <div><dt className="text-xs text-fg-subtle">{copy.high}</dt><dd className="mt-0.5 text-base font-semibold text-fg">{high !== null ? money(high) : "—"}</dd></div>
+      <div><dt className="text-xs text-fg-subtle">{copy.low}</dt><dd className="mt-0.5 text-base font-semibold text-fg">{low !== null ? money(low) : "-"}</dd></div>
+      <div><dt className="text-xs text-fg-subtle">{copy.high}</dt><dd className="mt-0.5 text-base font-semibold text-fg">{high !== null ? money(high) : "-"}</dd></div>
       <div><dt className="text-xs text-fg-subtle">{copy.days}</dt><dd className="mt-0.5 text-base font-semibold text-fg">{days.length}</dd></div>
     </dl>
   </div>;

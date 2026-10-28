@@ -130,7 +130,7 @@ export default async function ForRetailersPage({
         genuinely better than the everyday one, a commissionable link, and the
         delivery and returns terms that go with it. We run the event, write the
         script, notify the people who asked to be reminded, and report back
-        afterwards — how many waited, how many saw the reveal, how many clicked
+        afterwards: how many waited, how many saw the reveal, how many clicked
         through. What we will not do is invent scarcity: we do not hold your
         stock and cannot see it, so the pressure in a Live Drop is the clock,
         which is real, and never a countdown of units, which would not be.

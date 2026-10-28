@@ -197,7 +197,7 @@ export function LiveBroadcastProvider({ market, children }: { market: string; ch
       }
       if (payload.event_type !== "conversation.utterance") return;
       const role = String(payload.properties?.role || "").toLowerCase();
-      const text = String(payload.properties?.speech || payload.properties?.text || "").trim();
+      const text = String(payload.properties?.speech || payload.properties?.text || "").replace(/[\u2013\u2014]/g, "-").trim();
       if (!text || !["pal", "replica"].includes(role)) return;
       const id = `c${String(payload.seq ?? text)}`;
       if (seenRef.current.has(id)) return;

@@ -964,7 +964,7 @@ const googleUserId = (profile, marketCode) => {
  */
 const sendWelcome = (user) => {
   welcomeEmail(user).catch((error) => {
-    console.error(`[welcome] ${user.email}: ${error.message}${error.details ? ` — ${error.details}` : ""}`);
+    console.error(`[welcome] ${user.email}: ${error.message}${error.details ? ` - ${error.details}` : ""}`);
   });
 };
 
@@ -1251,7 +1251,7 @@ const chloeContext = (selectedMarket, view) => [
      none of it to us, so that sentence is invented — and inventing it is what
      affiliate programmes reject applications over. The countdown does the
      same work honestly. */
-  "Be urgent about the countdown: the price is live for a few minutes only and you should say so. Never say or imply how many are left, how fast they are selling, or that they will run out — you cannot see the retailer's stock, and this offer ends when the clock does, not when it sells out.",
+  "Be urgent about the countdown: the price is live for a few minutes only and you should say so. Never say or imply how many are left, how fast they are selling, or that they will run out; you cannot see the retailer's stock, and this offer ends when the clock does, not when it sells out.",
 ].join(" ");
 
 /* ----------------------------------------------------------------------
@@ -2307,7 +2307,7 @@ app.get("/category/:slug", (req, res) => {
   const prices = products.map(product => Number(product.current_price)).filter(value => Number.isFinite(value) && value > 0);
   const ratings = products.map(product => Number(product.rating)).filter(value => Number.isFinite(value) && value > 0);
   const pageLocale = languageTag(selectedMarket.code, req.language);
-  const priceRange = prices.length ? `${money(Math.min(...prices), selectedMarket.currency, pageLocale)} – ${money(Math.max(...prices), selectedMarket.currency, pageLocale)}` : t(req.language,"page.checkCurrentOffers");
+  const priceRange = prices.length ? `${money(Math.min(...prices), selectedMarket.currency, pageLocale)} - ${money(Math.max(...prices), selectedMarket.currency, pageLocale)}` : t(req.language,"page.checkCurrentOffers");
   const averageRating = ratings.length ? `${(ratings.reduce((sum, value) => sum + value, 0) / ratings.length).toFixed(1)} / 5` : t(req.language,"page.notAvailable");
   const categorySummary = `<div class="detail-grid"><section><h2>Products checked</h2><p>${products.length}</p></section><section><h2>Current price range</h2><p>${esc(priceRange)}</p></section><section><h2>Average rating</h2><p>${esc(averageRating)}</p></section></div><section class="editorial-box"><h2>${esc(t(req.language,"page.howSelectCategory",{category:categoryTitle.toLowerCase()}))}</h2><p>${esc(t(req.language,"page.categoryMethod",{country:localizedMarketName}))}</p></section>`;
   const alternateCodes = marketCodes.filter(code => navCategories(code).includes(category));
@@ -3170,7 +3170,7 @@ app.post("/api/price-watches", authRateLimit, express.json({limit:"4kb"}), (req,
     currency: product.currency || "USD",
   }).catch(error => console.error(`[price-watch] confirmation to ${email}: ${error.message}`));
 
-  res.status(201).json({ok:true, message:"Saved. Check your email — we just confirmed it."});
+  res.status(201).json({ok:true, message:"Saved. Check your email; we just confirmed it."});
 });
 
 app.post("/unsubscribe", (req, res) => {
@@ -3272,7 +3272,7 @@ app.get("/digest/stop", (req, res) => {
   const done = digestFlag(req.query.token, false);
   return done
     ? digestPage(res, 200, "No more Sundays",
-      "We will not send you the Sunday finds again. If you are also on the Live Drop list, those still arrive — the unsubscribe link in any of them stops those too.")
+      "We will not send you the Sunday finds again. If you are also on the Live Drop list, those still arrive; the unsubscribe link in any of them stops those too.")
     : digestPage(res, 404, "Link not recognised",
       "That link is not one we recognise. Reply to any of our emails and we will take you off by hand.");
 });
@@ -4071,7 +4071,7 @@ app.patch("/api/admin/live-drops/:key/media", admin, express.json({limit:"8kb"})
   };
   const bad = Object.entries(fields).filter(([, value]) => value === null).map(([name]) => name);
   if (bad.length) {
-    return res.status(400).json({error:`Use an https link or a path starting with / — check: ${bad.join(", ")}.`});
+    return res.status(400).json({error:`Use an https link or a path starting with / - check: ${bad.join(", ")}.`});
   }
 
   db.prepare(
@@ -4302,10 +4302,10 @@ app.get("/api/admin/ebay-stock", admin, async (req, res) => {
       /* Said in words, because `exact:false` is the whole answer to "can this
          product have a live counter" and it should not need decoding. */
       verdict: stock.exact
-        ? "eBay gives an exact count — this listing can drive a real counter."
+        ? "eBay gives an exact count; this listing can drive a real counter."
         : stock.threshold !== null
-          ? `eBay only says "more than ${stock.threshold}" — no countdown is possible.`
-          : "eBay gives no quantity for this listing — no countdown is possible.",
+          ? `eBay only says "more than ${stock.threshold}" - no countdown is possible.`
+          : "eBay gives no quantity for this listing; no countdown is possible.",
     });
   } catch (error) {
     return res.status(502).json({error:error.message});
@@ -4676,7 +4676,7 @@ const stockPoll = setInterval(async () => {
     for (const drop of live) {
       const result = await refreshDropStock(drop, {db, market:market(drop.market)});
       if (result.changed) {
-        console.log(`[live-drop] ${drop.drop_key}: ${result.remaining} left${result.soldOut ? " — sold out, drop closed" : ""}`);
+        console.log(`[live-drop] ${drop.drop_key}: ${result.remaining} left${result.soldOut ? " - sold out, drop closed" : ""}`);
       }
     }
   } catch (error) {

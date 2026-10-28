@@ -85,7 +85,7 @@ export default async function StoresPage({
     >
       <p>
         These are the shops connected to OneDailyDrop in{" "}
-        {info?.country ?? "this market"} today &mdash;{" "}
+        {info?.country ?? "this market"} today;{" "}
         {total.toLocaleString("en-US")} listings between them. Every name links
         straight through to that shop.
       </p>
@@ -114,7 +114,7 @@ export default async function StoresPage({
         Some shops supply product listings; others are available through a
         direct store link. Appearing here does not
         mean the shop pays for placement, chooses which of its products appear,
-        or has any say in how they are scored &mdash; none of those are things
+        or has any say in how they are scored; none of those are things
         we sell. A retailer sees the same ranking rules as every other retailer,
         and can be outranked by them on its own listings.
       </p>

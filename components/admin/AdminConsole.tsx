@@ -173,7 +173,7 @@ export function AdminConsole() {
       const body = await response.json();
       /* The provider's own words, not a shrug: "sender identity not verified"
          and "domain authentication incomplete" need different fixes. */
-      setMessage(response.ok ? body.message : [body.error, body.provider].filter(Boolean).join(" — "));
+      setMessage(response.ok ? body.message : [body.error, body.provider].filter(Boolean).join(" - "));
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "That did not go through.");
     } finally {
@@ -510,7 +510,7 @@ export function AdminConsole() {
                 product is actually seen. */}
             <FormGroup title="What people see" columns={2}>
               <MediaUpload adminKey={adminKey} kind="image" label="Product photo" hint="The product on its own, clean background." value={form.image_url} onChange={(v) => setForm({ ...form, image_url: v })} disabled={!unlocked || busy} />
-              <MediaUpload adminKey={adminKey} kind="image" label="Product in use — photo" hint="Somebody using it. Optional." value={form.secondary_image_url} onChange={(v) => setForm({ ...form, secondary_image_url: v })} disabled={!unlocked || busy} />
+              <MediaUpload adminKey={adminKey} kind="image" label="Product in use - photo" hint="Somebody using it. Optional." value={form.secondary_image_url} onChange={(v) => setForm({ ...form, secondary_image_url: v })} disabled={!unlocked || busy} />
               <MediaUpload adminKey={adminKey} kind="video" label="Product footage" hint="The product up close. Plays beside Chloe." value={form.video_url} onChange={(v) => setForm({ ...form, video_url: v })} disabled={!unlocked || busy} />
             </FormGroup>
 
@@ -520,7 +520,7 @@ export function AdminConsole() {
             <FormGroup title="Chloe's script" columns={2}>
               <ScriptField
                 label="Opening"
-                hint="She reads this word for word when she goes on air, 5 minutes before the drop. Don't put the drop price here — it is still hidden."
+                hint="She reads this word for word when she goes on air, 5 minutes before the drop. Don't put the drop price here; it is still hidden."
                 value={form.host_script_intro}
                 onChange={(v) => setForm({ ...form, host_script_intro: v })}
                 rows={6}
@@ -859,9 +859,9 @@ function DropRow({
             drop nobody had asked the shop about looked exactly like a drop
             whose seller publishes no quantity. */}
         {drop.stock_is_live
-          ? "Stock is confirmed by the shop — the page shows a live count."
+          ? "Stock is confirmed by the shop; the page shows a live count."
           : drop.stock_checked_at
-            ? "The shop gives no live count — the page shows the offer size, not a countdown."
+            ? "The shop gives no live count; the page shows the offer size, not a countdown."
             : "Not checked with the shop yet. The answer arrives within a minute of publishing."}
       </p>
       <p className="mt-2 text-xs text-fg-subtle">
@@ -870,7 +870,7 @@ function DropRow({
         {drop.reminders} {drop.reminders === 1 ? "person" : "people"} asked for a reminder
         {drop.reminder_emails_sent != null ? ` · ${drop.reminder_emails_sent} reminder ${drop.reminder_emails_sent === 1 ? "email" : "emails"} sent` : ""}
         {" · "}told = people emailed the announcement, once each. <strong>Bought: not knowable here.</strong>{" "}
-        Purchases are only visible in the network report — search it for{" "}
+        Purchases are only visible in the network report; search it for{" "}
         <code className="rounded bg-surface-2 px-1 py-0.5 font-mono text-[0.7rem] text-fg">
           {drop.click_label}
         </code>
@@ -986,12 +986,12 @@ function DropRow({
           were told those, and changing them quietly is a different act. */}
       <div className="mt-3 grid gap-x-4 sm:grid-cols-2">
         <MediaUpload adminKey={adminKey} kind="image" label="Product photo" value={media.image_url} onChange={(v) => setMedia({ ...media, image_url: v })} disabled={busy} />
-        <MediaUpload adminKey={adminKey} kind="image" label="Product in use — photo" value={media.secondary_image_url} onChange={(v) => setMedia({ ...media, secondary_image_url: v })} disabled={busy} />
+        <MediaUpload adminKey={adminKey} kind="image" label="Product in use - photo" value={media.secondary_image_url} onChange={(v) => setMedia({ ...media, secondary_image_url: v })} disabled={busy} />
         <MediaUpload adminKey={adminKey} kind="video" label="Product footage" value={media.video_url} onChange={(v) => setMedia({ ...media, video_url: v })} disabled={busy} />
         {/* Only shown to take one away: a presenter video replaces live Chloe
             on the page, and an old drop may still carry one. */}
         {media.stream_embed_url ? (
-          <MediaUpload adminKey={adminKey} kind="video" label="Presenter video (replaces live Chloe — remove it to use her)" value={media.stream_embed_url} onChange={(v) => setMedia({ ...media, stream_embed_url: v })} disabled={busy} />
+          <MediaUpload adminKey={adminKey} kind="video" label="Presenter video (replaces live Chloe - remove it to use her)" value={media.stream_embed_url} onChange={(v) => setMedia({ ...media, stream_embed_url: v })} disabled={busy} />
         ) : null}
       </div>
       <button
