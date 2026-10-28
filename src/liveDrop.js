@@ -61,11 +61,25 @@ function dropState(drop, now = Date.now(), earlyAccessSeconds = 0) {
  * promotion into a complaint.
  */
 function dropSaving(drop) {
-  const retail = number(drop?.retail_price, 0);
+  /*
+   * Against the seller's own figure, never against the one typed in the form.
+   *
+   * retail_price is whatever the admin entered. Nothing sourced it, nothing
+   * checked it, and a drop went out announcing "forty-five percent below its
+   * usual price" on the strength of it — out loud, in the host's voice, on a
+   * site whose whole argument is that it will not repeat a saving it cannot
+   * show you. seller_reference_price is read off the listing itself, so the
+   * comparison is at least the seller's published claim, and every place that
+   * shows it labels it as theirs.
+   *
+   * Absent on a listing with no crossed-out price, which is most of them, and
+   * that is the right outcome: no badge beats an invented one.
+   */
+  const reference = number(drop?.seller_reference_price, 0);
   const price = number(drop?.drop_price, 0);
-  if (!(retail > 0 && price > 0 && retail > price)) return null;
-  const amount = Math.round((retail - price) * 100) / 100;
-  return { amount, percent: Math.round((amount / retail) * 100) };
+  if (!(reference > 0 && price > 0 && reference > price)) return null;
+  const amount = Math.round((reference - price) * 100) / 100;
+  return { amount, percent: Math.round((amount / reference) * 100) };
 }
 
 /**
@@ -99,10 +113,33 @@ function presentDrop(drop, now = Date.now(), { earlyAccessSeconds = 0 } = {}) {
        hold it up, so this is where a shopper actually sees the thing. */
     secondary_image_url: drop.secondary_image_url || "",
     currency: drop.currency,
-    retail_price: number(drop.retail_price, 0) || null,
+    /*
+     * The seller's crossed-out price, not the one typed into the form.
+     *
+     * Same figure the catalogue shows on a product page, from the same place
+     * — the listing — and shown under the same rule: it is the seller's claim
+     * and is labelled as theirs. Most listings carry none, and then this is
+     * null and the page shows no comparison at all.
+     */
+    retail_price: number(drop.seller_reference_price, 0) || null,
     /* Before the start this is deliberately null, not the real number. */
     drop_price: revealed ? number(drop.drop_price, 0) || null : null,
     saving,
+    /*
+     * Whether eBay has confirmed this price lately, and agreed with it.
+     *
+     * The same shape as stock_is_live below, and for the same reason: a claim
+     * that cannot be re-checked should expire rather than linger. False means
+     * the page may still show the price — it is what the drop is offering —
+     * but nothing on the page may present it as confirmed.
+     */
+    price_is_verified: (() => {
+      const at = Date.parse(drop.price_verified_at || "");
+      if (!Number.isFinite(at) || now - at > 30 * 60 * 1000) return false;
+      const ours = number(drop.drop_price, 0);
+      const theirs = number(drop.listing_price, 0);
+      return ours > 0 && theirs > 0 && Math.abs(ours - theirs) <= 0.01;
+    })(),
     quantity_total: number(drop.quantity_total, 0),
     quantity_remaining: Math.max(0, number(drop.quantity_remaining, 0)),
     /*
@@ -171,15 +208,29 @@ function hostGreeting(view) {
   const product =
     [alreadyNamed ? "" : brand, title].filter(Boolean).join(" ").trim() || "today's drop";
   const shop = view.retailer_name ? ` It's available on ${view.retailer_name}.` : "";
-  const opening = `Hi, I'm Chloe and this is OneDailyDrop Live. Today's drop is the ${product}.${shop}`;
+  /*
+   * She says she is an AI in her first sentence, every time.
+   *
+   * She looks and sounds like a person and is introduced by a first name, so
+   * nothing else on the page corrects the impression — and a viewer who only
+   * ever catches the opening is the one most likely to be left with it. A
+   * disclosure further down the page is not one the audio audience receives.
+   */
+  const opening = `Hi, I'm Chloe, the AI host of OneDailyDrop Live. Today's drop is the ${product}.${shop}`;
 
   if (view.state !== "live") {
     return `${opening} The price opens in a moment — stay with me and I'll tell you the second it does. Ask me anything about it while we wait.`;
   }
-  const saving = view.saving
-    ? ` That's ${view.saving.percent} percent below its usual price.`
-    : "";
-  return `${opening} It's live now at ${view.currency} ${view.drop_price}.${saving} Ask me anything about it, and the buy button is right below me.`;
+  /*
+   * The price, and no comparison to it.
+   *
+   * She used to add "that's N percent below its usual price", where the usual
+   * price was a number typed into the admin form that nothing had checked.
+   * The page may still show the seller's own crossed-out figure, labelled as
+   * theirs; saying it aloud as ours is a different claim, and not one we can
+   * stand behind.
+   */
+  return `${opening} It's live now at ${view.currency} ${view.drop_price}. Ask me anything about it, and the buy button is right below me.`;
 }
 
 /**
@@ -197,7 +248,10 @@ function hostGreeting(view) {
  */
 function hostRevealLine(view) {
   if (!view || view.state !== "live" || view.drop_price == null) return "";
-  const saving = view.saving ? `, ${view.saving.percent} percent below its usual price` : "";
+  /*
+   * No saving in the reveal either, for the reason given in hostGreeting:
+   * the figure it was computed against was typed, not measured.
+   */
   /*
    * Urgency, from the one thing that is true.
    *
@@ -212,7 +266,7 @@ function hostRevealLine(view) {
    * The clock does the same job and is ours to state.
    */
   const minutes = Math.max(1, Math.round(number(view.seconds_until_end, 0) / 60));
-  return `The drop just opened at ${view.currency} ${view.drop_price}${saving}, and this price is only live for the next ${minutes} minutes. Announce it to the viewers now, in one or two lively sentences: say the price, say how little time is left, and tell them the buy button is right below you. Push the urgency of the clock as hard as you like. Never say or imply how many are left or that they will run out — you cannot see the shop's stock, and the offer ends when the countdown does.`;
+  return `The drop just opened at ${view.currency} ${view.drop_price}, and this price is only live for the next ${minutes} minutes. Announce it to the viewers now, in one or two lively sentences: say the price, say how little time is left, and tell them the buy button is right below you. Push the urgency of the clock as hard as you like. Never say or imply how many are left or that they will run out — you cannot see the shop's stock, and the offer ends when the countdown does. Never say the price is a discount, a saving, or a percentage off anything: you have no figure to compare it with, and claiming one is the single thing this show must not do.`;
 }
 
 /**

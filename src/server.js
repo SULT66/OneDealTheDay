@@ -78,7 +78,7 @@ const { digestItemFor } = require("./weeklyDigest");
 const { emailHealth } = require("./emailHealth");
 const { htmlCache } = require("./htmlCache");
 const { startCacheWarmer, pathsFor } = require("./cacheWarmer");
-const { readEbayStock, refreshDropStock, ebayItemIdFrom } = require("./liveStock");
+const { readEbayStock, refreshDropStock, ebayItemIdFrom, priceAgrees } = require("./liveStock");
 const { comparableFor, refreshComparables } = require("./comparables");
 const { updateTrackedPrices } = require("./trackedPrice");
 const { discoverEbay } = require("./merchandisingDiscovery");
@@ -3832,7 +3832,7 @@ app.post("/api/admin/live-drops", admin, (req, res) => {
   res.status(201).json({ok:true, drop_key:dropKey, published:false});
 });
 
-app.post("/api/admin/live-drops/:key/publish", admin, (req, res) => {
+app.post("/api/admin/live-drops/:key/publish", admin, async (req, res) => {
   const drop = db.prepare("SELECT * FROM live_drops WHERE drop_key=?").get(String(req.params.key || ""));
   if (!drop) return res.status(404).json({error:"No such drop."});
   const published = req.body?.published === false ? 0 : 1;
@@ -3841,6 +3841,42 @@ app.post("/api/admin/live-drops/:key/publish", admin, (req, res) => {
   if (!published && dropState(drop, Date.now()) === "live") {
     return res.status(409).json({error:"That drop is open. Let it close rather than pulling it from under whoever is watching."});
   }
+
+  /*
+   * The price on the page has to be the price in the basket.
+   *
+   * drop_price is typed into the admin form, so until now it was a plan that
+   * nothing had checked against the listing behind the buy button. A drop
+   * that announces one number and charges another is the complaint an
+   * affiliate account ends over — and the host says the number out loud, to
+   * everybody, at the moment of the reveal.
+   *
+   * Asked once, here, because this is the point where there is somebody to
+   * tell. eBay being unreachable does not block the publish: an outage is not
+   * evidence that the price is wrong. It simply leaves the drop unverified,
+   * and an unverified drop shows its price without presenting it as checked.
+   */
+  if (published) {
+    try {
+      const outcome = await refreshDropStock(drop, { db, market: market(drop.market) });
+      const checked = db
+        .prepare("SELECT drop_price, listing_price FROM live_drops WHERE id=?")
+        .get(drop.id);
+      if (checked?.listing_price != null && !priceAgrees(checked.drop_price, checked.listing_price)) {
+        return res.status(409).json({
+          error: `eBay is charging ${drop.currency} ${Number(checked.listing_price).toFixed(2)} for this listing, `
+            + `and the drop says ${drop.currency} ${Number(checked.drop_price).toFixed(2)}. `
+            + `Fix one of them before publishing.`,
+          listing_price: checked.listing_price,
+          drop_price: checked.drop_price,
+        });
+      }
+      if (outcome?.reason) console.log(`[live-drop] publish check for ${drop.drop_key}: ${outcome.reason}`);
+    } catch (error) {
+      console.error(`[live-drop] could not check the price of ${drop.drop_key}: ${error.message}`);
+    }
+  }
+
   const nowIso = new Date().toISOString();
   db.prepare("UPDATE live_drops SET published=?, updated_at=? WHERE id=?")
     .run(published, nowIso, drop.id);

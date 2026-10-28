@@ -372,6 +372,21 @@ const clubWaitlistEmail = ({email}) => sendEmail({
  */
 
 /* To the subscriber list, one to three days ahead. Marketing: carries a way out. */
+/*
+ * What every drop email has to say about the account, and did not.
+ *
+ * Buying in a drop takes a free one: the page hides the button without it and
+ * /live/go turns the link away. Not one of the five emails mentioned it, so a
+ * reader met the requirement at the worst moment there is — price open, clock
+ * running, and a sign-up form between them and the thing they came for.
+ *
+ * Two wordings, because the advice differs. Before the drop there is time to
+ * do it calmly; once it is live, saying "take a minute" is wrong.
+ */
+const ACCOUNT_BEFORE = "Buying in a drop takes a free account, which takes a minute. "
+  + "Worth doing before the clock starts — the price is only open for ten minutes.";
+const ACCOUNT_DURING = "Buying takes a free account; if you do not have one, the page offers it in one step.";
+
 const liveDropAnnouncementEmail = ({ email, title, market, startsAt, unsubscribeUrl, ...product }) => sendEmail({
   to: email,
   subject: `Live Drop ${dropTime(startsAt, market).replace(/ at .*/, "")}: ${title}`,
@@ -388,7 +403,7 @@ const liveDropAnnouncementEmail = ({ email, title, market, startsAt, unsubscribe
     ],
     product: productOf({ title, ...product }),
     cta: { label: "Remind me when it starts", href: dropUrl(market) },
-    after: "Tap the button, then press Remind me on the page.",
+    after: `Tap the button, then press Remind me on the page. ${ACCOUNT_BEFORE}`,
     signature: `See you there,<br>${CHLOE}`,
     footer: unsubscribeFooter(unsubscribeUrl, "You are receiving this because you signed up for Live Drop emails."),
   }),
@@ -411,6 +426,7 @@ const liveDropSaveTheDateEmail = ({ email, title, market, startsAt, unsubscribeU
     ],
     product: productOf({ title, ...product }),
     cta: { label: "See the drop page", href: dropUrl(market) },
+    after: ACCOUNT_BEFORE,
     signature: `See you tomorrow,<br>${CHLOE}`,
     footer: unsubscribeFooter(unsubscribeUrl, "You asked to be reminded about this drop."),
   }),
@@ -432,6 +448,7 @@ const liveDropStartingSoonEmail = ({ email, title, market, minutes, ...product }
     ],
     product: productOf({ title, ...product }),
     cta: { label: "Open the drop", href: dropUrl(market) },
+    after: ACCOUNT_BEFORE,
     signature: `See you in a bit,<br>${CHLOE}`,
     footer: "You asked us for this reminder. There is nothing to unsubscribe from.",
   }),
@@ -452,6 +469,7 @@ const liveDropReminderEmail = ({ email, title, market, minutes }) => sendEmail({
       "Open the page now so you're there the second the price appears. It's only open for ten minutes.",
     ],
     cta: { label: "Join the Live Drop", href: dropUrl(market) },
+    after: ACCOUNT_BEFORE,
     signature: CHLOE,
     footer: "You asked us for this reminder. There is nothing to unsubscribe from.",
   }),
@@ -480,6 +498,7 @@ const liveDropLiveNowEmail = ({ email, title, market, asked, unsubscribeUrl, ...
     ],
     product: productOf({ title, ...product }),
     cta: { label: "Watch and buy now", href: dropUrl(market) },
+    after: ACCOUNT_DURING,
     signature: CHLOE,
     footer: asked
       ? "You asked to be reminded about this drop. There is nothing to unsubscribe from."

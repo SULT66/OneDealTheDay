@@ -842,6 +842,29 @@ if (!dropColumns.has("stock_checked_at")) {
 if (!dropColumns.has("stock_verified_at")) {
   db.exec("ALTER TABLE live_drops ADD COLUMN stock_verified_at TEXT");
 }
+/*
+ * What eBay is charging, as against what the drop says it charges.
+ *
+ * drop_price and retail_price are typed into the admin form, so both were
+ * plans rather than facts: a drop could announce $220, and have the host say
+ * it out loud, while the listing behind the buy button said something else
+ * entirely. Nothing checked, and nothing could — the figures had no source.
+ *
+ * listing_price is read from the listing on the same pass that reads the
+ * stock, and price_verified_at stamps when. Together they let the page state
+ * a price as a fact and let a stale stamp withdraw that claim by itself.
+ *
+ * seller_reference_price is the seller's own crossed-out figure from the same
+ * answer. It is their claim and is labelled as theirs wherever it appears —
+ * the catalogue has always treated it that way, and a Live Drop has no
+ * licence the rest of the site lacks.
+ */
+if (!dropColumns.has("listing_price")) {
+  db.exec("ALTER TABLE live_drops ADD COLUMN listing_price REAL");
+  db.exec("ALTER TABLE live_drops ADD COLUMN listing_currency TEXT");
+  db.exec("ALTER TABLE live_drops ADD COLUMN seller_reference_price REAL");
+  db.exec("ALTER TABLE live_drops ADD COLUMN price_verified_at TEXT");
+}
 
 /*
  * Who has been told about which drop, for the announcement that goes to the
