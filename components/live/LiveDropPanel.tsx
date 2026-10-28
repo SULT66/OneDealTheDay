@@ -716,7 +716,12 @@ function BroadcastStage({
   untilEnd: number | null;
 }) {
   const tr = useCopy();
-  const showable = drop.state === "waiting" || drop.state === "live";
+  const broadcast = useLiveBroadcast();
+  const retainedDrop = useRef(drop);
+  if (!broadcast.session || broadcast.session.dropKey === drop.drop_key) retainedDrop.current = drop;
+  else if (broadcast.session.dropKey === retainedDrop.current.drop_key) drop = retainedDrop.current;
+  const watching = broadcast.session?.dropKey === drop.drop_key;
+  const showable = drop.state === "waiting" || drop.state === "live" || watching;
   if (!showable) return null;
   /* The price band under the picture, whichever presenter holds the stage. */
   const board = <PriceBoard drop={drop} market={market} untilStart={untilStart} untilEnd={untilEnd} />;
@@ -1190,9 +1195,10 @@ function TavusHost({ market, drop, board }: { market: string; drop: LiveDropView
 
   if (watching) {
     return (
-      <div className="relative flex w-full min-w-0 flex-col bg-[#07172b]">
+      <div className={`relative flex w-full min-w-0 flex-col bg-[#07172b] transition-opacity duration-700 ${live.fading ? "opacity-0" : "opacity-100"}`}>
         <div className="relative">
           <SwapStage
+            closing={live.closing || ["ended", "sold_out"].includes(drop.state)}
             talking={live.talking}
             productVideo={drop.video_url}
             productImage={drop.image_url}
@@ -1236,7 +1242,7 @@ function TavusHost({ market, drop, board }: { market: string; drop: LiveDropView
               {tr("app.live.leave")}
             </button>
           </div>
-          {chatOverlay(true)}
+          {!live.closing && !["ended", "sold_out"].includes(drop.state) && chatOverlay(true)}
         </div>
         {error || live.error ? <p className="px-3 pt-2 text-xs font-semibold text-red-300">{error || live.error}</p> : null}
         {board}

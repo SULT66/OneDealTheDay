@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import DailyIframe from "@daily-co/daily-js";
-import { hostTurnFinished, presenterSpeakingEvent } from "@/lib/liveHostProtocol";
+import { HOST_CLOSING_SCRIPT, hostClockInstruction, hostTurnFinished, presenterSpeakingEvent } from "@/lib/liveHostProtocol";
 
 /*
  * The host console: the one place that talks to Chloe during a drop.
@@ -20,6 +20,9 @@ import { hostTurnFinished, presenterSpeakingEvent } from "@/lib/liveHostProtocol
 
 type HostState = {
   state: string;
+  phase?: string;
+  seconds_until_start?: number | null;
+  seconds_until_end?: number | null;
   conversation_url: string;
   conversation_id: string;
   reveal_cue: string;
@@ -62,12 +65,14 @@ export function LiveHostConsole({ adminKey, dropKey }: { adminKey: string; dropK
   const [log, setLog] = useState<string[]>([]);
   const callRef = useRef<ReturnType<typeof DailyIframe.createCallObject> | null>(null);
   const readyRef = useRef(false);
+  const clockRef = useRef<Parameters<typeof hostClockInstruction>[0]>(null);
   const speakingRef = useRef(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const lastSentRef = useRef(0);
   const lastStoppedRef = useRef(0);
   const sawSpeakingEventsRef = useRef(false);
   const revealSentRef = useRef(false);
+  const closingSentRef = useRef(false);
   const busyRef = useRef(false);
   const lastKindRef = useRef<"script" | "other">("other");
   const phaseRef = useRef("");
@@ -84,6 +89,8 @@ export function LiveHostConsole({ adminKey, dropKey }: { adminKey: string; dropK
       return;
     }
     setError("");
+    clockRef.current = {state: body.state, secondsUntilStart: body.seconds_until_start ?? null,
+      secondsUntilEnd: body.seconds_until_end ?? null, receivedAt: Date.now()};
     setHost(body);
   }, [dropKey, headers]);
 
@@ -105,6 +112,7 @@ export function LiveHostConsole({ adminKey, dropKey }: { adminKey: string; dropK
     lastStoppedRef.current = 0;
     sawSpeakingEventsRef.current = false;
     revealSentRef.current = false;
+    closingSentRef.current = false;
     introQueuedRef.current = false;
     scriptLinesRef.current = [];
     lastKindRef.current = "other";
@@ -167,7 +175,7 @@ export function LiveHostConsole({ adminKey, dropKey }: { adminKey: string; dropK
           message_type: "conversation",
           event_type: "conversation.respond",
           conversation_id: host.conversation_id,
-          properties: { text },
+          properties: { text: `${text}\n${hostClockInstruction(clockRef.current, Date.now())}` },
         },
         "*",
       );
@@ -180,7 +188,7 @@ export function LiveHostConsole({ adminKey, dropKey }: { adminKey: string; dropK
 
   /* Tells the chat what she is doing, only when it changes. */
   const reportPhase = useCallback(
-    (phase: "presenting" | "answering") => {
+    (phase: "presenting" | "answering" | "closing" | "closed") => {
       if (phaseRef.current === phase) return;
       phaseRef.current = phase;
       void fetch(`/api/admin/live-host/${encodeURIComponent(dropKey)}/phase`, {
@@ -247,9 +255,24 @@ export function LiveHostConsole({ adminKey, dropKey }: { adminKey: string; dropK
   /* Autopilot: the opening script, the reveal, then questions between her
      answers, then a nudge when the chat is quiet. */
   useEffect(() => {
-    if (!autopilot || !joined || !host) return;
+    if (!joined || !host) return;
     const tick = setInterval(() => {
-      if (!readyRef.current || !["waiting", "live"].includes(host.state)) return;
+      if (!readyRef.current) return;
+      if (["ended", "sold_out"].includes(host.state)) {
+        if (host.phase === "closed" || phaseRef.current === "closed") return;
+        reportPhase("closing");
+        scriptLinesRef.current = [];
+        if (!hostTurnFinished({now:Date.now(), sentAt:lastSentRef.current, stoppedAt:lastStoppedRef.current,
+          speaking:speakingRef.current, sawEvents:sawSpeakingEventsRef.current})) return;
+        if (!closingSentRef.current) {
+          closingSentRef.current = echo(HOST_CLOSING_SCRIPT, "Chloe is saying goodbye");
+        } else {
+          reportPhase("closed");
+          note("Broadcast closing completed");
+        }
+        return;
+      }
+      if (!autopilot || !["waiting", "live"].includes(host.state)) return;
       const now = Date.now();
       if (!introQueuedRef.current && host.intro_script && ["waiting", "live"].includes(host.state)) {
         introQueuedRef.current = true;

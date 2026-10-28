@@ -42,6 +42,8 @@ type LiveBroadcastValue = {
   captions: BroadcastCaption[];
   /* Chloe is speaking, smoothed: a breath between two words is not a pause. */
   talking: boolean;
+  closing: boolean;
+  fading: boolean;
   musicOn: boolean;
   leftDropKey: string;
   setMusicOn: (on: boolean) => void;
@@ -92,6 +94,8 @@ export function LiveBroadcastProvider({ market, children }: { market: string; ch
   const [error, setError] = useState("");
   const [captions, setCaptions] = useState<BroadcastCaption[]>([]);
   const [talking, setTalking] = useState(false);
+  const [closing, setClosing] = useState(false);
+  const [fading, setFading] = useState(false);
   const [musicOn, setMusicOnState] = useState(true);
   const [leftDropKey, setLeftDropKey] = useState("");
   const seenRef = useRef(new Set<string>());
@@ -114,6 +118,8 @@ export function LiveBroadcastProvider({ market, children }: { market: string; ch
   }, []);
 
   const join = useCallback((next: Session) => {
+    setClosing(false);
+    setFading(false);
     setLeftDropKey("");
     /* Called from the viewer's click, which is the only moment a browser lets
        sound start. */
@@ -138,6 +144,8 @@ export function LiveBroadcastProvider({ market, children }: { market: string; ch
     setStream(null);
     setJoined(false);
     setTalking(false);
+    setClosing(false);
+    setFading(false);
     eventSpeakingRef.current = false;
     lastVoiceRef.current = 0;
     setSession(null);
@@ -307,25 +315,47 @@ export function LiveBroadcastProvider({ market, children }: { market: string; ch
     };
   }, [presenceKey]);
 
-  /* Off air when the drop is over, wherever the viewer is at the time. */
+  /* Preserve the room for Chloe's sign-off; the offer itself still ends at zero. */
   useEffect(() => {
     if (!session) return;
+    let cancelled = false;
+    let zeroTimer: ReturnType<typeof setTimeout> | undefined;
     const check = async () => {
       const response = await fetch(`/api/live/current?market=${encodeURIComponent(session.market)}`).catch(() => null);
-      if (!response?.ok) return;
-      const body = (await response.json().catch(() => ({}))) as { drop?: { drop_key?: string; state?: string } | null };
+      if (!response?.ok || cancelled) return;
+      const body = await response.json().catch(() => ({}));
+      if (cancelled) return;
       const drop = body.drop;
       if (!drop || drop.drop_key !== session.dropKey || !["waiting", "live"].includes(String(drop.state))) {
-        setSession(null);
+        setClosing(true);
+        const chat = await fetch(`/api/live/chat?drop_key=${encodeURIComponent(session.dropKey)}`).catch(() => null);
+        const status = await chat?.json().catch(() => ({}));
+        if (!cancelled && status?.phase === "closed") setFading(true);
+      } else if (drop.state === "live" && Number.isFinite(drop.seconds_until_end)) {
+        clearTimeout(zeroTimer);
+        zeroTimer = setTimeout(() => setClosing(true), Math.max(0, drop.seconds_until_end) * 1000);
       }
     };
-    const timer = setInterval(check, 30000);
-    return () => clearInterval(timer);
+    void check();
+    const timer = setInterval(check, 5000);
+    return () => { cancelled = true; clearInterval(timer); clearTimeout(zeroTimer); };
   }, [session]);
+
+  /* A missing host console/provider event must not leave an endless ended show. */
+  useEffect(() => {
+    if (!closing) return;
+    const timer = setTimeout(() => setFading(true), 90000);
+    return () => clearTimeout(timer);
+  }, [closing]);
+  useEffect(() => {
+    if (!fading) return;
+    const timer = setTimeout(leave, 900);
+    return () => clearTimeout(timer);
+  }, [fading, leave]);
 
   return (
     <LiveBroadcastContext.Provider
-      value={{ session, stream, joined, error, captions, talking, musicOn, leftDropKey, setMusicOn, join, leave }}
+      value={{ session, stream, joined, error, captions, talking, closing, fading, musicOn, leftDropKey, setMusicOn, join, leave }}
     >
       {children}
       <MiniPlayer market={market} />
@@ -363,8 +393,14 @@ export function BroadcastVideo({
 
 const isVideoFile = (value: string) => /\.(?:mp4|mov|webm)(?:[?#].*)?$/i.test(value || "");
 
-function ProductVideo({ src, label }: { src: string; label: string }) {
+function ProductVideo({ src, label, closing = false }: { src: string; label: string; closing?: boolean }) {
+  const foreground = useRef<HTMLVideoElement | null>(null);
   const background = useRef<HTMLVideoElement | null>(null);
+  useEffect(() => {
+    if (!closing) return;
+    const timer = setTimeout(() => { foreground.current?.pause(); background.current?.pause(); }, 700);
+    return () => clearTimeout(timer);
+  }, [closing]);
   const sync = (video: HTMLVideoElement) => {
     const backdrop = background.current;
     if (!backdrop) return;
@@ -376,7 +412,7 @@ function ProductVideo({ src, label }: { src: string; label: string }) {
     <>
       <video ref={background} src={src} autoPlay muted loop playsInline aria-hidden="true" tabIndex={-1}
         className="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover blur-2xl brightness-75" />
-      <video src={src} autoPlay muted loop playsInline aria-label={label}
+      <video ref={foreground} src={src} autoPlay muted loop playsInline aria-label={label}
         onTimeUpdate={(event) => sync(event.currentTarget)} onPlay={(event) => sync(event.currentTarget)}
         onPause={(event) => sync(event.currentTarget)} onSeeked={(event) => sync(event.currentTarget)}
         className="relative h-full w-full object-contain" />
@@ -403,6 +439,7 @@ export function SwapStage({
   productImage,
   productAlt,
   compact = false,
+  closing = false,
 }: {
   host: React.ReactNode;
   talking: boolean;
@@ -410,12 +447,13 @@ export function SwapStage({
   productImage?: string;
   productAlt: string;
   compact?: boolean;
+  closing?: boolean;
 }) {
   const tr = useCopy();
   const hasProduct = Boolean(productVideo || productImage);
-  const productFull = hasProduct && !talking;
+  const productFull = hasProduct && !talking && !closing;
   const layer = "absolute overflow-hidden transition-all duration-700 ease-in-out motion-reduce:transition-none";
-  const hostStyle: React.CSSProperties = !hasProduct
+  const hostStyle: React.CSSProperties = !hasProduct || closing
     ? { left: 0, top: 0, width: "100%", height: "100%" }
     : productFull
       ? compact
@@ -430,9 +468,9 @@ export function SwapStage({
   return (
     <div className={`relative w-full overflow-hidden bg-black ${compact ? "aspect-video" : "aspect-[4/3] sm:aspect-video"}`}>
       {hasProduct ? (
-        <div className={`${layer} z-10 border-l border-white/10 bg-black`} style={productStyle}>
+        <div className={`${layer} z-10 border-l border-white/10 bg-black`} style={{...productStyle, opacity:closing ? 0 : 1}}>
           {productVideo && isVideoFile(productVideo) ? (
-            <ProductVideo key={productVideo} src={productVideo} label={`${productAlt}, product demo`} />
+            <ProductVideo key={productVideo} src={productVideo} closing={closing} label={`${productAlt}, product demo`} />
           ) : productImage ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={productImage} alt={productAlt} className="h-full w-full bg-[#0b1524] object-contain p-2" />
@@ -462,7 +500,7 @@ export function SwapStage({
 
 function MiniPlayer({ market }: { market: string }) {
   const tr = useCopy();
-  const { session, stream, joined, talking, musicOn, setMusicOn, leave } = useLiveBroadcast();
+  const { session, stream, joined, talking, closing, fading, musicOn, setMusicOn, leave } = useLiveBroadcast();
   const pathname = usePathname();
   const [needsPlay, setNeedsPlay] = useState(false);
   const onLivePage = pathname?.startsWith(`/${market}/live`);
@@ -470,13 +508,14 @@ function MiniPlayer({ market }: { market: string }) {
 
   return (
     <div
-      className="fixed bottom-4 left-4 z-50 w-64 overflow-hidden rounded-2xl border border-white/15 bg-[#07172b] shadow-2xl sm:w-80"
+      className={`fixed bottom-4 left-4 z-50 w-64 overflow-hidden rounded-2xl border border-white/15 bg-[#07172b] shadow-2xl sm:w-80 transition-opacity duration-700 ${fading ? "opacity-0" : "opacity-100"}`}
       role="region"
       aria-label={tr("app.player.region")}
     >
       <div className="relative">
         <SwapStage
           compact
+          closing={closing}
           talking={talking}
           productVideo={session.productVideo}
           productImage={session.productImage}

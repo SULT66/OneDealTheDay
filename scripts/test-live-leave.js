@@ -24,7 +24,8 @@ function hooks() {
   return {react,render(fn){cursor=0; const result=fn(); while(pending.length) pending.shift()();return result;},unmount(){slots.forEach(x=>x?.cleanup?.());}};
 }
 (async()=>{
-  const h=hooks(), intervals=new Map(), listeners=new Map(), requests=[];
+  const h=hooks(), intervals=new Map(), timeouts=new Map(), listeners=new Map(), requests=[];
+  let dropState="live", hostPhase="answering";
   let timerId=0, stopped=0, closed=0;
   const window={localStorage:{getItem:()=>null,setItem:noop}, AudioContext:class {resume(){return Promise.resolve();} close(){closed++; return Promise.resolve();}},
     addEventListener:(name,fn)=>listeners.set(name,fn),removeEventListener:name=>listeners.delete(name),dispatchEvent:event=>listeners.get(event.type)?.(event)};
@@ -35,7 +36,8 @@ function hooks() {
     name.includes('stageMusic')?{startStageMusic:()=>({stop(){stopped++;},setEnabled:noop,setTalking:noop})}:name.includes('CopyProvider')?{useCopy:()=>x=>x}:{};
   const broadcast=compile('components/live/LiveBroadcast.tsx',require,{window,document:{addEventListener:noop,removeEventListener:noop},navigator:{sendBeacon:()=>false},
     CustomEvent:class {constructor(type,options){this.type=type;this.detail=options.detail;}},Blob,
-    fetch:async(_url,options)=>{requests.push(JSON.parse(options.body));return {ok:true,json:async()=>({watching:options.body.includes('leaving')?0:1})};},
+    fetch:async(url,options)=>{if(url.startsWith('/api/live/current'))return {ok:true,json:async()=>({drop:{drop_key:'drop1',state:dropState,seconds_until_end:180}})};if(url.startsWith('/api/live/chat'))return {ok:true,json:async()=>({phase:hostPhase})};requests.push(JSON.parse(options.body));return {ok:true,json:async()=>({watching:options.body.includes('leaving')?0:1})};},
+    setTimeout:(fn,ms)=>{const id=++timerId;timeouts.set(id,{fn,ms});return id;},clearTimeout:id=>timeouts.delete(id),
     setInterval:(fn,ms)=>{const id=++timerId;intervals.set(id,{fn,ms});return id;},clearInterval:id=>intervals.delete(id),performance:{now:()=>10000}});
   const render=()=>h.render(()=>broadcast.LiveBroadcastProvider({market:'us',children:null})).props.value;
   let value=render();
@@ -65,6 +67,21 @@ function hooks() {
   value.join({conversationUrl:'https://example.test/room',dropKey:'drop1',market:'us',title:'Test'});
   value=render();await settle();
   assert.equal(value.leftDropKey,'');assert.equal(requests.at(-1).leaving,undefined,'rejoining restores presence');
+
+  // Expiry keeps the room for the sign-off, then fades before disconnecting.
+  dropState='live';value.join({conversationUrl:'https://example.test/room',dropKey:'drop1',market:'us',title:'Test'});
+  value=render();await settle();
+  dropState='ended';
+  await [...intervals.values()].find(x=>x.ms===5000).fn();await settle();value=render();
+  assert.equal(value.closing,true);assert(value.session,'room disconnected before goodbye');
+  assert.equal(value.fading,false);
+  const closingStage=broadcast.SwapStage({host:null,talking:false,closing:true,productVideo:'/portrait.mp4',productAlt:'Test'});
+  assert.equal(closingStage.props.children[1].props.style.width,'100%','Chloe did not take the whole stage');
+  assert.equal(closingStage.props.children[0].props.style.opacity,0,'product did not fade away');
+  hostPhase='closed';await [...intervals.values()].find(x=>x.ms===5000).fn();await settle();value=render();
+  assert.equal(value.fading,true);assert(value.session,'room disconnected before fade');
+  [...timeouts.values()].find(x=>x.ms===900).fn();value=render();await settle();
+  assert.equal(value.session,null,'room stayed open after goodbye and fade');
   h.unmount();pageHooks.unmount();await settle();
 
   // The actual product stage has a muted cover backdrop and full-size foreground.

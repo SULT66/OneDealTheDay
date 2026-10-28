@@ -128,7 +128,7 @@ function queuePosition(db, dropId, messageId) {
  * gets answered looks abandoned. So the chat says what she is doing and how
  * many questions are in line, and which questions have already reached her.
  */
-const HOST_PHASES = ["presenting", "answering"];
+const HOST_PHASES = ["presenting", "answering", "closing", "closed"];
 
 function setBroadcastPhase(db, dropId, phase) {
   if (!HOST_PHASES.includes(phase)) return false;

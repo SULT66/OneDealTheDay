@@ -9,17 +9,25 @@ const compile = path => ts.transpileModule(fs.readFileSync(path, 'utf8'), {
 }).outputText;
 const protocol = {exports: {}};
 vm.runInNewContext(compile('lib/liveHostProtocol.ts'), {module: protocol, exports: protocol.exports});
-const {presenterSpeakingEvent, hostTurnFinished} = protocol.exports;
+const {presenterSpeakingEvent, hostTurnFinished, hostClockInstruction} = protocol.exports;
 assert.equal(presenterSpeakingEvent({event_type:'conversation.started_speaking', properties:{role:'user'}}), null);
 assert.equal(presenterSpeakingEvent({event_type:'conversation.started_speaking', properties:{role:'pal'}}), 'started');
 assert.equal(presenterSpeakingEvent({event_type:'conversation.stopped_speaking', properties:{role:'replica'}}), 'stopped');
 assert.equal(hostTurnFinished({now:60000,sentAt:1000,stoppedAt:0,speaking:true,sawEvents:true}), false);
 assert.equal(hostTurnFinished({now:60000,sentAt:1000,stoppedAt:500,speaking:false,sawEvents:true}), true);
 
+const clockSnapshot = {state:'live', secondsUntilStart:0, secondsUntilEnd:420, receivedAt:100000};
+assert.match(hostClockInstruction(clockSnapshot, 100000), /7 minutes 0 seconds/);
+assert.match(hostClockInstruction(clockSnapshot, 340000), /3 minutes 0 seconds/);
+assert.match(hostClockInstruction(clockSnapshot, 521000), /drop has ended/);
+assert.match(hostClockInstruction({...clockSnapshot,state:'waiting',secondsUntilStart:30}, 100000), /NOT time left to buy/);
+assert.match(hostClockInstruction(null, 100000), /without giving a number/);
+
 let now = 100000, cursor = 0, pendingEffects = [], view;
 const slots = [], effects = [], timers = new Map(), handlers = {}, sent = [];
 let timerId = 0, presenter = false;
-const host = {state:'waiting', conversation_url:'https://tavus.daily.co/test', conversation_id:'c123test',
+const phases = [];
+const host = {seconds_until_start:120, seconds_until_end:720, state:'waiting', conversation_url:'https://tavus.daily.co/test', conversation_id:'c123test',
   intro_script:'First paragraph.\n\nSecond paragraph.', reveal_script:'The price is now open.',
   reveal_cue:'Reveal', idle_cue:'Idle', queued:0, messages:[]};
 const react = {
@@ -42,7 +50,7 @@ vm.runInNewContext(compile('components/admin/LiveHostConsole.tsx'), {
   require:name=>name==='react'?react:name==='react/jsx-runtime'?{jsx,jsxs:jsx}:name==='@daily-co/daily-js'?{default:{createCallObject:()=>call},__esModule:true}:protocol.exports,
   MediaStream:class {constructor(tracks){this.tracks=tracks;}getTracks(){return this.tracks;}},
   Date:class extends Date {static now(){return now;}},
-  fetch:async url=>({ok:true,json:async()=>{
+  fetch:async (url,options)=>(url.endsWith("/phase") && phases.push(JSON.parse(options.body).phase), {ok:true,json:async()=>{
     if(url.endsWith('/next')) {host.queued=0;return {cue:'[ODD test] Is it refurbished?',questions:[{text:'Is it refurbished?'}]};}
     return {...host};
   }}),
@@ -67,10 +75,21 @@ const refresh=async()=>{for(const timer of [...timers.values()])if(timer.ms===50
   host.queued=1;await refresh();await tick();assert.equal(sent.length,1,'question interrupted the script');
   speaking('pal',false);await settle();await tick();
   assert.equal(sent[1].event_type,'conversation.respond','question did not run between paragraphs');
+  assert.match(sent[1].properties.text,/CURRENT COUNTDOWN:.*NOT time left to buy/);
   speaking('replica',true);await settle();await tick();assert.equal(sent.length,2);
   speaking('replica',false);await settle();await tick();
   assert.equal(sent[2].event_type,'conversation.echo');assert.equal(sent[2].properties.text,'Second paragraph.','script did not resume after the answer');
   speaking('pal',true);await settle();host.state='live';await refresh();await tick();assert.equal(sent.length,3,'price reveal interrupted a speaking turn');
   speaking('pal',false);await settle();await tick();assert.equal(sent[3].properties.text,'The price is now open.');
+  speaking('pal',true);await settle();host.state='ended';await refresh();await tick();
+  assert.equal(sent.length,4,'closing interrupted an unfinished reveal');
+  speaking('pal',false);await settle();await tick();
+  assert.equal(sent[4].event_type,'conversation.echo');
+  assert.match(sent[4].properties.text,/This drop has ended/);
+  assert.match(sent[4].properties.text,/see you next time/);
+  speaking('pal',true);await settle();await tick();assert.equal(sent.length,5);
+  speaking('pal',false);await settle();await tick();await tick();
+  assert.equal(sent.length,5,'closing speech repeated');
+  assert(phases.includes('closing'));assert.equal(phases.at(-1),'closed');
   console.log('Host console: waits for PAL, reads script, answers questions, resumes, and reveals without interruption: ok');
 })().catch(error=>{console.error(error);process.exitCode=1;});

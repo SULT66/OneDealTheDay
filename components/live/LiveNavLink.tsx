@@ -90,7 +90,7 @@ export function LiveNavLink({ market, label }: { market: string; label: string }
     <Link
       href={`/${market}/live`}
       /* Red in both states. The tab is the channel, not the event. */
-      className="inline-flex h-9 items-center gap-1.5 rounded-full px-4 text-sm font-semibold text-danger transition-colors hover:bg-surface-2"
+      className="inline-flex h-9 items-center gap-1.5 whitespace-nowrap leading-none rounded-full px-4 text-sm font-semibold text-danger transition-colors hover:bg-surface-2"
       aria-label={
         onAir ? `${label} — a drop is open now` : soon ? `${label} — a drop opens shortly` : label
       }
@@ -104,9 +104,9 @@ export function LiveNavLink({ market, label }: { market: string; label: string }
               "h-2 w-2 shrink-0 rounded-full border border-danger/70"
         }
       />
-      <span className={onAir ? "animate-pulse" : undefined}>{label}</span>
+      <span className={onAir ? "leading-none animate-pulse" : "leading-none"}>{label}</span>
       {lit && remaining != null && remaining > 0 && (
-        <span className="text-xs font-semibold tabular-nums opacity-80">
+        <span className="text-sm leading-none font-semibold tabular-nums opacity-80">
           {onAir ? clock(remaining) : `in ${clock(remaining)}`}
         </span>
       )}
