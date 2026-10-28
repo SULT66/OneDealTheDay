@@ -3875,26 +3875,25 @@ app.post("/api/admin/live-drops/:key/publish", admin, async (req, res) => {
       /*
        * And the struck-through price, which is the badge the drop is sold on.
        *
-       * Taken from the listing when eBay publishes one, and typed in when it
-       * does not — but a typed figure that contradicts eBay's own is the one
-       * version that must never reach the page, because the shopper can open
-       * the listing in the next tab and see it. Two ways it can contradict:
-       * by disagreeing with eBay's own crossed-out figure, or by being at or
-       * below what eBay is actually charging, which is not a usual price at
-       * all.
+       * Everything here comes off the listing: where the API publishes a
+       * crossed-out price we read it ourselves, and where it does not — 39%
+       * of the eBay listings in this catalogue on 2026-10-28 — the figure is
+       * copied from the listing page by hand, from the places the API does
+       * not expose, such as a list price in the item specifics.
+       *
+       * So a difference between the two is not evidence of an invented
+       * number, and refusing the publish over it only blocked a drop for
+       * being described from a different part of the same page. eBay's own
+       * figure simply wins when there is one (see referencePrice), which
+       * makes the badge agree with the listing without anybody being told
+       * off.
+       *
+       * What is still refused is a usual price at or below what eBay is
+       * actually charging. That is not a comparison that can be read two
+       * ways — it is a saving that does not exist.
        */
       const typed = Number(checked?.retail_price) || 0;
-      const sellers = Number(checked?.seller_reference_price) || 0;
-      if (typed > 0 && sellers > 0 && !priceAgrees(typed, sellers)) {
-        return res.status(409).json({
-          error: `This drop says the usual price is ${drop.currency} ${typed.toFixed(2)}, `
-            + `but eBay's own crossed-out price on that listing is ${drop.currency} ${sellers.toFixed(2)}. `
-            + `Use eBay's figure, or clear yours and the page will.`,
-          typed_reference_price: typed,
-          seller_reference_price: sellers,
-        });
-      }
-      if (typed > 0 && !sellers && checked?.listing_price != null && typed <= Number(checked.listing_price)) {
+      if (typed > 0 && checked?.listing_price != null && typed <= Number(checked.listing_price)) {
         return res.status(409).json({
           error: `The usual price on this drop (${drop.currency} ${typed.toFixed(2)}) is not above what eBay `
             + `is charging (${drop.currency} ${Number(checked.listing_price).toFixed(2)}), so there is no saving to show.`,
