@@ -10,14 +10,14 @@ const guides = [
       ["Is this deal actually a discount?", "A real discount needs a meaningful comparison for the same product and buying terms. A crossed-out list price alone does not prove that anyone previously paid it. Compare the exact model and condition, include delivery, and look for dated price observations before calling the offer a saving."],
       ["Three different numbers", "The current price is what the retailer reports now. A reference price is the retailer’s own comparison figure. Our tracked history records prices we observed after tracking began. These are different kinds of evidence: a seller’s reference price is not our historical measurement, and our lowest recorded price is not the lowest price ever charged anywhere."],
       ["How our tracked-drop label works", "OneDailyDrop uses the last observation from each day, over a rolling 60-day window. At least three observed days and a rounded drop of at least 5% are required. The percentage compares the latest recorded price with the highest daily price we recorded in that window. Gaps mean we did not observe those days; they do not prove the price stayed unchanged."],
-      ["Worked example — illustrative, not a live offer", "Suppose we observed $100, $95 and $80 on three separate days. The latest price is 20% below our observed high: (100 − 80) ÷ 100. If the seller also displays a $160 list price, that does not turn our evidence into a 50% measured reduction. Delivery and taxes may still change the checkout total."],
+      ["Worked example - illustrative, not a live offer", "Suppose we observed $100, $95 and $80 on three separate days. The latest price is 20% below our observed high: (100 − 80) ÷ 100. If the seller also displays a $160 list price, that does not turn our evidence into a 50% measured reduction. Delivery and taxes may still change the checkout total."],
       ["Check the product before the percentage", "Match the model number, capacity, size, bundle contents, warranty region and new or refurbished condition. A cheaper accessory is not a comparison for the full product. For marketplace listings, check the seller’s identity, return window and delivery charge separately from the product’s reviews."],
       ["When the evidence is missing", "No history means no historical claim. No product reviews means seller feedback cannot stand in for them. A displayed OneDailyDrop Score is an offer assessment, not a promise that the price is the cheapest. Open the retailer link and confirm the final price and terms before paying."]
     ]
   },
   {
     slug: "onedailydrop-score", title: "What the OneDailyDrop Score measures",
-    description: "How offer quality, evidence coverage and product reviews affect the public OneDailyDrop Score — and why some listings have none.",
+    description: "How offer quality, evidence coverage and product reviews affect the public OneDailyDrop Score, and why some listings have none.",
     query: "", category: "",
     sections: [
       ["What is the OneDailyDrop Score?", "The OneDailyDrop Score assesses a specific offer using price context, product reviews, seller signals and buying terms. It is not a product test, a fraud guarantee or a lowest-price guarantee. A missing score means the available evidence does not support a public number; it does not automatically mean the product is bad."],

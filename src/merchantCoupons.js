@@ -24,7 +24,7 @@ function utcTime(value) {
   return Date.parse(/(?:Z|[+-]\d\d:\d\d)$/.test(text) ? text : `${text}Z`);
 }
 function clean(value, limit=3000) {
-  return String(value || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, limit);
+  return String(value || "").replace(/\u2014/g, " - ").replace(/\u2013/g, "-").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, limit);
 }
 function discountPercentage(text) {
   const values = [...new Set((String(text).match(/\b\d+(?:\.\d+)?\s*%/g) || []).map(v=>parseFloat(v)))];

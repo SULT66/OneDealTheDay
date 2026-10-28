@@ -244,8 +244,8 @@ function overview(db, { days = 30, now = Date.now() } = {}) {
      */
     notMeasuredHere: [
       "Visitors before counting started, and anyone browsing with JavaScript off. Bots are left out on purpose.",
-      "Anyone behind an unattributed click — those carry no session id, so they are counted as clicks and not as people.",
-      "Purchases and commission — they happen at the shop; search the network report for the odd- labels.",
+      "Anyone behind an unattributed click: those carry no session id, so they are counted as clicks and not as people.",
+      "Purchases and commission: they happen at the shop; search the network report for the odd- labels.",
     ],
   };
 }

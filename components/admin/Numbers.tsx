@@ -180,7 +180,7 @@ export function Numbers({ adminKey }: { adminKey: string }) {
             />
             <Stat
               label="Counting since"
-              value={data.visits.countingSince ? new Date(data.visits.countingSince).toLocaleDateString() : "—"}
+              value={data.visits.countingSince ? new Date(data.visits.countingSince).toLocaleDateString() : "-"}
               note="browsers only · bots left out"
             />
           </Group>
@@ -246,7 +246,7 @@ export function Numbers({ adminKey }: { adminKey: string }) {
         />
         <Stat
           label="Asked about one drop only"
-          value={audience.oneDropReminderPeople == null ? "—" : count(audience.oneDropReminderPeople)}
+          value={audience.oneDropReminderPeople == null ? "-" : count(audience.oneDropReminderPeople)}
           note="pressed Remind me on a drop page"
         />
       </Group>

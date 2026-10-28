@@ -44,7 +44,7 @@ export function PriceBands({
     const to = bucket.max === undefined ? "" : formatPrice(bucket.max, currency, market);
     if (!bucket.min) return tr("app.filter.under", { price: to });
     if (bucket.max === undefined) return tr("app.filter.over", { price: from });
-    return `${from} – ${to}`;
+    return `${from} - ${to}`;
   };
 
   return (

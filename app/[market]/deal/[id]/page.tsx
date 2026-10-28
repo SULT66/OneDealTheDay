@@ -45,7 +45,7 @@ export async function generateMetadata({
     const ended = await getEndedDeal(market, id);
     if (!ended) return {};
     return {
-      title: `${ended.title} — this offer has ended | OneDailyDrop`,
+      title: `${ended.title} - this offer has ended | OneDailyDrop`,
       alternates: { canonical: `/${market}/deal/${id}` },
       robots: { index: false, follow: true },
     };

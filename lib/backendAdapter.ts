@@ -36,7 +36,7 @@ const matchCase = (source: string, corrected: string) => {
 };
 
 export function correctFeedTitle(title: string): string {
-  return String(title || "").replace(/[a-zA-Z]+/g, (word) => {
+  return String(title || "").replace(/[\u2013\u2014]/g, "-").replace(/[a-zA-Z]+/g, (word) => {
     const corrected = FEED_TITLE_TYPOS[word.toLowerCase()];
     return corrected ? matchCase(word, corrected) : word;
   });

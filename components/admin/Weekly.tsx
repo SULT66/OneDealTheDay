@@ -61,7 +61,7 @@ export function Weekly({ adminKey }: { adminKey: string }) {
   const rows = [
     { label: "This week so far", sub: `closes ${new Date(data.next_snapshot_at).toLocaleString()}`, metrics: data.this_week, live: true },
     ...data.weeks.map((week) => ({
-      label: `${day(week.firstDay)} – ${day(week.lastDay)}`,
+      label: `${day(week.firstDay)} - ${day(week.lastDay)}`,
       sub: `taken ${new Date(week.takenAt).toLocaleDateString()}`,
       metrics: week.metrics,
       live: false,
@@ -98,7 +98,7 @@ export function Weekly({ adminKey }: { adminKey: string }) {
                     const good = diff === 0 ? null : (diff > 0) !== Boolean(column.upIsBad);
                     return (
                       <td key={column.key} className="px-3 py-2.5 text-right align-top tnum">
-                        <span className="font-semibold text-fg">{notCounted ? "—" : count(value)}</span>
+                        <span className="font-semibold text-fg">{notCounted ? "-" : count(value)}</span>
                         {comparable && diff !== 0 && (
                           <span className={`block text-xs font-semibold ${good ? "text-[#2f8a3e]" : "text-danger"}`}>
                             {diff > 0 ? "▲" : "▼"} {count(Math.abs(diff))}
@@ -116,7 +116,7 @@ export function Weekly({ adminKey }: { adminKey: string }) {
       <p className="mt-3 max-w-prose text-xs leading-relaxed text-fg-subtle">
         A week runs Friday to Thursday ({data.timezone.replace("_", " ")} time), so it includes that
         Thursday&rsquo;s Live Drop. It is saved automatically when it closes and never changes after.
-        Arrows compare with the week below. &ldquo;—&rdquo; means visitors were not counted yet that week.
+        Arrows compare with the week below. &ldquo;-&rdquo; means visitors were not counted yet that week.
         Your own browser is not counted.
       </p>
     </div>

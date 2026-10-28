@@ -425,7 +425,7 @@ const liveDropAnnouncementEmail = ({ email, title, market, startsAt, unsubscribe
  * do it calmly; once it is live, "take a minute" is the wrong thing to say.
  */
 const ACCOUNT_BEFORE = "Buying in a drop takes a free account, which takes a minute. "
-  + "Worth doing before the clock starts — the price is only open for ten minutes.";
+  + "Worth doing before the clock starts; the price is only open for ten minutes.";
 const ACCOUNT_DURING = "Buying takes a free account; if you do not have one, the page offers it in one step.";
 
 /*
@@ -453,7 +453,7 @@ const liveDropLastCallEmail = ({ email, title, market, minutes, unsubscribeUrl, 
     heading: "We go live in about an hour",
     paragraphs: [
       `Hi, it's Chloe. The drop I mentioned opens in about ${escapeHtml(String(minutes))} minutes.`,
-      "I reveal the price the moment we start, and it is only open for ten minutes — so this is the one to put down your coffee for.",
+      "I reveal the price the moment we start, and it is only open for ten minutes, so this is the one to put down your coffee for.",
     ],
     product: productOf({ title, ...product }),
     cta: { label: "Open the drop page", href: dropUrl(market) },
@@ -675,7 +675,7 @@ const introEmail = ({ email, market = "us", unsubscribeUrl }) => sendEmail({
     paragraphs: [
       "You're on the list, so here is the one thing worth knowing about us.",
       "When a shop crosses out a price, we do not repeat that figure as a saving. We record the price ourselves, every day, for sixty days. If today's price is below the highest we have seen in that time, we say by how much. If it is not, we say nothing.",
-      "That is why most listings on this site show no discount at all. Not because we could not find one — because we could not prove one.",
+      "That is why most listings on this site show no discount at all. Not because we could not find one, but because we could not prove one.",
       "The shop's own crossed-out price is still shown, labelled as the shop's. It is their claim, not ours.",
     ],
     cta: { label: "How we pick what to show", href: `${SITE}/${encodeURIComponent(market)}/how-we-select-deals` },
@@ -768,7 +768,7 @@ const weeklyDigestEmail = ({ email, market = "us", items = [], unconfirmed = 0, 
   fromName: NICK_FROM,
   ...composeEmail({
     preheader: items.length
-      ? `${items[0].title}${items[0].price ? ` — ${items[0].price}` : ""}, and ${items.length - 1} more.`
+      ? `${items[0].title}${items[0].price ? ` - ${items[0].price}` : ""}, and ${items.length - 1} more.`
       : "This week's finds.",
     eyebrow: "Sunday",
     heading: items.length === 1 ? "One find this week" : `${items.length} finds this week`,
@@ -812,11 +812,11 @@ const reactivationEmail = ({ email, market = "us", items = [], months = 2, fewer
   unsubscribeUrl,
   fromName: NICK_FROM,
   ...composeEmail({
-    preheader: "Or tell us to write less often — both are one click.",
+    preheader: "Or tell us to write less often; both are one click.",
     eyebrow: "Still there?",
     heading: "Three you missed",
     paragraphs: [
-      `You joined about ${months === 1 ? "a month" : `${months} months`} ago and we have not heard anything back since — no saved price, no drop you asked to be reminded about. We do not track whether our emails get opened, so this is genuinely all we know, and it may well mean nothing.`,
+      `You joined about ${months === 1 ? "a month" : `${months} months`} ago and we have not heard anything back since: no saved price, no drop you asked to be reminded about. We do not track whether our emails get opened, so this is genuinely all we know, and it may well mean nothing.`,
       "Either way, here are three the Sunday letter carried while you were on the list. Each one says what we measured about its price, which is the only thing we ever claim about it.",
     ],
     items,
@@ -827,8 +827,8 @@ const reactivationEmail = ({ email, market = "us", items = [], months = 2, fewer
       ? { label: "Send me the Sunday five only", href: fewerUrl }
       : { label: "See everything we checked", href: `${SITE}/${encodeURIComponent(market)}` },
     after: fewerUrl
-      ? `One email a week instead of one for every drop. Or <a href="${escapeHtml(`${SITE}/${encodeURIComponent(market)}`)}" style="color:${MUTED}">see everything we checked</a> — and doing nothing at all is fine too, nothing changes if you ignore this.`
-      : "Doing nothing is fine too — nothing changes if you ignore this.",
+      ? `One email a week instead of one for every drop. Or <a href="${escapeHtml(`${SITE}/${encodeURIComponent(market)}`)}" style="color:${MUTED}">see everything we checked</a>, and doing nothing at all is fine too, nothing changes if you ignore this.`
+      : "Doing nothing is fine too; nothing changes if you ignore this.",
     signature: NICK_SIGNATURE,
     footer: unsubscribeFooter(unsubscribeUrl, "You are receiving this because you signed up for Live Drop emails."),
   }),
