@@ -133,9 +133,12 @@ export function LiveDropSignup({
       )}
 
       {status === "done" ? (
-        <p className={cn("mt-6 text-sm font-semibold", dark ? "" : "text-fg")} role="status">
-          {message}
-        </p>
+        <div className="mt-6" role="status">
+          <p className={cn("text-sm font-semibold", dark ? "" : "text-fg")}>{message}</p>
+          <p className={cn("mt-2 max-w-md text-xs leading-relaxed", dark ? "opacity-70" : "text-fg-muted")}>
+            {tr("app.signup.gmailPrimaryTip")}
+          </p>
+        </div>
       ) : (
         <>
           <div className="mt-6 flex flex-col gap-3 sm:max-w-lg sm:flex-row">
