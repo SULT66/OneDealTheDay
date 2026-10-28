@@ -428,6 +428,41 @@ const ACCOUNT_BEFORE = "Buying in a drop takes a free account, which takes a min
   + "Worth doing before the clock starts — the price is only open for ten minutes.";
 const ACCOUNT_DURING = "Buying takes a free account; if you do not have one, the page offers it in one step.";
 
+/*
+ * The hour before, to the subscriber list.
+ *
+ * Not liveDropStartingSoonEmail, which goes to people who pressed Remind me
+ * and opens by saying so: "you asked OneDailyDrop to remind you about this".
+ * A subscriber did not ask about this drop, and telling them they did is both
+ * untrue and the sort of thing that gets a sender reported.
+ *
+ * So this is a marketing letter and carries the unsubscribe link that makes
+ * it one, while the requested reminders stay transactional and plain. What it
+ * has in common with them is the point: a ten minute event needs a warning
+ * close enough to act on, and an announcement three days out is not one.
+ */
+const liveDropLastCallEmail = ({ email, title, market, minutes, unsubscribeUrl, ...product }) => sendEmail({
+  to: email,
+  subject: `Starting in about an hour: ${title}`,
+  unsubscribeUrl,
+  fromName: "Chloe from OneDailyDrop",
+  ...composeEmail({
+    live: true,
+    preheader: "Ten minutes, one price. This is your heads-up.",
+    eyebrow: "Nearly time",
+    heading: "We go live in about an hour",
+    paragraphs: [
+      `Hi, it's Chloe. The drop I mentioned opens in about ${escapeHtml(String(minutes))} minutes.`,
+      "I reveal the price the moment we start, and it is only open for ten minutes — so this is the one to put down your coffee for.",
+    ],
+    product: productOf({ title, ...product }),
+    cta: { label: "Open the drop page", href: dropUrl(market) },
+    after: ACCOUNT_BEFORE,
+    signature: `See you in a bit,<br>${CHLOE}`,
+    footer: unsubscribeFooter(unsubscribeUrl, "You are receiving this because you signed up for Live Drop emails."),
+  }),
+});
+
 /* Only for people who requested a reminder for this specific event.
  * Keep the event information separate from subscriber promotions. Gmail still
  * chooses the category; a simpler message cannot guarantee Primary placement.
@@ -799,4 +834,4 @@ const reactivationEmail = ({ email, market = "us", items = [], months = 2, fewer
   }),
 });
 
-module.exports = { reactivationEmail, digestInviteEmail, weeklyDigestEmail, introEmail, scoreExplainerEmail, welcomeEmail, liveDropLiveNowEmail, liveDropSaveTheDateEmail, liveDropStartingSoonEmail, liveDropAnnouncementEmail, priceDropEmail, priceWatchStartedEmail, passwordResetEmail, subscriptionEmail, clubWaitlistEmail, liveDropReminderEmail, deliveryTestEmail };
+module.exports = { liveDropLastCallEmail, reactivationEmail, digestInviteEmail, weeklyDigestEmail, introEmail, scoreExplainerEmail, welcomeEmail, liveDropLiveNowEmail, liveDropSaveTheDateEmail, liveDropStartingSoonEmail, liveDropAnnouncementEmail, priceDropEmail, priceWatchStartedEmail, passwordResetEmail, subscriptionEmail, clubWaitlistEmail, liveDropReminderEmail, deliveryTestEmail };

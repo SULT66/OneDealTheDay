@@ -500,6 +500,89 @@ async function announceDropToSubscribers({
   return sent;
 }
 
+/**
+ * The hour-before warning, to the subscriber list.
+ *
+ * The list heard about a drop twice: an announcement up to three days ahead,
+ * and "we are live now" at the moment it opened. For a ten minute event the
+ * first is too early to act on and the second arrives after most people have
+ * already missed it — a phone face-down for four minutes is the whole event.
+ * The warning in between existed only for people who pressed Remind me on the
+ * page, which most people never do.
+ *
+ * Same window as the requested "starting soon" pass, so the two arrive
+ * together rather than an hour apart, and nobody gets both: somebody who
+ * asked for this drop by hand is already being written to by sendStagedReminders
+ * and does not need a second copy with marketing wording on it.
+ */
+async function remindSubscribersBeforeStart({
+  db,
+  sendLastCall,
+  unsubscribeUrlFor = () => "",
+  now = Date.now(),
+  /* Close enough to act on, far enough to finish what you are doing. The
+     floor matters as much as the ceiling: a warning delivered four minutes
+     before a ten minute drop is a worse message than none. */
+  fromMinutes = 25,
+  toMinutes = 95,
+  batch = 500,
+  logger = console,
+}) {
+  const drops = db.prepare(`
+    SELECT id, title, market, start_at, brand, retailer_name, image_url, retail_price, currency
+    FROM live_drops
+    WHERE published = 1 AND start_at > ? AND start_at <= ?
+    ORDER BY start_at
+  `).all(
+    new Date(now + fromMinutes * 60000).toISOString(),
+    new Date(now + toMinutes * 60000).toISOString(),
+  );
+
+  const mark = db.prepare(
+    "INSERT OR IGNORE INTO live_drop_subscriber_reminders(drop_id,subscriber_id,sent_at) VALUES(?,?,?)",
+  );
+  let sent = 0;
+  for (const drop of drops) {
+    const audience = db.prepare(`
+      SELECT s.id, s.email, s.unsubscribe_token FROM subscribers s
+      WHERE s.status = 'active' AND s.market = ?
+        /* "Fewer emails" means this one too. */
+        AND s.drop_opt_in = 1
+        AND NOT EXISTS (
+          SELECT 1 FROM live_drop_subscriber_reminders r
+          WHERE r.drop_id = ? AND r.subscriber_id = s.id
+        )
+        /* And not to anybody who asked about this drop by hand: they are
+           already getting the plain "starting soon" note, and two warnings
+           for one event is how a list learns to filter us. */
+        AND NOT EXISTS (
+          SELECT 1 FROM live_drop_reminders d
+          WHERE d.drop_id = ? AND lower(d.email) = lower(s.email)
+        )
+      LIMIT ?
+    `).all(drop.market, drop.id, drop.id, batch);
+
+    const minutes = Math.max(1, Math.round((Date.parse(drop.start_at) - now) / 60000));
+    for (const subscriber of audience) {
+      try {
+        await sendLastCall({
+          email: subscriber.email,
+          title: drop.title,
+          market: drop.market,
+          minutes,
+          ...emailProduct(drop),
+          unsubscribeUrl: unsubscribeUrlFor(subscriber),
+        });
+        mark.run(drop.id, subscriber.id, new Date(now).toISOString());
+        sent += 1;
+      } catch (error) {
+        logger.error(`[live-drop] hour-before to ${subscriber.email} failed: ${error.message}`);
+      }
+    }
+  }
+  return sent;
+}
+
 /*
  * "It's live now", the moment the price opens.
  *
@@ -584,4 +667,5 @@ module.exports = {
   sendDueReminders,
   sendStagedReminders,
   announceDropToSubscribers,
+  remindSubscribersBeforeStart,
 };
