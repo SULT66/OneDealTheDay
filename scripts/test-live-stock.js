@@ -12,7 +12,7 @@
  */
 
 const assert = require("assert");
-const { readEbayStock, refreshDropStock, ebayItemIdFrom } = require("../src/liveStock");
+const { readEbayStock, refreshDropStock, ebayItemIdFrom, priceAgrees, priceIsVerified } = require("../src/liveStock");
 
 /* --- Finding the listing inside the link we already hold. --- */
 assert.strictEqual(ebayItemIdFrom("https://www.ebay.com/itm/353050432837?mkevt=1&campid=5339179772"), "353050432837");
@@ -94,7 +94,12 @@ const clientReturning = (item) => ({
       prepare(sql) {
         return {
           run(...params) {
-            if (sql.includes("stock_checked_at=?")) {
+            if (sql.includes("listing_price=?")) {
+              rows.listing_price = params[0];
+              rows.listing_currency = params[1];
+              rows.seller_reference_price = params[2];
+              rows.price_verified_at = params[3];
+            } else if (sql.includes("stock_checked_at=?")) {
               rows.stock_checked_at = params[0];
             } else if (sql.includes("quantity_remaining=?")) {
               rows.quantity_remaining = params[0];
@@ -185,6 +190,80 @@ const clientReturning = (item) => ({
     assert.strictEqual(result.changed, false);
     assert.match(result.reason, /not an eBay listing/);
   }
+
+  /* ------------------------------------------------------ what it costs */
+
+  /*
+   * The price comes back on the same pass as the stock, and is written down.
+   *
+   * drop_price and retail_price are typed into the admin form, so before this
+   * a drop could announce one number while the listing behind the buy button
+   * said another — and the host read the number out loud at the reveal. The
+   * figures now have a source and a timestamp, so the page can state a price
+   * as a fact and a stale stamp can take the claim back.
+   */
+  {
+    const db = makeDb(drop);
+    await refreshDropStock(drop, {
+      db,
+      now: Date.parse("2026-10-28T10:00:00Z"),
+      readStock: async () => ({
+        exact: true,
+        available: 6,
+        outOfStock: false,
+        price: 219.99,
+        currency: "USD",
+        sellerOriginalPrice: 299,
+      }),
+    });
+    assert.strictEqual(db.updates.listing_price, 219.99, "what eBay charges was not written down");
+    assert.strictEqual(db.updates.seller_reference_price, 299, "the seller's own crossed-out price was lost");
+    assert.strictEqual(
+      db.updates.price_verified_at,
+      "2026-10-28T10:00:00.000Z",
+      "the price was stored without the moment it was read, so it can never go stale",
+    );
+  }
+
+  /* A listing that gives no price leaves the old figures alone rather than
+     overwriting them with nothing. */
+  {
+    const db = makeDb({ ...drop, listing_price: 219.99 });
+    await refreshDropStock(drop, {
+      db,
+      readStock: async () => ({ exact: true, available: 6, outOfStock: false, price: null }),
+    });
+    assert.strictEqual(db.updates.listing_price, 219.99, "a silent listing erased a price we had");
+  }
+
+  /* ------------------------------------------- does the price agree at all */
+
+  assert.ok(priceAgrees(219.99, 219.99), "the same price disagreed with itself");
+  /* A cent of tolerance: a figure that survives a conversion and two
+     roundings can land a penny away and that is not a different price. */
+  assert.ok(priceAgrees(219.99, 220.0), "a penny of rounding was treated as a different price");
+  assert.ok(!priceAgrees(219.99, 229.99), "a ten dollar gap was waved through");
+  assert.ok(!priceAgrees(0, 219.99), "a drop with no price of its own was called verified");
+  assert.ok(!priceAgrees(219.99, 0), "a listing with no price was called verified");
+
+  /* ------------------------------------- and may the drop still claim it */
+
+  const now = Date.parse("2026-10-28T10:00:00Z");
+  const verified = {
+    drop_price: 219.99,
+    listing_price: 219.99,
+    price_verified_at: new Date(now - 60_000).toISOString(),
+  };
+  assert.ok(priceIsVerified(verified, { now }), "a price checked a minute ago was not treated as checked");
+  assert.ok(
+    !priceIsVerified({ ...verified, price_verified_at: new Date(now - 90 * 60_000).toISOString() }, { now }),
+    "an hour-and-a-half-old check still counted, so the claim never expires",
+  );
+  assert.ok(
+    !priceIsVerified({ ...verified, listing_price: 249.99 }, { now }),
+    "a drop whose listing has moved was still presenting its price as confirmed",
+  );
+  assert.ok(!priceIsVerified({ drop_price: 219.99 }, { now }), "a drop nobody has checked was called verified");
 
   console.log("live stock: ok");
 })().catch(error => {

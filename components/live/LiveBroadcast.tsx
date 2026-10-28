@@ -409,6 +409,7 @@ export function SwapStage({
   productAlt: string;
   compact?: boolean;
 }) {
+  const tr = useCopy();
   const hasProduct = Boolean(productVideo || productImage);
   const productFull = hasProduct && !talking;
   const layer = "absolute overflow-hidden transition-all duration-700 ease-in-out motion-reduce:transition-none";
@@ -441,6 +442,17 @@ export function SwapStage({
         style={hostStyle}
       >
         {host}
+        {/*
+          She looks and sounds like a person and is introduced by a first
+          name, so without this nothing on screen corrects the impression.
+          It sits on her own tile rather than in a line of small print below
+          the player, because a disclosure belongs where the thing it
+          describes is — and it follows her into the corner when the product
+          takes the stage.
+        */}
+        <span className="pointer-events-none absolute bottom-1.5 left-1.5 z-30 rounded-full bg-black/65 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-white/90">
+          {tr("app.live.aiBadge")}
+        </span>
       </div>
     </div>
   );

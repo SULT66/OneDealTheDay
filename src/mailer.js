@@ -407,22 +407,38 @@ const liveDropAnnouncementEmail = ({ email, title, market, startsAt, unsubscribe
     ],
     product: productOf({ title, ...product }),
     cta: { label: "Remind me when it starts", href: dropUrl(market) },
-    after: "Tap the button, then press Remind me on the page.",
+    after: `Tap the button, then press Remind me on the page. ${ACCOUNT_BEFORE}`,
     signature: `See you there,<br>${CHLOE}`,
     footer: unsubscribeFooter(unsubscribeUrl, "You are receiving this because you signed up for Live Drop emails."),
   }),
 });
 
+/*
+ * What every drop email has to say about the account, and did not.
+ *
+ * Buying in a drop takes a free one: the page hides the button without it and
+ * /live/go turns the link away. Not one of the five drop emails mentioned it,
+ * so a reader met the requirement at the worst moment there is — price open,
+ * clock running, and a sign-up form between them and the thing they came for.
+ *
+ * Two wordings, because the advice differs. Before the drop there is time to
+ * do it calmly; once it is live, "take a minute" is the wrong thing to say.
+ */
+const ACCOUNT_BEFORE = "Buying in a drop takes a free account, which takes a minute. "
+  + "Worth doing before the clock starts — the price is only open for ten minutes.";
+const ACCOUNT_DURING = "Buying takes a free account; if you do not have one, the page offers it in one step.";
+
 /* Only for people who requested a reminder for this specific event.
  * Keep the event information separate from subscriber promotions. Gmail still
  * chooses the category; a simpler message cannot guarantee Primary placement.
  */
-function composeLiveReminder({ title, market, heading, timing, unsubscribeUrl }) {
+function composeLiveReminder({ title, market, heading, timing, note = "", unsubscribeUrl }) {
   const url = dropUrl(market);
   const text = [
     heading,
     `You asked OneDailyDrop to remind you about ${title}.`,
     timing,
+    ...(note ? [note] : []),
     `Open your live event: ${url}`,
     "OneDailyDrop reminders",
     ...(unsubscribeUrl ? [`Unsubscribe: ${unsubscribeUrl}`] : []),
@@ -434,6 +450,7 @@ function composeLiveReminder({ title, market, heading, timing, unsubscribeUrl })
     <h1 style="margin:0 0 16px;font-size:20px;line-height:1.4">${escapeHtml(heading)}</h1>
     <p>You asked OneDailyDrop to remind you about <strong>${escapeHtml(title)}</strong>.</p>
     <p>${escapeHtml(timing)}</p>
+    ${note ? `<p>${escapeHtml(note)}</p>` : ""}
     <p>Open your live event:<br><a href="${escapeHtml(url)}" style="color:#174ea6">${escapeHtml(url)}</a></p>
     <p style="margin-top:24px;color:#5f6368;font-size:14px">OneDailyDrop reminders</p>
     ${unsubscribeUrl ? `<p style="font-size:13px"><a href="${escapeHtml(unsubscribeUrl)}">Unsubscribe</a></p>` : ""}
@@ -452,6 +469,7 @@ const liveDropSaveTheDateEmail = ({ email, title, market, startsAt, unsubscribeU
     title, market, unsubscribeUrl,
     heading: "Your live event is scheduled",
     timing: `It starts on ${dropTime(startsAt, market)}. You can return to the event page for its current status.`,
+    note: ACCOUNT_BEFORE,
   }),
 });
 
@@ -464,6 +482,7 @@ const liveDropStartingSoonEmail = ({ email, title, market, minutes }) => sendEma
     title, market,
     heading: `Your live event starts in ${minutes} minutes`,
     timing: `The event is scheduled to start in ${minutes} minutes. You can open the page now and check its current status.`,
+    note: ACCOUNT_BEFORE,
   }),
 });
 
@@ -475,6 +494,7 @@ const liveDropReminderEmail = ({ email, title, market, minutes }) => sendEmail({
     title, market,
     heading: `Your live event starts in ${minutes} minutes`,
     timing: `The event is scheduled to start in ${minutes} minutes. You can open the page now and check its current status.`,
+    note: ACCOUNT_BEFORE,
   }),
 });
 
@@ -494,6 +514,7 @@ const liveDropLiveNowEmail = ({ email, title, market, asked, unsubscribeUrl, ...
       title, market,
       heading: "Your live event has started",
       timing: "The event you asked about has started. Open the page to see its current status.",
+      note: ACCOUNT_DURING,
     }),
   });
   return sendEmail({
@@ -506,6 +527,7 @@ const liveDropLiveNowEmail = ({ email, title, market, asked, unsubscribeUrl, ...
     preheader: "The price is on the page right now. Ten minutes only.",
     eyebrow: "Live now",
     heading: "We're live!",
+    after: ACCOUNT_DURING,
     paragraphs: [
       "Hi, it's Chloe. The Live Drop just started and the price is revealed on the page right now.",
       "It's open for ten minutes only. Jump in, and ask me anything in the chat.",

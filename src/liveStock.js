@@ -91,9 +91,27 @@ async function readEbayStock(itemId, {
   const sold = wholeNumber(availability.estimatedSoldQuantity);
   const threshold = wholeNumber(availability.estimatedAvailabilityThreshold);
 
+  /*
+   * The price rides along in the same answer, so asking for it costs nothing.
+   *
+   * Two figures, and the difference between them is the whole point. `price`
+   * is what eBay will charge the buyer who follows our link — the only number
+   * anyone here is entitled to call the price. `sellerOriginalPrice` is the
+   * seller's own crossed-out figure: their claim, not a measurement of ours.
+   * It is carried so a page can show it labelled as theirs, the way the
+   * catalogue already does, and never so that we can work a saving out of it.
+   */
+  const price = Number(item?.price?.value ?? item?.price);
+  const sellerOriginal = Number(
+    item?.marketingPrice?.originalPrice?.value ?? item?.marketingPrice?.originalPrice,
+  );
+
   return {
     itemId: String(itemId),
     title: item?.title || "",
+    price: Number.isFinite(price) && price > 0 ? price : null,
+    currency: String(item?.price?.currency || "").toUpperCase() || null,
+    sellerOriginalPrice: Number.isFinite(sellerOriginal) && sellerOriginal > 0 ? sellerOriginal : null,
     status,
     /* True only when eBay gave a count we can count down. Everything on top of
        this — the public counter, closing the drop by itself — is gated on it,
@@ -139,6 +157,23 @@ async function refreshDropStock(drop, { db, readStock = readEbayStock, market, n
   db.prepare("UPDATE live_drops SET stock_checked_at=? WHERE id=?")
     .run(new Date(now).toISOString(), drop.id);
 
+  /*
+   * And what eBay is charging, written down on the same pass.
+   *
+   * The drop's own price is typed into the admin form, which makes it a plan
+   * rather than a fact: nothing stopped a drop announcing $220 while the
+   * listing behind the buy button said something else. This is the figure the
+   * buyer will actually be shown, stamped with the moment it was read, so the
+   * page and the host can be held to it — and so a stale stamp withdraws the
+   * claim by itself, exactly as it does for the stock count.
+   */
+  if (stock.price != null) {
+    db.prepare(`UPDATE live_drops
+                   SET listing_price=?, listing_currency=?, seller_reference_price=?, price_verified_at=?
+                 WHERE id=?`)
+      .run(stock.price, stock.currency || drop.currency || null, stock.sellerOriginalPrice, new Date(now).toISOString(), drop.id);
+  }
+
   if (!stock.exact && !stock.outOfStock) return { changed: false, reason: "eBay gives no exact count", stock };
 
   /* Never above what this drop was allocated: the shop may have five hundred,
@@ -162,4 +197,43 @@ async function refreshDropStock(drop, { db, readStock = readEbayStock, market, n
   return { changed: true, remaining, soldOut: remaining === 0, stock, verifiedAt };
 }
 
-module.exports = { readEbayStock, refreshDropStock, ebayItemIdFrom };
+/*
+ * Does the price we are announcing match the one eBay will charge?
+ *
+ * A cent of tolerance, because a figure that survives a currency conversion
+ * and two roundings can land a penny away from itself and that is not a
+ * different price. Anything wider is: a drop is one product at one price, and
+ * if the listing has moved then the number on our page is no longer the
+ * number in the basket.
+ */
+const PRICE_TOLERANCE = 0.01;
+
+function priceAgrees(dropPrice, listingPrice, tolerance = PRICE_TOLERANCE) {
+  const ours = Number(dropPrice);
+  const theirs = Number(listingPrice);
+  if (!(ours > 0) || !(theirs > 0)) return false;
+  return Math.abs(ours - theirs) <= tolerance;
+}
+
+/**
+ * Whether a drop may state its price as a fact right now.
+ *
+ * Verified means: eBay was asked, answered, agreed — and recently enough that
+ * the answer still describes the listing. Same shape as the stock rule, and
+ * for the same reason: a claim that cannot be re-checked should expire rather
+ * than linger.
+ */
+function priceIsVerified(drop, { now = Date.now(), withinMinutes = 30 } = {}) {
+  const at = Date.parse(drop?.price_verified_at || "");
+  if (!Number.isFinite(at) || now - at > withinMinutes * 60000) return false;
+  return priceAgrees(drop?.drop_price, drop?.listing_price);
+}
+
+module.exports = {
+  readEbayStock,
+  refreshDropStock,
+  ebayItemIdFrom,
+  priceAgrees,
+  priceIsVerified,
+  PRICE_TOLERANCE,
+};

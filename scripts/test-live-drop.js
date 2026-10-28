@@ -12,7 +12,13 @@ const drop = {
   brand: "Apple",
   retailer_name: "Partner X",
   image_url: "https://example.com/iphone.jpg",
+  /* Typed into the admin form, and deliberately different from the figure
+     under it so these checks can tell which one reaches the page. Nothing may
+     be published from this one; see the comment on dropSaving. */
   retail_price: 799,
+  /* Read off the listing by src/liveStock.js. The only comparison that may be
+     shown, and shown as the seller's own claim rather than ours. */
+  seller_reference_price: 699,
   drop_price: 449,
   currency: "USD",
   quantity_total: 20,
@@ -79,7 +85,11 @@ const teaser = presentDrop(drop, at(-600));
 assert.strictEqual(teaser.state, "upcoming");
 assert.strictEqual(teaser.drop_price, null, "the drop price leaked before the drop opened");
 assert.strictEqual(teaser.saving, null, "the saving gave the price away before the drop opened");
-assert.strictEqual(teaser.retail_price, 799, "the retail price is public and should be shown");
+assert.strictEqual(
+  teaser.retail_price,
+  699,
+  "the page showed the figure typed into the form rather than the seller's own",
+);
 assert.strictEqual(
   teaser.affiliate_url,
   "",
@@ -90,7 +100,7 @@ assert.strictEqual(teaser.seconds_until_start, 600, "the countdown is wrong befo
 const live = presentDrop(drop, at(120));
 assert.strictEqual(live.state, "live");
 assert.strictEqual(live.drop_price, 449);
-assert.deepStrictEqual(live.saving, { amount: 350, percent: 44 }, "the saving is wrong");
+assert.deepStrictEqual(live.saving, { amount: 250, percent: 36 }, "the saving is wrong");
 assert.strictEqual(live.affiliate_url, drop.affiliate_url, "there is no way to buy during the drop");
 assert.strictEqual(live.seconds_until_end, 480, "the remaining time is wrong");
 
@@ -104,10 +114,42 @@ assert(
 /* No honest comparison, no badge. "SAVE $0 (0%)" is worse than nothing, and a
    saving against a retail price nobody can point at is a complaint waiting to
    happen. */
-assert.strictEqual(dropSaving({ retail_price: 0, drop_price: 449 }), null);
-assert.strictEqual(dropSaving({ retail_price: 449, drop_price: 449 }), null);
-assert.strictEqual(dropSaving({ retail_price: 400, drop_price: 449 }), null);
-assert.deepStrictEqual(dropSaving({ retail_price: 100, drop_price: 75 }), { amount: 25, percent: 25 });
+assert.strictEqual(dropSaving({ seller_reference_price: 0, drop_price: 449 }), null);
+assert.strictEqual(dropSaving({ seller_reference_price: 449, drop_price: 449 }), null);
+assert.strictEqual(dropSaving({ seller_reference_price: 400, drop_price: 449 }), null);
+assert.deepStrictEqual(
+  dropSaving({ seller_reference_price: 100, drop_price: 75 }),
+  { amount: 25, percent: 25 },
+);
+
+/*
+ * eBay's figure wins; the typed one is the fallback.
+ *
+ * The struck-through badge is what the drop is sold on, so it stays — but it
+ * is read off the listing wherever eBay publishes a crossed-out price, which
+ * needs nobody to type anything and cannot drift from what the shop is
+ * showing. The figure entered with the drop covers the listings, most of
+ * them, that publish none.
+ *
+ * A typed figure that contradicts eBay's is refused at publish rather than
+ * here: this function is handed one row and cannot ask the marketplace
+ * anything. See the publish route in src/server.js.
+ */
+assert.deepStrictEqual(
+  dropSaving({ seller_reference_price: 699, retail_price: 999, drop_price: 449 }),
+  { amount: 250, percent: 36 },
+  "the typed figure beat eBay's own crossed-out price",
+);
+assert.deepStrictEqual(
+  dropSaving({ retail_price: 999, drop_price: 449 }),
+  { amount: 550, percent: 55 },
+  "a listing with no crossed-out price of its own lost the badge entirely",
+);
+assert.strictEqual(
+  dropSaving({ drop_price: 449 }),
+  null,
+  "a drop with no reference price at all still produced a saving",
+);
 
 /*
  * What the host says on arrival, and the one thing she may not say early.
@@ -126,7 +168,36 @@ assert(!/\b44\s?percent\b/.test(waitingGreeting), "the saving gives the price aw
 
 const liveGreeting = hostGreeting(presentDrop(drop, at(60)));
 assert(liveGreeting.includes("449"), "the host does not say the price once it is live");
-assert(liveGreeting.includes("44 percent"), "the host does not say the saving once it is live");
+assert(
+  !/percent|%|below its usual|discount|saving/i.test(liveGreeting),
+  "the host claimed a saving out loud, which is the one thing this show must not do",
+);
+assert(liveGreeting.includes("449"), "the host did not say the price she is there to announce");
+
+/*
+ * The disclosure that she is not a person lives on screen, not in her mouth.
+ *
+ * She said it aloud for a day and the owner took it out on 28 October 2026 —
+ * his call, and his risk: a bot used to push a sale has to identify itself
+ * under California's SB 1001, and under article 50 of the EU AI Act in the
+ * markets this site also serves.
+ *
+ * What remains is the badge on her tile, which makes it the only disclosure
+ * there is. So this checks the copy still exists rather than checking a
+ * sentence nobody says: an unused translation key is exactly the kind of
+ * thing a later tidy-up deletes, and deleting this one leaves nothing.
+ */
+const { appCopy } = require("../src/i18n-app");
+assert(
+  /\bAI\b/i.test(appCopy.en["app.live.aiBadge"] || ""),
+  "the on-screen badge is the only disclosure left that the host is not a person, and it is gone",
+);
+for (const line of [waitingGreeting, liveGreeting]) {
+  assert(
+    !/\bAI\b/.test(line),
+    "the host is announcing herself as an AI out loud again, which was deliberately removed",
+  );
+}
 assert(hostGreeting(null).length > 0, "a drop-less greeting throws instead of falling back");
 
 /* Said once. A retailer title usually opens with the brand, and putting the
@@ -150,7 +221,14 @@ assert.strictEqual(
 );
 const reveal = hostRevealLine(presentDrop(drop, at(60)));
 assert(reveal.includes("449"), "the reveal does not carry the price it exists to announce");
-assert(reveal.includes("44 percent"), "the reveal does not carry the saving");
+assert(
+  !/percent below|below its usual/i.test(reveal),
+  "the reveal told the host to announce a saving against an unchecked figure",
+);
+assert(
+  /never say the price is a discount/i.test(reveal),
+  "the reveal does not forbid the host from calling the price a discount",
+);
 assert.strictEqual(hostRevealLine(null), "", "a missing drop throws instead of staying quiet");
 /* Urgency from the clock, which is ours and true; never from stock, which is
    the shop's and invisible to us. Handed only the facts she closed a rehearsal
@@ -167,7 +245,7 @@ assert(
   "a brand missing from the title is no longer added, so the product is under-named",
 );
 
-console.log("Live Drop states, early access, price reveal, saving and host greeting checks passed.");
+console.log("Live Drop states, early access, price reveal, seller-sourced saving and host greeting checks passed.");
 
 /* ------------------------------------------------------------------ funnel */
 
