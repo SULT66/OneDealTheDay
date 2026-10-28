@@ -1,5 +1,15 @@
 const SITE = "https://www.onedailydrop.com";
 
+/* Email clients have no page origin for /media/uploads/... URLs. */
+function emailImageUrl(value) {
+  try {
+    const url = new URL(String(value || ""), SITE);
+    return value && ["https:", "http:"].includes(url.protocol) ? url.href : "";
+  } catch {
+    return "";
+  }
+}
+
 const escapeHtml = value => String(value ?? "").replace(/[&<>"']/g, character => ({
   "&": "&amp;",
   "<": "&lt;",
@@ -20,9 +30,9 @@ const escapeHtml = value => String(value ?? "").replace(/[&<>"']/g, character =>
  * Unsubscribe button of their own and POST to the URL; the route accepts that
  * as well as a plain visit.
  *
- * Every message also carries a plain-text part. HTML-only mail is one of the
- * clearest signals of a bulk campaign, and the drop emails were landing in
- * Gmail's Promotions tab.
+ * Every message also carries a plain-text part for clients that prefer it.
+ * Gmail chooses inbox categories; template and transport settings cannot
+ * guarantee Primary placement.
  */
 const sendEmail = async ({to, toName, subject, html, text, unsubscribeUrl, fromName = "OneDailyDrop"}) => {
   const apiKey = String(process.env.SENDGRID_API_KEY || "").trim();
@@ -55,11 +65,9 @@ const sendEmail = async ({to, toName, subject, html, text, unsubscribeUrl, fromN
         }
         : {}),
       /*
-       * No tracking. SendGrid's defaults rewrite every link through a
-       * redirect and add an invisible open pixel, and both are what bulk
-       * marketing looks like to Gmail: the letter from Chloe went to
-       * Promotions with them. Our own links already record the click
-       * (/live/go, /go) on arrival, so nothing is lost.
+       * Keep direct links and avoid an invisible open pixel. Our own links
+       * already record arrivals (/live/go, /go). This is a transport preference,
+       * not a promise about Gmail inbox categories.
        */
       tracking_settings: {
         click_tracking: {enable: false, enable_text: false},
@@ -87,6 +95,7 @@ const sendEmail = async ({to, toName, subject, html, text, unsubscribeUrl, fromN
 /* A readable text version of an HTML email, for when none was written. */
 function plainTextFrom(html) {
   return String(html || "")
+    .replace(/<(head|style|script)\b[^>]*>[\s\S]*?<\/\1>/gi, "")
     .replace(/<a [^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi, (_match, href, label) => `${label.replace(/<[^>]+>/g, "").trim()} (${href})`)
     .replace(/<br\s*\/?>/gi, "\n")
     .replace(/<\/(p|div|h1|h2|tr|li)>/gi, "\n")
@@ -117,7 +126,7 @@ function plainTextFrom(html) {
  * OneDailyDrop, and it reads like something a person sent.
  *
  * Table-based and inline-styled because that is what mail clients render;
- * Outlook has no flexbox and Gmail strips a stylesheet.
+ * The inline table layout remains usable when a client ignores media queries.
  * ---------------------------------------------------------------------- */
 const LIME = "#b8ec44";
 const INK = "#010101";
@@ -149,18 +158,18 @@ const paragraphHtml = (text) =>
  */
 function composeEmail({ preheader, eyebrow, heading, paragraphs = [], product, items = [], note = [], cta, after, signature, tip, footer, live = false }) {
   const productCard = product && product.title ? `
-      <tr><td style="padding:6px 32px 4px">
+      <tr><td class="email-content" style="padding:6px 32px 4px">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f6f7f2;border-radius:16px">
           <tr>
-            ${product.imageUrl ? `<td width="112" style="padding:14px 0 14px 14px;vertical-align:middle">
-              <img src="${escapeHtml(product.imageUrl)}" alt="${escapeHtml(product.title)}" width="98" height="98"
+            ${emailImageUrl(product.imageUrl) ? `<td class="email-product-image" width="112" style="padding:14px 0 14px 14px;vertical-align:middle">
+              <img src="${escapeHtml(emailImageUrl(product.imageUrl))}" alt="${escapeHtml(product.title)}" width="98" height="98"
                 style="display:block;width:98px;height:98px;object-fit:contain;border-radius:12px;background:#ffffff;border:0">
             </td>` : ""}
-            <td style="padding:16px 18px;vertical-align:middle">
+            <td class="email-product-copy" style="padding:16px 18px;vertical-align:middle;overflow-wrap:anywhere">
               ${product.brand ? `<div style="font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:${FAINT};margin-bottom:4px">${escapeHtml(product.brand)}</div>` : ""}
               <div style="font-size:16px;line-height:1.35;font-weight:bold;color:${INK}">${escapeHtml(product.title)}</div>
               ${product.retailerName ? `<div style="font-size:13px;color:${MUTED};margin-top:5px">Available on ${escapeHtml(product.retailerName)}</div>` : ""}
-              ${product.retailPrice ? `<div style="font-size:13px;color:${MUTED};margin-top:5px"><span style="text-decoration:line-through">${escapeHtml(product.currency || "")} ${escapeHtml(product.retailPrice)}</span> usual price</div>` : ""}
+              ${product.retailPrice ? `<div style="font-size:13px;color:${MUTED};margin-top:5px">${escapeHtml(product.currency || "")} ${escapeHtml(product.retailPrice)} usual price</div>` : ""}
             </td>
           </tr>
         </table>
@@ -179,13 +188,13 @@ function composeEmail({ preheader, eyebrow, heading, paragraphs = [], product, i
    * badge in an email cannot be checked and a sentence can.
    */
   const itemList = (items || []).length ? `
-      <tr><td style="padding:4px 32px 0">
+      <tr><td class="email-content" style="padding:4px 32px 0">
         ${items.map((item, index) => `
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 10px;background:#f6f7f2;border-radius:16px">
           <tr>
-            ${item.imageUrl ? `<td width="92" style="padding:14px 0 14px 14px;vertical-align:top">
+            ${emailImageUrl(item.imageUrl) ? `<td width="92" style="padding:14px 0 14px 14px;vertical-align:top">
               <a href="${escapeHtml(item.href || SITE)}" style="text-decoration:none">
-                <img src="${escapeHtml(item.imageUrl)}" alt="${escapeHtml(item.title || "")}" width="78" height="78"
+                <img src="${escapeHtml(emailImageUrl(item.imageUrl))}" alt="${escapeHtml(item.title || "")}" width="78" height="78"
                   style="display:block;width:78px;height:78px;object-fit:contain;border-radius:12px;background:#ffffff;border:0">
               </a>
             </td>` : ""}
@@ -201,17 +210,26 @@ function composeEmail({ preheader, eyebrow, heading, paragraphs = [], product, i
         </table>`).join("")}
       </td></tr>` : "";
 
-  const html = `
+  const html = `<!doctype html>
+  <html><head><meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    @media screen and (max-width:480px) {
+      .email-content { padding-left:20px !important; padding-right:20px !important; }
+      .email-product-image { display:block !important; width:auto !important; padding:16px 16px 0 !important; }
+      .email-product-image img { margin:0 auto !important; }
+      .email-product-copy { display:block !important; padding:16px !important; }
+    }
+  </style></head><body style="margin:0;padding:0">
   <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent">${escapeHtml(preheader || "")}</div>
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f2f3ee;padding:28px 12px;font-family:Helvetica,Arial,sans-serif">
     <tr><td align="center">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;background:#ffffff;border-radius:22px;border:1px solid #e6e8df">
-        <tr><td style="padding:28px 32px 0">
+        <tr><td class="email-content" style="padding:28px 32px 0">
           <span style="font-size:17px;font-weight:bold;letter-spacing:-.01em;color:${INK}">OneDailyDrop</span>
           ${live ? `<span style="display:inline-block;margin-left:6px;padding:2px 8px;border-radius:6px;background:${LIME};color:${INK};font-size:12px;font-weight:bold;letter-spacing:.06em;vertical-align:2px">LIVE</span>` : ""}
         </td></tr>
 
-        <tr><td style="padding:26px 32px 6px">
+        <tr><td class="email-content" style="padding:26px 32px 6px">
           ${eyebrow ? `<div style="font-size:12px;font-weight:bold;letter-spacing:.14em;text-transform:uppercase;color:${OLIVE};margin-bottom:10px">${escapeHtml(eyebrow)}</div>` : ""}
           <h1 style="margin:0 0 16px;font-size:26px;line-height:1.2;letter-spacing:-.01em;color:${INK}">${escapeHtml(heading)}</h1>
           ${paragraphs.map(paragraphHtml).join("")}
@@ -220,28 +238,28 @@ function composeEmail({ preheader, eyebrow, heading, paragraphs = [], product, i
         ${productCard}
         ${itemList}
 
-        ${(note || []).length ? `<tr><td style="padding:18px 32px 0">
+        ${(note || []).length ? `<tr><td class="email-content" style="padding:18px 32px 0">
           ${note.map(paragraphHtml).join("")}
         </td></tr>` : ""}
 
-        ${cta ? `<tr><td style="padding:22px 32px 4px">
+        ${cta ? `<tr><td class="email-content" style="padding:22px 32px 4px">
           <a href="${cta.href}" style="display:inline-block;background:${LIME};color:${INK};text-decoration:none;padding:15px 30px;border-radius:999px;font-weight:bold;font-size:16px">${escapeHtml(cta.label)}</a>
           ${after ? `<div style="font-size:13px;color:${MUTED};margin-top:12px">${after}</div>` : ""}
         </td></tr>` : ""}
 
-        ${signature ? `<tr><td style="padding:22px 32px 0;font-size:15px;line-height:1.5;color:#2b2f33">${signature}</td></tr>` : ""}
+        ${signature ? `<tr><td class="email-content" style="padding:22px 32px 0;font-size:15px;line-height:1.5;color:#2b2f33">${signature}</td></tr>` : ""}
 
-        ${tip ? `<tr><td style="padding:20px 32px 0">
+        ${tip ? `<tr><td class="email-content" style="padding:20px 32px 0">
           <div style="background:#f6f7f2;border-radius:12px;padding:12px 14px;font-size:13px;line-height:1.55;color:${MUTED}">${tip}</div>
         </td></tr>` : ""}
 
-        <tr><td style="padding:24px 32px 28px;font-size:12px;line-height:1.6;color:${FAINT}">
+        <tr><td class="email-content" style="padding:24px 32px 28px;font-size:12px;line-height:1.6;color:${FAINT}">
           ${footer ? `${footer}<br>` : ""}
           OneDailyDrop · <a href="${SITE}" style="color:${FAINT}">onedailydrop.com</a>
         </td></tr>
       </table>
     </td></tr>
-  </table>`;
+  </table></body></html>`;
 
   return { html, text: plainTextFrom(html) };
 }
@@ -395,67 +413,68 @@ const liveDropAnnouncementEmail = ({ email, title, market, startsAt, unsubscribe
   }),
 });
 
-/* To people who pressed Remind me, the day before. */
-const liveDropSaveTheDateEmail = ({ email, title, market, startsAt, unsubscribeUrl, ...product }) => sendEmail({
+/* Only for people who requested a reminder for this specific event.
+ * Keep the event information separate from subscriber promotions. Gmail still
+ * chooses the category; a simpler message cannot guarantee Primary placement.
+ */
+function composeLiveReminder({ title, market, heading, timing, unsubscribeUrl }) {
+  const url = dropUrl(market);
+  const text = [
+    heading,
+    `You asked OneDailyDrop to remind you about ${title}.`,
+    timing,
+    `Open your live event: ${url}`,
+    "OneDailyDrop reminders",
+    ...(unsubscribeUrl ? [`Unsubscribe: ${unsubscribeUrl}`] : []),
+  ].join("\n\n");
+  const html = `<!doctype html>
+<html><head><meta name="viewport" content="width=device-width, initial-scale=1"></head>
+<body style="margin:0;background:#ffffff;color:#202124;font-family:Arial,Helvetica,sans-serif">
+  <div style="max-width:560px;padding:24px 20px;font-size:16px;line-height:1.6;overflow-wrap:anywhere">
+    <h1 style="margin:0 0 16px;font-size:20px;line-height:1.4">${escapeHtml(heading)}</h1>
+    <p>You asked OneDailyDrop to remind you about <strong>${escapeHtml(title)}</strong>.</p>
+    <p>${escapeHtml(timing)}</p>
+    <p>Open your live event:<br><a href="${escapeHtml(url)}" style="color:#174ea6">${escapeHtml(url)}</a></p>
+    <p style="margin-top:24px;color:#5f6368;font-size:14px">OneDailyDrop reminders</p>
+    ${unsubscribeUrl ? `<p style="font-size:13px"><a href="${escapeHtml(unsubscribeUrl)}">Unsubscribe</a></p>` : ""}
+  </div>
+</body></html>`;
+  return {html, text};
+}
+
+/* To people who pressed Remind me, 12–36 hours before. */
+const liveDropSaveTheDateEmail = ({ email, title, market, startsAt, unsubscribeUrl }) => sendEmail({
   to: email,
-  subject: `Tomorrow on Live: ${title}`,
+  subject: `Your live event: ${title}`,
   unsubscribeUrl,
-  fromName: "Chloe from OneDailyDrop",
-  ...composeEmail({
-    live: true,
-    preheader: `${dropTime(startsAt, market)}. Put it in your calendar.`,
-    eyebrow: "Tomorrow",
-    heading: "Your Live Drop is tomorrow",
-    paragraphs: [
-      `Hi, it's Chloe. Just a heads-up: the drop you asked about goes live on <strong>${escapeHtml(dropTime(startsAt, market))}</strong>.`,
-      "I'll reveal the price the moment we start, and it's only open for ten minutes, so it's worth putting in your calendar now.",
-    ],
-    product: productOf({ title, ...product }),
-    cta: { label: "See the drop page", href: dropUrl(market) },
-    signature: `See you tomorrow,<br>${CHLOE}`,
-    footer: unsubscribeFooter(unsubscribeUrl, "You asked to be reminded about this drop."),
+  fromName: "OneDailyDrop reminders",
+  ...composeLiveReminder({
+    title, market, unsubscribeUrl,
+    heading: "Your live event is scheduled",
+    timing: `It starts on ${dropTime(startsAt, market)}. You can return to the event page for its current status.`,
   }),
 });
 
-/* To people who pressed Remind me, about an hour before. Asked for: no unsubscribe. */
-const liveDropStartingSoonEmail = ({ email, title, market, minutes, ...product }) => sendEmail({
+/* Requested reminders carry event details, without a product sales card. */
+const liveDropStartingSoonEmail = ({ email, title, market, minutes }) => sendEmail({
   to: email,
-  subject: `We go live in ${minutes} minutes`,
-  fromName: "Chloe from OneDailyDrop",
-  ...composeEmail({
-    live: true,
-    preheader: `${title}. The price is revealed when we start.`,
-    eyebrow: `In ${minutes} minutes`,
-    heading: `We go live in ${minutes} minutes`,
-    paragraphs: [
-      "Hi, it's Chloe. Almost time!",
-      "When we start, I'll reveal today's price right on the page, and you'll have ten minutes to grab it. Come a little early and ask me anything in the chat while we wait.",
-    ],
-    product: productOf({ title, ...product }),
-    cta: { label: "Open the drop", href: dropUrl(market) },
-    signature: `See you in a bit,<br>${CHLOE}`,
-    footer: "You asked us for this reminder. There is nothing to unsubscribe from.",
+  subject: `Reminder: ${title} starts in ${minutes} minutes`,
+  fromName: "OneDailyDrop reminders",
+  ...composeLiveReminder({
+    title, market,
+    heading: `Your live event starts in ${minutes} minutes`,
+    timing: `The event is scheduled to start in ${minutes} minutes. You can open the page now and check its current status.`,
   }),
 });
 
-/* To people who pressed Remind me, ten minutes before. */
-const liveDropReminderEmail = ({ email, title, market, minutes, ...product }) => sendEmail({
+const liveDropReminderEmail = ({ email, title, market, minutes }) => sendEmail({
   to: email,
-  subject: `Starting in ${minutes} minutes: ${title}`,
-  fromName: "Chloe from OneDailyDrop",
-  ...composeEmail({
-    live: true,
-    preheader: "Grab your spot. The price is revealed when we start.",
-    eyebrow: `In ${minutes} minutes`,
-    heading: "We're about to start",
-    paragraphs: [
-      `Hi, it's Chloe. <strong>${escapeHtml(title)}</strong> goes live in ${minutes} minutes.`,
-      "Open the page now so you're there the second the price appears. It's only open for ten minutes.",
-    ],
-    product: productOf({ title, ...product }),
-    cta: { label: "Join the Live Drop", href: dropUrl(market) },
-    signature: CHLOE,
-    footer: "You asked us for this reminder. There is nothing to unsubscribe from.",
+  subject: `Reminder: ${title} starts in ${minutes} minutes`,
+  fromName: "OneDailyDrop reminders",
+  ...composeLiveReminder({
+    title, market,
+    heading: `Your live event starts in ${minutes} minutes`,
+    timing: `The event is scheduled to start in ${minutes} minutes. You can open the page now and check its current status.`,
   }),
 });
 
@@ -466,7 +485,18 @@ const liveDropReminderEmail = ({ email, title, market, minutes, ...product }) =>
  * The price is not in it even though it is public by now: an email read ten
  * minutes later would quote a price that has already gone.
  */
-const liveDropLiveNowEmail = ({ email, title, market, asked, unsubscribeUrl, ...product }) => sendEmail({
+const liveDropLiveNowEmail = ({ email, title, market, asked, unsubscribeUrl, ...product }) => {
+  if (asked) return sendEmail({
+    to: email,
+    subject: `Your live event has started: ${title}`,
+    fromName: "OneDailyDrop reminders",
+    ...composeLiveReminder({
+      title, market,
+      heading: "Your live event has started",
+      timing: "The event you asked about has started. Open the page to see its current status.",
+    }),
+  });
+  return sendEmail({
   to: email,
   subject: `We're live now: ${title}`,
   unsubscribeUrl,
@@ -483,11 +513,10 @@ const liveDropLiveNowEmail = ({ email, title, market, asked, unsubscribeUrl, ...
     product: productOf({ title, ...product }),
     cta: { label: "Watch and buy now", href: dropUrl(market) },
     signature: CHLOE,
-    footer: asked
-      ? "You asked to be reminded about this drop. There is nothing to unsubscribe from."
-      : unsubscribeFooter(unsubscribeUrl, "You are receiving this because you signed up for Live Drop emails."),
+    footer: unsubscribeFooter(unsubscribeUrl, "You are receiving this because you signed up for Live Drop emails."),
   }),
-});
+  });
+};
 
 /* ------------------------------------------------------- price watches */
 

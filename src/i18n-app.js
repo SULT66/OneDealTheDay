@@ -16,6 +16,7 @@
  */
 const appCopy = {
   en: {
+    "app.signup.gmailPrimaryTip": "Using Gmail? If our email lands in Promotions or Updates, open it and choose Move to → Primary. This helps Gmail learn your preference.",
     "app.yourMarket": "your market",
     "app.home.metaTitle": "Checked deals in {country}",
     "app.home.metaDescription": "Check here before you buy. We check the current price, product evidence and seller reliability across {country} retailers, and only list what clears the bar.",
@@ -342,6 +343,7 @@ const appCopy = {
   },
 
   es: {
+    "app.signup.gmailPrimaryTip": "¿Usas Gmail? Si nuestro email llega a Promociones o Notificaciones, ábrelo y selecciona Mover a → Principal. Esto ayuda a Gmail a aprender tu preferencia.",
     "app.yourMarket": "tu mercado",
     "app.home.metaTitle": "Ofertas verificadas en {country}",
     "app.home.metaDescription": "Consúltanos antes de comprar. Comprobamos el precio actual, la evidencia del producto y la fiabilidad del vendedor en los comercios de {country}, y solo listamos lo que supera el listón.",
@@ -668,6 +670,7 @@ const appCopy = {
   },
 
   fr: {
+    "app.signup.gmailPrimaryTip": "Vous utilisez Gmail ? Si notre email arrive dans Promotions ou Notifications, ouvrez-le et choisissez Déplacer vers → Principale. Gmail pourra ainsi mieux tenir compte de votre préférence.",
     "app.signup.eyebrow": "OneDailyDrop Live",
     "app.signup.title": "Ne manquez aucun Live Drop.",
     "app.signup.lede": "Des alertes Live Drop, un email de confirmation et trois emails de bienvenue prévus aux jours 1, 3 et 7.",
@@ -817,6 +820,7 @@ const appCopy = {
   },
 
   de: {
+    "app.signup.gmailPrimaryTip": "Du nutzt Gmail? Falls unsere E-Mail unter Werbung oder Benachrichtigungen ankommt, öffne sie und wähle Verschieben nach → Allgemein. So lernt Gmail deine Präferenz.",
     "app.signup.eyebrow": "OneDailyDrop Live",
     "app.signup.title": "Keinen Live Drop verpassen.",
     "app.signup.lede": "Live-Drop-Hinweise, eine Bestätigungsmail und drei Willkommensmails, geplant für Tag 1, 3 und 7.",

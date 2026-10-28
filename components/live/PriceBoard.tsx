@@ -138,12 +138,12 @@ export function PriceBoard({
       {/* The lime rule a shopping channel runs above its price band. */}
       <div className="h-1 w-full bg-lime" aria-hidden="true" />
 
-      <div className="grid grid-cols-[1fr_1.35fr] sm:grid-cols-[1fr_1.35fr_0.85fr_1fr]">
+      <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)] [&>div]:min-w-0 [&>div]:break-words lg:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)_minmax(0,0.85fr)_minmax(0,1fr)]">
         {/* Usually */}
-        <div className="flex flex-col justify-center gap-1 px-3 py-3 sm:px-5">
+        <div className="flex flex-col justify-center gap-1 px-3 py-3 lg:px-5">
           <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/55">{tr("app.board.usually")}</p>
           {hasCompare ? (
-            <p className="relative w-fit text-xl font-black leading-none text-white/80 tnum sm:text-3xl">
+            <p className="relative w-fit text-xl font-black leading-none text-white/80 tnum lg:text-3xl">
               {money(drop.retail_price as number)}
               <span
                 aria-hidden="true"
@@ -162,21 +162,21 @@ export function PriceBoard({
         </div>
 
         {/* Today's drop price */}
-        <div className="relative flex flex-col justify-center overflow-hidden bg-lime px-3 py-3 text-ink sm:px-5">
+        <div className="relative flex flex-col justify-center overflow-hidden bg-lime px-3 py-3 text-ink lg:px-5">
           <p className="text-[10px] font-black uppercase tracking-[0.16em] text-ink/70">
             {revealed ? tr("app.board.liveDropPrice") : tr("app.board.dropPrice")}
           </p>
           {revealed ? (
             <p
               className={cn(
-                "origin-left text-3xl font-black leading-none tnum transition-all duration-500 ease-out motion-reduce:transition-none sm:text-5xl",
+                "origin-left text-3xl font-black leading-none tnum transition-all duration-500 ease-out motion-reduce:transition-none lg:text-5xl",
                 shown ? "scale-100 opacity-100" : "scale-50 opacity-0",
               )}
             >
               {money(drop.drop_price as number)}
             </p>
           ) : (
-            <p className="text-2xl font-black leading-none tracking-widest text-ink/35 sm:text-4xl" aria-label={tr("app.board.hidden")}>
+            <p className="text-2xl font-black leading-none tracking-widest text-ink/35 lg:text-4xl" aria-label={tr("app.board.hidden")}>
               $ ? ? ?
             </p>
           )}
@@ -195,7 +195,7 @@ export function PriceBoard({
         {/* The clock */}
         <div
           className={cn(
-            "flex flex-col justify-center gap-1 border-t border-white/10 px-3 py-2.5 sm:border-t-0 sm:px-4",
+            "flex flex-col justify-center gap-1 border-t border-white/10 px-3 py-2.5 lg:border-t-0 lg:px-4",
             lastMinute ? "bg-[#ff7a68]/15" : "",
           )}
         >
@@ -205,23 +205,23 @@ export function PriceBoard({
           {timerSeconds != null ? (
             <p
               className={cn(
-                "text-2xl font-black leading-none tnum sm:text-4xl",
+                "text-2xl font-black leading-none tnum lg:text-4xl",
                 lastMinute ? "animate-pulse text-[#ff7a68]" : "text-white",
               )}
             >
               {clock(timerSeconds)}
             </p>
           ) : (
-            <p className="text-lg font-black leading-none text-white tnum sm:text-2xl">{openingTime(drop.start_at, market, language)}</p>
+            <p className="text-lg font-black leading-none text-white tnum lg:text-2xl">{openingTime(drop.start_at, market, language)}</p>
           )}
         </div>
 
         {/* The saving and what is left */}
-        <div className="flex flex-col justify-center gap-2 border-l border-t border-white/10 px-3 py-2.5 sm:border-t-0 sm:px-5">
+        <div className="flex flex-col justify-center gap-2 border-l border-t border-white/10 px-3 py-2.5 lg:border-t-0 lg:px-5">
           {revealed && drop.saving ? (
             <p className="flex flex-col gap-0.5">
-              <span className="whitespace-nowrap text-2xl font-black leading-none text-lime tnum sm:text-[1.7rem]">{tr("app.board.off", { percent: counted })}</span>
-              <span className="whitespace-nowrap text-xs font-semibold text-white/70 tnum">{tr("app.board.save", { amount: money(drop.saving.amount) })}</span>
+              <span className="text-2xl font-black leading-none text-lime tnum lg:text-[1.7rem]">{tr("app.board.off", { percent: counted })}</span>
+              <span className="text-xs font-semibold text-white/70 tnum">{tr("app.board.save", { amount: money(drop.saving.amount) })}</span>
             </p>
           ) : (
             <p className="text-xs font-semibold text-white/70">

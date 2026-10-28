@@ -425,7 +425,7 @@ export function SwapStage({
     : { left: "62%", top: 0, width: "38%", height: "100%" };
 
   return (
-    <div className="relative aspect-video w-full overflow-hidden bg-black">
+    <div className={`relative w-full overflow-hidden bg-black ${compact ? "aspect-video" : "aspect-[4/3] sm:aspect-video"}`}>
       {hasProduct ? (
         <div className={`${layer} z-10 border-l border-white/10 bg-black`} style={productStyle}>
           {productVideo && isVideoFile(productVideo) ? (
