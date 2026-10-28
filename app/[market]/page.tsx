@@ -42,7 +42,7 @@ export async function generateMetadata({
      * not repeated at both ends.
      */
     title: {
-      absolute: language === "en" ? `Deals with price evidence in ${country} | OneDailyDrop` : `OneDailyDrop: ${t(language, "app.home.metaTitle", { country })}`,
+      absolute: language === "en" ? "OneDailyDrop — Fresh Finds. New Deals. Every Day." : `OneDailyDrop: ${t(language, "app.home.metaTitle", { country })}`,
     },
     description: t(language, "app.home.metaDescription", { country }),
     alternates: { canonical: `/${market}`, languages: marketAlternates() },
