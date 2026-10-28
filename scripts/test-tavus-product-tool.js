@@ -103,7 +103,9 @@ assert(
   "the Chloe embed still asks the browser for camera or microphone permission",
 );
 assert(
-  /aspect-video w-full/.test(liveBroadcastSource) && /relative h-full w-full object-contain/.test(liveBroadcastSource),
+  /relative w-full overflow-hidden/.test(liveBroadcastSource) &&
+    /sm:aspect-video/.test(liveBroadcastSource) &&
+    /relative h-full w-full object-contain/.test(liveBroadcastSource),
   "the shared stage must stay responsive and preserve the full product video",
 );
 
