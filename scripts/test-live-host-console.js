@@ -16,7 +16,7 @@ assert.equal(presenterSpeakingEvent({event_type:'conversation.stopped_speaking',
 assert.equal(hostTurnFinished({now:60000,sentAt:1000,stoppedAt:0,speaking:true,sawEvents:true}), false);
 assert.equal(hostTurnFinished({now:60000,sentAt:1000,stoppedAt:500,speaking:false,sawEvents:true}), true);
 
-let now = 100000, cursor = 0, pendingEffects = [];
+let now = 100000, cursor = 0, pendingEffects = [], view;
 const slots = [], effects = [], timers = new Map(), handlers = {}, sent = [];
 let timerId = 0, presenter = false;
 const host = {state:'waiting', conversation_url:'https://tavus.daily.co/test', conversation_id:'c123test',
@@ -30,14 +30,17 @@ const react = {
 };
 // Stable callbacks matter for the component's polling/scheduling effects.
 react.useCallback = (fn,deps)=>{const i=cursor++;const old=slots[i];if(!old || deps.some((x,n)=>x!==old.deps[n]))slots[i]={fn,deps};return slots[i].fn;};
-const call = {participants:()=>presenter?{pal:{local:false,tracks:{video:{persistentTrack:{id:'v'}}}}}:{},
+const call = {participants:()=>presenter?{pal:{local:false,tracks:{video:{persistentTrack:{id:'v'}},audio:{persistentTrack:{id:'a'}}}}}:{},
   on:(event,fn)=>{handlers[event]=fn;}, join:async()=>{}, leave:async()=>{}, destroy:()=>{},
   sendAppMessage:payload=>sent.push(payload)};
 const mod={exports:{}};
-const noop=()=>null;
+const jsx=(type,props)=>({type,props});
+const find=(node,predicate)=>{if(!node || typeof node!=='object')return null;if(predicate(node))return node;for(const child of [node.props?.children].flat(Infinity)){const match=find(child,predicate);if(match)return match;}return null;};
+const video={srcObject:null,muted:true,play:async()=>{}};
 vm.runInNewContext(compile('components/admin/LiveHostConsole.tsx'), {
   module:mod,exports:mod.exports,console,
-  require:name=>name==='react'?react:name==='react/jsx-runtime'?{jsx:noop,jsxs:noop}:name==='@daily-co/daily-js'?{default:{createCallObject:()=>call},__esModule:true}:protocol.exports,
+  require:name=>name==='react'?react:name==='react/jsx-runtime'?{jsx,jsxs:jsx}:name==='@daily-co/daily-js'?{default:{createCallObject:()=>call},__esModule:true}:protocol.exports,
+  MediaStream:class {constructor(tracks){this.tracks=tracks;}getTracks(){return this.tracks;}},
   Date:class extends Date {static now(){return now;}},
   fetch:async url=>({ok:true,json:async()=>{
     if(url.endsWith('/next')) {host.queued=0;return {cue:'[ODD test] Is it refurbished?',questions:[{text:'Is it refurbished?'}]};}
@@ -46,7 +49,7 @@ vm.runInNewContext(compile('components/admin/LiveHostConsole.tsx'), {
   setInterval:(fn,ms)=>{const id=++timerId;timers.set(id,{fn,ms});return id;},
   clearInterval:id=>timers.delete(id),
 });
-const render=()=>{cursor=0;pendingEffects=[];mod.exports.LiveHostConsole({adminKey:'test',dropKey:'test'});for(const run of pendingEffects)run();};
+const render=()=>{cursor=0;pendingEffects=[];view=mod.exports.LiveHostConsole({adminKey:'test',dropKey:'test'});find(view,n=>n.type==='video').props.ref.current=video;for(const run of pendingEffects)run();};
 const settle=async()=>{for(let i=0;i<12;i++)await Promise.resolve();render();};
 const tick=async(ms=2000)=>{now+=ms;for(const timer of [...timers.values()])if(timer.ms===2000)timer.fn();await settle();};
 const speaking=(role,started)=>handlers['app-message']({data:{event_type:`conversation.${started?'started':'stopped'}_speaking`,properties:{role}}});
@@ -55,6 +58,10 @@ const refresh=async()=>{for(const timer of [...timers.values()])if(timer.ms===50
   render();await settle();handlers['joined-meeting']();await settle();
   await tick();assert.equal(sent.length,0,'script sent before the presenter arrived');
   presenter=true;handlers['participant-updated']();await settle();
+  assert.equal(video.srcObject.getTracks().map(t=>t.id).join(','),'v,a','host preview discarded the audio track');
+  find(view,n=>n.type==='button' && n.props.children==='Listen to Chloe').props.onClick();await settle();
+  assert.equal(video.muted,false,'preview could not be unmuted by a click');
+  assert.equal(find(view,n=>n.type==='video').props.muted,false);
   await tick();assert.equal(sent[0].event_type,'conversation.echo');assert.equal(sent[0].properties.text,'First paragraph.');
   speaking('pal',true);await settle();
   host.queued=1;await refresh();await tick();assert.equal(sent.length,1,'question interrupted the script');
