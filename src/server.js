@@ -1242,6 +1242,7 @@ const chloeContext = (selectedMarket, view) => [
   `This session is the OneDailyDrop Live event for market ${String(selectedMarket).toUpperCase()}.`,
   `The current published drop key is ${view.drop_key}.`,
   "Use get_product_details before stating any product, price, discount, stock or purchase fact.",
+  "Remaining-time estimates expire immediately: never reuse a duration from an earlier turn. Use only the CURRENT COUNTDOWN supplied with the current instruction, or ask viewers to check the on-screen timer. Never invent a duration.",
   "Never ask the shopper for a product ID. Keep answers brief and suitable for a live shopping broadcast.",
   /* Urgency is the format and she should sell it. What she may not sell is
      scarcity: she closed a rehearsal with "grab yours before they are gone",
@@ -4128,6 +4129,8 @@ app.get("/api/admin/live-host/:key", admin, async (req, res) => {
   const queued = db.prepare("SELECT COUNT(*) AS n FROM live_chat_messages WHERE drop_id=? AND status='queued'").get(drop.id).n;
   res.json({
     state:view?.state || "ended",
+    seconds_until_start:view?.seconds_until_start ?? null,
+    seconds_until_end:view?.seconds_until_end ?? null,
     conversation_url:broadcast?.conversation_url || "",
     conversation_id:broadcast?.conversation_id || "",
     reveal_cue:broadcast && view?.state === "live" ? revealCue(broadcast.secret, hostRevealLine(view)) : "",

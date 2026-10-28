@@ -21,3 +21,19 @@ export function hostTurnFinished({ now, sentAt, stoppedAt, speaking, sawEvents }
   if (stoppedAt >= sentAt && now - stoppedAt > 1500) return true;
   return now - sentAt > (sawEvents ? 45000 : 25000);
 }
+
+/** Recompute from the server's duration, independent of the browser wall clock. */
+export function hostClockInstruction(snapshot: {
+  state: string; secondsUntilStart: number | null; secondsUntilEnd: number | null; receivedAt: number;
+} | null, now: number): string {
+  const rule = "Never repeat a remaining-time number from earlier dialogue or a script. If this clock is unavailable, tell viewers to check the on-screen countdown without giving a number.";
+  if (!snapshot) return rule;
+  const elapsed = Math.max(0, (now - snapshot.receivedAt) / 1000);
+  const raw = snapshot.state === "live" ? snapshot.secondsUntilEnd : snapshot.secondsUntilStart;
+  if (raw == null || !Number.isFinite(raw)) return rule;
+  const seconds = Math.max(0, Math.floor(raw - elapsed));
+  const duration = `${Math.floor(seconds / 60)} minutes ${seconds % 60} seconds`;
+  if (snapshot.state === "live") return `CURRENT COUNTDOWN: ${seconds ? duration + " remain before this drop ends" : "this drop has ended; do not say the offer is still live"}. This supersedes ALL earlier time estimates. Use only this fresh time if mentioning a duration; it keeps decreasing. ${rule}`;
+  if (snapshot.state === "waiting" || snapshot.state === "upcoming") return `CURRENT COUNTDOWN: ${duration} until the scheduled start, NOT time left to buy. ${rule}`;
+  return `CURRENT COUNTDOWN: the drop has ended. Do not say the offer is still live. ${rule}`;
+}

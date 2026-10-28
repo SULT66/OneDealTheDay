@@ -9,17 +9,24 @@ const compile = path => ts.transpileModule(fs.readFileSync(path, 'utf8'), {
 }).outputText;
 const protocol = {exports: {}};
 vm.runInNewContext(compile('lib/liveHostProtocol.ts'), {module: protocol, exports: protocol.exports});
-const {presenterSpeakingEvent, hostTurnFinished} = protocol.exports;
+const {presenterSpeakingEvent, hostTurnFinished, hostClockInstruction} = protocol.exports;
 assert.equal(presenterSpeakingEvent({event_type:'conversation.started_speaking', properties:{role:'user'}}), null);
 assert.equal(presenterSpeakingEvent({event_type:'conversation.started_speaking', properties:{role:'pal'}}), 'started');
 assert.equal(presenterSpeakingEvent({event_type:'conversation.stopped_speaking', properties:{role:'replica'}}), 'stopped');
 assert.equal(hostTurnFinished({now:60000,sentAt:1000,stoppedAt:0,speaking:true,sawEvents:true}), false);
 assert.equal(hostTurnFinished({now:60000,sentAt:1000,stoppedAt:500,speaking:false,sawEvents:true}), true);
 
+const clockSnapshot = {state:'live', secondsUntilStart:0, secondsUntilEnd:420, receivedAt:100000};
+assert.match(hostClockInstruction(clockSnapshot, 100000), /7 minutes 0 seconds/);
+assert.match(hostClockInstruction(clockSnapshot, 340000), /3 minutes 0 seconds/);
+assert.match(hostClockInstruction(clockSnapshot, 521000), /drop has ended/);
+assert.match(hostClockInstruction({...clockSnapshot,state:'waiting',secondsUntilStart:30}, 100000), /NOT time left to buy/);
+assert.match(hostClockInstruction(null, 100000), /without giving a number/);
+
 let now = 100000, cursor = 0, pendingEffects = [], view;
 const slots = [], effects = [], timers = new Map(), handlers = {}, sent = [];
 let timerId = 0, presenter = false;
-const host = {state:'waiting', conversation_url:'https://tavus.daily.co/test', conversation_id:'c123test',
+const host = {seconds_until_start:120, seconds_until_end:720, state:'waiting', conversation_url:'https://tavus.daily.co/test', conversation_id:'c123test',
   intro_script:'First paragraph.\n\nSecond paragraph.', reveal_script:'The price is now open.',
   reveal_cue:'Reveal', idle_cue:'Idle', queued:0, messages:[]};
 const react = {
@@ -67,6 +74,7 @@ const refresh=async()=>{for(const timer of [...timers.values()])if(timer.ms===50
   host.queued=1;await refresh();await tick();assert.equal(sent.length,1,'question interrupted the script');
   speaking('pal',false);await settle();await tick();
   assert.equal(sent[1].event_type,'conversation.respond','question did not run between paragraphs');
+  assert.match(sent[1].properties.text,/CURRENT COUNTDOWN:.*NOT time left to buy/);
   speaking('replica',true);await settle();await tick();assert.equal(sent.length,2);
   speaking('replica',false);await settle();await tick();
   assert.equal(sent[2].event_type,'conversation.echo');assert.equal(sent[2].properties.text,'Second paragraph.','script did not resume after the answer');

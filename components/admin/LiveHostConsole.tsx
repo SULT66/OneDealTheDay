@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import DailyIframe from "@daily-co/daily-js";
-import { hostTurnFinished, presenterSpeakingEvent } from "@/lib/liveHostProtocol";
+import { hostClockInstruction, hostTurnFinished, presenterSpeakingEvent } from "@/lib/liveHostProtocol";
 
 /*
  * The host console: the one place that talks to Chloe during a drop.
@@ -20,6 +20,8 @@ import { hostTurnFinished, presenterSpeakingEvent } from "@/lib/liveHostProtocol
 
 type HostState = {
   state: string;
+  seconds_until_start?: number | null;
+  seconds_until_end?: number | null;
   conversation_url: string;
   conversation_id: string;
   reveal_cue: string;
@@ -62,6 +64,7 @@ export function LiveHostConsole({ adminKey, dropKey }: { adminKey: string; dropK
   const [log, setLog] = useState<string[]>([]);
   const callRef = useRef<ReturnType<typeof DailyIframe.createCallObject> | null>(null);
   const readyRef = useRef(false);
+  const clockRef = useRef<Parameters<typeof hostClockInstruction>[0]>(null);
   const speakingRef = useRef(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const lastSentRef = useRef(0);
@@ -84,6 +87,8 @@ export function LiveHostConsole({ adminKey, dropKey }: { adminKey: string; dropK
       return;
     }
     setError("");
+    clockRef.current = {state: body.state, secondsUntilStart: body.seconds_until_start ?? null,
+      secondsUntilEnd: body.seconds_until_end ?? null, receivedAt: Date.now()};
     setHost(body);
   }, [dropKey, headers]);
 
@@ -167,7 +172,7 @@ export function LiveHostConsole({ adminKey, dropKey }: { adminKey: string; dropK
           message_type: "conversation",
           event_type: "conversation.respond",
           conversation_id: host.conversation_id,
-          properties: { text },
+          properties: { text: `${text}\n${hostClockInstruction(clockRef.current, Date.now())}` },
         },
         "*",
       );
