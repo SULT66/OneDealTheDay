@@ -57,7 +57,7 @@ function hooks() {
   const page=compile('components/live/LiveDropPanel.tsx',name=>name==='react'?pageHooks.react:name==='react/jsx-runtime'?{jsx,jsxs:jsx}:
     name.includes('CopyProvider')?{useCopy:()=>x=>x}:name.includes('LiveBroadcast')?{useLiveBroadcast:()=>broadcastValue,sendPresence:broadcast.sendPresence}:
     name.includes('analyticsSession')?{recordLiveDropEvent:noop,analyticsSessionId:()=> 'stable-viewer-session'}:name.includes('/format')?{formatPrice:()=>'$1'}:{},
-    {window,navigator:{sendBeacon:()=>false},Blob,fetch:async()=>({ok:true,json:async()=>({drop:null})}),
+    {window,document:{addEventListener:noop,removeEventListener:noop},navigator:{sendBeacon:()=>false},Blob,fetch:async()=>({ok:true,json:async()=>({drop:null})}),
       setInterval:(fn,ms)=>{const id=++timerId;intervals.set(id,{fn,ms});return id;},clearInterval:id=>intervals.delete(id),setTimeout:()=>1,clearTimeout:noop});
   const initialDrop={drop_key:'drop1',state:'live',watching:0,seconds_until_start:0,seconds_until_end:60,currency:'USD'};
   const before=requests.length;

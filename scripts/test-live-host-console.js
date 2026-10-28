@@ -28,8 +28,8 @@ const slots = [], effects = [], timers = new Map(), handlers = {}, sent = [];
 let timerId = 0, presenter = false;
 const phases = [];
 const host = {seconds_until_start:120, seconds_until_end:720, state:'waiting', conversation_url:'https://tavus.daily.co/test', conversation_id:'c123test',
-  intro_script:'First paragraph.\n\nSecond paragraph.', reveal_script:'The price is now open.',
-  reveal_cue:'Reveal', idle_cue:'Idle', queued:0, messages:[]};
+  intro_script:'First paragraph.\n\nSecond paragraph.', reveal_script:'',
+  reveal_cue:'', idle_cue:'Idle', queued:0, messages:[]};
 const react = {
   useState(initial) {const i=cursor++; if (!(i in slots)) slots[i]=initial; return [slots[i], value=>{slots[i]=typeof value==='function'?value(slots[i]):value;}];},
   useRef(initial) {const i=cursor++; return slots[i] ||= {current:initial};},
@@ -70,16 +70,18 @@ const refresh=async()=>{for(const timer of [...timers.values()])if(timer.ms===50
   find(view,n=>n.type==='button' && n.props.children==='Listen to Chloe').props.onClick();await settle();
   assert.equal(video.muted,false,'preview could not be unmuted by a click');
   assert.equal(find(view,n=>n.type==='video').props.muted,false);
+  await tick();assert.equal(sent.length,0,'opening script played during the pre-show advertisement');
+  host.state='live';await refresh();
   await tick();assert.equal(sent[0].event_type,'conversation.echo');assert.equal(sent[0].properties.text,'First paragraph.');
   speaking('pal',true);await settle();
   host.queued=1;await refresh();await tick();assert.equal(sent.length,1,'question interrupted the script');
   speaking('pal',false);await settle();await tick();
   assert.equal(sent[1].event_type,'conversation.respond','question did not run between paragraphs');
-  assert.match(sent[1].properties.text,/CURRENT COUNTDOWN:.*NOT time left to buy/);
+  assert.match(sent[1].properties.text,/CURRENT COUNTDOWN:.*remain before this drop ends/);
   speaking('replica',true);await settle();await tick();assert.equal(sent.length,2);
   speaking('replica',false);await settle();await tick();
   assert.equal(sent[2].event_type,'conversation.echo');assert.equal(sent[2].properties.text,'Second paragraph.','script did not resume after the answer');
-  speaking('pal',true);await settle();host.state='live';await refresh();await tick();assert.equal(sent.length,3,'price reveal interrupted a speaking turn');
+  speaking('pal',true);await settle();host.state='live';host.reveal_script='The price is now open.';host.reveal_cue='Reveal';await refresh();await tick();assert.equal(sent.length,3,'price reveal interrupted a speaking turn');
   speaking('pal',false);await settle();await tick();assert.equal(sent[3].properties.text,'The price is now open.');
   speaking('pal',true);await settle();host.state='ended';await refresh();await tick();
   assert.equal(sent.length,4,'closing interrupted an unfinished reveal');

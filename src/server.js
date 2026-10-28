@@ -3782,6 +3782,7 @@ const liveDropInput = (body) => {
       end_at: new Date(startAt + minutes * 60000).toISOString(),
       member_early_access_seconds: Math.max(0, Math.min(3600, Math.round(Number(body.member_early_access_seconds) || 0))),
       affiliate_url: url,
+      preroll_video_url: text(body.preroll_video_url, 1000),
       video_url: text(body.video_url, 1000),
       stream_embed_url: text(body.stream_embed_url, 1000),
       terms: text(body.terms, 2000),
@@ -3885,6 +3886,7 @@ app.get("/api/admin/live-drops", admin, (req, res) => {
          could not see. */
       image_url: row.image_url || "",
       secondary_image_url: row.secondary_image_url || "",
+      preroll_video_url: row.preroll_video_url || "",
       video_url: row.video_url || "",
       stream_embed_url: row.stream_embed_url || "",
       host_script_intro: row.host_script_intro || "",
@@ -3905,11 +3907,11 @@ app.post("/api/admin/live-drops", admin, (req, res) => {
   db.prepare(`INSERT INTO live_drops(
     drop_key,market,title,brand,retailer_name,image_url,secondary_image_url,retail_price,drop_price,currency,
     quantity_total,quantity_remaining,start_at,end_at,member_early_access_seconds,
-    affiliate_url,video_url,stream_embed_url,terms,host_script_intro,host_script_reveal,published,created_at,updated_at
+    affiliate_url,preroll_video_url,video_url,stream_embed_url,terms,host_script_intro,host_script_reveal,published,created_at,updated_at
   ) VALUES(
     @drop_key,@market,@title,@brand,@retailer_name,@image_url,@secondary_image_url,@retail_price,@drop_price,@currency,
     @quantity_total,@quantity_remaining,@start_at,@end_at,@member_early_access_seconds,
-    @affiliate_url,@video_url,@stream_embed_url,@terms,@host_script_intro,@host_script_reveal,0,@created_at,@updated_at
+    @affiliate_url,@preroll_video_url,@video_url,@stream_embed_url,@terms,@host_script_intro,@host_script_reveal,0,@created_at,@updated_at
   )`).run({...drop, drop_key:dropKey, created_at:nowIso, updated_at:nowIso});
 
   /* Drafted, not announced. Writing a drop and advertising it are separate
@@ -4066,6 +4068,7 @@ app.patch("/api/admin/live-drops/:key/media", admin, express.json({limit:"8kb"})
   const fields = {
     image_url: link(req.body?.image_url, drop.image_url),
     secondary_image_url: link(req.body?.secondary_image_url, drop.secondary_image_url),
+    preroll_video_url: link(req.body?.preroll_video_url, drop.preroll_video_url || ""),
     video_url: link(req.body?.video_url, drop.video_url),
     stream_embed_url: link(req.body?.stream_embed_url, drop.stream_embed_url),
   };
@@ -4075,9 +4078,9 @@ app.patch("/api/admin/live-drops/:key/media", admin, express.json({limit:"8kb"})
   }
 
   db.prepare(
-    "UPDATE live_drops SET image_url=?, secondary_image_url=?, video_url=?, stream_embed_url=?, updated_at=? WHERE id=?",
+    "UPDATE live_drops SET image_url=?, secondary_image_url=?, preroll_video_url=?, video_url=?, stream_embed_url=?, updated_at=? WHERE id=?",
   ).run(
-    fields.image_url, fields.secondary_image_url, fields.video_url, fields.stream_embed_url,
+    fields.image_url, fields.secondary_image_url, fields.preroll_video_url, fields.video_url, fields.stream_embed_url,
     new Date().toISOString(), drop.id,
   );
   publicHtmlCache.clear();
