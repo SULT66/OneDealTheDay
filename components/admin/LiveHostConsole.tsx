@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import DailyIframe from "@daily-co/daily-js";
+import { hostTurnFinished, presenterSpeakingEvent } from "@/lib/liveHostProtocol";
 
 /*
  * The host console: the one place that talks to Chloe during a drop.
@@ -49,27 +50,19 @@ function splitScript(script: string): string[] {
 }
 
 const IDLE_SECONDS = 75;
-/* How long she must have been quiet before the next piece of script: long
-   enough to be sure she finished, short enough not to sound like a stall. */
-const TURN_GAP_MS = 1500;
-/* Between two pieces of script, at most this often, she says she has seen the
-   questions coming in — so a viewer whose question waits knows it was seen. */
-const ACK_EVERY_MS = 90 * 1000;
-const ACKNOWLEDGEMENTS = [
-  "I can see your questions coming in, keep them coming, I'll answer them right after I show you this.",
-  "Love all the questions in the chat, stay with me, I'm answering every one of them in just a moment.",
-  "Your questions are in line and I haven't forgotten them, let me finish showing you this and they're next.",
-];
-const FALLBACK_TURN_SECONDS = 25;
 
 export function LiveHostConsole({ adminKey, dropKey }: { adminKey: string; dropKey: string }) {
   const [host, setHost] = useState<HostState | null>(null);
   const [error, setError] = useState("");
   const [joined, setJoined] = useState(false);
+  const [presenterReady, setPresenterReady] = useState(false);
+  const [monitorMuted, setMonitorMuted] = useState(true);
   const [autopilot, setAutopilot] = useState(true);
   const [speaking, setSpeaking] = useState(false);
   const [log, setLog] = useState<string[]>([]);
   const callRef = useRef<ReturnType<typeof DailyIframe.createCallObject> | null>(null);
+  const readyRef = useRef(false);
+  const speakingRef = useRef(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const lastSentRef = useRef(0);
   const lastStoppedRef = useRef(0);
@@ -78,8 +71,6 @@ export function LiveHostConsole({ adminKey, dropKey }: { adminKey: string; dropK
   const busyRef = useRef(false);
   const lastKindRef = useRef<"script" | "other">("other");
   const phaseRef = useRef("");
-  const lastAckRef = useRef(0);
-  const ackCountRef = useRef(0);
 
   const headers = useCallback(() => ({ "X-Admin-Key": adminKey }), [adminKey]);
   const note = (line: string) =>
@@ -106,16 +97,31 @@ export function LiveHostConsole({ adminKey, dropKey }: { adminKey: string; dropK
   const url = host?.conversation_url || "";
   useEffect(() => {
     if (!url) return;
+    readyRef.current = false;
+    speakingRef.current = false;
+    setPresenterReady(false);
+    setSpeaking(false);
+    lastSentRef.current = 0;
+    lastStoppedRef.current = 0;
+    sawSpeakingEventsRef.current = false;
+    revealSentRef.current = false;
+    introQueuedRef.current = false;
+    scriptLinesRef.current = [];
+    lastKindRef.current = "other";
     const call = DailyIframe.createCallObject({ audioSource: false, videoSource: false });
     callRef.current = call;
     const sync = () => {
       const presenter = Object.values(call.participants()).find(
         (participant) => !participant.local && participant.tracks.video?.persistentTrack,
       );
-      const track = presenter?.tracks.video?.persistentTrack;
+      const tracks = [presenter?.tracks.video?.persistentTrack, presenter?.tracks.audio?.persistentTrack]
+        .filter((track): track is MediaStreamTrack => Boolean(track));
+      readyRef.current = Boolean(presenter);
+      setPresenterReady(readyRef.current);
       const element = videoRef.current;
-      if (element && track && !(element.srcObject instanceof MediaStream && element.srcObject.getTracks().some((t) => t.id === track.id))) {
-        element.srcObject = new MediaStream([track]);
+      if (element && tracks.length && !(element.srcObject instanceof MediaStream &&
+          tracks.every((track) => (element.srcObject as MediaStream).getTracks().some((t) => t.id === track.id)))) {
+        element.srcObject = new MediaStream(tracks);
         void element.play().catch(() => undefined);
       }
     };
@@ -126,14 +132,17 @@ export function LiveHostConsole({ adminKey, dropKey }: { adminKey: string; dropK
     });
     call.on("participant-joined", sync);
     call.on("participant-updated", sync);
+    call.on("participant-left", sync);
     call.on("app-message", (event: { data?: unknown }) => {
-      const type = (event.data as { event_type?: string } | null)?.event_type || "";
-      if (type === "conversation.replica.started_speaking") {
+      const change = presenterSpeakingEvent(event.data);
+      if (change === "started") {
         sawSpeakingEventsRef.current = true;
+        speakingRef.current = true;
         setSpeaking(true);
       }
-      if (type === "conversation.replica.stopped_speaking") {
+      if (change === "stopped") {
         sawSpeakingEventsRef.current = true;
+        speakingRef.current = false;
         setSpeaking(false);
         lastStoppedRef.current = Date.now();
       }
@@ -152,7 +161,7 @@ export function LiveHostConsole({ adminKey, dropKey }: { adminKey: string; dropK
   const send = useCallback(
     (text: string, label: string) => {
       const call = callRef.current;
-      if (!call || !host?.conversation_id || !text) return false;
+      if (!call || !readyRef.current || !host?.conversation_id || !text) return false;
       call.sendAppMessage(
         {
           message_type: "conversation",
@@ -168,24 +177,6 @@ export function LiveHostConsole({ adminKey, dropKey }: { adminKey: string; dropK
     },
     [host?.conversation_id],
   );
-
-  const sendNextQuestions = useCallback(async () => {
-    if (busyRef.current) return;
-    busyRef.current = true;
-    try {
-      const response = await fetch(`/api/admin/live-host/${encodeURIComponent(dropKey)}/next`, {
-        method: "POST",
-        headers: headers(),
-      }).catch(() => null);
-      const body = await response?.json().catch(() => ({}));
-      if (response?.ok && body?.cue) {
-        send(body.cue, `Handed Chloe ${body.questions.length} question${body.questions.length === 1 ? "" : "s"}`);
-        void load();
-      }
-    } finally {
-      busyRef.current = false;
-    }
-  }, [dropKey, headers, send, load]);
 
   /* Tells the chat what she is doing, only when it changes. */
   const reportPhase = useCallback(
@@ -203,11 +194,32 @@ export function LiveHostConsole({ adminKey, dropKey }: { adminKey: string; dropK
     [dropKey, headers],
   );
 
+  const sendNextQuestions = useCallback(async () => {
+    if (busyRef.current || !readyRef.current) return;
+    busyRef.current = true;
+    try {
+      const response = await fetch(`/api/admin/live-host/${encodeURIComponent(dropKey)}/next`, {
+        method: "POST",
+        headers: headers(),
+      }).catch(() => null);
+      const body = await response?.json().catch(() => ({}));
+      if (response?.ok && body?.cue) {
+        if (send(body.cue, `Handed Chloe ${body.questions.length} question${body.questions.length === 1 ? "" : "s"}`)) {
+          lastKindRef.current = "other";
+          reportPhase("answering");
+        }
+        void load();
+      }
+    } finally {
+      busyRef.current = false;
+    }
+  }, [dropKey, headers, send, load, reportPhase]);
+
   /* Word for word: Tavus's echo, no model in between. */
   const echo = useCallback(
     (text: string, label: string) => {
       const call = callRef.current;
-      if (!call || !host?.conversation_id || !text.trim()) return false;
+      if (!call || !readyRef.current || !host?.conversation_id || !text.trim()) return false;
       call.sendAppMessage(
         {
           message_type: "conversation",
@@ -237,38 +249,39 @@ export function LiveHostConsole({ adminKey, dropKey }: { adminKey: string; dropK
   useEffect(() => {
     if (!autopilot || !joined || !host) return;
     const tick = setInterval(() => {
+      if (!readyRef.current || !["waiting", "live"].includes(host.state)) return;
       const now = Date.now();
       if (!introQueuedRef.current && host.intro_script && ["waiting", "live"].includes(host.state)) {
         introQueuedRef.current = true;
         queueScript(host.intro_script);
       }
+      const finishedTurn = hostTurnFinished({ now, sentAt: lastSentRef.current,
+        stoppedAt: lastStoppedRef.current, speaking: speakingRef.current,
+        sawEvents: sawSpeakingEventsRef.current });
+      if (!finishedTurn || busyRef.current) return;
       if (host.state === "live" && !revealSentRef.current) {
         revealSentRef.current = true;
         if (host.reveal_script) {
-          /* The price opening outranks whatever was left of the opening. */
-          queueScript(host.reveal_script, true);
+          /* Announce the reveal next, then resume the remaining presentation. */
+          scriptLinesRef.current = [...splitScript(host.reveal_script), ...scriptLinesRef.current];
         } else if (host.reveal_cue) {
           send(host.reveal_cue, "Told Chloe the price is open");
           return;
         }
       }
-      const finishedTurn = sawSpeakingEventsRef.current
-        ? !speaking && now - lastStoppedRef.current > TURN_GAP_MS && lastStoppedRef.current >= lastSentRef.current
-        : now - lastSentRef.current > FALLBACK_TURN_SECONDS * 1000;
       const presenting =
         scriptLinesRef.current.length > 0 || (lastKindRef.current === "script" && !finishedTurn && Boolean(lastSentRef.current));
       reportPhase(presenting ? "presenting" : "answering");
-      if (!finishedTurn && lastSentRef.current) return;
+      /* Answer a batch between script paragraphs, then resume the script.
+         A full chat cannot starve the presentation, or vice versa. */
+      if (host.queued > 0 && lastKindRef.current === "script") {
+        void sendNextQuestions();
+        return;
+      }
       if (scriptLinesRef.current.length) {
         lastKindRef.current = "script";
-        if (host.queued > 0 && now - lastAckRef.current > ACK_EVERY_MS) {
-          lastAckRef.current = now;
-          const line = ACKNOWLEDGEMENTS[ackCountRef.current++ % ACKNOWLEDGEMENTS.length];
-          echo(line, "Told viewers their questions are next");
-          return;
-        }
-        const line = scriptLinesRef.current.shift() as string;
-        echo(line, `Script: ${line.slice(0, 60)}`);
+        const line = scriptLinesRef.current[0];
+        if (echo(line, `Script: ${line.slice(0, 60)}`)) scriptLinesRef.current.shift();
         return;
       }
       lastKindRef.current = "other";
@@ -337,7 +350,7 @@ export function LiveHostConsole({ adminKey, dropKey }: { adminKey: string; dropK
                 : joined
                   ? speaking
                     ? "Chloe is speaking"
-                    : "Connected to Chloe"
+                    : presenterReady ? "Connected to Chloe" : "Waiting for Chloe to be ready…"
                   : "Connecting…"}
         </span>
         <label className="ml-auto flex items-center gap-2 text-xs font-semibold text-fg">
@@ -347,9 +360,10 @@ export function LiveHostConsole({ adminKey, dropKey }: { adminKey: string; dropK
         {host?.intro_script ? (
           <button
             type="button"
-            disabled={!joined}
+            disabled={!joined || !presenterReady}
             onClick={() => {
               introQueuedRef.current = true;
+              setAutopilot(true);
               queueScript(host.intro_script || "", true);
               note("Reading the opening script again");
             }}
@@ -360,7 +374,7 @@ export function LiveHostConsole({ adminKey, dropKey }: { adminKey: string; dropK
         ) : null}
         <button
           type="button"
-          disabled={!joined}
+          disabled={!joined || !presenterReady}
           onClick={() => void sendNextQuestions()}
           className="inline-flex h-8 cursor-pointer items-center rounded-full border border-border px-3 text-xs font-semibold text-fg hover:bg-surface disabled:opacity-50"
         >
@@ -381,7 +395,7 @@ export function LiveHostConsole({ adminKey, dropKey }: { adminKey: string; dropK
         <div className="mt-2 flex flex-wrap gap-2">
           <button
             type="button"
-            disabled={!joined || !ownText.trim()}
+            disabled={!joined || !presenterReady || !ownText.trim()}
             onClick={() => {
               say(ownText);
               setOwnText("");
@@ -392,7 +406,7 @@ export function LiveHostConsole({ adminKey, dropKey }: { adminKey: string; dropK
           </button>
           <button
             type="button"
-            disabled={!joined || !ownText.trim()}
+            disabled={!joined || !presenterReady || !ownText.trim()}
             onClick={() => {
               void instruct(ownText);
               setOwnText("");
@@ -421,7 +435,22 @@ export function LiveHostConsole({ adminKey, dropKey }: { adminKey: string; dropK
       </div>
 
       <div className="mt-3 grid gap-3 md:grid-cols-[200px_1fr_1fr]">
-        <video ref={videoRef} muted playsInline className="aspect-[4/3] w-full rounded-xl bg-black object-contain" />
+        <div>
+          <video ref={videoRef} muted={monitorMuted} playsInline className="aspect-[4/3] w-full rounded-xl bg-black object-contain" />
+          <button type="button" disabled={!joined || !presenterReady}
+            onClick={() => {
+              const muted = !monitorMuted;
+              setMonitorMuted(muted);
+              if (videoRef.current) {
+                videoRef.current.muted = muted;
+                void videoRef.current.play().catch(() => setError("Press Listen to Chloe again to enable the preview audio."));
+              }
+            }}
+            className="mt-2 cursor-pointer text-xs font-semibold text-fg underline disabled:opacity-50">
+            {monitorMuted ? "Listen to Chloe" : "Mute preview"}
+          </button>
+          <p className="mt-1 text-xs text-fg-subtle">Keep this console open for the script and chat. Preview sound affects only you.</p>
+        </div>
         <div>
           <p className="text-xs font-semibold text-fg-muted">
             Chat · {host?.queued ?? 0} waiting for Chloe

@@ -7,6 +7,7 @@ import DailyIframe from "@daily-co/daily-js";
 import { analyticsSessionId } from "@/lib/analyticsSession";
 import { startStageMusic, type StageMusic } from "./stageMusic";
 import { useCopy } from "@/components/site/CopyProvider";
+import { presenterSpeakingEvent } from "@/lib/liveHostProtocol";
 
 /*
  * Chloe's broadcast, held above the pages.
@@ -176,12 +177,13 @@ export function LiveBroadcastProvider({ market, children }: { market: string; ch
         properties?: { role?: string; speech?: string; text?: string };
       } | null;
       if (!payload) return;
-      if (payload.event_type === "conversation.replica.started_speaking") {
+      const change = presenterSpeakingEvent(payload);
+      if (change === "started") {
         eventSpeakingRef.current = true;
         lastVoiceRef.current = performance.now();
         return;
       }
-      if (payload.event_type === "conversation.replica.stopped_speaking") {
+      if (change === "stopped") {
         eventSpeakingRef.current = false;
         return;
       }
