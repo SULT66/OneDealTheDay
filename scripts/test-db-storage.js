@@ -171,6 +171,9 @@ hooked.exec(`
   CREATE TABLE users(id INTEGER PRIMARY KEY, email TEXT);
   CREATE TABLE saved_offers(id INTEGER PRIMARY KEY, user_id INTEGER, url TEXT);
   CREATE TABLE products(id INTEGER PRIMARY KEY, title TEXT);
+  CREATE TABLE live_drops(id INTEGER PRIMARY KEY, drop_key TEXT, published INTEGER, start_at TEXT);
+  CREATE TABLE live_drop_reminders(id INTEGER PRIMARY KEY, drop_id INTEGER);
+  CREATE TABLE live_host_broadcasts(id INTEGER PRIMARY KEY, drop_id INTEGER, conversation_id TEXT);
 `);
 
 const requests = [];
@@ -196,6 +199,22 @@ assert.strictEqual(
   1,
   "Wrapping prepare() broke ordinary reads",
 );
+
+// Schedule and broadcast state cannot be rebuilt from retailer feeds.
+const beforeLiveWrites = requests.length;
+hooked.prepare("INSERT INTO live_drops(drop_key,published,start_at) VALUES(?,?,?)").run("scheduled-test",0,"2026-10-28T22:40:00.000Z");
+hooked.prepare("UPDATE live_drops SET published=1 WHERE drop_key=?").run("scheduled-test");
+hooked.prepare("INSERT INTO live_drop_reminders(drop_id) VALUES(?)").run(1);
+hooked.prepare("INSERT INTO live_host_broadcasts(drop_id,conversation_id) VALUES(?,?)").run(1,"c-shared-test");
+assert.strictEqual(requests.length-beforeLiveWrites,4,"Live schedule/publication/reminder/broadcast writes did not request a snapshot");
+const liveSnapshot=writeSnapshot(hooked,hookedShared,{logger:quiet});
+const restoredLivePath=path.join(hookedWorkspace,"restored-live.db");
+prepareRuntimeDatabase({runtimePath:restoredLivePath,sharedPath:path.join(hookedShared,"site.db"),sharedDir:hookedShared,openDatabase,logger:quiet});
+const restoredLive=new Database(restoredLivePath,{readonly:true});
+assert.deepStrictEqual(restoredLive.prepare("SELECT drop_key,published,start_at FROM live_drops").get(),{drop_key:"scheduled-test",published:1,start_at:"2026-10-28T22:40:00.000Z"});
+restoredLive.close();
+// The independent snapshot above is for recovery, not the debounce check below.
+fs.rmSync(liveSnapshot);
 
 /* Signing in writes a user and a session back to back. That is one moment, and
    it should cost one snapshot rather than one per statement. */
