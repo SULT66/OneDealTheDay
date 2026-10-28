@@ -3860,7 +3860,7 @@ app.post("/api/admin/live-drops/:key/publish", admin, async (req, res) => {
     try {
       const outcome = await refreshDropStock(drop, { db, market: market(drop.market) });
       const checked = db
-        .prepare("SELECT drop_price, listing_price FROM live_drops WHERE id=?")
+        .prepare("SELECT drop_price, retail_price, listing_price, seller_reference_price FROM live_drops WHERE id=?")
         .get(drop.id);
       if (checked?.listing_price != null && !priceAgrees(checked.drop_price, checked.listing_price)) {
         return res.status(409).json({
@@ -3869,6 +3869,37 @@ app.post("/api/admin/live-drops/:key/publish", admin, async (req, res) => {
             + `Fix one of them before publishing.`,
           listing_price: checked.listing_price,
           drop_price: checked.drop_price,
+        });
+      }
+
+      /*
+       * And the struck-through price, which is the badge the drop is sold on.
+       *
+       * Taken from the listing when eBay publishes one, and typed in when it
+       * does not — but a typed figure that contradicts eBay's own is the one
+       * version that must never reach the page, because the shopper can open
+       * the listing in the next tab and see it. Two ways it can contradict:
+       * by disagreeing with eBay's own crossed-out figure, or by being at or
+       * below what eBay is actually charging, which is not a usual price at
+       * all.
+       */
+      const typed = Number(checked?.retail_price) || 0;
+      const sellers = Number(checked?.seller_reference_price) || 0;
+      if (typed > 0 && sellers > 0 && !priceAgrees(typed, sellers)) {
+        return res.status(409).json({
+          error: `This drop says the usual price is ${drop.currency} ${typed.toFixed(2)}, `
+            + `but eBay's own crossed-out price on that listing is ${drop.currency} ${sellers.toFixed(2)}. `
+            + `Use eBay's figure, or clear yours and the page will.`,
+          typed_reference_price: typed,
+          seller_reference_price: sellers,
+        });
+      }
+      if (typed > 0 && !sellers && checked?.listing_price != null && typed <= Number(checked.listing_price)) {
+        return res.status(409).json({
+          error: `The usual price on this drop (${drop.currency} ${typed.toFixed(2)}) is not above what eBay `
+            + `is charging (${drop.currency} ${Number(checked.listing_price).toFixed(2)}), so there is no saving to show.`,
+          typed_reference_price: typed,
+          listing_price: checked.listing_price,
         });
       }
       if (outcome?.reason) console.log(`[live-drop] publish check for ${drop.drop_key}: ${outcome.reason}`);

@@ -123,17 +123,32 @@ assert.deepStrictEqual(
 );
 
 /*
- * And never from the admin form.
+ * eBay's figure wins; the typed one is the fallback.
  *
- * This is the check the old behaviour would fail. A drop went out announcing
- * "forty-five percent below its usual price" against retail_price, a number
- * somebody typed and nothing sourced — on a site that exists to refuse exactly
- * that. A figure with no origin produces no badge now, however large it is.
+ * The struck-through badge is what the drop is sold on, so it stays — but it
+ * is read off the listing wherever eBay publishes a crossed-out price, which
+ * needs nobody to type anything and cannot drift from what the shop is
+ * showing. The figure entered with the drop covers the listings, most of
+ * them, that publish none.
+ *
+ * A typed figure that contradicts eBay's is refused at publish rather than
+ * here: this function is handed one row and cannot ask the marketplace
+ * anything. See the publish route in src/server.js.
  */
-assert.strictEqual(
+assert.deepStrictEqual(
+  dropSaving({ seller_reference_price: 699, retail_price: 999, drop_price: 449 }),
+  { amount: 250, percent: 36 },
+  "the typed figure beat eBay's own crossed-out price",
+);
+assert.deepStrictEqual(
   dropSaving({ retail_price: 999, drop_price: 449 }),
+  { amount: 550, percent: 55 },
+  "a listing with no crossed-out price of its own lost the badge entirely",
+);
+assert.strictEqual(
+  dropSaving({ drop_price: 449 }),
   null,
-  "a saving was computed from the figure typed into the admin form",
+  "a drop with no reference price at all still produced a saving",
 );
 
 /*
@@ -159,11 +174,28 @@ assert(
 );
 assert(liveGreeting.includes("449"), "the host did not say the price she is there to announce");
 
-/* And she says what she is, in the sentence everybody hears. */
-for (const [when, line] of [["waiting", waitingGreeting], ["live", liveGreeting]]) {
+/*
+ * The disclosure that she is not a person lives on screen, not in her mouth.
+ *
+ * She said it aloud for a day and the owner took it out on 28 October 2026 —
+ * his call, and his risk: a bot used to push a sale has to identify itself
+ * under California's SB 1001, and under article 50 of the EU AI Act in the
+ * markets this site also serves.
+ *
+ * What remains is the badge on her tile, which makes it the only disclosure
+ * there is. So this checks the copy still exists rather than checking a
+ * sentence nobody says: an unused translation key is exactly the kind of
+ * thing a later tidy-up deletes, and deleting this one leaves nothing.
+ */
+const { appCopy } = require("../src/i18n-app");
+assert(
+  /\bAI\b/i.test(appCopy.en["app.live.aiBadge"] || ""),
+  "the on-screen badge is the only disclosure left that the host is not a person, and it is gone",
+);
+for (const line of [waitingGreeting, liveGreeting]) {
   assert(
-    /\bAI\b/.test(line),
-    `the ${when} greeting does not disclose that the host is not a person`,
+    !/\bAI\b/.test(line),
+    "the host is announcing herself as an AI out loud again, which was deliberately removed",
   );
 }
 assert(hostGreeting(null).length > 0, "a drop-less greeting throws instead of falling back");

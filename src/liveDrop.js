@@ -60,22 +60,25 @@ function dropState(drop, now = Date.now(), earlyAccessSeconds = 0) {
  * a retail price nobody can point at is the kind of thing that turns a
  * promotion into a complaint.
  */
+/**
+ * The price the drop is struck through against.
+ *
+ * eBay's own crossed-out figure first, read off the listing by liveStock, so
+ * the common case needs nobody to type anything and cannot drift from what
+ * the shop is showing. The admin's own entry is the fallback, for the
+ * listings — most of them — where eBay publishes no such figure at all.
+ *
+ * Either way it is somebody's claim about a usual price and not a measurement
+ * of ours, so every place it appears labels it as the seller's. What it may
+ * not do is disagree with eBay when eBay has an opinion: publishing checks
+ * that, and refuses.
+ */
+function referencePrice(drop) {
+  return number(drop?.seller_reference_price, 0) || number(drop?.retail_price, 0);
+}
+
 function dropSaving(drop) {
-  /*
-   * Against the seller's own figure, never against the one typed in the form.
-   *
-   * retail_price is whatever the admin entered. Nothing sourced it, nothing
-   * checked it, and a drop went out announcing "forty-five percent below its
-   * usual price" on the strength of it — out loud, in the host's voice, on a
-   * site whose whole argument is that it will not repeat a saving it cannot
-   * show you. seller_reference_price is read off the listing itself, so the
-   * comparison is at least the seller's published claim, and every place that
-   * shows it labels it as theirs.
-   *
-   * Absent on a listing with no crossed-out price, which is most of them, and
-   * that is the right outcome: no badge beats an invented one.
-   */
-  const reference = number(drop?.seller_reference_price, 0);
+  const reference = referencePrice(drop);
   const price = number(drop?.drop_price, 0);
   if (!(reference > 0 && price > 0 && reference > price)) return null;
   const amount = Math.round((reference - price) * 100) / 100;
@@ -113,15 +116,9 @@ function presentDrop(drop, now = Date.now(), { earlyAccessSeconds = 0 } = {}) {
        hold it up, so this is where a shopper actually sees the thing. */
     secondary_image_url: drop.secondary_image_url || "",
     currency: drop.currency,
-    /*
-     * The seller's crossed-out price, not the one typed into the form.
-     *
-     * Same figure the catalogue shows on a product page, from the same place
-     * — the listing — and shown under the same rule: it is the seller's claim
-     * and is labelled as theirs. Most listings carry none, and then this is
-     * null and the page shows no comparison at all.
-     */
-    retail_price: number(drop.seller_reference_price, 0) || null,
+    /* eBay's crossed-out figure when the listing has one, otherwise the one
+       entered with the drop. See referencePrice. */
+    retail_price: referencePrice(drop) || null,
     /* Before the start this is deliberately null, not the real number. */
     drop_price: revealed ? number(drop.drop_price, 0) || null : null,
     saving,
@@ -209,14 +206,16 @@ function hostGreeting(view) {
     [alreadyNamed ? "" : brand, title].filter(Boolean).join(" ").trim() || "today's drop";
   const shop = view.retailer_name ? ` It's available on ${view.retailer_name}.` : "";
   /*
-   * She says she is an AI in her first sentence, every time.
+   * She does not announce herself as an AI out loud.
    *
-   * She looks and sounds like a person and is introduced by a first name, so
-   * nothing else on the page corrects the impression — and a viewer who only
-   * ever catches the opening is the one most likely to be left with it. A
-   * disclosure further down the page is not one the audio audience receives.
+   * The owner's call, made on 28 October 2026: the badge on her tile carries
+   * the disclosure instead, on screen for the whole drop, and a spoken one
+   * was judged to cost more of the show than it was worth. The badge is
+   * therefore the only disclosure there is — see app.live.aiBadge in
+   * src/i18n-app.js and SwapStage in components/live/LiveBroadcast.tsx — so
+   * it is not decoration and must not be dropped as clutter.
    */
-  const opening = `Hi, I'm Chloe, the AI host of OneDailyDrop Live. Today's drop is the ${product}.${shop}`;
+  const opening = `Hi, I'm Chloe and this is OneDailyDrop Live. Today's drop is the ${product}.${shop}`;
 
   if (view.state !== "live") {
     return `${opening} The price opens in a moment — stay with me and I'll tell you the second it does. Ask me anything about it while we wait.`;
