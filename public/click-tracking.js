@@ -12,7 +12,7 @@
   const sessionId = (() => {
     try {
       const current = sessionStorage.getItem("odd_analytics_session");
-      if (/^[A-Za-z0-9_-]{16,80}$/.test(current || "")) return current;
+      if (/^[A-Za-z0-9_-]{16,80}$/.test(current || "") && !current.startsWith("internal_")) return current;
       const created = token();
       sessionStorage.setItem("odd_analytics_session", created);
       return created;

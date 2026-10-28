@@ -127,7 +127,7 @@ async function run() {
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const response = await fetch(`${base}/api/analytics/events`, {
       method:"POST",
-      headers:{"content-type":"application/json"},
+      headers:{"content-type":"application/json", cookie:"odd_internal_browser=1"},
       body:JSON.stringify(events)
     });
     assert(response.status === 204, "Search/impression analytics request failed");
@@ -136,7 +136,7 @@ async function run() {
 
   const productClick = await fetch(`${base}/api/click-events`, {
     method:"POST",
-    headers:{"content-type":"application/json"},
+    headers:{"content-type":"application/json", cookie:"odd_internal_browser=1"},
     body:JSON.stringify({
       eventId:"analytics-product-click",
       sessionId:"analytics-session-001",
@@ -148,7 +148,7 @@ async function run() {
   });
   assert(productClick.status === 204, "Product click analytics request failed");
 
-  const outbound = await fetch(`${base}/us/go/${product.id}?source=product&placement=product_cta&action=view_deal&sid=analytics-session-001&eid=analytics-outbound-001`, {redirect:"manual"});
+  const outbound = await fetch(`${base}/us/go/${product.id}?source=product&placement=product_cta&action=view_deal&sid=analytics-session-001&eid=analytics-outbound-001`, {redirect:"manual", headers:{cookie:"odd_internal_browser=1"}});
   assert(outbound.status === 302, "Outbound analytics redirect failed");
 
   const reportResponse = await fetch(`${base}/api/admin/analytics-baseline?days=7`, {

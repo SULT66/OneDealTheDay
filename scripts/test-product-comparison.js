@@ -1,0 +1,33 @@
+const assert = require('assert');
+const {restoreCompareItems,toggleCompareItem}=require('../src/compareSelection');
+const item=(id,extra={})=>({id:String(id),title:'Tool bag',image:'https://example.com/bag.jpg',category:'tools-diy',currency:'USD',...extra});
+let rows=[];
+for(const id of [1,2,3,4]) rows=toggleCompareItem(rows,item(id));
+assert.equal(rows.length,4);
+assert.strictEqual(toggleCompareItem(rows,item(5)),rows,'A fifth item must not replace a selection');
+rows=toggleCompareItem(rows,item(2));
+assert.deepEqual(rows.map(x=>x.id),['1','3','4']);
+assert.deepEqual(toggleCompareItem(rows,item(5)).map(x=>x.id),['1','3','4','5']);
+assert.strictEqual(toggleCompareItem(rows,item(5,{currency:'CAD'})),rows);
+assert.strictEqual(toggleCompareItem(rows,item(5,{category:'electronics'})),rows);
+assert.deepEqual(restoreCompareItems(null),[]);
+assert.deepEqual(restoreCompareItems([null,{},item('invalid'),item(1),item(1),item(2,{category:'electronics'}),item(3)]).map(x=>x.id),['1','3']);
+assert.equal(restoreCompareItems([item(1),item(2),item(3),item(4),item(5)]).length,4);
+assert.deepEqual(Object.keys(restoreCompareItems([item(1,{price:1,delivery:'unverified'})])[0]).sort(),['category','currency','id','image','title']);
+console.log('Product comparison selection: limit, removal, persistence validation and market currency boundaries passed.');
+
+const {comparisonResults}=require('../src/compareSelection');
+const snapshots=new Map([['1',{price:30,checkedAt:'2026-10-21'}],['2',{price:40,checkedAt:'2026-10-21'}]]);
+const resolved=comparisonResults([item(1),item(2),item(3)],[{price:25},null,null],snapshots);
+assert.equal(resolved[0].offer.price,25,'A refreshed price must override a page snapshot');
+assert.equal(resolved[0].refreshed,true);
+assert.equal(resolved[1].offer.price,40,'API failure must retain the verified page snapshot');
+assert.equal(resolved[1].offer.checkedAt,'2026-10-21');
+assert.equal(resolved[1].refreshed,false,'A fallback must not claim it was refreshed');
+assert.equal(resolved[2].offer,null,'Missing data must not be invented');
+
+const allowed=[item(1),item(2),item(3),item(4)];
+assert.deepEqual(toggleCompareItem([],item(1),allowed).map(x=>x.id),["1"]);
+const selected=[item(1)];
+assert.strictEqual(toggleCompareItem(selected,item(99),allowed),selected,"Same-category items outside this related shelf must be rejected");
+assert.deepEqual(toggleCompareItem([],item(1),[item(5),item(6)]),[],"Another product page must have an independent eligible set");

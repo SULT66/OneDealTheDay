@@ -1,5 +1,6 @@
 const fs = require("fs");
 const path = require("path");
+const { execFileSync } = require("node:child_process");
 const { nodeFileTrace } = require("next/dist/compiled/@vercel/nft");
 
 const root = path.resolve(__dirname, "..");
@@ -71,6 +72,12 @@ async function main() {
     copy(relativePath);
   }
 
+  // Market selection reads country only. geoip-lite automatically falls back
+  // to its country databases when city files are absent (about 105 MB saved).
+  for (const name of ["geoip-city.dat", "geoip-city6.dat", "geoip-city-names.dat"]) {
+    fs.rmSync(path.join(target, "node_modules/geoip-lite/data", name), {force:true});
+  }
+
   // These directories are read by name at runtime and therefore cannot all be
   // discovered by static import tracing.
   copy("node_modules/next/dist/compiled/webpack");
@@ -107,6 +114,23 @@ async function main() {
 
   const megabytes = directorySize(target) / 1024 / 1024;
   console.log(`Runtime package: ${trace.fileList.size} traced files, ${megabytes.toFixed(1)} MB`);
+  // Azure serves wwwroot over a network share. Keep the complete release in
+  // one file, then extract it locally before loading application modules.
+  // An old process keeps its own .next manifests during the next ZIP deploy.
+  const payload = `${target}.payload`;
+  fs.renameSync(target, payload);
+  fs.mkdirSync(target);
+  try {
+    execFileSync("tar", ["-czf", path.join(target, "runtime.tar.gz"), "-C", payload, "."], {stdio:"inherit"});
+    fs.copyFileSync(path.join(root, "scripts/runtime-bootstrap.js"), path.join(target, "app.js"));
+    fs.writeFileSync(path.join(target, "package.json"), JSON.stringify({name:"onedailydrop-runtime",private:true,scripts:{start:"node app.js"},engines:{node:">=22"}}, null, 2));
+    for (const name of [".deployment", ".release-sha"]) {
+      if (fs.existsSync(path.join(payload, name))) fs.copyFileSync(path.join(payload, name), path.join(target, name));
+    }
+  } finally {
+    fs.rmSync(payload, {recursive:true, force:true});
+  }
+  console.log(`Local runtime archive: ${(directorySize(target)/1024/1024).toFixed(1)} MB`);
   if (trace.warnings.size > 0) {
     console.log(`Runtime trace completed with ${trace.warnings.size} optional/dynamic import warnings`);
   }

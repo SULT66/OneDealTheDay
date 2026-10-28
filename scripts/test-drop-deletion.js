@@ -1,20 +1,4 @@
-/*
- * When a Live Drop may be deleted.
- *
- * The rule used to refuse anything whose start time had passed, which reads as
- * "a drop that ran is the record of what was offered" and is not that
- * statement. A draft that was never published never ran — nobody was told, and
- * no public page ever existed for it. Its scheduled hour arriving only meant
- * it could no longer be deleted, so a console filled with dead test drafts had
- * no way out and they went on polluting the funnel counts.
- *
- * The line is whether it was ever published, not the clock and not where it
- * stands now. Loosening it to published-right-now was my first attempt and it
- * was wrong: unpublish a drop that had already run and the record of what was
- * offered to real people could be erased. All three halves are pinned here —
- * a stale draft has to go, a live one has to survive a stray click, and one
- * that was ever public has to survive even after being taken down.
- */
+/* Removing drafts and previous public drops, while protecting an active show. */
 
 const assert = require("assert");
 const fs = require("fs");
@@ -114,16 +98,29 @@ const iso = (offsetMs) => new Date(Date.now() + offsetMs).toISOString();
   assert.match(refusal.error, /unpublish/i, "it says what to do instead");
   assert.strictEqual(db.prepare("SELECT COUNT(*) n FROM live_drops WHERE drop_key=?").get(livePublished).n, 1);
 
-  /* --- And unpublishing does not make it deletable either.
-     This is where I first got the rule wrong: loosening the guard to
-     published-right-now would have let a drop that already ran be unpublished
-     and then erased, taking the record of what was offered to real people with
-     it. An existing test caught that; this pins it down from the outside. --- */
+  // Previously public drops can now be removed; historical attribution stays.
   await publish(livePublished, false);
-  const stillRefused = await remove(livePublished);
-  assert.strictEqual(stillRefused.status, 409, "a drop that was ever published is never deletable");
-  assert.match((await stillRefused.json()).error, /record/i);
-  assert.strictEqual(db.prepare("SELECT COUNT(*) n FROM live_drops WHERE drop_key=?").get(livePublished).n, 1);
+  assert.strictEqual((await remove(livePublished)).status, 200);
+  const archived = db.prepare("SELECT * FROM live_drops WHERE drop_key=?").get(livePublished);
+  assert.ok(archived.deleted_at);
+  assert.strictEqual(archived.published, 0);
+  const listed = await (await fetch(`${base}/api/admin/live-drops`, {headers:admin})).json();
+  assert.ok(!listed.drops.some(drop => drop.drop_key === livePublished));
+  assert.strictEqual((await publish(livePublished, true)).status, 404, "removed drops cannot reappear");
+
+  // An ended drop need not be unpublished separately before removal.
+  const ended = await create("Past public show", iso(-3600000));
+  await publish(ended, true);
+  assert.strictEqual((await remove(ended)).status, 200);
+  const current = await (await fetch(`${base}/api/live/current?market=us`)).json();
+  assert.notStrictEqual(current.drop?.drop_key, ended);
+
+  // A live show must be ended first.
+  const running = await create("Still running", iso(-60000));
+  await publish(running, true);
+  assert.strictEqual((await remove(running)).status, 409);
+  await fetch(`${base}/api/admin/live-drops/${running}/end`, {method:"POST",headers:admin});
+  assert.strictEqual((await remove(running)).status, 200);
 
   /* --- Everything hanging off it goes too. A drop deleted while its events,
      reminders or announcements stayed behind would leave rows pointing at a

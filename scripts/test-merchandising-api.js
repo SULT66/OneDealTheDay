@@ -3,6 +3,17 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
+// Exercise the seasonal page inside its buying window on every calendar date.
+// Wall-clock fixtures with arrival = today + 3 days stop qualifying near Oct 31.
+const RealDate = Date;
+const fixtureNow = RealDate.parse('2026-10-14T18:00:00Z');
+global.Date = class FixtureDate extends RealDate {
+  constructor(...args) { super(...(args.length ? args : [fixtureNow])); }
+  static now() { return fixtureNow; }
+  static parse(value) { return RealDate.parse(value); }
+  static UTC(...args) { return RealDate.UTC(...args); }
+};
+
 process.env.MERCHANDISING_FOCUS = 'halloween';
 process.env.PORT = '18137';
 process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'odd-merch-api-'));

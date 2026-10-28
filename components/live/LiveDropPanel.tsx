@@ -8,7 +8,7 @@ import { formatPrice } from "@/lib/format";
 import { DeliaTrigger } from "@/components/delia/DeliaTrigger";
 import { LiveDropSignup } from "@/components/site/LiveDropSignup";
 import { analyticsSessionId, recordLiveDropEvent } from "@/lib/analyticsSession";
-import { BroadcastVideo, MusicToggle, SwapStage, useLiveBroadcast } from "./LiveBroadcast";
+import { BroadcastVideo, MusicToggle, SwapStage, useLiveBroadcast, sendPresence } from "./LiveBroadcast";
 import { PriceBoard } from "./PriceBoard";
 import { useCopy } from "@/components/site/CopyProvider";
 
@@ -105,6 +105,7 @@ export function LiveDropPanel({
   );
   const [untilEnd, setUntilEnd] = useState<number | null>(initialDrop?.seconds_until_end ?? null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pollStateRef = useRef({state: initialDrop?.state ?? "upcoming", secondsUntilStart: initialDrop?.seconds_until_start ?? null});
   /* Buying in a drop takes a free account. Null until /api/me answers, so a
      signed-in shopper never sees the sign-up button flash in place of Buy. */
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
@@ -124,6 +125,7 @@ export function LiveDropPanel({
       return;
     }
     const body = (await response.json().catch(() => ({}))) as { drop?: LiveDropView | null };
+    pollStateRef.current = {state: body.drop?.state ?? "upcoming", secondsUntilStart: body.drop?.seconds_until_start ?? null};
     setDrop(body.drop || null);
     setUntilStart(body.drop?.seconds_until_start ?? null);
     setUntilEnd(body.drop?.seconds_until_end ?? null);
@@ -136,17 +138,15 @@ export function LiveDropPanel({
       if (cancelled) return;
       await load();
       if (cancelled) return;
-      timerRef.current = setTimeout(tick, pollInterval(drop?.state ?? "upcoming", untilStart));
+      timerRef.current = setTimeout(tick, pollInterval(pollStateRef.current.state, pollStateRef.current.secondsUntilStart));
     };
     tick();
     return () => {
       cancelled = true;
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-    /* Intentionally keyed on the market alone: the loop reschedules itself and
-       re-reads state through the closure on each pass. */
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [market]);
+    /* Read the latest response from a ref, not the first render closure. */
+  }, [market, load]);
 
   /*
    * The funnel, one line per stage.
@@ -192,8 +192,7 @@ export function LiveDropPanel({
    *
    * Only while the drop is actually on: a tab left open overnight on a drop
    * that ended is not an audience. The server counts rows touched in the last
-   * ninety seconds, so stopping this is all it takes to leave the count, and
-   * closing the tab stops it without anybody having to say goodbye.
+   * fifty seconds. Explicit Leave stops both heartbeats immediately.
    */
   const dropKey = drop?.drop_key;
   /* Somebody watching Chloe keeps being counted by the broadcast itself when
@@ -203,15 +202,12 @@ export function LiveDropPanel({
   const broadcastDropRef = useRef("");
   broadcastDropRef.current = broadcast.session?.dropKey || "";
   const onAir = drop?.state === "waiting" || drop?.state === "live";
+  const leftThisDrop = broadcast.leftDropKey === dropKey;
+  const broadcastOwnsPresence = broadcast.session?.dropKey === dropKey;
   useEffect(() => {
-    if (!dropKey || !onAir) return;
+    if (!dropKey || !onAir || leftThisDrop || broadcastOwnsPresence) return;
     const beat = () => {
-      void fetch("/api/live/watching", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ drop_key: dropKey, session_id: analyticsSessionId() }),
-        keepalive: true,
-      }).catch(() => {});
+      sendPresence(dropKey);
     };
     beat();
     const timer = setInterval(beat, 20000);
@@ -231,7 +227,16 @@ export function LiveDropPanel({
       window.removeEventListener("pagehide", leave);
       if (broadcastDropRef.current !== dropKey) leave();
     };
-  }, [dropKey, onAir]);
+  }, [dropKey, onAir, leftThisDrop, broadcastOwnsPresence]);
+
+  useEffect(() => {
+    const update = (event: Event) => {
+      const detail = (event as CustomEvent<{ dropKey: string; watching: number }>).detail;
+      setDrop((current) => current?.drop_key === detail.dropKey ? { ...current, watching: detail.watching } : current);
+    };
+    window.addEventListener("odd-live-presence", update);
+    return () => window.removeEventListener("odd-live-presence", update);
+  }, []);
 
   /* The local second hand between polls. */
   useEffect(() => {
@@ -284,31 +289,28 @@ export function LiveDropPanel({
      */
     <Frame>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-2">
           {/* The show's name, sized like one. LIVE sits on lime rather than
               being lime: lime type on a white card all but disappears. */}
-          <p className="flex items-center gap-2 text-2xl font-black tracking-tight text-fg sm:text-3xl">
+          <p className="flex w-full flex-wrap items-center gap-2 text-xl font-black tracking-tight text-fg min-[360px]:text-2xl lg:w-auto lg:text-3xl">
             OneDailyDrop
             <span className="rounded-lg bg-lime px-2.5 py-0.5 text-xl font-black tracking-wide text-ink sm:text-2xl">
               LIVE
             </span>
           </p>
           <StateBadge state={drop.state} />
-          {/* Only while the drop is on, and only once there is somebody to
-              count. "1 watching" on an empty page says the quiet part out
-              loud, and a number nobody is behind would be the other kind of
-              lie. */}
-          {onAir && drop.watching > 0 && (
-            <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-fg-muted tnum">
+          {/* Keep zero visible too, so the last viewer leaving is visible. */}
+          {onAir && (
+            <span className="inline-flex flex-wrap items-center gap-1.5 text-sm font-semibold text-fg-muted tnum">
               <Eye size={15} weight="fill" aria-hidden="true" />
               {drop.watching.toLocaleString()}
               <span className="font-normal text-fg-subtle">{tr("app.live.watching")}</span>
             </span>
           )}
+          <span className="rounded-full border border-border bg-surface-2 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-fg-muted">
+            {tr("app.live.aiHost")}
+          </span>
         </div>
-        <span className="rounded-full border border-border bg-surface-2 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-fg-muted">
-          {tr("app.live.aiHost")}
-        </span>
       </div>
 
       <BroadcastStage market={market} drop={drop} untilStart={untilStart} untilEnd={untilEnd} />
@@ -441,8 +443,8 @@ function Frame({ children }: { children: React.ReactNode }) {
      * carries meaning. The countdown and the stock are the page; this is the
      * room they stand in, and an empty room needs no lighting.
      */
-    <section className="relative mx-auto w-full max-w-5xl px-3 py-4 sm:px-6 sm:py-8">
-      <div className="rounded-3xl border border-border bg-surface p-4 shadow-lg sm:p-6">{children}</div>
+    <section className="relative mx-auto w-full min-w-0 max-w-5xl px-3 py-4 sm:px-6 sm:py-8">
+      <div className="min-w-0 rounded-3xl border border-border bg-surface p-3 shadow-lg min-[360px]:p-4 sm:p-6">{children}</div>
     </section>
   );
 }
@@ -511,8 +513,14 @@ function RemindMe({ dropKey }: { dropKey: string }) {
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(false);
 
-  if (message) return <p className="text-sm font-medium text-fg">{message}</p>;
+  if (message) return (
+    <div className="min-w-0" role="status">
+      <p className="text-sm font-medium text-fg">{message}</p>
+      {done && <p className="mt-2 max-w-md text-xs leading-relaxed text-fg-muted">{tr("app.signup.gmailPrimaryTip")}</p>}
+    </div>
+  );
 
   if (!open) {
     return (
@@ -546,6 +554,7 @@ function RemindMe({ dropKey }: { dropKey: string }) {
         }).catch(() => null);
         const body = await response?.json().catch(() => ({}));
         setBusy(false);
+        setDone(response?.ok === true);
         if (response?.ok) recordLiveDropEvent(dropKey, "remind");
         setMessage(
           response?.ok
@@ -562,7 +571,7 @@ function RemindMe({ dropKey }: { dropKey: string }) {
         onChange={(event) => setEmail(event.target.value)}
         placeholder="you@example.com"
         aria-label={tr("app.live.remindEmail")}
-        className="h-12 w-56 rounded-full border border-border bg-surface-2 px-4 text-sm text-fg outline-none focus:border-border-strong"
+        className="h-12 w-full min-w-0 sm:w-56 rounded-full border border-border bg-surface-2 px-4 text-sm text-fg outline-none focus:border-border-strong"
       />
       <button
         type="submit"
@@ -672,7 +681,7 @@ function BroadcastStage({
         /* Side by side at every width, phone included: the presenter and the
            product are the two halves of a shopping channel, and stacking them
            on a phone would push the product below the fold. */
-        showsProduct && "grid-cols-1 sm:grid-cols-[1.3fr_0.7fr]",
+        showsProduct && "grid-cols-1 sm:grid-cols-[minmax(0,1.3fr)_minmax(0,0.7fr)]",
       )}
     >
       <div className="relative min-w-0 overflow-hidden bg-[radial-gradient(circle_at_50%_20%,#123b69_0%,#07172b_48%,#030914_100%)]">

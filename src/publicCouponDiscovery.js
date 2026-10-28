@@ -82,6 +82,10 @@ async function collectPublicCoupons(fetchImpl=fetch,previous=[],now=Date.now(),{
     if(!old || Date.parse(raw.checkedAt)>Date.parse(old.checkedAt)) unique.set(key,raw);
   }
   const failedSources=results.filter(r=>r.status==='rejected').length;
-  return {offers:[...unique.values()],sources:sources.length,failedSources,snapshotUsed};
+  const sourceResults=results.map((result,index)=>({source:sources[index],
+    status:result.status==='fulfilled' ? 'checked' : 'unavailable',
+    offers:result.status==='fulfilled' ? result.value.filter(raw=>normalizePublicCoupon(raw,now)).length : 0,
+    ...(result.status==='rejected' ? {httpStatus:result.reason?.status || null} : {})}));
+  return {offers:[...unique.values()],sources:sources.length,failedSources,snapshotUsed,sourceResults};
 }
 module.exports={discoverEbay,discoverJcp,collectPublicCoupons};

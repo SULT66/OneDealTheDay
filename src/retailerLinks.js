@@ -10,6 +10,7 @@ const PLACEMENTS = new Set([
   "featured_cta",
   "daily_card_cta",
   "product_cta",
+  "product_compare",
   "offer_comparison",
   "shop_all",
   "store_directory",

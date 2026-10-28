@@ -1,5 +1,5 @@
 const {
-  headTerm, landedCost, matchesAnySearchTerm, matchesHeadTerm, normalizedTitle, queryBudget,
+  headTerm, landedCost, matchesSearchWord, normalizedTitle, queryBudget,
   scoreOffers, searchTokens, selectUniqueProducts, looksLikeAccessory, matchesMainProduct, isMainProductQuery,
 } = require("./ranker");
 
@@ -91,12 +91,14 @@ function isUnavailable(product) {
   return /\b(?:out of stock|unavailable|expired|ended|sold out)\b/i.test(clean(product.availability));
 }
 
-// A shared noun alone is not an answer to a compound product request.
-// Keep descriptive modifiers optional, but require each identifying word.
-const OPTIONAL_MODIFIERS = new Set(["wireless", "bluetooth", "portable", "rechargeable", "gaming", "smart", "mini", "compact", "noise", "cancelling", "canceling", "waterproof", "cordless", "usb", "wired", "digital", "electric", "automatic", "black", "white", "silver", "cheap", "budget", "premium", "professional", "heavy", "duty", "large", "small"]);
+// Search eligibility uses complete headline words across all product families.
+// Product attributes (wireless, cordless, color, etc.) are part of the request;
+// only subjective shopping language is optional. Descriptions can discuss a
+// different product and must not make that product eligible for this query.
+const OPTIONAL_MODIFIERS = new Set(["cheap", "budget", "premium", "professional"]);
 function matchesQuery(product, query) {
-  const terms = searchTokens(query).filter(term => !OPTIONAL_MODIFIERS.has(term));
-  if (terms.length < 2) return matchesHeadTerm(product, headTerm(query));
+  const identifying = searchTokens(query).filter(term => !OPTIONAL_MODIFIERS.has(term));
+  const terms = identifying.length ? identifying : [headTerm(query)].filter(Boolean);
   const headline = normalizedTitle(`${product.title || ""} ${product.brand || ""} ${product.normalized_category || product.category || ""}`);
   return terms.every(term => {
     // Retailers call the same appliance a coffee machine, maker or brewer.
@@ -104,9 +106,7 @@ function matchesQuery(product, query) {
       return /\b(?:machines?|makers?|brewers?|espresso|coffeemakers?)\b/.test(headline);
     }
     if (term === "coffee" && /\bcoffeemakers?\b/.test(headline)) return true;
-    const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const stem = escaped.endsWith("ies") ? `${escaped.slice(0, -3)}y` : escaped.endsWith("s") && !escaped.endsWith("ss") ? escaped.slice(0, -1) : escaped;
-    return new RegExp(`\\b(?:${escaped}|${stem}|${stem}s|${stem}es)\\b`).test(headline);
+    return matchesSearchWord(headline, term);
   });
 }
 
@@ -157,17 +157,9 @@ function searchCatalogProducts(rows, options) {
     .filter(product => updatedAfter == null || timestamp(product) >= updatedAfter);
 
   /*
-   * Everything that cannot match is dropped before anything is scored. The
-   * terms are the query's own plus the requested category's, which is the
-   * full set textMatchScore builds for these options.
-   */
-  const intentCategory = options.categories.length === 1 ? options.categories[0] : "";
-  const searchTerms = [...new Set([...searchTokens(options.query), ...searchTokens(intentCategory)])];
-  /*
    * The thing asked for has to be there.
    *
-   * One-word requests retain the head-term rules. Compound requests also
-   * require their identifying words in the headline: "coffee machine" must
+   * All requests require their identifying words in the headline: "coffee machine" must
    * not match an exercise machine or a machine-washable coffee pillow.
    */
   /*
@@ -179,7 +171,6 @@ function searchCatalogProducts(rows, options) {
   const mainProduct = isMainProductQuery(options.query);
   const matching = options.query
     ? candidates.filter(product =>
-      matchesAnySearchTerm(product, searchTerms) &&
       matchesQuery(product, options.query) &&
       (!mainProduct || matchesMainProduct(product, options.query)) &&
       (budget.max == null || landedCost(product) <= budget.max) &&

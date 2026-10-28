@@ -43,5 +43,21 @@ assert.strictEqual(db.prepare("SELECT role FROM delia_messages").get().role, "us
 db.prepare("INSERT INTO users(email,name) VALUES(?,?)").run("second@example.com", "Second");
 assert.strictEqual(db.prepare("SELECT id FROM users WHERE email=?").get("second@example.com").id, 2);
 
+// Delivery history is not replaced, but its parent subscriber is. The
+// completed transaction must retain both rows without disabling FK checks.
+db.pragma("foreign_keys = ON");
+db.exec(`CREATE TABLE subscriber_sequence(id INTEGER PRIMARY KEY, subscriber_id INTEGER REFERENCES subscribers(id), step TEXT)`);
+db.prepare("INSERT INTO subscribers(id,email) VALUES(?,?)").run(1,"person@example.com");
+db.prepare("INSERT INTO subscriber_sequence VALUES(1,1,'welcome')").run();
+const withHistory=readPersonalTables(db);
+replacePersonalTables(db,withHistory);
+assert.strictEqual(db.prepare("SELECT step FROM subscriber_sequence").get().step,"welcome");
+assert.deepStrictEqual(db.pragma("foreign_key_check"),[]);
+assert.strictEqual(db.pragma("defer_foreign_keys",{simple:true}),0);
+const orphaned={...withHistory,subscribers:[]};
+assert.throws(()=>replacePersonalTables(db,orphaned),/FOREIGN KEY/);
+assert.strictEqual(db.prepare("SELECT email FROM subscribers WHERE id=1").get().email,"person@example.com");
+assert.deepStrictEqual(db.pragma("foreign_key_check"),[]);
+
 db.close();
 _resetForTests().then(() => console.log("personal PostgreSQL snapshot tests passed"));

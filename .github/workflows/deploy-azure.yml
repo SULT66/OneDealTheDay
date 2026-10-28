@@ -28,7 +28,7 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
 
     steps:
       - name: Check out repository
@@ -62,19 +62,22 @@ jobs:
       # Trace the custom server and ship only files it can load in production.
       # In particular, do not send the Turbopack cache, test suite, repository
       # history, unused packages or devDependencies.
-      # The .deployment file tells App Service not to run Oryx a second time;
-      # that redundant build created node_modules.tar.gz and left the site on
-      # 503 while every cold start tried to extract more than 500 MB.
+      # Package the complete traced release as one archive. The bootstrap
+      # extracts it locally so module loads and Next manifests never read
+      # mutable deployment files from Azure network storage.
       - name: Prepare lean production package
         run: |
           release_dir="${RUNNER_TEMP}/onedailydrop-release"
           node scripts/build-runtime-package.js "${release_dir}"
 
+          test -s "${release_dir}/runtime.tar.gz"
+          test ! -e "${release_dir}/node_modules"
           test ! -e "${release_dir}/.next/cache"
           test ! -e "${release_dir}/scripts"
           test ! -e "${release_dir}/node_modules.tar.gz"
           test ! -e "${release_dir}/oryx-manifest.toml"
           du -sh "${release_dir}"
+          node scripts/test-runtime-package.js "${release_dir}"
 
       # v3/OneDeploy can report success while leaving the previous Linux App
       # Service package active. v2 uses the stable zip-deploy path here.
@@ -99,16 +102,16 @@ jobs:
           # later. A red deploy that shipped fine is worse than a slow one:
           # the next real failure is the one nobody believes.
           #
-          # Ten minutes, which is inside the job's own limit and past every
-          # warm-up seen so far.
+          # Fifteen minutes includes Azure container provisioning and its
+          # ten-minute startup-probe budget; still require the exact release.
           host=https://onedealtheday-g3dme0aghzerc3a2.centralus-01.azurewebsites.net
-          deadline=$(( SECONDS + 600 ))
+          deadline=$(( SECONDS + 900 ))
           attempt=0
           while (( SECONDS < deadline )); do
             attempt=$(( attempt + 1 ))
             if curl --fail --silent --show-error --max-time 20 "${host}/api/status" > "${RUNNER_TEMP}/odd-health.json" &&
                node -e 'const fs=require("fs"); const status=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); process.exit(status.releaseId===process.env.GITHUB_SHA ? 0 : 1)' "${RUNNER_TEMP}/odd-health.json"; then
-              echo "Healthy after ${attempt} attempt(s), $(( 600 - (deadline - SECONDS) ))s."
+              echo "Healthy after ${attempt} attempt(s), $(( 900 - (deadline - SECONDS) ))s."
               exit 0
             fi
             echo "Attempt ${attempt}: new release not ready yet ($(( deadline - SECONDS ))s left)."
@@ -116,7 +119,7 @@ jobs:
             if (( SECONDS + 15 >= deadline )); then break; fi
             sleep 15
           done
-          echo "The expected release did not start within 10 minutes of the deploy."
+          echo "The expected release did not start within 15 minutes of the deploy."
           exit 1
 
       - name: Collect Azure startup logs after failed health check

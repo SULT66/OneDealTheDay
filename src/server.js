@@ -85,7 +85,6 @@ const { discoverEbay } = require("./merchandisingDiscovery");
 const { runMerchandising, getMerchandisingShelves, getHalloweenCollection, merchandisingStatus } = require("./merchandising");
 const { indexEvidence, isIndexableProduct } = require("./indexability");
 const { missingQueries, pruneSearches, searchDemand } = require("./searchQueries");
-const { checkAmazonLinks } = require("./amazonLinkHealth");
 const { overview } = require("./overview");
 const { pageViewRow, recordPageView } = require("./pageViews");
 const {
@@ -1556,6 +1555,9 @@ app.post("/api/live/remind", authRateLimit, (req, res) => {
   }
   const drop = db.prepare("SELECT id, start_at FROM live_drops WHERE drop_key=? AND published=1").get(dropKey);
   if (!drop) return res.status(404).json({error:"That drop is not open for reminders."});
+  if (Date.parse(drop.start_at) <= Date.now()) {
+    return res.status(409).json({error:"That drop has already started. Open the Live page instead."});
+  }
   try {
     db.prepare("INSERT INTO live_drop_reminders(drop_id,user_id,email,created_at) VALUES(?,?,?,?)")
       .run(drop.id, user?.id || null, email, new Date().toISOString());
@@ -1992,7 +1994,7 @@ const shell = (title, description, canonical, body, schema = null, image = "", r
     ]
   };
   const ogType = suppliedNodes.some(node => node?.["@type"] === "Product") ? "product" : "website";
-  const html = `<!doctype html><html lang="${esc(locale)}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0a1020"><title>${esc(title)}</title><meta name="description" content="${esc(description.slice(0,160))}"><meta name="robots" content="${esc(robotsContent)}"><link rel="canonical" href="${esc(canonical)}"><link rel="icon" href="/favicon.svg" type="image/svg+xml">${alternates}${imageConnectionHints(image)}<meta property="og:type" content="${ogType}"><meta property="og:site_name" content="OneDailyDrop"><meta property="og:locale" content="${esc(ogLocale)}"><meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(description.slice(0,180))}"><meta property="og:url" content="${esc(canonical)}">${image ? `<meta property="og:image" content="${esc(image)}"><meta property="og:image:alt" content="${esc(title)}">` : ""}<meta name="twitter:card" content="${image ? "summary_large_image" : "summary"}"><meta name="twitter:title" content="${esc(title)}"><meta name="twitter:description" content="${esc(description.slice(0,180))}">${image ? `<meta name="twitter:image" content="${esc(image)}">` : ""}<link rel="stylesheet" href="/styles.css?v=20260731-brand-lockup"><link rel="stylesheet" href="/brand-theme.css?v=20260731-brand-lockup"><link rel="stylesheet" href="/liquid-glass.css?v=20260731-brand-lockup"><script type="application/ld+json">${JSON.stringify(pageSchema).replace(/</g,"\\u003c")}</script><script>window.__ODD_LANGUAGE__=${JSON.stringify(language)};window.__ODD_LOCALE__=${JSON.stringify(locale)};window.__ODD_TEXT__=${JSON.stringify(clientCopy(language)).replace(/</g, "\\u003c")};</script></head><body>${sharedHeader(code, language, req)}${body}${sharedFooter(code, language)}<script src="/theme.js?v=20260728-i18n2"></script><script src="/site-shell.js?v=20260728-i18n2"></script><script src="/cookie-consent.js?v=20260912-startup-fix"></script><script src="/click-tracking.js?v=20260814-day5"></script></body></html>`;
+  const html = `<!doctype html><html lang="${esc(locale)}"><head><script src="/internal-traffic.js?v=20261023-removed"></script><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0a1020"><title>${esc(title)}</title><meta name="description" content="${esc(description.slice(0,160))}"><meta name="robots" content="${esc(robotsContent)}"><link rel="canonical" href="${esc(canonical)}"><link rel="icon" href="/favicon.svg" type="image/svg+xml">${alternates}${imageConnectionHints(image)}<meta property="og:type" content="${ogType}"><meta property="og:site_name" content="OneDailyDrop"><meta property="og:locale" content="${esc(ogLocale)}"><meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(description.slice(0,180))}"><meta property="og:url" content="${esc(canonical)}">${image ? `<meta property="og:image" content="${esc(image)}"><meta property="og:image:alt" content="${esc(title)}">` : ""}<meta name="twitter:card" content="${image ? "summary_large_image" : "summary"}"><meta name="twitter:title" content="${esc(title)}"><meta name="twitter:description" content="${esc(description.slice(0,180))}">${image ? `<meta name="twitter:image" content="${esc(image)}">` : ""}<link rel="stylesheet" href="/styles.css?v=20260731-brand-lockup"><link rel="stylesheet" href="/brand-theme.css?v=20260731-brand-lockup"><link rel="stylesheet" href="/liquid-glass.css?v=20260731-brand-lockup"><script type="application/ld+json">${JSON.stringify(pageSchema).replace(/</g,"\\u003c")}</script><script>window.__ODD_LANGUAGE__=${JSON.stringify(language)};window.__ODD_LOCALE__=${JSON.stringify(locale)};window.__ODD_TEXT__=${JSON.stringify(clientCopy(language)).replace(/</g, "\\u003c")};</script></head><body>${sharedHeader(code, language, req)}${body}${sharedFooter(code, language)}<script src="/theme.js?v=20260728-i18n2"></script><script src="/site-shell.js?v=20260728-i18n2"></script><script src="/cookie-consent.js?v=20261023-owner-mode-removed"></script><script src="/click-tracking.js?v=20261023-owner-mode-removed"></script></body></html>`;
   const versionedHtml = html
     .replace("/styles.css?v=20260731-brand-lockup", "/styles.css?v=20260815-public-taxonomy-v2")
     .replace("/site-shell.js?v=20260728-i18n2", "/site-shell.js?v=20260814-day11-prefetch")
@@ -2942,12 +2944,13 @@ app.get("/api/products/:id", (req, res) => {
       : null
   };
 
+  // Filter by product type before limiting the shelf. The highest-scoring 80
+  // items can all be unrelated while valid alternatives sit further down.
   const relatedRows = db.prepare(`
     SELECT * FROM products
     WHERE market=? AND status='published' AND ${sourceSql()}
       AND normalized_category=? AND id<>?
     ORDER BY COALESCE(ranking_score,score) DESC,score DESC,updated_at DESC
-    LIMIT 80
   `).all(selectedMarket, product.normalized_category, product.id);
   const related = relatedProducts(product, uniqueProductsInOrder(relatedRows));
 
@@ -3102,7 +3105,7 @@ app.get("/unsubscribe", (req, res) => {
   const message = done
     ? "You have been unsubscribed. We will not email this address about Live Drops again."
     : "That unsubscribe link is not one we recognise. If you are still receiving email from us, reply to it and we will remove you by hand.";
-  return res.status(done ? 200 : 404).send(`<!doctype html><html lang="en"><head><meta charset="utf-8">
+  return res.status(done ? 200 : 404).send(`<!doctype html><html lang="en"><head><script src="/internal-traffic.js?v=20261023-removed"></script><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow">
 <title>Unsubscribed - OneDailyDrop</title></head>
 <body style="font-family:system-ui,Arial,sans-serif;max-width:34rem;margin:12vh auto;padding:0 1.25rem;color:#17191d">
@@ -3125,7 +3128,7 @@ const digestPage = (res, status, title, message) => res
   .status(status)
   .set("X-Robots-Tag", "noindex, nofollow")
   .set("Cache-Control", "no-store")
-  .send(`<!doctype html><html lang="en"><head><meta charset="utf-8">
+  .send(`<!doctype html><html lang="en"><head><script src="/internal-traffic.js?v=20261023-removed"></script><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow">
 <title>${esc(title)} - OneDailyDrop</title></head>
 <body style="font-family:system-ui,Arial,sans-serif;max-width:34rem;margin:12vh auto;padding:0 1.25rem;color:#17191d">
@@ -3658,9 +3661,8 @@ app.get("/live/go/:key", (req, res) => {
  *   - Nothing about a drop that has already opened may be edited except the
  *     remaining stock. Changing the price or the clock afterwards would mean
  *     the page no longer says what people were actually shown.
- *   - Only a draft can be deleted. Once a drop has run, the row is the record
- *     of what was offered and at what price, and that record is the answer to
- *     any later question about it.
+ *   - Past public drops can be removed from the schedule. Their history stays
+ *     available internally for attribution; unused drafts are deleted.
  */
 const liveDropInput = (body) => {
   const text = (value, max) => String(value ?? "").trim().slice(0, max);
@@ -3711,7 +3713,7 @@ const liveDropInput = (body) => {
 
 app.get("/api/admin/live-drops", admin, (req, res) => {
   const now = Date.now();
-  const rows = db.prepare("SELECT * FROM live_drops ORDER BY start_at DESC LIMIT 50").all();
+  const rows = db.prepare("SELECT * FROM live_drops WHERE deleted_at IS NULL ORDER BY start_at DESC LIMIT 50").all();
   /* The funnel alongside each drop, because "did it work" is the only question
      worth asking afterwards and it should not need a second screen. */
   /* The owner's own visits to a drop are not the audience (src/growthMetrics.js). */
@@ -3742,6 +3744,7 @@ app.get("/api/admin/live-drops", admin, (req, res) => {
    */
   const reminders = db.prepare(`
     SELECT COUNT(*) AS total, COUNT(reminded_at) AS sent,
+      COUNT(reminded_day_before_at) AS day_before, COUNT(reminded_hour_before_at) AS hour_before,
       COUNT(reminded_at) + COUNT(reminded_day_before_at) + COUNT(reminded_hour_before_at) AS emails
     FROM live_drop_reminders WHERE drop_id=?
   `);
@@ -3780,6 +3783,9 @@ app.get("/api/admin/live-drops", admin, (req, res) => {
       reminders_unsent: reminderCounts.total - reminderCounts.sent,
       /* Every reminder email that went out: up to three per person. */
       reminder_emails_sent: reminderCounts.emails,
+      reminder_day_before_sent: reminderCounts.day_before,
+      reminder_hour_before_sent: reminderCounts.hour_before,
+      live_now_sent: db.prepare("SELECT COUNT(*) AS n FROM live_drop_live_notices WHERE drop_id=?").get(row.id).n,
       /* Whether it was ever public, which decides whether it can be deleted. */
       ever_published: Boolean(row.first_published_at),
       funnel: Object.fromEntries(funnel.all(row.id).map((entry) => [entry.event_type, entry.total])),
@@ -3834,7 +3840,7 @@ app.post("/api/admin/live-drops", admin, (req, res) => {
 
 app.post("/api/admin/live-drops/:key/publish", admin, async (req, res) => {
   const drop = db.prepare("SELECT * FROM live_drops WHERE drop_key=?").get(String(req.params.key || ""));
-  if (!drop) return res.status(404).json({error:"No such drop."});
+  if (!drop || drop.deleted_at) return res.status(404).json({error:"No such drop."});
   const published = req.body?.published === false ? 0 : 1;
   /* Pulling a drop that is already open would leave anybody on the page with a
      countdown to something that no longer exists. */
@@ -3935,7 +3941,7 @@ app.post("/api/admin/live-drops/:key/publish", admin, async (req, res) => {
  */
 app.post("/api/admin/live-drops/:key/end", admin, (req, res) => {
   const drop = db.prepare("SELECT * FROM live_drops WHERE drop_key=?").get(String(req.params.key || ""));
-  if (!drop) return res.status(404).json({error:"No such drop."});
+  if (!drop || drop.deleted_at) return res.status(404).json({error:"No such drop."});
   const nowIso = new Date().toISOString();
   if (Date.parse(drop.end_at) <= Date.now()) {
     return res.status(409).json({error:"That drop has already closed."});
@@ -3950,7 +3956,7 @@ app.post("/api/admin/live-drops/:key/end", admin, (req, res) => {
 
 app.post("/api/admin/live-drops/:key/stock", admin, (req, res) => {
   const drop = db.prepare("SELECT * FROM live_drops WHERE drop_key=?").get(String(req.params.key || ""));
-  if (!drop) return res.status(404).json({error:"No such drop."});
+  if (!drop || drop.deleted_at) return res.status(404).json({error:"No such drop."});
   const remaining = Number(req.body?.quantity_remaining);
   if (!Number.isInteger(remaining) || remaining < 0 || remaining > drop.quantity_total) {
     return res.status(400).json({error:`Remaining stock must be a whole number between 0 and ${drop.quantity_total}.`});
@@ -3990,7 +3996,7 @@ app.post("/api/admin/drop-media", admin, async (req, res) => {
 
 app.patch("/api/admin/live-drops/:key/media", admin, express.json({limit:"8kb"}), (req, res) => {
   const drop = db.prepare("SELECT * FROM live_drops WHERE drop_key=?").get(String(req.params.key || ""));
-  if (!drop) return res.status(404).json({error:"No such drop."});
+  if (!drop || drop.deleted_at) return res.status(404).json({error:"No such drop."});
 
   /* Empty clears the slot, which is how a wrong video is removed rather than
      replaced. Anything else has to be a URL we would be willing to load. */
@@ -4063,7 +4069,7 @@ app.get("/api/admin/search-demand", admin, (req, res) => {
 app.get("/api/admin/live-host/:key", admin, async (req, res) => {
   res.set("Cache-Control", "no-store");
   const drop = db.prepare("SELECT * FROM live_drops WHERE drop_key=?").get(String(req.params.key || ""));
-  if (!drop) return res.status(404).json({error:"No such drop."});
+  if (!drop || drop.deleted_at) return res.status(404).json({error:"No such drop."});
   const view = presentDrop(drop, Date.now());
   if (!chloeConfigured(drop.market)) {
     return res.status(503).json({error:"Chloe is not connected: TAVUS_API_KEY is not set, or this drop is not in the US market."});
@@ -4093,7 +4099,7 @@ app.get("/api/admin/live-host/:key", admin, async (req, res) => {
 /* Hands Chloe the next few questions, and says what to send her. */
 app.post("/api/admin/live-host/:key/next", admin, (req, res) => {
   const drop = db.prepare("SELECT * FROM live_drops WHERE drop_key=?").get(String(req.params.key || ""));
-  if (!drop) return res.status(404).json({error:"No such drop."});
+  if (!drop || drop.deleted_at) return res.status(404).json({error:"No such drop."});
   const broadcast = db.prepare("SELECT * FROM live_host_broadcasts WHERE drop_id=? AND ended_at IS NULL ORDER BY id DESC LIMIT 1").get(drop.id);
   if (!broadcast) return res.status(409).json({error:"Chloe is not on air for this drop."});
   const questions = takeNextQuestions(db, drop.id);
@@ -4103,8 +4109,8 @@ app.post("/api/admin/live-host/:key/next", admin, (req, res) => {
 /* Chloe's script for a drop, editable at any time: it is what she will say,
    not something anybody has been told yet. */
 app.patch("/api/admin/live-drops/:key/script", admin, express.json({limit:"16kb"}), (req, res) => {
-  const drop = db.prepare("SELECT id FROM live_drops WHERE drop_key=?").get(String(req.params.key || ""));
-  if (!drop) return res.status(404).json({error:"No such drop."});
+  const drop = db.prepare("SELECT id, deleted_at FROM live_drops WHERE drop_key=?").get(String(req.params.key || ""));
+  if (!drop || drop.deleted_at) return res.status(404).json({error:"No such drop."});
   const intro = String(req.body?.host_script_intro ?? "").trim().slice(0, 4000);
   const reveal = String(req.body?.host_script_reveal ?? "").trim().slice(0, 2000);
   db.prepare("UPDATE live_drops SET host_script_intro=?, host_script_reveal=?, updated_at=? WHERE id=?")
@@ -4116,7 +4122,7 @@ app.patch("/api/admin/live-drops/:key/script", admin, express.json({limit:"16kb"
    drop's marker here so the marker itself never reaches the browser. */
 app.post("/api/admin/live-host/:key/instruction", admin, express.json({limit:"4kb"}), (req, res) => {
   const drop = db.prepare("SELECT * FROM live_drops WHERE drop_key=?").get(String(req.params.key || ""));
-  if (!drop) return res.status(404).json({error:"No such drop."});
+  if (!drop || drop.deleted_at) return res.status(404).json({error:"No such drop."});
   const broadcast = db.prepare("SELECT * FROM live_host_broadcasts WHERE drop_id=? AND ended_at IS NULL ORDER BY id DESC LIMIT 1").get(drop.id);
   if (!broadcast) return res.status(409).json({error:"Chloe is not on air for this drop."});
   const text = String(req.body?.text || "").replace(/\s+/g, " ").trim().slice(0, 1000);
@@ -4126,8 +4132,8 @@ app.post("/api/admin/live-host/:key/instruction", admin, express.json({limit:"4k
 
 /* The console saying what Chloe is doing, for the chat to show viewers. */
 app.post("/api/admin/live-host/:key/phase", admin, express.json({limit:"1kb"}), (req, res) => {
-  const drop = db.prepare("SELECT id FROM live_drops WHERE drop_key=?").get(String(req.params.key || ""));
-  if (!drop) return res.status(404).json({error:"No such drop."});
+  const drop = db.prepare("SELECT id, deleted_at FROM live_drops WHERE drop_key=?").get(String(req.params.key || ""));
+  if (!drop || drop.deleted_at) return res.status(404).json({error:"No such drop."});
   if (!HOST_PHASES.includes(req.body?.phase)) return res.status(400).json({error:"Unknown phase."});
   res.json({ok:setBroadcastPhase(db, drop.id, req.body.phase)});
 });
@@ -4140,32 +4146,19 @@ app.post("/api/admin/live-host/:key/hide/:id", admin, (req, res) => {
 
 app.delete("/api/admin/live-drops/:key", admin, (req, res) => {
   const drop = db.prepare("SELECT * FROM live_drops WHERE drop_key=?").get(String(req.params.key || ""));
-  if (!drop) return res.status(404).json({error:"No such drop."});
-  /*
-   * Ever public is the line, not the clock and not published-right-now.
-   *
-   * This used to refuse anything whose start time had passed, which sounds
-   * like "a drop that ran cannot be erased" but is not that statement: a draft
-   * that was never published never ran — nobody was told, and no public page
-   * ever existed for it, since /api/live/current only returns published drops.
-   * Its scheduled hour arriving only meant it could never be deleted, so dead
-   * test drafts had no way out and went on polluting the funnel counts.
-   *
-   * Loosening it to `published` alone went too far the other way, and a test
-   * written for the original rule caught it: unpublish a drop that had already
-   * run and the record of what was offered to real people could be erased.
-   * first_published_at is set on the first publish and never cleared, so a
-   * drop that was ever public stays.
-   */
-  if (drop.published) {
-    return res.status(409).json({
-      error: "This drop is published. Unpublish it first — deleting one out from under the people looking at it is a separate decision.",
-    });
+  if (!drop || drop.deleted_at) return res.status(404).json({error:"No such drop."});
+  const state = dropState(drop, Date.now());
+  if (drop.published && !["ended", "sold_out"].includes(state)) {
+    return res.status(409).json({error:"This drop is published. Unpublish it first, or end the live drop before removing it."});
   }
+  // Remove past public drops from the console and public schedule while keeping
+  // attribution and broadcast cleanup records. Unpublishing also stops mail jobs.
   if (drop.first_published_at) {
-    return res.status(409).json({
-      error: "This drop was published once, so it is the record of what was offered. It can be unpublished, not deleted.",
-    });
+    const now = new Date().toISOString();
+    db.prepare("UPDATE live_drops SET published=0, deleted_at=?, updated_at=? WHERE id=?")
+      .run(now, now, drop.id);
+    publicHtmlCache.clear();
+    return res.json({ok:true});
   }
   db.prepare("DELETE FROM live_drop_announcements WHERE drop_id=?").run(drop.id);
   db.prepare("DELETE FROM live_drop_presence WHERE drop_id=?").run(drop.id);
@@ -4207,115 +4200,9 @@ app.delete("/api/admin/live-drops/:key", admin, (req, res) => {
  * some with nothing at all. That is worth knowing while choosing the product,
  * not while two hundred people are watching.
  */
-/*
- * Amazon picks: chosen by a person, linked by a person.
- *
- * Amazon's agreement allows their data to be shown only when it comes from
- * the Product Advertising API, and that opens after three qualifying sales.
- * So nothing here fetches anything from Amazon — not a price, not an image,
- * not a title. What is stored is what was typed, plus the SiteStripe link,
- * which is the one part that must survive untouched: it carries the tag,
- * and a link without it earns nothing while looking identical.
- */
-const AMAZON_LINK = /^https:\/\/(?:amzn\.to\/[A-Za-z0-9]+|(?:www\.)?amazon\.[a-z.]{2,6}\/\S+)$/i;
-
-app.get("/api/admin/amazon-picks", admin, (req, res) => {
-  res.json({
-    markets: c.markets,
-    picks: db.prepare("SELECT * FROM amazon_picks ORDER BY market, position, id").all(),
-  });
-});
-
-app.post("/api/admin/amazon-picks", admin, express.json({limit:"8kb"}), (req, res) => {
-  const title = String(req.body?.title || "").trim().slice(0, 200);
-  const url = String(req.body?.url || "").trim();
-  const category = String(req.body?.category || "").trim().slice(0, 60);
-  const marketCode = normalizeMarket(req.body?.market) || c.primaryMarket;
-  const note = String(req.body?.note || "").trim().slice(0, 400);
-  /*
-   * A price is stored with the moment it was typed, and shown beside it.
-   * Amazon's own prices move several times a day — which is why their
-   * agreement has prices come from the API — so this is never presented as
-   * the current one. Dated, it stays true however old it gets.
-   */
-  const price = Number(req.body?.price);
-  const hasPrice = Number.isFinite(price) && price > 0;
-  const currency = String(req.body?.currency || "USD").trim().toUpperCase().slice(0, 3);
-  if (!title) return res.status(400).json({error:"Give it a name — nothing is fetched from Amazon, so this is the only title it will have."});
-  if (!AMAZON_LINK.test(url)) return res.status(400).json({error:"That is not an Amazon link. Use the short link SiteStripe gives you."});
-  /* Recorded so a link can be recognised again later, and so the API can fill
-     in real data for the same product once it is available. */
-  const asin = (url.match(/\/(?:dp|gp\/product)\/([A-Z0-9]{10})/) || [])[1] || "";
-  try {
-    const nowIso = new Date().toISOString();
-    const info = db.prepare(
-      `INSERT INTO amazon_picks(market,title,category,url,asin,position,created_at,price,currency,price_checked_at,note)
-       VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
-    ).run(
-      marketCode, title, category, url, asin, Number(req.body?.position) || 0, nowIso,
-      hasPrice ? price : null, currency, hasPrice ? nowIso : null, note,
-    );
-    /* The homepage is cached; a pick nobody can see for ten minutes reads as
-       a form that did not work. */
-    publicHtmlCache.clear();
-    return res.status(201).json({ok:true, id:info.lastInsertRowid, asin});
-  } catch (error) {
-    if (String(error.message).includes("UNIQUE")) return res.status(409).json({error:"That link is already on the site."});
-    throw error;
-  }
-});
-
-/*
- * Updating one, which for a price is the whole point: it goes stale by
- * definition, and the alternative to editing it is deleting the row and
- * retyping the name and the note.
- */
-app.patch("/api/admin/amazon-picks/:id", admin, express.json({limit:"8kb"}), (req, res) => {
-  const pick = db.prepare("SELECT * FROM amazon_picks WHERE id=?").get(Number(req.params.id) || 0);
-  if (!pick) return res.sendStatus(404);
-  const price = Number(req.body?.price);
-  const hasPrice = Number.isFinite(price) && price > 0;
-  const nowIso = new Date().toISOString();
-  db.prepare(
-    "UPDATE amazon_picks SET title=?, category=?, note=?, price=?, currency=?, price_checked_at=? WHERE id=?",
-  ).run(
-    String(req.body?.title ?? pick.title).trim().slice(0, 200) || pick.title,
-    String(req.body?.category ?? pick.category).trim().slice(0, 60),
-    String(req.body?.note ?? pick.note).trim().slice(0, 400),
-    hasPrice ? price : null,
-    String(req.body?.currency || pick.currency || "USD").trim().toUpperCase().slice(0, 3),
-    /* Re-stamped only when a price is actually given, so an edit to the
-       note does not make an old price look freshly checked. */
-    hasPrice ? nowIso : null,
-    pick.id,
-  );
-  publicHtmlCache.clear();
-  return res.json({ok:true});
-});
-
-app.delete("/api/admin/amazon-picks/:id", admin, (req, res) => {
-  const removed = db.prepare("DELETE FROM amazon_picks WHERE id=?").run(Number(req.params.id) || 0).changes;
-  publicHtmlCache.clear();
-  return res.status(removed ? 200 : 404).json({ok:Boolean(removed)});
-});
-
-/* Read by the Next pages. No price and no image, because there are none to
-   give: that is the whole shape of this feature until the API opens. */
-app.get("/api/amazon-picks", (req, res) => {
-  const marketCode = normalizeMarket(req.query.market) || c.primaryMarket;
-  res.set("Cache-Control", "public, max-age=300, stale-while-revalidate=900");
-  res.json(
-    db.prepare(`
-      SELECT id,title,category,note,price,currency,price_checked_at
-      FROM amazon_picks
-      /* A link the daily check found dead stops being offered. Marked, not
-         deleted: the name and the note were written by hand and the product
-         may come back. */
-      WHERE market=? AND link_status<>'dead'
-      ORDER BY position, id LIMIT 24
-    `).all(marketCode),
-  );
-});
+// Retired feature: old clients cannot add or expose Amazon picks.
+app.use("/api/admin/amazon-picks", admin, (req, res) => res.status(410).json({error:"Amazon picks has been removed."}));
+app.get("/api/amazon-picks", (req, res) => res.set("Cache-Control", "no-store").json([]));
 
 /*
  * Out to Amazon, through here so the click is counted.
@@ -4348,33 +4235,7 @@ app.get("/amazon/go/store", (req, res) => {
   return res.redirect(302, `https://www.amazon.com/?tag=${encodeURIComponent(c.amazonAssociateTag)}`);
 });
 
-app.get("/amazon/go/:id", (req, res) => {
-  outboundHeaders(res);
-  const pick = db.prepare("SELECT * FROM amazon_picks WHERE id=?").get(Number(req.params.id) || 0);
-  if (!pick) return res.sendStatus(404);
-  const sessionId = analyticsToken(req.query.sid);
-  db.prepare(
-    "INSERT INTO clicks(session_id,product_id,market,retailer_name,source_page,placement,action_type,destination_type,clicked_at,referrer,user_agent) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
-  ).run(
-    sessionId, null, pick.market, "Amazon", "amazon_picks", "amazon_picks", "view_deal", "retailer",
-    new Date().toISOString(), String(req.get("referer") || "").slice(0, 1000), String(req.get("user-agent") || "").slice(0, 500),
-  );
-  /* The link is used exactly as SiteStripe made it. Adding parameters to an
-     Amazon affiliate link is how the tag stops being honoured. */
-  return res.redirect(302, pick.url);
-});
-
-/* On demand as well as daily, because after fixing a link the answer to
-   "is it alive now" should not be a day away. */
-app.post("/api/admin/amazon-picks/check", admin, async (req, res) => {
-  try {
-    const summary = await checkAmazonLinks({db});
-    publicHtmlCache.clear();
-    return res.json(summary);
-  } catch (error) {
-    return res.status(502).json({error:error.message});
-  }
-});
+app.get("/amazon/go/:id", (req, res) => res.sendStatus(410));
 
 app.get("/api/admin/ebay-stock", admin, async (req, res) => {
   const raw = String(req.query.item || req.query.url || "").trim();
@@ -4397,6 +4258,20 @@ app.get("/api/admin/ebay-stock", admin, async (req, res) => {
     return res.status(502).json({error:error.message});
   }
 });
+app.get("/api/admin/coupons", admin, (req, res) => {
+  res.set("Cache-Control", "no-store").json({
+    ...require("./couponSchedule").couponRefreshService().status(),
+    active: require("./merchantCoupons").listCoupons("us").length + require("./publicCoupons").listPublicCoupons("us").length + require("./marketplaceCoupons").listMarketplaceCoupons(db,"us").length,
+  });
+});
+app.post("/api/admin/coupons/refresh", admin, async (req, res) => {
+  try {
+    const result = await require("./couponSchedule").couponRefreshService().run({force:true});
+    publicHtmlCache.clear();
+    res.set("Cache-Control", "no-store").json(result);
+  } catch (error) { res.status(502).json({error:"Coupon refresh could not finish."}); }
+});
+
 app.get("/api/admin/email-health", admin, async (req, res) => {
   try {
     res.json(await emailHealth());
@@ -4415,7 +4290,7 @@ app.get("/api/admin/email-health", admin, async (req, res) => {
  */
 app.post("/api/admin/email-test", admin, express.json({limit:"4kb"}), async (req, res) => {
   const to = String(req.body?.to || "").trim().slice(0, 160);
-  if (!/^[^@s]+@[^@s]+.[^@s]+$/.test(to)) return res.status(400).json({error:"Enter an address to send to."});
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(to)) return res.status(400).json({error:"Enter an address to send to."});
   try {
     await deliveryTestEmail({to});
     res.json({ok:true, to, message:`Sent to ${to}. If it does not arrive, look in spam before changing anything.`});
@@ -4490,11 +4365,24 @@ app.use((req, res) => {
   return handleNextRequest(req, res);
 });
 
-function backfillBrands() {
-  const rows = db.prepare("SELECT id,title,description,brand,manufacturer FROM products WHERE status='published' AND (brand_slug IS NULL OR brand_slug='')").all();
+async function backfillBrands() {
+  let afterId = 0, reviewed = 0;
+  const batch = db.prepare("SELECT id,title,description,brand,manufacturer FROM products WHERE id>? AND status='published' AND (brand_slug IS NULL OR brand_slug='') ORDER BY id LIMIT 50");
   const update = db.prepare("UPDATE products SET brand=?,brand_slug=? WHERE id=?");
-  db.transaction(() => { for (const row of rows) { const brand = normalizeBrand(detectBrand(row)); if (brand) update.run(brand, slugifyBrand(brand), row.id); } })();
-  if (rows.length) console.log(`Brand intelligence reviewed ${rows.length} existing products`);
+  for (;;) {
+    const rows = batch.all(afterId);
+    if (!rows.length) break;
+    db.transaction(() => {
+      for (const row of rows) {
+        const brand = normalizeBrand(detectBrand(row));
+        if (brand) update.run(brand, slugifyBrand(brand), row.id);
+      }
+    })();
+    reviewed += rows.length;
+    afterId = rows[rows.length - 1].id;
+    await new Promise(resolve => setTimeout(resolve, 25));
+  }
+  if (reviewed) console.log(`Brand intelligence reviewed ${reviewed} existing products`);
 }
 
 const merchandisingEnabled = String(process.env.MERCHANDISING_ENABLED || "true").toLowerCase() !== "false";
@@ -4666,27 +4554,7 @@ if (c.liveRefreshEnabled) {
     {timezone:"UTC"},
   );
 
-  /* The hand-added Amazon links, on the same daily pass as the catalogue's.
-     They are the only thing on this site nothing else ever revisits. */
-  cron.schedule(
-    c.linkHealthCron,
-    async () => {
-      try {
-        const summary = await checkAmazonLinks({db});
-        if (summary.checked) {
-          console.log(
-            `[amazon-links] checked ${summary.checked}: ${summary.ok} ok, ${summary.dead} dead, ${summary.unknown} unknown`,
-          );
-        }
-        if (summary.dead) {
-          console.warn(`[amazon-links] no longer offered: ${summary.deadIds.join(", ")}`);
-        }
-      } catch (error) {
-        console.error(`[amazon-links] ${error.message}`);
-      }
-    },
-    {timezone:"Etc/UTC"},
-  );
+
 }
 
 /*
@@ -5002,10 +4870,15 @@ app.use((error, req, res, next) => {
 });
 
 (async () => {
-  backfillBrands();
+  let phaseStarted = Date.now();
+  console.log("[startup] preparing Next.js");
   await nextApp.prepare();
+  console.log(`[startup] Next.js ready after ${Date.now() - phaseStarted}ms`);
+  phaseStarted = Date.now();
   await bootstrapPersonalPostgres(db);
+  console.log(`[startup] personal data ready after ${Date.now() - phaseStarted}ms`);
   app.listen(c.port, () => {
+    setTimeout(() => backfillBrands().catch(error => console.error(`[brands] ${error.message}`)), 30000).unref();
     console.log(`http://localhost:${c.port}`);
     if (c.liveRefreshEnabled) {
       setTimeout(() => refreshCouponSources().catch(()=>console.warn("[coupons] Startup refresh failed")),30000).unref();

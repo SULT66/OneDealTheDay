@@ -464,7 +464,7 @@ async function main() {
      published even once, which first_published_at records and never clears. */
   assert(
     /drop\.first_published_at/.test(serverSource),
-    "a drop that was once published can now be deleted, so the record of what was offered can vanish",
+    "the first publication timestamp is no longer tracked",
   );
 
   /* The buy link is the one field that sends a shopper off our site. */
@@ -621,8 +621,8 @@ async function main() {
   assert(/leaving: true/.test(panel) && /pagehide/.test(panel), "closing the page no longer takes the viewer out of the count");
   assert(/req\.body\?\.leaving === true/.test(serverSource), "the server ignores a page saying it left");
   assert(
-    /onAir && drop\.watching > 0/.test(panel),
-    "the viewer count shows outside the drop, or shows a zero nobody needed to read",
+    /\{onAir && \(/.test(panel),
+    "the viewer count must stay visible at zero after the last viewer leaves",
   );
 
   console.log("Live Drop admin guards, server-side exit, broadcast priority, reminders and presence passed.");

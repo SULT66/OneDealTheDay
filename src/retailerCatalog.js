@@ -191,6 +191,21 @@ const RETAILERS = Object.freeze([
     feedPolicy:{spreadAcrossFeed:true, excludeTitleTerms:["custom payment", "price difference link", "not a product sale", "purchase protection", "gift card", "not sold separately", "not for sale", "non-delivery"]}
   },
   {
+    id:"lumary", name:"Lumary", network:"Awin", markets:["us"],
+    storefrontHost:"lumarysmart.com", awinFeedId:"F4323", maxCatalogProducts:150,
+    feedPolicy:{spreadAcrossFeed:true, excludeTitleTerms:["custom payment", "price difference link", "not a product sale", "purchase protection", "gift card", "not sold separately", "not for sale", "non-delivery"]}
+  },
+  {
+    id:"rockbros", name:"ROCKBROS", network:"Awin", markets:["us"],
+    storefrontHost:"rockbrosbike.us", awinFeedId:"F2309", maxCatalogProducts:150,
+    feedPolicy:{spreadAcrossFeed:true, excludeTitleTerms:["custom payment", "price difference link", "not a product sale", "purchase protection", "gift card", "not sold separately", "not for sale", "non-delivery"]}
+  },
+  {
+    id:"simple-project", name:"Simple Project", network:"Awin", markets:["us"],
+    storefrontHost:"simpleprojectus.com", awinFeedId:"F2281", maxCatalogProducts:150,
+    feedPolicy:{spreadAcrossFeed:true, excludeTitleTerms:["custom payment", "price difference link", "not a product sale", "purchase protection", "gift card", "not sold separately", "not for sale", "non-delivery"]}
+  },
+  {
     id:"alorair-crawlspace", name:"AlorairCrawlspace", network:"Awin", markets:["us"],
     storefrontHost:"aloraircrawlspace.com", awinFeedId:"F2715", maxCatalogProducts:100,
     feedPolicy:{spreadAcrossFeed:true, excludeTitleTerms:["custom payment", "price difference link", "not a product sale", "purchase protection", "gift card", "not sold separately", "not for sale", "non-delivery"]}

@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { activeHalloween, activeCampaign } from "@/src/merchandisingCalendar";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import type { Language } from "@/lib/i18n";
 import { StructuredData } from "@/components/site/StructuredData";
 import type { Metadata } from "next";
@@ -18,7 +18,6 @@ import { LiveDropSignup } from "@/components/site/LiveDropSignup";
 import { DeliaTrigger } from "@/components/delia/DeliaTrigger";
 import { DealCard } from "@/components/deal/DealCard";
 import { NextLiveDrop } from "@/components/live/NextLiveDrop";
-import { AmazonPicks } from "@/components/site/AmazonPicks";
 import { PartnerPicks } from "@/components/site/PartnerPicks";
 import { HalloweenProducts } from "@/components/site/HalloweenProducts";
 import { getHalloweenCollection } from "@/lib/merchandising";
@@ -28,6 +27,7 @@ export async function generateMetadata({
   params,
 }: PageProps<"/[market]">): Promise<Metadata> {
   const { market } = await params;
+  if (!getMarket(market)) notFound();
   const info = getMarket(market);
   const language = await getLanguage(market);
   const country = info ? countryName(market, language) : t(language, "app.yourMarket");
@@ -51,6 +51,8 @@ export async function generateMetadata({
 
 export default async function MarketHome({ params, searchParams }: PageProps<"/[market]">) {
   const {market} = await params;
+  // Pages and layouts can render concurrently; validate before calendar work.
+  if (!getMarket(market)) notFound();
   const language = await getLanguage(market);
   const search = await searchParams;
   // Preserve old campaign filter bookmarks after moving the collection.
@@ -124,7 +126,6 @@ async function HomeCatalog({market,language,halloween}:{market:string;language:L
             carry no price and no score, so an outage cannot make them
             misleading the way a stale catalogue would. */}
         <div className="mt-4 text-left">
-          <AmazonPicks market={market} />
           <MerchandisingShelves market={market} language={language} excludeHalloween={halloween} />
         </div>
       </div>
@@ -203,7 +204,6 @@ async function HomeCatalog({market,language,halloween}:{market:string;language:L
           score, and a card without either sitting beside cards with both
           invites the reader to assume it was checked the same way. Renders
           nothing at all until a pick is added. */}
-      <AmazonPicks market={market} />
       {/* Same terms as the shelf above, for shops reached through Sovrn. */}
       <PartnerPicks market={market} />
 

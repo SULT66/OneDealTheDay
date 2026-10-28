@@ -42,6 +42,7 @@ type LiveBroadcastValue = {
   /* Chloe is speaking, smoothed: a breath between two words is not a pause. */
   talking: boolean;
   musicOn: boolean;
+  leftDropKey: string;
   setMusicOn: (on: boolean) => void;
   join: (session: Session) => void;
   leave: () => void;
@@ -72,10 +73,15 @@ const readMusicPreference = () => {
 };
 
 /* The one presence heartbeat that follows the viewer across pages. */
-const sendPresence = (dropKey: string, leaving = false) => {
+export const sendPresence = (dropKey: string, leaving = false, beacon = false) => {
   const body = JSON.stringify({ drop_key: dropKey, session_id: analyticsSessionId(), ...(leaving ? { leaving: true } : {}) });
-  if (leaving && navigator.sendBeacon?.("/api/live/watching", new Blob([body], { type: "application/json" }))) return;
-  void fetch("/api/live/watching", { method: "POST", headers: { "Content-Type": "application/json" }, body, keepalive: true }).catch(() => {});
+  if (beacon && navigator.sendBeacon?.("/api/live/watching", new Blob([body], { type: "application/json" }))) return;
+  void fetch("/api/live/watching", { method: "POST", headers: { "Content-Type": "application/json" }, body, keepalive: true })
+    .then(async (response) => {
+      if (!response.ok) return;
+      const result = await response.json();
+      if (typeof result.watching === "number") window.dispatchEvent(new CustomEvent("odd-live-presence", { detail: { dropKey, watching: result.watching } }));
+    }).catch(() => {});
 };
 
 export function LiveBroadcastProvider({ market, children }: { market: string; children: React.ReactNode }) {
@@ -86,15 +92,13 @@ export function LiveBroadcastProvider({ market, children }: { market: string; ch
   const [captions, setCaptions] = useState<BroadcastCaption[]>([]);
   const [talking, setTalking] = useState(false);
   const [musicOn, setMusicOnState] = useState(true);
+  const [leftDropKey, setLeftDropKey] = useState("");
   const seenRef = useRef(new Set<string>());
   const audioRef = useRef<AudioContext | null>(null);
   const musicRef = useRef<StageMusic | null>(null);
   const eventSpeakingRef = useRef(false);
   const lastVoiceRef = useRef(0);
   const talkingSinceRef = useRef(0);
-  const pathname = usePathname();
-  const onLivePageRef = useRef(false);
-  onLivePageRef.current = Boolean(pathname?.startsWith(`/${market}/live`));
 
   useEffect(() => setMusicOnState(readMusicPreference()), []);
 
@@ -109,6 +113,7 @@ export function LiveBroadcastProvider({ market, children }: { market: string; ch
   }, []);
 
   const join = useCallback((next: Session) => {
+    setLeftDropKey("");
     /* Called from the viewer's click, which is the only moment a browser lets
        sound start. */
     try {
@@ -122,7 +127,20 @@ export function LiveBroadcastProvider({ market, children }: { market: string; ch
     }
     setSession((current) => (current?.conversationUrl === next.conversationUrl ? current : next));
   }, []);
-  const leave = useCallback(() => setSession(null), []);
+  const leave = useCallback(() => {
+    setLeftDropKey(session?.dropKey || "");
+    // Silence in the click handler, before React unmounts either player.
+    musicRef.current?.stop();
+    musicRef.current = null;
+    if (audioRef.current) void audioRef.current.close().catch(() => {});
+    audioRef.current = null;
+    setStream(null);
+    setJoined(false);
+    setTalking(false);
+    eventSpeakingRef.current = false;
+    lastVoiceRef.current = 0;
+    setSession(null);
+  }, [session]);
 
   useEffect(() => {
     if (!session) {
@@ -278,13 +296,12 @@ export function LiveBroadcastProvider({ market, children }: { market: string; ch
     if (!presenceKey) return;
     sendPresence(presenceKey);
     const timer = setInterval(() => sendPresence(presenceKey), 20000);
-    const gone = () => sendPresence(presenceKey, true);
+    const gone = () => sendPresence(presenceKey, true, true);
     window.addEventListener("pagehide", gone);
     return () => {
       clearInterval(timer);
       window.removeEventListener("pagehide", gone);
-      /* On the Live page the page's own heartbeat still counts them. */
-      if (!onLivePageRef.current) gone();
+      sendPresence(presenceKey, true);
     };
   }, [presenceKey]);
 
@@ -306,7 +323,7 @@ export function LiveBroadcastProvider({ market, children }: { market: string; ch
 
   return (
     <LiveBroadcastContext.Provider
-      value={{ session, stream, joined, error, captions, talking, musicOn, setMusicOn, join, leave }}
+      value={{ session, stream, joined, error, captions, talking, musicOn, leftDropKey, setMusicOn, join, leave }}
     >
       {children}
       <MiniPlayer market={market} />
@@ -334,11 +351,36 @@ export function BroadcastVideo({
     if (stream) {
       void element.play().then(() => onNeedsPlay?.(false)).catch(() => onNeedsPlay?.(true));
     }
+    return () => {
+      element.pause();
+      element.srcObject = null;
+    };
   }, [stream, onNeedsPlay]);
   return <video ref={ref} autoPlay playsInline className={className} aria-label={label} />;
 }
 
 const isVideoFile = (value: string) => /\.(?:mp4|mov|webm)(?:[?#].*)?$/i.test(value || "");
+
+function ProductVideo({ src, label }: { src: string; label: string }) {
+  const background = useRef<HTMLVideoElement | null>(null);
+  const sync = (video: HTMLVideoElement) => {
+    const backdrop = background.current;
+    if (!backdrop) return;
+    if (Math.abs(backdrop.currentTime - video.currentTime) > 0.2) backdrop.currentTime = video.currentTime;
+    if (video.paused) backdrop.pause();
+    else if (backdrop.paused) void backdrop.play().catch(() => {});
+  };
+  return (
+    <>
+      <video ref={background} src={src} autoPlay muted loop playsInline aria-hidden="true" tabIndex={-1}
+        className="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover blur-2xl brightness-75" />
+      <video src={src} autoPlay muted loop playsInline aria-label={label}
+        onTimeUpdate={(event) => sync(event.currentTarget)} onPlay={(event) => sync(event.currentTarget)}
+        onPause={(event) => sync(event.currentTarget)} onSeeked={(event) => sync(event.currentTarget)}
+        className="relative h-full w-full object-contain" />
+    </>
+  );
+}
 
 /*
  * The stage: Chloe and the product, trading places.
@@ -384,19 +426,11 @@ export function SwapStage({
     : { left: "62%", top: 0, width: "38%", height: "100%" };
 
   return (
-    <div className="relative aspect-video w-full overflow-hidden bg-black">
+    <div className={`relative w-full overflow-hidden bg-black ${compact ? "aspect-video" : "aspect-[4/3] sm:aspect-video"}`}>
       {hasProduct ? (
         <div className={`${layer} z-10 border-l border-white/10 bg-black`} style={productStyle}>
           {productVideo && isVideoFile(productVideo) ? (
-            <video
-              src={productVideo}
-              autoPlay
-              muted
-              loop
-              playsInline
-              aria-label={`${productAlt}, product demo`}
-              className={`h-full w-full ${productFull ? "object-contain" : "object-cover"}`}
-            />
+            <ProductVideo key={productVideo} src={productVideo} label={`${productAlt}, product demo`} />
           ) : productImage ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={productImage} alt={productAlt} className="h-full w-full bg-[#0b1524] object-contain p-2" />
