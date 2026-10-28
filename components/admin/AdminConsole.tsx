@@ -191,12 +191,14 @@ export function AdminConsole() {
     const result = await response?.json().catch(() => ({}));
     setBusy(false);
     const failure = response?.ok ? "" : result?.error || "That did not go through.";
-    setMessage(failure || "Done.");
+    const warning = response?.ok && Array.isArray(result?.warnings)
+      ? result.warnings.filter((value: unknown) => typeof value === "string").join(" ") : "";
+    setMessage(failure || warning || "Done.");
     load();
     /* Returned so the row that was clicked can say what happened next to the
        button. A refusal printed at the top of a long console reads as a button
        that does nothing — which is exactly how the delete guard was reported. */
-    return failure;
+    return failure || warning;
   };
 
   const create = async (event: React.FormEvent) => {
@@ -726,6 +728,7 @@ function DropRow({
 }) {
   const [stock, setStock] = useState(String(drop.quantity_remaining));
   const [rowMessage, setRowMessage] = useState("");
+  const [publishing, setPublishing] = useState(false);
   const [hostOpen, setHostOpen] = useState(false);
   const [script, setScript] = useState({
     host_script_intro: drop.host_script_intro || "",
@@ -891,12 +894,18 @@ function DropRow({
         <button
           type="button"
           disabled={busy}
-          onClick={() =>
-            act(`/api/admin/live-drops/${drop.drop_key}/publish`, { published: !drop.published })
-          }
+          onClick={async () => {
+            setRowMessage("");
+            setPublishing(true);
+            try {
+              setRowMessage(await act(`/api/admin/live-drops/${drop.drop_key}/publish`, { published: !drop.published }));
+            } finally {
+              setPublishing(false);
+            }
+          }}
           className="inline-flex h-9 cursor-pointer items-center rounded-full border border-border px-4 text-xs font-semibold text-fg transition-colors hover:bg-surface-2 disabled:opacity-55"
         >
-          {drop.published ? "Unpublish" : "Publish"}
+          {publishing ? "Publishing…" : drop.published ? "Unpublish" : "Publish"}
         </button>
 
         {drop.published ? (
@@ -966,6 +975,12 @@ function DropRow({
 
       {hostOpen && <LiveHostConsole adminKey={adminKey} dropKey={drop.drop_key} />}
 
+      {rowMessage && (
+        <p className="mt-3 text-xs font-semibold text-fg-muted" role="status">
+          {rowMessage}
+        </p>
+      )}
+
       {/* What the drop shows, editable after it is published. The offer
           itself — price, quantity, hour — is deliberately not here: people
           were told those, and changing them quietly is a different act. */}
@@ -1024,14 +1039,6 @@ function DropRow({
         Save script
       </button>
 
-      {/* Beside the button that was pressed. A refusal printed at the top of a
-          long console is a refusal nobody reads, and the button then looks
-          broken — which is exactly how the delete guard was reported. */}
-      {rowMessage && (
-        <p className="mt-3 text-xs font-semibold text-danger" role="status">
-          {rowMessage}
-        </p>
-      )}
     </div>
   );
 }

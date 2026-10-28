@@ -3920,26 +3920,16 @@ app.post("/api/admin/live-drops/:key/publish", admin, async (req, res) => {
   const drop = db.prepare("SELECT * FROM live_drops WHERE drop_key=?").get(String(req.params.key || ""));
   if (!drop || drop.deleted_at) return res.status(404).json({error:"No such drop."});
   const published = req.body?.published === false ? 0 : 1;
+  const warnings = [];
   /* Pulling a drop that is already open would leave anybody on the page with a
      countdown to something that no longer exists. */
   if (!published && dropState(drop, Date.now()) === "live") {
     return res.status(409).json({error:"That drop is open. Let it close rather than pulling it from under whoever is watching."});
   }
 
-  /*
-   * The price on the page has to be the price in the basket.
-   *
-   * drop_price is typed into the admin form, so until now it was a plan that
-   * nothing had checked against the listing behind the buy button. A drop
-   * that announces one number and charges another is the complaint an
-   * affiliate account ends over — and the host says the number out loud, to
-   * everybody, at the moment of the reveal.
-   *
-   * Asked once, here, because this is the point where there is somebody to
-   * tell. eBay being unreachable does not block the publish: an outage is not
-   * evidence that the price is wrong. It simply leaves the drop unverified,
-   * and an unverified drop shows its price without presenting it as checked.
-   */
+  /* Price checks inform the operator but do not veto publication. Keep the
+     entered price and the verification result separate; publishing alone
+     must never make a mismatched price count as verified. */
   if (published) {
     try {
       const outcome = await refreshDropStock(drop, { db, market: market(drop.market) });
@@ -3947,43 +3937,20 @@ app.post("/api/admin/live-drops/:key/publish", admin, async (req, res) => {
         .prepare("SELECT drop_price, retail_price, listing_price, seller_reference_price FROM live_drops WHERE id=?")
         .get(drop.id);
       if (checked?.listing_price != null && !priceAgrees(checked.drop_price, checked.listing_price)) {
-        return res.status(409).json({
-          error: `eBay is charging ${drop.currency} ${Number(checked.listing_price).toFixed(2)} for this listing, `
-            + `and the drop says ${drop.currency} ${Number(checked.drop_price).toFixed(2)}. `
-            + `Fix one of them before publishing.`,
-          listing_price: checked.listing_price,
-          drop_price: checked.drop_price,
-        });
+        warnings.push(
+          `Published with a price warning: eBay's recorded price is ${drop.currency} ${Number(checked.listing_price).toFixed(2)}, `
+            + `while the drop says ${drop.currency} ${Number(checked.drop_price).toFixed(2)}. Check the price and host script.`,
+        );
       }
 
-      /*
-       * And the struck-through price, which is the badge the drop is sold on.
-       *
-       * Everything here comes off the listing: where the API publishes a
-       * crossed-out price we read it ourselves, and where it does not — 39%
-       * of the eBay listings in this catalogue on 2026-10-28 — the figure is
-       * copied from the listing page by hand, from the places the API does
-       * not expose, such as a list price in the item specifics.
-       *
-       * So a difference between the two is not evidence of an invented
-       * number, and refusing the publish over it only blocked a drop for
-       * being described from a different part of the same page. eBay's own
-       * figure simply wins when there is one (see referencePrice), which
-       * makes the badge agree with the listing without anybody being told
-       * off.
-       *
-       * What is still refused is a usual price at or below what eBay is
-       * actually charging. That is not a comparison that can be read two
-       * ways — it is a saving that does not exist.
-       */
+      /* The reference-price check is advisory too. eBay's own reference,
+         when available, remains the public display's preferred source. */
       const typed = Number(checked?.retail_price) || 0;
       if (typed > 0 && checked?.listing_price != null && typed <= Number(checked.listing_price)) {
-        return res.status(409).json({
-          error: `The usual price on this drop (${drop.currency} ${typed.toFixed(2)}) is not above what eBay `
-            + `is charging (${drop.currency} ${Number(checked.listing_price).toFixed(2)}), so there is no saving to show.`,
-          typed_reference_price: typed,
-          listing_price: checked.listing_price,
-        });
+        warnings.push(
+          `Published with a comparison-price warning: the entered usual price (${drop.currency} ${typed.toFixed(2)}) `
+            + `is not above eBay's recorded price (${drop.currency} ${Number(checked.listing_price).toFixed(2)}). Check the saving claim.`,
+        );
       }
       if (outcome?.reason) console.log(`[live-drop] publish check for ${drop.drop_key}: ${outcome.reason}`);
     } catch (error) {
@@ -4000,7 +3967,7 @@ app.post("/api/admin/live-drops/:key/publish", admin, async (req, res) => {
   if (published && !drop.first_published_at) {
     db.prepare("UPDATE live_drops SET first_published_at=? WHERE id=?").run(nowIso, drop.id);
   }
-  res.json({ok:true, published:Boolean(published)});
+  res.json({ok:true, published:Boolean(published), warnings});
 });
 
 /*
