@@ -923,6 +923,30 @@ db.exec(`
   );
   CREATE UNIQUE INDEX IF NOT EXISTS idx_live_drop_announcements_unique
     ON live_drop_announcements(drop_id, subscriber_id);
+
+  /*
+   * The hour-before letter, and who has had it.
+   *
+   * A subscriber used to hear about a drop exactly twice: an announcement up
+   * to three days ahead, and "we are live now" as it opened. For a ten minute
+   * event that is one message too early to act on and one too late to arrive
+   * for. The only warning in between went to people who had pressed Remind me
+   * on the page, and most people press nothing.
+   *
+   * Its own ledger rather than a stage column on the announcements above,
+   * because the two are sent by different sweeps on different schedules, and
+   * one row would make "has been announced" and "has been warned" the same
+   * question. They are not.
+   */
+  CREATE TABLE IF NOT EXISTS live_drop_subscriber_reminders(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    drop_id INTEGER NOT NULL,
+    subscriber_id INTEGER NOT NULL,
+    sent_at TEXT NOT NULL,
+    FOREIGN KEY(drop_id) REFERENCES live_drops(id)
+  );
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_live_drop_subscriber_reminders_unique
+    ON live_drop_subscriber_reminders(drop_id, subscriber_id);
 `);
 
 /*

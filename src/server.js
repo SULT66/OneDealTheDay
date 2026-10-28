@@ -18,6 +18,7 @@ const { runLinkHealthCheck } = require("./linkHealth");
 const {
   dropState, hostGreeting, hostRevealLine, presentDrop,
   sendDueReminders, sendStagedReminders, announceDropToSubscribers, sendLiveNowNotices,
+  remindSubscribersBeforeStart,
 } = require("./liveDrop");
 const { sendDuePriceDrops } = require("./priceWatches");
 const { cacheKey, readCachedAnswer, writeCachedAnswer } = require("./deliaCache");
@@ -65,7 +66,7 @@ const {
 const renderShoppingAssistantPanel = require("./shoppingAssistantPanel");
 const {
   welcomeEmail,
-  liveDropSaveTheDateEmail, liveDropStartingSoonEmail, liveDropAnnouncementEmail, liveDropLiveNowEmail, priceDropEmail,
+  liveDropSaveTheDateEmail, liveDropStartingSoonEmail, liveDropAnnouncementEmail, liveDropLastCallEmail, liveDropLiveNowEmail, priceDropEmail,
   priceWatchStartedEmail,
   passwordResetEmail, subscriptionEmail, clubWaitlistEmail, liveDropReminderEmail, deliveryTestEmail,
   digestInviteEmail, weeklyDigestEmail, introEmail, scoreExplainerEmail,
@@ -1567,6 +1568,83 @@ app.post("/api/live/remind", authRateLimit, (req, res) => {
     if (!String(error.message).includes("UNIQUE")) throw error;
   }
   res.status(201).json({ok:true, message:"We will email you when it opens."});
+});
+
+/*
+ * Opening the page of a drop that has not started yet.
+ *
+ * Almost nobody presses Remind me. The button is the one thing worth doing on
+ * that page and it still asks for a decision, a form and an address, so most
+ * of the people who came early — the people most likely to come back — leave
+ * with nothing arranged.
+ *
+ * What this does not do is sign up whoever happens to be looking. An address
+ * is needed before anything can be promised, and a visitor has not given one;
+ * and for somebody signed in, an account is not permission to be emailed about
+ * drops, which is why the welcome letter asks separately. Putting an address
+ * on a list because its owner looked at a page is how a list stops arriving in
+ * anybody's inbox.
+ *
+ * So it arms the reminder only where the permission already exists — a signed-
+ * in visitor who is on the drop list — and otherwise hands the page the
+ * address to fill in, turning a form into one tap. Three answers:
+ *
+ *   armed  : it is arranged, and the page says so with an undo
+ *   prefill: one tap away, no typing
+ *   neither: the ordinary form, as before
+ */
+app.post("/api/live/remind/auto", authRateLimit, (req, res) => {
+  res.set("Cache-Control", "no-store");
+  const user = currentUser(req);
+  if (!user?.email) return res.json({armed:false, email:null});
+
+  const dropKey = String(req.body?.drop_key || "").trim().slice(0, 80);
+  const drop = db.prepare("SELECT id, start_at FROM live_drops WHERE drop_key=? AND published=1").get(dropKey);
+  if (!drop || Date.parse(drop.start_at) <= Date.now()) return res.json({armed:false, email:null});
+
+  const email = String(user.email).trim().toLowerCase();
+  const already = db
+    .prepare("SELECT 1 AS yes FROM live_drop_reminders WHERE drop_id=? AND lower(email)=?")
+    .get(drop.id, email);
+  if (already) return res.json({armed:true, email});
+
+  /* Permission is the subscriber row, not the account. */
+  const onTheList = db.prepare(`
+    SELECT 1 AS yes FROM subscribers
+     WHERE lower(email)=? AND status='active' AND drop_opt_in=1
+  `).get(email);
+  if (!onTheList) return res.json({armed:false, email});
+
+  try {
+    db.prepare("INSERT INTO live_drop_reminders(drop_id,user_id,email,created_at) VALUES(?,?,?,?)")
+      .run(drop.id, user.id || null, email, new Date().toISOString());
+  } catch (error) {
+    if (!String(error.message).includes("UNIQUE")) throw error;
+  }
+  return res.json({armed:true, email});
+});
+
+/*
+ * Undoing it, which is what makes arming it acceptable.
+ *
+ * Anything arranged on somebody's behalf has to be as easy to call off as it
+ * was to arrange, and in the same place — not in a settings page and not by
+ * replying to an email that has not arrived yet.
+ */
+app.delete("/api/live/remind", authRateLimit, (req, res) => {
+  res.set("Cache-Control", "no-store");
+  const user = currentUser(req);
+  const email = String(req.body?.email || user?.email || "").trim().toLowerCase().slice(0, 160);
+  const dropKey = String(req.body?.drop_key || "").trim().slice(0, 80);
+  if (!email) return res.status(400).json({error:"Nothing to cancel."});
+  const drop = db.prepare("SELECT id FROM live_drops WHERE drop_key=?").get(dropKey);
+  if (!drop) return res.status(404).json({error:"No such drop."});
+  /* Only ever the address the caller can prove is theirs: a signed-in user's
+     own, or one passed with it by the same person who just gave it. */
+  const removed = db
+    .prepare("DELETE FROM live_drop_reminders WHERE drop_id=? AND lower(email)=?")
+    .run(drop.id, email);
+  return res.json({ok:true, removed:Number(removed?.changes || 0)});
 });
 
 /*
@@ -4782,6 +4860,23 @@ cron.schedule(
           : ""),
       });
       if (announced) console.log(`[live-drop] announced to ${announced} subscriber${announced === 1 ? "" : "s"}`);
+
+      /*
+       * And an hour before, which is the message the list never had.
+       *
+       * The announcement above lands up to three days out and "we are live
+       * now" lands once the drop has already started. Between them a ten
+       * minute event had no warning anybody could act on, unless they had
+       * pressed Remind me on the page — and almost nobody presses anything.
+       */
+      const warned = await remindSubscribersBeforeStart({
+        db,
+        sendLastCall: liveDropLastCallEmail,
+        unsubscribeUrlFor: (subscriber) => (subscriber.unsubscribe_token
+          ? `${SITE}/unsubscribe?token=${encodeURIComponent(subscriber.unsubscribe_token)}`
+          : ""),
+      });
+      if (warned) console.log(`[live-drop] hour-before warning to ${warned} subscriber${warned === 1 ? "" : "s"}`);
 
       /* The moment it opens: everyone who asked, and the subscriber list. */
       const liveNow = await sendLiveNowNotices({

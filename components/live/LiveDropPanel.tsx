@@ -514,6 +514,33 @@ function RemindMe({ dropKey }: { dropKey: string }) {
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
+  /* null until the server has answered, so neither state flashes first. */
+  const [armed, setArmed] = useState<boolean | null>(null);
+
+  /*
+   * Ask the server what it can do for this visitor, once, on arrival.
+   *
+   * The decision is entirely its: it is the only side that knows whether this
+   * address is already on the drop list, and permission is not something a
+   * page should work out for itself. See /api/live/remind/auto in
+   * src/server.js for the three answers and why they are the three.
+   */
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/live/remind/auto", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ drop_key: dropKey }),
+    })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((body) => {
+        if (cancelled || !body) return;
+        if (body.email) setEmail(body.email);
+        setArmed(Boolean(body.armed));
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [dropKey]);
 
   if (message) return (
     <div className="min-w-0" role="status">
@@ -521,6 +548,73 @@ function RemindMe({ dropKey }: { dropKey: string }) {
       {done && <p className="mt-2 max-w-md text-xs leading-relaxed text-fg-muted">{tr("app.signup.gmailPrimaryTip")}</p>}
     </div>
   );
+
+  /*
+   * Already arranged, so say so and offer to call it off.
+   *
+   * The undo is what makes arranging it on somebody's behalf acceptable, and
+   * it belongs here rather than in a settings page: the moment a person might
+   * want it is the moment they read that it happened.
+   */
+  if (armed) {
+    return (
+      <div className="min-w-0" role="status">
+        <p className="text-sm font-medium text-fg">{tr("app.live.remindArmed")}</p>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={async () => {
+            setBusy(true);
+            await fetch("/api/live/remind", {
+              method: "DELETE",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ drop_key: dropKey }),
+            }).catch(() => null);
+            setBusy(false);
+            setArmed(false);
+          }}
+          className="mt-1 cursor-pointer text-xs font-semibold text-fg-muted underline underline-offset-4 hover:text-fg disabled:opacity-60"
+        >
+          {tr("app.live.remindCancel")}
+        </button>
+      </div>
+    );
+  }
+
+  /*
+   * One tap, for somebody whose address we already hold.
+   *
+   * The form is the step most people stop at, and for a signed-in visitor
+   * there is nothing in it to fill in: the server has already said which
+   * address it would use.
+   */
+  if (!open && armed === false && email) {
+    return (
+      <button
+        type="button"
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true);
+          const response = await fetch("/api/live/remind", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ drop_key: dropKey }),
+          }).catch(() => null);
+          const body = await response?.json().catch(() => ({}));
+          setBusy(false);
+          if (response?.ok) {
+            recordLiveDropEvent(dropKey, "remind");
+            setArmed(true);
+            return;
+          }
+          setMessage(body?.error || tr("app.live.tryAgain"));
+        }}
+        className="inline-flex h-12 items-center rounded-full bg-lime px-6 text-sm font-bold text-ink transition-opacity hover:opacity-88 disabled:opacity-60"
+      >
+        {tr("app.live.remindWhenOpens")}
+      </button>
+    );
+  }
 
   if (!open) {
     return (

@@ -1,6 +1,10 @@
 const assert = require("assert");
 const Database = require("better-sqlite3");
-const { sendStagedReminders, announceDropToSubscribers } = require("../src/liveDrop");
+const {
+  sendStagedReminders,
+  announceDropToSubscribers,
+  remindSubscribersBeforeStart,
+} = require("../src/liveDrop");
 const { sendDuePriceDrops } = require("../src/priceWatches");
 
 /*
@@ -28,6 +32,10 @@ db.exec(`
   );
   CREATE TABLE subscribers(id INTEGER PRIMARY KEY, email TEXT, status TEXT, market TEXT, unsubscribe_token TEXT, drop_opt_in INTEGER NOT NULL DEFAULT 1);
   CREATE TABLE live_drop_announcements(
+    id INTEGER PRIMARY KEY AUTOINCREMENT, drop_id INTEGER, subscriber_id INTEGER, sent_at TEXT,
+    UNIQUE(drop_id, subscriber_id)
+  );
+  CREATE TABLE live_drop_subscriber_reminders(
     id INTEGER PRIMARY KEY AUTOINCREMENT, drop_id INTEGER, subscriber_id INTEGER, sent_at TEXT,
     UNIQUE(drop_id, subscriber_id)
   );
@@ -141,6 +149,63 @@ db.prepare("INSERT INTO live_drop_reminders(id,drop_id,email) VALUES(2,2,'onadra
 
   assert.strictEqual(await run(async () => { throw new Error("twice"); }), 0, "the same price drop was mailed twice");
 
+
+  /* --------------------------------------------- an hour out, to the list */
+
+  /*
+   * The message the subscriber list never had.
+   *
+   * It heard twice: an announcement up to three days ahead, and "we are live
+   * now" once the drop had already started. For a ten minute event the first
+   * is too early to act on and the second arrives after most people have
+   * missed it. Only somebody who had pressed Remind me on the page got a
+   * warning in between, and most people press nothing.
+   */
+  /* Somebody who is both on the list and pressed Remind me, so the dedupe
+     has something real to catch. */
+  db.prepare("INSERT INTO subscribers VALUES(5,'waiting@example.com','active','us','tok-5',1)").run();
+
+  const lastCall = [];
+  const warn = (options) => remindSubscribersBeforeStart({
+    db,
+    sendLastCall: async (m) => { lastCall.push(m); },
+    logger: { error() {} },
+    ...options,
+  });
+
+  /* A day out is far too early for this one. */
+  assert.strictEqual(await warn({ now }), 0, "the hour-before letter went out a day ahead");
+
+  /* Fifty minutes out, it goes — to the list, and not to the person who
+     asked by hand, who is already getting the plain "starting soon" note. */
+  const closeNow = Date.parse(at(24)) - 50 * 60 * 1000;
+  assert.strictEqual(await warn({ now: closeNow }), 1, "the list was not warned an hour before");
+  assert.deepStrictEqual(
+    lastCall.map((m) => m.email),
+    ["sub@example.com"],
+    "the wrong people were warned, or somebody got two warnings for one drop",
+  );
+  assert.strictEqual(
+    lastCall[0].title,
+    "Ninja Creami",
+    "the warning did not name the drop it is warning about",
+  );
+  assert.ok(lastCall[0].minutes >= 45 && lastCall[0].minutes <= 55, "the warning quoted the wrong timing");
+  assert.ok(lastCall[0].imageUrl, "the warning showed no picture of what is being sold");
+
+  /* Once each, however often the sweep runs. */
+  assert.strictEqual(await warn({ now: closeNow }), 0, "the same subscriber was warned twice");
+
+  /* Four minutes out is worse than nothing: the drop is ten minutes long. */
+  const tooLate = Date.parse(at(24)) - 4 * 60 * 1000;
+  db.prepare("DELETE FROM live_drop_subscriber_reminders").run();
+  assert.strictEqual(await warn({ now: tooLate }), 0, "a warning went out with the drop nearly over");
+
+  /* And never for a drop that is not published. */
+  db.prepare("DELETE FROM live_drop_subscriber_reminders").run();
+  db.prepare("UPDATE live_drops SET published=0 WHERE id=1").run();
+  assert.strictEqual(await warn({ now: closeNow }), 0, "an unpublished drop was announced to the list");
+  db.prepare("UPDATE live_drops SET published=1 WHERE id=1").run();
   console.log("Funnel email checks passed: two stages, one announcement, one price drop, none of them twice.");
 })().catch((error) => {
   console.error(error);
