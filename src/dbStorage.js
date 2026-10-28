@@ -258,10 +258,10 @@ function startSnapshotSchedule(
  *
  * Everything else in the database comes back from the feeds on the next
  * refresh. These do not: there is no way to recreate somebody's account, the
- * product they saved, or what they asked Delia last week.
+ * product they saved, what they asked Delia last week, or a scheduled Live Drop.
  */
 const PERSONAL_TABLES =
-  /\b(?:users|user_sessions|password_reset_tokens|subscribers|price_alerts|saved_offers|delia_conversations|delia_messages)\b/i;
+  /\b(?:users|user_sessions|password_reset_tokens|subscribers|price_alerts|saved_offers|delia_conversations|delia_messages|live_drops|live_drop_reminders|live_host_broadcasts)\b/i;
 
 const WRITE_STATEMENT = /^\s*(?:insert|update|delete|replace)\b/i;
 
