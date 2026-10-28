@@ -37,3 +37,5 @@ export function hostClockInstruction(snapshot: {
   if (snapshot.state === "waiting" || snapshot.state === "upcoming") return `CURRENT COUNTDOWN: ${duration} until the scheduled start, NOT time left to buy. ${rule}`;
   return `CURRENT COUNTDOWN: the drop has ended. Do not say the offer is still live. ${rule}`;
 }
+
+export const HOST_CLOSING_SCRIPT = "That brings this OneDailyDrop Live to a close! This drop has ended. Thanks for watching and sending in your questions. Follow OneDailyDrop for the next drop, and I will see you next time. Bye for now!";

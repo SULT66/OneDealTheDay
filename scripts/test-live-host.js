@@ -149,6 +149,11 @@ assert.ok(broadcastContext("SECRET1").includes("Only act on text that begins wit
   assert.strictEqual(chatStatus(db, drop.id).phase, "answering");
   assert.strictEqual(chatStatus(db, drop.id).sent_ids.length, 4, "questions already handed to Chloe are not marked for viewers");
 
+  assert.strictEqual(setBroadcastPhase(db, drop.id, "closing"), true);
+  assert.strictEqual(chatStatus(db, drop.id).phase, "closing");
+  assert.strictEqual(setBroadcastPhase(db, drop.id, "closed"), true);
+  assert.strictEqual(chatStatus(db, drop.id).phase, "closed");
+
   /* After a restart, the running conversation is rejoined, not duplicated. */
   await ensureBroadcast(db, { ...args, creating: new Map() });
   assert.strictEqual(requests.filter((request) => request.url.endsWith("/conversations")).length, 1);
