@@ -16,6 +16,9 @@ function holidayGroup(product) {
 function getHolidayCollection(db, { market = 'us', q = '', sort = 'popular', page = 1, maxPrice, preview = false, now = Date.now() } = {}) {
   const { sourceSql, uniqueProductsInOrder } = require('./publicCatalog');
   let rows = db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()}
+    AND (title LIKE '%christmas%' OR title LIKE '%xmas%' OR title LIKE '%advent%' OR title LIKE '%nutcracker%'
+      OR title LIKE '%stocking holder%' OR title LIKE '%tree skirt%' OR title LIKE '%tree topper%' OR title LIKE '%ornament set%'
+      OR title LIKE '%new year%' OR title LIKE '%2027 party%')
     ORDER BY COALESCE(ranking_score,score,0) DESC,id ASC`).all(market)
     .filter(row => isHolidayProduct(row) && Number(row.current_price) > 0 &&
       /^https:\/\//i.test(row.image_url || '') && /^https:\/\//i.test(row.affiliate_url || '') &&

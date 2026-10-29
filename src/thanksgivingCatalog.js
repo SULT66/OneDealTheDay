@@ -5,8 +5,11 @@ const GROUPS = {table:['dinnerware','tablecloth','table runner','serving tray'],
 function getThanksgivingCollection(db,{market='us',q='',page=1,now=Date.now()}={}) {
   const signal=activeCampaign({eventKey:'thanksgiving',market,now,throughEvent:true});
   if(!signal)return {active:false,total:0,pages:1,page:1,products:[]};
-  const queries=GROUPS[q]||Object.values(GROUPS).flat();
-  const rows=db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()} ORDER BY COALESCE(ranking_score,score,0) DESC,id`).all(market)
+  const queries=Object.hasOwn(GROUPS,q)?GROUPS[q]:Object.values(GROUPS).flat();
+  const rows=db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()}
+    AND (title LIKE '%dinnerware%' OR title LIKE '%tablecloth%' OR title LIKE '%table runner%' OR title LIKE '%serving tray%'
+      OR title LIKE '%roast%' OR title LIKE '%thermometer%' OR title LIKE '%baking dish%' OR title LIKE '%carving knife%'
+      OR title LIKE '%pumpkin%' OR title LIKE '%thanksgiving%' OR title LIKE '%autumn wreath%') ORDER BY COALESCE(ranking_score,score,0) DESC,id`).all(market)
     .filter(p=>queries.some(query=>matchesQuery(p,query))&&isPromotionEligible(p,{market,now,requireReviews:false}));
   const products=uniqueProductsInOrder(rows),pages=Math.max(1,Math.ceil(products.length/24));
   const current=Math.min(pages,Math.max(1,Math.floor(Number(page)||1)));

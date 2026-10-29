@@ -15,7 +15,7 @@ export async function HolidayDiscovery({market,language}:{market:string;language
   if(!isHolidaySeason())return null;
   const c=COPY[language];
   let products:RawProduct[]=[];
-  try {const r=await fetch(`${BACKEND_URL}/api/holiday?${new URLSearchParams({market,lang:language,preview:'1'})}`,{cache:'no-store',signal:AbortSignal.timeout(5000)});if(r.ok)products=(await r.json()).products||[];}catch{}
+  try {const r=await fetch(`${BACKEND_URL}/api/holiday?${new URLSearchParams({market,lang:language,preview:'1'})}`,{cache:'no-store',signal:AbortSignal.timeout(15000)});if(r.ok)products=(await r.json()).products||[];}catch{}
   const currency=market==='uk'?'GBP':market==='de'||market==='fr'?'EUR':market==='ca'?'CAD':'USD';
   return <section aria-labelledby="holiday-discovery-title" className="mt-10 space-y-6">
     <SectionHeader id="holiday-discovery-title" eyebrow={c.eyebrow} title={c.title} action={{href:`/${market}/holiday`,label:c.all}}/>

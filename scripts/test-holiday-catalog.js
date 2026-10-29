@@ -87,6 +87,7 @@ for(const row of [hosting,{...hosting,id:2,title:'Instant Food Thermometer',affi
 const hostingNow=Date.parse('2026-10-29T13:00:00Z');
 assert.equal(getThanksgivingCollection(thanksgivingDb,{now:hostingNow}).total,2);
 assert.equal(getThanksgivingCollection(thanksgivingDb,{now:hostingNow,q:'table'}).total,1);
+assert.equal(getThanksgivingCollection(thanksgivingDb,{now:hostingNow,q:'constructor'}).total,2,'Unknown filters safely show the collection');
 assert.equal(getThanksgivingCollection(thanksgivingDb,{now:hostingNow,q:'kitchen'}).products[0].id,2);
 assert.equal(getThanksgivingCollection(thanksgivingDb,{now:hostingNow,market:'ca'}).active,false,'Canadian Thanksgiving has already passed');
 assert.equal(getThanksgivingCollection(thanksgivingDb,{now:Date.parse('2026-11-28')}).active,false);

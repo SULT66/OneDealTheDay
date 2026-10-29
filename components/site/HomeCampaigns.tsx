@@ -54,7 +54,7 @@ export function HomeCampaigns({market,language,halloween=false,halloweenLate=fal
   if (blackFriday) slides.push({
     key:"black-friday", eyebrow:copy.bfEyebrow, title:copy.bfTitle, note:copy.bfNote,
     cta:copy.bfShop, href:`/${market}/black-friday`,
-    image:"/campaigns/black-friday-editorial-2026.webp", imagePosition:"center 56%",
+    image:"/campaigns/black-friday-editorial-2026.webp", imagePosition:"center 15%",
     ground:"#f3f0e8", textColor:"#101010",highlight:true, accent:"#101010", accentText:"#ffffff", eyebrowText:"#101010", dots:"#c1f21d",
   });
 
@@ -65,7 +65,7 @@ export function HomeCampaigns({market,language,halloween=false,halloweenLate=fal
       fr:{eyebrow:"Noël et Nouvel An",title:"Un peu de magie.\nTant à célébrer.",note:"Des cadeaux, des lumières et de belles trouvailles pour les fêtes.",cta:"Explorer les fêtes"},
       de:{eyebrow:"Weihnachten & Neujahr",title:"Ein wenig Glanz.\nViel zu feiern.",note:"Geschenke, Lichter und festliche Entdeckungen für eine besondere Zeit.",cta:"Festliche Angebote entdecken"},
     }[language];
-    slides.push({key:"holiday",...festive,href:`/${market}/holiday`,image:"/campaigns/holiday-editorial-2026.webp",imagePosition:"center 64%",
+    slides.push({key:"holiday",...festive,href:`/${market}/holiday`,image:"/campaigns/holiday-editorial-2026.webp",imagePosition:"center 35%",
       ground:"#f6f1e7",textColor:"#101010",highlight:true,accent:"#101010",accentText:"#ffffff",eyebrowText:"#101010",dots:"#c1f21d"});
   }
 
@@ -80,7 +80,7 @@ export function HomeCampaigns({market,language,halloween=false,halloweenLate=fal
     }[language];
     const eventDate=new Intl.DateTimeFormat(language,{month:"short",day:"numeric",timeZone:"America/New_York"}).format(new Date(thanksgiving.eventAt));
     slides.push({key:"thanksgiving",...gathering,eyebrow:`${gathering.eyebrow} · ${eventDate}`,href:`/${market}/thanksgiving`,
-      image:"/campaigns/thanksgiving-editorial-2026.webp",imagePosition:"center 60%",ground:"#f4e9d9",textColor:"#101010",highlight:true,
+      image:"/campaigns/thanksgiving-editorial-2026.webp",imagePosition:"center 40%",ground:"#f4e9d9",textColor:"#101010",highlight:true,
       accent:"#101010",accentText:"#ffffff",eyebrowText:"#101010",dots:"#c1f21d"});
   }
 
