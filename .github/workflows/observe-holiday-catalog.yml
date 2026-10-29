@@ -19,5 +19,10 @@ jobs:
             if (!response.ok) throw new Error('Progress HTTP ' + response.status);
             const status = await response.json();
             console.log('HOLIDAY_STATUS ' + JSON.stringify(status));
+            try {
+              const runtimeResponse=await fetch('https://www.onedailydrop.com/api/status?market=us',{signal:AbortSignal.timeout(30000)});
+              const runtime=await runtimeResponse.json();
+              console.log('HOLIDAY_RUNTIME '+JSON.stringify({releaseId:runtime.releaseId,uptimeSeconds:runtime.uptimeSeconds,lastRun:runtime.lastRun}));
+            } catch(error) { console.log('HOLIDAY_RUNTIME_ERROR '+error.message); }
           })().catch(error => { console.error(error.message); process.exitCode=1; });
           NODE
