@@ -32,7 +32,7 @@ assert(ignore.split(/\r?\n/).includes("data/"), "Runtime database directory is n
 /* The version on the end of these changes whenever the script does — pinning
    it here failed the build for a cache-busting edit that was entirely
    correct. What matters is that the page still loads them at all. */
-assert(rootLayout.includes("cookie-consent.css?v="), "The Next.js frontend does not load consent styles");
+assert(/import\s+["']\.\.\/public\/cookie-consent\.css["']/.test(rootLayout), "The Next.js frontend does not bundle consent styles");
 assert(rootLayout.includes("cookie-consent.js?v="), "The Next.js frontend does not load the consent controller");
 assert(cookieScript.includes('new Set(["fr", "de"])'), "European consent markets are not configured");
 assert(cookieScript.includes('saved === "accepted"'), "Analytics is not gated behind affirmative consent");

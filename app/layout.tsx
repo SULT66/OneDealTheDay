@@ -2,8 +2,16 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { Outfit } from "next/font/google";
 import Script from "next/script";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { tagFor } from "@/lib/i18n";
 import "./globals.css";
+import "../public/cookie-consent.css";
+
+// This tiny cleanup must run before analytics, but fetching it as a separate
+// head script blocked document parsing on every first visit. Read the trusted
+// local file once and send the same code inline, preserving its execution order.
+const retiredOwnerCleanup = readFileSync(path.join(process.cwd(), "public/internal-traffic.js"), "utf8");
 
 /* Reference brand uses Lufga, which is a commercial licence we cannot ship.
    Outfit is the closest free geometric grotesque — swap this one import if
@@ -96,7 +104,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang={lang} className={`${outfit.variable} h-full antialiased`}>
       <head>
-        <script src="/internal-traffic.js?v=20261023-removed" />
+        <script dangerouslySetInnerHTML={{ __html: retiredOwnerCleanup }} />
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
         <Script id="lareo-analytics-config" strategy="beforeInteractive">
           {`window.__LAREO_ANALYTICS__=${JSON.stringify({
@@ -104,7 +112,6 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
             writeKey: process.env.NEXT_PUBLIC_LAREO_ANALYTICS_WRITE_KEY || "",
           })}`}
         </Script>
-        <link rel="stylesheet" href="/cookie-consent.css?v=20260730" />
       </head>
       <body className="min-h-full flex flex-col bg-bg text-fg">
         {children}
