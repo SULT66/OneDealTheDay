@@ -33,7 +33,7 @@ export default async function ThanksgivingPage({params,searchParams}:PageProps<'
 }
 async function Products({market,language,q,page}:{market:string;language:Language;q:string;page:number}){
   const c=COPY[language];let data:{total:number;pages:number;page:number;products:RawProduct[]}|null=null;
-  try{const r=await fetch(`${BACKEND_URL}/api/thanksgiving?${new URLSearchParams({market,lang:language,q,page:String(page)})}`,{cache:'no-store',signal:AbortSignal.timeout(8000)});if(r.ok)data=await r.json();}catch{}
+  try{const r=await fetch(`${BACKEND_URL}/api/thanksgiving?${new URLSearchParams({market,lang:language,q,page:String(page)})}`,{cache:'no-store',signal:AbortSignal.timeout(15000)});if(r.ok)data=await r.json();}catch{}
   if(!data?.products.length)return <p className="rounded-card border border-border p-8 text-fg-muted" data-odd-transient={!data?'1':undefined}>{c.empty}</p>;
   const href=(n:number)=>`/${market}/thanksgiving?${new URLSearchParams({q,page:String(n),lang:language})}`;
   return <section><p className="mb-5 text-sm text-fg-muted">{data.total} {c.count}</p><ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{data.products.map((raw,i)=><li key={raw.id}><DealCard market={market} deal={{...adaptProduct(raw),rank:i+1}} index={i} priority={i<4} campaignBadge="Thanksgiving"/></li>)}</ul>
