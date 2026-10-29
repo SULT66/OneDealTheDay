@@ -134,7 +134,7 @@ function recalculateCatalog(db, marketCodes = ["us", "ca", "uk", "fr", "de"], op
      * If nothing was confirmed today there is no honest pick, and an empty
      * slot is what this site says it does in that case rather than filling it.
      */
-    const confirmedToday = selectUniqueProducts(scored)
+    const confirmedToday = selectUniqueProducts(scored.filter(product => product.status !== "hidden"))
       .filter(isDailyPickEligible)
       .filter(product => isCheckedToday(product.checked_at, code));
     selectedByMarket.set(code, confirmedToday.slice(0, 10));
@@ -155,7 +155,7 @@ function recalculateCatalog(db, marketCodes = ["us", "ca", "uk", "fr", "de"], op
     for (const row of rows) {
       const normalized = normalizedById.get(row.id);
       const scored = scoredById.get(row.id);
-      const publicStatus = scored ? "published" : "archived";
+      const publicStatus = row.status === "hidden" ? "hidden" : scored ? "published" : "archived";
       updateProduct.run(
         normalized.product_key,
         normalized.gtin,

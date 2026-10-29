@@ -1,11 +1,11 @@
 [
   {
-    "slug": "halloween",
-    "name": "Halloween",
-    "noun": "Halloween find",
-    "nounPlural": "Halloween finds",
+    "slug": "christmas-new-year",
+    "name": "Christmas & New Year",
+    "noun": "holiday find",
+    "nounPlural": "holiday finds",
     "icon": "Gift",
-    "blurb": "Halloween decorations, costumes, party supplies and spooky finds."
+    "blurb": "Christmas decorations, festive lights, gifts and New Year party finds."
   },
   {
     "slug": "office",

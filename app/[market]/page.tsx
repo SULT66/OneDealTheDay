@@ -68,8 +68,9 @@ export default async function MarketHome({ params, searchParams }: PageProps<"/[
      itself and changes what it promises once the cutoff has passed. Black
      Friday appears from its preparation window, which is where the price
      records that make it worth anything are being written. */
-  const halloween = Boolean(activeHalloween({market}));
-  const halloweenBanner = activeCampaign({eventKey:'halloween', market, throughEvent:true});
+  const holidaySeason = Date.now() >= Date.parse("2026-10-28T04:00:00Z") && Date.now() < Date.parse("2027-01-08T05:00:00Z");
+  const halloween = !holidaySeason && Boolean(activeHalloween({market}));
+  const halloweenBanner = holidaySeason ? undefined : activeCampaign({eventKey:'halloween', market, throughEvent:true});
   const blackFriday = Boolean(activeCampaign({eventKey:'black-friday', market, fromPreparation:true}));
   return <div className="mx-auto max-w-7xl px-4 pb-24 pt-4 sm:px-6 sm:pt-5">
     <Suspense fallback={<HomeCampaigns market={market} language={language} blackFriday={blackFriday}/> }>

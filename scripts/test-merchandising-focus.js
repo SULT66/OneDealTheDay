@@ -22,7 +22,7 @@ assert.equal(focusSignals(signals,null).length,signals.length,'General rotation 
 process.env.MERCHANDISING_FOCUS='all';
 assert.equal(focus('2026-10-14T12:00:00Z'),null);
 process.env.MERCHANDISING_FOCUS='halloween';
-assert.equal(focus('2026-12-02T12:00:00Z'),'halloween','Manual override remains explicit');
+assert.equal(focus('2026-12-02T12:00:00Z'),'christmas','Expired Halloween override cannot revive the retired campaign');
 console.log('Automatic campaign focus: regional boundaries, cutoffs, general rotation and yearly renewal passed');
 // Exercise transitions against persisted signals, placements and discovery throttle.
 delete process.env.MERCHANDISING_FOCUS;
