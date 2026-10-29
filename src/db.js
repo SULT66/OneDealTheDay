@@ -1189,7 +1189,8 @@ db.exec(`
     );
   UPDATE products
   SET first_seen_at=COALESCE(NULLIF(first_seen_at,''), NULLIF(updated_at,''), datetime('now')),
-      last_seen_at=COALESCE(NULLIF(last_seen_at,''), NULLIF(updated_at,''), datetime('now'));
+      last_seen_at=COALESCE(NULLIF(last_seen_at,''), NULLIF(updated_at,''), datetime('now'))
+  WHERE COALESCE(first_seen_at,'')='' OR COALESCE(last_seen_at,'')='';
   UPDATE subscribers SET market='us' WHERE COALESCE(market,'')='';
   UPDATE users SET market='us' WHERE COALESCE(market,'')='';
 `);
@@ -1200,11 +1201,12 @@ db.exec(`
   DROP TRIGGER IF EXISTS prevent_product_archiving;
   UPDATE products
   SET status='archived'
-  WHERE LOWER(COALESCE(availability,'')) LIKE '%unavailable%'
+  WHERE status='published' AND (
+        LOWER(COALESCE(availability,'')) LIKE '%unavailable%'
      OR LOWER(COALESCE(availability,'')) LIKE '%out of stock%'
      OR LOWER(COALESCE(availability,'')) LIKE '%sold out%'
      OR LOWER(COALESCE(availability,'')) LIKE '%expired%'
-     OR LOWER(COALESCE(availability,'')) LIKE '%discontinued%';
+     OR LOWER(COALESCE(availability,'')) LIKE '%discontinued%');
   CREATE INDEX IF NOT EXISTS idx_products_status_score ON products(status, score DESC);
   CREATE INDEX IF NOT EXISTS idx_products_market_status_score ON products(market, status, score DESC);
   CREATE INDEX IF NOT EXISTS idx_products_market_status_rank ON products(market, status, ranking_score DESC);

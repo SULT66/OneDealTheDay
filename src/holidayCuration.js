@@ -2,12 +2,58 @@ const { SHELVES } = require('./categoryGaps');
 const { isHalloweenProduct } = require('./seasonalProductTypes');
 const { isHolidaySeason } = require('./holidayCatalog');
 const PLAN_ID = 'holiday-catalog-2026-v1';
+const IMPORT_POLICY = 'holiday-curation-v2-partner-completion';
 const TERMS = {
   ...SHELVES,
   'Other Deals':['garden hose','plant stand','storage basket','reusable shopping bag','door mat'],
   'Heating, Cooling & Air Quality':['air purifier','humidifier','ceramic space heater','air purifier filter'],
   'Christmas & New Year':['Christmas tree','Christmas string lights','Christmas ornaments set','Christmas wreath','Christmas garland','advent calendar','Christmas stockings','New Year party decorations'],
 };
+const EXTRA_TERMS = {
+  'Baby & Kids':['baby changing pad','baby swaddle blanket','infant play mat','baby feeding set','baby bath toys','stroller organizer'],
+  'Furniture':['side table','storage cabinet','dresser','wardrobe','bookcase','storage bench'],
+  'Travel':['travel backpack','passport holder','luggage organizer','weekender bag'],
+  'Mattresses & Sleep':['bed pillow set','bedding sheet set','mattress protector','memory foam mattress topper'],
+  'Toys & Games':['UNO card game','Monopoly board game','Ravensburger jigsaw puzzle','LEGO flower building set','Melissa Doug puzzle'],
+  'Pet Supplies':['dog harness','cat scratching mat','pet water fountain','dog leash'],
+  'Automotive':['car trunk organizer','car cleaning brush','car floor mat','tire inflator'],
+  'Office':['office desk','standing desk','office chair','desk organizer'],
+  'Fashion':['leather belt','fashion scarf','crossbody bag','men wallet','women handbag'],
+  'Gifts':['personalized gift','keepsake gift','gift set','photo frame'],
+  'Heating, Cooling & Air Quality':['dehumidifier','crawlspace dehumidifier','air scrubber','ventilation fan','exhaust fan'],
+  'Sports & Outdoors':['treadmill','walking pad','exercise bike','camping sleeping bag','hunting waders'],
+  'Arts & Crafts':['artist paintbrush','watercolor paintbrush','paint brushes','painting canvas'],
+  'Health & Beauty':['skin care device','facial massager','IPL hair removal','electric toothbrush'],
+  'Home & Kitchen':['coffee maker','espresso machine','home lighting','storage organizer','bathroom shelf'],
+};
+for (const [category,terms] of Object.entries(EXTRA_TERMS)) TERMS[category]=[...TERMS[category],...terms];
+const PARTNER_FEEDS = {
+  'Furniture':['feed-tribesigns-us'],
+  'Gifts':['feed-giftlab-us','feed-love-is-a-rose-us','feed-grommet-us'],
+  'Bikes & Mobility':['feed-mooncool-us','feed-rockbros-us'],
+  'Mattresses & Sleep':['feed-king-koil-us'],
+  'Heating, Cooling & Air Quality':['feed-alorair-crawlspace-us'],
+  'Sports & Outdoors':['feed-fed-fitness-us','feed-tidewe-us','feed-toputure-us'],
+  'Home & Kitchen':['feed-argendon-us','feed-lumary-us','feed-simple-project-us','feed-outin-us','feed-grommet-us'],
+  'Arts & Crafts':['feed-silver-brush-us'],
+  'Health & Beauty':['feed-evenskyn-us'],
+  'Office':['feed-tribesigns-us'],
+  'Baby & Kids':['feed-grommet-us'],
+  'Tools & DIY':['feed-grommet-us'],
+  'Other Deals':['feed-grommet-us'],
+};
+function upgradePlan(state,current) {
+  if (state.importPolicy===IMPORT_POLICY) return false;
+  for (const task of state.tasks) {
+    if ((current[task.category]||0)>=task.target) task.status='complete';
+    else if (task.status==='shortfall') {
+      task.status='pending';task.attempts=0;task.queryOffset=12;delete task.lastError;
+    }
+  }
+  if (state.status==='partial' && state.tasks.some(task=>task.status==='pending')) state.status='running';
+  state.importPolicy=IMPORT_POLICY;
+  return true;
+}
 function qualified(product) {
   if (!product || !/^https:\/\//i.test(product.image_url || '') || !/^https:\/\//i.test(product.affiliate_url || '') || !(Number(product.current_price)>0)) return false;
   if (Number(product.review_count)>0 && Number(product.rating)<4) return false;
@@ -29,7 +75,7 @@ function createHolidayCuration({db,config,clearCaches=()=>{},refresh}={}) {
   function initialize() {
     let state=read();if(state)return state;
     const baseline=counts();
-    state={id:PLAN_ID,status:'running',startedAt:new Date().toISOString(),baseline,hiddenIds:[],electronicsTarget:Math.max(0,(baseline.Electronics||0)-500),tasks:[],sources:{}};
+    state={id:PLAN_ID,status:'running',startedAt:new Date().toISOString(),importPolicy:IMPORT_POLICY,baseline,hiddenIds:[],electronicsTarget:Math.max(0,(baseline.Electronics||0)-500),tasks:[],sources:{}};
     const protectedIds=new Set(db.prepare("SELECT DISTINCT product_id FROM daily_drops WHERE market='us'").all().map(r=>r.product_id));
     const liveUrls=new Set(db.prepare("SELECT affiliate_url FROM live_drops WHERE market='us' AND published=1").all().map(r=>r.affiliate_url));
     const hide=db.prepare("UPDATE products SET status='hidden',updated_at=? WHERE id=? AND status='published'");
@@ -67,28 +113,32 @@ function createHolidayCuration({db,config,clearCaches=()=>{},refresh}={}) {
     try {
       const existing=read();
       const state=existing||initialize();
+      if(state.importPolicy!==IMPORT_POLICY && upgradePlan(state,counts()))save(state);
       if(state.status==='complete'||state.status==='partial')return;
       if(!existing)await snapshot();
-      const providers=require('./providers/registry').enabledProviders(config).filter(p=>['ebay','aliexpress'].includes(p.id)&&p.markets.includes('us')).map(p=>p.id);
-      if(!providers.length){state.status='partial';state.reason='No configured product search sources';save(state);return;}
+      const available=require('./providers/registry').enabledProviders(config).filter(p=>p.markets.includes('us'));
+      const providers=available.filter(p=>['ebay','aliexpress'].includes(p.id)).map(p=>p.id);
+      if(!available.length){state.status='partial';state.reason='No configured product search sources';save(state);return;}
       for(const task of state.tasks) {
         if(task.status!=='pending')continue;
         if((counts()[task.category]||0)>=task.target){task.status='complete';save(state);continue;}
         if(isMarketRefreshing('us'))return;
         const terms=TERMS[task.category];
-        const keywords=[0,1,2].map(offset=>terms[(task.attempts*3+offset)%terms.length]);
+        const keywords=[0,1,2].map(offset=>terms[((task.queryOffset||0)+task.attempts*3+offset)%terms.length]);
+        const providerIds=available.filter(p=>providers.includes(p.id)||(PARTNER_FEEDS[task.category]||[]).includes(p.id)).map(p=>p.id);
+        if(!providerIds.length){task.status='shortfall';save(state);continue;}
         task.attempts++;task.status='searching';save(state);
         try {
           const result=await (refresh||refreshMarketOnce)({...config,aliexpressMaxProducts:100},'us',{
-            providerIds:providers,keywords,allowedCategories:[task.category],curationQuality:true,
+            providerIds,keywords,allowedCategories:[task.category],curationQuality:true,
             maxNewProducts:Math.max(0,task.target-(counts()[task.category]||0)),
             skipDailySelection:true,skipMerchandising:true,sourceDeadlineMs:150000,
             searchOptions:{detailLimit:180,targetEligible:100,searchLimit:100,strictQueries:true,requestTimeoutMs:15000,maxAttempts:1,searchConcurrency:2,detailConcurrency:3},
           });
           task.lastImported=result?.eligible||0;
-          state.sources[task.category]=providers;
-          task.status=(counts()[task.category]||0)>=task.target?'complete':task.attempts>=4?'shortfall':'pending';
-        }catch(error){task.status=task.attempts>=4?'shortfall':'pending';task.lastError=String(error.message||'Import failed').slice(0,250);}
+          state.sources[task.category]=providerIds;
+          task.status=(counts()[task.category]||0)>=task.target?'complete':task.attempts>=8?'shortfall':'pending';
+        }catch(error){task.status=task.attempts>=8?'shortfall':'pending';task.lastError=String(error.message||'Import failed').slice(0,250);}
         clearCaches();save(state);await snapshot();
         // One bounded category batch per pass keeps the public server usable.
         return;
@@ -105,4 +155,4 @@ function createHolidayCuration({db,config,clearCaches=()=>{},refresh}={}) {
   }
   return {start,run,publicStatus,initialize};
 }
-module.exports={PLAN_ID,TERMS,qualified,createHolidayCuration};
+module.exports={PLAN_ID,IMPORT_POLICY,TERMS,PARTNER_FEEDS,upgradePlan,qualified,createHolidayCuration};

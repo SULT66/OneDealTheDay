@@ -317,7 +317,7 @@ async function refreshMarket(config, marketCode, options = {}) {
       const existingIds = new Set(existing.map(product => product.provider_external_id));
       // Include current listings in deduplication so the requested additions
       // count distinct new products, without another copy of a familiar offer.
-      const additions = selectUniqueProducts([...existing,...scoredOffers])
+      const additions = require('./publicCatalog').uniqueProductsInOrder([...existing,...scoredOffers])
         .filter(product => !existing.includes(product) && !existingIds.has(qualifiedProviderId(product)))
         .slice(0,Math.max(0,options.maxNewProducts));
       const allowedIds = new Set(additions.map(qualifiedProviderId));
