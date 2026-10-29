@@ -8,8 +8,12 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { DeliaPanel } from "./DeliaPanel";
+import dynamic from "next/dynamic";
 import { measure, pageType } from "@/lib/measure";
+
+const DeliaPanel = dynamic(() => import("./DeliaPanel").then(module => module.DeliaPanel), {
+  ssr: false,
+});
 
 type DeliaState = {
   open: boolean;
@@ -50,10 +54,14 @@ export function DeliaProvider({
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
+  // Keep the panel mounted after its first use so closing it preserves drafts
+  // and conversation state, without loading its code for ordinary browsing.
+  const [activated, setActivated] = useState(false);
   const [seed, setSeed] = useState<string | null>(null);
   const [seedProductId, setSeedProductId] = useState<string | null>(null);
 
   const openDelia = useCallback((next?: string, productId?: string) => {
+    setActivated(true);
     setSeed(next ?? null);
     setSeedProductId(productId ?? null);
     setOpen(true);
@@ -79,7 +87,7 @@ export function DeliaProvider({
   return (
     <Ctx.Provider value={value}>
       {children}
-      <DeliaPanel />
+      {activated && <DeliaPanel />}
     </Ctx.Provider>
   );
 }

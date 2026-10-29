@@ -26,12 +26,12 @@ function hooks() {
 (async()=>{
   const h=hooks(), intervals=new Map(), timeouts=new Map(), listeners=new Map(), requests=[];
   let dropState="live", hostPhase="answering";
-  let timerId=0, stopped=0, closed=0;
+  let timerId=0, stopped=0, closed=0, sdkLoads=0, callsCreated=0;
   const window={localStorage:{getItem:()=>null,setItem:noop}, AudioContext:class {resume(){return Promise.resolve();} close(){closed++; return Promise.resolve();}},
     addEventListener:(name,fn)=>listeners.set(name,fn),removeEventListener:name=>listeners.delete(name),dispatchEvent:event=>listeners.get(event.type)?.(event)};
-  const daily={createCallObject:()=>({on:noop,participants:()=>({}),join:()=>Promise.resolve(),leave:()=>Promise.resolve(),destroy:noop})};
+  const daily={createCallObject:()=>{callsCreated++;return ({on:noop,participants:()=>({}),join:()=>Promise.resolve(),leave:()=>Promise.resolve(),destroy:noop});}};
   const jsx=(type,props)=>({type,props});
-  const require=name=>name==='react'?h.react:name==='react/jsx-runtime'?{jsx,jsxs:jsx}:name==='@daily-co/daily-js'?{default:daily}:
+  const require=name=>name==='react'?h.react:name==='react/jsx-runtime'?{jsx,jsxs:jsx}:name==='@daily-co/daily-js'?(sdkLoads++,{default:daily}):
     name==='next/navigation'?{usePathname:()=>'/us/live'}:name.includes('analyticsSession')?{analyticsSessionId:()=> 'stable-viewer-session'}:
     name.includes('stageMusic')?{startStageMusic:()=>({stop(){stopped++;},setEnabled:noop,setTalking:noop})}:name.includes('CopyProvider')?{useCopy:()=>x=>x}:{};
   const broadcast=compile('components/live/LiveBroadcast.tsx',require,{window,document:{addEventListener:noop,removeEventListener:noop},navigator:{sendBeacon:()=>false},
@@ -41,8 +41,11 @@ function hooks() {
     setInterval:(fn,ms)=>{const id=++timerId;intervals.set(id,{fn,ms});return id;},clearInterval:id=>intervals.delete(id),performance:{now:()=>10000}});
   const render=()=>h.render(()=>broadcast.LiveBroadcastProvider({market:'us',children:null})).props.value;
   let value=render();
+  assert.equal(sdkLoads,0,'Ordinary browsing must not load the video SDK');
   value.join({conversationUrl:'https://example.test/room',dropKey:'drop1',market:'us',title:'Test'});
   value=render(); await settle();
+  assert.equal(sdkLoads,1,'Joining loads the video SDK');
+  assert.equal(callsCreated,1);
   assert.equal(requests.at(-1).leaving,undefined);
   assert([...intervals.values()].some(x=>x.ms===20000),'joined viewers need a heartbeat');
   value.leave();
@@ -82,6 +85,15 @@ function hooks() {
   assert.equal(value.fading,true);assert(value.session,'room disconnected before fade');
   [...timeouts.values()].find(x=>x.ms===900).fn();value=render();await settle();
   assert.equal(value.session,null,'room stayed open after goodbye and fade');
+  // Leaving before the asynchronous SDK import settles must not create a room.
+  value=render();
+  const createdBefore=callsCreated;
+  value.join({conversationUrl:'https://example.test/room',dropKey:'drop2',market:'us',title:'Test'});
+  value=render();
+  value.leave();
+  value=render();
+  await settle();
+  assert.equal(callsCreated,createdBefore,'Abandoned lazy import must not join a room');
   h.unmount();pageHooks.unmount();await settle();
 
   // The actual product stage has a muted cover backdrop and full-size foreground.
