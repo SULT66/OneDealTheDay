@@ -61,6 +61,10 @@ ebay.searchProducts = async options => {
   assert.equal(calls,1);
   const imported=db.prepare("SELECT * FROM products WHERE external_id='us:ebay:v1|123456789012|0'").get();
   assert(imported,'Targeted products must persist in the actual catalogue');
+  assert.equal(imported.average_30_day_price,0,'New imports persist an unknown history average as zero rather than a missing migration field');
+  assert.equal(imported.lowest_30_day_price,0);
+  assert.equal(imported.price_history_observation_count,0,'Scoring-time history metadata persists before the first observation is recorded');
+  assert.equal(imported.price_history_distinct_days,0);
   assert.equal(imported.delivery_country,'US');
   assert.equal(imported.ebay_sold_quantity,432);
   assert.equal(imported.delivery_estimated_at,iso(now+4*DAY));

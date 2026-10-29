@@ -25,7 +25,6 @@ function needsRecalculation(db) {
       COALESCE(score_breakdown,'') NOT LIKE ?
       OR evidence_confidence IS NULL
       OR commerce_quality IS NULL
-      OR average_30_day_price IS NULL
       OR ranking_score IS NULL
       OR (landed_cost IS NULL AND current_price>0 AND shipping_cost IS NOT NULL)
       OR COALESCE(normalized_category,'')=''
