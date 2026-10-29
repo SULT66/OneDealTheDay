@@ -27,7 +27,7 @@ jobs:
           })().catch(error => { console.error(error.message); process.exitCode=1; });
           NODE
       - name: Inspect startup timing when progress is unavailable
-        if: failure()
+        if: always()
         env:
           AZURE_WEBAPP_PUBLISH_PROFILE: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
         run: |
