@@ -1,3 +1,4 @@
+const { isHolidayProduct } = require('./holidayCatalog');
 // Product nouns outrank incidental words: a TV poster is not a television,
 // and an animated skeleton dog is decor rather than equipment for a pet.
 function isHalloweenProduct(product = {}) {
@@ -22,6 +23,7 @@ function seasonalProductType(value) {
 
 function seasonalProductCategory(title) {
   if (isHalloweenProduct({title})) return "Halloween";
+  if (isHolidayProduct({title})) return "Christmas & New Year";
   const type = seasonalProductType(title);
   if (type === "posters" || type === "decor" || type === "party") return "Home & Kitchen";
   if (type === "pet-costumes") return "Pet Supplies";

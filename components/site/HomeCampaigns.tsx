@@ -28,18 +28,13 @@ const COPY: Record<Language, Copy> = {
 /*
  * The hero, as a rotation rather than a single banner.
  *
- * Two campaigns legitimately overlap for most of October: Halloween is being
- * bought now, and Black Friday is being recorded now. A single banner forces a
- * choice between them and the loser disappears from the home page entirely; a
- * rotation lets each have the whole hero in turn. When only one campaign is
- * live, or none, this renders exactly what a single banner did.
- *
- * Which campaigns are live is the calendar's decision, taken upstream and
- * passed in here, so the copy in this file never has a date of its own to go
- * stale.
+ * Black Friday stays first while the festive collection rotates as a second
+ * slide. Halloween is retired during the holiday preparation window.
  */
 export function HomeCampaigns({market,language,halloween=false,halloweenLate=false,blackFriday=false,halloweenQueries=[]}:{market:string;language:Language;halloween?:boolean;halloweenLate?:boolean;blackFriday?:boolean;halloweenQueries?:string[]}) {
   const copy = COPY[language];
+  const holiday = Date.now() >= Date.parse("2026-10-28T04:00:00Z") && Date.now() < Date.parse("2027-01-08T05:00:00Z");
+  if (holiday) halloween = false;
   const search = `/${market}/search`;
   const slides: CampaignSlide[] = [];
 
@@ -58,6 +53,17 @@ export function HomeCampaigns({market,language,halloween=false,halloweenLate=fal
     cta:copy.bfShop, href:`/${market}/black-friday`,
     ground:"#101208", accent:"#b8ec44", accentText:"#010101", eyebrowText:"#cdf07a", dots:"#b8ec44",
   });
+
+  if (holiday) {
+    const festive = {
+      en:{eyebrow:"Christmas & New Year",title:"A little sparkle.\nA lot to celebrate.",note:"Thoughtful gifts, glowing lights and festive finds for a season worth celebrating.",cta:"Explore holiday finds"},
+      es:{eyebrow:"Navidad y Año Nuevo",title:"Un poco de brillo.\nMucho que celebrar.",note:"Regalos, luces y decoración para disfrutar de las fiestas.",cta:"Explorar las fiestas"},
+      fr:{eyebrow:"Noël et Nouvel An",title:"Un peu de magie.\nTant à célébrer.",note:"Des cadeaux, des lumières et de belles trouvailles pour les fêtes.",cta:"Explorer les fêtes"},
+      de:{eyebrow:"Weihnachten & Neujahr",title:"Ein wenig Glanz.\nViel zu feiern.",note:"Geschenke, Lichter und festliche Entdeckungen für eine besondere Zeit.",cta:"Festliche Angebote entdecken"},
+    }[language];
+    slides.push({key:"holiday",...festive,href:`/${market}/holiday`,image:"/campaigns/holiday-2026.webp",imagePosition:"center 64%",
+      ground:"#09241c",accent:"#e9c982",accentText:"#09241c",eyebrowText:"#f5dfa9",dots:"#e9c982"});
+  }
 
   if (!slides.length) slides.push({
     key:"everyday", eyebrow:"OneDailyDrop", title:copy.everyday, note:copy.everydayNote,

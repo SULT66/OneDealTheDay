@@ -82,7 +82,7 @@ function yearlyEvents(year, market) {
   }
   add('black-friday', 'Black Friday', shift(thanksgiving, 1), tech, { start: -14, end: 3, preparation: 56, sources: [SOURCES.us, SOURCES.retail] });
   add('cyber-monday', 'Cyber Monday', shift(thanksgiving, 4), ['laptop', 'headphones', 'SSD', 'keyboard', 'router'], { start: -3, end: 1, preparation: 56, sources: [SOURCES.us, SOURCES.retail] });
-  add('christmas', 'Christmas gifts and decorations', date(year, 12, 25), ['Christmas decoration', 'Christmas lights', 'LEGO', 'board game', 'gift set'], { start: -54, delivery: 10, preparation: 56, sources: [market === 'us' ? SOURCES.us : market === 'ca' ? SOURCES.ca : SOURCES.uk] });
+  add('christmas', 'Christmas gifts and decorations', date(year, 12, 25), ['Christmas tree', 'Christmas lights', 'Christmas ornaments', 'Christmas wreath', 'advent calendar', 'Christmas gift set', 'New Year party decorations', 'Christmas garland'], { start: -58, delivery: 10, preparation: 58, sources: [market === 'us' ? SOURCES.us : market === 'ca' ? SOURCES.ca : SOURCES.uk] });
   if (market === 'ca' || market === 'uk') add('boxing-day', 'Boxing Day', date(year, 12, 26), tech, { start: 0, end: 7, sources: [SOURCES[market]] });
   if (market === 'us') {
     add('memorial-day', 'Memorial Day weekend', lastWeekday(year, 5, 1), ['outdoor chair', 'grill', 'mattress', 'patio furniture'], { start: -14, end: 1, sources: [SOURCES.us] });

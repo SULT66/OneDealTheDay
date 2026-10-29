@@ -154,10 +154,12 @@ async function get(route, options) {
   assert((await filtered.text()).includes('No matching products right now'),'Dedicated filters affect the collection');
   assert.equal((await fetch(base+'/us/halloween')).headers.get('x-odd-cache'),'HIT','Dedicated page gets HTML caching');
   const categoryPage = await fetch(base+'/us/category/halloween');
-  assert.equal(categoryPage.status,200);
-  const categoryHtml = await categoryPage.text();
-  assert(categoryHtml.includes('Test seasonal shelf'),'First category page must render its matching shelf');
-  assert(categoryHtml.includes('Pumpkin Halloween Decoration Sculpture'),'Halloween category must render the migrated product');
+  assert.equal(categoryPage.status,404,'Retired Halloween aisle is absent from the public category navigation');
+  const holidayPage=await fetch(base+'/us/holiday');
+  assert.equal(holidayPage.status,200);
+  assert((await holidayPage.text()).includes('Christmas &amp; New Year finds'),'Holiday collection has its dedicated page');
+  assert.equal((await get('/api/holiday?market=us')).body.total,0,'Halloween stock cannot enter the holiday collection');
+  assert.equal((await get('/api/holiday-progress')).body.status,'pending','Public progress reads cannot start catalogue changes');
   const homeKitchenHtml = await (await fetch(base+'/us/category/home-kitchen')).text();
   assert(!homeKitchenHtml.includes('Pumpkin Halloween Decoration Sculpture'),'Home & Kitchen must not render a migrated Halloween product');
   assert(!homeKitchenHtml.includes('Test seasonal shelf'),'Home & Kitchen must not render the Halloween shelf');

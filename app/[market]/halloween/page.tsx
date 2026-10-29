@@ -1,3 +1,5 @@
+import { redirect } from "next/navigation";
+import { isHolidaySeason } from "@/src/holidayCatalog";
 import { Suspense } from 'react';
 import type { Metadata } from 'next';
 import { getLanguage, type Language } from '@/lib/i18n';
@@ -16,6 +18,7 @@ export async function generateMetadata({params}:PageProps<'/[market]/halloween'>
 }
 export default async function HalloweenPage({params,searchParams}:PageProps<'/[market]/halloween'>) {
   const {market}=await params, search=await searchParams, language=await getLanguage(market);
+  if (isHolidaySeason()) redirect(`/${market}/holiday`);
   const q=typeof search.q==='string'?search.q.slice(0,120):'';
   const sort=typeof search.sort==='string'?search.sort:'popular';
   const page=Math.max(1,Math.floor(Number(search.page)||1));

@@ -9,12 +9,13 @@
    every product whose stamp does not match on boot — so bumping it is how
    corrected rules reach the listings already stored. */
 const {isHalloweenProduct, seasonalProductCategory} = require("./seasonalProductTypes");
-const TAXONOMY_VERSION = "catalog-taxonomy-v12";
+const TAXONOMY_VERSION = "catalog-taxonomy-v13-holiday";
 
 // This is the only taxonomy exposed to shoppers. Source-feed category paths are
 // preserved in `category` for auditing, but must never be used as navigation.
 const PUBLIC_CATEGORIES = Object.freeze([
   "Halloween",
+  "Christmas & New Year",
   "Electronics",
   "Home & Kitchen",
   "Heating, Cooling & Air Quality",
@@ -39,6 +40,7 @@ const FALLBACK_CATEGORY = "Other Deals";
 
 const EXACT = new Map([
   ["halloween", "Halloween"],
+  ["christmas & new year", "Christmas & New Year"],
   ["electronics", "Electronics"],
   ["smart home", "Electronics"],
   ["heating, cooling & air quality", "Heating, Cooling & Air Quality"],

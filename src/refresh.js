@@ -257,7 +257,7 @@ async function refreshMarket(config, marketCode, options = {}) {
   selectedMarket.aliexpressGapPlan = options.keywords ? [] : planGapSearches(categoryCounts);
   selectedMarket.ebayGapPlan = selectedMarket.aliexpressGapPlan;
   selectedMarket.existingProviderIds = db.prepare(
-    "SELECT provider_external_id FROM products WHERE market=? AND status='published'"
+    "SELECT provider_external_id FROM products WHERE market=? AND status IN ('published','hidden')"
   ).all(marketCode).map(row => row.provider_external_id);
   selectedMarket.aliexpressRefreshPlan = db.prepare(
     "SELECT DISTINCT category AS keyword, normalized_category AS category FROM products WHERE market=? AND source='aliexpress' AND status='published'"
@@ -299,7 +299,10 @@ async function refreshMarket(config, marketCode, options = {}) {
     recordSourceReports(runId, selectedMarket.code, started, loaded.reports);
     const failedReports = loaded.reports.filter(report => report.status === "failed");
     if (failedReports.length) console.error(`Partial ${selectedMarket.name} refresh: ${failedReports.map(report => `${report.name}: ${report.error}`).join(" | ")}`);
-    const found = await addPriceIntelligence(loaded.products, selectedMarket.code);
+    const requestedProducts = loaded.products.filter(product =>
+      (!options.allowedCategories || options.allowedCategories.includes(product.normalized_category)) &&
+      (!options.curationQuality || require('./holidayCuration').qualified(product)));
+    const found = await addPriceIntelligence(requestedProducts, selectedMarket.code);
     const eligibility = {
       currency: selectedMarket.currency,
       minimumRating: 0,
@@ -308,8 +311,20 @@ async function refreshMarket(config, marketCode, options = {}) {
       minimumEvidenceConfidence: 0,
       maximumShippingRatio: 0.5
     };
-    const scoredOffers = await scoreOffersAsync(found, eligibility, {background:config.isProduction});
-    const uniqueProducts = selectUniqueProducts(scoredOffers);
+    let scoredOffers = await scoreOffersAsync(found, eligibility, {background:config.isProduction});
+    if (options.curationQuality && Number.isFinite(options.maxNewProducts)) {
+      const existing = db.prepare("SELECT * FROM products WHERE market=? AND status IN ('published','hidden')").all(marketCode);
+      const existingIds = new Set(existing.map(product => product.provider_external_id));
+      // Include current listings in deduplication so the requested additions
+      // count distinct new products, without another copy of a familiar offer.
+      const additions = selectUniqueProducts([...existing,...scoredOffers])
+        .filter(product => !existing.includes(product) && !existingIds.has(qualifiedProviderId(product)))
+        .slice(0,Math.max(0,options.maxNewProducts));
+      const allowedIds = new Set(additions.map(qualifiedProviderId));
+      scoredOffers = scoredOffers.filter(product => existingIds.has(qualifiedProviderId(product)) || allowedIds.has(qualifiedProviderId(product)));
+    }
+    const hiddenIds = new Set(db.prepare("SELECT provider_external_id FROM products WHERE market=? AND status='hidden'").all(marketCode).map(row => row.provider_external_id));
+    const uniqueProducts = selectUniqueProducts(scoredOffers.filter(product => !hiddenIds.has(qualifiedProviderId(product))));
     /* Reported as the run's catalog size; the whole of scoredOffers is what
        actually gets written to the products table further down. */
     const catalogProducts = uniqueProducts.slice(0, 60);
@@ -377,7 +392,7 @@ async function refreshMarket(config, marketCode, options = {}) {
           currency=excluded.currency,badge=excluded.badge,score=excluded.score,
           relevance_score=excluded.relevance_score,commerce_quality=excluded.commerce_quality,ranking_score=excluded.ranking_score,
           evidence_confidence=excluded.evidence_confidence,score_breakdown=excluded.score_breakdown,
-          selection_reason=excluded.selection_reason,source=excluded.source,status='published',
+          selection_reason=excluded.selection_reason,source=excluded.source,status=CASE WHEN products.status='hidden' THEN 'hidden' ELSE 'published' END,
           updated_at=excluded.updated_at,last_seen_at=excluded.last_seen_at
       `);
 

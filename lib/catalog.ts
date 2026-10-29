@@ -224,6 +224,7 @@ export async function getCategoriesWithCounts(
   const rows = await fetchCategoryCounts(marketCode);
 
   return rows
+    .filter(({ category }) => category !== "Halloween")
     .map(({ category, count }) => {
       const slug = slugifyCategory(category);
       const known = getCategory(slug);

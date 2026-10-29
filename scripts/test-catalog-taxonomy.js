@@ -89,7 +89,7 @@ const cases = [
   [{source:"ebay", category:"", title:"Infant Optics Baby Monitor"}, "Baby & Kids"]
 ];
 
-assert.strictEqual(PUBLIC_CATEGORIES.length, 19, "The shopper taxonomy includes a dedicated Halloween aisle");
+assert.strictEqual(PUBLIC_CATEGORIES.length, 20, "The taxonomy includes a dedicated Christmas & New Year aisle");
 assert.strictEqual(new Set(PUBLIC_CATEGORIES).size, PUBLIC_CATEGORIES.length, "Public categories must be unique");
 assert(!PUBLIC_CATEGORIES.some(category => category.includes(">")), "A raw feed hierarchy escaped into public navigation");
 

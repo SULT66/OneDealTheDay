@@ -675,7 +675,7 @@ app.post("/api/shopping-assistant/feedback", shoppingAssistantRateLimit, (req, r
  * they reach the catch-all at the bottom of this file instead of being
  * rewritten back onto the old bare-URL Express routes.
  */
-const nextOwnedPath = /^\/(?:about|account|saved|live|how-we-select-deals|search|daily-drop|archive|contact|privacy|terms|affiliate-disclosure|editorial-policy|for-retailers|price-disclaimer|stores|coupons|halloween|black-friday|guides|guides\/[^/]+|brands|brand\/[^/]+|category|deal\/[^/]+|category\/[^/]+)\/?$/;
+const nextOwnedPath = /^\/(?:about|account|saved|live|how-we-select-deals|search|daily-drop|archive|contact|privacy|terms|affiliate-disclosure|editorial-policy|for-retailers|price-disclaimer|stores|coupons|halloween|holiday|black-friday|guides|guides\/[^/]+|brands|brand\/[^/]+|category|deal\/[^/]+|category\/[^/]+)\/?$/;
 app.use((req, res, next) => {
   const match = req.url.match(new RegExp(`^/(${marketCodes.join("|")})(?=/|\\?|$)`));
   /* Compare the path alone, not the whole URL: `/de` was left intact for Next
@@ -795,6 +795,7 @@ const publicRscCache = rscCache();
 const publicHtmlCache = htmlCache({ onClear: () => publicRscCache.clear() });
 app.use(publicRscCache);
 app.use(publicHtmlCache);
+const holidayCuration = require('./holidayCuration').createHolidayCuration({db,config:c,clearCaches:()=>publicHtmlCache.clear()});
 
 const authAttempts = new Map();
 const authRateLimit = (req, res, next) => {
@@ -3453,6 +3454,15 @@ app.get("/api/admin/automation-status", admin, (req,res) => {
   });
 });
 
+// Public reads expose catalogue results only, never supplier credentials or raw errors.
+app.get('/api/holiday-progress', (req,res) => res.set('Cache-Control','no-store').json(holidayCuration.publicStatus()));
+app.get('/api/holiday', (req,res) => {
+  const marketCode=normalizeMarket(req.query.market)||req.market||'us';
+  const language=resolveLanguage(req,res,marketCode);
+  const collection=require('./holidayCatalog').getHolidayCollection(db,{market:marketCode,q:req.query.q,sort:req.query.sort,page:req.query.page});
+  res.set('Cache-Control','no-store').json({...collection,market:marketCode,
+    products:collection.products.map(product=>presentProduct(localizeProduct({...product,deal_url:dealPath(product)},language),language))});
+});
 // Reads only: visiting a shelf never triggers a paid research call.
 app.get("/api/merchandising", (req, res) => {
   const marketCode = normalizeMarket(req.query.market) || req.market || "us";
@@ -4954,6 +4964,7 @@ app.use((error, req, res, next) => {
   await bootstrapPersonalPostgres(db);
   console.log(`[startup] personal data ready after ${Date.now() - phaseStarted}ms`);
   app.listen(c.port, () => {
+    holidayCuration.start();
     setTimeout(() => backfillBrands().catch(error => console.error(`[brands] ${error.message}`)), 30000).unref();
     console.log(`http://localhost:${c.port}`);
     if (c.liveRefreshEnabled) {

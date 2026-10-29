@@ -26,9 +26,9 @@ const halloween = signal('halloween', 'us', '2026-10-13T17:00:00Z', 90);
 assert.equal(localDate(halloween.endsAt, 'us'), '2026-10-24');
 assert.ok(!calendarSignals({ now: halloween.endsAt }).some(s => s.id === halloween.id), 'exclusive expiry');
 const christmas = signal('christmas', 'us', '2026-10-13T17:00:00Z', 90);
-assert.equal(localDate(christmas.preparationAt, 'us'), '2026-10-30');
-assert.equal(localDate(christmas.startsAt, 'us'), '2026-11-01');
-assert.equal(christmas.startsAt, '2026-11-01T04:00:00.000Z'); // before DST fallback
+assert.equal(localDate(christmas.preparationAt, 'us'), '2026-10-28');
+assert.equal(localDate(christmas.startsAt, 'us'), '2026-10-28');
+assert.equal(christmas.startsAt, '2026-10-28T04:00:00.000Z'); // before DST fallback
 assert.equal(christmas.endsAt, '2026-12-15T05:00:00.000Z'); // after fallback
 assert.ok(Date.parse(christmas.startsAt) > Date.parse('2026-10-13T17:00:00Z'), 'future brief retained');
 assert.equal(localDate(signal('new-year', 'us', '2026-12-31T23:00:00Z', 90).eventAt, 'us'), '2027-01-01');

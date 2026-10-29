@@ -131,8 +131,16 @@ async function get(route) {
   const caHome=await get('/ca');
   assert(!caHome.includes('Explore Halloween'),'Do not advertise an empty regional collection');
   assert(!caHome.includes('See more Halloween finds'),'Do not render an empty homepage preview');
-  const caHalloween=await get('/ca/halloween');
-  assert(caHalloween.includes('Browse available products'),'Empty direct collection must offer a useful alternative');
+  if(require('../src/holidayCatalog').isHolidaySeason()) {
+    const retired=await fetch(base+'/ca/halloween',{redirect:'manual'});
+    const body=await retired.text();
+    assert(retired.headers.get('location')?.includes('/ca/holiday') ||
+      (body.includes('NEXT_REDIRECT') && body.includes('/ca/holiday')),
+      'Retired Halloween collection must redirect to the holiday collection');
+  } else {
+    const caHalloween=await get('/ca/halloween');
+    assert(caHalloween.includes('Browse available products'),'Empty direct collection must offer a useful alternative');
+  }
   console.log("Audit brands: shared layout, compact search, 24-card paging, matching averages, regions, redirects, previews, cancellation and bounded partial fallback passed.");
   process.exit(0);
 })().catch(error => {console.error(error); process.exit(1);});
