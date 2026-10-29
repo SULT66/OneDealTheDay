@@ -1,4 +1,5 @@
 // Agent 4: durable, market-scoped shelves. Catalogue prices/scores stay untouched.
+const { variedProducts } = require('./productVariety');
 const { randomUUID } = require('node:crypto');
 const { calendarSignals, activeCampaign } = require('./merchandisingCalendar');
 const { internalTrendSignals, researchTrendSignals } = require('./merchandisingTrends');
@@ -7,7 +8,7 @@ const { PRICE_CONFIDENT_HOURS } = require('./productPresentation');
 const { discoveryKeywords, INTERVAL_MS, RETRY_INTERVAL_MS, POLICY_VERSION } = require('./merchandisingDiscovery');
 const { withVerifiedRetailerTerms } = require('./verifiedRetailerTerms');
 const { merchandisingFocus, focusSignals } = require('./merchandisingFocus');
-const CALENDAR_POLICY_VERSION = 'holiday-sales-v4';
+const CALENDAR_POLICY_VERSION = 'holiday-sales-v5-varied-hosting';
 const { salesEvidence } = require('./merchandisingSeeds');
 const {isHalloweenProduct, matchesHalloweenQuery, diverseSeasonalProducts} = require('./seasonalProductTypes');
 const DAY = 86400000;
@@ -122,10 +123,10 @@ function getMerchandisingShelves(db, { market = 'us', now = Date.now(), limit = 
   const placements = db.prepare('SELECT * FROM merchandising_placements WHERE market=? AND expires_at>? ORDER BY position,signal_id,product_id').all(market, now);
   const shelves = [];
   for (const signal of signalsFor(db, market, now)) {
-    const products = placements.filter(p => p.signal_id === signal.id).map(p => rows.get(p.product_id))
+    const products = variedProducts(placements.filter(p => p.signal_id === signal.id).map(p => rows.get(p.product_id))
       .filter(row => row && isPromotionEligible(row, { market, now, requireReviews:false }) &&
         !signalRejectionReasons(row, signal, {market, now}).length && priceExpiry(row) > now)
-      .filter(row => !category || String(row.normalized_category || row.category).toLowerCase() === String(category).toLowerCase());
+      .filter(row => !category || String(row.normalized_category || row.category).toLowerCase() === String(category).toLowerCase()));
     if (!products.length) continue;
     shelves.push({ id: signal.id, title: signal.title, kind: signal.kind, confidence: signal.confidence,
       sourceUrls: (signal.sourceUrls || []).filter(url => {

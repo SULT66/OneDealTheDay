@@ -675,7 +675,7 @@ app.post("/api/shopping-assistant/feedback", shoppingAssistantRateLimit, (req, r
  * they reach the catch-all at the bottom of this file instead of being
  * rewritten back onto the old bare-URL Express routes.
  */
-const nextOwnedPath = /^\/(?:about|account|saved|live|how-we-select-deals|search|daily-drop|archive|contact|privacy|terms|affiliate-disclosure|editorial-policy|for-retailers|price-disclaimer|stores|coupons|halloween|holiday|black-friday|guides|guides\/[^/]+|brands|brand\/[^/]+|category|deal\/[^/]+|category\/[^/]+)\/?$/;
+const nextOwnedPath = /^\/(?:about|account|saved|live|how-we-select-deals|search|daily-drop|archive|contact|privacy|terms|affiliate-disclosure|editorial-policy|for-retailers|price-disclaimer|stores|coupons|halloween|holiday|thanksgiving|black-friday|guides|guides\/[^/]+|brands|brand\/[^/]+|category|deal\/[^/]+|category\/[^/]+)\/?$/;
 app.use((req, res, next) => {
   const match = req.url.match(new RegExp(`^/(${marketCodes.join("|")})(?=/|\\?|$)`));
   /* Compare the path alone, not the whole URL: `/de` was left intact for Next
@@ -3459,7 +3459,14 @@ app.get('/api/holiday-progress', (req,res) => res.set('Cache-Control','no-store'
 app.get('/api/holiday', (req,res) => {
   const marketCode=normalizeMarket(req.query.market)||req.market||'us';
   const language=resolveLanguage(req,res,marketCode);
-  const collection=require('./holidayCatalog').getHolidayCollection(db,{market:marketCode,q:req.query.q,sort:req.query.sort,page:req.query.page});
+  const collection=require('./holidayCatalog').getHolidayCollection(db,{market:marketCode,q:req.query.q,sort:req.query.sort,page:req.query.page,maxPrice:req.query.max,preview:req.query.preview==='1'});
+  res.set('Cache-Control','no-store').json({...collection,market:marketCode,
+    products:collection.products.map(product=>presentProduct(localizeProduct({...product,deal_url:dealPath(product)},language),language))});
+});
+app.get('/api/thanksgiving', (req,res) => {
+  const marketCode=normalizeMarket(req.query.market)||req.market||'us';
+  const language=resolveLanguage(req,res,marketCode);
+  const collection=require('./thanksgivingCatalog').getThanksgivingCollection(db,{market:marketCode,q:req.query.q,page:req.query.page});
   res.set('Cache-Control','no-store').json({...collection,market:marketCode,
     products:collection.products.map(product=>presentProduct(localizeProduct({...product,deal_url:dealPath(product)},language),language))});
 });

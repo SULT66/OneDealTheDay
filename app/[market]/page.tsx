@@ -5,6 +5,7 @@ import type { Language } from "@/lib/i18n";
 import { StructuredData } from "@/components/site/StructuredData";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { HolidayDiscovery } from "@/components/site/HolidayDiscovery";
 import { HomeCampaigns } from "@/components/site/HomeCampaigns";
 import {
   getCategoriesWithCounts,
@@ -143,7 +144,30 @@ async function HomeCatalog({market,language,halloween}:{market:string;language:L
 
       {/* Directly under the hero, and only when a drop is actually scheduled:
           it renders nothing the rest of the time. */}
+      <Suspense fallback={null}><HolidayDiscovery market={market} language={language}/></Suspense>
+
       <NextLiveDrop market={market} />
+
+      {/* ------------------------------------------------------- best right now */}
+      <section aria-labelledby="best-title" className="mt-20">
+        <SectionHeader
+          id="best-title"
+          eyebrow={t(language, "app.home.bestEyebrow")}
+          title={t(language, "app.home.bestTitle")}
+          action={{
+            href: `/${market}/search`,
+            label: t(language, "app.home.seeAllDeals"),
+          }}
+        />
+
+        <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {picks.map((deal, i) => (
+            <li key={deal.id}>
+              <DealCard deal={deal} market={market} index={i} />
+            </li>
+          ))}
+        </ul>
+      </section>
 
       <Suspense fallback={null}><MerchandisingShelves market={market} language={language} excludeHalloween={halloween} /></Suspense>
 
@@ -174,27 +198,6 @@ async function HomeCatalog({market,language,halloween}:{market:string;language:L
                   {t(language, "app.home.checkedCount", { count: c.count })}
                 </span>
               </Link>
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      {/* ------------------------------------------------------- best right now */}
-      <section aria-labelledby="best-title" className="mt-20">
-        <SectionHeader
-          id="best-title"
-          eyebrow={t(language, "app.home.bestEyebrow")}
-          title={t(language, "app.home.bestTitle")}
-          action={{
-            href: `/${market}/search`,
-            label: t(language, "app.home.seeAllDeals"),
-          }}
-        />
-
-        <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {picks.map((deal, i) => (
-            <li key={deal.id}>
-              <DealCard deal={deal} market={market} index={i} />
             </li>
           ))}
         </ul>

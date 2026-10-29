@@ -33,6 +33,8 @@ assert.equal(qualified(sample),true);assert.equal(qualified({...sample,seller_ra
 assert.equal(qualified({...sample,image_url:'http://example.com/a'}),false);
 assert.equal(isHolidayProduct({title:'Christmas repair service'}),false);
 assert.equal(normalizeCatalogProduct({...sample,title:'Christmas string lights'}).normalized_category,'Christmas & New Year');
+assert.equal(getHolidayCollection(db,{maxPrice:25}).total,6,'Budget filtering applies before pagination');
+assert.equal(getHolidayCollection(db,{preview:true}).products.length,1,'A preview contains one ornament set, not eight colour variants');
 db.close();console.log('Holiday catalogue: 500 fewer electronics, protected drops, retired Halloween, restart safety, collection pagination and quality gates passed.');
 
 const interrupted={id:'holiday-catalog-2026-v1',status:'partial',hiddenIds:[101,102],baseline:{Electronics:1598},electronicsTarget:1098,tasks:[
@@ -55,3 +57,38 @@ interrupted.tasks[1].attempts=1;
 assert.equal(upgradePlan(interrupted,{}),false,'The migration runs once across process restarts');
 assert.equal(interrupted.tasks[1].attempts,1);
 console.log('Holiday completion: preserved baseline, no repeated removals, resumed shortfalls, additional terms and one-time policy migration passed.');
+
+const {reconcilePlan,HOLIDAY_TARGET}=require('../src/holidayCuration');
+const finished={status:'complete',importPolicy:'holiday-curation-v2-partner-completion',hiddenIds:[1],electronicsTarget:1098,tasks:[
+ {category:'Christmas & New Year',target:150,attempts:3,status:'complete'},
+ {category:'Office',target:153,attempts:1,status:'complete'}
+]};
+upgradePlan(finished,{'Christmas & New Year':150,Office:147});
+assert.equal(finished.tasks[0].target,HOLIDAY_TARGET);
+assert.equal(HOLIDAY_TARGET,500);
+assert(finished.tasks.every(t=>t.status==='pending'),'completed-but-depleted categories must resume');
+assert.equal(finished.electronicsTarget,1098);
+assert.deepEqual(finished.hiddenIds,[1]);
+finished.tasks.forEach(t=>t.status='complete');finished.status='complete';
+reconcilePlan(finished,{'Christmas & New Year':500,Office:147});
+assert.equal(finished.status,'running');
+assert.equal(finished.tasks[1].status,'pending');
+finished.tasks[1].attempts=8;
+reconcilePlan(finished,{'Christmas & New Year':500,Office:147});
+assert.equal(finished.status,'partial','exhausted shortfalls are never reported as complete');
+console.log('Holiday expansion: 500 target, depleted category recovery and truthful partial status passed.');
+
+const {getThanksgivingCollection}=require('../src/thanksgivingCatalog');
+const thanksgivingDb=new Database(':memory:');
+const hosting={...sample,title:'Corelle Dinnerware Set',shipping_summary:'Free shipping',shipping_cost:0,return_summary:'30 day returns accepted',checked_at:'2026-10-29T12:00:00Z',currency:'USD'};
+thanksgivingDb.exec(`CREATE TABLE products(${Object.entries(hosting).map(([key,value])=>`${key} ${typeof value==='number'?'REAL':'TEXT'}`).join(',')})`);
+const hostingInsert=thanksgivingDb.prepare(`INSERT INTO products VALUES(${Object.keys(hosting).map(()=>'?').join(',')})`);
+for(const row of [hosting,{...hosting,id:2,title:'Instant Food Thermometer',affiliate_url:'https://www.ebay.com/itm/123456789002'},{...hosting,id:3,title:'Unrelated Phone Charger',affiliate_url:'https://www.ebay.com/itm/123456789003'}])hostingInsert.run(...Object.values(row));
+const hostingNow=Date.parse('2026-10-29T13:00:00Z');
+assert.equal(getThanksgivingCollection(thanksgivingDb,{now:hostingNow}).total,2);
+assert.equal(getThanksgivingCollection(thanksgivingDb,{now:hostingNow,q:'table'}).total,1);
+assert.equal(getThanksgivingCollection(thanksgivingDb,{now:hostingNow,q:'kitchen'}).products[0].id,2);
+assert.equal(getThanksgivingCollection(thanksgivingDb,{now:hostingNow,market:'ca'}).active,false,'Canadian Thanksgiving has already passed');
+assert.equal(getThanksgivingCollection(thanksgivingDb,{now:Date.parse('2026-11-28')}).active,false);
+thanksgivingDb.close();
+console.log('Thanksgiving collection: real product matching, intent filters and regional expiry passed.');

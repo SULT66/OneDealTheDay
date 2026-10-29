@@ -14,6 +14,8 @@ export type CampaignSlide = {
   imagePosition?: string;
   /** Flat colour behind the photograph, and the whole background without one. */
   ground: string;
+  textColor?: string;
+  highlight?: boolean;
   /** Accent for the eyebrow and the button. */
   accent: string;
   accentText: string;
@@ -66,8 +68,8 @@ export function CampaignCarousel({ slides, intervalMs = 6000, label }: { slides:
     onMouseLeave={() => setHeld(false)}
     onFocusCapture={() => setHeld(true)}
     onBlurCapture={event => { if (!region.current?.contains(event.relatedTarget as Node)) setHeld(false); }}
-    className="relative isolate overflow-hidden rounded-card text-white"
-    style={{ backgroundColor: current.ground }}
+    className="relative isolate overflow-hidden rounded-card"
+    style={{ backgroundColor: current.ground, color:current.textColor || "#fff" }}
   >
     {/* The grid stacks every slide in one cell, so the hero is as tall as its
         tallest slide and nothing reflows when the turn changes. */}
@@ -86,12 +88,12 @@ export function CampaignCarousel({ slides, intervalMs = 6000, label }: { slides:
           className={`col-start-1 row-start-1 transition-opacity duration-700 motion-reduce:transition-none ${shown ? "opacity-100" : "pointer-events-none opacity-0"}`}
         >
           {slide.image && <div aria-hidden="true" className="absolute inset-0 bg-cover bg-no-repeat" style={{ backgroundImage: `url("${slide.image}")`, backgroundPosition: slide.imagePosition || "center 65%" }} />}
-          <div className="absolute inset-0" style={{ backgroundImage: `linear-gradient(to right, ${slide.ground}f2, ${slide.ground}99, transparent)` }} />
-          <div className="relative max-w-3xl px-5 py-6 sm:px-8 lg:px-10">
+          <div className="absolute inset-0" style={{ backgroundImage: `linear-gradient(to right, ${slide.ground}, ${slide.ground}d9 35%, ${slide.ground}00 75%)` }} />
+          <div className="relative max-w-xl px-5 pb-20 pt-7 sm:px-8 sm:pt-9 lg:px-10 lg:pt-10">
             <p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: slide.eyebrowText }}>{slide.eyebrow}</p>
-            <Heading id={position === 0 ? "hero-title" : undefined} className="mt-2 whitespace-pre-line text-3xl font-bold leading-[1.08] tracking-tight sm:text-4xl">{slide.title}</Heading>
-            <div className="mt-3 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:gap-5">
-              <p className="max-w-md text-sm leading-relaxed text-white/80">{slide.note}</p>
+            <Heading id={position === 0 ? "hero-title" : undefined} className="mt-3 whitespace-pre-line text-4xl font-black uppercase leading-[0.98] tracking-[-0.055em] sm:text-5xl lg:text-6xl" style={{fontFamily:'Impact, "Arial Black", sans-serif'}}>{slide.title.split("\n").map((line,i)=><span key={i} className="block"><span className={slide.highlight && i===1 ? "inline-block bg-[#c1f21d] px-2 pb-1 text-[#101010]" : ""}>{line}</span></span>)}</Heading>
+            <div className="mt-4 flex flex-col items-start gap-4">
+              <p className="max-w-xs text-sm font-medium leading-relaxed">{slide.note}</p>
               <a href={slide.href} tabIndex={shown ? undefined : -1} className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-full px-5 text-sm font-semibold transition-opacity hover:opacity-90" style={{ backgroundColor: slide.accent, color: slide.accentText }}>
                 {slide.cta}<ArrowRight size={18} weight="bold" aria-hidden="true" />
               </a>
@@ -101,16 +103,16 @@ export function CampaignCarousel({ slides, intervalMs = 6000, label }: { slides:
       })}
     </div>
 
-    {slides.length > 1 && <div className="absolute bottom-3 right-5 flex gap-2 sm:bottom-4 sm:right-6">
+    {slides.length > 1 && <div className="absolute bottom-3 left-5 right-5 flex gap-1 sm:bottom-4 sm:left-8 sm:right-auto">
       {slides.map((slide, position) => <button
         key={slide.key}
         type="button"
         onClick={() => setIndex(position)}
         aria-label={slide.eyebrow}
         aria-current={position === index ? "true" : undefined}
-        className="h-2.5 rounded-full transition-all"
-        style={{ width: position === index ? 26 : 10, backgroundColor: position === index ? current.dots : "rgba(255,255,255,0.45)" }}
-      />)}
+        className="flex min-h-11 min-w-0 flex-1 items-center justify-center rounded-full border px-2 sm:flex-none sm:px-3 text-[10px] font-bold uppercase tracking-wide transition-all"
+        style={{ color:current.textColor || "#fff", borderColor:current.textColor ? "#10101035" : "#ffffff55", backgroundColor: position === index ? current.dots : "transparent" }}
+      >{slide.eyebrow.split(" · ")[0]}</button>)}
     </div>}
   </div>;
 }

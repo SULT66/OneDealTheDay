@@ -163,3 +163,10 @@ const popularSignal=signal({queries:['Halloween mask'],startsAt:iso(seedNow-8640
 const shelf=selectMerchandise([researched,product(301,{title:'Halloween mask',checked_at:iso(seedNow-1000)})],[popularSignal],{now:seedNow})[0];
 assert.deepEqual(shelf.products.map(p=>p.id),[300],'Unknown sales cannot fill a sales-backed shelf');
 assert.equal(selectMerchandise([{...researched,return_summary:'No returns'}],[popularSignal],{now:seedNow})[0].products.length,0,'Research evidence cannot waive buying checks');
+
+const hosting=signal({id:'thanksgiving',title:'Thanksgiving hosting',queries:['dinnerware','food thermometer','tablecloth']});
+const dinnerware=[201,202,203,204,205].map((id,i)=>product(id,{title:`Brand${i} Stoneware Dinnerware Set`,product_key:`gtin:${id}`,category:'Home & Kitchen'}));
+const hostingRows=[...dinnerware,product(206,{title:'Digital Food Thermometer',product_key:'gtin:206'}),product(207,{title:'Linen Tablecloth',product_key:'gtin:207'})];
+const hostingPicks=selectMerchandise(hostingRows,[hosting],{now,limitPerSignal:6})[0].products;
+assert.equal(hostingPicks.filter(p=>/dinnerware/i.test(p.title)).length,1);
+assert.equal(hostingPicks.length,3,'a shorter varied shelf is preferable to five sets of plates');

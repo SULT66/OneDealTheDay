@@ -1,4 +1,5 @@
 import type { Deal } from "./types";
+import { productType } from "../src/productVariety";
 
 /**
  * Which listings the homepage shelf holds.
@@ -48,14 +49,18 @@ export function chooseTopPicks(
   const retailerCap = shopsInTheRunning > 1 ? perRetailer : limit;
 
   const picked: Deal[] = [];
+  const usedTypes = new Set<string>();
   const categoryCount = new Map<string, number>();
   const retailerCount = new Map<string, number>();
 
   for (const deal of candidates) {
     if (picked.length >= limit) break;
+    const type = productType(deal);
+    if (type && usedTypes.has(type)) continue;
     if ((categoryCount.get(deal.category) ?? 0) >= perCategory) continue;
     if ((retailerCount.get(deal.retailer) ?? 0) >= retailerCap) continue;
     picked.push(deal);
+    if (type) usedTypes.add(type);
     categoryCount.set(deal.category, (categoryCount.get(deal.category) ?? 0) + 1);
     retailerCount.set(deal.retailer, (retailerCount.get(deal.retailer) ?? 0) + 1);
   }

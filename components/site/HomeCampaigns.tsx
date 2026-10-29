@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { activeCampaign } from "@/src/merchandisingCalendar";
+import { isHolidaySeason } from "@/src/holidayCatalog";
 import { ArrowRight } from "@phosphor-icons/react/ssr";
 import type { Language } from "@/lib/i18n";
 import { CampaignCarousel, type CampaignSlide } from "@/components/site/CampaignCarousel";
@@ -12,7 +14,7 @@ type Copy = {
 
 const COPY: Record<Language, Copy> = {
   en: {eyebrow:"Halloween · October 31",title:"A little spooky.\nA lot of fun.",note:"Costumes, decorations & party finds for October 31.",lateNote:"October 31 is close. Check each seller's delivery estimate before you count on it arriving.",shop:"Explore Halloween",categories:["Costumes","Decorations","Party supplies"],
-    bfEyebrow:"Black Friday · November 27",bfTitle:"We are already\nwriting the prices down.",bfNote:"Eight weeks of our own records, so on the day you can see which discounts are real and which were always that price.",bfShop:"See the price diary",
+    bfEyebrow:"Black Friday · November 27",bfTitle:"BIG FINDS.\nSMARTER SPENDING.",bfNote:"The wishlist starts here. Follow our price diary before the big day.",bfShop:"See the price diary",
     browse:"Browse all finds",drop:"One day. One pick.",dropNote:"Meet today's Daily Drop.",daily:"See today's pick",everyday:"Find your next good buy.",everydayNote:"Explore products with price, seller and buying terms checked.",hero:"Campaigns"},
   es: {eyebrow:"Halloween · 31 de octubre",title:"Un poco de miedo.\nMucha diversión.",note:"Disfraces, decoración e ideas para tu fiesta.",lateNote:"El 31 de octubre está cerca. Comprueba el plazo de entrega de cada vendedor antes de contar con él.",shop:"Explorar Halloween",categories:["Disfraces","Decoración","Fiesta"],
     bfEyebrow:"Black Friday · 27 de noviembre",bfTitle:"Ya estamos\napuntando los precios.",bfNote:"Ocho semanas de registros propios para que ese día veas qué descuentos son reales y cuáles siempre costaron lo mismo.",bfShop:"Ver el diario de precios",
@@ -28,15 +30,16 @@ const COPY: Record<Language, Copy> = {
 /*
  * The hero, as a rotation rather than a single banner.
  *
- * Black Friday stays first while the festive collection rotates as a second
- * slide. Halloween is retired during the holiday preparation window.
+ * Festive gifts lead, followed by the Black Friday price diary and regional
+ * Thanksgiving hosting. Halloween is retired during holiday preparation.
  */
 export function HomeCampaigns({market,language,halloween=false,halloweenLate=false,blackFriday=false,halloweenQueries=[]}:{market:string;language:Language;halloween?:boolean;halloweenLate?:boolean;blackFriday?:boolean;halloweenQueries?:string[]}) {
   const copy = COPY[language];
-  const holiday = Date.now() >= Date.parse("2026-10-28T04:00:00Z") && Date.now() < Date.parse("2027-01-08T05:00:00Z");
+  const holiday = isHolidaySeason();
   if (holiday) halloween = false;
   const search = `/${market}/search`;
   const slides: CampaignSlide[] = [];
+  const thanksgiving = activeCampaign({eventKey:"thanksgiving",market,fromPreparation:true,throughEvent:true});
 
   if (halloween) slides.push({
     key:"halloween", eyebrow:copy.eyebrow, title:copy.title,
@@ -51,18 +54,34 @@ export function HomeCampaigns({market,language,halloween=false,halloweenLate=fal
   if (blackFriday) slides.push({
     key:"black-friday", eyebrow:copy.bfEyebrow, title:copy.bfTitle, note:copy.bfNote,
     cta:copy.bfShop, href:`/${market}/black-friday`,
-    ground:"#101208", accent:"#b8ec44", accentText:"#010101", eyebrowText:"#cdf07a", dots:"#b8ec44",
+    image:"/campaigns/black-friday-editorial-2026.webp", imagePosition:"center 56%",
+    ground:"#f3f0e8", textColor:"#101010",highlight:true, accent:"#101010", accentText:"#ffffff", eyebrowText:"#101010", dots:"#c1f21d",
   });
 
   if (holiday) {
     const festive = {
-      en:{eyebrow:"Christmas & New Year",title:"A little sparkle.\nA lot to celebrate.",note:"Thoughtful gifts, glowing lights and festive finds for a season worth celebrating.",cta:"Explore holiday finds"},
+      en:{eyebrow:"Christmas & New Year",title:"GIFT MODE:\nACTIVATED.",note:"Christmas sparkle. New Year energy. Gifts that deserve a proper unboxing.",cta:"Explore holiday finds"},
       es:{eyebrow:"Navidad y Año Nuevo",title:"Un poco de brillo.\nMucho que celebrar.",note:"Regalos, luces y decoración para disfrutar de las fiestas.",cta:"Explorar las fiestas"},
       fr:{eyebrow:"Noël et Nouvel An",title:"Un peu de magie.\nTant à célébrer.",note:"Des cadeaux, des lumières et de belles trouvailles pour les fêtes.",cta:"Explorer les fêtes"},
       de:{eyebrow:"Weihnachten & Neujahr",title:"Ein wenig Glanz.\nViel zu feiern.",note:"Geschenke, Lichter und festliche Entdeckungen für eine besondere Zeit.",cta:"Festliche Angebote entdecken"},
     }[language];
-    slides.push({key:"holiday",...festive,href:`/${market}/holiday`,image:"/campaigns/holiday-2026.webp",imagePosition:"center 64%",
-      ground:"#09241c",accent:"#e9c982",accentText:"#09241c",eyebrowText:"#f5dfa9",dots:"#e9c982"});
+    slides.push({key:"holiday",...festive,href:`/${market}/holiday`,image:"/campaigns/holiday-editorial-2026.webp",imagePosition:"center 64%",
+      ground:"#f6f1e7",textColor:"#101010",highlight:true,accent:"#101010",accentText:"#ffffff",eyebrowText:"#101010",dots:"#c1f21d"});
+  }
+
+  // A consistent campaign journey: festive gifts, price diary, then hosting.
+  if (holiday) slides.sort((a,b)=>Number(b.key==="holiday")-Number(a.key==="holiday"));
+  if (thanksgiving) {
+    const gathering = {
+      en:{eyebrow:"Thanksgiving",title:"HOST MODE:\nNO PANIC.",note:"Good food. Great company. A few clever finds for your Thanksgiving table.",cta:"Get ready to gather"},
+      es:{eyebrow:"Acción de Gracias",title:"TODO LISTO.\nSIN ESTRÉS.",note:"Ideas para cocinar, decorar y compartir la mesa.",cta:"Preparar la celebración"},
+      fr:{eyebrow:"Thanksgiving",title:"ON REÇOIT.\nSANS STRESS.",note:"De belles trouvailles pour cuisiner et partager.",cta:"Préparer la fête"},
+      de:{eyebrow:"Thanksgiving",title:"GÄSTE KOMMEN.\nKEINE PANIK.",note:"Entdeckungen zum Kochen, Dekorieren und Feiern.",cta:"Das Fest vorbereiten"},
+    }[language];
+    const eventDate=new Intl.DateTimeFormat(language,{month:"short",day:"numeric",timeZone:"America/New_York"}).format(new Date(thanksgiving.eventAt));
+    slides.push({key:"thanksgiving",...gathering,eyebrow:`${gathering.eyebrow} · ${eventDate}`,href:`/${market}/thanksgiving`,
+      image:"/campaigns/thanksgiving-editorial-2026.webp",imagePosition:"center 60%",ground:"#f4e9d9",textColor:"#101010",highlight:true,
+      accent:"#101010",accentText:"#ffffff",eyebrowText:"#101010",dots:"#c1f21d"});
   }
 
   if (!slides.length) slides.push({

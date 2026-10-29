@@ -1,3 +1,4 @@
+const { variedProducts } = require('./productVariety');
 const { salesEvidence } = require('./merchandisingSeeds');
 const { isIP } = require("node:net");
 const { isPublicProduct, uniqueProductsInOrder } = require("./publicCatalog");
@@ -165,7 +166,7 @@ function selectMerchandise(rows, signals, { market = "us", now = Date.now(), lim
     const ordered = matching.sort((left, right) => (left.source === "ebay" ? 0 : 1) - (right.source === "ebay" ? 0 : 1) || salesTier(right,now) - salesTier(left,now) || commerceQuality(right) - commerceQuality(left) ||
       Date.parse(right.checked_at) - Date.parse(left.checked_at) || Number(left.id) - Number(right.id));
     const unique = uniqueProductsInOrder(ordered);
-    return { signal, products: balanced(unique, limit, now), rejected: array(rows).length - unique.length };
+    return { signal, products: balanced(variedProducts(unique), limit, now), rejected: array(rows).length - unique.length };
   });
 }
 
