@@ -367,6 +367,7 @@ async function refreshMarket(config, marketCode, options = {}) {
           title,category,normalized_category,taxonomy_version,description,image_url,affiliate_url,retailer_shop_url,retailer_name,seller_name,seller_rating,seller_feedback_count,shipping_summary,return_summary,
           shipping_cost,delivery_estimated_at,delivery_country,delivery_postal_code,ebay_sold_quantity,landed_cost,availability,checked_at,rating,review_count,current_price,original_price,currency,badge,coupon_json,
           score,relevance_score,commerce_quality,ranking_score,evidence_confidence,score_breakdown,
+          average_30_day_price,lowest_30_day_price,average_90_day_price,lowest_90_day_price,price_history_observation_count,price_history_distinct_days,price_history_coverage_days,
           selection_reason,source,status,updated_at,first_seen_at,last_seen_at
         )
         VALUES(
@@ -374,6 +375,7 @@ async function refreshMarket(config, marketCode, options = {}) {
           @title,@category,@normalized_category,@taxonomy_version,@description,@image_url,@affiliate_url,@retailer_shop_url,@retailer_name,@seller_name,@seller_rating,@seller_feedback_count,@shipping_summary,@return_summary,
           @shipping_cost,@delivery_estimated_at,@delivery_country,@delivery_postal_code,@ebay_sold_quantity,@landed_cost,@availability,@checked_at,@rating,@review_count,@current_price,@original_price,@currency,@badge,@coupon_json,
           @score,@relevance_score,@commerce_quality,@ranking_score,@evidence_confidence,@score_breakdown,
+          @average_30_day_price,@lowest_30_day_price,@average_90_day_price,@lowest_90_day_price,@price_history_observation_count,@price_history_distinct_days,@price_history_coverage_days,
           @selection_reason,@source,'published',@updated_at,@first_seen_at,@last_seen_at
         )
         ON CONFLICT(external_id) DO UPDATE SET
@@ -392,6 +394,7 @@ async function refreshMarket(config, marketCode, options = {}) {
           currency=excluded.currency,badge=excluded.badge,score=excluded.score,
           relevance_score=excluded.relevance_score,commerce_quality=excluded.commerce_quality,ranking_score=excluded.ranking_score,
           evidence_confidence=excluded.evidence_confidence,score_breakdown=excluded.score_breakdown,
+          average_30_day_price=excluded.average_30_day_price,lowest_30_day_price=excluded.lowest_30_day_price,average_90_day_price=excluded.average_90_day_price,lowest_90_day_price=excluded.lowest_90_day_price,price_history_observation_count=excluded.price_history_observation_count,price_history_distinct_days=excluded.price_history_distinct_days,price_history_coverage_days=excluded.price_history_coverage_days,
           selection_reason=excluded.selection_reason,source=excluded.source,status=CASE WHEN products.status='hidden' THEN 'hidden' ELSE 'published' END,
           updated_at=excluded.updated_at,last_seen_at=excluded.last_seen_at
       `);
@@ -450,6 +453,13 @@ async function refreshMarket(config, marketCode, options = {}) {
           commerce_quality: numberValue(product.commerce_quality, 0),
           ranking_score: numberValue(product.ranking_score, 0),
           evidence_confidence: numberValue(product.evidence_confidence, 0),
+          average_30_day_price: Math.max(0,numberValue(product.average_30_day_price,0)),
+          lowest_30_day_price: Math.max(0,numberValue(product.lowest_30_day_price,0)),
+          average_90_day_price: Math.max(0,numberValue(product.average_90_day_price,0)),
+          lowest_90_day_price: Math.max(0,numberValue(product.lowest_90_day_price,0)),
+          price_history_observation_count: Math.max(0,numberValue(product.price_history_observation_count,0)),
+          price_history_distinct_days: Math.max(0,numberValue(product.price_history_distinct_days,0)),
+          price_history_coverage_days: Math.max(0,numberValue(product.price_history_coverage_days,0)),
           score_breakdown: JSON.stringify(product.score_breakdown || {}),
           selection_reason: textValue(product.selection_reason),
           source: textValue(product.source),
