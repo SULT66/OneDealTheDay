@@ -78,6 +78,7 @@ const { chooseDigestItems } = require("./digestSelection");
 const { digestItemFor } = require("./weeklyDigest");
 const { emailHealth } = require("./emailHealth");
 const { htmlCache } = require("./htmlCache");
+const { rscCache } = require("./rscCache");
 const { startCacheWarmer, pathsFor } = require("./cacheWarmer");
 const { readEbayStock, refreshDropStock, ebayItemIdFrom, priceAgrees } = require("./liveStock");
 const { comparableFor, refreshComparables } = require("./comparables");
@@ -790,7 +791,9 @@ app.use(express.static(publicDir, {
  * market/language middleware so `req.language` is set, and before the Next
  * handler that does the expensive work.
  */
-const publicHtmlCache = htmlCache();
+const publicRscCache = rscCache();
+const publicHtmlCache = htmlCache({ onClear: () => publicRscCache.clear() });
+app.use(publicRscCache);
 app.use(publicHtmlCache);
 
 const authAttempts = new Map();

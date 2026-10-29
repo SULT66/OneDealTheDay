@@ -251,7 +251,7 @@ function htmlCache(options = {}) {
   /* Exposed for the tests and for anything that needs to drop the lot — a
      catalogue refresh publishes new prices, and a page promising yesterday's
      is worse than a slow one. */
-  middleware.clear = () => entries.clear();
+  middleware.clear = () => { entries.clear(); options.onClear?.(); };
   middleware.size = () => entries.size;
   middleware.refreshHeaders = Object.freeze({"x-odd-cache-refresh":refreshToken});
   return middleware;
