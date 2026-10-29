@@ -2,7 +2,7 @@ const assert=require('node:assert/strict');
 process.env.PUBLIC_PRODUCT_SOURCES='ebay';
 process.env.EBAY_CLIENT_ID='holiday-test';process.env.EBAY_CLIENT_SECRET='holiday-test';process.env.EBAY_CAMPAIGN_ID='5339179772';
 const Database=require('better-sqlite3');
-const {createHolidayCuration,qualified}=require('../src/holidayCuration');
+const {createHolidayCuration,qualified,upgradePlan,IMPORT_POLICY}=require('../src/holidayCuration');
 const {getHolidayCollection,isHolidayProduct}=require('../src/holidayCatalog');
 const {normalizeCatalogProduct}=require('../src/catalogTaxonomy');
 const db=new Database(':memory:');
@@ -34,3 +34,24 @@ assert.equal(qualified({...sample,image_url:'http://example.com/a'}),false);
 assert.equal(isHolidayProduct({title:'Christmas repair service'}),false);
 assert.equal(normalizeCatalogProduct({...sample,title:'Christmas string lights'}).normalized_category,'Christmas & New Year');
 db.close();console.log('Holiday catalogue: 500 fewer electronics, protected drops, retired Halloween, restart safety, collection pagination and quality gates passed.');
+
+const interrupted={id:'holiday-catalog-2026-v1',status:'partial',hiddenIds:[101,102],baseline:{Electronics:1598},electronicsTarget:1098,tasks:[
+ {category:'Travel',before:8,target:70,attempts:2,status:'complete'},
+ {category:'Baby & Kids',before:50,target:100,attempts:4,status:'shortfall'},
+ {category:'Furniture',before:71,target:121,attempts:4,status:'shortfall'}
+]};
+assert.equal(upgradePlan(interrupted,{'Travel':70,'Baby & Kids':99,'Furniture':85}),true);
+assert.equal(interrupted.importPolicy,IMPORT_POLICY);
+assert.equal(interrupted.status,'running');
+assert.equal(interrupted.tasks[0].status,'complete');
+assert.equal(interrupted.tasks[0].attempts,2,'Completed batches are preserved');
+assert.equal(interrupted.tasks[1].status,'pending');
+assert.equal(interrupted.tasks[1].queryOffset,12,'Retries use additional search terms');
+assert.equal(interrupted.tasks[1].attempts,0);
+assert.deepEqual(interrupted.hiddenIds,[101,102],'A retry never removes electronics again');
+assert.equal(interrupted.electronicsTarget,1098);
+assert.deepEqual(interrupted.baseline,{Electronics:1598});
+interrupted.tasks[1].attempts=1;
+assert.equal(upgradePlan(interrupted,{}),false,'The migration runs once across process restarts');
+assert.equal(interrupted.tasks[1].attempts,1);
+console.log('Holiday completion: preserved baseline, no repeated removals, resumed shortfalls, additional terms and one-time policy migration passed.');
