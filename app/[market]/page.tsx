@@ -126,7 +126,7 @@ async function HomeCatalog({market,language,halloween}:{market:string;language:L
             carry no price and no score, so an outage cannot make them
             misleading the way a stale catalogue would. */}
         <div className="mt-4 text-left">
-          <MerchandisingShelves market={market} language={language} excludeHalloween={halloween} />
+          <Suspense fallback={null}><MerchandisingShelves market={market} language={language} excludeHalloween={halloween} /></Suspense>
         </div>
       </div>
     );
@@ -144,7 +144,7 @@ async function HomeCatalog({market,language,halloween}:{market:string;language:L
           it renders nothing the rest of the time. */}
       <NextLiveDrop market={market} />
 
-      <MerchandisingShelves market={market} language={language} excludeHalloween={halloween} />
+      <Suspense fallback={null}><MerchandisingShelves market={market} language={language} excludeHalloween={halloween} /></Suspense>
 
       {/* ---------------------------------------------------------- categories */}
       <section aria-labelledby="categories-title" className="mt-20">
@@ -205,7 +205,7 @@ async function HomeCatalog({market,language,halloween}:{market:string;language:L
           invites the reader to assume it was checked the same way. Renders
           nothing at all until a pick is added. */}
       {/* Same terms as the shelf above, for shops reached through Sovrn. */}
-      <PartnerPicks market={market} />
+      <Suspense fallback={null}><PartnerPicks market={market} /></Suspense>
 
       {/* scroll-mt clears the sticky header when a visitor arrives via the
           header's CTA — on this page that's a same-page jump straight to

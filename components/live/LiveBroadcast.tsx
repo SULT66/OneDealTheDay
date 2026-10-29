@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
-import DailyIframe from "@daily-co/daily-js";
 import { analyticsSessionId } from "@/lib/analyticsSession";
 import { startStageMusic, type StageMusic } from "./stageMusic";
 import { useCopy } from "@/components/site/CopyProvider";
@@ -159,68 +158,82 @@ export function LiveBroadcastProvider({ market, children }: { market: string; ch
     setError("");
     setJoined(false);
     seenRef.current.clear();
-    const call = DailyIframe.createCallObject({ audioSource: false, videoSource: false });
+    // Browsing the catalogue must not download the video-call SDK. A viewer
+    // can also leave while it downloads; never join that abandoned session.
+    let cancelled = false;
+    let disconnect: (() => void) | undefined;
+    void import("@daily-co/daily-js").then(({ default: DailyIframe }) => {
+      if (cancelled) return;
+      const call = DailyIframe.createCallObject({ audioSource: false, videoSource: false });
 
-    const sync = () => {
-      /* Chloe is the one participant publishing video; the host console and
-         the other viewers publish nothing. */
-      const presenter = Object.values(call.participants()).find(
-        (participant) => !participant.local && participant.tracks.video?.persistentTrack,
-      );
-      const tracks = [presenter?.tracks.video?.persistentTrack, presenter?.tracks.audio?.persistentTrack].filter(
-        (track): track is MediaStreamTrack => Boolean(track),
-      );
-      if (!tracks.length) return;
-      setStream((current) => {
-        const ids = current ? current.getTracks().map((track) => track.id) : [];
-        return tracks.every((track) => ids.includes(track.id)) ? current : new MediaStream(tracks);
+      const sync = () => {
+        /* Chloe is the one participant publishing video; the host console and
+           the other viewers publish nothing. */
+        const presenter = Object.values(call.participants()).find(
+          (participant) => !participant.local && participant.tracks.video?.persistentTrack,
+        );
+        const tracks = [presenter?.tracks.video?.persistentTrack, presenter?.tracks.audio?.persistentTrack].filter(
+          (track): track is MediaStreamTrack => Boolean(track),
+        );
+        if (!tracks.length) return;
+        setStream((current) => {
+          const ids = current ? current.getTracks().map((track) => track.id) : [];
+          return tracks.every((track) => ids.includes(track.id)) ? current : new MediaStream(tracks);
+        });
+      };
+
+      const onMessage = (event: { data?: unknown }) => {
+        const payload = event.data as {
+          event_type?: string;
+          seq?: number | string;
+          properties?: { role?: string; speech?: string; text?: string };
+        } | null;
+        if (!payload) return;
+        const change = presenterSpeakingEvent(payload);
+        if (change === "started") {
+          eventSpeakingRef.current = true;
+          lastVoiceRef.current = performance.now();
+          return;
+        }
+        if (change === "stopped") {
+          eventSpeakingRef.current = false;
+          return;
+        }
+        if (payload.event_type !== "conversation.utterance") return;
+        const role = String(payload.properties?.role || "").toLowerCase();
+        const text = String(payload.properties?.speech || payload.properties?.text || "").replace(/[\u2013\u2014]/g, "-").trim();
+        if (!text || !["pal", "replica"].includes(role)) return;
+        const id = `c${String(payload.seq ?? text)}`;
+        if (seenRef.current.has(id)) return;
+        seenRef.current.add(id);
+        /* The arrival time only orders her captions among the chat lines;
+           nothing about the drop's state is read from this clock. */
+        setCaptions((current) => [...current, { id, text, at: new Date().getTime() }].slice(-40));
+      };
+
+      call.on("joined-meeting", () => {
+        setJoined(true);
+        sync();
       });
-    };
+      call.on("participant-joined", sync);
+      call.on("participant-updated", sync);
+      call.on("app-message", onMessage);
+      call.on("left-meeting", () => setJoined(false));
+      call.on("error", () => setError("Chloe's video connection was interrupted."));
+      void call
+        .join({ url: session.conversationUrl, startAudioOff: true, startVideoOff: true, userName: "OneDailyDrop viewer" })
+        .catch(() => setError("Chloe's video connection was interrupted."));
 
-    const onMessage = (event: { data?: unknown }) => {
-      const payload = event.data as {
-        event_type?: string;
-        seq?: number | string;
-        properties?: { role?: string; speech?: string; text?: string };
-      } | null;
-      if (!payload) return;
-      const change = presenterSpeakingEvent(payload);
-      if (change === "started") {
-        eventSpeakingRef.current = true;
-        lastVoiceRef.current = performance.now();
-        return;
-      }
-      if (change === "stopped") {
-        eventSpeakingRef.current = false;
-        return;
-      }
-      if (payload.event_type !== "conversation.utterance") return;
-      const role = String(payload.properties?.role || "").toLowerCase();
-      const text = String(payload.properties?.speech || payload.properties?.text || "").replace(/[\u2013\u2014]/g, "-").trim();
-      if (!text || !["pal", "replica"].includes(role)) return;
-      const id = `c${String(payload.seq ?? text)}`;
-      if (seenRef.current.has(id)) return;
-      seenRef.current.add(id);
-      /* The arrival time only orders her captions among the chat lines;
-         nothing about the drop's state is read from this clock. */
-      setCaptions((current) => [...current, { id, text, at: new Date().getTime() }].slice(-40));
-    };
-
-    call.on("joined-meeting", () => {
-      setJoined(true);
-      sync();
+      disconnect = () => {
+        void call.leave().catch(() => undefined).finally(() => call.destroy());
+      };
+    }).catch(() => {
+      if (!cancelled) setError("Chloe's video connection was interrupted.");
     });
-    call.on("participant-joined", sync);
-    call.on("participant-updated", sync);
-    call.on("app-message", onMessage);
-    call.on("left-meeting", () => setJoined(false));
-    call.on("error", () => setError("Chloe's video connection was interrupted."));
-    void call
-      .join({ url: session.conversationUrl, startAudioOff: true, startVideoOff: true, userName: "OneDailyDrop viewer" })
-      .catch(() => setError("Chloe's video connection was interrupted."));
 
     return () => {
-      void call.leave().catch(() => undefined).finally(() => call.destroy());
+      cancelled = true;
+      disconnect?.();
     };
   }, [session]);
 
