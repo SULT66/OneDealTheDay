@@ -1,0 +1,23 @@
+name: Observe holiday catalogue
+on:
+  pull_request:
+    branches: [main]
+    paths: [.github/workflows/observe-holiday-catalog.yml]
+permissions:
+  contents: read
+jobs:
+  observe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Read current production catalogue progress
+        run: |
+          node <<'NODE'
+          (async () => {
+            const url = 'https://www.onedailydrop.com/api/holiday-progress';
+            const response = await fetch(url, {signal:AbortSignal.timeout(45000), headers:{'Cache-Control':'no-cache'}});
+            if (!response.ok) throw new Error('Progress HTTP ' + response.status);
+            const status = await response.json();
+            console.log('HOLIDAY_STATUS ' + JSON.stringify(status));
+          })().catch(error => { console.error(error.message); process.exitCode=1; });
+          NODE
