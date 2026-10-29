@@ -67,6 +67,9 @@ export async function MerchandisingShelves({ market, language, category, exclude
       {shelf.id.includes('-halloween-') && <Link href={`/${market}/halloween`} className="mt-6 inline-flex rounded-full bg-red-600 px-6 py-3 text-sm font-bold text-white hover:bg-red-700">
         {{en:'Browse all Halloween finds →',es:'Ver todos los productos Halloween →',fr:'Voir tous les produits Halloween →',de:'Alle Halloween-Produkte →'}[language]}
       </Link>}
+      {shelf.id.includes('-thanksgiving-') && <Link href={`/${market}/thanksgiving`} className="mt-6 inline-flex rounded-full bg-lime px-6 py-3 text-sm font-bold text-ink">
+        {{en:'Explore Thanksgiving finds →',es:'Ver Acción de Gracias →',fr:'Découvrir Thanksgiving →',de:'Thanksgiving entdecken →'}[language]}
+      </Link>}
       {shelf.kind === "trend" && shelf.sourceUrls.length > 0 && <details className="mt-3 text-xs text-fg-subtle">
         <summary className="cursor-pointer">{copy.sources}</summary>
         <ul className="mt-2 space-y-1">

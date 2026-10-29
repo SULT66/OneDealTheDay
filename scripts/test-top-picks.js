@@ -122,3 +122,11 @@ const deal = (score, category, retailer, id = `${score}-${category}-${retailer}`
 }
 
 console.log("top picks: ok");
+
+const varied = chooseTopPicks([
+  {...deal(95,'home-kitchen','eBay','plates-a'),title:'Corelle Dinnerware Set'},
+  {...deal(94,'home-kitchen','eBay','plates-b'),title:'Threshold Stoneware Plates'},
+  {...deal(93,'home-kitchen','eBay','thermometer'),title:'Inkbird Food Thermometer'},
+  {...deal(92,'toys-games','eBay','game'),title:'Family Board Game'},
+],{limit:4});
+assert.deepStrictEqual(varied.map(p=>p.id),['plates-a','thermometer','game'],'different brands of dinnerware must not occupy the whole home shelf');

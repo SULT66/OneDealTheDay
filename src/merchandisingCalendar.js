@@ -78,7 +78,7 @@ function yearlyEvents(year, market) {
   add('winter-home', 'Winter home preparation', date(year, 11, 1), ['blanket', 'duvet', 'humidifier', 'winter coat'], { start: -21, end: 120 });
   const thanksgiving = nthWeekday(year, 11, 4, 4);
   if (market === 'us' || market === 'ca') {
-    add('thanksgiving', 'Thanksgiving hosting', market === 'us' ? thanksgiving : nthWeekday(year, 10, 1, 2), ['roasting pan', 'dinnerware', 'tablecloth', 'food thermometer'], { start: -28, delivery: 7, sources: [SOURCES[market]] });
+    add('thanksgiving', 'Thanksgiving hosting', market === 'us' ? thanksgiving : nthWeekday(year, 10, 1, 2), ['roasting pan', 'dinnerware', 'tablecloth', 'food thermometer', 'serving tray', 'pumpkin decor', 'baking dish', 'carving knife'], { start: -28, delivery: 7, sources: [SOURCES[market]] });
   }
   add('black-friday', 'Black Friday', shift(thanksgiving, 1), tech, { start: -14, end: 3, preparation: 56, sources: [SOURCES.us, SOURCES.retail] });
   add('cyber-monday', 'Cyber Monday', shift(thanksgiving, 4), ['laptop', 'headphones', 'SSD', 'keyboard', 'router'], { start: -3, end: 1, preparation: 56, sources: [SOURCES.us, SOURCES.retail] });

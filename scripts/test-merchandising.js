@@ -95,7 +95,7 @@ function database() {
   assert.equal(db.prepare('SELECT COUNT(*) AS n FROM merchandising_leases').get().n, 0);
   native.close();
   const ordered = database();
-  ordered.db.prepare('INSERT INTO products(id,market,title,checked_at,availability) VALUES (?,?,?,?,?)').run(3,'us','Headphones',new Date(now).toISOString(),'in_stock');
+  ordered.db.prepare('INSERT INTO products(id,market,title,checked_at,availability) VALUES (?,?,?,?,?)').run(3,'us','Bluetooth Speaker',new Date(now).toISOString(),'in_stock');
   await runMerchandising(ordered.db,{now,research:true});
   assert.deepEqual(getMerchandisingShelves(ordered.db,{now})[0].products.map(p=>p.id),[3,1],
     'Persisted shelves must preserve selector order rather than sorting by database ID');

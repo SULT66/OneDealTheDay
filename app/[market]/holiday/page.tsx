@@ -23,10 +23,10 @@ export default async function HolidayPage({params,searchParams}:PageProps<'/[mar
   const sort=typeof search.sort==='string'?search.sort:'popular';
   const page=Math.max(1,Math.floor(Number(search.page)||1));
   return <div className="mx-auto max-w-7xl px-4 pb-24 pt-8 sm:px-6">
-    <div className="overflow-hidden rounded-card bg-[#09241c] bg-cover bg-center px-6 py-10 text-white sm:px-10" style={{backgroundImage:'linear-gradient(90deg,#09241cf2,#09241c99,transparent),url(/campaigns/holiday-2026.webp)'}}>
-      <p className="text-xs font-semibold uppercase tracking-widest text-[#e9c982]">OneDailyDrop · Holiday collection</p>
+    <div className="overflow-hidden rounded-card bg-[#f6f1e7] bg-cover bg-center px-6 py-10 text-[#101010] sm:px-10" style={{backgroundImage:'linear-gradient(90deg,#f6f1e7,#f6f1e7cc 45%,transparent),url(/campaigns/holiday-editorial-2026.webp)'}}>
+      <p className="text-xs font-semibold uppercase tracking-widest text-[#101010]">OneDailyDrop · Holiday collection</p>
       <h1 className="mt-3 max-w-xl text-4xl font-bold tracking-tight sm:text-5xl">{copy.title}</h1>
-      <p className="mt-4 max-w-lg text-sm leading-relaxed text-white/85">{copy.note}</p>
+      <p className="mt-4 max-w-lg text-sm leading-relaxed text-[#101010]">{copy.note}</p>
     </div>
     <nav className="my-7 flex flex-wrap gap-2" aria-label={copy.title}>
       {[['',copy.all],['decor',copy.decor],['lights',copy.lights],['gifts',copy.gifts],['new-year',copy.party]].map(([key,label])=><a key={key} aria-current={q===key?'page':undefined} href={`/${market}/holiday?${new URLSearchParams({q:key,sort,lang:language})}`} className={`rounded-full border px-4 py-2 text-sm font-semibold ${q===key?'border-[#0c4a38] bg-[#0c4a38] text-white':'border-border text-fg'}`}>{label}</a>)}

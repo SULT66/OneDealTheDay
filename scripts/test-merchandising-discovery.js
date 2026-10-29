@@ -79,7 +79,7 @@ ebay.searchProducts = async options => {
   db.prepare('INSERT INTO merchandising_signals VALUES(?,?,?,?,?,?)')
     .run('us',seasonal.id,'calendar',now-DAY,now+7*DAY,JSON.stringify(seasonal));
   db.prepare('INSERT INTO merchandising_status VALUES(?,?,?,?,?)')
-    .run('us','calendar',checkedNow,'success',JSON.stringify({policyVersion:'holiday-sales-v4'}));
+    .run('us','calendar',checkedNow,'success',JSON.stringify({policyVersion:'holiday-sales-v5-varied-hosting'}));
   let discoveryCalls=0;
   const discover=async()=>{discoveryCalls++;return {status:'success',count:1,observedAt:iso(Date.now())};};
   assert.equal((await runMerchandising(db,{now:checkedNow,discover})).status,'success');
