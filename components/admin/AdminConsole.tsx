@@ -10,6 +10,7 @@ import { Weekly } from "./Weekly";
 import { MediaUpload } from "./MediaUpload";
 import { LiveHostConsole } from "./LiveHostConsole";
 import { MerchandisingPanel } from "./MerchandisingPanel";
+import { MerchantHealth } from "./MerchantHealth";
 
 /**
  * The admin console: scheduling a Live Drop, and the catalogue refresh.
@@ -372,6 +373,12 @@ export function AdminConsole() {
       </Card>
       </TabPanel>
 
+      <TabPanel id="merchants" active={tab}>
+        <Card className="mt-6">
+          <MerchantHealth adminKey={adminKey} />
+        </Card>
+      </TabPanel>
+
       <TabPanel id="email" active={tab}>
       <Card className="mt-6">
         <Legend>Email delivery</Legend>
@@ -607,6 +614,7 @@ export function AdminConsole() {
 const TABS = [
   { id: "numbers", label: "Numbers" },
   { id: "weekly", label: "Weekly" },
+  { id: "merchants", label: "Merchants" },
   { id: "drops", label: "Live Drops" },
   { id: "email", label: "Email" },
   { id: "icons", label: "Shop icons" },
