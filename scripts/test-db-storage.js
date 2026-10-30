@@ -134,6 +134,28 @@ const afterCorruption = prepareRuntimeDatabase({
 assert.strictEqual(afterCorruption.restoredFrom, third, "the restore did not skip the corrupt snapshot");
 assert.strictEqual(countRows(live), 41, "the fallback restore is missing rows");
 
+/* Restoration must not run SQLite integrity checks *on the Azure share*:
+ * those random reads delayed one production boot by several minutes.
+ * Copy the snapshot locally, then verify it and preserve corrupt fallback. */
+fs.rmSync(live, { force: true });
+const openedDuringRestore = [];
+const localOnlyRestore = prepareRuntimeDatabase({
+  runtimePath: live,
+  sharedPath: path.join(sharedDir, "site.db"),
+  sharedDir,
+  openDatabase: (file, options) => {
+    openedDuringRestore.push(file);
+    assert(!file.startsWith(sharedDir), "SQLite opened a backup directly on shared storage");
+    return new Database(file, options);
+  },
+  logger: quiet,
+});
+assert.strictEqual(localOnlyRestore.restoredFrom, third, "local-only restore must skip corrupt newest snapshot");
+assert.strictEqual(localOnlyRestore.verified, true, "successfully restored database must report verification");
+assert(openedDuringRestore.length >= 2, "corrupt and healthy candidates were not both checked locally");
+assert.strictEqual(countRows(live), 41, "local-only restore lost data");
+
+
 /* A journal beside the old file describes offsets in that file. Carrying one
    into the restored copy would corrupt it, so the restore must clear them. */
 fs.rmSync(live, { force: true });

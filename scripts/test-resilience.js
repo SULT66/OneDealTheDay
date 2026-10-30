@@ -39,8 +39,9 @@ assert(
 );
 assert(/busy_timeout/.test(dbSource), "Without a busy timeout a contended write throws instead of waiting");
 assert(
-  dbSource.includes("repairIndexesIfNeeded(db, dbPath, { enabled: isAzure })"),
-  "Azure startup does not repair known index-only SQLite corruption before migrations",
+  /repairIndexesIfNeeded\(db, dbPath, \{ enabled: isAzure && !runtimeDatabaseVerified \}\)/.test(dbSource) &&
+    /runtimeDatabaseVerified = prepared\.verified === true/.test(dbSource),
+  "Azure startup must repair unverified SQLite copies before migrations; only a verified local copy may skip a duplicate scan",
 );
 
 console.log("Crash resilience and SQLite storage constraints passed.");

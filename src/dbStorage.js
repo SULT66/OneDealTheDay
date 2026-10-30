@@ -118,28 +118,54 @@ function bestAvailableCopy({ runtimePath, sharedPath, sharedDir, openDatabase })
 function prepareRuntimeDatabase({ runtimePath, sharedPath, sharedDir, openDatabase, logger = console }) {
   fs.mkdirSync(path.dirname(runtimePath), { recursive: true });
 
-  if (isHealthyDatabase(runtimePath, openDatabase)) return { restoredFrom: null };
-
-  const source = bestAvailableCopy({ runtimePath, sharedPath, sharedDir, openDatabase });
-  if (!source) {
-    /* Nothing to restore is normal exactly once, on the very first boot: the
-       schema below creates an empty database. It is alarming every other
-       time, so say so rather than starting silently. */
-    logger.warn(
-      `[db] no healthy database found to restore; starting empty at ${runtimePath}`,
-    );
-    return { restoredFrom: null };
+  // The runtime copy is already on a local disk; an integrity check here is
+  // cheap and preserves any writes made since the last shared snapshot.
+  if (isHealthyDatabase(runtimePath, openDatabase)) {
+    return { restoredFrom: null, verified: true };
   }
-  if (source === runtimePath) return { restoredFrom: null };
 
-  fs.copyFileSync(source, runtimePath);
-  /* A journal left beside the old file describes byte offsets in that file,
-     not in this copy, so carrying it over would corrupt the restore. */
-  for (const suffix of ["-wal", "-shm", "-journal"]) {
-    fs.rmSync(`${runtimePath}${suffix}`, { force: true });
+  // Azure /home is an SMB mount. Running SQLite integrity_check directly
+  // against every 100+ MB snapshot on it can stall container startup for
+  // minutes, then a second check in db.js repeats the work. Copy each
+  // candidate to *local* disk first and validate the local staging file.
+  // Newest verified snapshot wins; never replace the runtime copy with an
+  // unverified candidate, even when the newer one is corrupt.
+  const candidates = [...listSnapshots(sharedDir), sharedPath]
+    .filter(Boolean)
+    .filter((file, index, all) => all.indexOf(file) === index)
+    .filter(file => fs.existsSync(file))
+    .sort((left, right) => modifiedAt(right) - modifiedAt(left));
+
+  const staged = `${runtimePath}.restore-partial`;
+  for (const source of candidates) {
+    try {
+      fs.rmSync(staged, { force: true });
+      fs.copyFileSync(source, staged);
+      if (!isHealthyDatabase(staged, openDatabase)) {
+        logger.warn(`[db] rejected damaged snapshot ${path.basename(source)}`);
+        continue;
+      }
+      // rename is atomic on the container's own filesystem. An interrupted
+      // download or integrity check cannot replace a previously good copy.
+      fs.renameSync(staged, runtimePath);
+      // The previous runtime's journal refers to byte offsets in its old
+      // file. Keep only the fully checked snapshot, not the old journal.
+      for (const suffix of ["-wal", "-shm", "-journal"]) {
+        fs.rmSync(`${runtimePath}${suffix}`, { force: true });
+      }
+      logger.warn(`[db] restored ${path.basename(source)} to ${runtimePath}`);
+      return { restoredFrom: source, verified: true };
+    } catch (error) {
+      logger.warn(`[db] could not restore ${path.basename(source)}: ${error.message}`);
+    } finally {
+      fs.rmSync(staged, { force: true });
+    }
   }
-  logger.warn(`[db] restored ${path.basename(source)} to ${runtimePath}`);
-  return { restoredFrom: source };
+
+  // Empty is valid only on first use. Do not silently treat a corrupt copy
+  // as healthy: retaining the warning makes any loss visible to operators.
+  logger.warn(`[db] no healthy database found to restore; starting empty at ${runtimePath}`);
+  return { restoredFrom: null, verified: false };
 }
 
 function pruneSnapshots(sharedDir, keep, logger = console) {
