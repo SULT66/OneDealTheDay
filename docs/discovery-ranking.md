@@ -12,6 +12,8 @@ prices and affiliate commission do not contribute. Usefulness is an initial
 heuristic (descriptive title, accessible price, lower prominence for printer
 consumables and installation parts), not measured consumer demand.
 
+The general shelf focuses on $8–$300 items (in the market currency) and excludes ambiguous quantity ranges and named vehicle-fit parts. Specialist and cheaper products remain in their categories. Coffee gifts, family games, food storage, blankets and portable charging receive a modest usefulness bonus.
+
 The first 12 recommendations limit a retailer to four places when alternatives
 qualify, a category to three and a recognized product type to one. A per-shop
 repeat penalty gives other qualifying shops earlier exposure. The shelf does

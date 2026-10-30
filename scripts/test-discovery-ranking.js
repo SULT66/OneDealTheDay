@@ -39,3 +39,11 @@ const established = Array.from({length:20},(_,i)=>({...base,id:`est-${i}`,title:
 const newShops=['OutIn','Lumary','Grommet','Giftlab'].map((retailer_name,i)=>({...base,id:`new-${i}`,title:`Useful household gift ${i}`,category:`gift-${i}`,retailer_name}));
 assert.ok(new Set(discoveryOrder([...established,...newShops]).slice(0,4).map(p=>p.retailer_name)).size>1,
   'even a strong data-rich retailer must not occupy the entire first desktop row');
+
+const unsuitable = [
+  {...base,id:'variant',current_price:1.94,title:'500-1PCS Protective Card Sleeves'},
+  {...base,id:'car-part',current_price:35,title:'for Tesla Model Y Floor Mats'},
+  {...base,id:'industrial',current_price:478,title:'Crawl Space Dehumidifier'},
+];
+assert.equal(discoveryOrder(unsuitable,{shelf:true}).length,0,'variant bait and specialist items must not lead the general homepage');
+assert.equal(discoveryOrder(unsuitable).length,3,'specialist and budget products must remain in the catalog');

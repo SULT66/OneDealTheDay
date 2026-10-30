@@ -20,6 +20,7 @@ function recommendationScore(p) {
   // categories; they should not dominate a general discovery shelf.
   if (/\b(printer paper|ink cartridge|toner|ream|replacement parts?)\b/i.test(title)) useful -= 0.3;
   if (/\b(recessed|in.wall|thermostat)\b/i.test(title)) useful -= 0.15;
+  if (/\b(espresso|coffee maker|coffee press|board game|food storage|blanket|power bank|string lights)\b/i.test(title)) useful += 0.2;
   const seller = num(p.seller_rating ?? p.seller?.positivePct);
   const trust = seller > 5 ? clamp((seller - 80) / 20) : seller > 0 ? clamp((seller - 3.5) / 1.5) : 0.5;
   const delivery = text(p.shipping_summary ?? p.delivery);
@@ -44,13 +45,22 @@ function discoveryEligible(p) {
     !(num(p.rating) > 0 && num(p.rating) < 3.8) &&
     !(seller > 0 && (seller > 5 ? seller < 95 : seller < 4.5));
 }
+// A general discovery shelf is not a feed of cheapest selectable variants.
+// Specialist products and low-cost parts remain reachable in their categories.
+function showcaseEligible(p) {
+  const price = num(p.current_price ?? p.price);
+  const title = text(p.title);
+  return discoveryEligible(p) && price >= 8 && price <= 300 &&
+    !/\b\d+\s*[-/]\s*\d+\s*(?:pcs|pieces|packs?)\b/i.test(title) &&
+    !/\b(?:for|fits)\s+(?:tesla|ford|chevrolet|toyota|honda|bmw|mercedes)\b/i.test(title);
+}
 // Diversify a bounded first screen, then retain every remaining listing.
 // A quality floor prevents weak offers being promoted just to fill a quota.
 function discoveryOrder(items, { limit = items.length, perRetailer = 4, perCategory = 3, shelf = false } = {}) {
   const scores = new Map(items.map(p=>[p, num(p.recommendationScore ?? p.recommendation_score) || recommendationScore(p)]));
   const score = p => scores.get(p) ?? 0;
   const sorted = [...items].sort((a,b) => score(b)-score(a) || text(a.id).localeCompare(text(b.id), undefined, {numeric:true}));
-  const candidates = sorted.filter(discoveryEligible);
+  const candidates = sorted.filter(showcaseEligible);
   const floor = 50;
   const picked = [], used = new Set(), shops = new Map(), categories = new Map(), types = new Map();
   const shopCount = new Set(candidates.filter(p=>score(p)>=floor).map(merchant)).size;
@@ -72,4 +82,4 @@ function discoveryOrder(items, { limit = items.length, perRetailer = 4, perCateg
   }
   return shelf ? picked : [...picked, ...sorted.filter(p=>!used.has(p))].slice(0,limit);
 }
-module.exports = { recommendationScore, discoveryEligible, discoveryOrder };
+module.exports = { recommendationScore, discoveryEligible, showcaseEligible, discoveryOrder };
