@@ -2011,8 +2011,9 @@ const searchRowsForMarket = code => {
   const cached = searchCatalogCache.get(code);
   if (cached && cached.expiresAt > Date.now()) return cached.rows;
   const rows = db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()}`).all(code).filter(isPubliclyIndexable);
-  searchCatalogCache.set(code, {rows, expiresAt:Date.now() + 60000});
-  return rows;
+  const enrichedRows = require("./discoveryHistory").discoveryHistory(db, rows, code);
+  searchCatalogCache.set(code, {rows:enrichedRows, expiresAt:Date.now() + 60000});
+  return enrichedRows;
 };
 const sharedHeader = (code, language = "en", req = null) => {
   const home = marketPath(code);

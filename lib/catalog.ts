@@ -114,12 +114,13 @@ async function languageParam(): Promise<string> {
  * a copy nobody could age out.
  */
 const fetchMarketCatalog = cache(
-  async (marketCode: string, limit?: number, category?: string): Promise<Deal[]> => {
+  async (marketCode: string, limit?: number, category?: string, discovery = false): Promise<Deal[]> => {
     const params = new URLSearchParams({ market: marketCode, compact: "1" });
     const lang = await languageParam();
     if (lang) params.set("lang", lang);
     if (limit) params.set("limit", String(limit));
     if (category) params.set("category", category);
+    if (discovery) params.set("view", "discovery");
 
     const res = await fetch(`${BACKEND_URL}/api/products?${params}`, {
       cache: "no-store" as const,
@@ -522,7 +523,7 @@ export async function getTopPicks(
      from the top 300 finds the same diverse shortlist a full 2,600-item
      market would — every category here has well under 300 listings except
      Gifts, which the caps below only ever take perCategory of anyway. */
-  const deals = await fetchMarketCatalog(marketCode, 300);
+  const deals = await fetchMarketCatalog(marketCode, 120, undefined, true);
   return chooseTopPicks(deals, { limit, perCategory, perRetailer });
 }
 

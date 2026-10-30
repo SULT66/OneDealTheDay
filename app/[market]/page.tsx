@@ -144,12 +144,11 @@ async function HomeCatalog({market,language,halloween}:{market:string;language:L
 
       {/* Directly under the hero, and only when a drop is actually scheduled:
           it renders nothing the rest of the time. */}
-      <Suspense fallback={null}><HolidayDiscovery market={market} language={language}/></Suspense>
 
       <NextLiveDrop market={market} />
 
       {/* ------------------------------------------------------- best right now */}
-      <section aria-labelledby="best-title" className="mt-20">
+      <section aria-labelledby="best-title" className="mt-10">
         <SectionHeader
           id="best-title"
           eyebrow={t(language, "app.home.bestEyebrow")}
@@ -168,6 +167,8 @@ async function HomeCatalog({market,language,halloween}:{market:string;language:L
           ))}
         </ul>
       </section>
+
+      <Suspense fallback={null}><HolidayDiscovery market={market} language={language}/></Suspense>
 
       <Suspense fallback={null}><MerchandisingShelves market={market} language={language} excludeHalloween={halloween} /></Suspense>
 

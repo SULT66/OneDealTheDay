@@ -2,6 +2,8 @@
 // alone: a broad category is not evidence that two products are the same type.
 /** @type {Array<[string, RegExp]>} */
 const TYPES = [
+  ['espresso-machine', /\b(?:espresso|coffee) (?:machine|maker|press)\b/i],
+  ['power-bank', /\bpower banks?\b/i],
   ['dinnerware', /\b(dinnerware|dinner sets?|plates?|stoneware|tableware)\b/i],
   ['roasting-pan', /\b(roasting pans?|roasters?)\b/i],
   ['thermometer', /\bthermometers?\b/i],

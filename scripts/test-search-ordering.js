@@ -30,10 +30,11 @@ execFileSync(
     "--module", "commonjs",
     "--target", "es2022",
     "--skipLibCheck",
+    "--allowJs",
   ],
   { stdio: "pipe" },
 );
-const { applyFilter, sortDeals, listingCounts } = require(path.join(out, "filter.js"));
+const { applyFilter, sortDeals, listingCounts } = require(path.join(out, "lib", "filter.js"));
 
 /* What the backend returned for "office chair", in its order: chairs, none of
    which carries a score, and one high-scoring stationery listing further down
@@ -91,7 +92,7 @@ assert.deepStrictEqual(
   "filtering scrambled the search ranking",
 );
 
-const { listingFacets } = require(path.join(out, "filter.js"));
+const { listingFacets } = require(path.join(out, "lib", "filter.js"));
 const matching = [
   {...deal(1,"Laptop",null),retailer:"A",price:500},
   {...deal(2,"Laptop",null),retailer:"B",price:1000},
@@ -112,7 +113,7 @@ assert.strictEqual(applyFilter(matching,{maxPrice:1500}).length,2,"Explicit ceil
  * shops that publishes reviews" — it removed 86% of the shelf and nothing said
  * so until it was pressed.
  */
-const { priceBuckets, PRICE_FILTER_MIN_LISTINGS } = require(path.join(out, "filter.js"));
+const { priceBuckets, PRICE_FILTER_MIN_LISTINGS } = require(path.join(out, "lib", "filter.js"));
 
 const shelf = [
   { ...deal(1, "Chair", 90), retailer: "Newegg", price: 20, rating: 0, reviewCount: 0, referencePrice: null },

@@ -20,7 +20,7 @@ const {
 } = require("../src/productIdentity");
 
 assert.strictEqual(SCORE_MODEL, "current-offer-v9");
-assert.strictEqual(RANKING_MODEL, "ranking-v1");
+assert.strictEqual(RANKING_MODEL, "ranking-v2-discovery");
 for (const placeholder of ["Does not apply", "Does Not Apply", "Non applicable", "Nicht zutreffend", "Ne s'applique pas", "不适用", "N/A"]) {
   assert.strictEqual(normalizeTradeItemId(placeholder), "", `Placeholder GTIN was accepted: ${placeholder}`);
 }
@@ -171,9 +171,9 @@ const multiSourceResults = scoreOffers([
 assert.strictEqual(multiSourceResults[0].external_id, "awin-exact", "eBay data richness overrode a stronger cross-store relevance match");
 assert.strictEqual(multiSourceResults[0].score_breakdown.ranking.model, RANKING_MODEL, "Ranking layers were not persisted in the score breakdown");
 assert.deepStrictEqual(multiSourceResults[0].score_breakdown.ranking.weights, {
-  relevance:0.60,
-  commerce_quality:0.25,
-  data_confidence:0.15
+  relevance:0.75,
+  recommendations:0.20,
+  data_confidence:0.05
 });
 const budgetResults = scoreOffers([
   {...sourceNeutral, external_id:"within-budget", source:"feed-king-koil", current_price:699},
