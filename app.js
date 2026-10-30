@@ -96,8 +96,9 @@ const searchRowsForMarket = marketCode => {
     SELECT * FROM products
     WHERE market=? AND status='published' AND ${sourceSql()}
   `).all(marketCode);
-  searchCatalogCache.set(marketCode, {rows, expiresAt:Date.now() + 60000});
-  return rows;
+  const enrichedRows = require("./src/discoveryHistory").discoveryHistory(db, rows, marketCode);
+  searchCatalogCache.set(marketCode, {rows:enrichedRows, expiresAt:Date.now() + 60000});
+  return enrichedRows;
 };
 
 if (config.isProduction) {
@@ -494,11 +495,12 @@ function expressWithHomepage(...args) {
       ? Math.max(10, Math.min(1000, Math.round(requestedLimit)))
       : Number.MAX_SAFE_INTEGER;
     const compactResponse = String(req.query.compact || "") === "1";
+    const discovery = req.query.view === "discovery";
     // Scopes the query to one category server-side — a category page (or the
     // Gifts feed alone, ~2,300 rows) no longer has to pull the whole market
     // catalog across the wire just to keep its own slice of it.
     const categoryFilter = String(req.query.category || "").trim();
-    const cacheKey = `products:${selectedMarket}:${language}:${responseLimit}:${compactResponse ? 1 : 0}:${categoryFilter}`;
+    const cacheKey = `products:${selectedMarket}:${language}:${responseLimit}:${compactResponse ? 1 : 0}:${categoryFilter}:${discovery ? 1 : 0}`;
     const cached = cachedValue(cacheKey);
     res.set("Cache-Control", "private, max-age=60, stale-while-revalidate=300");
     if (cached) return res.set("X-ODD-Cache", "HIT").json(cached);
@@ -539,6 +541,7 @@ function expressWithHomepage(...args) {
         display_badge:shaped.display_badge,
         coupons:shaped.coupons,
         display_score:shaped.display_score,
+        recommendation_score:require("./src/discoveryRanking").recommendationScore(product),
         display_selection_reason:shaped.display_selection_reason,
         display_product_rating:shaped.display_product_rating,
         display_product_rating_label:shaped.display_product_rating_label,
@@ -563,7 +566,7 @@ function expressWithHomepage(...args) {
       // drop leads" ordering below is a homepage concern that does not apply
       // once the request is already scoped to one category.
       const products = catalogSnapshot(searchRowsForMarket(selectedMarket), {
-        category: categoryFilter, ranking: false,
+        category: categoryFilter, ranking: false, discovery,
       }).slice(0, responseLimit);
       presented = await presentCatalogBatch(cacheKey, products, present);
     } else {
@@ -577,9 +580,9 @@ function expressWithHomepage(...args) {
       `).all(selectedMarket, selectedMarket);
       const dailyIds = new Set(daily.map(product => product.id));
       const catalog = catalogSnapshot(searchRowsForMarket(selectedMarket), {
-        ranking: false, unique: false,
-      }).filter(product => !dailyIds.has(product.id));
-      const products = uniqueProductsInOrder([...daily.map(product => ({
+        ranking: false, unique: discovery, discovery,
+      }).filter(product => discovery || !dailyIds.has(product.id));
+      const products = uniqueProductsInOrder([...(discovery ? [] : daily).map(product => ({
         ...product,
         selection_reason: product.daily_selection_reason || product.selection_reason
       })), ...catalog], responseLimit);

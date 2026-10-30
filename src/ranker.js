@@ -110,7 +110,7 @@ function deduplicationCandidateKeys(product) {
  * there to end.
  */
 const SCORE_MODEL = "current-offer-v9";
-const RANKING_MODEL = "ranking-v1";
+const RANKING_MODEL = "ranking-v2-discovery";
 
 const SEARCH_STOP_WORDS = new Set([
   "a", "an", "and", "at", "best", "buy", "for", "from", "good", "in", "me", "of", "on", "or", "the", "to", "with",
@@ -772,9 +772,10 @@ function rankingLayers(product, options = {}, scoreResult = null) {
   const quality = commerceQuality(product, result.breakdown);
   const confidence = clamp(number(result.evidenceConfidence) / 100);
   const weights = mode === "search"
-    ? {relevance:0.60, commerce_quality:0.25, data_confidence:0.15}
-    : {relevance:0.25, commerce_quality:0.50, data_confidence:0.25};
-  const finalRank = relevance * weights.relevance + quality * weights.commerce_quality + confidence * weights.data_confidence;
+    ? {relevance:0.75, recommendations:0.20, data_confidence:0.05}
+    : {relevance:0.10, recommendations:0.85, data_confidence:0.05};
+  const recommendation = require("./discoveryRanking").recommendationScore(product) / 100;
+  const finalRank = relevance * weights.relevance + recommendation * weights.recommendations + confidence * weights.data_confidence;
   return {
     model:RANKING_MODEL,
     mode,

@@ -1,3 +1,4 @@
+import { recommendationScore } from "../src/discoveryRanking";
 import type { Deal, PricePoint } from "./types";
 
 /**
@@ -55,6 +56,7 @@ export type RawProduct = {
   original_price: number | null;
   currency: string;
   display_score: number | null;
+  recommendation_score?: number;
   tracked_drop_percent?: number | null;
   tracked_low?: number | null;
   rating: number | null;
@@ -160,6 +162,7 @@ export function adaptProduct(raw: RawProduct): Omit<Deal, "rank"> {
     priceIsCurrent: raw.display_price_is_current !== false,
     currency: raw.currency,
     score: raw.display_score,
+    recommendationScore: raw.recommendation_score ?? recommendationScore(raw),
     rating: raw.rating ?? 0,
     reviewCount: raw.review_count ?? 0,
     seller: {

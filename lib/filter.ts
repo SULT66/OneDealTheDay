@@ -1,3 +1,4 @@
+import { discoveryOrder } from "../src/discoveryRanking";
 import type { DealFilter, DealLike, SortKey } from "./types";
 import { SORT_KEYS } from "./types";
 import { discountPercent } from "./format";
@@ -12,10 +13,12 @@ import { discountPercent } from "./format";
 
 export function sortDeals<T extends DealLike>(
   list: T[],
-  sort: SortKey = "score",
+  sort: SortKey = "recommended",
 ): T[] {
   const sorted = [...list];
   switch (sort) {
+    case "recommended":
+      return discoveryOrder(sorted);
     /* rank is the position the search returned, so this restores that order
        after the filter panel has removed things from the middle of it. */
     case "relevance":

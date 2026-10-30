@@ -46,6 +46,7 @@ export type Deal = {
   currency: string;
   /** OneDailyDrop Score, 0–100. Null until a listing clears the editorial gate. */
   score: number | null;
+  recommendationScore?: number;
   rating: number;
   reviewCount: number;
   seller: Seller;
@@ -138,6 +139,7 @@ export type DealLike = {
   referencePrice: number | null;
   currency: string;
   score: number | null;
+  recommendationScore?: number;
   rating: number;
   reviewCount: number;
   image: string;
@@ -174,6 +176,7 @@ export const SORT_KEYS = [
    * is just not what someone who typed two words is asking for.
    */
   "relevance",
+  "recommended",
   "score",
   "price-asc",
   "price-desc",
