@@ -3441,6 +3441,93 @@ app.get("/api/admin/refresh-status", admin, (req,res) => {
   if (!adminRefreshJob) return res.status(404).json({error:"No refresh job has been started in this application instance"});
   return res.json(refreshJobResponse(adminRefreshJob));
 });
+/* One screen for the actual product sources, including shops with zero offers.
+ * Read-only: it never triggers a feed download or changes publication status. */
+app.get("/api/admin/merchant-health", admin, (req, res) => {
+  const marketCode = normalizeMarket(req.query.market) || "us";
+  const providers = enabledProviders(c).filter(provider =>
+    !Array.isArray(provider.markets) || provider.markets.includes(marketCode));
+  const coverage = retailerCoverage(providers).filter(row => row.markets.includes(marketCode));
+
+  const counts = db.prepare(`
+    SELECT LOWER(p.source) AS source,
+           COUNT(*) AS published,
+           SUM(CASE WHEN p.current_price > 0
+                AND LENGTH(TRIM(COALESCE(p.title,''))) >= 10
+                AND LENGTH(TRIM(COALESCE(p.image_url,''))) > 0
+                AND LENGTH(TRIM(COALESCE(p.affiliate_url,''))) > 0
+             THEN 1 ELSE 0 END) AS complete,
+           MAX(p.checked_at) AS last_price_check
+    FROM products p
+    WHERE p.market=? AND p.status='published' AND ${sourceSql("p")}
+    GROUP BY LOWER(p.source)
+  `).all(marketCode);
+  const bySource = new Map(counts.map(row => [row.source, row]));
+
+  /* These clicks include tracked product-to-retailer handoffs, not purchases
+   * and not store-directory clicks without a product id. */
+  const since = new Date(Date.now() - 30 * 86400000).toISOString();
+  const clicks = db.prepare(`
+    SELECT LOWER(p.source) AS source, COUNT(*) AS outbound_clicks
+    FROM clicks c JOIN products p ON p.id=c.product_id
+    WHERE p.market=? AND c.clicked_at>=? AND c.destination_type='retailer'
+    GROUP BY LOWER(p.source)
+  `).all(marketCode, since);
+  const byClicks = new Map(clicks.map(row => [row.source, Number(row.outbound_clicks) || 0]));
+
+  const recent = db.prepare(`
+    SELECT provider_id,status,found_count,finished_at,message
+    FROM source_refresh_runs WHERE market=? ORDER BY id DESC LIMIT 500
+  `).all(marketCode);
+  const byProvider = new Map();
+  for (const run of recent) if (!byProvider.has(run.provider_id)) byProvider.set(run.provider_id, run);
+
+  const stores = coverage.map(retailer => {
+    const provider = providers.find(item =>
+      item.id === retailer.id || item.id === `feed-${retailer.id}` ||
+      item.id.startsWith(`feed-${retailer.id}-`) || item.source === `feed-${retailer.id}`);
+    const source = provider?.source || "";
+    const stats = bySource.get(source) || {};
+    const run = provider ? byProvider.get(provider.id) : null;
+    return {
+      id:retailer.id, name:retailer.name, network:retailer.network,
+      feed_configured:Boolean(provider), source,
+      published:Number(stats.published) || 0,
+      complete:Number(stats.complete) || 0,
+      last_price_check:stats.last_price_check || null,
+      outbound_clicks_30d:byClicks.get(source) || 0,
+      refresh:run ? {status:run.status, found:Number(run.found_count)||0, at:run.finished_at, message:run.message||""} : null
+    };
+  });
+  const knownSources = new Set(stores.map(row => row.source).filter(Boolean));
+  /* Custom feeds may be configured without an entry in the public retailer
+   * directory; they still deserve a health row. */
+  for (const provider of providers) {
+    if (knownSources.has(provider.source)) continue;
+    knownSources.add(provider.source);
+    const stats = bySource.get(provider.source) || {};
+    const run = byProvider.get(provider.id);
+    stores.push({
+      id:provider.id, name:provider.name, network:"Configured source",
+      feed_configured:true, source:provider.source,
+      published:Number(stats.published)||0, complete:Number(stats.complete)||0,
+      last_price_check:stats.last_price_check||null,
+      outbound_clicks_30d:byClicks.get(provider.source)||0,
+      refresh:run ? {status:run.status, found:Number(run.found_count)||0, at:run.finished_at, message:run.message||""} : null
+    });
+  }
+  res.set("Cache-Control", "no-store").json({
+    market:marketCode, as_of:new Date().toISOString(), period_days:30,
+    stores,
+    totals:{
+      configured:stores.filter(row=>row.feed_configured).length,
+      with_products:stores.filter(row=>row.published>0).length,
+      published:stores.reduce((sum,row)=>sum+row.published,0),
+      complete:stores.reduce((sum,row)=>sum+row.complete,0)
+    }
+  });
+});
+
 app.get("/api/admin/automation-status", admin, (req,res) => {
   const sourceRuns = db.prepare("SELECT * FROM source_refresh_runs ORDER BY id DESC LIMIT 100").all();
   const alerts = db.prepare("SELECT * FROM automation_alerts WHERE resolved_at IS NULL ORDER BY created_at DESC LIMIT 100").all();
