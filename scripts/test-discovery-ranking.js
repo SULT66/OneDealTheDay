@@ -33,3 +33,9 @@ assert.equal(enriched[0].average_30_day_price,70,'ranking must use actual observ
 assert.ok(recommendationScore(enriched[0])>recommendationScore(base));
 db.close();
 console.log('Discovery history: batched recorded-price context and market/currency isolation passed.');
+
+const established = Array.from({length:20},(_,i)=>({...base,id:`est-${i}`,title:`Useful household gadget ${i}`,category:`cat-${i}`,retailer_name:'eBay',
+  rating:4.8,review_count:200,seller_rating:4.95,shipping_summary:'Free shipping',return_summary:'30-day returns'}));
+const newShops=['OutIn','Lumary','Grommet','Giftlab'].map((retailer_name,i)=>({...base,id:`new-${i}`,title:`Useful household gift ${i}`,category:`gift-${i}`,retailer_name}));
+assert.ok(new Set(discoveryOrder([...established,...newShops]).slice(0,4).map(p=>p.retailer_name)).size>1,
+  'even a strong data-rich retailer must not occupy the entire first desktop row');

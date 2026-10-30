@@ -62,7 +62,7 @@ function discoveryOrder(items, { limit = items.length, perRetailer = 4, perCateg
       if (used.has(p) || score(p) < floor) continue;
       const shop = merchant(p), category = p.category || p.normalized_category || p.public_category || '', type = productType(p);
       if ((shops.get(shop)||0) >= cap || (categories.get(category)||0) >= perCategory || (type && (types.get(type)||0) >= 1)) continue;
-      const value = score(p) - (shops.get(shop)||0)*6 - (categories.get(category)||0)*3;
+      const value = score(p) - (shops.get(shop)||0)*12 - (categories.get(category)||0)*3;
       if (value > bestValue) { best = p; bestValue = value; }
     }
     if (!best) break;
