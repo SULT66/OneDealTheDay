@@ -35,13 +35,17 @@ const dbPath = path.join(runtimeDir, "site.db");
 const splitFromShare = path.resolve(runtimeDir) !== path.resolve(dir);
 const onNetworkShare = isAzure && !splitFromShare;
 
+let runtimeDatabaseVerified = false;
 if (splitFromShare) {
-  prepareRuntimeDatabase({
+  const prepared = prepareRuntimeDatabase({
     runtimePath: dbPath,
     sharedPath: sharedDbPath,
     sharedDir: dir,
     openDatabase: (file, options) => new Database(file, options),
   });
+  // Restore already ran integrity_check on the final local copy.
+  // Running it again against a large catalog delays Azure readiness.
+  runtimeDatabaseVerified = prepared.verified === true;
 }
 
 const db = new Database(dbPath);
@@ -90,7 +94,7 @@ console.log(
 // damaged index pages while leaving the underlying table rows intact. Preserve
 // the original file, rebuild only the indexes, and verify integrity before any
 // startup migration writes to them.
-repairIndexesIfNeeded(db, dbPath, { enabled: isAzure });
+repairIndexesIfNeeded(db, dbPath, { enabled: isAzure && !runtimeDatabaseVerified });
 
 /*
  * The share stops being the live database and becomes the backup instead.
