@@ -31,7 +31,7 @@ function quantityDetails(offer, language = 'en') {
 }
 
 function focusedPackComparison(result, original, message, language='en') {
-  if (!original || !result || result.turn_kind==='discussion' || result.scope==='social' || result.scope==='off_topic') return result;
+  if (!original || !result || result.bundle || result.linked_product || result.turn_kind==='discussion' || result.scope==='social' || result.scope==='off_topic') return result;
   // A carried product ID must not hijack a later unrelated discovery request.
   if (!/\b(?:price|cheaper|worth|compare|precio|barato|prix|cher|preis|günstig)\b|цен[аыуе]|дешевле|сравни/iu.test(String(message || ''))) return result;
   const copy = COPY[language] || COPY.en;

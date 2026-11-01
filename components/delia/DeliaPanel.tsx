@@ -1,5 +1,5 @@
 "use client";
-import { useUiCopy } from "@/components/site/CopyProvider";
+import { useUiCopy, useCopy } from "@/components/site/CopyProvider";
 
 import Link from "next/link";
 import { AffiliateNotice } from "@/components/site/AffiliateNotice";
@@ -59,6 +59,7 @@ import { useDelia } from "./DeliaContext";
  * asked for.
  */
 const TRANSCRIPT_KEY = "odd-delia-transcript";
+const BUNDLE_CURRENCIES: Record<string,string> = {us:"USD",ca:"CAD",uk:"GBP",fr:"EUR",de:"EUR"};
 
 /*
  * Whether a stored turn can still be drawn.
@@ -543,6 +544,7 @@ function DeliaExchange({
   disabled: boolean;
 }) {
   const ui = useUiCopy();
+  const copy = useCopy();
   // When there are two questions, answering one used to fire the request
   // immediately, taking only that answer and leaving the other question
   // unanswered. Two questions now select, and wait for both before sending
@@ -587,6 +589,34 @@ function DeliaExchange({
         <div className="min-w-0 flex-1 space-y-4">
         <p className="whitespace-pre-wrap text-[0.95rem] leading-7 text-fg">{result.message}</p>
 
+        {result.linkedProduct && (
+          <div className="rounded-2xl border border-border p-4 text-sm">
+            <p className="mb-1 text-xs font-semibold text-fg-muted">{copy("app.delia.linked")}</p>
+            <a href={result.linkedProduct.url} target="_blank" rel="noopener noreferrer" className="font-semibold underline underline-offset-4">
+              {result.linkedProduct.title}
+            </a>
+            {result.linkedProduct.price_value != null && result.linkedProduct.currency && (
+              <p className="mt-1">{copy("app.delia.listedPrice")}: {formatPrice(result.linkedProduct.price_value,result.linkedProduct.currency)}</p>
+            )}
+          </div>
+        )}
+
+        {result.bundle && (
+          <div className="space-y-2 rounded-2xl border border-border p-4 text-sm">
+            <p className="font-semibold">{result.bundle.title}</p>
+            <p>{copy("app.delia.totalBudget")}: {formatPrice(result.bundle.budget,result.bundle.currency)}</p>
+            {result.bundle.complete && result.bundle.known_total != null && (
+              <>
+                <p>{copy("app.delia.itemSubtotal")}: {formatPrice(result.bundle.item_subtotal ?? 0,result.bundle.currency)}</p>
+                <p>{copy("app.delia.knownShipping")}: {formatPrice(result.bundle.known_shipping ?? 0,result.bundle.currency)}</p>
+                <p className="font-semibold">{copy("app.delia.knownTotal")}: {formatPrice(result.bundle.known_total,result.bundle.currency)}</p>
+                {!result.bundle.shipping_complete && <p className="text-xs text-fg-muted">{copy("app.delia.shippingUnknown")}</p>}
+              </>
+            )}
+            {result.bundle.missing.length>0 && <p>{copy("app.delia.missing")}: {result.bundle.missing.join(", ")}</p>}
+          </div>
+        )}
+
         {/* Delia already works out whether these are what was asked for, and
             said so in result_state, but the shopper was never told. Somebody
             who asked for 32oz maple syrup and got a 33.8oz bottle deserves to
@@ -602,7 +632,12 @@ function DeliaExchange({
           )}
 
         {result.recommendations.length > 0 && (
-          <OfferGroups recs={result.recommendations} market={market} onClose={onClose} />
+          result.bundle ? <div className="space-y-3">{result.recommendations.map((rec,index)=>(
+            <div key={rec.catalog_product_id || rec.url}>
+              <p className="mb-1 text-xs font-semibold text-fg-muted">{rec.bundle_component}</p>
+              <OfferRow rec={rec} market={market} onClose={onClose} position={index+1}/>
+            </div>
+          ))}</div> : <OfferGroups recs={result.recommendations} market={market} onClose={onClose} />
         )}
 
         {result.partial && (
@@ -946,6 +981,7 @@ function ConversationSidebar({
 
 export function DeliaPanel() {
   const ui = useUiCopy();
+  const copy = useCopy();
   const { open, seed, seedProductId, market, language, closeDelia } = useDelia();
 
   const [available, setAvailable] = useState<boolean | null>(null);
@@ -1048,6 +1084,7 @@ export function DeliaPanel() {
      and the browser agree on the first paint. */
   useEffect(() => setExamples(pickExamples()), []);
   const [typed, setTyped] = useState("");
+  const [linkHint, setLinkHint] = useState(false);
   // Keyed by turn index — feedback is per-answer, not global to the panel.
   const [feedbackGiven, setFeedbackGiven] = useState<Record<number, boolean>>({});
 
@@ -1419,7 +1456,7 @@ export function DeliaPanel() {
           value={typed}
           onChange={(e) => setTyped(e.target.value)}
           onKeyDown={onComposerKey}
-          placeholder={ui("Ask Delia anything")}
+          placeholder={linkHint ? copy("app.delia.linkPlaceholder") : ui("Ask Delia anything")}
           autoComplete="off"
           className="focus-self max-h-[200px] min-h-10 flex-1 resize-none bg-transparent py-2 text-[0.95rem] leading-6 text-fg outline-none placeholder:text-fg-subtle"
         />
@@ -1542,9 +1579,15 @@ export function DeliaPanel() {
                 <h3 className="text-balance text-center text-2xl font-bold tracking-tight text-fg sm:text-3xl">
                   {ui("What are you shopping for?")}</h3>
                 <p className="mt-2 max-w-md text-center text-sm leading-relaxed text-fg-muted">
-                  {ui("Tell Delia what you need and your budget.")}</p>
+                  {copy("app.delia.modesHelp")}</p>
 
                 <div className="mt-7 w-full">{composer}</div>
+
+                <div className="mt-3 flex w-full flex-wrap justify-center gap-2">
+                  <button type="button" className="rounded-full border border-border px-3 py-2 text-xs font-semibold hover:bg-bg" onClick={()=>{setLinkHint(false);setTyped(copy("app.delia.taskExample"));inputRef.current?.focus();}}>{copy("app.delia.taskMode")}</button>
+                  <button type="button" className="rounded-full border border-border px-3 py-2 text-xs font-semibold hover:bg-bg" onClick={()=>{setLinkHint(true);inputRef.current?.focus();}}>{copy("app.delia.linkMode")}</button>
+                  <button type="button" className="rounded-full border border-border px-3 py-2 text-xs font-semibold hover:bg-bg" onClick={()=>{setLinkHint(false);setTyped(copy("app.delia.bundleExample", {budget: `200 ${BUNDLE_CURRENCIES[market] || "USD"}`}));inputRef.current?.focus();}}>{copy("app.delia.bundleMode")}</button>
+                </div>
 
                 <ul className="mt-4 grid w-full grid-cols-1 gap-2 sm:grid-cols-2">
                   {examples.map((e) => (

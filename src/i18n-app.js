@@ -1118,3 +1118,16 @@ Object.assign(appCopy.de, {
   "app.filter.hide": "Ausblenden",
   "app.brands.countOne": "1 Marke"
 });
+
+for (const [language, values] of Object.entries({
+  en:['Product you linked','Listed price','Total budget','Items subtotal','Known delivery charges','Known total','Some delivery charges are unconfirmed. Tax is not included.','Still needed','Describe your task, paste a product link, or build a set within a total budget.','Choose for my needs','Check a product link','Build a set on a budget','I need a coffee machine','Build a desk setup for {budget} total','Paste a public product link here'],
+  es:['Producto de tu enlace','Precio anunciado','Presupuesto total','Subtotal de artículos','Envío conocido','Total conocido','Algunos gastos de envío no están confirmados. Impuestos no incluidos.','Aún falta','Describe tu necesidad, pega un enlace o pide un conjunto con presupuesto total.','Elegir según mi necesidad','Comprobar un enlace','Crear un conjunto con presupuesto','Necesito una cafetera','Crea un conjunto para mi escritorio por {budget}','Pega aquí un enlace público a un producto'],
+  fr:['Produit de votre lien','Prix affiché','Budget total','Sous-total des articles','Livraison connue','Total connu','Certains frais de livraison restent à confirmer. Taxes exclues.','Il manque','Décrivez un besoin, collez un lien ou demandez un ensemble avec un budget total.','Choisir selon mes besoins','Vérifier un lien','Composer un ensemble','Il me faut une machine à café','Compose un ensemble pour mon bureau pour {budget}','Collez un lien public vers un produit'],
+  de:['Produkt aus Ihrem Link','Gelisteter Preis','Gesamtbudget','Artikel-Zwischensumme','Bekannte Versandkosten','Bekannte Summe','Einige Versandkosten sind unbestätigt. Steuern sind nicht enthalten.','Noch benötigt','Beschreiben Sie einen Bedarf, fügen Sie einen Link ein oder nennen Sie ein Gesamtbudget für ein Set.','Nach Bedarf auswählen','Produktlink prüfen','Set mit Gesamtbudget','Ich brauche eine Kaffeemaschine','Stelle ein Set für meinen Schreibtisch für {budget} zusammen','Öffentlichen Produktlink hier einfügen'],
+  ru:['Товар по вашей ссылке','Указанная цена','Общий бюджет','Стоимость товаров','Известная доставка','Известная сумма','Часть расходов на доставку не подтверждена. Налоги не включены.','Ещё нужно','Опишите задачу, вставьте ссылку на товар или попросите комплект на общий бюджет.','Подобрать под задачу','Проверить ссылку','Собрать комплект на бюджет','Нужна кофемашина','Обустрой рабочий стол за {budget}','Вставьте публичную ссылку на товар'],
+  az:['Keçiddəki məhsul','Göstərilən qiymət','Ümumi büdcə','Məhsulların cəmi','Məlum çatdırılma','Məlum cəm','Bəzi çatdırılma xərcləri təsdiqlənməyib. Vergilər daxil deyil.','Hələ lazımdır','Ehtiyacınızı yazın, məhsul keçidi göndərin və ya ümumi büdcəyə dəst istəyin.','Ehtiyaca görə seç','Məhsul keçidini yoxla','Büdcəyə dəst hazırla','Qəhvə maşını lazımdır','İş masası üçün dəst hazırla, büdcə {budget}','Açıq məhsul keçidini daxil edin'],
+})) {
+  const keys=['linked','listedPrice','totalBudget','itemSubtotal','knownShipping','knownTotal','shippingUnknown','missing','modesHelp','taskMode','linkMode','bundleMode','taskExample','bundleExample','linkPlaceholder'];
+  appCopy[language] ||= {};
+  keys.forEach((key,index)=>{appCopy[language]['app.delia.'+key]=values[index];});
+}

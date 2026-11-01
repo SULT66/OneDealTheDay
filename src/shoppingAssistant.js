@@ -1,4 +1,5 @@
 const OpenAIExport = require("openai");
+const {shoppingMode} = require("./deliaShoppingModes");
 const {packCount} = require("./packComparison");
 const { marketPath } = require("./markets");
 const {
@@ -1812,7 +1813,7 @@ function shoppingMissionText(missionValue, fallback = "") {
 
 const DISCOVERY_QUESTION_COPY = {
   en: {
-    intro: "I can narrow this down properly. Two quick questions:",
+    intro: "One detail will help me find the right options:",
     budget: "What budget should I stay within?",
     headphone: "Would you prefer earbuds or over-ear headphones?",
     tv: "What screen size do you want?",
@@ -1822,7 +1823,7 @@ const DISCOVERY_QUESTION_COPY = {
     general: "How will you mainly use this product?",
   },
   ru: {
-    intro: "Чтобы подобрать действительно хорошие варианты, уточню два момента:",
+    intro: "Уточню один момент, чтобы подобрать подходящие варианты:",
     budget: "Какой у вас бюджет?",
     headphone: "Нужны внутриканальные вкладыши или полноразмерные наушники?",
     tv: "Какой размер экрана вам нужен?",
@@ -1832,7 +1833,7 @@ const DISCOVERY_QUESTION_COPY = {
     general: "Как вы будете в основном использовать этот товар?",
   },
   az: {
-    intro: "Həqiqətən yaxşı variantlar seçmək üçün iki qısa sual:",
+    intro: "Uyğun variantları seçmək üçün bir sual:",
     budget: "Büdcəniz nə qədərdir?",
     headphone: "Qulaqdaxili, yoxsa qulaqüstü qulaqlıq istəyirsiniz?",
     tv: "Hansı ekran ölçüsünü istəyirsiniz?",
@@ -1842,7 +1843,7 @@ const DISCOVERY_QUESTION_COPY = {
     general: "Bu məhsuldan əsasən necə istifadə edəcəksiniz?",
   },
   es: {
-    intro: "Para elegir opciones realmente buenas, necesito dos datos:",
+    intro: "Un detalle para elegir las opciones adecuadas:",
     budget: "¿Qué presupuesto debo respetar?",
     headphone: "¿Prefieres auriculares de botón o de diadema?",
     tv: "¿Qué tamaño de pantalla quieres?",
@@ -1852,7 +1853,7 @@ const DISCOVERY_QUESTION_COPY = {
     general: "¿Cómo usarás principalmente este producto?",
   },
   fr: {
-    intro: "Pour choisir de très bonnes options, j’ai deux questions rapides :",
+    intro: "Une précision pour choisir les bonnes options :",
     budget: "Quel budget dois-je respecter ?",
     headphone: "Préférez-vous des écouteurs ou un casque ?",
     tv: "Quelle taille d’écran souhaitez-vous ?",
@@ -1862,7 +1863,7 @@ const DISCOVERY_QUESTION_COPY = {
     general: "Comment utiliserez-vous principalement ce produit ?",
   },
   de: {
-    intro: "Damit ich wirklich gute Optionen auswählen kann, zwei kurze Fragen:",
+    intro: "Eine Frage, damit ich passende Optionen auswählen kann:",
     budget: "Welches Budget soll ich einhalten?",
     headphone: "Möchten Sie In-Ear- oder Over-Ear-Kopfhörer?",
     tv: "Welche Bildschirmgröße möchten Sie?",
@@ -5387,7 +5388,7 @@ function createShoppingAssistant({
 } = {}) {
   const openai = client || (apiKey ? new OpenAI({ apiKey }) : null);
 
-  return {
+  const assistant = {
     configured: Boolean(openai),
     model,
     async respond({
@@ -5404,6 +5405,9 @@ function createShoppingAssistant({
       /* Set by the "just show me options" button, so a broad request can be
          searched without answering anything first. */
       skipClarification = false,
+      // Internal orchestration only; these are never read from the HTTP body.
+      modesHandled = false,
+      responseBudgetMs = TOTAL_RESPONSE_BUDGET_MS,
       /* The products the panel is showing from the last search, so a question
          about them is answered about them. See src/deliaConversation.js. */
       shortlist: shortlistInput = [],
@@ -5488,6 +5492,32 @@ function createShoppingAssistant({
         const error = new Error("AI Shopping Assistant is not configured.");
         error.statusCode = 503;
         throw error;
+      }
+      if (!modesHandled) {
+        const selectedMarket = market(marketCode);
+        const modeResult = await shoppingMode({
+          message:userMessage, messages, shoppingMission, productId, skipClarification,
+          language:responseLanguage(userMessage, language), market:selectedMarket,
+          openai, model, signal, onProgress,
+          bounded:withRequestTimeout,
+          extractSources,
+          allowedLink:(url) => {
+            const u = new URL(url);
+            if (['onedailydrop.com','www.onedailydrop.com'].includes(u.hostname)) {
+              return new RegExp(`^/${selectedMarket.code}/deal/\\d+/?$`).test(u.pathname);
+            }
+            return allowedRetailerHost(url,selectedMarket.code) && isDirectProductPage(url) && urlMatchesMarket(url,selectedMarket.code);
+          },
+          catalogLink:(url) => {
+            const u = new URL(url);
+            if (!['onedailydrop.com','www.onedailydrop.com'].includes(u.hostname)) return null;
+            const id = new RegExp(`^/${selectedMarket.code}/deal/(\\d+)/?$`).exec(u.pathname)?.[1];
+            const product = id && catalogProductById(db,sourceSql,id,selectedMarket.code,language);
+            return product ? {id:product.id,title:product.title,price_value:product.price,currency:product.currency} : null;
+          },
+          search:(options) => assistant.respond({marketCode,language,signal,...options,modesHandled:true}),
+        });
+        if (modeResult) return modeResult;
       }
       const shortlist = sanitizeShortlist(shortlistInput);
       let classification;
@@ -5603,7 +5633,7 @@ function createShoppingAssistant({
           currency: market(marketCode).currency,
           shopperLanguage,
           signal,
-          timeoutMs: Math.max(0, TOTAL_RESPONSE_BUDGET_MS - (Date.now() - startedAt)),
+          timeoutMs: Math.max(0, responseBudgetMs - (Date.now() - startedAt)),
         });
         return {
           message: discussion?.answer || DISCUSSION_UNAVAILABLE[shopperLanguage] || DISCUSSION_UNAVAILABLE.en,
@@ -5767,7 +5797,7 @@ function createShoppingAssistant({
         !hadActiveMission && !namedSomethingSpecific && !skipClarification
           ? refinementPrompts.filter(
               (prompt) => prompt.options.length > 0 && !looksLikeBudgetOptions(prompt.options),
-            )
+            ).slice(0, 1)
           : [];
       if (askFirstPrompts.length) {
         return {
@@ -5939,7 +5969,7 @@ function createShoppingAssistant({
          spent real time, and a fixed 26s on top of them overruns the route's
          own deadline. */
       const remainingBudgetMs =
-        TOTAL_RESPONSE_BUDGET_MS -
+        responseBudgetMs -
         (Date.now() - startedAt) -
         RESPONSE_ASSEMBLY_RESERVE_MS;
       /*
@@ -6638,7 +6668,7 @@ function createShoppingAssistant({
             shopperLanguage,
             lowerPriceRequested: isLowerPriceRequest(userMessage),
             signal,
-            timeoutMs: Math.min(SUMMARY_TIMEOUT_MS, SUMMARY_DEADLINE_MS - (Date.now() - startedAt)),
+            timeoutMs: Math.min(SUMMARY_TIMEOUT_MS, responseBudgetMs - (Date.now() - startedAt), SUMMARY_DEADLINE_MS - (Date.now() - startedAt)),
           })
         : null;
       if (
@@ -6738,6 +6768,7 @@ function createShoppingAssistant({
       };
     },
   };
+  return assistant;
 }
 
 module.exports = {
