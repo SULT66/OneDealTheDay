@@ -108,6 +108,7 @@ const {
 const { storefrontUrl, storeDirectoryDestination } = require("./storefrontLinks");
 const {ratingSummary, summarizeBrands} = require("./brandSummary");
 const {catalogPreview} = require("./deliaPreview");
+const {previewProductId} = require("./deliaShoppingModes");
 const {focusedPackComparison} = require("./packComparison");
 const { hostLabel, verifyOutbound, withSignedLinks } = require("./outboundLinks");
 const { matchConversations, normalizeQuery: normalizeConversationQuery } = require("./deliaConversationSearch");
@@ -461,7 +462,7 @@ app.post("/api/shopping-assistant/stream", shoppingAssistantRateLimit, async (re
   }
 
   let preview=null;
-  try{preview=catalogPreview({db,sourceSql,productId:req.body?.product_id,market:selectedMarket.code,language,t});}catch(error){console.error("Delia catalogue preview unavailable:",error.message);}
+  try{preview=catalogPreview({db,sourceSql,productId:previewProductId(req.body),market:selectedMarket.code,language,t});}catch(error){console.error("Delia catalogue preview unavailable:",error.message);}
   if(preview){send({type:"preview",result:preview});res.flushHeaders();}
   let hardTimeoutTimer;
   try {
@@ -500,7 +501,7 @@ app.post("/api/shopping-assistant/stream", shoppingAssistantRateLimit, async (re
       }, SHOPPING_ASSISTANT_HARD_TIMEOUT_MS);
     });
     const rawResult = await Promise.race([assistantTask, hardTimeoutTask]);
-    const originalPreview = catalogPreview({db,sourceSql,productId:req.body?.product_id,market:selectedMarket.code,language,t});
+    const originalPreview = catalogPreview({db,sourceSql,productId:previewProductId(req.body),market:selectedMarket.code,language,t});
     const result = rawResult.partial ? rawResult : focusedPackComparison(rawResult,originalPreview?.recommendations[0],req.body?.message,language);
     clearTimeout(hardTimeoutTimer);
     if(res.destroyed)return;
@@ -572,7 +573,7 @@ app.post("/api/shopping-assistant", shoppingAssistantRateLimit, async (req, res)
 
   let preview = null;
   try {
-    preview = catalogPreview({db, sourceSql, productId:req.body?.product_id, market:selectedMarket.code, language, t});
+    preview = catalogPreview({db, sourceSql, productId:previewProductId(req.body), market:selectedMarket.code, language, t});
   } catch (error) {
     console.error("Delia catalogue preview unavailable:", error.message);
   }
@@ -615,7 +616,7 @@ app.post("/api/shopping-assistant", shoppingAssistantRateLimit, async (req, res)
       }, SHOPPING_ASSISTANT_HARD_TIMEOUT_MS);
     });
     const rawResult = await Promise.race([assistantTask, hardTimeoutTask]);
-    const originalPreview = catalogPreview({db,sourceSql,productId:req.body?.product_id,market:selectedMarket.code,language,t});
+    const originalPreview = catalogPreview({db,sourceSql,productId:previewProductId(req.body),market:selectedMarket.code,language,t});
     const result = rawResult.partial ? rawResult : focusedPackComparison(rawResult,originalPreview?.recommendations[0],req.body?.message,language);
     clearTimeout(hardTimeoutTimer);
     /* Kept only if it is worth keeping: a search that found nothing is the

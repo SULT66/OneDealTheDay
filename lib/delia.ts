@@ -12,6 +12,8 @@ import { appCopy } from "../src/i18n-app";
  */
 
 export type DeliaRecommendation = {
+  bundle_component?: string;
+  shipping_cost?: number | null;
   title: string;
   pack_count?: number | null;
   unit_price_value?: number | null;
@@ -91,6 +93,18 @@ export type DeliaClarificationPrompt = {
 };
 
 export type DeliaResult = {
+  bundle?: {
+    title: string;
+    budget: number;
+    currency: string;
+    complete: boolean;
+    item_subtotal?: number;
+    known_shipping?: number;
+    known_total?: number;
+    shipping_complete?: boolean;
+    missing: string[];
+  };
+  linkedProduct?: {title: string; url: string; price_value: number | null; currency: string | null};
   /** Catalogue facts survived, but the external comparison did not finish. */
   partial?: boolean;
   transcript: string;
@@ -161,6 +175,8 @@ export type DeliaProgress = {
  * live backend rather than assumed from source, since the two disagreed.
  */
 type AssistantResponse = {
+  bundle?: DeliaResult["bundle"];
+  linked_product?: DeliaResult["linkedProduct"];
   partial?: boolean;
   message?: string;
   message_source?: "delia" | "template";
@@ -410,6 +426,8 @@ async function askAssistantStreaming(
  */
 function toResult(transcript: string, data: AssistantResponse): DeliaResult {
   return {
+    bundle: data.bundle,
+    linkedProduct: data.linked_product,
     partial: Boolean(data.partial),
     transcript,
     message: (data.message || "").replace(/[\u2013\u2014]/g, "-"),
