@@ -4,16 +4,63 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
 import dynamic from "next/dynamic";
 import { measure, pageType } from "@/lib/measure";
+import { useUiCopy } from "@/components/site/CopyProvider";
 
 const DeliaPanel = dynamic(() => import("./DeliaPanel").then(module => module.DeliaPanel), {
   ssr: false,
+  loading: () => <DeliaLoading />,
 });
+
+// Keep the opening feedback in the small provider bundle. The full chat and
+// its account/history code can still load only when somebody needs them.
+function DeliaLoading() {
+  const { open, closeDelia } = useDelia();
+  const ui = useUiCopy();
+  const closeRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const previousFocus = document.activeElement as HTMLElement | null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    closeRef.current?.focus();
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closeDelia();
+      if (event.key === "Tab") {
+        event.preventDefault();
+        closeRef.current?.focus();
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", onKey);
+      previousFocus?.focus?.();
+    };
+  }, [open, closeDelia]);
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-stretch justify-center bg-ink/55 sm:items-center sm:p-4">
+      <div role="dialog" aria-modal="true" aria-labelledby="delia-loading-title"
+        aria-busy="true"
+        className="relative flex h-dvh w-full flex-col bg-surface sm:h-[min(880px,92dvh)] sm:max-w-4xl sm:rounded-3xl">
+        <div className="flex h-14 shrink-0 items-center justify-between px-5">
+          <h2 id="delia-loading-title" className="font-semibold">Delia</h2>
+          <button ref={closeRef} type="button" aria-label={ui("Close Delia")} onClick={closeDelia}
+            className="h-10 w-10 rounded-lg text-xl hover:bg-bg">×</button>
+        </div>
+        <p role="status" className="m-auto px-5 text-sm text-fg-muted">{ui("Opening Delia…")}</p>
+      </div>
+    </div>
+  );
+}
 
 type DeliaState = {
   open: boolean;

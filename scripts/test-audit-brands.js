@@ -103,9 +103,13 @@ async function get(route) {
   for (let n = 0; n < 20 && !aborted; n++) await new Promise(r => setTimeout(r, 20));
   assert.equal(aborted, 1, "disconnect must abort server work");
 
-  // Advance only the focused comparison's 25-second timer; preserve all other timers.
+  // Exercise the actual route deadline without waiting a minute. A product
+  // preview must leave enough time for the 52-second assistant budget.
+  const serverSource = fs.readFileSync(path.join(__dirname, "../src/server.js"), "utf8");
+  const deadline = Number(/SHOPPING_ASSISTANT_HARD_TIMEOUT_MS = (\d+)/.exec(serverSource)[1]);
+  assert(deadline > 52000 && deadline <= 60000);
   const realTimeout = global.setTimeout;
-  global.setTimeout = (callback, ms, ...args) => realTimeout(callback, ms === 25000 ? 30 : ms, ...args);
+  global.setTimeout = (callback, ms, ...args) => realTimeout(callback, ms === deadline ? 30 : ms, ...args);
   try {
     const fallback = await fetch(base + "/api/shopping-assistant/stream", options);
     const events = (await fallback.text()).trim().split("\n").map(line => JSON.parse(line));
@@ -114,6 +118,13 @@ async function get(route) {
     assert.equal(final.recommendations[0].catalog_product_id, 1);
     assert.match(final.message, /external comparison did not finish/i);
     assert.equal(aborted, 2, "deadline must stop external work and retain catalogue facts");
+    const plain = await fetch(base + "/api/shopping-assistant", options);
+    const plainResult = await plain.json();
+    assert.equal(plainResult.partial, true);
+    assert.equal(plainResult.recommendations[0].catalog_product_id, 1);
+    assert.equal(aborted, 3, "The non-streaming transport must retain the same fallback");
+    assert.equal(db.prepare("SELECT COUNT(*) AS n FROM delia_answers").get().n, 0,
+      "An interrupted comparison must not be cached as a completed answer");
   } finally {global.setTimeout = realTimeout;}
   db.prepare("UPDATE products SET title='Acme Bed Pillows 2-Pack',current_price=5.84 WHERE id=1").run();
   for(const endpoint of ['/api/shopping-assistant','/api/shopping-assistant/stream']) {
