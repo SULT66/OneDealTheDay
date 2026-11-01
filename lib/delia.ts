@@ -1,3 +1,5 @@
+import { appCopy } from "../src/i18n-app";
+
 /**
  * Thin client for the backend's real AI shopping assistant.
  *
@@ -89,6 +91,8 @@ export type DeliaClarificationPrompt = {
 };
 
 export type DeliaResult = {
+  /** Catalogue facts survived, but the external comparison did not finish. */
+  partial?: boolean;
   transcript: string;
   message: string;
   /* Whether `message` is Delia's own sentence or the plain template. Absent on
@@ -157,6 +161,7 @@ export type DeliaProgress = {
  * live backend rather than assumed from source, since the two disagreed.
  */
 type AssistantResponse = {
+  partial?: boolean;
   message?: string;
   message_source?: "delia" | "template";
   turn_kind?: "discussion";
@@ -256,7 +261,8 @@ export async function askAssistant(
    */
   onProgress?: (event: DeliaProgress) => void,
 ): Promise<DeliaResult> {
-  const signal=AbortSignal.any([...(opts.signal?[opts.signal]:[]),AbortSignal.timeout(opts.productId?35000:65000)]);
+  // The server allows 58 seconds, including for product-page questions.
+  const signal=AbortSignal.any([...(opts.signal?[opts.signal]:[]),AbortSignal.timeout(65000)]);
   opts={...opts,signal};
   if (onProgress) {
     const streamed = await askAssistantStreaming(transcript, opts, onProgress);
@@ -334,7 +340,21 @@ async function askAssistantStreaming(
   const decoder = new TextDecoder();
   let buffer = "";
   let result: DeliaResult | null = null;
+  let preview: DeliaResult | null = null;
   let failure = "";
+
+  const recoverPreview = () => {
+    // Explicit cancellation must stay cancelled. A connection loss or client
+    // deadline must not discard catalogue facts already shown to the shopper.
+    if (opts.signal?.aborted && opts.signal.reason?.name !== "TimeoutError") return null;
+    if (!preview?.recommendations.length) return null;
+    const copy = appCopy as Record<string, Record<string, string>>;
+    return {
+      ...preview,
+      partial: true,
+      message: copy[opts.language || "en"]?.["app.delia.partial"] || copy.en["app.delia.partial"],
+    };
+  };
 
   /* Lines can be split across chunks, so only whole ones are parsed and the
      remainder waits for the next read. */
@@ -348,7 +368,10 @@ async function askAssistantStreaming(
       return;
     }
     if (event.type === "progress") onProgress(event);
-    if (event.type === "preview" && event.result) opts.onPreview?.(toResult(transcript,event.result));
+    if (event.type === "preview" && event.result) {
+      preview = toResult(transcript, event.result);
+      opts.onPreview?.(preview);
+    }
     if (event.type === "result" && event.result) result = toResult(transcript, event.result);
     if (event.type === "error") failure = event.error || "Delia could not answer that. Try again.";
   };
@@ -363,10 +386,17 @@ async function askAssistantStreaming(
     if(result)break;
   }
   consume(buffer);
+  } catch (error) {
+    const recovered = recoverPreview();
+    if (recovered) return recovered;
+    throw error;
   } finally { await reader.cancel().catch(()=>{}); reader.releaseLock(); }
 
-  if (failure) throw new DeliaError(failure);
-  if(!result)throw new DeliaError("Delia could not finish that search. Try again.");
+  if (failure || !result) {
+    const recovered = recoverPreview();
+    if (recovered) return recovered;
+    throw new DeliaError(failure || "Delia could not finish that search. Try again.");
+  }
   return result;
 }
 
@@ -380,6 +410,7 @@ async function askAssistantStreaming(
  */
 function toResult(transcript: string, data: AssistantResponse): DeliaResult {
   return {
+    partial: Boolean(data.partial),
     transcript,
     message: (data.message || "").replace(/[\u2013\u2014]/g, "-"),
     messageSource: data.message_source,

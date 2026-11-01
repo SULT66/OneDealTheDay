@@ -74,7 +74,7 @@ function cacheKey({ message, messages, shoppingMission, excludedOfferUrls, marke
  * request a follow-up that does not read this cache anyway.
  */
 function worthCaching(result) {
-  if (!result || result.error) return false;
+  if (!result || result.error || result.partial) return false;
   if (result.result_state === "no_match") return false;
   if (Array.isArray(result.clarifying_questions) && result.clarifying_questions.length) return false;
   return Array.isArray(result.recommendations) && result.recommendations.length > 0;
@@ -86,7 +86,8 @@ function readCachedAnswer(db, key, now = Date.now(), ttlMs = DEFAULT_TTL_MS) {
   if (!row) return null;
   if (now - Date.parse(row.created_at) > ttlMs) return null;
   try {
-    return JSON.parse(row.payload);
+    const result = JSON.parse(row.payload);
+    return worthCaching(result) ? result : null;
   } catch {
     return null;
   }

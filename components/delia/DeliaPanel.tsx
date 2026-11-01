@@ -605,6 +605,17 @@ function DeliaExchange({
           <OfferGroups recs={result.recommendations} market={market} onClose={onClose} />
         )}
 
+        {result.partial && (
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={() => onFollowUp(result.transcript)}
+            className="text-sm font-semibold underline underline-offset-4 disabled:opacity-40"
+          >
+            {ui("Try again")}
+          </button>
+        )}
+
         {result.comparisonNotes.length > 0 && (
           <ul className="space-y-1.5">
             {result.comparisonNotes.map((note, i) => (

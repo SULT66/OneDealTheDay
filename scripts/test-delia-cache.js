@@ -92,6 +92,8 @@ assert.strictEqual(worthCaching({ result_state: "no_match", recommendations: [{}
 assert.strictEqual(worthCaching({ result_state: "exact_matches", recommendations: [] }), false);
 assert.strictEqual(worthCaching({ error: "boom" }), false);
 assert.strictEqual(worthCaching(null), false);
+assert.strictEqual(worthCaching({ partial: true, result_state: "exact_matches", recommendations: [{}] }), false,
+  "An unfinished external comparison must be retried, not cached as complete");
 /* A question back costs seconds rather than tens of seconds, and the answer
    to it is a follow-up, which never reads this cache anyway. */
 assert.strictEqual(
@@ -129,6 +131,9 @@ assert.strictEqual(
 );
 assert.strictEqual(readCachedAnswer(db, "us:en:never-asked", now), null);
 assert.strictEqual(readCachedAnswer(db, null, now), null);
+db.prepare("INSERT INTO delia_answers(cache_key,payload,created_at) VALUES(?,?,?)")
+  .run("partial-old", JSON.stringify({...answer, partial:true}), new Date(now).toISOString());
+assert.equal(readCachedAnswer(db, "partial-old", now), null, "Old cached partial results must not block a fresh search");
 
 /* Nothing is written for a request that was refused a key. */
 assert.strictEqual(writeCachedAnswer(db, null, answer, now), false);

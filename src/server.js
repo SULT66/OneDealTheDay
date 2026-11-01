@@ -497,7 +497,7 @@ app.post("/api/shopping-assistant/stream", shoppingAssistantRateLimit, async (re
           shoppingMissionText(timeoutMission, req.body?.message),
         ));
         requestController.abort();
-      }, preview ? 25000 : SHOPPING_ASSISTANT_HARD_TIMEOUT_MS);
+      }, SHOPPING_ASSISTANT_HARD_TIMEOUT_MS);
     });
     const rawResult = await Promise.race([assistantTask, hardTimeoutTask]);
     const originalPreview = catalogPreview({db,sourceSql,productId:req.body?.product_id,market:selectedMarket.code,language,t});
@@ -570,6 +570,12 @@ app.post("/api/shopping-assistant", shoppingAssistantRateLimit, async (req, res)
     return res.set("Cache-Control", "no-store").json(withSignedLinks(cached));
   }
 
+  let preview = null;
+  try {
+    preview = catalogPreview({db, sourceSql, productId:req.body?.product_id, market:selectedMarket.code, language, t});
+  } catch (error) {
+    console.error("Delia catalogue preview unavailable:", error.message);
+  }
   let hardTimeoutTimer;
   try {
     const assistantTask = shoppingAssistant.respond({
@@ -596,7 +602,7 @@ app.post("/api/shopping-assistant", shoppingAssistantRateLimit, async (req, res)
           req.body?.message,
           false,
         );
-        resolve(timeoutResponse(
+        resolve(preview ? {...preview, message:t(language,"app.delia.partial")} : timeoutResponse(
           req.body?.message,
           language,
           [],
@@ -625,8 +631,14 @@ app.post("/api/shopping-assistant", shoppingAssistantRateLimit, async (req, res)
     return res.set("Cache-Control", "no-store").json(withSignedLinks(result));
   } catch (error) {
     clearTimeout(hardTimeoutTimer);
+    if (res.destroyed) return;
     const status = Number(error.statusCode) || 502;
     if (status >= 500) console.error("Shopping assistant request failed:", error.message);
+    if (preview && status >= 500) {
+      const result = {...preview, message:t(language,"app.delia.partial")};
+      rememberExchange(req, selectedMarket.code, result);
+      return res.set("Cache-Control", "no-store").json(withSignedLinks(result));
+    }
     return res.status(status).set("Cache-Control", "no-store").json({
       error:status === 503
         ? "The AI Shopping Assistant is being connected. Please try again shortly."
