@@ -3,6 +3,7 @@ const {shoppingMode,taskQuestion,publicProductUrl,sameProductUrl,totalBudget,wan
 
 const coffee=taskQuestion({message:'Нужна кофемашина до $200',language:'ru'});
 assert.equal(coffee.clarifying_questions.length,1);
+assert.notEqual(coffee.message,coffee.clarification_prompts[0].question,'The question must not be repeated as both the message and prompt');
 assert.deepEqual(coffee.clarification_prompts[0].options,['Дома','В офисе','В поездках']);
 assert.equal(coffee.shopping_mission.budget_max,200);
 assert.equal(taskQuestion({message:'I need a portable coffee machine for travel',language:'en'}),null);

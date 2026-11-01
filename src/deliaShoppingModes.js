@@ -12,7 +12,7 @@ const copyFor = language => COPY[language] || COPY.en;
 const tidy = value => String(value || '').replace(/\s+/g,' ').trim();
 const cents = value => value == null || !Number.isFinite(Number(value)) || Number(value)<0 ? null : Math.round(Number(value)*100);
 const reply = (message, language, extra={}) => ({message,message_source:'template',scope:'shopping',language,result_state:'no_match',recommendations:[],partial_offers:[],comparison:[],comparison_notes:[],clarifying_questions:[],clarification_prompts:[],follow_up:'',...extra});
-const question = (text, language, mission, options=[]) => reply(text,language,{
+const question = (text, language, mission, options=[]) => reply(copyFor(language).general,language,{
   needs_clarification:true,can_skip_clarification:false,shopping_mission:mission,
   clarifying_questions:[text],clarification_prompts:[{question:text,options}],
 });
