@@ -3,12 +3,12 @@ const path = require('node:path');
 const INTERVAL = 6 * 3600000;
 const RETRY = 3600000;
 
-function createCouponRefreshService({directory, merchant, publicSource, now=Date.now}) {
+function createCouponRefreshService({directory, merchant, publicSource, marketplace=null, now=Date.now}) {
   const statePath=path.join(directory,'coupon-refresh-state.json');
   let state={};
   try { const saved=JSON.parse(fs.readFileSync(statePath,'utf8')); if(saved && typeof saved==='object' && !Array.isArray(saved)) state=saved; } catch {}
   let pending=null;
-  const sources={awin:merchant, public:publicSource};
+  const sources={awin:merchant, public:publicSource, ...(marketplace ? {marketplace} : {})};
   const persist=()=>{
     fs.mkdirSync(directory,{recursive:true});
     fs.writeFileSync(`${statePath}.tmp`,JSON.stringify(state),{mode:0o600});
@@ -58,6 +58,8 @@ function couponRefreshService() {
   if (!service) service=createCouponRefreshService({
     directory:process.env.DATA_DIR || (process.env.WEBSITE_SITE_NAME ? '/home/data/onedealtheday' : path.join(__dirname,'..','data')),
     merchant:require('./merchantCoupons'),publicSource:require('./publicCoupons'),
+    marketplace:require('./marketplaceCouponSource').createMarketplaceCouponSource(
+      market=>require('./marketplaceCoupons').listMarketplaceCoupons(require('./db'),market)),
   });
   return service;
 }
