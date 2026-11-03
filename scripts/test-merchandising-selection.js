@@ -109,8 +109,12 @@ assert.deepEqual(signalRejectionReasons({...onTime,delivery_country:'CA'},dated,
 assert.deepEqual(signalRejectionReasons({...onTime,delivery_estimated_at:iso(now+17*86400000)},dated,{now}),['holiday_delivery_late']);
 // A better-qualified direct merchant must beat eBay; source identity is not a ranking signal.
 const reviewedFeed=product(104,{source:'feed-tribesigns',retailer_name:'Tribesigns',
-  rating:5,review_count:420,original_price:80});
-assert.equal(selectMerchandise([valid,reviewedFeed],[signal()],{now,limitPerSignal:1})[0].products[0].source,'feed-tribesigns',
+  rating:5,review_count:420,seller_rating:99.9,seller_feedback_count:2500});
+const weakerEbay=product(106,{rating:4.3,review_count:1,seller_rating:95.1,seller_feedback_count:25});
+const {commerceQuality}=require('../src/ranker');
+assert(commerceQuality(reviewedFeed)>commerceQuality(weakerEbay),
+  'A tested merchant comparison must have a real quality advantage before claiming precedence');
+assert.equal(selectMerchandise([weakerEbay,reviewedFeed],[signal()],{now,limitPerSignal:1})[0].products[0].source,'feed-tribesigns',
   'Higher-quality affiliate offers must not lose merely because an eBay listing exists');
 const equalTier = [
   product(141,{source:'ebay',retailer_name:'eBay',title:'Halloween Pumpkin Pattern Wall Decoration'}),
