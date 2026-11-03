@@ -75,10 +75,10 @@ export function MerchantHealth({ adminKey }: { adminKey: string }) {
         <>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             {[
-              ["Import sources", health.totals.configured],
+              ["Active data sources", health.totals.configured],
               ["Stores with products", health.totals.with_products],
-              ["Published products", total],
-              ["Complete listings", health.totals.complete],
+              ["Published database rows", total],
+              ["Rows with basic fields", health.totals.complete],
             ].map(([name, number]) => (
               <div key={name} className="rounded-xl border border-border bg-surface-2 p-3">
                 <p className="text-xs text-fg-muted">{name}</p>
@@ -88,7 +88,7 @@ export function MerchantHealth({ adminKey }: { adminKey: string }) {
           </div>
           {largestShare >= 40 && (
             <p className="rounded-xl border border-border px-4 py-3 text-sm text-fg-muted">
-              Catalog concentration: one source supplies {largestShare}% of published listings.
+              Catalog concentration: one source supplies {largestShare}% of published database rows.
               This is a catalog-wide share, not the homepage mix. The discovery shelf has separate diversity limits.
             </p>
           )}
@@ -96,7 +96,7 @@ export function MerchantHealth({ adminKey }: { adminKey: string }) {
             <table className="w-full min-w-[740px] text-left text-xs">
               <thead className="bg-surface-2 text-fg-muted">
                 <tr>
-                  {["Merchant", "Product feed", "Published", "Complete", "Clicks 30d", "Latest refresh"].map(heading=>
+                  {["Merchant", "Catalog source", "Published rows", "Basic fields", "Clicks 30d", "Price checked", "Latest refresh"].map(heading=>
                     <th key={heading} className="px-3 py-3 font-semibold">{heading}</th>)}
                 </tr>
               </thead>
@@ -107,7 +107,7 @@ export function MerchantHealth({ adminKey }: { adminKey: string }) {
                     : row.refresh && refreshLate(row.refresh.at) ? "Refresh overdue"
                     : row.published === 0 ? "No live listings"
                     : row.complete === 0 ? "Missing product data"
-                    : row.refresh?.status === "success" ? "Import running" : "No refresh history";
+                    : row.refresh?.status === "success" ? "Latest refresh succeeded" : "No refresh history";
                   return (
                     <tr key={row.id} className="align-top">
                       <td className="px-3 py-3">
@@ -118,6 +118,7 @@ export function MerchantHealth({ adminKey }: { adminKey: string }) {
                       <td className="px-3 py-3 font-semibold tabular-nums text-fg">{row.published.toLocaleString()}</td>
                       <td className="px-3 py-3 tabular-nums text-fg">{row.complete.toLocaleString()}</td>
                       <td className="px-3 py-3 tabular-nums text-fg">{row.outbound_clicks_30d.toLocaleString()}</td>
+                      <td className="px-3 py-3 text-fg-muted">{dateLabel(row.last_price_check)}</td>
                       <td className="px-3 py-3 text-fg-muted">
                         <span className={row.refresh?.status === "failed" ? "font-semibold text-danger" : "font-medium text-fg"}>{status}</span>
                         <span className="mt-1 block">{dateLabel(row.refresh?.at || null)}</span>
@@ -131,9 +132,9 @@ export function MerchantHealth({ adminKey }: { adminKey: string }) {
             </table>
           </div>
           <p className="text-xs leading-relaxed text-fg-muted">
-            "Complete" means published with a price, descriptive title, image and affiliate link. It does not certify
+            "Basic fields" means a price, descriptive title, image and affiliate link. It does not certify
             customer satisfaction. Clicks are tracked product-to-store departures, not orders or commissions.
-            A store without a feed can still have a valid affiliate relationship and storefront link.
+            Counts are raw published database rows, before deduplicating cards for the storefront. A store without a configured feed or API can still have a valid affiliate relationship and storefront link.
             Data checked: {dateLabel(health.as_of)}.
           </p>
         </>
