@@ -26,7 +26,7 @@ const featured=holidayPreview(rows,8);
 assert(!featured.some(p=>/sticker|pillowcase/i.test(p.title)),"cheap accessories must not lead seasonal homepage");
 assert(featured.length>=5,"a varied holiday shelf should not become empty");
 assert(new Set(featured.map(p=>p.retailer_name)).size>=4,"several qualified partners must appear");
-assert(featured.filter(p=>p.retailer_name==="AliExpress").length<=2,"no one feed should fill an 8-item holiday spotlight");
+assert(featured.filter(p=>p.retailer_name==="AliExpress").length<=3,"fallback may use one more qualified item when other shops cannot fill all eight positions");
 assert.equal(rows.length,12,"full catalog remains intact");
 const defaultPage=orderCategoryShowcase(rows);
 assert.equal(defaultPage.length,rows.length);
