@@ -35,11 +35,15 @@ function getHolidayCollection(db, { market = 'us', q = '', sort = 'popular', pag
     Number(b.ranking_score || b.score || 0)-Number(a.ranking_score || a.score || 0) || a.id-b.id);
   const total = rows.length;
   if(preview) {
-    const ordered = rows.sort((a,b)=>holidayGroup(a).localeCompare(holidayGroup(b)));
-    const groupsUsed = new Set(), lead=[], rest=[];
-    for(const row of ordered){const group=holidayGroup(row);if(!groupsUsed.has(group)){lead.push(row);groupsUsed.add(group);}else rest.push(row);}
-    return {active:isHolidaySeason(now),total,pages:Math.max(1,Math.ceil(total/24)),page:1,products:require('./productVariety').variedProducts([...lead,...rest],8)};
+    // The homepage is curated more strictly than the complete holiday store:
+    // no tiny sticker/pillowcase bait, and no single feed fills the eight slots.
+    return {active:isHolidaySeason(now),total,pages:Math.max(1,Math.ceil(total/24)),page:1,
+      products:require('./holidayShowcase').holidayPreview(rows,8)};
   }
+  // Keep all products and all price-sort orders; only the default first page
+  // receives a balanced editorial permutation.
+  if(sort!=='price-asc' && sort!=='price-desc')
+    rows=require('./categoryShowcase').orderCategoryShowcase(rows);
   const pages = Math.max(1,Math.ceil(total/24));
   page = Math.min(pages,Math.max(1,Math.floor(Number(page)||1)));
   return { active:isHolidaySeason(now), total, pages, page, products:rows.slice((page-1)*24,page*24) };
