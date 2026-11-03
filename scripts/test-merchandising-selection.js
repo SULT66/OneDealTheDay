@@ -107,8 +107,24 @@ assert.equal(selectMerchandise([onTime, product(101,{rating:0,review_count:0}), 
 assert.deepEqual(signalRejectionReasons(product(103),dated,{now}),['holiday_delivery_unknown']);
 assert.deepEqual(signalRejectionReasons({...onTime,delivery_country:'CA'},dated,{now}),['holiday_delivery_unknown']);
 assert.deepEqual(signalRejectionReasons({...onTime,delivery_estimated_at:iso(now+17*86400000)},dated,{now}),['holiday_delivery_late']);
-const reviewedFeed=product(104,{source:'feed-tribesigns',retailer_name:'Tribesigns'});
-assert.equal(selectMerchandise([reviewedFeed,valid],[signal()],{now,limitPerSignal:1})[0].products[0].source,'ebay');
+// A better-qualified direct merchant must beat eBay; source identity is not a ranking signal.
+const reviewedFeed=product(104,{source:'feed-tribesigns',retailer_name:'Tribesigns',
+  rating:5,review_count:420,seller_rating:99.9,seller_feedback_count:2500});
+const weakerEbay=product(106,{rating:4.3,review_count:1,seller_rating:95.1,seller_feedback_count:25});
+const {commerceQuality}=require('../src/ranker');
+assert(commerceQuality(reviewedFeed)>commerceQuality(weakerEbay),
+  'A tested merchant comparison must have a real quality advantage before claiming precedence');
+assert.equal(selectMerchandise([weakerEbay,reviewedFeed],[signal()],{now,limitPerSignal:1})[0].products[0].source,'feed-tribesigns',
+  'Higher-quality affiliate offers must not lose merely because an eBay listing exists');
+const equalTier = [
+  product(141,{source:'ebay',retailer_name:'eBay',title:'Halloween Pumpkin Pattern Wall Decoration'}),
+  product(142,{source:'ebay',retailer_name:'eBay',title:'Halloween Pumpkin Large Outdoor Lantern'}),
+  product(143,{source:'feed-tribesigns',retailer_name:'Tribesigns',title:'Halloween Pumpkin Ceramic Garden Sculpture'}),
+];
+const mixed = selectMerchandise(equalTier,[signal()],{now,limitPerSignal:3})[0].products;
+assert.equal(new Set(mixed.slice(0,2).map(p=>p.retailer_name)).size,2,
+  'Equally qualified sources should share the first shelf positions');
+
 assert.equal(isPromotionEligible(product(105,{rating:0,review_count:0}),{now}),false,'Established seller is not a substitute for product reviews on featured shelves');
 const consoleSignal=signal({kind:'trend',queries:['Nintendo Switch 2 console']});
 const oldConsole=product(110,{title:'New Nintendo Switch v2 Console Gaming System HAC-001(-01) Red/Blue'});

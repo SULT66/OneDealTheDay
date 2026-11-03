@@ -144,7 +144,10 @@ function balanced(products, limit, now) {
     const usage = product => (retailers.get(product.retailer_name || product.source) || 0) * 2 +
       (categories.get(product.normalized_category || product.category) || 0);
     for (let index = 1; index < remaining.length; index += 1) {
-      if (remaining[index].source === remaining[best].source && salesTier(remaining[index],now) === salesTier(remaining[best],now) && usage(remaining[index]) < usage(remaining[best])) best = index;
+      // A store is not granted priority merely because it is eBay or because
+      // another source is unfamiliar. Preserve sales-evidence tiers, then
+      // diversify qualified offers across merchants within the same tier.
+      if (salesTier(remaining[index],now) === salesTier(remaining[best],now) && usage(remaining[index]) < usage(remaining[best])) best = index;
     }
     const [product] = remaining.splice(best, 1);
     selected.push(product);
@@ -163,7 +166,7 @@ function selectMerchandise(rows, signals, { market = "us", now = Date.now(), lim
   const eligible = array(rows).filter(product => isPromotionEligible(product, { market: code, now, requireReviews }));
   return array(signals).filter(signal => activeSignal(signal, code, now)).map(signal => {
     const matching = eligible.filter(product => !signalRejectionReasons(product, signal, {market:code, now}).length);
-    const ordered = matching.sort((left, right) => (left.source === "ebay" ? 0 : 1) - (right.source === "ebay" ? 0 : 1) || salesTier(right,now) - salesTier(left,now) || commerceQuality(right) - commerceQuality(left) ||
+    const ordered = matching.sort((left, right) => salesTier(right,now) - salesTier(left,now) || commerceQuality(right) - commerceQuality(left) ||
       Date.parse(right.checked_at) - Date.parse(left.checked_at) || Number(left.id) - Number(right.id));
     const unique = uniqueProductsInOrder(ordered);
     return { signal, products: balanced(variedProducts(unique), limit, now), rejected: array(rows).length - unique.length };
