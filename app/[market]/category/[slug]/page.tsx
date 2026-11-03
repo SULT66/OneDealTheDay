@@ -13,6 +13,7 @@ import {
 } from "@/lib/catalog";
 import { categoryName, countryName, getLanguage, marketAlternates, t } from "@/lib/i18n";
 import { DealListing } from "@/components/catalog/DealListing";
+import { orderCategoryShowcase } from "@/src/categoryShowcase";
 import { MerchandisingShelves } from "@/components/site/MerchandisingShelves";
 
 export function generateStaticParams() {
@@ -54,7 +55,12 @@ export default async function CategoryPage({
   const query = await searchParams;
   const filter = { ...filterFromSearchParams(query), category: slug };
   const page = Number(Array.isArray(query.page) ? query.page[0] : query.page) || 1;
-  const deals = await getDeals(market, filter);
+  const matches = await getDeals(market, filter);
+  // Curate only the default category view. Explicit sort and store selections
+  // keep their original order, and no product is removed from pagination.
+  const deals = (!filter.sort || filter.sort === "recommended") && !filter.retailer
+    ? orderCategoryShowcase(matches)
+    : matches;
   const language = await getLanguage(market);
   const name = categoryName(category.name, language);
 
