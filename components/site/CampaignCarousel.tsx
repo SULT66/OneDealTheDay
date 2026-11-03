@@ -12,6 +12,8 @@ export type CampaignSlide = {
   /** Background photograph, when the campaign has one. */
   image?: string;
   imagePosition?: string;
+  imageOnRight?: boolean;
+  fullSlideLink?: boolean;
   /** Flat colour behind the photograph, and the whole background without one. */
   ground: string;
   textColor?: string;
@@ -84,17 +86,25 @@ export function CampaignCarousel({ slides, intervalMs = 6000, label }: { slides:
         return <div
           key={slide.key}
           aria-hidden={shown ? undefined : "true"}
-          {...(shown ? {} : { inert: "" as unknown as boolean })}
+          {...(shown ? {} : { inert: true })}
           className={`col-start-1 row-start-1 transition-opacity duration-700 motion-reduce:transition-none ${shown ? "opacity-100" : "pointer-events-none opacity-0"}`}
         >
-          {slide.image && <div aria-hidden="true" className="absolute inset-0 bg-cover bg-no-repeat" style={{ backgroundImage: `url("${slide.image}")`, backgroundPosition: slide.imagePosition || "center 65%" }} />}
+          {slide.imageOnRight && <div aria-hidden="true" className="absolute inset-y-0 right-0 w-[70%] bg-[#c1f21d] sm:w-[55%]" style={{ clipPath: "polygon(28% 0, 100% 0, 100% 100%, 0 100%, 4% 82%, 10% 73%, 9% 59%, 17% 45%, 16% 33%, 25% 17%)" }} />}
+          {slide.image && <div aria-hidden="true"
+            className={`absolute bg-cover bg-no-repeat ${slide.imageOnRight ? "inset-y-0 right-0 w-[66%] sm:w-[51%]" : "inset-0"}`}
+            style={{
+              backgroundImage: `url("${slide.image}")`,
+              backgroundPosition: slide.imagePosition || "center 65%",
+              clipPath: slide.imageOnRight ? "polygon(30% 0, 100% 0, 100% 100%, 1% 100%, 7% 83%, 12% 71%, 11% 60%, 20% 43%, 19% 31%, 27% 15%)" : undefined,
+            }} />}
           <div className="absolute inset-0" style={{ backgroundImage: `linear-gradient(to right, ${slide.ground}, ${slide.ground}d9 35%, ${slide.ground}00 75%)` }} />
-          <div className="relative max-w-xl px-5 pb-20 pt-7 sm:px-8 sm:pt-9 lg:px-10 lg:pt-10">
+          {slide.fullSlideLink && <a aria-hidden="true" tabIndex={-1} href={slide.href} className="absolute inset-0" />}
+          <div className={`relative max-w-xl px-5 pb-20 pt-7 sm:px-8 sm:pt-9 lg:px-10 lg:pt-10 ${slide.fullSlideLink ? "pointer-events-none" : ""}`}>
             <p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: slide.eyebrowText }}>{slide.eyebrow}</p>
-            <Heading id={position === 0 ? "hero-title" : undefined} className="mt-3 whitespace-pre-line text-4xl font-black uppercase leading-[0.98] tracking-[-0.055em] sm:text-5xl lg:text-6xl" style={{fontFamily:'Impact, "Arial Black", sans-serif'}}>{slide.title.split("\n").map((line,i)=><span key={i} className="block"><span className={slide.highlight && i===1 ? "inline-block bg-[#c1f21d] px-2 pb-1 text-[#101010]" : ""}>{line}</span></span>)}</Heading>
+            <Heading id={position === 0 ? "hero-title" : undefined} className="mt-3 whitespace-pre-line text-4xl font-black uppercase leading-none tracking-[-0.035em] sm:text-5xl lg:text-6xl" style={{fontFamily:'Impact, "Arial Black", sans-serif'}}>{slide.title.split("\n").map((line,i)=><span key={i} className="block"><span className={slide.highlight && i===1 ? "inline-block bg-[#c1f21d] px-2 pb-1 text-[#101010]" : ""}>{line}</span></span>)}</Heading>
             <div className="mt-4 flex flex-col items-start gap-4">
               <p className="max-w-xs text-sm font-medium leading-relaxed">{slide.note}</p>
-              <a href={slide.href} tabIndex={shown ? undefined : -1} className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-full px-5 text-sm font-semibold transition-opacity hover:opacity-90" style={{ backgroundColor: slide.accent, color: slide.accentText }}>
+              <a href={slide.href} tabIndex={shown ? undefined : -1} className={`inline-flex min-h-11 shrink-0 items-center gap-2 rounded-full px-5 text-sm font-semibold transition-opacity hover:opacity-90 ${shown && slide.fullSlideLink ? "pointer-events-auto" : ""}`} style={{ backgroundColor: slide.accent, color: slide.accentText }}>
                 {slide.cta}<ArrowRight size={18} weight="bold" aria-hidden="true" />
               </a>
             </div>
@@ -110,7 +120,7 @@ export function CampaignCarousel({ slides, intervalMs = 6000, label }: { slides:
         onClick={() => setIndex(position)}
         aria-label={slide.eyebrow}
         aria-current={position === index ? "true" : undefined}
-        className="flex min-h-11 min-w-0 flex-1 items-center justify-center rounded-full border px-2 sm:flex-none sm:px-3 text-[10px] font-bold uppercase tracking-wide transition-all"
+        className="flex min-h-11 min-w-0 flex-1 items-center justify-center rounded-full border break-words px-1 text-center leading-tight sm:flex-none sm:px-3 text-[10px] font-bold uppercase tracking-wide transition-all"
         style={{ color:current.textColor || "#fff", borderColor:current.textColor ? "#10101035" : "#ffffff55", backgroundColor: position === index ? current.dots : "transparent" }}
       >{slide.eyebrow.split(" · ")[0]}</button>)}
     </div>}

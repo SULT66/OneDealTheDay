@@ -14,7 +14,7 @@ type Copy = {
 
 const COPY: Record<Language, Copy> = {
   en: {eyebrow:"Halloween · October 31",title:"A little spooky.\nA lot of fun.",note:"Costumes, decorations & party finds for October 31.",lateNote:"October 31 is close. Check each seller's delivery estimate before you count on it arriving.",shop:"Explore Halloween",categories:["Costumes","Decorations","Party supplies"],
-    bfEyebrow:"Black Friday · November 27",bfTitle:"BIG FINDS.\nSMARTER SPENDING.",bfNote:"The wishlist starts here. Follow our price diary before the big day.",bfShop:"See the price diary",
+    bfEyebrow:"Black Friday · November 27",bfTitle:"BIG FINDS.\nSMARTER SPENDING.",bfNote:"Track prices now so you can spot real deals on Black Friday.",bfShop:"See the price diary",
     browse:"Browse all finds",drop:"One day. One pick.",dropNote:"Meet today's Daily Drop.",daily:"See today's pick",everyday:"Find your next good buy.",everydayNote:"Explore products with price, seller and buying terms checked.",hero:"Campaigns"},
   es: {eyebrow:"Halloween · 31 de octubre",title:"Un poco de miedo.\nMucha diversión.",note:"Disfraces, decoración e ideas para tu fiesta.",lateNote:"El 31 de octubre está cerca. Comprueba el plazo de entrega de cada vendedor antes de contar con él.",shop:"Explorar Halloween",categories:["Disfraces","Decoración","Fiesta"],
     bfEyebrow:"Black Friday · 27 de noviembre",bfTitle:"Ya estamos\napuntando los precios.",bfNote:"Ocho semanas de registros propios para que ese día veas qué descuentos son reales y cuáles siempre costaron lo mismo.",bfShop:"Ver el diario de precios",
@@ -60,7 +60,7 @@ export function HomeCampaigns({market,language,halloween=false,halloweenLate=fal
 
   if (holiday) {
     const festive = {
-      en:{eyebrow:"Christmas & New Year",title:"GIFT MODE:\nACTIVATED.",note:"Christmas sparkle. New Year energy. Gifts that deserve a proper unboxing.",cta:"Explore holiday finds"},
+      en:{eyebrow:"Christmas & New Year",title:"GIFT MODE:\nACTIVATED.",note:"Gifts, decorations and festive finds for Christmas and New Year.",cta:"Explore holiday finds"},
       es:{eyebrow:"Navidad y Año Nuevo",title:"Un poco de brillo.\nMucho que celebrar.",note:"Regalos, luces y decoración para disfrutar de las fiestas.",cta:"Explorar las fiestas"},
       fr:{eyebrow:"Noël et Nouvel An",title:"Un peu de magie.\nTant à célébrer.",note:"Des cadeaux, des lumières et de belles trouvailles pour les fêtes.",cta:"Explorer les fêtes"},
       de:{eyebrow:"Weihnachten & Neujahr",title:"Ein wenig Glanz.\nViel zu feiern.",note:"Geschenke, Lichter und festliche Entdeckungen für eine besondere Zeit.",cta:"Festliche Angebote entdecken"},
@@ -73,7 +73,7 @@ export function HomeCampaigns({market,language,halloween=false,halloweenLate=fal
   if (holiday) slides.sort((a,b)=>Number(b.key==="holiday")-Number(a.key==="holiday"));
   if (thanksgiving) {
     const gathering = {
-      en:{eyebrow:"Thanksgiving",title:"HOST MODE:\nNO PANIC.",note:"Good food. Great company. A few clever finds for your Thanksgiving table.",cta:"Get ready to gather"},
+      en:{eyebrow:"Thanksgiving",title:"SET THE TABLE.\nLET’S GATHER.",note:"Cookware, table décor and little extras for Thanksgiving.",cta:"Explore Thanksgiving finds"},
       es:{eyebrow:"Acción de Gracias",title:"TODO LISTO.\nSIN ESTRÉS.",note:"Ideas para cocinar, decorar y compartir la mesa.",cta:"Preparar la celebración"},
       fr:{eyebrow:"Thanksgiving",title:"ON REÇOIT.\nSANS STRESS.",note:"De belles trouvailles pour cuisiner et partager.",cta:"Préparer la fête"},
       de:{eyebrow:"Thanksgiving",title:"GÄSTE KOMMEN.\nKEINE PANIK.",note:"Entdeckungen zum Kochen, Dekorieren und Feiern.",cta:"Das Fest vorbereiten"},
@@ -82,6 +82,22 @@ export function HomeCampaigns({market,language,halloween=false,halloweenLate=fal
     slides.push({key:"thanksgiving",...gathering,eyebrow:`${gathering.eyebrow} · ${eventDate}`,href:`/${market}/thanksgiving`,
       image:"/campaigns/thanksgiving-editorial-2026.webp",imagePosition:"center 40%",ground:"#f4e9d9",textColor:"#101010",highlight:true,
       accent:"#101010",accentText:"#ffffff",eyebrowText:"#101010",dots:"#c1f21d"});
+  }
+
+  if (market === "us") {
+    const outin = {
+      en:{title:"GOOD ESPRESSO.\nANYWHERE.",note:"Meet the OutIn Nano portable espresso machine and explore OutIn accessories.",cta:"Explore OutIn"},
+      es:{title:"BUEN ESPRESSO.\nDONDE QUIERAS.",note:"Descubre la cafetera portátil OutIn Nano y los accesorios OutIn.",cta:"Explorar OutIn"},
+      fr:{title:"UN BON EXPRESSO.\nPARTOUT.",note:"Découvrez la machine à expresso portable OutIn Nano et les accessoires OutIn.",cta:"Découvrir OutIn"},
+      de:{title:"GUTER ESPRESSO.\nÜBERALL.",note:"Entdecke die tragbare Espressomaschine OutIn Nano und das Zubehör von OutIn.",cta:"OutIn entdecken"},
+    }[language];
+    const query = new URLSearchParams({retailer:"OutIn",lang:language});
+    slides.push({
+      key:"outin",eyebrow:"OutIn",...outin,href:`${search}?${query}`,
+      image:"/campaigns/outin-nano.webp",imagePosition:"center 49%",imageOnRight:true,fullSlideLink:true,
+      ground:"#f4ebdc",textColor:"#101010",highlight:true,
+      accent:"#101010",accentText:"#ffffff",eyebrowText:"#101010",dots:"#c1f21d",
+    });
   }
 
   if (!slides.length) slides.push({
