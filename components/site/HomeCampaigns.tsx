@@ -86,14 +86,14 @@ export function HomeCampaigns({market,language,halloween=false,halloweenLate=fal
 
   if (market === "us") {
     const outin = {
-      en:{title:"GOOD ESPRESSO.\nANYWHERE.",note:"Meet the OutIn Nano portable espresso machine and explore OutIn accessories.",cta:"Explore OutIn"},
-      es:{title:"BUEN ESPRESSO.\nDONDE QUIERAS.",note:"Descubre la cafetera portátil OutIn Nano y los accesorios OutIn.",cta:"Explorar OutIn"},
-      fr:{title:"UN BON EXPRESSO.\nPARTOUT.",note:"Découvrez la machine à expresso portable OutIn Nano et les accessoires OutIn.",cta:"Découvrir OutIn"},
-      de:{title:"GUTER ESPRESSO.\nÜBERALL.",note:"Entdecke die tragbare Espressomaschine OutIn Nano und das Zubehör von OutIn.",cta:"OutIn entdecken"},
+      en:{title:"GOOD ESPRESSO.\nANYWHERE.",note:"Meet the OUTLN Nano portable espresso machine and explore OUTLN accessories.",cta:"Explore OUTLN"},
+      es:{title:"BUEN ESPRESSO.\nDONDE QUIERAS.",note:"Descubre la cafetera portátil OUTLN Nano y los accesorios OUTLN.",cta:"Explorar OUTLN"},
+      fr:{title:"UN BON EXPRESSO.\nPARTOUT.",note:"Découvrez la machine à expresso portable OUTLN Nano et les accessoires OUTLN.",cta:"Découvrir OUTLN"},
+      de:{title:"GUTER ESPRESSO.\nÜBERALL.",note:"Entdecke die tragbare Espressomaschine OUTLN Nano und das Zubehör von OUTLN.",cta:"OUTLN entdecken"},
     }[language];
     const query = new URLSearchParams({retailer:"OutIn",lang:language});
     slides.push({
-      key:"outin",eyebrow:"OutIn",...outin,href:`${search}?${query}`,
+      key:"outin",eyebrow:"OUTLN",...outin,href:`${search}?${query}`,
       image:"/campaigns/outin-nano.webp",imagePosition:"center 49%",imageOnRight:true,fullSlideLink:true,
       ground:"#f4ebdc",textColor:"#101010",highlight:true,
       accent:"#101010",accentText:"#ffffff",eyebrowText:"#101010",dots:"#c1f21d",
