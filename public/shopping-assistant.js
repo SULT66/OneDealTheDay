@@ -483,6 +483,7 @@
       ? value
       : {};
     return {
+      condition: ["new", "non_new"].includes(mission.condition) ? mission.condition : "",
       product_type: String(mission.product_type || "").slice(0, 60),
       brands: (Array.isArray(mission.brands) ? mission.brands : [])
         .map((item) => String(item || "").slice(0, 40))
@@ -587,7 +588,7 @@
               .filter((offer) => offer && typeof offer === "object")
               .map((offer) => ({ ...offer, url: safeBrowserUrl(offer.url) }))
               .filter((offer) => offer.url)
-              .slice(0, 2),
+              .slice(0, 5),
           };
         })
         .filter((item) => {

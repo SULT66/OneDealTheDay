@@ -180,12 +180,12 @@ function createEbayClient({clientId, clientSecret, campaignId, environment = "pr
   }
 
   return {
-    async search(keyword, market) {
+    async search(keyword, market, condition = "new") {
       const body = await request("/buy/browse/v1/item_summary/search", market, {
         q:keyword,
         limit:String(Math.min(200, positiveInteger(searchLimit, 20))),
         fieldgroups:"EXTENDED",
-        filter:`buyingOptions:{FIXED_PRICE},conditions:{NEW},deliveryCountry:${market.countryCodes?.[0] || "US"}`
+        filter:`buyingOptions:{FIXED_PRICE},${condition === "non_new" ? "conditionIds:{1500|2000|2010|2020|2030|2500|3000|4000|5000|6000}" : "conditions:{NEW}"},deliveryCountry:${market.countryCodes?.[0] || "US"}`
       });
       return Array.isArray(body.itemSummaries) ? body.itemSummaries : [];
     },
@@ -232,7 +232,7 @@ function listingAvailable(item) {
   return !status.includes("OUT_OF_STOCK") && !status.includes("UNAVAILABLE");
 }
 
-function candidateIsUsable(item) {
+function candidateIsUsable(item, requestedCondition = "new") {
   const buyingOptions = Array.isArray(item?.buyingOptions) ? item.buyingOptions : [];
   const condition = text(item?.condition).toLowerCase();
   return Boolean(
@@ -242,7 +242,10 @@ function candidateIsUsable(item) {
     text(item?.itemAffiliateWebUrl).startsWith("http") &&
     number(item?.price) > 0 &&
     buyingOptions.includes("FIXED_PRICE") &&
-    (String(item?.conditionId || "") === "1000" || /^new\b/.test(condition)) &&
+    (requestedCondition === "non_new"
+      ? /^(?:1500|2000|2010|2020|2030|2500|3000|4000|5000|6000)$/.test(String(item?.conditionId || "")) || /\b(?:used|refurbished|renewed|pre-owned|open box)\b/.test(condition)
+      : String(item?.conditionId || "") === "1000" || /^new\b/.test(condition)) &&
+    String(item?.conditionId || "") !== "7000" &&
     !item?.adultOnly &&
     listingAvailable(item)
   );
@@ -341,6 +344,7 @@ function normalizeItem(item, keyword, sourceRank, market) {
     mpn,
     brand:text(item?.brand),
     title:text(item?.title),
+    condition:text(item?.condition),
     category:keyword,
     description:text(item?.shortDescription || item?.subtitle || `${item?.condition || "New"} item listed on eBay.`),
     rating:number(review.averageRating, 0),
@@ -416,6 +420,7 @@ async function searchProducts({
   keywordsPerRun = 0,
   signal,
   strictQueries = false,
+  condition = "new",
   preferredItems = [],
   gapPlan = [],
   existingProviderIds = [],
@@ -441,7 +446,7 @@ async function searchProducts({
       const result = seed.group ? await ebayClient.getItemsByItemGroup(seed.legacyId, market)
         : await ebayClient.getItemByLegacyId(seed.legacyId, market);
       const items = seed.group ? result.items || [] : [result];
-      const item = items.filter(item => candidateIsUsable(item) &&
+      const item = items.filter(item => candidateIsUsable(item, condition) &&
         String(item.legacyItemId || item.itemId?.split('|')[1]) === seed.legacyId &&
         require('../merchandisingSelection').matchesQuery(item, seed.query))
         .sort((a,b) => number(a.price, Infinity) - number(b.price, Infinity))[0];
@@ -454,7 +459,7 @@ async function searchProducts({
   const searches = await mapLimit(searchTerms, Math.max(1, Math.min(SEARCH_CONCURRENCY, Number(searchConcurrency) || SEARCH_CONCURRENCY)), async (keyword) => {
     if (quotaExhausted) throw quotaExhausted;
     try {
-      return await ebayClient.search(keyword, market);
+      return await ebayClient.search(keyword, market, condition);
     } catch (reason) {
       if (isQuotaError(reason)) quotaExhausted = reason;
       throw reason;
@@ -474,7 +479,7 @@ async function searchProducts({
       return;
     }
     result.value.forEach((item, itemIndex) => {
-      if (!candidateIsUsable(item)) return;
+      if (!candidateIsUsable(item, condition)) return;
       if (strictQueries && !require("../merchandisingSelection").matchesQuery(item, searchTerms[keywordIndex])) return;
       // Search categories are peers. Penalizing every later category made a
       // strong item rank lower solely because its category ran later.
@@ -558,7 +563,7 @@ async function searchProducts({
         seller:{...candidate.item?.seller, ...result.value?.seller}
       };
       const product = normalizeItem(merged, candidate.keyword, candidate.sourceRank, market);
-      if (hasTrustEvidence(product) && product.current_price > 0 && product.affiliate_url && product.image_url && listingAvailable(merged)) {
+      if (candidateIsUsable(merged, condition) && hasTrustEvidence(product) && product.current_price > 0 && product.affiliate_url && product.image_url && listingAvailable(merged)) {
         const category = categoryOf(product);
         const isNewGap = gapCategories.has(category) && !existing.has(`ebay:${product.external_id}`);
         if (isNewGap) {

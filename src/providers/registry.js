@@ -1,3 +1,4 @@
+const { requestedCondition } = require("../shoppingCondition");
 const affiliateFeed = require("./affiliateFeed");
 
 /* How long any one source may hold up a catalogue refresh. Eight minutes is
@@ -26,7 +27,7 @@ function nativeProviders(config) {
       /* No keywords passed means the broad scheduled sweep, which takes a
          rotating slice of the list. A shopper's own query arrives with its
          keywords and is searched in full. */
-      search:({market, keywords, detailLimit, targetEligible, searchLimit, keywordsPerRun, strictQueries, preferredItems, requestTimeoutMs, maxAttempts, searchConcurrency, detailConcurrency, signal}) => require("./ebay").searchProducts({
+      search:({market, keywords, detailLimit, targetEligible, searchLimit, keywordsPerRun, strictQueries, preferredItems, requestTimeoutMs, maxAttempts, searchConcurrency, detailConcurrency, condition, signal}) => require("./ebay").searchProducts({
         clientId:config.ebayClientId,
         clientSecret:config.ebayClientSecret,
         campaignId:config.ebayCampaignId,
@@ -37,7 +38,7 @@ function nativeProviders(config) {
         detailLimit,
         targetEligible,
         searchLimit,
-        strictQueries, preferredItems,
+        strictQueries, preferredItems, condition,
         gapPlan:!keywords ? market.ebayGapPlan : [],
         existingProviderIds:market.existingProviderIds,
         requestTimeoutMs, maxAttempts, searchConcurrency, detailConcurrency,
@@ -288,7 +289,7 @@ async function searchAll(config, market, options = {}) {
 // searches the shopper's active mission instead of the scheduled broad
 // keywords. Provider failures are isolated so one unavailable store never
 // collapses the complete multi-retailer answer.
-async function searchForAssistant(config, {query, queries, market, signal, perSourceLimit = 12}) {
+async function searchForAssistant(config, {query, queries, request, market, signal, perSourceLimit = 12}) {
   const keywords = [...new Set([
     ...(Array.isArray(queries) ? queries : []),
     query,
@@ -311,7 +312,8 @@ async function searchForAssistant(config, {query, queries, market, signal, perSo
       keywords,
       signal,
       detailLimit:18,
-      targetEligible:6
+      targetEligible:6,
+      condition: requestedCondition(request) || "new"
     })
   ));
   return settled.flatMap((result, index) => {

@@ -1655,11 +1655,11 @@ const client = {
      one: no tools, no search. What must stay single is the live search. */
   assert.strictEqual(
     calls.filter((call) => call.text?.format?.name !== "delia_shortlist_summary").length,
-    2,
-    "Assistant did not collapse discovery and rendering into one live-search call",
+    3,
+    "A thin shortlist should receive exactly one bounded store expansion",
   );
   assert(
-    calls.slice(2).every((call) => call.text?.format?.name === "delia_shortlist_summary" && !call.tools),
+    calls.slice(3).every((call) => call.text?.format?.name === "delia_shortlist_summary" && !call.tools),
     "Something other than the tool-free summary ran after the live search",
   );
   assert(
@@ -1950,8 +1950,8 @@ const client = {
   });
   assert.strictEqual(
     emptyCatalogCalls.filter((call) => call.text?.format?.name !== "delia_shortlist_summary").length,
-    2,
-    "The empty-catalog flow used more than one live-search response",
+    3,
+    "The empty-catalog flow must bound additional store discovery to one call",
   );
   assert.strictEqual(
     emptyCatalogResult.products.length,

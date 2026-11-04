@@ -151,8 +151,8 @@ const handleNextRequest = nextApp.getRequestHandler();
    plus the response assembly after it, otherwise it fires first and answers
    with an empty product list, which is the failure it exists to catch. */
 const SHOPPING_ASSISTANT_HARD_TIMEOUT_MS = 58000;
-const assistantRetailerSearch = ({ query, queries, market: selectedMarket, signal }) =>
-  searchForAssistant(c, {query, queries, market:selectedMarket, signal});
+const assistantRetailerSearch = ({ query, queries, request, market: selectedMarket, signal }) =>
+  searchForAssistant(c, {query, queries, request, market:selectedMarket, signal});
 const shoppingAssistant = createShoppingAssistant({
   db,
   sourceSql,
