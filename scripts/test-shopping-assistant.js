@@ -1651,8 +1651,8 @@ const client = {
     language: "en",
     signal: requestController.signal,
   });
-  /* The summary written over the final shortlist is a third call, and a small
-     one: no tools, no search. What must stay single is the live search. */
+  /* The initial search can receive one bounded expansion for a thin answer.
+     Any later summary remains tool-free. */
   assert.strictEqual(
     calls.filter((call) => call.text?.format?.name !== "delia_shortlist_summary").length,
     3,
