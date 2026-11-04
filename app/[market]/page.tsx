@@ -19,7 +19,6 @@ import { LiveDropSignup } from "@/components/site/LiveDropSignup";
 import { DeliaTrigger } from "@/components/delia/DeliaTrigger";
 import { DealCard } from "@/components/deal/DealCard";
 import { NextLiveDrop } from "@/components/live/NextLiveDrop";
-import { PartnerPicks } from "@/components/site/PartnerPicks";
 import { HalloweenProducts } from "@/components/site/HalloweenProducts";
 import { getHalloweenCollection } from "@/lib/merchandising";
 import { MerchandisingShelves } from "@/components/site/MerchandisingShelves";
@@ -205,13 +204,6 @@ async function HomeCatalog({market,language,halloween}:{market:string;language:L
       </section>
 
       {/* ------------------------------------------------------------ signup */}
-      {/* Below the catalogue, never mixed into it: these have no price and no
-          score, and a card without either sitting beside cards with both
-          invites the reader to assume it was checked the same way. Renders
-          nothing at all until a pick is added. */}
-      {/* Same terms as the shelf above, for shops reached through Sovrn. */}
-      <Suspense fallback={null}><PartnerPicks market={market} /></Suspense>
-
       {/* scroll-mt clears the sticky header when a visitor arrives via the
           header's CTA — on this page that's a same-page jump straight to
           #subscribe, on any other page it's a normal navigation that lands
