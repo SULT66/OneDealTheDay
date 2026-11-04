@@ -99,10 +99,10 @@ export function CampaignCarousel({ slides, intervalMs = 6000, label }: { slides:
             }} />}
           <div className="absolute inset-0" style={{ backgroundImage: `linear-gradient(to right, ${slide.ground}, ${slide.ground}d9 35%, ${slide.ground}00 75%)` }} />
           {slide.fullSlideLink && <a aria-hidden="true" tabIndex={-1} href={slide.href} className="absolute inset-0" />}
-          <div className={`relative max-w-xl px-5 pb-36 pt-7 sm:px-8 sm:pb-28 sm:pt-9 lg:px-10 lg:pt-10 ${slide.fullSlideLink ? "pointer-events-none" : ""}`}>
+          <div className={`relative max-w-xl px-5 pb-36 pt-6 sm:px-8 sm:pb-20 sm:pt-7 lg:px-10 ${slide.fullSlideLink ? "pointer-events-none" : ""}`}>
             <p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: slide.eyebrowText }}>{slide.eyebrow}</p>
-            <Heading id={position === 0 ? "hero-title" : undefined} className="mt-3 whitespace-pre-line text-4xl font-black uppercase leading-[1.04] tracking-[0.01em] sm:text-5xl lg:text-6xl" style={{fontFamily:'"Arial Black", "Helvetica Neue", Arial, sans-serif'}}>{slide.title.split("\n").map((line,i)=><span key={i} className="block"><span className={slide.highlight && i===1 ? "inline-block bg-[#c1f21d] px-2 pb-1 text-[#101010]" : ""}>{line}</span></span>)}</Heading>
-            <div className="mt-4 flex flex-col items-start gap-4">
+            <Heading id={position === 0 ? "hero-title" : undefined} className="mt-3 whitespace-pre-line font-sans text-[30px] font-semibold uppercase leading-[1.1] tracking-[-0.025em] sm:text-[38px] lg:text-[44px]">{slide.title.split("\n").map((line,i)=><span key={i} className="block"><span className={slide.highlight && i===1 ? "inline-block bg-[#c1f21d] px-2 pb-1 text-[#101010]" : ""}>{line}</span></span>)}</Heading>
+            <div className="mt-3 flex flex-col items-start gap-3">
               <p className="max-w-xs text-sm font-medium leading-relaxed">{slide.note}</p>
               <a href={slide.href} tabIndex={shown ? undefined : -1} className={`inline-flex min-h-11 shrink-0 items-center gap-2 rounded-full px-5 text-sm font-semibold transition-opacity hover:opacity-90 ${shown && slide.fullSlideLink ? "pointer-events-auto" : ""}`} style={{ backgroundColor: slide.accent, color: slide.accentText }}>
                 {slide.cta}<ArrowRight size={18} weight="bold" aria-hidden="true" />
