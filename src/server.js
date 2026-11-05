@@ -319,6 +319,31 @@ app.post("/api/ebay/account-deletion", express.raw({type:"application/json", lim
   return res.sendStatus(204);
 });
 app.use(express.json());
+
+app.get("/api/odd-live-tv/status", (req, res) => {
+  res.set("Cache-Control", "no-store");
+  const rawUrl = String(process.env.ODD_LIVE_HLS_URL || "").trim();
+  let hlsUrl = "";
+  try {
+    const parsed = new URL(rawUrl);
+    /* Viewer URLs are public media addresses: credentials, query tokens, and
+       fragments must stay out of this response. */
+    if (parsed.protocol === "https:" && !parsed.username && !parsed.password && !parsed.search && !parsed.hash) {
+      hlsUrl = parsed.toString();
+    }
+  } catch {}
+  const productIds = String(process.env.ODD_LIVE_PRODUCT_IDS || "")
+    .split(",")
+    .map(value => value.trim())
+    .filter(value => /^\d+$/.test(value))
+    .slice(0, 12);
+  res.json({
+    online: process.env.ODD_LIVE_ONLINE === "true" && Boolean(hlsUrl),
+    title: String(process.env.ODD_LIVE_TITLE || "ODD Live TV").trim().slice(0, 100),
+    hlsUrl,
+    productIds,
+  });
+});
 app.use("/api", (req, res, next) => {
   res.set("X-Robots-Tag", "noindex, nofollow");
   next();
