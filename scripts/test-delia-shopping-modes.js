@@ -1,5 +1,5 @@
 const assert=require('node:assert/strict');
-const {shoppingMode,taskQuestion,publicProductUrl,sameProductUrl,totalBudget,wantsBundle,assembleBundle,previewProductId}=require('../src/deliaShoppingModes');
+const {shoppingMode,taskQuestion,publicProductUrl,sameProductUrl,totalBudget,wantsBundle,assembleBundle,previewProductId,componentMatchesOffer}=require('../src/deliaShoppingModes');
 
 const coffee=taskQuestion({message:'Нужна кофемашина до $200',language:'ru'});
 assert.equal(coffee.clarifying_questions.length,1);
@@ -23,6 +23,16 @@ assert(!sameProductUrl('https://www.ebay.com/itm/123?var=1','https://www.ebay.co
 assert.equal(previewProductId({message:'Is it a good price?',product_id:8}),8);
 assert.equal(previewProductId({message:'Build a desk setup for $200 total',product_id:8}),null);
 assert.equal(previewProductId({message:'https://www.ebay.com/itm/123',product_id:8}),null);
+for(const [query,title,expected] of [
+ ['LED desk lamp','Two Silver Rose Blooms Personalized Desk Set',false],
+ ['desktop organizer','Tool Bag Open Top Tool Organizer Bag',false],
+ ['LED desk lamp','Rechargeable LED Desk Lamp with USB',true],
+ ['office desk organizer','Mesh Desktop Organizer with Pencil Holder',true],
+ ['office desk','Small Writing Desk with Two Shelves',true],
+ ['office desk','Dollhouse Miniature Wooden Desk',false],
+ ['office desk','Desk Lamp with Pen Holder',false],
+ ['office desk','Desk Set with Silver Roses',false],
+]) assert.equal(componentMatchesOffer(query,title),expected,title);
 const offer=(url,price,extra={})=>({title:url,url:'https://shop.example/'+url,price_value:price,currency:'USD',source_type:'catalog',shipping_cost:0,...extra});
 const groups=[{label:'Desk',offers:[offer('desk',180),offer('desk-budget',120)]},{label:'Lamp',offers:[offer('lamp',30)]},{label:'Organizer',offers:[offer('organizer',20)]}];
 const combined=assembleBundle(groups,200,'USD');
@@ -53,9 +63,9 @@ const options={language:'en',market:{code:'us',currency:'USD'},model:'fixture',b
  let searches=0,modelCalls=0;
  const bundle=await shoppingMode({...options,message:'200',shoppingMission:ask.shopping_mission,
   openai:{responses:{create:async()=>{modelCalls++;return {output_text:JSON.stringify({title:'Desk setup',components:[{label:'Desk',query:'office desk',weight:7},{label:'Lamp',query:'desk lamp',weight:2},{label:'Organizer',query:'desk organizer',weight:1}]})};}}},
-  search:async({message,skipClarification,responseBudgetMs})=>{searches++;assert(skipClarification);assert(responseBudgetMs<58000);return {recommendations:[message.includes('office desk')?offer('desk',120):message.includes('desk lamp')?offer('lamp',20):offer('organizer',10)]};}
+  search:async({message,skipClarification,responseBudgetMs})=>{searches++;assert(skipClarification);assert(responseBudgetMs<58000);return {recommendations:[message.includes('office desk')?offer('desk',120):message.includes('desk lamp')?offer('lamp',20):offer('desk-organizer',10)]};}
  });
- assert.equal(modelCalls,1);assert.equal(searches,3);assert.equal(bundle.bundle.complete,true);assert.equal(bundle.bundle.known_total,150);
+ assert.equal(modelCalls,2);assert.equal(searches,3);assert.equal(bundle.bundle.complete,true);assert.equal(bundle.bundle.known_total,150);
  assert.equal(bundle.bundle.budget,200);assert.equal(bundle.recommendations.length,3);
  assert(wantsBundle('Make the total $150',bundle.shopping_mission),'A changed total must keep the set task');
  const failed=await shoppingMode({...options,message:'Build a desk setup for $200 total',
@@ -63,6 +73,15 @@ const options={language:'en',market:{code:'us',currency:'USD'},model:'fixture',b
   search:async({message})=>message.includes('lamp')?Promise.reject(new Error('Search unavailable')):{recommendations:[offer('desk',50)]}
  });
  assert.equal(failed.bundle.complete,false);assert.equal(failed.recommendations.length,0);assert.deepEqual(failed.bundle.missing,['Lamp']);
+ const repaired=await shoppingMode({...options,message:'Build a desk setup for $200 total',
+  openai:{responses:{create:async req=>({output_text:JSON.stringify(req.text.format.name==='delia_bundle_plan'
+   ?{title:'Desk setup',components:[{label:'Lamp',query:'desk lamp',weight:1},{label:'Organizer',query:'desk organizer',weight:1}]}
+   :{matches:[{component_index:0,offer_indices:[0]},{component_index:1,offer_indices:[0]}]})})}},
+  search:async()=>({recommendations:[offer('Two Silver Rose Blooms Personalized Desk Set',30),offer('Tool Bag Open Top Tool Organizer Bag',20)]}),
+  catalogOffers:({query})=>[query.includes('lamp')?offer('LED Desk Lamp',15):offer('Mesh Desk Organizer',10)]
+ });
+ assert.equal(repaired.bundle.complete,true);assert.equal(repaired.bundle.known_total,25);
+ assert.deepEqual(repaired.recommendations.map(r=>r.title),['LED Desk Lamp','Mesh Desk Organizer']);
  const url='https://www.ebay.com/itm/123';
  let input;
  const link=await shoppingMode({...options,message:'Compare '+url,
@@ -74,6 +93,22 @@ const options={language:'en',market:{code:'us',currency:'USD'},model:'fixture',b
  assert.equal(blocked.recommendations.length,0);assert.match(blocked.message,/could not read/);
  const local=await shoppingMode({...options,message:'https://www.onedailydrop.com/us/deal/42',catalogLink:()=>({id:42,title:'Known product',price_value:44,currency:'USD'}),search:async(args)=>{assert.equal(args.productId,42);return {recommendations:[]};}});
  assert.equal(local.linked_product.title,'Known product');
+ // Exercise the real SQL retailer-link lookup, not a mocked catalogLink.
+ const Database=require('better-sqlite3');
+ const db=new Database(':memory:');
+ db.exec(`CREATE TABLE products (id INTEGER PRIMARY KEY,title TEXT,brand TEXT,category TEXT,market TEXT,status TEXT,source TEXT,
+ retailer_name TEXT,current_price REAL,original_price REAL,currency TEXT,rating REAL,review_count INTEGER,
+ seller_name TEXT,seller_rating REAL,seller_feedback_count INTEGER,shipping_summary TEXT,return_summary TEXT,
+ availability TEXT,checked_at TEXT,updated_at TEXT,image_url TEXT,affiliate_url TEXT,score REAL,
+ shipping_cost REAL,evidence_confidence REAL,score_breakdown TEXT);`);
+ db.prepare("INSERT INTO products (id,title,market,status,source,affiliate_url,current_price,currency) VALUES (1,'Known coffee maker','us','published','ebay',?,90,'USD')").run('https://www.ebay.com/itm/123?campid=55');
+ const catalogEntry=createShoppingAssistant({db,sourceSql:()=> '1=1',market:()=>options.market,client:options.openai});
+ const actualRespond=catalogEntry.respond.bind(catalogEntry);
+ catalogEntry.respond=async args=>args.modesHandled?{recommendations:[]}:actualRespond(args);
+ const known=await catalogEntry.respond({message:url,marketCode:'us',language:'en'});
+ assert.equal(known.linked_product.title,'Known coffee maker');
+ assert.equal(known.linked_product.price_value,90);
+ db.close();
  const controller=new AbortController();controller.abort();
  await assert.rejects(shoppingMode({...options,message:url,signal:controller.signal,openai:{responses:{create:async()=>{throw controller.signal.reason;}}}}),{name:'AbortError'});
  console.log('Delia shopping modes: one task question, safe evidenced links, carried budget, separate searches, exact totals, shipping uncertainty, missing items and cancellation passed.');

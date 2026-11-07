@@ -1,6 +1,6 @@
 const { requestedCondition, matchesCondition } = require("./shoppingCondition");
 const OpenAIExport = require("openai");
-const {shoppingMode} = require("./deliaShoppingModes");
+const {shoppingMode,sameProductUrl,componentMatchesOffer} = require("./deliaShoppingModes");
 const {packCount} = require("./packComparison");
 const { marketPath } = require("./markets");
 const {
@@ -5509,11 +5509,29 @@ function createShoppingAssistant({
           },
           catalogLink:(url) => {
             const u = new URL(url);
-            if (!['onedailydrop.com','www.onedailydrop.com'].includes(u.hostname)) return null;
-            const id = new RegExp(`^/${selectedMarket.code}/deal/(\\d+)/?$`).exec(u.pathname)?.[1];
-            const product = id && catalogProductById(db,sourceSql,id,selectedMarket.code,language);
+            let product;
+            if (['onedailydrop.com','www.onedailydrop.com'].includes(u.hostname)) {
+              const id = new RegExp(`^/${selectedMarket.code}/deal/(\\d+)/?$`).exec(u.pathname)?.[1];
+              product = id && catalogProductById(db,sourceSql,id,selectedMarket.code,language);
+            } else {
+              const rows=db.prepare(`SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()}
+                AND (affiliate_url LIKE ? ESCAPE '\\' OR affiliate_url LIKE ? ESCAPE '\\') LIMIT 30`)
+                .all(selectedMarket.code,sqlLikePattern(u.pathname),sqlLikePattern(encodeURIComponent(u.pathname)));
+              const row=rows.find(row=>sameProductUrl(affiliateDestinationUrl(row.affiliate_url)||row.affiliate_url,url));
+              product=row && assistantProduct(row,language);
+            }
             return product ? {id:product.id,title:product.title,price_value:product.price,currency:product.currency} : null;
           },
+          catalogOffers:({query,budget}) => db.prepare(`SELECT * FROM products
+              WHERE market=? AND status='published' AND ${sourceSql()} AND current_price>0 AND current_price<=?
+              ORDER BY score DESC LIMIT 4000`).all(selectedMarket.code,budget)
+            .filter(row=>componentMatchesOffer(query,row.title)===true && !/out[ _-]*of[ _-]*stock|sold[ _-]*out|unavailable|ended/i.test(row.availability||''))
+            .filter(row=>Number.isFinite(Date.parse(row.checked_at||row.updated_at)) && Date.now()-Date.parse(row.checked_at||row.updated_at)<=72*60*60*1000)
+            .map(row=>assistantProduct(row,language))
+            .filter(p=>p.source.startsWith('feed-') || (p.score!=null && p.score>=PUBLIC_SCORE_FLOOR))
+            .slice(0,8).map(p=>({title:p.title,retailer:p.retailer,price:'',price_value:p.price,shipping_cost:p.shipping_cost,currency:p.currency,
+              url:p.url,source_type:'catalog',catalog_product_id:p.id,delivery:p.delivery,returns:p.returns,availability:p.availability,
+              score:p.score,rating:p.rating,reviews:p.reviews,image_url:p.image_url})),
           search:(options) => assistant.respond({marketCode,language,signal,...options,modesHandled:true}),
         });
         if (modeResult) return modeResult;
