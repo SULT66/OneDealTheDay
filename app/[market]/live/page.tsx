@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { BACKEND_URL, getImpulsePicks } from "@/lib/catalog";
 import { LiveDropPanel, type LiveDropView } from "@/components/live/LiveDropPanel";
+import { ODDLiveChannel } from "@/components/live/ODDLiveChannel";
 import { DealCard } from "@/components/deal/DealCard";
 import { SectionHeader } from "@/components/site/SectionHeader";
 import type { Deal } from "@/lib/types";
@@ -78,8 +79,12 @@ export default async function LivePage({
     /* A shelf that fails to load is left out; the drop is the page. */
     getImpulsePicks(market).catch(() => ({ deals: [] as Deal[], ceiling: 0 })),
   ]);
+  // The scheduled drop keeps its existing stage; otherwise show the optional
+  // standalone GPU-powered TV channel, when a read-only player is configured.
+  const activeDrop = answered?.drop?.state === "waiting" || answered?.drop?.state === "live";
   return (
     <>
+      {!activeDrop && <ODDLiveChannel embedUrl={process.env.ODD_LIVE_EMBED_URL} />}
       <LiveDropPanel
         market={market}
         initialDrop={answered?.drop ?? null}
