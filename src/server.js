@@ -4284,6 +4284,87 @@ app.post("/api/admin/odd-live/:key/preview-turn", admin, async (req, res) => {
   }
 });
 
+/**
+ * ODD Live GPU producer API. OFF unless ODD_LIVE_WORKER_ENABLED=true.
+ * This is separate from Tavus. Never expose the worker secret to the browser.
+ * A message remains queued until the worker confirms its completed clip was aired.
+ */
+const oddProducerLeases = require("./oddLiveQueue").createProducerLeases();
+const oddWorkerAuth = (req,res,next) => {
+  if (process.env.ODD_LIVE_WORKER_ENABLED !== "true" || !process.env.ODD_LIVE_WORKER_KEY)
+    return res.status(503).json({error:"ODD Live worker is disabled."});
+  const token=String(req.get("x-odd-worker-key")||"");
+  if (!secretMatches(token,process.env.ODD_LIVE_WORKER_KEY))
+    return res.status(401).json({error:"Unauthorized"});
+  return next();
+};
+app.post("/api/odd-live/worker/next", oddWorkerAuth, async (req,res)=>{
+  res.set("Cache-Control","no-store");
+  const marketCode=normalizeMarket(req.body?.market)||"us";
+  const drop=currentLiveDrop(marketCode);
+  if (!drop || !drop.published || presentDrop(drop,Date.now())?.state!=="live")
+    return res.json({kind:"not_live"});
+  if(oddProducerLeases.has(drop.id))return res.json({kind:"busy"});
+  const question=db.prepare(
+    "SELECT id,text FROM live_chat_messages WHERE drop_id=? AND status='queued' ORDER BY id ASC LIMIT 1"
+  ).get(drop.id);
+  const lease=oddProducerLeases.acquire(drop.id,question?.id||null);
+  if(!lease)return res.json({kind:"busy"});
+  try {
+    const {preparePreviewTurn}=require("./oddLiveProducer");
+    const createText=process.env.OPENAI_API_KEY
+      ? async ({system,user})=>{
+          const OpenAI=require("openai");
+          const client=new OpenAI({apiKey:process.env.OPENAI_API_KEY,timeout:12000,maxRetries:0});
+          const response=await client.responses.create({
+            model:process.env.ODD_LIVE_AI_MODEL || "gpt-4.1-mini",
+            instructions:system,input:user,max_output_tokens:160
+          });
+          return response.output_text;
+        }
+      : undefined;
+    const turn=await preparePreviewTurn({
+      drop,now:Date.now(),question:question?.text||"",generateText:createText
+    });
+    return res.json({
+      kind:question?"question":"presentation",
+      drop_key:drop.drop_key,
+      question_id:question?.id||null,
+      spoken_text:turn.spoken_text,
+      lease_token:lease.token,
+      lease_expires_at:new Date(lease.expiresAt).toISOString(),
+      publish_required:true,
+    });
+  }catch(error){
+    oddProducerLeases.release(drop.id,lease.token);
+    console.error("[odd-live] producer turn error:",error?.message||error);
+    return res.status(503).json({error:"Presenter cannot prepare a turn right now."});
+  }
+});
+app.post("/api/odd-live/worker/ack", oddWorkerAuth, (req,res)=>{
+  res.set("Cache-Control","no-store");
+  const key=String(req.body?.drop_key||"").slice(0,100);
+  const drop=db.prepare("SELECT id FROM live_drops WHERE drop_key=? AND published=1").get(key);
+  if(!drop)return res.status(404).json({error:"Unknown show."});
+  const token=String(req.body?.lease_token||"");
+  const lease=oddProducerLeases.check(drop.id,token);
+  if(!lease)return res.status(409).json({error:"Lease expired or already completed."});
+  if(req.body?.aired!==true) {
+    oddProducerLeases.release(drop.id,token);
+    return res.json({ok:true,retryable:true});
+  }
+  if(lease.questionId!==null) {
+    const result=db.prepare("UPDATE live_chat_messages SET status='sent', sent_at=? WHERE id=? AND drop_id=? AND status='queued'")
+      .run(new Date().toISOString(),lease.questionId,drop.id);
+    if(result.changes!==1){
+      oddProducerLeases.release(drop.id,token);
+      return res.status(409).json({error:"Question status changed."});
+    }
+  }
+  oddProducerLeases.release(drop.id,token);
+  return res.json({ok:true,question_id:lease.questionId});
+});
+
 app.get("/api/admin/live-host/:key", admin, async (req, res) => {
   res.set("Cache-Control", "no-store");
   const drop = db.prepare("SELECT * FROM live_drops WHERE drop_key=?").get(String(req.params.key || ""));
