@@ -67,7 +67,7 @@ export function ODDLiveTvExperience({market}:{market:string}) {
                 <h3 className="font-bold">{product.title}</h3>
                 <p className="mt-1 text-sm text-white/70">{product.brand||product.retailer_name||"Featured product"}</p>
                 {price ? <p className="mt-2 font-semibold">{price}</p> : <p className="mt-2 text-xs text-white/70">Check retailer for current price</p>}
-                {product.affiliate_url ? <a href={product.affiliate_url} target="_blank" rel="noopener noreferrer sponsored" className="mt-3 inline-block rounded-full bg-lime-300 px-4 py-2 text-sm font-bold text-black">See at retailer</a>:null}
+                {product.affiliate_url ? <a href={product.affiliate_url} target="_blank" rel="noopener sponsored" className="mt-3 inline-block rounded-full bg-lime-300 px-4 py-2 text-sm font-bold text-black">See at retailer</a>:null}
               </div>
             </div>:<p>Featured product information is currently unavailable.</p>}
           </>
