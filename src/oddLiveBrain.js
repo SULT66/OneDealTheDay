@@ -8,7 +8,7 @@ function productFacts(product) {
   if (!product || typeof product !== "object" || !clean(product.title)) throw new Error("PRODUCT_REQUIRED");
   const c = clean(product.currency, 3).toUpperCase();
   let price = null;
-  if (Number.isFinite(Number(product.price)) && Number(product.price) >= 0 && /^[A-Z]{3}$/.test(c)) {
+  if (product.price !== null && product.price !== undefined && product.price !== "" && Number.isFinite(Number(product.price)) && Number(product.price) >= 0 && /^[A-Z]{3}$/.test(c)) {
     try { price = new Intl.NumberFormat("en-US", {style: "currency", currency: c}).format(Number(product.price)); }
     catch { /* invalid currency */ }
   }
