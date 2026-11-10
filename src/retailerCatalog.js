@@ -210,6 +210,21 @@ const RETAILERS = Object.freeze([
     storefrontHost:"aloraircrawlspace.com", awinFeedId:"F2715", maxCatalogProducts:100,
     feedPolicy:{spreadAcrossFeed:true, excludeTitleTerms:["custom payment", "price difference link", "not a product sale", "purchase protection", "gift card", "not sold separately", "not for sale", "non-delivery"]}
   },
+  {
+    id:"piscifun", name:"Piscifun", network:"Awin", markets:["us"],
+    storefrontHost:"piscifun.com", awinFeedId:"F1374", maxCatalogProducts:150,
+    feedPolicy:{spreadAcrossFeed:true, excludeTitleTerms:["custom payment", "price difference link", "purchase protection", "gift card", "not sold separately", "not for sale", "non-delivery"]}
+  },
+  {
+    id:"apolosign", name:"Apolosign", network:"Awin", markets:["us"],
+    storefrontHost:"apolosign.com", awinFeedId:"F1090", maxCatalogProducts:50,
+    feedPolicy:{spreadAcrossFeed:true, excludeTitleTerms:["custom payment", "price difference link", "purchase protection", "gift card", "not sold separately", "not for sale", "non-delivery"]}
+  },
+  {
+    id:"sunaofe", name:"Sunaofe", network:"Awin", markets:["us"],
+    storefrontHost:"sunaofe.com", awinFeedId:"F2716", maxCatalogProducts:100,
+    feedPolicy:{spreadAcrossFeed:true, excludeTitleTerms:["custom payment", "price difference link", "purchase protection", "gift card", "not sold separately", "not for sale", "non-delivery"]}
+  },
   {id:"currys", name:"Currys", network:"Awin", markets:["uk"]},
   {id:"ao", name:"AO.com", network:"Awin", markets:["uk"]},
   {id:"fnac", name:"Fnac", network:"Awin", markets:["fr"]},
