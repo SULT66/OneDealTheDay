@@ -4365,6 +4365,138 @@ app.post("/api/odd-live/worker/ack", oddWorkerAuth, (req,res)=>{
   return res.json({ok:true,question_id:lease.questionId});
 });
 
+/**
+ * Independent one-hour ODD TV channel. Existing ten-minute Live Drops are
+ * unchanged. No new TV schema or routes are live until explicitly enabled.
+ */
+const oddTv=require("./oddTvChannel");
+const oddTvEnabled=process.env.ODD_TV_ENABLED==="true";
+if(oddTvEnabled) oddTv.init(db);
+const oddTvLeases=require("./oddLiveQueue").createProducerLeases();
+const currentTv=(marketCode)=>oddTvEnabled
+  ? oddTv.currentShow(db,marketCode,Date.now()) : null;
+
+app.get("/api/odd-tv/live",(req,res)=>{
+  res.set("Cache-Control","no-store");
+  if(!oddTvEnabled)return res.json({show:null});
+  const marketCode=normalizeMarket(req.query?.market)||"us";
+  return res.json({show:oddTv.publicShow(db,marketCode,Date.now())});
+});
+app.get("/api/odd-tv/chat",(req,res)=>{
+  res.set("Cache-Control","no-store");
+  if(!oddTvEnabled)return res.json({messages:[]});
+  const marketCode=normalizeMarket(req.query?.market)||"us";
+  const show=currentTv(marketCode);
+  if(!show)return res.json({messages:[],show_id:null});
+  return res.json({
+    show_id:show.id,
+    messages:oddTv.messages(db,show.id,req.query?.after||0),
+  });
+});
+app.post("/api/odd-tv/chat",(req,res)=>{
+  res.set("Cache-Control","no-store");
+  if(!oddTvEnabled)return res.status(503).json({error:"ODD TV is not enabled."});
+  const marketCode=normalizeMarket(req.body?.market)||"us";
+  const show=currentTv(marketCode);
+  if(!show)return res.status(409).json({error:"No ODD Live TV broadcast is on air."});
+  const sessionId=analyticsToken(req.body?.session_id);
+  if(!sessionId)return res.status(400).json({error:"Invalid viewer session."});
+  try{
+    const id=oddTv.postQuestion(db,{showId:show.id,sessionId,text:req.body?.text,now:Date.now()});
+    return res.status(201).json({ok:true,question_id:id});
+  }catch(error){
+    return res.status(error.message.includes("RATE")||error.message.includes("QUEUE")?429:400)
+      .json({error:error.message});
+  }
+});
+app.post("/api/admin/odd-tv/show",admin,express.json({limit:"5kb"}),(req,res)=>{
+  res.set("Cache-Control","no-store");
+  if(!oddTvEnabled)return res.status(503).json({error:"ODD TV disabled."});
+  const marketCode=normalizeMarket(req.body?.market)||"us";
+  try{
+    const id=oddTv.createShow(db,{market:marketCode,productIds:req.body?.product_ids,now:Date.now()});
+    return res.status(201).json({show_id:id,state:"draft"});
+  }catch(error){return res.status(400).json({error:error.message});}
+});
+app.post("/api/admin/odd-tv/show/:id/start",admin,(req,res)=>{
+  res.set("Cache-Control","no-store");
+  if(!oddTvEnabled)return res.status(503).json({error:"ODD TV disabled."});
+  try{
+    const state=oddTv.startShow(db,Number(req.params.id),{now:Date.now()});
+    return res.json({...state,state:"live"});
+  }catch(error){return res.status(409).json({error:error.message});}
+});
+app.post("/api/admin/odd-tv/show/:id/stop",admin,(req,res)=>{
+  res.set("Cache-Control","no-store");
+  if(!oddTvEnabled)return res.status(503).json({error:"ODD TV disabled."});
+  db.prepare("UPDATE odd_tv_shows SET status='ended',end_at=? WHERE id=? AND status='live'")
+    .run(new Date().toISOString(),Number(req.params.id));
+  return res.json({ok:true});
+});
+app.post("/api/odd-tv/worker/next",oddWorkerAuth,async(req,res)=>{
+  res.set("Cache-Control","no-store");
+  if(!oddTvEnabled)return res.json({kind:"not_live"});
+  const marketCode=normalizeMarket(req.body?.market)||"us";
+  const show=currentTv(marketCode);
+  if(!show)return res.json({kind:"not_live"});
+  const key="tv:"+show.id;
+  if(oddTvLeases.has(key))return res.json({kind:"busy"});
+  const question=oddTv.nextQuestion(db,show.id);
+  const lease=oddTvLeases.acquire(key,question?.id||null);
+  if(!lease)return res.json({kind:"busy"});
+  try {
+    const listing=oddTv.currentProduct(db,show,Date.now()).product;
+    if(!listing)throw new Error("NO_PUBLISHED_PRODUCT");
+    const {composeHostTurn}=require("./oddLiveBrain");
+    let generateText;
+    if(process.env.OPENAI_API_KEY){
+      generateText=async ({system,user})=>{
+        const OpenAI=require("openai");
+        const client=new OpenAI({apiKey:process.env.OPENAI_API_KEY,timeout:12000,maxRetries:0});
+        const response=await client.responses.create({
+          model:process.env.ODD_LIVE_AI_MODEL||"gpt-4.1-mini",
+          instructions:system,input:user,max_output_tokens:160
+        });
+        return response.output_text;
+      };
+    }
+    const speech=await composeHostTurn({
+      product:listing,question:question?.text||"",locale:"en-US",generateText
+    });
+    return res.json({
+      kind:question?"question":"presentation",
+      show_id:show.id,drop_key:key,question_id:question?.id||null,
+      product_id:listing.id,spoken_text:speech,
+      lease_token:lease.token,
+      lease_expires_at:new Date(lease.expiresAt).toISOString(),
+    });
+  }catch(error){
+    oddTvLeases.release(key,lease.token);
+    console.error("[odd-tv] turn preparation failed",error.message);
+    return res.status(503).json({error:"Unable to prepare presenter turn."});
+  }
+});
+app.post("/api/odd-tv/worker/ack",oddWorkerAuth,(req,res)=>{
+  res.set("Cache-Control","no-store");
+  const id=Number(String(req.body?.drop_key||"").match(/^tv:(\\d+)$/)?.[1]);
+  if(!oddTvEnabled||!Number.isSafeInteger(id)||id<=0)
+    return res.status(400).json({error:"Invalid show identifier."});
+  const key="tv:"+id;
+  const token=String(req.body?.lease_token||"");
+  const lease=oddTvLeases.check(key,token);
+  if(!lease)return res.status(409).json({error:"Expired or invalid lease."});
+  if(req.body?.aired!==true){
+    oddTvLeases.release(key,token);
+    return res.json({ok:true,retryable:true});
+  }
+  if(lease.questionId!==null && !oddTv.markSent(db,id,lease.questionId,Date.now())){
+    oddTvLeases.release(key,token);
+    return res.status(409).json({error:"Question state changed."});
+  }
+  oddTvLeases.release(key,token);
+  return res.json({ok:true,question_id:lease.questionId});
+});
+
 app.get("/api/admin/live-host/:key", admin, async (req, res) => {
   res.set("Cache-Control", "no-store");
   const drop = db.prepare("SELECT * FROM live_drops WHERE drop_key=?").get(String(req.params.key || ""));
