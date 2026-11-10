@@ -1,3 +1,4 @@
+import { ODDLiveTvExperience } from "./ODDLiveTvExperience";
 /**
  * Optional always-on ODD Live channel outside scheduled product drops.
  *
@@ -6,7 +7,7 @@
  * During an active drop the existing LiveDropPanel owns the stage so product
  * pricing, checkout links, viewer presence and host fallbacks remain intact.
  */
-export function ODDLiveChannel({ embedUrl }: { embedUrl?: string }) {
+export function ODDLiveChannel({ embedUrl, market }: { embedUrl?: string; market: string }) {
   if (!embedUrl) return null;
 
   let playerUrl: string;
@@ -39,6 +40,7 @@ export function ODDLiveChannel({ embedUrl }: { embedUrl?: string }) {
             className="h-full w-full border-0"
           />
         </div>
+        <ODDLiveTvExperience market={market} />
       </div>
     </section>
   );
