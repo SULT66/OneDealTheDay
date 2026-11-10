@@ -6,6 +6,7 @@ The live program compositor and publisher must first prove actual playback.
 Run on Diana WSL2 in the existing odd-ai-test environment.
 """
 import argparse
+from datetime import datetime
 import html
 import json
 import os
@@ -136,8 +137,27 @@ def main():
             "spoken_text":speech,
             "note":"REHEARSAL_ONLY_NOT_AIRED",
         },indent=2),encoding="utf-8")
+        # Atomic handoff to the local compositor. The lease stays on disk with
+        # restricted permissions; only the broadcaster may acknowledge delivery.
+        ready=OUTPUT/"ready"
+        ready.mkdir(mode=0o700,exist_ok=True)
+        expires=response.get("lease_expires_at","")
+        expiry=datetime.fromisoformat(expires.replace("Z","+00:00")).timestamp()
+        meta={
+            "video":str(video.resolve()),
+            "drop_key":response["drop_key"],
+            "question_id":response.get("question_id"),
+            "lease_token":response["lease_token"],
+            "lease_expires_at":expiry,
+        }
+        target=ready/(jobdir.name+".ready.json")
+        temp=ready/(jobdir.name+".tmp")
+        temp.write_text(json.dumps(meta),encoding="utf-8")
+        temp.chmod(0o600)
+        os.replace(temp,target)
         print("CHLOE_PREVIEW_READY:",video)
-        print("NOT_AIRED: question remains queued; no ACK sent.")
+        print("LOCAL_CLIP_QUEUED:",target.name)
+        print("NOT_ACKNOWLEDGED: delivery confirmation belongs to the broadcaster.")
     except Exception:
         print("REHEARSAL_FAILED; question stays queued. See per-turn render.log.",file=sys.stderr)
         raise
