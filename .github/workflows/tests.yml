@@ -44,3 +44,6 @@ jobs:
 
       - name: Run the test suite
         run: npm test
+
+      - name: Test ODD Live AI and producer leases
+        run: node --test tests/oddLiveBrain.test.js tests/oddLiveProducer.test.js scripts/test-odd-live-queue.js
