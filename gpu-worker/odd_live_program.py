@@ -107,8 +107,9 @@ def ack(info):
     if not (base.startswith("https://") and key and info.get("lease_token")):
         raise RuntimeError("ACK_REQUIRES_HTTPS_AND_SECRET")
     payload=json.dumps({"drop_key":info["drop_key"],"lease_token":info["lease_token"],"aired":True}).encode()
+    endpoint="/api/odd-tv/worker/ack" if str(info["drop_key"]).startswith("tv:") else "/api/odd-live/worker/ack"
     req=urllib.request.Request(
-        base+"/api/odd-live/worker/ack",method="POST",data=payload,
+        base+endpoint,method="POST",data=payload,
         headers={"Content-Type":"application/json","X-ODD-Worker-Key":key}
     )
     with urllib.request.urlopen(req,timeout=12) as response:
