@@ -4237,6 +4237,53 @@ app.get("/api/admin/search-demand", admin, (req, res) => {
   });
 });
 
+/**
+ * Safe, read-only AI presenter rehearsal: queued viewer questions are merely
+ * peeked at, never marked as delivered. The future worker must separately
+ * acknowledge actual audio broadcast. Admin-only; disabled by default.
+ */
+app.post("/api/admin/odd-live/:key/preview-turn", admin, async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  if (process.env.ODD_LIVE_AI_PREVIEW !== "true") {
+    return res.status(503).json({error:"ODD Live AI preview is disabled."});
+  }
+  if (!process.env.OPENAI_API_KEY) {
+    return res.status(503).json({error:"OPENAI_API_KEY is not configured."});
+  }
+  const drop = db.prepare("SELECT * FROM live_drops WHERE drop_key=? AND published=1 AND deleted_at IS NULL")
+    .get(String(req.params.key || "").slice(0, 100));
+  if (!drop) return res.status(404).json({error:"No published Live Drop with that key."});
+  const {preparePreviewTurn} = require("./oddLiveProducer");
+  const question = db.prepare(
+    "SELECT id, text FROM live_chat_messages WHERE drop_id=? AND status='queued' ORDER BY id ASC LIMIT 1"
+  ).get(drop.id);
+  try {
+    const OpenAI = require("openai");
+    const client = new OpenAI({apiKey:process.env.OPENAI_API_KEY, timeout:12000, maxRetries:0});
+    const result = await preparePreviewTurn({
+      drop, now:Date.now(), question:question?.text || "",
+      generateText:async ({system,user}) => {
+        const response = await client.responses.create({
+          model:process.env.ODD_LIVE_AI_MODEL || "gpt-4.1-mini",
+          instructions:system, input:user, max_output_tokens:160,
+        });
+        return response.output_text;
+      },
+    });
+    return res.json({
+      ...result,
+      question_id:question?.id || null,
+      question_preview:question?.text || null,
+      queue_unchanged:true,
+      speech_published:false,
+    });
+  } catch (error) {
+    if (error?.message === "DROP_NOT_LIVE") return res.status(409).json({error:"No live product is on air."});
+    console.error("[odd-live] presenter preview failed:", error?.message || error);
+    return res.status(503).json({error:"Presenter preview is temporarily unavailable."});
+  }
+});
+
 app.get("/api/admin/live-host/:key", admin, async (req, res) => {
   res.set("Cache-Control", "no-store");
   const drop = db.prepare("SELECT * FROM live_drops WHERE drop_key=?").get(String(req.params.key || ""));
