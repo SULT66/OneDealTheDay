@@ -51,9 +51,10 @@ test("stale product price is not spoken as current",()=>{
  const db=setup();
  const id=tv.createShow(db,{productIds:[1,2,3,4,5,6,7,8],now:time});
  tv.startShow(db,id,{now:time});
- const at=tv.currentShow(db,"us",time+61*60000-60000);
+ db.prepare("UPDATE products SET checked_at=? WHERE id=1").run(new Date(time-2*60*60000).toISOString());
+ const at=tv.currentShow(db,"us",time+1000);
  assert.ok(at);
- const p=tv.currentProduct(db,at,time+61*60000-60000).product;
+ const p=tv.currentProduct(db,at,time+1000).product;
  assert.equal(p.price,null);
  db.close();
 });
