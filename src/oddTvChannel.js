@@ -34,8 +34,41 @@ function validateProducts(db,market,ids) {
   if(ids.some(id=>!stmt.get(id,market)))throw new Error("PRODUCT_NOT_PUBLISHED_IN_MARKET");
   return ids;
 }
+/**
+ * Pick up to ten currently published, purchasable listings, diversifying
+ * across retailers so one highly-scored marketplace does not fill the show.
+ */
+function pickProducts(db,market) {
+  const {sourceSql}=require("./publicCatalog");
+  const rows=db.prepare(
+    "SELECT id,retailer_name FROM products WHERE market=? AND status='published' " +
+    "AND current_price>0 AND affiliate_url IS NOT NULL AND length(trim(affiliate_url))>0 " +
+    "AND " + sourceSql() +
+    " ORDER BY COALESCE(ranking_score,score,0) DESC,id DESC LIMIT 150"
+  ).all(market);
+  const perRetailer=new Map();
+  const selected=[];
+  const used=new Set();
+  for(const row of rows){
+    const retailer=String(row.retailer_name||"unknown").toLowerCase();
+    const count=perRetailer.get(retailer)||0;
+    if(count>=2)continue;
+    selected.push(row.id);used.add(row.id);
+    perRetailer.set(retailer,count+1);
+    if(selected.length===10)break;
+  }
+  if(selected.length<8){
+    for(const row of rows){
+      if(used.has(row.id))continue;
+      selected.push(row.id);used.add(row.id);
+      if(selected.length===10)break;
+    }
+  }
+  if(selected.length<8)throw new Error("NOT_ENOUGH_ELIGIBLE_PRODUCTS");
+  return selected;
+}
 function createShow(db,{market="us",productIds,now=Date.now()}) {
-  const ids=validateProducts(db,market,productIds);
+  const ids=validateProducts(db,market,productIds==null?pickProducts(db,market):productIds);
   const existing=db.prepare("SELECT id FROM odd_tv_shows WHERE status='live' AND end_at>? LIMIT 1")
     .get(new Date(now).toISOString());
   if(existing)throw new Error("ANOTHER_SHOW_ACTIVE");
@@ -123,4 +156,4 @@ function markSent(db,showId,questionId,now=Date.now()) {
     "UPDATE odd_tv_chat SET status='sent',sent_at=? WHERE id=? AND show_id=? AND status='queued'"
   ).run(new Date(now).toISOString(),questionId,showId).changes===1;
 }
-module.exports={SHOW_MINUTES,init,validateProducts,createShow,startShow,currentShow,currentProduct,publicShow,postQuestion,messages,nextQuestion,markSent};
+module.exports={SHOW_MINUTES,init,validateProducts,pickProducts,createShow,startShow,currentShow,currentProduct,publicShow,postQuestion,messages,nextQuestion,markSent};
