@@ -4478,7 +4478,7 @@ app.post("/api/odd-tv/worker/next",oddWorkerAuth,async(req,res)=>{
 });
 app.post("/api/odd-tv/worker/ack",oddWorkerAuth,(req,res)=>{
   res.set("Cache-Control","no-store");
-  const id=Number(String(req.body?.drop_key||"").match(/^tv:(\\d+)$/)?.[1]);
+  const id=Number(String(req.body?.drop_key||"").match(/^tv:([0-9]+)$/)?.[1]);
   if(!oddTvEnabled||!Number.isSafeInteger(id)||id<=0)
     return res.status(400).json({error:"Invalid show identifier."});
   const key="tv:"+id;
