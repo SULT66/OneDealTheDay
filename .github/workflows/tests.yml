@@ -47,3 +47,6 @@ jobs:
 
       - name: Test ODD Live AI and producer leases
         run: node --test tests/oddLiveBrain.test.js tests/oddLiveProducer.test.js scripts/test-odd-live-queue.js
+
+      - name: Check ODD Live GPU worker Python syntax
+        run: python -m py_compile gpu-worker/odd_live_chloe_worker.py gpu-worker/odd_live_program.py
