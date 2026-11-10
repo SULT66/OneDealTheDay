@@ -114,7 +114,10 @@ def main():
     key=os.environ["ODD_LIVE_WORKER_KEY"]
     if not base.startswith("https://") and not base.startswith("http://127.0.0.1:"):
         raise ValueError("WORKER_API_MUST_USE_HTTPS")
-    response=post_json(base,"/api/odd-live/worker/next",key,{"market":args.market})
+    mode=os.getenv("ODD_LIVE_MODE","tv")
+    if mode not in {"tv","drop"}: raise ValueError("INVALID_WORKER_MODE")
+    path="/api/odd-tv/worker/next" if mode=="tv" else "/api/odd-live/worker/next"
+    response=post_json(base,path,key,{"market":args.market})
     if response.get("kind") in {"busy","not_live"}:
         print("NO_TURN:",response["kind"])
         return
