@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { BACKEND_URL, getImpulsePicks } from "@/lib/catalog";
 import { LiveDropPanel, type LiveDropView } from "@/components/live/LiveDropPanel";
+import { ODDLiveChannel } from "@/components/live/ODDLiveChannel";
 import { DealCard } from "@/components/deal/DealCard";
 import { SectionHeader } from "@/components/site/SectionHeader";
 import type { Deal } from "@/lib/types";
@@ -34,6 +35,15 @@ export const dynamic = "force-dynamic";
  * page during an outage, and on the day of a drop that is the worst possible
  * thing to say.
  */
+async function currentTvShow(market: string): Promise<boolean> {
+  try {
+    const response = await fetch(`${BACKEND_URL}/api/odd-tv/live?market=${encodeURIComponent(market)}`,{cache:"no-store"});
+    if(!response.ok)return false;
+    const body=await response.json() as {show?: {state?:string}|null};
+    return body.show?.state==="live";
+  }catch{return false;}
+}
+
 async function currentDrop(market: string): Promise<{ drop: LiveDropView | null } | null> {
   try {
     const response = await fetch(
@@ -73,18 +83,24 @@ export default async function LivePage({
 }) {
   const { market } = await params;
   const language = await getLanguage(market);
-  const [answered, shelf] = await Promise.all([
+  const [answered, shelf, tvOnAir] = await Promise.all([
     currentDrop(market),
     /* A shelf that fails to load is left out; the drop is the page. */
     getImpulsePicks(market).catch(() => ({ deals: [] as Deal[], ceiling: 0 })),
+    currentTvShow(market),
   ]);
+  // The scheduled drop keeps its existing stage; otherwise show the optional
+  // standalone GPU-powered TV channel, when a read-only player is configured.
+  const activeDrop = answered?.drop?.state === "waiting" || answered?.drop?.state === "live";
+  const tvVisible = !activeDrop && Boolean(process.env.ODD_LIVE_EMBED_URL) && tvOnAir;
   return (
     <>
-      <LiveDropPanel
+      {tvVisible && <ODDLiveChannel embedUrl={process.env.ODD_LIVE_EMBED_URL} market={market} />}
+      {!tvVisible && <LiveDropPanel
         market={market}
         initialDrop={answered?.drop ?? null}
         serverChecked={answered !== null}
-      />
+      />}
       {shelf.deals.length > 0 && (
         <section aria-labelledby="impulse-title" className="mx-auto w-full max-w-5xl px-3 pb-12 pt-4 sm:px-6">
           <SectionHeader

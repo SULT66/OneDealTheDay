@@ -4237,6 +4237,267 @@ app.get("/api/admin/search-demand", admin, (req, res) => {
   });
 });
 
+/**
+ * Safe, read-only AI presenter rehearsal: queued viewer questions are merely
+ * peeked at, never marked as delivered. The future worker must separately
+ * acknowledge actual audio broadcast. Admin-only; disabled by default.
+ */
+app.post("/api/admin/odd-live/:key/preview-turn", admin, async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  if (process.env.ODD_LIVE_AI_PREVIEW !== "true") {
+    return res.status(503).json({error:"ODD Live AI preview is disabled."});
+  }
+  if (!process.env.OPENAI_API_KEY) {
+    return res.status(503).json({error:"OPENAI_API_KEY is not configured."});
+  }
+  const drop = db.prepare("SELECT * FROM live_drops WHERE drop_key=? AND published=1 AND deleted_at IS NULL")
+    .get(String(req.params.key || "").slice(0, 100));
+  if (!drop) return res.status(404).json({error:"No published Live Drop with that key."});
+  const {preparePreviewTurn} = require("./oddLiveProducer");
+  const question = db.prepare(
+    "SELECT id, text FROM live_chat_messages WHERE drop_id=? AND status='queued' ORDER BY id ASC LIMIT 1"
+  ).get(drop.id);
+  try {
+    const OpenAI = require("openai");
+    const client = new OpenAI({apiKey:process.env.OPENAI_API_KEY, timeout:12000, maxRetries:0});
+    const result = await preparePreviewTurn({
+      drop, now:Date.now(), question:question?.text || "",
+      generateText:async ({system,user}) => {
+        const response = await client.responses.create({
+          model:process.env.ODD_LIVE_AI_MODEL || "gpt-4.1-mini",
+          instructions:system, input:user, max_output_tokens:160,
+        });
+        return response.output_text;
+      },
+    });
+    return res.json({
+      ...result,
+      question_id:question?.id || null,
+      question_preview:question?.text || null,
+      queue_unchanged:true,
+      speech_published:false,
+    });
+  } catch (error) {
+    if (error?.message === "DROP_NOT_LIVE") return res.status(409).json({error:"No live product is on air."});
+    console.error("[odd-live] presenter preview failed:", error?.message || error);
+    return res.status(503).json({error:"Presenter preview is temporarily unavailable."});
+  }
+});
+
+/**
+ * ODD Live GPU producer API. OFF unless ODD_LIVE_WORKER_ENABLED=true.
+ * This is separate from Tavus. Never expose the worker secret to the browser.
+ * A message remains queued until the worker confirms its completed clip was aired.
+ */
+const oddProducerLeases = require("./oddLiveQueue").createProducerLeases();
+const oddWorkerAuth = (req,res,next) => {
+  if (process.env.ODD_LIVE_WORKER_ENABLED !== "true" || !process.env.ODD_LIVE_WORKER_KEY)
+    return res.status(503).json({error:"ODD Live worker is disabled."});
+  const token=String(req.get("x-odd-worker-key")||"");
+  if (!secretMatches(token,process.env.ODD_LIVE_WORKER_KEY))
+    return res.status(401).json({error:"Unauthorized"});
+  return next();
+};
+app.post("/api/odd-live/worker/next", oddWorkerAuth, async (req,res)=>{
+  res.set("Cache-Control","no-store");
+  const marketCode=normalizeMarket(req.body?.market)||"us";
+  const drop=currentLiveDrop(marketCode);
+  if (!drop || !drop.published || presentDrop(drop,Date.now())?.state!=="live")
+    return res.json({kind:"not_live"});
+  if(oddProducerLeases.has(drop.id))return res.json({kind:"busy"});
+  const question=db.prepare(
+    "SELECT id,text FROM live_chat_messages WHERE drop_id=? AND status='queued' ORDER BY id ASC LIMIT 1"
+  ).get(drop.id);
+  const lease=oddProducerLeases.acquire(drop.id,question?.id||null);
+  if(!lease)return res.json({kind:"busy"});
+  try {
+    const {preparePreviewTurn}=require("./oddLiveProducer");
+    const createText=process.env.OPENAI_API_KEY
+      ? async ({system,user})=>{
+          const OpenAI=require("openai");
+          const client=new OpenAI({apiKey:process.env.OPENAI_API_KEY,timeout:12000,maxRetries:0});
+          const response=await client.responses.create({
+            model:process.env.ODD_LIVE_AI_MODEL || "gpt-4.1-mini",
+            instructions:system,input:user,max_output_tokens:160
+          });
+          return response.output_text;
+        }
+      : undefined;
+    const turn=await preparePreviewTurn({
+      drop,now:Date.now(),question:question?.text||"",generateText:createText
+    });
+    return res.json({
+      kind:question?"question":"presentation",
+      drop_key:drop.drop_key,
+      question_id:question?.id||null,
+      spoken_text:turn.spoken_text,
+      lease_token:lease.token,
+      lease_expires_at:new Date(lease.expiresAt).toISOString(),
+      publish_required:true,
+    });
+  }catch(error){
+    oddProducerLeases.release(drop.id,lease.token);
+    console.error("[odd-live] producer turn error:",error?.message||error);
+    return res.status(503).json({error:"Presenter cannot prepare a turn right now."});
+  }
+});
+app.post("/api/odd-live/worker/ack", oddWorkerAuth, (req,res)=>{
+  res.set("Cache-Control","no-store");
+  const key=String(req.body?.drop_key||"").slice(0,100);
+  const drop=db.prepare("SELECT id FROM live_drops WHERE drop_key=? AND published=1").get(key);
+  if(!drop)return res.status(404).json({error:"Unknown show."});
+  const token=String(req.body?.lease_token||"");
+  const lease=oddProducerLeases.check(drop.id,token);
+  if(!lease)return res.status(409).json({error:"Lease expired or already completed."});
+  if(req.body?.aired!==true) {
+    oddProducerLeases.release(drop.id,token);
+    return res.json({ok:true,retryable:true});
+  }
+  if(lease.questionId!==null) {
+    const result=db.prepare("UPDATE live_chat_messages SET status='sent', sent_at=? WHERE id=? AND drop_id=? AND status='queued'")
+      .run(new Date().toISOString(),lease.questionId,drop.id);
+    if(result.changes!==1){
+      oddProducerLeases.release(drop.id,token);
+      return res.status(409).json({error:"Question status changed."});
+    }
+  }
+  oddProducerLeases.release(drop.id,token);
+  return res.json({ok:true,question_id:lease.questionId});
+});
+
+/**
+ * Independent one-hour ODD TV channel. Existing ten-minute Live Drops are
+ * unchanged. No new TV schema or routes are live until explicitly enabled.
+ */
+const oddTv=require("./oddTvChannel");
+const oddTvEnabled=process.env.ODD_TV_ENABLED==="true";
+if(oddTvEnabled) oddTv.init(db);
+// MuseTalk rendering can exceed two minutes; keep one TV turn leased while GPU renders.
+const oddTvLeases=require("./oddLiveQueue").createProducerLeases({ttlMs:10*60*1000});
+const currentTv=(marketCode)=>oddTvEnabled
+  ? oddTv.currentShow(db,marketCode,Date.now()) : null;
+
+app.get("/api/odd-tv/live",(req,res)=>{
+  res.set("Cache-Control","no-store");
+  if(!oddTvEnabled)return res.json({show:null});
+  const marketCode=normalizeMarket(req.query?.market)||"us";
+  return res.json({show:oddTv.publicShow(db,marketCode,Date.now())});
+});
+app.get("/api/odd-tv/chat",(req,res)=>{
+  res.set("Cache-Control","no-store");
+  if(!oddTvEnabled)return res.json({messages:[]});
+  const marketCode=normalizeMarket(req.query?.market)||"us";
+  const show=currentTv(marketCode);
+  if(!show)return res.json({messages:[],show_id:null});
+  return res.json({
+    show_id:show.id,
+    messages:oddTv.messages(db,show.id,req.query?.after||0),
+  });
+});
+app.post("/api/odd-tv/chat",(req,res)=>{
+  res.set("Cache-Control","no-store");
+  if(!oddTvEnabled)return res.status(503).json({error:"ODD TV is not enabled."});
+  const marketCode=normalizeMarket(req.body?.market)||"us";
+  const show=currentTv(marketCode);
+  if(!show)return res.status(409).json({error:"No ODD Live TV broadcast is on air."});
+  const sessionId=analyticsToken(req.body?.session_id);
+  if(!sessionId)return res.status(400).json({error:"Invalid viewer session."});
+  try{
+    const id=oddTv.postQuestion(db,{showId:show.id,sessionId,text:req.body?.text,now:Date.now()});
+    return res.status(201).json({ok:true,question_id:id});
+  }catch(error){
+    return res.status(error.message.includes("RATE")||error.message.includes("QUEUE")?429:400)
+      .json({error:error.message});
+  }
+});
+app.post("/api/admin/odd-tv/show",admin,express.json({limit:"5kb"}),(req,res)=>{
+  res.set("Cache-Control","no-store");
+  if(!oddTvEnabled)return res.status(503).json({error:"ODD TV disabled."});
+  const marketCode=normalizeMarket(req.body?.market)||"us";
+  try{
+    const id=oddTv.createShow(db,{market:marketCode,productIds:req.body?.product_ids,now:Date.now()});
+    return res.status(201).json({show_id:id,state:"draft"});
+  }catch(error){return res.status(400).json({error:error.message});}
+});
+app.post("/api/admin/odd-tv/show/:id/start",admin,(req,res)=>{
+  res.set("Cache-Control","no-store");
+  if(!oddTvEnabled)return res.status(503).json({error:"ODD TV disabled."});
+  try{
+    const state=oddTv.startShow(db,Number(req.params.id),{now:Date.now()});
+    return res.json({...state,state:"live"});
+  }catch(error){return res.status(409).json({error:error.message});}
+});
+app.post("/api/admin/odd-tv/show/:id/stop",admin,(req,res)=>{
+  res.set("Cache-Control","no-store");
+  if(!oddTvEnabled)return res.status(503).json({error:"ODD TV disabled."});
+  db.prepare("UPDATE odd_tv_shows SET status='ended',end_at=? WHERE id=? AND status='live'")
+    .run(new Date().toISOString(),Number(req.params.id));
+  return res.json({ok:true});
+});
+app.post("/api/odd-tv/worker/next",oddWorkerAuth,async(req,res)=>{
+  res.set("Cache-Control","no-store");
+  if(!oddTvEnabled)return res.json({kind:"not_live"});
+  const marketCode=normalizeMarket(req.body?.market)||"us";
+  const show=currentTv(marketCode);
+  if(!show)return res.json({kind:"not_live"});
+  const key="tv:"+show.id;
+  if(oddTvLeases.has(key))return res.json({kind:"busy"});
+  const question=oddTv.nextQuestion(db,show.id);
+  const lease=oddTvLeases.acquire(key,question?.id||null);
+  if(!lease)return res.json({kind:"busy"});
+  try {
+    const listing=oddTv.currentProduct(db,show,Date.now()).product;
+    if(!listing)throw new Error("NO_PUBLISHED_PRODUCT");
+    const {composeHostTurn}=require("./oddLiveBrain");
+    let generateText;
+    if(process.env.OPENAI_API_KEY){
+      generateText=async ({system,user})=>{
+        const OpenAI=require("openai");
+        const client=new OpenAI({apiKey:process.env.OPENAI_API_KEY,timeout:12000,maxRetries:0});
+        const response=await client.responses.create({
+          model:process.env.ODD_LIVE_AI_MODEL||"gpt-4.1-mini",
+          instructions:system,input:user,max_output_tokens:160
+        });
+        return response.output_text;
+      };
+    }
+    const speech=await composeHostTurn({
+      product:listing,question:question?.text||"",locale:"en-US",generateText
+    });
+    return res.json({
+      kind:question?"question":"presentation",
+      show_id:show.id,drop_key:key,question_id:question?.id||null,
+      product_id:listing.id,spoken_text:speech,
+      lease_token:lease.token,
+      lease_expires_at:new Date(lease.expiresAt).toISOString(),
+    });
+  }catch(error){
+    oddTvLeases.release(key,lease.token);
+    console.error("[odd-tv] turn preparation failed",error.message);
+    return res.status(503).json({error:"Unable to prepare presenter turn."});
+  }
+});
+app.post("/api/odd-tv/worker/ack",oddWorkerAuth,(req,res)=>{
+  res.set("Cache-Control","no-store");
+  const id=Number(String(req.body?.drop_key||"").match(/^tv:([0-9]+)$/)?.[1]);
+  if(!oddTvEnabled||!Number.isSafeInteger(id)||id<=0)
+    return res.status(400).json({error:"Invalid show identifier."});
+  const key="tv:"+id;
+  const token=String(req.body?.lease_token||"");
+  const lease=oddTvLeases.check(key,token);
+  if(!lease)return res.status(409).json({error:"Expired or invalid lease."});
+  if(req.body?.aired!==true){
+    oddTvLeases.release(key,token);
+    return res.json({ok:true,retryable:true});
+  }
+  if(lease.questionId!==null && !oddTv.markSent(db,id,lease.questionId,Date.now())){
+    oddTvLeases.release(key,token);
+    return res.status(409).json({error:"Question state changed."});
+  }
+  oddTvLeases.release(key,token);
+  return res.json({ok:true,question_id:lease.questionId});
+});
+
 app.get("/api/admin/live-host/:key", admin, async (req, res) => {
   res.set("Cache-Control", "no-store");
   const drop = db.prepare("SELECT * FROM live_drops WHERE drop_key=?").get(String(req.params.key || ""));
