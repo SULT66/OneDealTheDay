@@ -4372,7 +4372,8 @@ app.post("/api/odd-live/worker/ack", oddWorkerAuth, (req,res)=>{
 const oddTv=require("./oddTvChannel");
 const oddTvEnabled=process.env.ODD_TV_ENABLED==="true";
 if(oddTvEnabled) oddTv.init(db);
-const oddTvLeases=require("./oddLiveQueue").createProducerLeases();
+// MuseTalk rendering can exceed two minutes; keep one TV turn leased while GPU renders.
+const oddTvLeases=require("./oddLiveQueue").createProducerLeases({ttlMs:10*60*1000});
 const currentTv=(marketCode)=>oddTvEnabled
   ? oddTv.currentShow(db,marketCode,Date.now()) : null;
 
