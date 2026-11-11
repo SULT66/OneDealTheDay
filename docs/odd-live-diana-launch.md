@@ -7,7 +7,7 @@ ODD Live TV is an **independent** 60-minute channel on the OneDailyDrop backend.
 - `src/oddTvChannel.js`: draft/start/stop a show, 8–10 published products with merchant diversification, time-based rotation (60 minutes), separate moderated/rate-limited question queue.
 - `src/oddLiveBrain.js`: grounded response prompt and fallback that cannot fabricate unknown price or stock.
 - `src/oddLiveQueue.js`: single-lease producer handshake; question not marked `sent` until affirmative broadcast acknowledgement.
-- `gpu-worker/odd_live_chloe_worker.py`: fetches one turn, Azure Speech `en-US-JennyNeural` WAV, MuseTalk v1.5 mouth video, enqueues a completed MP4.
+- `gpu-worker/odd_live_chloe_worker.py`: fetches one turn, Azure Speech `en-US-SaraNeural` WAV, MuseTalk v1.5 mouth video, enqueues a completed MP4.
 - `gpu-worker/odd_live_program.py`: keeps a local RTSP H.264/AAC stream, switches from idle frames to lip-synced segments, then back to idle.
 - `components/live/ODDLiveTvExperience.tsx`: shows current on-air product, merchant link, shared chat below the **external HTTPS viewer embed**.
 
@@ -51,10 +51,10 @@ ODD_LIVE_WORKER_KEY=<same secret as backend>
 ODD_LIVE_MODE=tv
 AZURE_SPEECH_KEY=<existing Azure Speech secret>
 AZURE_SPEECH_REGION=<region from Speech resource>
-ODD_LIVE_VOICE=en-US-JennyNeural
+ODD_LIVE_VOICE=en-US-SaraNeural
 ```
 
-Never paste secrets into chat or commit credentials.
+On Diana, the worker also reads `~/.config/odd-live/speech.env` (`chmod 600`) for `AZURE_SPEECH_KEY` and `AZURE_SPEECH_REGION`, without overriding explicit environment variables. That file has already been created on Diana. Do not commit or paste credentials. The selected default Sara voice uses `cheerful` style, subject to later user approval. The TV worker lease lasts 10 minutes to accommodate batched MuseTalk; do not enable unattended polling until timeout and failed-turn retry logic are tested.
 
 1. First confirm `python -m py_compile gpu-worker/odd_live_chloe_worker.py gpu-worker/odd_live_program.py`.
 2. In WSL start `python gpu-worker/odd_live_program.py` (local RTSP only; **no** `--ack-delivered`).
