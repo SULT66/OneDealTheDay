@@ -43,9 +43,14 @@ def launch_ffmpeg(width,height,url):
     ar,aw=os.pipe()
     cmd=[
         "ffmpeg","-nostdin","-hide_banner","-loglevel","warning",
+        # Rawvideo frames are 2.7 MB at 720p; probing 5 MB while the
+        # Python writer blocks on a pipe can deadlock before the RTSP starts.
+        # These input formats are fully specified; no probing is necessary.
+        "-probesize","32","-analyzeduration","0",
         "-thread_queue_size","32","-f","rawvideo",
         "-pixel_format","bgr24","-video_size",f"{width}x{height}",
         "-framerate",str(FPS),"-i",f"pipe:{vr}",
+        "-probesize","32","-analyzeduration","0",
         "-thread_queue_size","64","-f","s16le","-ar",str(AUDIO_RATE),
         "-ac","1","-i",f"pipe:{ar}",
         "-c:v","h264_nvenc","-preset","p4","-pix_fmt","yuv420p",
