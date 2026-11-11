@@ -49,6 +49,10 @@ export function applyFilter<T extends DealLike>(
   list: T[],
   filter: DealFilter = {},
 ): T[] {
+  return sortDeals(matchDeals(list, filter), filter.sort);
+}
+
+function matchDeals<T extends DealLike>(list: T[], filter: DealFilter): T[] {
   const {
     category,
     retailer,
@@ -58,12 +62,11 @@ export function applyFilter<T extends DealLike>(
     minScore,
     discountedOnly,
     query,
-    sort,
   } = filter;
 
   const needle = query?.trim().toLowerCase();
 
-  const matched = list.filter((d) => {
+  return list.filter((d) => {
     if (category && d.category !== category) return false;
     if (retailer && d.retailer !== retailer) return false;
     if (maxPrice !== undefined && d.price > maxPrice) return false;
@@ -80,8 +83,6 @@ export function applyFilter<T extends DealLike>(
     }
     return true;
   });
-
-  return sortDeals(matched, sort);
 }
 
 /* ---------- URL <-> filter, shared by the category page and Delia ---------- */
@@ -136,8 +137,8 @@ export function searchParamsFromFilter(filter: DealFilter): string {
 
 /** Same matched products as the grid, before applying each facet's own restriction. */
 export function listingFacets<T extends DealLike>(deals: T[], filter: DealFilter) {
-  const retailers = [...new Set(applyFilter(deals, { minPrice: filter.minPrice, maxPrice: filter.maxPrice }).map(d => d.retailer))].sort();
-  const prices = applyFilter(deals, { retailer: filter.retailer }).map(d => d.price).filter(p => p > 0 && Number.isFinite(p)).sort((a,b) => a-b);
+  const retailers = [...new Set(matchDeals(deals, { minPrice: filter.minPrice, maxPrice: filter.maxPrice }).map(d => d.retailer))].sort();
+  const prices = matchDeals(deals, { retailer: filter.retailer }).map(d => d.price).filter(p => p > 0 && Number.isFinite(p)).sort((a,b) => a-b);
   const min = prices.length ? Math.floor(prices[0]) : 0;
   // The upper stop is open ended; exceptional prices remain reachable in the numeric fields.
   const upper = prices.length ? prices[Math.min(prices.length-1, Math.floor((prices.length-1)*0.8))] : 0;
@@ -219,15 +220,20 @@ export function listingCounts<T extends DealLike>(deals: T[], filter: DealFilter
   // Applying a literal phrase again would turn real results into zero counts.
   if (queryApplied) filter = { ...filter, query: undefined };
   const size = (patch: Partial<DealFilter>) =>
-    applyFilter(deals, { ...filter, ...patch }).length;
-  const withoutPrice = { minPrice: undefined, maxPrice: undefined };
-  const inPriceScope = applyFilter(deals, { ...filter, ...withoutPrice });
+    matchDeals(deals, { ...filter, ...patch }).length;
+  const inPriceScope = matchDeals(deals, { ...filter, minPrice: undefined, maxPrice: undefined });
+  const inRetailerScope = matchDeals(deals, { ...filter, retailer: undefined });
+  const retailerCounts = new Map<string, number>();
+  for (const { retailer } of inRetailerScope) {
+    retailerCounts.set(retailer, (retailerCounts.get(retailer) ?? 0) + 1);
+  }
 
   return {
-    total: applyFilter(deals, filter).length,
-    retailers: [...new Set(applyFilter(deals, { ...filter, retailer: undefined }).map((d) => d.retailer))]
-      .sort()
-      .map((value) => ({ value, count: size({ retailer: value }) })),
+    total: matchDeals(deals, filter).length,
+    retailers: [...retailerCounts.keys()].sort().map(value => ({
+      value,
+      count: value ? (retailerCounts.get(value) ?? 0) : inRetailerScope.length,
+    })),
     rating: RATING_VALUES.map((value) => ({ value, count: size({ minRating: value }) })),
     score: SCORE_VALUES.map((value) => ({ value, count: size({ minScore: value }) })),
     discounted: size({ discountedOnly: true }),

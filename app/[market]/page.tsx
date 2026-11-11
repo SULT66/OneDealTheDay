@@ -73,17 +73,19 @@ export default async function MarketHome({ params, searchParams }: PageProps<"/[
   const halloweenBanner = holidaySeason ? undefined : activeCampaign({eventKey:'halloween', market, throughEvent:true});
   const blackFriday = Boolean(activeCampaign({eventKey:'black-friday', market, fromPreparation:true}));
   return <div className="mx-auto max-w-7xl px-4 pb-24 pt-4 sm:px-6 sm:pt-5">
-    <Suspense fallback={<HomeCampaigns market={market} language={language} blackFriday={blackFriday}/> }>
-      <RegionalCampaigns market={market} language={language} halloween={Boolean(halloweenBanner)}
-        halloweenLate={Boolean(halloweenBanner?.pastDeliveryCutoff)} blackFriday={blackFriday}/>
-    </Suspense>
+    {halloweenBanner ? (
+      <Suspense fallback={<HomeCampaigns market={market} language={language} blackFriday={blackFriday} />}>
+        <RegionalCampaigns market={market} language={language}
+          halloweenLate={Boolean(halloweenBanner.pastDeliveryCutoff)} blackFriday={blackFriday} />
+      </Suspense>
+    ) : <HomeCampaigns market={market} language={language} blackFriday={blackFriday} />}
     <Suspense fallback={null}><HomeCatalog market={market} language={language} halloween={halloween} /></Suspense>
     <DeliaTrigger variant="floating" />
   </div>;
 }
 
-async function RegionalCampaigns({market,language,halloween,halloweenLate,blackFriday}:{market:string;language:Language;halloween:boolean;halloweenLate:boolean;blackFriday:boolean}) {
-  const data=halloween ? await getHalloweenCollection(market,language,1,'','popular',true) : null;
+async function RegionalCampaigns({market,language,halloweenLate,blackFriday}:{market:string;language:Language;halloweenLate:boolean;blackFriday:boolean}) {
+  const data = await getHalloweenCollection(market, language, 1, '', 'popular', true);
   const hasCollection=Boolean(data && !data.unavailable && data.total>0);
   return <div data-odd-transient={data?.unavailable ? "1" : undefined}>
     <HomeCampaigns market={market} language={language} halloween={hasCollection}

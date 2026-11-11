@@ -4,7 +4,7 @@ import { headers } from "next/headers";
 import categoriesData from "@/site-content/categories.json";
 import marketsData from "@/site-content/markets.json";
 import type { Category, Deal, DealFilter, Market } from "./types";
-import { applyFilter, sortDeals } from "./filter";
+import { applyFilter } from "./filter";
 import { chooseTopPicks } from "./topPicks";
 import { categoryName } from "./i18n";
 import {
@@ -333,7 +333,7 @@ export async function searchDeals(
    * the sort control on — that is to say, on every search from an ad.
    */
   return {
-    deals: sortDeals(applyFilter(found, rest), filter.sort ?? "relevance"),
+    deals: applyFilter(found, { ...rest, sort: filter.sort ?? "relevance" }),
     correction,
   };
 }
@@ -793,13 +793,13 @@ export type MerchantCoupon = {
   checkedAt: string; href: string; discountPercent?: number | null; termsUrl?: string; itemTitle?: string;
   expiresOn?: string; affiliate?: boolean; sourceType?: string;
 };
-export const getMerchantCoupons = cache(async (market: string): Promise<MerchantCoupon[]> => {
+export const getMerchantCoupons = cache(async (market: string): Promise<MerchantCoupon[] | null> => {
   try {
     const response = await fetch(`${BACKEND_URL}/api/coupons?market=${encodeURIComponent(market)}`, {
       cache: "no-store", signal: AbortSignal.timeout(5000),
     });
-    if (!response.ok) return [];
+    if (!response.ok) return null;
     const data = await response.json();
-    return Array.isArray(data.coupons) ? data.coupons : [];
-  } catch { return []; }
+    return Array.isArray(data.coupons) ? data.coupons : null;
+  } catch { return null; }
 });
