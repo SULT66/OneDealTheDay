@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""ODD Live GPU rehearsal worker: ONE authorized turn -> Azure Jenny WAV -> MuseTalk MP4.
+"""ODD Live GPU rehearsal worker: ONE authorized turn -> Azure Speech WAV -> MuseTalk MP4.
 
 Does NOT claim the question aired, and DOES NOT acknowledge it as delivered.
 The live program compositor and publisher must first prove actual playback.
@@ -24,6 +24,21 @@ MUSETALK = ROOT / "MuseTalk"
 OUTPUT = ROOT / "output" / "chloe-smart"
 CONFIG = MUSETALK / "models" / "musetalkV15"
 MODEL_AVATAR = "chloe_closeup_01"
+SPEECH_CONFIG = Path.home() / ".config" / "odd-live" / "speech.env"
+
+def load_speech_config():
+    """Load Diana-only credentials; never print them or override explicit env."""
+    if not SPEECH_CONFIG.is_file():
+        return
+    if SPEECH_CONFIG.stat().st_mode & 0o077:
+        raise PermissionError("SPEECH_CONFIG_MUST_BE_PRIVATE_CHMOD_600")
+    for line in SPEECH_CONFIG.read_text(encoding="utf-8").splitlines():
+        if not line or line.lstrip().startswith("#") or "=" not in line:
+            continue
+        name, value = line.split("=", 1)
+        if name in {"AZURE_SPEECH_KEY", "AZURE_SPEECH_REGION"} and value:
+            os.environ.setdefault(name, value)
+
 
 def post_json(base, path, key, payload):
     data = json.dumps(payload).encode("utf-8")
@@ -40,14 +55,17 @@ def synthesize_azure(text, dest):
     region = os.environ["AZURE_SPEECH_REGION"]
     if not region.replace("-","").isalnum():
         raise ValueError("INVALID_SPEECH_REGION")
-    voice = os.environ.get("ODD_LIVE_VOICE", "en-US-JennyNeural")
+    voice = os.environ.get("ODD_LIVE_VOICE", "en-US-SaraNeural")
     if not voice.startswith("en-US-"):
         raise ValueError("VOICE_MUST_BE_EN_US")
     safe = html.escape(text, quote=True)
+    spoken = "<prosody rate='+2%'>" + safe + "</prosody>"
+    if voice == "en-US-SaraNeural":
+        spoken = "<mstts:express-as style='cheerful' styledegree='1.1'>" + spoken + "</mstts:express-as>"
     ssml = (
         "<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' "
-        "xml:lang='en-US'><voice name='" + html.escape(voice, quote=True) +
-        "'><prosody rate='-3%'>" + safe + "</prosody></voice></speak>"
+        "xmlns:mstts='https://www.w3.org/2001/mstts' xml:lang='en-US'>"
+        "<voice name='" + html.escape(voice, quote=True) + "'>" + spoken + "</voice></speak>"
     )
     request = urllib.request.Request(
         "https://" + region + ".tts.speech.microsoft.com/cognitiveservices/v1",
@@ -110,6 +128,7 @@ def main():
                    help="One rehearsal; never automatic unbounded spending.")
     p.add_argument("--market",default="us")
     args=p.parse_args()
+    load_speech_config()
     base=os.environ["ODD_LIVE_API_BASE"].rstrip("/")
     key=os.environ["ODD_LIVE_WORKER_KEY"]
     if not base.startswith("https://") and not base.startswith("http://127.0.0.1:"):
@@ -131,7 +150,7 @@ def main():
     jobdir=OUTPUT / ("turn-" + str(int(time.time())) + "-" + os.urandom(3).hex())
     jobdir.mkdir(mode=0o700)
     try:
-        audio=jobdir / "jenny.wav"
+        audio=jobdir / "speech.wav"
         synthesize_azure(speech,audio)
         video=render_musetalk(audio,jobdir)
         (jobdir / "turn.json").write_text(json.dumps({
