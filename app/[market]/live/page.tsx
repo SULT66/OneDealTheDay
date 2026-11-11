@@ -95,7 +95,7 @@ export default async function LivePage({
   const tvVisible = !activeDrop && Boolean(process.env.ODD_LIVE_EMBED_URL) && tvOnAir;
   return (
     <>
-      {!activeDrop && <ODDLiveChannel embedUrl={process.env.ODD_LIVE_EMBED_URL} market={market} />}
+      {tvVisible && <ODDLiveChannel embedUrl={process.env.ODD_LIVE_EMBED_URL} market={market} />}
       {!tvVisible && <LiveDropPanel
         market={market}
         initialDrop={answered?.drop ?? null}
