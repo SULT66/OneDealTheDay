@@ -37,7 +37,7 @@ export const dynamic = "force-dynamic";
  */
 async function currentTvShow(market: string): Promise<boolean> {
   try {
-    const response = await fetch(`${BACKEND_URL}/api/odd-tv/live?market=${encodeURIComponent(market)}`,{ cache: "no-store", signal: AbortSignal.timeout(3000) });
+    const response = await fetch(`${BACKEND_URL}/api/odd-tv/live?market=${encodeURIComponent(market)}`,{ cache: "no-store", signal: AbortSignal.timeout(20000) });
     if(!response.ok)return false;
     const body=await response.json() as {show?: {state?:string}|null};
     return body.show?.state==="live";
