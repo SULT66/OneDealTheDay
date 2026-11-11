@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Suspense } from "react";
 import { getMerchantCoupons } from "@/lib/catalog";
 import { getLanguage, marketAlternates } from "@/lib/i18n";
 import { CouponCatalog } from "@/components/coupons/CouponCatalog";
@@ -14,7 +15,6 @@ export async function generateMetadata({params}: {params:Promise<{market:string}
 export default async function CouponsPage({params}: {params:Promise<{market:string}>}) {
   const {market} = await params;
   const spanish = (await getLanguage(market)) === "es";
-  const coupons = await getMerchantCoupons(market);
   return <div className="mx-auto max-w-7xl px-4 pb-24 pt-8 sm:px-6">
     <Link href={`/${market}`} className="text-sm text-fg-muted hover:text-fg">{spanish ? "Inicio" : "Home"}</Link>
     <div className="mt-6 max-w-3xl">
@@ -24,6 +24,18 @@ export default async function CouponsPage({params}: {params:Promise<{market:stri
       <p className="mt-3 text-sm text-fg-muted">{spanish ? "También encontrarás ofertas públicas de tiendas fuera de nuestro catálogo de productos." : "Browse public offers from stores beyond our product catalog, too."}</p>
       <p className="mt-3 text-sm text-fg-muted">{spanish ? "Códigos publicados por las tiendas; no probados mediante una compra. La tienda confirma el descuento al pagar. Podemos recibir una comisión por compras realizadas a través de nuestros enlaces." : "Codes supplied by the stores; not tested by making a purchase. The store confirms the discount at checkout. We may earn a commission from purchases through our links."}</p>
     </div>
-    <CouponCatalog coupons={coupons} spanish={spanish} />
+    <Suspense fallback={<p role="status" className="mt-6 text-sm text-fg-muted">{spanish ? "Cargando cupones…" : "Loading coupons…"}</p>}>
+      <CouponResults market={market} spanish={spanish} />
+    </Suspense>
   </div>;
+}
+
+async function CouponResults({market, spanish}: {market: string; spanish: boolean}) {
+  const coupons = await getMerchantCoupons(market);
+  if (coupons === null) {
+    return <p className="mt-6 text-sm text-fg-muted">
+      {spanish ? "No se pudieron cargar los cupones. Vuelve a intentarlo." : "Coupons couldn’t be loaded. Please try again."}
+    </p>;
+  }
+  return <CouponCatalog coupons={coupons} spanish={spanish} />;
 }

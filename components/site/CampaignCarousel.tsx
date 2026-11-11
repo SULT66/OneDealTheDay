@@ -29,9 +29,8 @@ export type CampaignSlide = {
  * The home hero, rotating when more than one campaign has something to say.
  *
  * Every slide is in the markup from the first paint — hidden siblings carry
- * aria-hidden and inert rather than being mounted later — so the server sends
- * a complete hero, the photographs are fetched before their turn comes, and
- * the height never jumps between slides of different lengths.
+ * aria-hidden and inert so the height stays stable. Only the first photo
+ * loads initially. Keep the previous photo mounted during the crossfade.
  *
  * Rotation stops while a pointer is over the hero or a keyboard focus is
  * inside it: a person reading or reaching for the button should not have it
@@ -39,7 +38,10 @@ export type CampaignSlide = {
  * reduced motion, and the dots still work in that case.
  */
 export function CampaignCarousel({ slides, intervalMs = 6000, label }: { slides: CampaignSlide[]; intervalMs?: number; label: string }) {
-  const [index, setIndex] = useState(0);
+  const [[index, previous], setSlide] = useState([0, 0]);
+  const selectSlide = (position: number) => setSlide(([current, previous]) =>
+    position === current ? [current, previous] : [position, current],
+  );
   const [held, setHeld] = useState(false);
   const region = useRef<HTMLDivElement>(null);
 
@@ -47,7 +49,7 @@ export function CampaignCarousel({ slides, intervalMs = 6000, label }: { slides:
     if (slides.length < 2 || held) return;
     const motion = window.matchMedia?.("(prefers-reduced-motion: reduce)");
     if (motion?.matches) return;
-    const timer = window.setInterval(() => setIndex(current => (current + 1) % slides.length), intervalMs);
+    const timer = window.setInterval(() => setSlide(([current]) => [(current + 1) % slides.length, current]), intervalMs);
     return () => window.clearInterval(timer);
   }, [slides.length, intervalMs, held]);
 
@@ -90,7 +92,7 @@ export function CampaignCarousel({ slides, intervalMs = 6000, label }: { slides:
           className={`relative isolate col-start-1 row-start-1 transition-opacity duration-700 motion-reduce:transition-none ${shown ? "opacity-100" : "pointer-events-none opacity-0"}`}
         >
           {slide.imageOnRight && <div aria-hidden="true" className="absolute inset-y-0 right-0 w-[70%] bg-[#c1f21d] sm:w-[55%]" style={{ clipPath: "polygon(28% 0, 100% 0, 100% 100%, 0 100%, 4% 82%, 10% 73%, 9% 59%, 17% 45%, 16% 33%, 25% 17%)" }} />}
-          {slide.image && <div aria-hidden="true"
+          {slide.image && (shown || position === previous) && <div aria-hidden="true"
             className={`absolute bg-cover bg-no-repeat ${slide.imageOnRight ? "inset-y-0 right-0 w-[66%] sm:w-[51%]" : "inset-0"}`}
             style={{
               backgroundImage: `url("${slide.image}")`,
@@ -117,7 +119,7 @@ export function CampaignCarousel({ slides, intervalMs = 6000, label }: { slides:
       {slides.map((slide, position) => <button
         key={slide.key}
         type="button"
-        onClick={() => setIndex(position)}
+        onClick={() => selectSlide(position)}
         aria-label={slide.eyebrow}
         aria-current={position === index ? "true" : undefined}
         className="flex min-h-11 min-w-0 items-center justify-center rounded-full border px-3 py-2 text-center text-[11px] font-bold uppercase leading-tight tracking-[0.01em] shadow-sm backdrop-blur-sm transition-colors hover:border-[#101010] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#101010]"

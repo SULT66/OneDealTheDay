@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { BACKEND_URL, getImpulsePicks } from "@/lib/catalog";
 import { LiveDropPanel, type LiveDropView } from "@/components/live/LiveDropPanel";
 import { ODDLiveChannel } from "@/components/live/ODDLiveChannel";
 import { DealCard } from "@/components/deal/DealCard";
 import { SectionHeader } from "@/components/site/SectionHeader";
-import type { Deal } from "@/lib/types";
 import { formatPrice } from "@/lib/format";
-import { getLanguage, t } from "@/lib/i18n";
+import { getLanguage, t, type Language } from "@/lib/i18n";
 
 /**
  * The Live Drop page.
@@ -37,7 +37,7 @@ export const dynamic = "force-dynamic";
  */
 async function currentTvShow(market: string): Promise<boolean> {
   try {
-    const response = await fetch(`${BACKEND_URL}/api/odd-tv/live?market=${encodeURIComponent(market)}`,{cache:"no-store"});
+    const response = await fetch(`${BACKEND_URL}/api/odd-tv/live?market=${encodeURIComponent(market)}`,{ cache: "no-store", signal: AbortSignal.timeout(3000) });
     if(!response.ok)return false;
     const body=await response.json() as {show?: {state?:string}|null};
     return body.show?.state==="live";
@@ -48,7 +48,7 @@ async function currentDrop(market: string): Promise<{ drop: LiveDropView | null 
   try {
     const response = await fetch(
       `${BACKEND_URL}/api/live/current?market=${encodeURIComponent(market)}`,
-      { cache: "no-store" },
+      { cache: "no-store", signal: AbortSignal.timeout(3000) },
     );
     if (!response.ok) return null;
     const body = (await response.json()) as { drop?: LiveDropView | null };
@@ -83,43 +83,48 @@ export default async function LivePage({
 }) {
   const { market } = await params;
   const language = await getLanguage(market);
-  const [answered, shelf, tvOnAir] = await Promise.all([
+  const tvEmbedUrl = process.env.ODD_LIVE_EMBED_URL;
+  const [answered, tvOnAir] = await Promise.all([
     currentDrop(market),
-    /* A shelf that fails to load is left out; the drop is the page. */
-    getImpulsePicks(market).catch(() => ({ deals: [] as Deal[], ceiling: 0 })),
-    currentTvShow(market),
+    tvEmbedUrl ? currentTvShow(market) : false,
   ]);
-  // The scheduled drop keeps its existing stage; otherwise show the optional
-  // standalone GPU-powered TV channel, when a read-only player is configured.
   const activeDrop = answered?.drop?.state === "waiting" || answered?.drop?.state === "live";
-  const tvVisible = !activeDrop && Boolean(process.env.ODD_LIVE_EMBED_URL) && tvOnAir;
+  const tvVisible = !activeDrop && tvEmbedUrl && tvOnAir;
   return (
     <>
-      {tvVisible && <ODDLiveChannel embedUrl={process.env.ODD_LIVE_EMBED_URL} market={market} />}
+      {tvVisible && <ODDLiveChannel embedUrl={tvEmbedUrl} market={market} />}
       {!tvVisible && <LiveDropPanel
         market={market}
         initialDrop={answered?.drop ?? null}
         serverChecked={answered !== null}
       />}
-      {shelf.deals.length > 0 && (
-        <section aria-labelledby="impulse-title" className="mx-auto w-full max-w-5xl px-3 pb-12 pt-4 sm:px-6">
-          <SectionHeader
-            id="impulse-title"
-            eyebrow={t(language, "app.live.whileYouWatch")}
-            title={t(language, "app.live.picksUnder", {
-              price: formatPrice(shelf.ceiling, shelf.deals[0].currency, market).replace(/[.,]00$/, ""),
-            })}
-            action={{ href: `/${market}/search`, label: t(language, "app.live.seeAllDeals") }}
-          />
-          <ul className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-            {shelf.deals.map((deal, index) => (
-              <li key={deal.id}>
-                <DealCard deal={deal} market={market} index={index} />
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+      <Suspense fallback={null}>
+        <LivePicks market={market} language={language} />
+      </Suspense>
     </>
+  );
+}
+
+async function LivePicks({market, language}: {market: string; language: Language}) {
+  const shelf = await getImpulsePicks(market).catch(() => null);
+  if (!shelf?.deals.length) return null;
+  return (
+    <section aria-labelledby="impulse-title" className="mx-auto w-full max-w-5xl px-3 pb-12 pt-4 sm:px-6">
+      <SectionHeader
+        id="impulse-title"
+        eyebrow={t(language, "app.live.whileYouWatch")}
+        title={t(language, "app.live.picksUnder", {
+          price: formatPrice(shelf.ceiling, shelf.deals[0].currency, market).replace(/[.,]00$/, ""),
+        })}
+        action={{ href: `/${market}/search`, label: t(language, "app.live.seeAllDeals") }}
+      />
+      <ul className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+        {shelf.deals.map((deal, index) => (
+          <li key={deal.id}>
+            <DealCard deal={deal} market={market} index={index} />
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
