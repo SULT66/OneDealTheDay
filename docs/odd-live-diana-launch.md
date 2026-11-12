@@ -7,8 +7,8 @@ ODD Live TV is an **independent** 60-minute channel on the OneDailyDrop backend.
 - `src/oddTvChannel.js`: draft/start/stop a show, 8–10 published products with merchant diversification, time-based rotation (60 minutes), separate moderated/rate-limited question queue.
 - `src/oddLiveBrain.js`: grounded response prompt and fallback that cannot fabricate unknown price or stock.
 - `src/oddLiveQueue.js`: single-lease producer handshake; question not marked `sent` until affirmative broadcast acknowledgement.
-- `gpu-worker/odd_live_chloe_worker.py`: fetches one turn, Azure Speech `en-US-SaraNeural` WAV, MuseTalk v1.5 mouth video, enqueues a completed MP4.
-- `gpu-worker/odd_live_program.py`: keeps a local RTSP H.264/AAC stream, switches from idle frames to lip-synced segments, then back to idle.
+- `gpu-worker/odd_live_chloe_worker.py`: processes one queued viewer question, generates Azure Speech + a MuseTalk v1.5 lip-synced MP4; `--watch` supervises repeated checks.
+- `gpu-worker/odd_live_program.py`: keeps a local RTSP H.264/AAC stream, switches to lip-synced answers, and can play occasional short motion MP4s between answers.
 - `components/live/ODDLiveTvExperience.tsx`: shows current on-air product, merchant link, shared chat below the **external HTTPS viewer embed**.
 
 ## Separate service feature flags
@@ -25,7 +25,7 @@ All worker keys, Azure Speech credentials and model tokens belong in secure serv
 
 ### Show API (admin key)
 
-- `POST /api/admin/odd-tv/show` with `X-Admin-Key`: `{"market":"us"}` selects up to 10 published currently eligible products across merchants; alternatively supply exactly 8–10 unique `product_ids`.
+- `POST /api/admin/odd-tv/show` with `X-Admin-Key`: `{"market":"us"}` automatically selects 8–10 eligible published products across merchants. For a hand-picked lineup, send exactly 8–10 published product IDs as `{"market":"us","product_ids":[101,202,...]}`. The storefront itself has no product-picker screen yet.
 - `POST /api/admin/odd-tv/show/:id/start` starts a 60-minute show immediately.
 - `POST /api/admin/odd-tv/show/:id/stop` ends it.
 
@@ -61,6 +61,12 @@ On Diana, the worker also reads `~/.config/odd-live/speech.env` (`chmod 600`) fo
 3. With a test show already started, run one turn with `python gpu-worker/odd_live_chloe_worker.py --once`. It builds one WAV+MP4 and writes an atomic `*.ready.json` handoff to the local program.
 4. Confirm `rtsp://127.0.0.1:8554/odd-live-smart` displays lips and speaks the answer, and the ODD TV chat question is still **queued**, because public delivery is not yet proven.
 5. Enable `--ack-delivered` only once end-to-end playback, reconnects, error handling and the authenticated HTTPS viewer/ingest relay are verified.
+
+
+
+### Optional walk/gesture clips
+
+Put short Chloe motion videos in `~/odd-ai-humans/assets/chloe/motions/` on Diana. Use 16:9 clips with Chloe's approved appearance, clothes, and studio; 5–10 seconds, 10–60 fps, MP4. Audio is ignored. The broadcaster scales them to the stream size and plays one every 50 seconds while no answer is being spoken. File names sort alphabetically, so number them (for example `01-walk-to-table.mp4`, `02-turn-and-present.mp4`, `03-walk-back.mp4`). Keep the walk clips silent or treat their sound as discarded; spoken answers still use the MuseTalk lip-sync path.
 
 ## Operational safety / next gates
 
