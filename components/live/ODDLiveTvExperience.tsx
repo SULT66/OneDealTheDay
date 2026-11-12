@@ -46,7 +46,7 @@ export function ODDLiveTvExperience({market}:{market:string}) {
       });
       const body=await res.json().catch(()=>({}));
       if(!res.ok){setNotice(String(body.error||"Could not send question."));return;}
-      setDraft("");setNotice("Question added to Chloe's queue.");
+      setDraft("");setNotice("Question sent. Chloe will answer when the live worker is running.");
       void refresh();
     }catch{setNotice("Unable to connect to chat right now.");}
     finally{setSending(false);}
@@ -78,7 +78,12 @@ export function ODDLiveTvExperience({market}:{market:string}) {
         <p className="mt-1 text-xs text-white/60">Questions are visible to viewers. Chloe answers selected questions when ready.</p>
         <div role="log" aria-live="polite" className="mt-3 h-52 space-y-2 overflow-y-auto text-sm">
           {messages.length===0 ? <p className="text-white/60">No questions yet.</p> : messages.map(msg=>
-            <p key={msg.id} className="rounded-lg bg-white/10 p-2"><span className="font-semibold">{msg.author}: </span>{msg.text}</p>
+            <p key={msg.id} className="rounded-lg bg-white/10 p-2">
+              <span className="font-semibold">{msg.author}: </span>{msg.text}
+              <span className="mt-1 block text-xs text-white/50">
+                {msg.status==="sent" ? "Chloe answered" : msg.status==="queued" ? "Waiting for Chloe" : ""}
+              </span>
+            </p>
           )}
         </div>
         <form onSubmit={sendQuestion} className="mt-3 space-y-2">
