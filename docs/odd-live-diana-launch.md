@@ -57,11 +57,11 @@ ODD_LIVE_VOICE=en-US-SaraNeural
 On Diana, the worker also reads `~/.config/odd-live/speech.env` (`chmod 600`) for `AZURE_SPEECH_KEY` and `AZURE_SPEECH_REGION`, without overriding explicit environment variables. That file has already been created on Diana. Do not commit or paste credentials. The selected default Sara voice uses `cheerful` style, subject to later user approval. The TV worker lease lasts 10 minutes to accommodate batched MuseTalk; do not enable unattended polling until timeout and failed-turn retry logic are tested.
 
 1. First confirm `python -m py_compile gpu-worker/odd_live_chloe_worker.py gpu-worker/odd_live_program.py`.
-2. In WSL start `python gpu-worker/odd_live_program.py` (local RTSP only; **no** `--ack-delivered`).
-3. With a test show already started, run one turn with `python gpu-worker/odd_live_chloe_worker.py --once`. It builds one WAV+MP4 and writes an atomic `*.ready.json` handoff to the local program.
-4. Confirm `rtsp://127.0.0.1:8554/odd-live-smart` displays lips and speaks the answer, and the ODD TV chat question is still **queued**, because public delivery is not yet proven.
-5. Enable `--ack-delivered` only once end-to-end playback, reconnects, error handling and the authenticated HTTPS viewer/ingest relay are verified.
-
+2. In WSL start `python gpu-worker/odd_live_program.py` (local RTSP only; do not pass `--ack-delivered` before the public audio/video check).
+3. With a test show live, run `python gpu-worker/odd_live_chloe_worker.py --once` to render one queued answer.
+4. Confirm the public viewer receives Chloe's synchronized mouth movement and audible speech; unmute the viewer for the audio check.
+5. Start supervised question polling with `python gpu-worker/odd_live_chloe_worker.py --watch`; it polls every 8 seconds, makes no speech/model calls while the queue is empty, and stops with Ctrl+C.
+6. After the public audio/video check passes, restart the broadcaster with `--ack-delivered`. This marks a chat question answered after its clip is sent to the live encoder.
 
 
 ### Optional walk/gesture clips
