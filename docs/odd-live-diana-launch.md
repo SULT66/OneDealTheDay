@@ -25,7 +25,7 @@ All worker keys, Azure Speech credentials and model tokens belong in secure serv
 
 ### Show API (admin key)
 
-- `POST /api/admin/odd-tv/show` with `X-Admin-Key`: `{"market":"us"}` automatically selects 8–10 eligible published products across merchants. For a hand-picked lineup, send exactly 8–10 published product IDs as `{"market":"us","product_ids":[101,202,...]}`. The storefront itself has no product-picker screen yet.
+- `POST /api/admin/odd-tv/show` with `X-Admin-Key`: `{"market":"us"}` automatically selects 8–10 eligible published products across merchants. For a hand-picked lineup, send exactly 8–10 published product IDs as `{"market":"us","product_ids":[101,202,...]}`. The admin console's ODD Live TV tab can search published products and start a show from a hand-picked list.
 - `POST /api/admin/odd-tv/show/:id/start` starts a 60-minute show immediately.
 - `POST /api/admin/odd-tv/show/:id/stop` ends it.
 
