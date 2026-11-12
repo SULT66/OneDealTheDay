@@ -4443,7 +4443,10 @@ app.post("/api/odd-tv/worker/next",oddWorkerAuth,async(req,res)=>{
   const key="tv:"+show.id;
   if(oddTvLeases.has(key))return res.json({kind:"busy"});
   const question=oddTv.nextQuestion(db,show.id);
-  const lease=oddTvLeases.acquire(key,question?.id||null);
+  // TV worker should only synthesize a turn when a viewer has actually asked
+  // something. Returning idle prevents repeated, paid product monologues.
+  if(!question)return res.json({kind:"idle"});
+  const lease=oddTvLeases.acquire(key,question.id);
   if(!lease)return res.json({kind:"busy"});
   try {
     const listing=oddTv.currentProduct(db,show,Date.now()).product;
