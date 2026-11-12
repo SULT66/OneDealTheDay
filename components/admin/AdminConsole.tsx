@@ -9,6 +9,7 @@ import { SearchDemand } from "./SearchDemand";
 import { Weekly } from "./Weekly";
 import { MediaUpload } from "./MediaUpload";
 import { LiveHostConsole } from "./LiveHostConsole";
+import { ODDTVConsole } from "./ODDTVConsole";
 import { MerchandisingPanel } from "./MerchandisingPanel";
 import { MerchantHealth } from "./MerchantHealth";
 
@@ -443,6 +444,10 @@ export function AdminConsole() {
 
       {/* The schedule first: opening this tab is usually about a drop that
           already exists. A new one is written below it. */}
+      <TabPanel id="tv" active={tab}>
+        <ODDTVConsole adminKey={adminKey} />
+      </TabPanel>
+
       <TabPanel id="drops" active={tab}>
       <Card className="mt-6">
         <Legend>Schedule</Legend>
@@ -616,6 +621,7 @@ const TABS = [
   { id: "weekly", label: "Weekly" },
   { id: "merchants", label: "Merchants" },
   { id: "drops", label: "Live Drops" },
+  { id: "tv", label: "ODD Live TV" },
   { id: "email", label: "Email" },
   { id: "icons", label: "Shop icons" },
   { id: "coupons", label: "Coupons" },

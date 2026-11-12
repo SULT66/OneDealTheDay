@@ -124,10 +124,30 @@ def render_musetalk(audio, jobdir, timeout_seconds=180):
 
 def main():
     p=argparse.ArgumentParser()
-    p.add_argument("--once",action="store_true",required=True,
-                   help="One rehearsal; never automatic unbounded spending.")
+    mode=p.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--once",action="store_true",
+                      help="Process one queued viewer question.")
+    mode.add_argument("--watch",action="store_true",
+                      help="Poll for viewer questions until stopped with Ctrl+C.")
     p.add_argument("--market",default="us")
+    p.add_argument("--poll-seconds",type=float,default=8,
+                   help="Idle delay between checks in --watch mode (default: 8).")
     args=p.parse_args()
+    if not 2 <= args.poll_seconds <= 60:
+        p.error("--poll-seconds must be between 2 and 60.")
+    if args.watch:
+        command=[sys.executable,str(Path(__file__).resolve()),"--once","--market",args.market]
+        print("CHLOE_WORKER_WATCHING: Ctrl+C stops polling.",flush=True)
+        try:
+            while True:
+                try:
+                    subprocess.run(command,check=False)
+                except OSError as exc:
+                    print("WORKER_LAUNCH_FAILED:",type(exc).__name__,file=sys.stderr,flush=True)
+                time.sleep(args.poll_seconds)
+        except KeyboardInterrupt:
+            print("\nCHLOE_WORKER_STOPPED",flush=True)
+        return
     load_speech_config()
     base=os.environ["ODD_LIVE_API_BASE"].rstrip("/")
     key=os.environ["ODD_LIVE_WORKER_KEY"]
@@ -137,7 +157,7 @@ def main():
     if mode not in {"tv","drop"}: raise ValueError("INVALID_WORKER_MODE")
     path="/api/odd-tv/worker/next" if mode=="tv" else "/api/odd-live/worker/next"
     response=post_json(base,path,key,{"market":args.market})
-    if response.get("kind") in {"busy","not_live"}:
+    if response.get("kind") in {"busy","not_live","idle"}:
         print("NO_TURN:",response["kind"])
         return
     if response.get("kind") not in {"presentation","question"}:

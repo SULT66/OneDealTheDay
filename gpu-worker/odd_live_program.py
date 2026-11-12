@@ -30,6 +30,7 @@ AUDIO_BYTES_PER_FRAME=SAMPLES_PER_FRAME*2  # s16le mono
 ROOT=Path.home()/"odd-ai-humans"
 IDLE=ROOT/"MuseTalk/results/v15/avatars/chloe_closeup_01/full_imgs"
 READY=ROOT/"output/chloe-smart/ready"
+MOTION_DIR=Path(os.getenv("ODD_LIVE_MOTION_DIR",str(ROOT/"assets/chloe/motions")))
 
 def write_all(fd, data):
     view=memoryview(data)
@@ -106,6 +107,28 @@ def decode_clip(video,width,height):
     if not frames: raise RuntimeError("NO_CLIP_FRAMES")
     return frames,samples
 
+def decode_motion(video,width,height):
+    """Decode a short silent walk/gesture clip for occasional idle playback."""
+    capture=cv2.VideoCapture(str(video))
+    if not capture.isOpened(): raise RuntimeError("UNREADABLE_MOTION_CLIP")
+    fps=capture.get(cv2.CAP_PROP_FPS)
+    if not (10<=fps<=60):
+        capture.release()
+        raise RuntimeError("MOTION_CLIP_FPS_MUST_BE_10_TO_60")
+    frames=[]
+    try:
+        while True:
+            ok,frame=capture.read()
+            if not ok: break
+            if frame.shape[:2]!=(height,width):
+                frame=cv2.resize(frame,(width,height))
+            frames.append(frame)
+            if len(frames)>FPS*20: raise RuntimeError("MOTION_CLIP_TOO_LONG")
+    finally:
+        capture.release()
+    if not frames: raise RuntimeError("EMPTY_MOTION_CLIP")
+    return frames
+
 def ack(info):
     base=os.getenv("ODD_LIVE_API_BASE","").rstrip("/")
     key=os.getenv("ODD_LIVE_WORKER_KEY","")
@@ -125,8 +148,14 @@ def main():
     parser=argparse.ArgumentParser()
     parser.add_argument("--rtsp",default="rtsp://127.0.0.1:8554/odd-live-smart")
     parser.add_argument("--ack-delivered",action="store_true",
-                        help="Only after external live audio/video playback is verified.")
+                        help="Acknowledge chat only after the clip has been sent to the live encoder.")
+    parser.add_argument("--motion-dir",default=str(MOTION_DIR),
+                        help="Directory containing short Chloe idle-motion MP4s.")
+    parser.add_argument("--motion-every-seconds",type=int,default=50,
+                        help="Wait this long between motion clips while idle.")
     args=parser.parse_args()
+    if not 15<=args.motion_every_seconds<=600:
+        parser.error("--motion-every-seconds must be between 15 and 600.")
     if not args.rtsp.startswith("rtsp://127.0.0.1:8554/"):
         raise ValueError("LOCAL_RTMP_ONLY_DISABLED")
     images=sorted(IDLE.glob("*.png"))
@@ -150,6 +179,16 @@ def main():
     idle_idx=0
     current=None
     frame_count=0
+    motion_dir=Path(args.motion_dir).expanduser()
+    motion_paths=sorted(motion_dir.glob("*.mp4")) if motion_dir.is_dir() else []
+    motion_index=0
+    motion_frames=[]
+    motion_frame_index=0
+    next_motion_at=time.monotonic()+args.motion_every_seconds
+    if motion_paths:
+        print("MOTION_CLIPS_FOUND",len(motion_paths),str(motion_dir),flush=True)
+    else:
+        print("NO_MOTION_CLIPS: using MuseTalk idle frames",str(motion_dir),flush=True)
     next_tick=time.monotonic()
     print("ODD_LIVE_PROGRAM_ON_AIR",args.rtsp,flush=True)
     try:
@@ -163,6 +202,8 @@ def main():
                         frames,audio=decode_clip(video,width,height)
                         current=(name,info,frames,audio)
                         frame_count=0
+                        motion_frames=[]
+                        motion_frame_index=0
                         print("CHLOE_SPEAKING",name.name,flush=True)
                     except Exception as exc:
                         name.rename(name.with_name(name.name.replace(".playing.json",".failed.json")))
@@ -177,9 +218,27 @@ def main():
                 frame_count+=1
                 total=max(len(frames),math.ceil(len(audio)/AUDIO_BYTES_PER_FRAME))
             else:
-                frame=cv2.imread(str(images[idle_idx%len(images)]))
-                idle_idx+=1
-                if frame is None: frame=first
+                now=time.monotonic()
+                if motion_paths and not motion_frames and now>=next_motion_at:
+                    candidate=motion_paths[motion_index%len(motion_paths)]
+                    motion_index+=1
+                    next_motion_at=now+args.motion_every_seconds
+                    try:
+                        motion_frames=decode_motion(candidate,width,height)
+                        motion_frame_index=0
+                        print("MOTION_CLIP_PLAYING",candidate.name,flush=True)
+                    except Exception as exc:
+                        print("MOTION_CLIP_SKIPPED",candidate.name,type(exc).__name__,flush=True)
+                if motion_frames:
+                    frame=motion_frames[motion_frame_index]
+                    motion_frame_index+=1
+                    if motion_frame_index>=len(motion_frames):
+                        motion_frames=[]
+                        motion_frame_index=0
+                else:
+                    frame=cv2.imread(str(images[idle_idx%len(images)]))
+                    idle_idx+=1
+                    if frame is None: frame=first
                 segment=b"\0"*AUDIO_BYTES_PER_FRAME
             audio_queue.put(segment,timeout=5)
             write_all(video_fd,frame.tobytes())
