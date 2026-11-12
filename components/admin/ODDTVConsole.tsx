@@ -33,7 +33,8 @@ export function ODDTVConsole({adminKey}:{adminKey:string}) {
       })
       .then((data:unknown)=>{
         if(active)setProducts(Array.isArray(data)?data.filter((item):item is CatalogProduct=>
-          item&&Number.isSafeInteger(item.id)&&item.id>0&&typeof item.title==="string"
+          typeof item==="object"&&item!==null&&"id" in item&&"title" in item&&
+          Number.isSafeInteger(item.id)&&Number(item.id)>0&&typeof item.title==="string"
         ):[]);
       })
       .catch(error=>{if(active)setNotice(error instanceof Error?error.message:"Could not load products.");});
