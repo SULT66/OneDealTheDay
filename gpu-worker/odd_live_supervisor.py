@@ -6,6 +6,7 @@ It never accepts shell commands or executable paths from the website.
 """
 import json
 import os
+import signal
 from pathlib import Path
 import socket
 import subprocess
@@ -119,20 +120,29 @@ def start_processes(log):
     return processes
 
 
+def stop_process_group(proc, timeout=8):
+    """Stop a managed process and every child in its dedicated session."""
+    if proc is None or proc.poll() is not None:
+        return
+    try:
+        os.killpg(proc.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        return
+    try:
+        proc.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        proc.wait(timeout=3)
+
+
 def stop_processes(processes):
-    # Stop the RTSP publisher before MediaMTX.
+    # Each managed service was started in its own session. Kill the whole
+    # broadcaster group so FFmpeg cannot survive as an orphan RTSP publisher.
     for name in ("broadcaster", "worker", "mediamtx"):
-        proc = processes.get(name)
-        if proc is not None and proc.poll() is None:
-            proc.terminate()
-    for name in ("broadcaster", "worker", "mediamtx"):
-        proc = processes.get(name)
-        if proc is not None and proc.poll() is None:
-            try:
-                proc.wait(timeout=8)
-            except subprocess.TimeoutExpired:
-                proc.kill()
-                proc.wait(timeout=3)
+        stop_process_group(processes.get(name), timeout=8)
 
 
 def main():
@@ -193,13 +203,7 @@ def main():
                                 last_detail = "RTSP publisher missing; restarting Chloe broadcaster"
                                 print("ODD_LIVE_RTSP_MISSING_RESTARTING", flush=True)
                                 old = processes.get("broadcaster")
-                                if old is not None and old.poll() is None:
-                                    old.terminate()
-                                    try:
-                                        old.wait(timeout=5)
-                                    except subprocess.TimeoutExpired:
-                                        old.kill()
-                                        old.wait(timeout=2)
+                                stop_process_group(old, timeout=5)
                                 processes["broadcaster"] = start_broadcaster(log)
                                 publisher_started_at = now_mono
                                 stream_missing_since = 0.0
