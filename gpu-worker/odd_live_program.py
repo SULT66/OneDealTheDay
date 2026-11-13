@@ -264,7 +264,13 @@ def main():
                 else:
                     frame=cv2.imread(str(images[idle_idx%len(images)]))
                     idle_idx+=1
-                    if frame is None: frame=first
+                    if frame is None:
+                        frame=first
+                    elif frame.shape[:2]!=(height,width):
+                        # All rawvideo writes must have the exact dimensions
+                        # passed to FFmpeg at startup; a single mismatched idle
+                        # PNG can desynchronize the stream indefinitely.
+                        frame=cv2.resize(frame,(width,height),interpolation=cv2.INTER_AREA)
                 segment=b"\0"*AUDIO_BYTES_PER_FRAME
             audio_queue.put(segment,timeout=5)
             write_all(video_fd,frame.tobytes())
