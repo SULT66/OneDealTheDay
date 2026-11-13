@@ -167,10 +167,13 @@ function messages(db,showId,after=0) {
 function nextQuestion(db,showId) {
   return db.prepare("SELECT id,text FROM odd_tv_chat WHERE show_id=? AND status='queued' ORDER BY id ASC LIMIT 1").get(showId)||null;
 }
-function hasPresentedProduct(db,showId,productId) {
-  return Boolean(db.prepare(
-    "SELECT 1 FROM odd_tv_product_presentations WHERE show_id=? AND product_id=?"
-  ).get(showId,productId));
+function productPresentationDue(db,showId,productId,now=Date.now(),intervalMs=75*1000) {
+  const row=db.prepare(
+    "SELECT presented_at FROM odd_tv_product_presentations WHERE show_id=? AND product_id=?"
+  ).get(showId,productId);
+  if(!row)return true;
+  const last=Date.parse(row.presented_at);
+  return !Number.isFinite(last)||now-last>=intervalMs;
 }
 function markProductPresented(db,showId,productId,now=Date.now()) {
   const show=db.prepare("SELECT product_ids FROM odd_tv_shows WHERE id=?").get(showId);
@@ -185,4 +188,4 @@ function markSent(db,showId,questionId,now=Date.now()) {
     "UPDATE odd_tv_chat SET status='sent',sent_at=? WHERE id=? AND show_id=? AND status='queued'"
   ).run(new Date(now).toISOString(),questionId,showId).changes===1;
 }
-module.exports={SHOW_MINUTES,init,validateProducts,pickProducts,createShow,startShow,currentShow,workerShow,currentProduct,publicShow,postQuestion,messages,nextQuestion,hasPresentedProduct,markProductPresented,markSent};
+module.exports={SHOW_MINUTES,init,validateProducts,pickProducts,createShow,startShow,currentShow,workerShow,currentProduct,publicShow,postQuestion,messages,nextQuestion,productPresentationDue,markProductPresented,markSent};
