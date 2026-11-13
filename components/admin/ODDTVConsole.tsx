@@ -104,6 +104,8 @@ export function ODDTVConsole({adminKey}:{adminKey:string}) {
 
   async function launch(manual:boolean) {
     if(!adminKey){setNotice("Enter the admin key above first.");return;}
+    if(!broadcast){setNotice("Waiting for Diana’s controller status.");return;}
+    if(!broadcast.controller_online){setNotice("Diana controller is offline. Start the stream and finish its one-time setup first.");return;}
     if(manual&&(selected.length<8||selected.length>10)){setNotice("Choose 8 to 10 products.");return;}
     setBusy(true);setNotice("");setShowId(null);
     try{
