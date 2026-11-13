@@ -190,24 +190,49 @@ def main():
     else:
         print("NO_MOTION_CLIPS: using MuseTalk idle frames",str(motion_dir),flush=True)
     next_tick=time.monotonic()
-    print("ODD_LIVE_PROGRAM_ON_AIR",args.rtsp,flush=True)
+    # Decode queued clips off the real-time writer loop. A full MuseTalk clip
+    # can take several seconds to load; blocking here starves FFmpeg's raw input
+    # pipes, so it never opens the RTSP publisher and the public player gets 404.
+    decoded_jobs=queue.Queue(maxsize=1)
+    decode_thread=None
+    next_job_check=0.0
+
+    def prepare_next_job():
+        job=read_job()
+        if not job:
+            return
+        name,info,video=job
+        try:
+            frames,audio=decode_clip(video,width,height)
+            decoded_jobs.put((name,info,frames,audio))
+        except Exception as exc:
+            failed=name.with_name(name.name.replace(".playing.json",".failed.json"))
+            try:
+                name.rename(failed)
+            except OSError:
+                pass
+            print("CLIP_FAILED",type(exc).__name__,flush=True)
+
+    print("ODD_LIVE_PROGRAM_STARTING",args.rtsp,flush=True)
     try:
         while process.poll() is None:
             if audio_error: raise RuntimeError("AUDIO_ENCODER_FAILED") from audio_error[0]
-            if current is None:
-                job=read_job()
-                if job:
-                    name,info,video=job
-                    try:
-                        frames,audio=decode_clip(video,width,height)
-                        current=(name,info,frames,audio)
-                        frame_count=0
-                        motion_frames=[]
-                        motion_frame_index=0
-                        print("CHLOE_SPEAKING",name.name,flush=True)
-                    except Exception as exc:
-                        name.rename(name.with_name(name.name.replace(".playing.json",".failed.json")))
-                        print("CLIP_FAILED",type(exc).__name__,flush=True)
+            try:
+                prepared=decoded_jobs.get_nowait()
+            except queue.Empty:
+                prepared=None
+            if prepared is not None:
+                name,info,frames,audio=prepared
+                current=(name,info,frames,audio)
+                frame_count=0
+                motion_frames=[]
+                motion_frame_index=0
+                print("CHLOE_SPEAKING",name.name,flush=True)
+            if current is None and time.monotonic()>=next_job_check:
+                if decode_thread is None or not decode_thread.is_alive():
+                    decode_thread=threading.Thread(target=prepare_next_job,daemon=True)
+                    decode_thread.start()
+                    next_job_check=time.monotonic()+1.0
             can_play=current is not None and time.time()>=float(current[1].get("play_after",0))
             if can_play:
                 path,info,frames,audio=current
