@@ -151,11 +151,11 @@ def main():
                         help="Acknowledge chat only after the clip has been sent to the live encoder.")
     parser.add_argument("--motion-dir",default=str(MOTION_DIR),
                         help="Directory containing short Chloe idle-motion MP4s.")
-    parser.add_argument("--motion-every-seconds",type=int,default=50,
-                        help="Wait this long between motion clips while idle.")
+    parser.add_argument("--motion-every-seconds",type=int,default=3,
+                        help="Pause between distinct idle-motion clips while Chloe is not speaking.")
     args=parser.parse_args()
-    if not 15<=args.motion_every_seconds<=600:
-        parser.error("--motion-every-seconds must be between 15 and 600.")
+    if not 1<=args.motion_every_seconds<=600:
+        parser.error("--motion-every-seconds must be between 1 and 600.")
     if not args.rtsp.startswith("rtsp://127.0.0.1:8554/"):
         raise ValueError("LOCAL_RTMP_ONLY_DISABLED")
     images=sorted(IDLE.glob("*.png"))
@@ -184,7 +184,7 @@ def main():
     motion_index=0
     motion_frames=[]
     motion_frame_index=0
-    next_motion_at=time.monotonic()+args.motion_every_seconds
+    next_motion_at=time.monotonic()
     if motion_paths:
         print("MOTION_CLIPS_FOUND",len(motion_paths),str(motion_dir),flush=True)
     else:
@@ -261,6 +261,10 @@ def main():
                     if motion_frame_index>=len(motion_frames):
                         motion_frames=[]
                         motion_frame_index=0
+                        # Rotate through the available breathing/blinking/
+                        # gesture clips with a short pause; never loop one
+                        # motion video as the entire broadcast.
+                        next_motion_at=time.monotonic()+args.motion_every_seconds
                 else:
                     frame=cv2.imread(str(images[idle_idx%len(images)]))
                     idle_idx+=1
