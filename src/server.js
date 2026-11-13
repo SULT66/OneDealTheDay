@@ -4443,14 +4443,16 @@ app.post("/api/odd-tv/worker/next",oddWorkerAuth,async(req,res)=>{
   const key="tv:"+show.id;
   if(oddTvLeases.has(key))return res.json({kind:"busy"});
   const question=oddTv.nextQuestion(db,show.id);
-  // TV worker should only synthesize a turn when a viewer has actually asked
-  // something. Returning idle prevents repeated, paid product monologues.
-  if(!question)return res.json({kind:"idle"});
-  const lease=oddTvLeases.acquire(key,question.id);
+  const listing=oddTv.currentProduct(db,show,Date.now()).product;
+  if(!listing)return res.status(503).json({error:"No current published product."});
+  // Viewer questions take priority. When the queue is empty, narrate each
+  // featured product once so the show opens with Chloe instead of silent idle.
+  if(!question&&oddTv.hasPresentedProduct(db,show.id,listing.id))return res.json({kind:"idle"});
+  const lease=oddTvLeases.acquire(key,question?.id||null,{
+    kind:question?"question":"presentation",productId:listing.id,
+  });
   if(!lease)return res.json({kind:"busy"});
   try {
-    const listing=oddTv.currentProduct(db,show,Date.now()).product;
-    if(!listing)throw new Error("NO_PUBLISHED_PRODUCT");
     const {composeHostTurn}=require("./oddLiveBrain");
     let generateText;
     if(process.env.OPENAI_API_KEY){
@@ -4496,6 +4498,13 @@ app.post("/api/odd-tv/worker/ack",oddWorkerAuth,(req,res)=>{
   if(lease.questionId!==null && !oddTv.markSent(db,id,lease.questionId,Date.now())){
     oddTvLeases.release(key,token);
     return res.status(409).json({error:"Question state changed."});
+  }
+  if(lease.questionId===null){
+    const productId=Number(lease.metadata?.productId);
+    if(!Number.isSafeInteger(productId)||!oddTv.markProductPresented(db,id,productId,Date.now())){
+      oddTvLeases.release(key,token);
+      return res.status(409).json({error:"Product presentation state changed."});
+    }
   }
   oddTvLeases.release(key,token);
   return res.json({ok:true,question_id:lease.questionId});
