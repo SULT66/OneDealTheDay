@@ -276,13 +276,19 @@ def main():
                         # PNG can desynchronize the stream indefinitely.
                         frame=cv2.resize(frame,(width,height),interpolation=cv2.INTER_AREA)
                 segment=b"\0"*AUDIO_BYTES_PER_FRAME
-            try:
-                audio_queue.put(segment,timeout=1 if can_play else 0.01)
-            except queue.Full:
-                # A delayed FFmpeg audio reader must not terminate the video
-                # publisher. Idle audio is silence; during speech log the
-                # dropped slice so it is visible instead of crashing the show.
-                print("AUDIO_BACKPRESSURE_DROPPED", "speech" if can_play else "silence", flush=True)
+            # Preserve one 40 ms audio slice for every video frame. If FFmpeg
+            # temporarily back-pressures its audio input, pause the shared
+            # producer clock instead of dropping speech samples; dropping even
+            # one slice makes the separate audio and video timelines drift.
+            while True:
+                try:
+                    audio_queue.put(segment,timeout=0.25)
+                    break
+                except queue.Full:
+                    if audio_error:
+                        raise RuntimeError("AUDIO_ENCODER_FAILED") from audio_error[0]
+                    if process.poll() is not None:
+                        raise RuntimeError("ENCODER_TERMINATED")
             ok,encoded=cv2.imencode(".jpg",frame,[cv2.IMWRITE_JPEG_QUALITY,90])
             if not ok: raise RuntimeError("JPEG_FRAME_ENCODE_FAILED")
             write_all(video_fd,encoded.tobytes())
