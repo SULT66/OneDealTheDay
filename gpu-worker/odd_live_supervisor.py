@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Keep Diana's ODD Live worker and RTSP broadcaster under the website buttons.
+"""Diana-side supervisor controlled by the authenticated ODD Live admin buttons.
 
-The supervisor polls a narrow, authenticated desired-state endpoint. It can
-only start or stop the two fixed ODD Live programs; it never accepts commands
-or executable paths from the website.
+Only starts/stops the fixed MediaMTX, Chloe worker, and RTSP broadcaster.
+It never accepts shell commands or executable paths from the website.
 """
 import json
 import os
 from pathlib import Path
+import socket
 import subprocess
 import sys
 import time
@@ -52,35 +52,63 @@ def post_json(base, path, key, payload):
         return json.loads(response.read().decode("utf-8"))
 
 
+def port_open(port):
+    try:
+        with socket.create_connection(("127.0.0.1", port), timeout=0.5):
+            return True
+    except OSError:
+        return False
+
+
 def start_processes(log):
-    scripts = {
-        "worker": ROOT / "gpu-worker" / "odd_live_chloe_worker.py",
-        "broadcaster": ROOT / "gpu-worker" / "odd_live_program.py",
-    }
-    missing = [name for name, path in scripts.items() if not path.is_file()]
-    if missing:
-        raise RuntimeError("ODD_LIVE_SCRIPTS_MISSING")
-    env = os.environ.copy()
-    worker = subprocess.Popen(
-        [sys.executable, "-u", str(scripts["worker"]), "--watch"],
-        cwd=str(ROOT), env=env, stdout=log, stderr=subprocess.STDOUT,
+    stream_dir = ROOT / "stream-server"
+    media = stream_dir / "mediamtx"
+    config = stream_dir / "mediamtx.yml"
+    worker = ROOT / "gpu-worker" / "odd_live_chloe_worker.py"
+    broadcaster = ROOT / "gpu-worker" / "odd_live_program.py"
+    if not (media.is_file() and config.is_file() and worker.is_file() and broadcaster.is_file()):
+        raise RuntimeError("ODD_LIVE_FILES_MISSING")
+    processes = {}
+    if port_open(8554):
+        # A manually started MediaMTX is reused and will not be stopped by this service.
+        processes["mediamtx"] = None
+    else:
+        processes["mediamtx"] = subprocess.Popen(
+            [str(media), str(config)], cwd=str(stream_dir),
+            env=os.environ.copy(), stdout=log, stderr=subprocess.STDOUT,
+            start_new_session=True,
+        )
+        for _ in range(40):
+            if port_open(8554):
+                break
+            if processes["mediamtx"].poll() is not None:
+                raise RuntimeError("MEDIAMTX_FAILED_TO_START")
+            time.sleep(0.5)
+        if not port_open(8554):
+            raise RuntimeError("MEDIAMTX_START_TIMEOUT")
+    processes["worker"] = subprocess.Popen(
+        [sys.executable, "-u", str(worker), "--watch"],
+        cwd=str(ROOT), env=os.environ.copy(), stdout=log, stderr=subprocess.STDOUT,
         start_new_session=True,
     )
-    broadcaster = subprocess.Popen(
-        [sys.executable, "-u", str(scripts["broadcaster"]),
+    processes["broadcaster"] = subprocess.Popen(
+        [sys.executable, "-u", str(broadcaster),
          "--rtsp", RTSP_URL, "--ack-delivered"],
-        cwd=str(ROOT), env=env, stdout=log, stderr=subprocess.STDOUT,
+        cwd=str(ROOT), env=os.environ.copy(), stdout=log, stderr=subprocess.STDOUT,
         start_new_session=True,
     )
-    return {"worker": worker, "broadcaster": broadcaster}
+    return processes
 
 
 def stop_processes(processes):
-    for proc in processes.values():
-        if proc.poll() is None:
+    # Stop the RTSP publisher before MediaMTX.
+    for name in ("broadcaster", "worker", "mediamtx"):
+        proc = processes.get(name)
+        if proc is not None and proc.poll() is None:
             proc.terminate()
-    for proc in processes.values():
-        if proc.poll() is None:
+    for name in ("broadcaster", "worker", "mediamtx"):
+        proc = processes.get(name)
+        if proc is not None and proc.poll() is None:
             try:
                 proc.wait(timeout=8)
             except subprocess.TimeoutExpired:
@@ -92,6 +120,7 @@ def main():
     base, key = load_worker_config()
     log_dir = ROOT / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
+    log = open(log_dir / "odd-live-control.log", "ab", buffering=0)
     processes = {}
     last_restart = 0.0
     last_detail = ""
@@ -102,18 +131,27 @@ def main():
                 control = post_json(base, CONTROL_PATH, key, {})
                 desired = control.get("desired_state")
                 if desired == "running":
-                    exited = [name for name, proc in processes.items() if proc.poll() is not None]
+                    exited = [name for name, proc in processes.items()
+                              if proc is not None and proc.poll() is not None]
                     if exited:
                         last_detail = "Restarting stopped ODD Live process: " + ",".join(exited)
                         stop_processes(processes)
                         processes = {}
                     if not processes and time.monotonic() - last_restart >= 5:
-                        log = open(log_dir / "odd-live-control.log", "ab", buffering=0)
-                        processes = start_processes(log)
-                        last_restart = time.monotonic()
-                        last_detail = ""
-                    alive = len(processes) == 2 and all(p.poll() is None for p in processes.values())
-                    state = "running" if alive else "starting"
+                        try:
+                            processes = start_processes(log)
+                            last_restart = time.monotonic()
+                            last_detail = ""
+                        except Exception as exc:
+                            last_restart = time.monotonic()
+                            last_detail = type(exc).__name__
+                            stop_processes(processes)
+                            processes = {}
+                    alive = (
+                        len(processes) == 3 and
+                        all(proc is None or proc.poll() is None for proc in processes.values())
+                    )
+                    state = "running" if alive else ("error" if last_detail else "starting")
                 elif desired == "stopped":
                     if processes:
                         stop_processes(processes)
@@ -134,6 +172,7 @@ def main():
         print("ODD_LIVE_SUPERVISOR_STOPPING", flush=True)
     finally:
         stop_processes(processes)
+        log.close()
 
 
 if __name__ == "__main__":
