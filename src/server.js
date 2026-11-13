@@ -4422,6 +4422,8 @@ app.post("/api/admin/odd-tv/show",admin,express.json({limit:"5kb"}),(req,res)=>{
 app.post("/api/admin/odd-tv/show/:id/start",admin,(req,res)=>{
   res.set("Cache-Control","no-store");
   if(!oddTvEnabled)return res.status(503).json({error:"ODD TV disabled."});
+  if(!oddTv.getBroadcastControl(db,Date.now()).controller_online)
+    return res.status(409).json({error:"DIANA_CONTROLLER_OFFLINE"});
   try{
     const state=oddTv.startShow(db,Number(req.params.id),{now:Date.now(),warmupMs:5*60*1000});
     const broadcast=oddTv.setBroadcastDesired(db,"running",Date.now());
