@@ -44,16 +44,16 @@ def launch_ffmpeg(width,height,url):
     ar,aw=os.pipe()
     cmd=[
         "ffmpeg","-nostdin","-hide_banner","-loglevel","warning",
-        # Rawvideo frames are 2.7 MB at 720p; probing 5 MB while the
-        # Python writer blocks on a pipe can deadlock before the RTSP starts.
-        # These input formats are fully specified; no probing is necessary.
-        "-probesize","32","-analyzeduration","0",
-        "-thread_queue_size","32","-f","rawvideo",
-        "-pixel_format","bgr24","-video_size",f"{width}x{height}",
+        # JPEG image2pipe frames are self-delimiting. POSIX pipes can return
+        # short writes; rawvideo treated those chunks like whole frames and
+        # stalled before FFmpeg opened the RTSP publisher.
+        "-probesize","5000000","-analyzeduration","1000000",
+        "-thread_queue_size","32","-f","image2pipe","-vcodec","mjpeg",
         "-framerate",str(FPS),"-i",f"pipe:{vr}",
         "-probesize","32","-analyzeduration","0",
         "-thread_queue_size","64","-f","s16le","-ar",str(AUDIO_RATE),
         "-ac","1","-i",f"pipe:{ar}",
+        "-map","0:v:0","-map","1:a:0",
         "-c:v","h264_nvenc","-preset","p4","-pix_fmt","yuv420p",
         "-b:v","3M","-g","50","-c:a","aac","-b:a","128k",
         "-f","rtsp","-rtsp_transport","tcp",url
@@ -277,7 +277,9 @@ def main():
                         frame=cv2.resize(frame,(width,height),interpolation=cv2.INTER_AREA)
                 segment=b"\0"*AUDIO_BYTES_PER_FRAME
             audio_queue.put(segment,timeout=5)
-            write_all(video_fd,frame.tobytes())
+            ok,encoded=cv2.imencode(".jpg",frame,[cv2.IMWRITE_JPEG_QUALITY,90])
+            if not ok: raise RuntimeError("JPEG_FRAME_ENCODE_FAILED")
+            write_all(video_fd,encoded.tobytes())
             if can_play and frame_count>=total:
                 path,info,_,_=current
                 aired=path.with_name(path.name.replace(".playing.json",".aired.json"))
