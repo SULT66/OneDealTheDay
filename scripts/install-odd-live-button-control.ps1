@@ -42,7 +42,7 @@ $bootstrapB64 = '__BOOTSTRAP_B64__'
 $bashCommand = "printf '%s' '$bootstrapB64' | base64 -d > /tmp/odd-live-bootstrap.sh && chmod 700 /tmp/odd-live-bootstrap.sh && bash /tmp/odd-live-bootstrap.sh"
 wsl.exe -d Ubuntu -u mixtu -- bash -lc "$bashCommand"
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-$taskArguments = '-d Ubuntu -u mixtu -- bash -lc "cd ~/odd-ai-humans && set -a && source ~/.config/odd-live/worker.env && set +a && conda run -n odd-ai-test python -u gpu-worker/odd_live_supervisor.py"'
+$taskArguments = '-d Ubuntu -u mixtu -- bash -lc "cd ~/odd-ai-humans && set -a && source ~/.config/odd-live/worker.env && set +a && /home/mixtu/miniforge3/bin/conda run -n odd-ai-test python -u gpu-worker/odd_live_supervisor.py"'
 $action = New-ScheduledTaskAction -Execute 'wsl.exe' -Argument $taskArguments
 $trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
 $principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Limited
