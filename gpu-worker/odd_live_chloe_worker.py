@@ -207,9 +207,24 @@ def main():
         print("CHLOE_PREVIEW_READY:",video)
         print("LOCAL_CLIP_QUEUED:",target.name)
         print("NOT_ACKNOWLEDGED: delivery confirmation belongs to the broadcaster.")
-    except Exception:
+    except BaseException as exc:
+        # The API holds this show turn for up to ten minutes. If TTS or MuseTalk
+        # fails before a ready clip is queued, release the lease immediately so
+        # the next watcher poll can retry instead of leaving Chloe stuck on idle.
+        lease_token=response.get("lease_token")
+        drop_key=response.get("drop_key")
+        if lease_token and drop_key:
+            ack_path="/api/odd-tv/worker/ack" if str(drop_key).startswith("tv:") else "/api/odd-live/worker/ack"
+            try:
+                released=post_json(base,ack_path,key,{
+                    "drop_key":drop_key,"lease_token":lease_token,"aired":False
+                })
+                if released.get("ok"):
+                    print("TURN_LEASE_RELEASED_AFTER_FAILURE",flush=True)
+            except Exception as release_error:
+                print("TURN_LEASE_RELEASE_FAILED:",type(release_error).__name__,file=sys.stderr,flush=True)
         print("REHEARSAL_FAILED; question stays queued. See per-turn render.log.",file=sys.stderr)
-        raise
+        raise exc
 
 if __name__=="__main__":
     main()
