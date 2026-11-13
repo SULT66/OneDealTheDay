@@ -173,6 +173,12 @@ def main():
         audio=jobdir / "speech.wav"
         synthesize_azure(speech,audio)
         video=render_musetalk(audio,jobdir)
+        prepared={}
+        if mode=="tv" and response.get("opening") is True:
+            prepared=post_json(base,"/api/odd-tv/worker/prepared",key,{
+                "drop_key":response["drop_key"],
+                "lease_token":response["lease_token"],
+            })
         (jobdir / "turn.json").write_text(json.dumps({
             "question_id": response.get("question_id"),
             "drop_key": response.get("drop_key"),
@@ -191,6 +197,7 @@ def main():
             "question_id":response.get("question_id"),
             "lease_token":response["lease_token"],
             "lease_expires_at":expiry,
+            "play_after":datetime.fromisoformat(prepared["play_after"].replace("Z","+00:00")).timestamp() if prepared.get("play_after") else 0,
         }
         target=ready/(jobdir.name+".ready.json")
         temp=ready/(jobdir.name+".tmp")

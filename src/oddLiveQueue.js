@@ -12,11 +12,11 @@ function createProducerLeases({ttlMs=120000,now=()=>Date.now()}={}) {
     for(const [dropId, lease] of active) if(lease.expiresAt <= now()) active.delete(dropId);
   }
   return {
-    acquire(dropId, questionId) {
+    acquire(dropId, questionId, metadata=null) {
       cleanup();
       if (active.has(dropId)) return null;
       const token=crypto.randomBytes(24).toString("hex");
-      const lease={dropId,questionId:questionId ?? null,token,expiresAt:now()+ttlMs};
+      const lease={dropId,questionId:questionId ?? null,metadata:metadata&&typeof metadata==="object"?{...metadata}:null,token,expiresAt:now()+ttlMs};
       active.set(dropId,lease);
       return {...lease};
     },

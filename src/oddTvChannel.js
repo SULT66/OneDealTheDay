@@ -25,6 +25,12 @@ function init(db) {
       sent_at TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_odd_tv_chat_queue ON odd_tv_chat(show_id,status,id);
+    CREATE TABLE IF NOT EXISTS odd_tv_product_presentations(
+      show_id INTEGER NOT NULL REFERENCES odd_tv_shows(id),
+      product_id INTEGER NOT NULL,
+      presented_at TEXT NOT NULL,
+      PRIMARY KEY(show_id,product_id)
+    );
   `);
 }
 function validateProducts(db,market,ids) {
@@ -77,23 +83,33 @@ function createShow(db,{market="us",productIds,now=Date.now()}) {
   ).run(market,JSON.stringify(ids),new Date(now).toISOString());
   return Number(result.lastInsertRowid);
 }
-function startShow(db,id,{now=Date.now()}={}) {
+function startShow(db,id,{now=Date.now(),warmupMs=0}={}) {
   const show=db.prepare("SELECT * FROM odd_tv_shows WHERE id=? AND status='draft'").get(id);
   if(!show)throw new Error("SHOW_NOT_DRAFT");
   const active=db.prepare("SELECT id FROM odd_tv_shows WHERE status='live' AND end_at>? LIMIT 1")
     .get(new Date(now).toISOString());
   if(active)throw new Error("ANOTHER_SHOW_ACTIVE");
-  const end=now+SHOW_MINUTES*60000;
+  const start=now+Math.max(0,Math.min(10*60*1000,Number(warmupMs)||0));
+  const end=start+SHOW_MINUTES*60000;
   const result=db.prepare(
     "UPDATE odd_tv_shows SET status='live',start_at=?,end_at=? WHERE id=? AND status='draft'"
-  ).run(new Date(now).toISOString(),new Date(end).toISOString(),id);
+  ).run(new Date(start).toISOString(),new Date(end).toISOString(),id);
   if(result.changes!==1)throw new Error("SHOW_START_RACE");
-  return {show_id:id,start_at:new Date(now).toISOString(),end_at:new Date(end).toISOString()};
+  return {show_id:id,state:start>now?"preparing":"live",start_at:new Date(start).toISOString(),end_at:new Date(end).toISOString()};
 }
 function currentShow(db,market="us",now=Date.now()) {
   return db.prepare(
     "SELECT * FROM odd_tv_shows WHERE market=? AND status='live' AND start_at<=? AND end_at>? ORDER BY id DESC LIMIT 1"
   ).get(market,new Date(now).toISOString(),new Date(now).toISOString())||null;
+}
+function workerShow(db,market="us",now=Date.now(),lookaheadMs=10*60*1000) {
+  const live=currentShow(db,market,now);
+  if(live)return {show:live,opening:false};
+  const nowIso=new Date(now).toISOString();
+  const upcoming=db.prepare(
+    "SELECT * FROM odd_tv_shows WHERE market=? AND status='live' AND start_at>? AND start_at<=? AND end_at>? ORDER BY id DESC LIMIT 1"
+  ).get(market,nowIso,new Date(now+lookaheadMs).toISOString(),nowIso)||null;
+  return upcoming?{show:upcoming,opening:true}:null;
 }
 function currentProduct(db,show,now=Date.now()) {
   const ids=JSON.parse(show.product_ids);
@@ -151,9 +167,25 @@ function messages(db,showId,after=0) {
 function nextQuestion(db,showId) {
   return db.prepare("SELECT id,text FROM odd_tv_chat WHERE show_id=? AND status='queued' ORDER BY id ASC LIMIT 1").get(showId)||null;
 }
+function productPresentationDue(db,showId,productId,now=Date.now(),intervalMs=75*1000) {
+  const row=db.prepare(
+    "SELECT presented_at FROM odd_tv_product_presentations WHERE show_id=? AND product_id=?"
+  ).get(showId,productId);
+  if(!row)return true;
+  const last=Date.parse(row.presented_at);
+  return !Number.isFinite(last)||now-last>=intervalMs;
+}
+function markProductPresented(db,showId,productId,now=Date.now()) {
+  const show=db.prepare("SELECT product_ids FROM odd_tv_shows WHERE id=?").get(showId);
+  if(!show||!JSON.parse(show.product_ids).includes(productId))return false;
+  return db.prepare(
+    "INSERT INTO odd_tv_product_presentations(show_id,product_id,presented_at) VALUES(?,?,?) " +
+    "ON CONFLICT(show_id,product_id) DO UPDATE SET presented_at=excluded.presented_at"
+  ).run(showId,productId,new Date(now).toISOString()).changes===1;
+}
 function markSent(db,showId,questionId,now=Date.now()) {
   return db.prepare(
     "UPDATE odd_tv_chat SET status='sent',sent_at=? WHERE id=? AND show_id=? AND status='queued'"
   ).run(new Date(now).toISOString(),questionId,showId).changes===1;
 }
-module.exports={SHOW_MINUTES,init,validateProducts,pickProducts,createShow,startShow,currentShow,currentProduct,publicShow,postQuestion,messages,nextQuestion,markSent};
+module.exports={SHOW_MINUTES,init,validateProducts,pickProducts,createShow,startShow,currentShow,workerShow,currentProduct,publicShow,postQuestion,messages,nextQuestion,productPresentationDue,markProductPresented,markSent};

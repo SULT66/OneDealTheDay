@@ -70,7 +70,7 @@ export function ODDTVConsole({adminKey}:{adminKey:string}) {
       });
       const result=await start.json().catch(()=>({}));
       if(!start.ok)throw new Error(result.error||"Show was created but could not be started.");
-      setNotice("ODD Live is on air with "+(manual?selected.length:"automatically selected")+" products.");
+      setNotice("Preparing Chloe’s opening. The show goes live when her first product segment is ready.");
     }catch(error){
       setNotice(error instanceof Error?error.message:"Could not start the show.");
     }finally{setBusy(false);}

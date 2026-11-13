@@ -75,7 +75,7 @@ export function ODDLiveTvExperience({market}:{market:string}) {
       </div>
       <aside aria-label="ODD Live audience chat" className="rounded-xl border border-white/15 bg-black/30 p-3">
         <h3 className="font-bold">Ask Chloe live</h3>
-        <p className="mt-1 text-xs text-white/60">Questions are visible to viewers. Chloe answers selected questions when ready.</p>
+        <p className="mt-1 text-xs text-white/60">Chloe presents each featured product and answers viewer questions.</p>
         <div role="log" aria-live="polite" className="mt-3 h-52 space-y-2 overflow-y-auto text-sm">
           {messages.length===0 ? <p className="text-white/60">No questions yet.</p> : messages.map(msg=>
             <p key={msg.id} className="rounded-lg bg-white/10 p-2">
