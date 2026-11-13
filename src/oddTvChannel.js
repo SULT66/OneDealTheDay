@@ -25,6 +25,12 @@ function init(db) {
       sent_at TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_odd_tv_chat_queue ON odd_tv_chat(show_id,status,id);
+    CREATE TABLE IF NOT EXISTS odd_tv_product_presentations(
+      show_id INTEGER NOT NULL REFERENCES odd_tv_shows(id),
+      product_id INTEGER NOT NULL,
+      presented_at TEXT NOT NULL,
+      PRIMARY KEY(show_id,product_id)
+    );
   `);
 }
 function validateProducts(db,market,ids) {
@@ -151,9 +157,22 @@ function messages(db,showId,after=0) {
 function nextQuestion(db,showId) {
   return db.prepare("SELECT id,text FROM odd_tv_chat WHERE show_id=? AND status='queued' ORDER BY id ASC LIMIT 1").get(showId)||null;
 }
+function hasPresentedProduct(db,showId,productId) {
+  return Boolean(db.prepare(
+    "SELECT 1 FROM odd_tv_product_presentations WHERE show_id=? AND product_id=?"
+  ).get(showId,productId));
+}
+function markProductPresented(db,showId,productId,now=Date.now()) {
+  const show=db.prepare("SELECT product_ids FROM odd_tv_shows WHERE id=?").get(showId);
+  if(!show||!JSON.parse(show.product_ids).includes(productId))return false;
+  return db.prepare(
+    "INSERT INTO odd_tv_product_presentations(show_id,product_id,presented_at) VALUES(?,?,?) " +
+    "ON CONFLICT(show_id,product_id) DO UPDATE SET presented_at=excluded.presented_at"
+  ).run(showId,productId,new Date(now).toISOString()).changes===1;
+}
 function markSent(db,showId,questionId,now=Date.now()) {
   return db.prepare(
     "UPDATE odd_tv_chat SET status='sent',sent_at=? WHERE id=? AND show_id=? AND status='queued'"
   ).run(new Date(now).toISOString(),questionId,showId).changes===1;
 }
-module.exports={SHOW_MINUTES,init,validateProducts,pickProducts,createShow,startShow,currentShow,currentProduct,publicShow,postQuestion,messages,nextQuestion,markSent};
+module.exports={SHOW_MINUTES,init,validateProducts,pickProducts,createShow,startShow,currentShow,currentProduct,publicShow,postQuestion,messages,nextQuestion,hasPresentedProduct,markProductPresented,markSent};
