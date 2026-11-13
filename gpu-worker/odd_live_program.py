@@ -47,7 +47,7 @@ def launch_ffmpeg(width,height,url):
         # JPEG image2pipe frames are self-delimiting. POSIX pipes can return
         # short writes; rawvideo treated those chunks like whole frames and
         # stalled before FFmpeg opened the RTSP publisher.
-        "-probesize","5000000","-analyzeduration","1000000",
+        "-probesize","32","-analyzeduration","0",
         "-thread_queue_size","32","-f","image2pipe","-vcodec","mjpeg",
         "-framerate",str(FPS),"-i",f"pipe:{vr}",
         "-probesize","32","-analyzeduration","0",
@@ -164,7 +164,7 @@ def main():
     if first is None: raise RuntimeError("BAD_IDLE_IMAGE")
     height,width=first.shape[:2]
     process,video_fd,audio_fd=launch_ffmpeg(width,height,args.rtsp)
-    audio_queue=queue.Queue(maxsize=8)
+    audio_queue=queue.Queue(maxsize=64)
     audio_error=[]
     def send_audio():
         try:
@@ -276,7 +276,13 @@ def main():
                         # PNG can desynchronize the stream indefinitely.
                         frame=cv2.resize(frame,(width,height),interpolation=cv2.INTER_AREA)
                 segment=b"\0"*AUDIO_BYTES_PER_FRAME
-            audio_queue.put(segment,timeout=5)
+            try:
+                audio_queue.put(segment,timeout=1 if can_play else 0.01)
+            except queue.Full:
+                # A delayed FFmpeg audio reader must not terminate the video
+                # publisher. Idle audio is silence; during speech log the
+                # dropped slice so it is visible instead of crashing the show.
+                print("AUDIO_BACKPRESSURE_DROPPED", "speech" if can_play else "silence", flush=True)
             ok,encoded=cv2.imencode(".jpg",frame,[cv2.IMWRITE_JPEG_QUALITY,90])
             if not ok: raise RuntimeError("JPEG_FRAME_ENCODE_FAILED")
             write_all(video_fd,encoded.tobytes())
