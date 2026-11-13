@@ -179,6 +179,7 @@ def main():
     idle_idx=0
     current=None
     frame_count=0
+    speech_started=False
     motion_dir=Path(args.motion_dir).expanduser()
     motion_paths=sorted(motion_dir.glob("*.mp4")) if motion_dir.is_dir() else []
     # idle_05.mp4 is the prepared walk-in scene: play it once at stream start,
@@ -242,6 +243,7 @@ def main():
                 name,info,frames,audio=prepared
                 current=(name,info,frames,audio)
                 frame_count=0
+                speech_started=False
                 print("CHLOE_SPEECH_READY",name.name,flush=True)
             if current is None and time.monotonic()>=next_job_check:
                 if decode_thread is None or not decode_thread.is_alive():
@@ -251,6 +253,9 @@ def main():
             can_play=(current is not None and not entry_pending and
                       time.time()>=float(current[1].get("play_after",0)))
             if can_play:
+                if not speech_started:
+                    print("CHLOE_SPEAKING",current[0].name,flush=True)
+                    speech_started=True
                 path,info,frames,audio=current
                 index=min(frame_count,len(frames)-1)
                 frame=frames[index]
@@ -321,6 +326,7 @@ def main():
                     try: ack(info); print("QUESTION_ACKNOWLEDGED",flush=True)
                     except Exception as exc: print("ACK_ERROR",type(exc).__name__,flush=True)
                 current=None
+                speech_started=False
             next_tick+=1/FPS
             pause=next_tick-time.monotonic()
             if pause>0:time.sleep(pause)
