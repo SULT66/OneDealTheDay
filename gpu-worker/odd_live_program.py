@@ -208,7 +208,8 @@ def main():
                     except Exception as exc:
                         name.rename(name.with_name(name.name.replace(".playing.json",".failed.json")))
                         print("CLIP_FAILED",type(exc).__name__,flush=True)
-            if current is not None:
+            can_play=current is not None and time.time()>=float(current[1].get("play_after",0))
+            if can_play:
                 path,info,frames,audio=current
                 index=min(frame_count,len(frames)-1)
                 frame=frames[index]
@@ -242,7 +243,7 @@ def main():
                 segment=b"\0"*AUDIO_BYTES_PER_FRAME
             audio_queue.put(segment,timeout=5)
             write_all(video_fd,frame.tobytes())
-            if current is not None and frame_count>=total:
+            if can_play and frame_count>=total:
                 path,info,_,_=current
                 aired=path.with_name(path.name.replace(".playing.json",".aired.json"))
                 path.rename(aired)
