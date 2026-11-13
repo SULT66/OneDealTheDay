@@ -38,8 +38,9 @@ echo "ODD_LIVE_CONTROLLER_FILES_READY"
 $bootstrapB64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($bootstrap))
 $remoteScript = @'
 $ErrorActionPreference = 'Stop'
-$bootstrap = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('__BOOTSTRAP_B64__'))
-wsl.exe -d Ubuntu -u mixtu -- bash -lc $bootstrap
+$bootstrapB64 = '__BOOTSTRAP_B64__'
+$bashCommand = "printf '%s' '$bootstrapB64' | base64 -d > /tmp/odd-live-bootstrap.sh && chmod 700 /tmp/odd-live-bootstrap.sh && bash /tmp/odd-live-bootstrap.sh"
+wsl.exe -d Ubuntu -u mixtu -- bash -lc "$bashCommand"
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 $taskArguments = '-d Ubuntu -u mixtu -- bash -lc "cd ~/odd-ai-humans && set -a && source ~/.config/odd-live/worker.env && set +a && conda run -n odd-ai-test python -u gpu-worker/odd_live_supervisor.py"'
 $action = New-ScheduledTaskAction -Execute 'wsl.exe' -Argument $taskArguments
