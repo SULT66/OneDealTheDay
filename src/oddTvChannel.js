@@ -83,23 +83,33 @@ function createShow(db,{market="us",productIds,now=Date.now()}) {
   ).run(market,JSON.stringify(ids),new Date(now).toISOString());
   return Number(result.lastInsertRowid);
 }
-function startShow(db,id,{now=Date.now()}={}) {
+function startShow(db,id,{now=Date.now(),warmupMs=0}={}) {
   const show=db.prepare("SELECT * FROM odd_tv_shows WHERE id=? AND status='draft'").get(id);
   if(!show)throw new Error("SHOW_NOT_DRAFT");
   const active=db.prepare("SELECT id FROM odd_tv_shows WHERE status='live' AND end_at>? LIMIT 1")
     .get(new Date(now).toISOString());
   if(active)throw new Error("ANOTHER_SHOW_ACTIVE");
-  const end=now+SHOW_MINUTES*60000;
+  const start=now+Math.max(0,Math.min(10*60*1000,Number(warmupMs)||0));
+  const end=start+SHOW_MINUTES*60000;
   const result=db.prepare(
     "UPDATE odd_tv_shows SET status='live',start_at=?,end_at=? WHERE id=? AND status='draft'"
-  ).run(new Date(now).toISOString(),new Date(end).toISOString(),id);
+  ).run(new Date(start).toISOString(),new Date(end).toISOString(),id);
   if(result.changes!==1)throw new Error("SHOW_START_RACE");
-  return {show_id:id,start_at:new Date(now).toISOString(),end_at:new Date(end).toISOString()};
+  return {show_id:id,state:start>now?"preparing":"live",start_at:new Date(start).toISOString(),end_at:new Date(end).toISOString()};
 }
 function currentShow(db,market="us",now=Date.now()) {
   return db.prepare(
     "SELECT * FROM odd_tv_shows WHERE market=? AND status='live' AND start_at<=? AND end_at>? ORDER BY id DESC LIMIT 1"
   ).get(market,new Date(now).toISOString(),new Date(now).toISOString())||null;
+}
+function workerShow(db,market="us",now=Date.now(),lookaheadMs=10*60*1000) {
+  const live=currentShow(db,market,now);
+  if(live)return {show:live,opening:false};
+  const nowIso=new Date(now).toISOString();
+  const upcoming=db.prepare(
+    "SELECT * FROM odd_tv_shows WHERE market=? AND status='live' AND start_at>? AND start_at<=? AND end_at>? ORDER BY id DESC LIMIT 1"
+  ).get(market,nowIso,new Date(now+lookaheadMs).toISOString(),nowIso)||null;
+  return upcoming?{show:upcoming,opening:true}:null;
 }
 function currentProduct(db,show,now=Date.now()) {
   const ids=JSON.parse(show.product_ids);
@@ -175,4 +185,4 @@ function markSent(db,showId,questionId,now=Date.now()) {
     "UPDATE odd_tv_chat SET status='sent',sent_at=? WHERE id=? AND show_id=? AND status='queued'"
   ).run(new Date(now).toISOString(),questionId,showId).changes===1;
 }
-module.exports={SHOW_MINUTES,init,validateProducts,pickProducts,createShow,startShow,currentShow,currentProduct,publicShow,postQuestion,messages,nextQuestion,hasPresentedProduct,markProductPresented,markSent};
+module.exports={SHOW_MINUTES,init,validateProducts,pickProducts,createShow,startShow,currentShow,workerShow,currentProduct,publicShow,postQuestion,messages,nextQuestion,hasPresentedProduct,markProductPresented,markSent};
