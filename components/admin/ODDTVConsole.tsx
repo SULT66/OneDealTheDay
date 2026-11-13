@@ -2,6 +2,14 @@
 
 import {useEffect,useMemo,useState} from "react";
 
+type BroadcastStatus={
+  desired_state:"running"|"stopped";
+  actual_state:"offline"|"starting"|"running"|"stopped"|"error";
+  controller_online:boolean;
+  last_seen:string|null;
+  detail:string;
+};
+
 type CatalogProduct={
   id:number;
   title:string;
@@ -21,6 +29,8 @@ export function ODDTVConsole({adminKey}:{adminKey:string}) {
   const [busy,setBusy]=useState(false);
   const [notice,setNotice]=useState("");
   const [showId,setShowId]=useState<number|null>(null);
+  const [broadcast,setBroadcast]=useState<BroadcastStatus|null>(null);
+  const [controlBusy,setControlBusy]=useState(false);
 
   useEffect(()=>{
     setProducts([]);
@@ -41,6 +51,46 @@ export function ODDTVConsole({adminKey}:{adminKey:string}) {
     return()=>{active=false;};
   },[adminKey,market]);
 
+  async function refreshBroadcast() {
+    if(!adminKey)return;
+    try{
+      const response=await fetch("/api/admin/odd-tv/broadcast/status",{
+        headers:{"X-Admin-Key":adminKey},cache:"no-store",
+      });
+      if(!response.ok)throw new Error("Broadcast control unavailable.");
+      setBroadcast(await response.json() as BroadcastStatus);
+    }catch{
+      setBroadcast(null);
+    }
+  }
+
+  useEffect(()=>{
+    if(!adminKey){setBroadcast(null);return;}
+    void refreshBroadcast();
+    const timer=window.setInterval(()=>void refreshBroadcast(),5000);
+    return()=>window.clearInterval(timer);
+  },[adminKey]);
+
+  async function setBroadcastState(desired_state:"running"|"stopped") {
+    if(!adminKey){setNotice("Enter the admin key above first.");return;}
+    setControlBusy(true);setNotice("");
+    try{
+      const response=await fetch("/api/admin/odd-tv/broadcast/control",{
+        method:"POST",
+        headers:{"Content-Type":"application/json","X-Admin-Key":adminKey},
+        body:JSON.stringify({desired_state}),
+      });
+      const result=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(result.error||"Could not change broadcast state.");
+      setBroadcast(result as BroadcastStatus);
+      setNotice(desired_state==="running"
+        ?"Start requested. Diana’s control service will launch the stream."
+        :"Stop requested. Diana’s control service will stop the stream and end the show.");
+    }catch(error){
+      setNotice(error instanceof Error?error.message:"Could not change broadcast state.");
+    }finally{setControlBusy(false);}
+  }
+
   const visible=useMemo(()=>{
     const term=query.trim().toLowerCase();
     return products.filter(product=>
@@ -54,6 +104,8 @@ export function ODDTVConsole({adminKey}:{adminKey:string}) {
 
   async function launch(manual:boolean) {
     if(!adminKey){setNotice("Enter the admin key above first.");return;}
+    if(!broadcast){setNotice("Waiting for Diana’s controller status.");return;}
+    if(!broadcast.controller_online){setNotice("Diana controller is offline. Start the stream and finish its one-time setup first.");return;}
     if(manual&&(selected.length<8||selected.length>10)){setNotice("Choose 8 to 10 products.");return;}
     setBusy(true);setNotice("");setShowId(null);
     try{
@@ -78,7 +130,31 @@ export function ODDTVConsole({adminKey}:{adminKey:string}) {
 
   return (
     <section className="mt-6 rounded-card border border-border bg-surface p-6 sm:p-8">
-      <h2 className="text-lg font-bold text-fg">ODD Live TV products</h2>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h2 className="text-lg font-bold text-fg">ODD Live TV products</h2>
+          <p role="status" className="mt-1 text-xs text-fg-muted">
+            {broadcast
+              ? (broadcast.controller_online
+                ? "Diana controller online · stream "+broadcast.actual_state
+                : "Diana controller offline · last state "+broadcast.actual_state)
+              : "Enter the admin key to check Diana’s stream controller."}
+            {broadcast?.detail?" · "+broadcast.detail:""}
+          </p>
+          {broadcast&&!broadcast.controller_online?<p className="mt-1 text-xs text-fg-muted">
+            Run the one-time setup on your PC to install the controller on Diana:{" "}
+            <a className="underline" href="https://raw.githubusercontent.com/SULT66/OneDealTheDay/main/scripts/install-odd-live-button-control.ps1" target="_blank" rel="noreferrer">download PowerShell setup</a>.
+          </p>:null}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" disabled={controlBusy||Boolean(broadcast?.controller_online&&broadcast.desired_state==="running"&&broadcast.actual_state!=="error")} onClick={()=>void setBroadcastState("running")} className="rounded-full border border-border px-4 py-2 text-sm font-semibold text-fg disabled:opacity-50">
+            {controlBusy?"Sending…":"Start stream"}
+          </button>
+          <button type="button" disabled={controlBusy||broadcast?.desired_state==="stopped"} onClick={()=>void setBroadcastState("stopped")} className="rounded-full border border-red-300 px-4 py-2 text-sm font-semibold text-red-700 disabled:opacity-50">
+            Stop stream
+          </button>
+        </div>
+      </div>
       <p className="mt-1 max-w-prose text-sm text-fg-muted">
         Published products are already in the catalog. Choose 8–10 for a custom show, or let ODD Live select an eligible lineup across merchants. The live page changes its featured product about every six minutes during the one-hour show.
       </p>

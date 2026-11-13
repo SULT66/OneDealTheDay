@@ -4422,9 +4422,12 @@ app.post("/api/admin/odd-tv/show",admin,express.json({limit:"5kb"}),(req,res)=>{
 app.post("/api/admin/odd-tv/show/:id/start",admin,(req,res)=>{
   res.set("Cache-Control","no-store");
   if(!oddTvEnabled)return res.status(503).json({error:"ODD TV disabled."});
+  if(!oddTv.getBroadcastControl(db,Date.now()).controller_online)
+    return res.status(409).json({error:"DIANA_CONTROLLER_OFFLINE"});
   try{
     const state=oddTv.startShow(db,Number(req.params.id),{now:Date.now(),warmupMs:5*60*1000});
-    return res.json(state);
+    const broadcast=oddTv.setBroadcastDesired(db,"running",Date.now());
+    return res.json({...state,broadcast});
   }catch(error){return res.status(409).json({error:error.message});}
 });
 app.post("/api/admin/odd-tv/show/:id/stop",admin,(req,res)=>{
@@ -4432,7 +4435,38 @@ app.post("/api/admin/odd-tv/show/:id/stop",admin,(req,res)=>{
   if(!oddTvEnabled)return res.status(503).json({error:"ODD TV disabled."});
   db.prepare("UPDATE odd_tv_shows SET status='ended',end_at=? WHERE id=? AND status='live'")
     .run(new Date().toISOString(),Number(req.params.id));
-  return res.json({ok:true});
+  const broadcast=oddTv.setBroadcastDesired(db,"stopped",Date.now());
+  return res.json({ok:true,broadcast});
+});
+app.post("/api/admin/odd-tv/broadcast/control",admin,(req,res)=>{
+  res.set("Cache-Control","no-store");
+  if(!oddTvEnabled)return res.status(503).json({error:"ODD TV disabled."});
+  const state=String(req.body?.desired_state||"");
+  if(!["running","stopped"].includes(state))return res.status(400).json({error:"Invalid broadcast state."});
+  if(state==="stopped"){
+    db.prepare("UPDATE odd_tv_shows SET status='ended',end_at=? WHERE status='live'")
+      .run(new Date().toISOString());
+  }
+  return res.json(oddTv.setBroadcastDesired(db,state,Date.now()));
+});
+app.get("/api/admin/odd-tv/broadcast/status",admin,(req,res)=>{
+  res.set("Cache-Control","no-store");
+  if(!oddTvEnabled)return res.status(503).json({error:"ODD TV disabled."});
+  return res.json(oddTv.getBroadcastControl(db,Date.now()));
+});
+app.post("/api/odd-tv/worker/control",oddWorkerAuth,(req,res)=>{
+  res.set("Cache-Control","no-store");
+  if(!oddTvEnabled)return res.status(503).json({error:"ODD TV disabled."});
+  return res.json(oddTv.getBroadcastControl(db,Date.now()));
+});
+app.post("/api/odd-tv/worker/heartbeat",oddWorkerAuth,(req,res)=>{
+  res.set("Cache-Control","no-store");
+  if(!oddTvEnabled)return res.status(503).json({error:"ODD TV disabled."});
+  try{
+    const state=String(req.body?.state||"");
+    const detail=String(req.body?.detail||"").slice(0,240);
+    return res.json({ok:true,...oddTv.updateBroadcastHeartbeat(db,{state,detail},Date.now())});
+  }catch(error){return res.status(400).json({error:error.message});}
 });
 app.post("/api/odd-tv/worker/next",oddWorkerAuth,async(req,res)=>{
   res.set("Cache-Control","no-store");

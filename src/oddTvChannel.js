@@ -31,6 +31,16 @@ function init(db) {
       presented_at TEXT NOT NULL,
       PRIMARY KEY(show_id,product_id)
     );
+    CREATE TABLE IF NOT EXISTS odd_tv_broadcast_control(
+      id INTEGER PRIMARY KEY CHECK(id=1),
+      desired_state TEXT NOT NULL DEFAULT 'stopped' CHECK(desired_state IN ('running','stopped')),
+      actual_state TEXT NOT NULL DEFAULT 'offline' CHECK(actual_state IN ('offline','starting','running','stopped','error')),
+      requested_at TEXT NOT NULL,
+      last_seen TEXT,
+      detail TEXT NOT NULL DEFAULT ''
+    );
+    INSERT OR IGNORE INTO odd_tv_broadcast_control(id,desired_state,actual_state,requested_at)
+      VALUES(1,'stopped','offline',CURRENT_TIMESTAMP);
   `);
 }
 function validateProducts(db,market,ids) {
@@ -183,9 +193,38 @@ function markProductPresented(db,showId,productId,now=Date.now()) {
     "ON CONFLICT(show_id,product_id) DO UPDATE SET presented_at=excluded.presented_at"
   ).run(showId,productId,new Date(now).toISOString()).changes===1;
 }
+function setBroadcastDesired(db,state,now=Date.now()) {
+  if(!["running","stopped"].includes(state))throw new Error("INVALID_BROADCAST_STATE");
+  db.prepare(
+    "INSERT INTO odd_tv_broadcast_control(id,desired_state,actual_state,requested_at,last_seen,detail) " +
+    "VALUES(1,?,'offline',?,NULL,'') " +
+    "ON CONFLICT(id) DO UPDATE SET desired_state=excluded.desired_state,requested_at=excluded.requested_at"
+  ).run(state,new Date(now).toISOString());
+  return getBroadcastControl(db,now);
+}
+function getBroadcastControl(db,now=Date.now()) {
+  const row=db.prepare("SELECT * FROM odd_tv_broadcast_control WHERE id=1").get();
+  if(!row)return {desired_state:"stopped",actual_state:"offline",controller_online:false,last_seen:null,detail:""};
+  const seen=Date.parse(row.last_seen||"");
+  const online=Number.isFinite(seen)&&now-seen<30*1000;
+  return {
+    desired_state:row.desired_state,
+    actual_state:online?row.actual_state:"offline",
+    controller_online:online,
+    last_seen:row.last_seen,
+    detail:row.detail||"",
+  };
+}
+function updateBroadcastHeartbeat(db,{state,detail=""},now=Date.now()) {
+  if(!["starting","running","stopped","error"].includes(state))throw new Error("INVALID_BROADCAST_HEARTBEAT");
+  db.prepare(
+    "UPDATE odd_tv_broadcast_control SET actual_state=?,last_seen=?,detail=? WHERE id=1"
+  ).run(state,new Date(now).toISOString(),String(detail||"").slice(0,240));
+  return getBroadcastControl(db,now);
+}
 function markSent(db,showId,questionId,now=Date.now()) {
   return db.prepare(
     "UPDATE odd_tv_chat SET status='sent',sent_at=? WHERE id=? AND show_id=? AND status='queued'"
   ).run(new Date(now).toISOString(),questionId,showId).changes===1;
 }
-module.exports={SHOW_MINUTES,init,validateProducts,pickProducts,createShow,startShow,currentShow,workerShow,currentProduct,publicShow,postQuestion,messages,nextQuestion,productPresentationDue,markProductPresented,markSent};
+module.exports={SHOW_MINUTES,init,validateProducts,pickProducts,createShow,startShow,currentShow,workerShow,currentProduct,publicShow,postQuestion,messages,nextQuestion,productPresentationDue,markProductPresented,setBroadcastDesired,getBroadcastControl,updateBroadcastHeartbeat,markSent};
