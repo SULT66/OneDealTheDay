@@ -181,9 +181,26 @@ def main():
     frame_count=0
     motion_dir=Path(args.motion_dir).expanduser()
     motion_paths=sorted(motion_dir.glob("*.mp4")) if motion_dir.is_dir() else []
+    # idle_05.mp4 is the prepared walk-in scene: play it once at stream start,
+    # then exclude it from the recurring breathing/blinking/gesture rotation.
+    entrance_path=motion_dir/"idle_05.mp4"
+    if not entrance_path.is_file():
+        entrance_path=None
+    if entrance_path:
+        motion_paths=[path for path in motion_paths if path!=entrance_path]
     motion_index=0
     motion_frames=[]
     motion_frame_index=0
+    active_motion_is_entrance=False
+    entry_pending=bool(entrance_path)
+    if entrance_path:
+        try:
+            motion_frames=decode_motion(entrance_path,width,height)
+            active_motion_is_entrance=True
+            print("MOTION_ENTRANCE_PLAYING_ONCE",entrance_path.name,flush=True)
+        except Exception as exc:
+            entry_pending=False
+            print("MOTION_ENTRANCE_SKIPPED",type(exc).__name__,flush=True)
     next_motion_at=time.monotonic()
     if motion_paths:
         print("MOTION_CLIPS_FOUND",len(motion_paths),str(motion_dir),flush=True)
@@ -225,15 +242,14 @@ def main():
                 name,info,frames,audio=prepared
                 current=(name,info,frames,audio)
                 frame_count=0
-                motion_frames=[]
-                motion_frame_index=0
-                print("CHLOE_SPEAKING",name.name,flush=True)
+                print("CHLOE_SPEECH_READY",name.name,flush=True)
             if current is None and time.monotonic()>=next_job_check:
                 if decode_thread is None or not decode_thread.is_alive():
                     decode_thread=threading.Thread(target=prepare_next_job,daemon=True)
                     decode_thread.start()
                     next_job_check=time.monotonic()+1.0
-            can_play=current is not None and time.time()>=float(current[1].get("play_after",0))
+            can_play=(current is not None and not entry_pending and
+                      time.time()>=float(current[1].get("play_after",0)))
             if can_play:
                 path,info,frames,audio=current
                 index=min(frame_count,len(frames)-1)
@@ -252,6 +268,7 @@ def main():
                     try:
                         motion_frames=decode_motion(candidate,width,height)
                         motion_frame_index=0
+                        active_motion_is_entrance=False
                         print("MOTION_CLIP_PLAYING",candidate.name,flush=True)
                     except Exception as exc:
                         print("MOTION_CLIP_SKIPPED",candidate.name,type(exc).__name__,flush=True)
@@ -261,10 +278,13 @@ def main():
                     if motion_frame_index>=len(motion_frames):
                         motion_frames=[]
                         motion_frame_index=0
-                        # Rotate through the available breathing/blinking/
-                        # gesture clips with a short pause; never loop one
-                        # motion video as the entire broadcast.
-                        next_motion_at=time.monotonic()+args.motion_every_seconds
+                        if active_motion_is_entrance:
+                            entry_pending=False
+                            active_motion_is_entrance=False
+                            print("MOTION_ENTRANCE_COMPLETE",flush=True)
+                        # Continue the idle motion rotation immediately, without
+                        # replaying the walk-in scene or freezing on a still frame.
+                        next_motion_at=time.monotonic()
                 else:
                     frame=cv2.imread(str(images[idle_idx%len(images)]))
                     idle_idx+=1
