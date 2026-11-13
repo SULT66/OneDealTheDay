@@ -139,9 +139,13 @@ export function ODDTVConsole({adminKey}:{adminKey:string}) {
               : "Enter the admin key to check Diana’s stream controller."}
             {broadcast?.detail?" · "+broadcast.detail:""}
           </p>
+          {broadcast&&!broadcast.controller_online?<p className="mt-1 text-xs text-fg-muted">
+            Run the one-time setup on your PC to install the controller on Diana:{" "}
+            <a className="underline" href="https://raw.githubusercontent.com/SULT66/OneDealTheDay/main/scripts/install-odd-live-button-control.ps1" target="_blank" rel="noreferrer">download PowerShell setup</a>.
+          </p>:null}
         </div>
         <div className="flex flex-wrap gap-2">
-          <button type="button" disabled={controlBusy||broadcast?.desired_state==="running"} onClick={()=>void setBroadcastState("running")} className="rounded-full border border-border px-4 py-2 text-sm font-semibold text-fg disabled:opacity-50">
+          <button type="button" disabled={controlBusy||Boolean(broadcast?.controller_online&&broadcast.desired_state==="running"&&broadcast.actual_state!=="error")} onClick={()=>void setBroadcastState("running")} className="rounded-full border border-border px-4 py-2 text-sm font-semibold text-fg disabled:opacity-50">
             {controlBusy?"Sending…":"Start stream"}
           </button>
           <button type="button" disabled={controlBusy||broadcast?.desired_state==="stopped"} onClick={()=>void setBroadcastState("stopped")} className="rounded-full border border-red-300 px-4 py-2 text-sm font-semibold text-red-700 disabled:opacity-50">
