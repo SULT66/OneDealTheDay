@@ -4423,8 +4423,8 @@ app.post("/api/admin/odd-tv/show/:id/start",admin,(req,res)=>{
   res.set("Cache-Control","no-store");
   if(!oddTvEnabled)return res.status(503).json({error:"ODD TV disabled."});
   try{
-    const state=oddTv.startShow(db,Number(req.params.id),{now:Date.now()});
-    return res.json({...state,state:"live"});
+    const state=oddTv.startShow(db,Number(req.params.id),{now:Date.now(),warmupMs:5*60*1000});
+    return res.json(state);
   }catch(error){return res.status(409).json({error:error.message});}
 });
 app.post("/api/admin/odd-tv/show/:id/stop",admin,(req,res)=>{
@@ -4438,8 +4438,9 @@ app.post("/api/odd-tv/worker/next",oddWorkerAuth,async(req,res)=>{
   res.set("Cache-Control","no-store");
   if(!oddTvEnabled)return res.json({kind:"not_live"});
   const marketCode=normalizeMarket(req.body?.market)||"us";
-  const show=currentTv(marketCode);
-  if(!show)return res.json({kind:"not_live"});
+  const workerState=oddTv.workerShow(db,marketCode,Date.now());
+  if(!workerState)return res.json({kind:"not_live"});
+  const {show,opening}=workerState;
   const key="tv:"+show.id;
   if(oddTvLeases.has(key))return res.json({kind:"busy"});
   const question=oddTv.nextQuestion(db,show.id);
@@ -4447,9 +4448,9 @@ app.post("/api/odd-tv/worker/next",oddWorkerAuth,async(req,res)=>{
   if(!listing)return res.status(503).json({error:"No current published product."});
   // Viewer questions take priority. When the queue is empty, narrate each
   // featured product once so the show opens with Chloe instead of silent idle.
-  if(!question&&oddTv.hasPresentedProduct(db,show.id,listing.id))return res.json({kind:"idle"});
+  if(!question&&!oddTv.productPresentationDue(db,show.id,listing.id))return res.json({kind:"idle"});
   const lease=oddTvLeases.acquire(key,question?.id||null,{
-    kind:question?"question":"presentation",productId:listing.id,
+    kind:question?"question":"presentation",productId:listing.id,opening,
   });
   if(!lease)return res.json({kind:"busy"});
   try {
@@ -4471,7 +4472,7 @@ app.post("/api/odd-tv/worker/next",oddWorkerAuth,async(req,res)=>{
     });
     return res.json({
       kind:question?"question":"presentation",
-      show_id:show.id,drop_key:key,question_id:question?.id||null,
+      show_id:show.id,drop_key:key,question_id:question?.id||null,opening,
       product_id:listing.id,spoken_text:speech,
       lease_token:lease.token,
       lease_expires_at:new Date(lease.expiresAt).toISOString(),
@@ -4481,6 +4482,25 @@ app.post("/api/odd-tv/worker/next",oddWorkerAuth,async(req,res)=>{
     console.error("[odd-tv] turn preparation failed",error.message);
     return res.status(503).json({error:"Unable to prepare presenter turn."});
   }
+});
+app.post("/api/odd-tv/worker/prepared",oddWorkerAuth,(req,res)=>{
+  res.set("Cache-Control","no-store");
+  const id=Number(String(req.body?.drop_key||"").match(/^tv:([0-9]+)$/)?.[1]);
+  if(!oddTvEnabled||!Number.isSafeInteger(id)||id<=0)
+    return res.status(400).json({error:"Invalid show identifier."});
+  const key="tv:"+id;
+  const token=String(req.body?.lease_token||"");
+  const lease=oddTvLeases.check(key,token);
+  if(!lease||lease.metadata?.opening!==true)
+    return res.status(409).json({error:"Opening lease expired or invalid."});
+  const show=db.prepare("SELECT * FROM odd_tv_shows WHERE id=? AND status='live'").get(id);
+  if(!show||Date.parse(show.start_at)<=Date.now())
+    return res.status(409).json({error:"Show is no longer preparing."});
+  const start=Date.now()+10*1000;
+  const end=start+oddTv.SHOW_MINUTES*60*1000;
+  db.prepare("UPDATE odd_tv_shows SET start_at=?,end_at=? WHERE id=? AND status='live'")
+    .run(new Date(start).toISOString(),new Date(end).toISOString(),id);
+  return res.json({ok:true,play_after:new Date(start).toISOString()});
 });
 app.post("/api/odd-tv/worker/ack",oddWorkerAuth,(req,res)=>{
   res.set("Cache-Control","no-store");
