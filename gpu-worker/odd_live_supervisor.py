@@ -60,6 +60,30 @@ def port_open(port):
         return False
 
 
+def stream_available():
+    """Return true only when MediaMTX can describe the live RTSP path."""
+    try:
+        result = subprocess.run(
+            ["ffprobe", "-rtsp_transport", "tcp", "-rw_timeout", "2000000",
+             "-v", "error", "-show_entries", "stream=codec_name",
+             "-of", "default=nw=1:nk=1", RTSP_URL],
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            text=True, timeout=4, check=False,
+        )
+        return result.returncode == 0 and "h264" in result.stdout.split()
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+
+
+def start_broadcaster(log):
+    return subprocess.Popen(
+        [sys.executable, "-u", str(ROOT / "gpu-worker" / "odd_live_program.py"),
+         "--rtsp", RTSP_URL, "--ack-delivered"],
+        cwd=str(ROOT), env=os.environ.copy(), stdout=log, stderr=subprocess.STDOUT,
+        start_new_session=True,
+    )
+
+
 def start_processes(log):
     stream_dir = ROOT / "stream-server"
     media = stream_dir / "mediamtx"
@@ -91,12 +115,7 @@ def start_processes(log):
         cwd=str(ROOT), env=os.environ.copy(), stdout=log, stderr=subprocess.STDOUT,
         start_new_session=True,
     )
-    processes["broadcaster"] = subprocess.Popen(
-        [sys.executable, "-u", str(broadcaster),
-         "--rtsp", RTSP_URL, "--ack-delivered"],
-        cwd=str(ROOT), env=os.environ.copy(), stdout=log, stderr=subprocess.STDOUT,
-        start_new_session=True,
-    )
+    processes["broadcaster"] = start_broadcaster(log)
     return processes
 
 
@@ -124,6 +143,10 @@ def main():
     processes = {}
     last_restart = 0.0
     last_detail = ""
+    publisher_started_at = 0.0
+    last_stream_check = 0.0
+    stream_missing_since = 0.0
+    publisher_ok = False
     print("ODD_LIVE_SUPERVISOR_READY", flush=True)
     try:
         while True:
@@ -141,6 +164,10 @@ def main():
                         try:
                             processes = start_processes(log)
                             last_restart = time.monotonic()
+                            publisher_started_at = last_restart
+                            last_stream_check = 0.0
+                            stream_missing_since = 0.0
+                            publisher_ok = False
                             last_detail = ""
                         except Exception as exc:
                             last_restart = time.monotonic()
@@ -151,7 +178,33 @@ def main():
                         len(processes) == 3 and
                         all(proc is None or proc.poll() is None for proc in processes.values())
                     )
-                    state = "running" if alive else ("error" if last_detail else "starting")
+                    now_mono = time.monotonic()
+                    if alive and now_mono - last_stream_check >= 10:
+                        last_stream_check = now_mono
+                        publisher_ok = stream_available()
+                        if publisher_ok:
+                            stream_missing_since = 0.0
+                            if last_detail.startswith("RTSP publisher"):
+                                last_detail = ""
+                        elif now_mono - publisher_started_at >= 15:
+                            if not stream_missing_since:
+                                stream_missing_since = now_mono
+                            elif now_mono - stream_missing_since >= 20:
+                                last_detail = "RTSP publisher missing; restarting Chloe broadcaster"
+                                print("ODD_LIVE_RTSP_MISSING_RESTARTING", flush=True)
+                                old = processes.get("broadcaster")
+                                if old is not None and old.poll() is None:
+                                    old.terminate()
+                                    try:
+                                        old.wait(timeout=5)
+                                    except subprocess.TimeoutExpired:
+                                        old.kill()
+                                        old.wait(timeout=2)
+                                processes["broadcaster"] = start_broadcaster(log)
+                                publisher_started_at = now_mono
+                                stream_missing_since = 0.0
+                                publisher_ok = False
+                    state = "running" if alive and publisher_ok else ("error" if last_detail else "starting")
                 elif desired == "stopped":
                     if processes:
                         stop_processes(processes)
