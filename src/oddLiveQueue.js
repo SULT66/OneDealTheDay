@@ -55,6 +55,11 @@ function createProducerLeases({ttlMs=60*60*1000,now=()=>Date.now()}={}) {
       return [...pending.values()].some(lease=>lease.dropId===dropId&&
         (Array.isArray(lease.questionId)?lease.questionId:[lease.questionId]).some(id=>Number(id)===Number(questionId)));
     },
+    hasPendingSlot(dropId,slotMinute) {
+      cleanup();
+      return [...active.values(),...pending.values()].some(lease=>
+        lease.dropId===dropId&&Number(lease.metadata?.slotMinute)===Number(slotMinute));
+    },
   };
 }
 module.exports={createProducerLeases};
