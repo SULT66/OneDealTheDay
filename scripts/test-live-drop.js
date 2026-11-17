@@ -440,13 +440,10 @@ async function main() {
      escapes the check below entirely — which is the one thing this exists to
      prevent, and it nearly happened the day the media route was added. */
   const adminRoutes = serverSource.match(/app\.(?:get|post|patch|delete)\("\/api\/admin\/live-drops[^"]*", *[a-z]+/g) || [];
-  /* Eight since Chloe's script became editable on its own route. */
-  assert.strictEqual(adminRoutes.length, 8, "the set of admin Live Drop routes changed");
+  /* The legacy host-script route was moved to the independent ODD Live TV show. */
+  assert.strictEqual(adminRoutes.length, 7, "the set of admin Live Drop routes changed");
   const hostRoutes = serverSource.match(/app\.(?:get|post|patch|delete)\("\/api\/admin\/live-host[^"]*", *[a-z]+/g) || [];
-  assert(hostRoutes.length >= 4, "the host console routes are missing");
-  for (const route of hostRoutes) {
-    assert(/, *admin$/.test(route), `a host console route is not behind the key: ${route}`);
-  }
+  assert.strictEqual(hostRoutes.length, 0, "legacy Live Drop host routes remain");
   for (const route of adminRoutes) {
     assert(/, *admin$/.test(route), `an admin Live Drop route is not behind the key: ${route}`);
   }
