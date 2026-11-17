@@ -2,6 +2,7 @@
 
 import {useEffect,useRef,useState} from "react";
 import {ODDLiveTvExperience} from "./ODDLiveTvExperience";
+import styles from "./ODDLiveChannel.module.css";
 
 /**
  * Public ODD Live TV stage. The iframe keeps MediaMTX's HLS/WebRTC playback
@@ -46,21 +47,29 @@ export function ODDLiveChannel({embedUrl,market}:{embedUrl?:string;market:string
     <section
       ref={stageRef}
       aria-label="ODD Live TV"
-      className={fullscreen
-        ?"fixed inset-0 z-[100] h-screen w-screen overflow-auto bg-black p-0 text-white"
-        :compact
-          ?"fixed bottom-4 right-4 z-[80] w-[min(92vw,360px)] overflow-hidden rounded-xl border border-white/20 bg-[#061224] text-white shadow-2xl"
-          :"mx-auto w-full px-3 pt-5 sm:px-6 "+(expanded?"max-w-7xl":"max-w-5xl")}
+      className={[styles.channel, compact&&!fullscreen ? styles.mini : "", fullscreen ? styles.fullscreen : "", expanded ? styles.expanded : ""].join(" ")}
     >
-      <div className={"relative overflow-hidden bg-[#061224] text-white "+(compact||fullscreen?"":"rounded-2xl border border-white/10 shadow-xl")}>
-        {!compact&&!fullscreen?<div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-          <div>
-            <h2 className="text-lg font-black tracking-tight sm:text-xl">ODD Live TV</h2>
-            <p className="text-xs text-white/65">AI shopping television — watch products as they are presented</p>
+      <div className={styles.shell}>
+        {!compact&&!fullscreen?<header className={styles.header}>
+          <div className={styles.heading}>
+            <span className={styles.brandMark} aria-hidden="true">ODD<span>▶</span></span>
+            <div>
+              <p className={styles.eyebrow}>ONEDAILYDROP</p>
+              <h2>Live Drop</h2>
+            </div>
           </div>
-          <span className="rounded-full border border-white/20 px-3 py-1 text-xs font-semibold">Shopping TV</span>
-        </div>:null}
-        <div className="relative aspect-video w-full bg-black">
+          <p className={styles.headerNote}>Discover it. Ask about it. Make it yours.</p>
+        </header>:null}
+        <ODDLiveTvExperience
+          market={market}
+          compact={compact&&!fullscreen}
+          chatOpen={chatOpen}
+          onChatToggle={()=>setChatOpen(value=>!value)}
+          onFullscreen={()=>void toggleFullscreen()}
+          onSizeToggle={()=>setExpanded(value=>!value)}
+          onCompactToggle={toggleCompact}
+          expanded={expanded}
+        >
           <iframe
             src={playerUrl}
             title="ODD Live shopping television stream"
@@ -68,19 +77,9 @@ export function ODDLiveChannel({embedUrl,market}:{embedUrl?:string;market:string
             allow="autoplay; fullscreen; picture-in-picture"
             allowFullScreen
             referrerPolicy="strict-origin-when-cross-origin"
-            className="absolute inset-0 h-full w-full border-0"
+            className={styles.player}
           />
-          <ODDLiveTvExperience
-            market={market}
-            compact={compact||fullscreen}
-            chatOpen={chatOpen}
-            onChatToggle={()=>setChatOpen(value=>!value)}
-            onFullscreen={()=>void toggleFullscreen()}
-            onSizeToggle={()=>setExpanded(value=>!value)}
-            onCompactToggle={toggleCompact}
-            expanded={expanded}
-          />
-        </div>
+        </ODDLiveTvExperience>
       </div>
     </section>
   );

@@ -1,6 +1,7 @@
 "use client";
 
-import {useCallback,useEffect,useState,type FormEvent} from "react";
+import {useCallback,useEffect,useState,type ReactNode,type FormEvent} from "react";
+import styles from "./ODDLiveChannel.module.css";
 import {analyticsSessionId} from "@/lib/analyticsSession";
 
 type Product = {
@@ -15,7 +16,7 @@ type Show = {
 };
 type ChatLine = {id:number;author:string;text:string;created_at:string;status:string};
 type Props = {
-  market:string;compact?:boolean;chatOpen?:boolean;onChatToggle?:()=>void;
+  children:ReactNode;market:string;compact?:boolean;chatOpen?:boolean;onChatToggle?:()=>void;
   onFullscreen?:()=>void;onSizeToggle?:()=>void;onCompactToggle?:()=>void;expanded?:boolean;
 };
 
@@ -27,7 +28,7 @@ const clock=(seconds:number)=>{
 };
 
 export function ODDLiveTvExperience({
-  market,compact=false,chatOpen=false,onChatToggle,onFullscreen,onSizeToggle,
+  children,market,compact=false,chatOpen=false,onChatToggle,onFullscreen,onSizeToggle,
   onCompactToggle,expanded=false,
 }:Props) {
   const [show,setShow]=useState<Show|null>(null);
@@ -122,74 +123,71 @@ export function ODDLiveTvExperience({
     ?new Intl.NumberFormat("en-US",{style:"currency",currency:product.currency}).format(product.price)
     :null;
 
+  const live=show?.state==="live";
   return (
-    <>
-      <div className="pointer-events-none absolute left-0 top-0 z-20 aspect-video w-full">
-        <div className="absolute left-3 right-3 top-3 flex items-center justify-between gap-2 sm:left-5 sm:right-5 sm:top-4">
-          <div className="pointer-events-auto flex items-center gap-2 rounded-full border border-red-300/40 bg-red-700/90 px-3 py-1.5 text-xs font-black uppercase tracking-wider text-white shadow-lg">
-            <span className="relative flex h-2.5 w-2.5">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-white/90"/>
-              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-white"/>
-            </span>
-            LIVE
-            {show?<span className="font-mono tabular-nums">{clock(remaining)}</span>:null}
-          </div>
-          <div className="pointer-events-auto flex items-center gap-1.5">
-            {show?<span className="rounded-full bg-black/65 px-3 py-1.5 text-xs font-semibold text-white shadow-lg" aria-live="polite">◉ {viewerCount} watching</span>:null}
-            <button type="button" onClick={onSizeToggle} className="rounded-full bg-black/65 px-3 py-1.5 text-xs font-bold text-white shadow-lg hover:bg-black/85" aria-label={expanded?"Return to normal size":"Enlarge live player"}>
-              {expanded?"−":"＋"}
-            </button>
-            <button type="button" onClick={onFullscreen} className="rounded-full bg-black/65 px-3 py-1.5 text-xs font-bold text-white shadow-lg hover:bg-black/85" aria-label="Watch full screen">⛶</button>
-            <button type="button" onClick={onCompactToggle} className="rounded-full bg-black/65 px-3 py-1.5 text-xs font-bold text-white shadow-lg hover:bg-black/85" aria-label={compact?"Restore live player":"Minimize live player"}>{compact?"↗":"−"}</button>
+    <div className={[styles.experience,compact?styles.compact:""].join(" ")}>
+      <div className={styles.stage}>
+        {children}
+        <div className={styles.onAir} aria-live="polite">
+          <span className={live?styles.liveBadge:styles.offlineBadge}><span/>{live?"LIVE":"STANDBY"}</span>
+          {show?<span className={styles.timer} aria-label="Time remaining">{clock(remaining)}</span>:null}
+        </div>
+        {show?<span className={styles.viewers}><LiveIcon name="viewers"/>{viewerCount}<span> watching</span></span>:null}
+        {!show?<p className={styles.waiting}>The next discovery is coming soon.</p>:null}
+        <div className={styles.toolbar}>
+          <span className={styles.stageLabel}>ODD <strong>LIVE</strong></span>
+          <div className={styles.controls}>
+            {compact?<button type="button" onClick={onChatToggle} aria-label={chatOpen?"Close chat":"Open chat"} aria-expanded={chatOpen}><LiveIcon name="chat"/></button>:null}
+            {!compact?<button type="button" onClick={onSizeToggle} aria-label={expanded?"Return to normal size":"Enlarge live player"} aria-pressed={expanded} title={expanded?"Normal size":"Theater mode"}><LiveIcon name="size"/></button>:null}
+            <button type="button" onClick={onFullscreen} aria-label="Watch full screen" title="Full screen"><LiveIcon name="fullscreen"/></button>
+            <button type="button" onClick={onCompactToggle} aria-label={compact?"Restore live player":"Minimize live player"} title={compact?"Restore player":"Mini player"}><LiveIcon name={compact?"restore":"minimize"}/></button>
           </div>
         </div>
-
-        {compact&&!chatOpen?(
-          <button type="button" onClick={onChatToggle} className="pointer-events-auto absolute bottom-3 right-3 rounded-full bg-black/75 px-3 py-2 text-xs font-bold text-white shadow-lg">
-            {"Chat"+(messages.length?" · "+messages.length:"")}
-          </button>
-        ):null}
-
-        {(!compact||chatOpen)?(
-          <aside aria-label="ODD Live audience chat" className="pointer-events-auto absolute bottom-10 right-2 flex max-h-[47%] w-[min(44%,330px)] flex-col overflow-hidden rounded-xl border border-white/25 bg-[#061224]/85 p-2.5 text-white shadow-xl backdrop-blur-md sm:bottom-12 sm:right-4 sm:p-3">
-            <div className="flex items-center justify-between gap-2">
-              <div>
-                <h3 className="text-sm font-black">Ask the host live</h3>
-                <p className="text-[10px] text-white/65">Questions are answered in scheduled breaks</p>
-              </div>
-              {compact?<button type="button" onClick={onChatToggle} className="rounded-full px-2 py-1 text-lg leading-none text-white/80" aria-label="Close chat">×</button>:null}
-            </div>
-            <div role="log" aria-live="polite" className="mt-2 min-h-8 flex-1 space-y-1.5 overflow-y-auto text-xs">
-              {messages.length===0?<p className="text-white/65">No questions yet. Be the first.</p>:messages.slice(-8).map(msg=>
-                <p key={msg.id} className="rounded-lg bg-white/10 px-2 py-1.5">
-                  <span className="font-bold">{msg.author}: </span>{msg.text}
-                  <span className="ml-1 text-[10px] text-lime-200/80">
-                    {msg.status==="sent"?"Answered":msg.status==="queued"?"Queued for Q&A":""}
-                  </span>
-                </p>
-              )}
-            </div>
-            <form onSubmit={sendQuestion} className="mt-2 flex gap-1.5">
-              <label htmlFor="odd-tv-question" className="sr-only">Your product question</label>
-              <input id="odd-tv-question" className="min-w-0 flex-1 rounded-lg border border-white/20 bg-white/10 px-2.5 py-2 text-xs text-white placeholder:text-white/45" placeholder="Ask about this product…" maxLength={200} value={draft} disabled={!show||sending} onChange={event=>setDraft(event.target.value)}/>
-              <button disabled={!show||sending||draft.trim().length<2} type="submit" className="shrink-0 rounded-lg bg-lime-300 px-3 py-2 text-xs font-black text-black disabled:opacity-50">{sending?"…":"Send"}</button>
-            </form>
-            {notice?<p role="status" className="mt-1 text-[10px] text-white/75">{notice}</p>:null}
-          </aside>
-        ):null}
-
-        {!show?<div className="pointer-events-auto absolute bottom-4 left-4 rounded-lg bg-black/70 px-3 py-2 text-xs text-white">Waiting for the next scheduled ODD Live show.</div>:null}
-
-        {!compact&&product?<div className="pointer-events-auto absolute bottom-10 left-2 max-h-[34%] w-[min(44%,480px)] overflow-hidden rounded-xl border border-white/20 bg-[#061224]/85 p-2.5 text-white shadow-xl backdrop-blur-md sm:bottom-12 sm:left-4 sm:w-[min(48%,480px)] sm:p-3">
-          <p className="mb-1 text-[9px] font-black tracking-wider text-lime-300 sm:text-[10px]">PRODUCT {show?.product_index||1} OF {show?.product_count||2}</p>
-          <h3 className="line-clamp-2 text-[11px] font-bold leading-snug sm:text-sm">{product.title}</h3>
-          <div className="mt-1 flex items-center justify-between gap-2">
-            <span className="truncate text-[9px] text-white/70 sm:text-xs">{product.brand||product.retailer_name||"Featured product"}{price?" · "+price:""}</span>
-            {product.affiliate_url?<a href={product.affiliate_url} target="_blank" rel="noopener sponsored" className="shrink-0 rounded-full bg-lime-300 px-2.5 py-1 text-[9px] font-black text-black sm:px-3 sm:text-xs">Shop</a>:null}
-          </div>
-        </div>:null}
       </div>
-
-    </>
+      {(!compact||chatOpen)?<aside className={styles.sidebar} aria-label="Live shopping and audience chat">
+        {!compact?<section className={styles.productSection} aria-label="Currently featured product">
+          <div className={styles.sectionLabel}><span className={styles.accentDot}/>{product?"IN THE SPOTLIGHT":"COMING UP"}
+            {show?<span className={styles.productCount}>{show.product_index||1} / {show.product_count||2}</span>:null}
+          </div>
+          {product?<>
+            {product.image_url?<div className={styles.productImage}><img src={product.image_url} alt={product.title} loading="eager"/></div>:null}
+            <p className={styles.retailer}>{product.retailer_name||product.brand||"Featured find"}</p>
+            <h3 className={styles.productTitle}>{product.title}</h3>
+            {price&&product.price_verified?<p className={styles.price}>{price}</p>:null}
+            {product.affiliate_url?<a href={product.affiliate_url} target="_blank" rel="noopener sponsored" className={styles.shopButton}>Shop this find <LiveIcon name="arrow"/></a>:null}
+            <p className={styles.shopNote}>Purchase on the store’s website. Final price and availability may change.</p>
+          </>:<div className={styles.emptyProduct}><LiveIcon name="bag"/><h3>Your next great find</h3><p>Featured product details will appear here when the show starts.</p></div>}
+        </section>:null}
+        <section className={styles.chat} aria-label="ODD Live audience chat">
+          <div className={styles.chatHeading}><div><h3>Ask the host <span>Q&A</span></h3><p>Answers during the show’s Q&A breaks</p></div>{compact?<button type="button" className={styles.closeChat} onClick={onChatToggle} aria-label="Close chat">×</button>:<LiveIcon name="chat"/>}</div>
+          <div role="log" aria-live="polite" className={styles.messages}>
+            {messages.length===0?<div className={styles.emptyChat}><p>Curious about this find?</p><span>Ask a question and join the conversation.</span></div>:messages.slice(-8).map(msg=>
+              <div key={msg.id} className={styles.message}><span className={styles.avatar} aria-hidden="true">{msg.author.slice(0,1).toUpperCase()}</span><div><p><strong>{msg.author}</strong><span>{msg.status==="sent"?"Answered":msg.status==="queued"?"Queued":""}</span></p><p>{msg.text}</p></div></div>
+            )}
+          </div>
+          <form onSubmit={sendQuestion} className={styles.questionForm}>
+            <label htmlFor="odd-tv-question" className="sr-only">Your product question</label>
+            <input id="odd-tv-question" placeholder={show?"Ask about this find…":"Chat opens when the show starts"} maxLength={200} value={draft} disabled={!show||sending} onChange={event=>setDraft(event.target.value)}/>
+            <button disabled={!show||sending||draft.trim().length<2} type="submit" aria-label="Send question">{sending?"…":<LiveIcon name="send"/>}</button>
+          </form>
+          {notice?<p role="status" className={styles.notice}>{notice}</p>:null}
+        </section>
+      </aside>:null}
+    </div>
   );
+}
+
+function LiveIcon({name}:{name:string}) {
+  const paths:Record<string,ReactNode>={
+    viewers:<><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></>,
+    fullscreen:<path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/>,
+    size:<><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 5v14m10-14v14"/></>,
+    minimize:<><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M13 12h6v5h-6z"/></>,
+    restore:<path d="M7 17 17 7M7 7h10v10"/>,
+    arrow:<path d="M4 12h16m-6-6 6 6-6 6"/>,
+    send:<><path d="m3 3 18 9-18 9 4-9-4-9Z"/><path d="M7 12h14"/></>,
+    chat:<path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5H4l-2 2V11.5a9.5 9.5 0 0 1 19 0Z"/>,
+    bag:<><path d="M5 8h14l2 13H3L5 8Z"/><path d="M8 8V6a4 4 0 0 1 8 0v2"/></>,
+  };
+  return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>;
 }

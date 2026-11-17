@@ -1,0 +1,106 @@
+.channel { width:100%; max-width:1120px; margin:0 auto; padding:28px 24px 0; color:var(--fg); }
+.expanded { max-width:1440px; }
+.shell { overflow:hidden; border:1px solid var(--border); border-radius:24px; background:var(--surface); box-shadow:var(--shadow-card); }
+.header { display:flex; align-items:center; justify-content:space-between; gap:20px; padding:20px 24px; border-bottom:1px solid var(--border); }
+.heading { display:flex; align-items:center; gap:12px; }
+.brandMark { display:flex; align-items:center; gap:4px; height:42px; padding:0 10px; border-radius:12px; background:var(--lime); color:var(--ink); font-size:16px; font-weight:900; letter-spacing:-1px; }
+.brandMark span { font-size:11px; }
+.eyebrow { margin:0 0 2px; color:var(--fg-muted); font-size:9px; font-weight:700; letter-spacing:2px; }
+.heading h2 { margin:0; font-size:23px; font-weight:800; letter-spacing:-.8px; line-height:1.15; }
+.headerNote { margin:0; font-size:12px; color:var(--fg-muted); }
+.experience { display:grid; grid-template-columns:minmax(0,1fr) 320px; }
+.stage { position:relative; min-width:0; min-height:520px; height:min(76vh,760px); overflow:hidden; background:#101110; color:white; }
+.player { position:absolute; inset:0; width:100%; height:100%; border:0; }
+.onAir { position:absolute; top:18px; left:18px; display:flex; align-items:center; gap:0; border:1px solid #ffffff28; border-radius:9px; overflow:hidden; background:#111c; box-shadow:0 2px 12px #0002; pointer-events:none; }
+.liveBadge,.offlineBadge { display:flex; align-items:center; gap:6px; padding:8px 10px; background:#dc302f; font-size:10px; font-weight:800; letter-spacing:.8px; }
+.liveBadge>span,.offlineBadge>span { height:6px; width:6px; border-radius:50%; background:white; }
+.offlineBadge { background:#434343; }
+.timer { padding:0 10px; font-size:11px; font-weight:600; font-variant-numeric:tabular-nums; }
+.viewers { position:absolute; top:18px; right:18px; display:flex; align-items:center; gap:6px; padding:7px 10px; border:1px solid #ffffff28; border-radius:9px; background:#111c; font-size:11px; pointer-events:none; }
+.viewers svg { width:14px; height:14px; }
+.waiting { position:absolute; bottom:72px; left:16px; right:16px; margin:0; padding:12px; border-radius:10px; background:#111c; font-size:13px; text-align:center; }
+.toolbar { position:absolute; bottom:0; left:0; right:0; display:flex; align-items:center; justify-content:space-between; padding:32px 16px 14px; background:linear-gradient(transparent,#000b); pointer-events:none; }
+.stageLabel { font-size:11px; font-weight:800; letter-spacing:1.5px; }
+.stageLabel strong { margin-left:4px; color:var(--lime); }
+.controls { display:flex; gap:6px; pointer-events:auto; }
+.controls button,.closeChat { display:grid; place-items:center; width:36px; height:36px; border:1px solid #ffffff36; border-radius:10px; color:white; background:#181818c9; cursor:pointer; transition:background .15s,color .15s; }
+.controls button:hover { color:var(--ink); background:var(--lime); }
+.controls button:focus-visible,.shopButton:focus-visible,.questionForm button:focus-visible,.closeChat:focus-visible { outline:3px solid var(--lime-deep); outline-offset:3px; }
+.sidebar { display:flex; min-width:0; flex-direction:column; border-left:1px solid var(--border); background:var(--surface); }
+.productSection { padding:20px; }
+.sectionLabel { display:flex; align-items:center; gap:6px; margin-bottom:14px; color:var(--fg-muted); font-size:9px; font-weight:800; letter-spacing:1.1px; }
+.accentDot { width:6px; height:6px; border-radius:50%; background:var(--lime-deep); }
+.productCount { margin-left:auto; font-variant-numeric:tabular-nums; letter-spacing:0; }
+.productImage { display:flex; align-items:center; justify-content:center; height:150px; margin-bottom:14px; padding:12px; border:1px solid var(--border); border-radius:14px; background:white; }
+.productImage img { max-width:100%; max-height:100%; object-fit:contain; }
+.retailer { margin:0 0 5px; color:var(--fg-muted); font-size:11px; }
+.productTitle { display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:3; overflow:hidden; margin:0; font-size:15px; font-weight:750; line-height:1.4; letter-spacing:-.2px; }
+.price { margin:10px 0 0; font-size:24px; font-weight:800; letter-spacing:-.7px; }
+.shopButton { display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:44px; margin-top:15px; padding:12px 16px; border-radius:12px; background:var(--lime); color:var(--ink); font-size:13px; font-weight:800; text-decoration:none; transition:background .15s; }
+.shopButton:hover { background:var(--lime-deep); }
+.shopNote { margin:8px 0 0; color:var(--fg-subtle); font-size:10px; line-height:1.5; }
+.emptyProduct { display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:200px; padding:20px 5px; text-align:center; }
+.emptyProduct>svg { width:32px; height:32px; color:var(--fg-muted); }
+.emptyProduct h3 { margin:12px 0 6px; font-size:16px; }
+.emptyProduct p { margin:0; font-size:12px; color:var(--fg-muted); line-height:1.6; }
+.chat { display:flex; flex:1; min-height:200px; flex-direction:column; padding:18px 20px; border-top:1px solid var(--border); }
+.chatHeading { display:flex; justify-content:space-between; align-items:center; gap:12px; }
+.chatHeading>svg { color:var(--fg-muted); }
+.chatHeading h3 { margin:0; font-size:14px; font-weight:800; letter-spacing:-.3px; }
+.chatHeading h3 span { margin-left:5px; padding:3px 5px; border-radius:4px; background:var(--bg); color:var(--fg-muted); font-size:8px; letter-spacing:.5px; }
+.chatHeading p { margin:5px 0 0; font-size:10px; color:var(--fg-subtle); }
+.messages { flex:1; min-height:65px; max-height:180px; overflow-y:auto; margin:16px 0; }
+.emptyChat { padding:8px 0; }
+.emptyChat p { margin:0 0 4px; font-size:12px; font-weight:600; }
+.emptyChat span { font-size:11px; color:var(--fg-muted); line-height:1.6; }
+.message { display:flex; align-items:flex-start; gap:8px; margin:0 0 12px; font-size:12px; }
+.avatar { display:grid; place-items:center; flex-shrink:0; width:26px; height:26px; border-radius:50%; background:var(--bg); color:var(--fg-muted); font-size:10px; font-weight:700; }
+.message>div { min-width:0; }
+.message p { margin:0; overflow-wrap:anywhere; line-height:1.6; }
+.message strong { font-size:10px; }
+.message p span { margin-left:6px; color:var(--fg-subtle); font-size:9px; }
+.questionForm { display:flex; align-items:center; gap:6px; padding:5px; border:1px solid var(--border-strong); border-radius:12px; background:var(--bg); }
+.questionForm:focus-within { border-color:var(--lime-deep); outline:2px solid var(--lime); outline-offset:1px; }
+.questionForm input { flex:1; width:0; min-width:0; padding:7px 4px 7px 7px; border:0; outline:none; background:transparent; color:var(--fg); font:inherit; font-size:12px; }
+.questionForm input::placeholder { color:var(--fg-subtle); }
+.questionForm button { display:grid; place-items:center; flex-shrink:0; width:34px; height:34px; border:0; border-radius:8px; background:var(--lime); color:var(--ink); cursor:pointer; }
+.questionForm button:disabled { background:var(--border); color:var(--fg-subtle); cursor:default; }
+.notice { margin:9px 0 0; color:var(--fg-muted); font-size:11px; line-height:1.5; }
+.closeChat { width:28px; height:28px; background:var(--bg); color:var(--fg); border-color:var(--border); }
+.mini { position:fixed; bottom:16px; right:16px; z-index:80; max-width:340px; width:calc(100vw - 32px); padding:0; }
+.mini .shell { border-radius:18px; box-shadow:var(--shadow-lift); }
+.compact { display:block; }
+.compact .stage { min-height:0; height:340px; }
+.compact .sidebar { border-left:0; }
+.compact .chat { min-height:220px; }
+.compact .viewers span { display:none; }
+.fullscreen { position:fixed; inset:0; z-index:100; max-width:none; height:100dvh; margin:0; padding:0; overflow:auto; background:var(--surface); }
+.fullscreen .shell { min-height:100%; border:0; border-radius:0; }
+.fullscreen .stage { min-height:0; height:100dvh; }
+.fullscreen .sidebar { max-height:100dvh; overflow-y:auto; }
+@media (min-width:1100px) { .expanded .experience { grid-template-columns:minmax(0,1fr) 360px; } }
+@media (max-width:760px) {
+  .channel { padding:16px 12px 0; }
+  .shell { border-radius:18px; }
+  .header { padding:16px; }
+  .heading h2 { font-size:20px; }
+  .headerNote { display:none; }
+  .experience { display:block; }
+  .stage { height:auto; min-height:0; aspect-ratio:4/5; max-height:75dvh; }
+  .sidebar { border-left:0; }
+  .productSection { position:relative; padding:18px; border-top:1px solid var(--border); }
+  .productImage { float:left; width:88px; height:100px; margin:0 14px 10px 0; padding:8px; border-radius:10px; }
+  .productTitle { font-size:14px; -webkit-line-clamp:3; }
+  .price { margin-top:5px; font-size:22px; }
+  .shopButton { clear:both; margin-top:14px; }
+  .shopNote { clear:both; }
+  .chat { min-height:225px; padding:18px; }
+  .messages { max-height:220px; }
+  .questionForm input { font-size:16px; }
+  .mini { padding:0; }
+  .mini .stage { height:300px; aspect-ratio:auto; }
+  .mini .questionForm input { font-size:16px; }
+  .fullscreen { padding:0; }
+  .fullscreen .stage { height:75dvh; aspect-ratio:auto; }
+  .fullscreen .sidebar { max-height:none; }
+}
