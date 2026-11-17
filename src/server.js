@@ -16,7 +16,7 @@ const c = require("./config");
 const { refreshProducts, localDate } = require("./refresh");
 const { runLinkHealthCheck } = require("./linkHealth");
 const {
-  dropState, hostGreeting, hostRevealLine, presentDrop,
+  dropState, presentDrop,
   sendDueReminders, sendStagedReminders, announceDropToSubscribers, sendLiveNowNotices,
   remindSubscribersBeforeStart,
 } = require("./liveDrop");
@@ -1211,21 +1211,8 @@ app.get("/api/live/current", (req, res) => {
   res.set("Cache-Control", "no-store").json({
     drop: presented ? {
       ...presented,
-      /* Chloe's tool is currently grounded to the US market in Tavus. Do not
-         offer her in another market until that tool receives a market input.
-
-         And off unless switched on: a private call each is not a broadcast.
-         Twenty viewers would be twenty different shows, and every one of them
-         a paid video call. What an audience watches together is the recorded
-         presentation in video_url or the stream in stream_embed_url. */
       /* Counted, not decorated. Every one of these is a page open right now. */
       watching: watchingNow(drop.id),
-      /* Empty until the drop opens, then the line the host is handed so she
-         announces the reveal instead of missing it. Her greeting is fixed when
-         the conversation starts, so somebody who began chatting in the waiting
-         room heard "the price opens in a moment" while the price was already
-         on the screen beside her. */
-      host_reveal_line: hostRevealLine(presented),
     } : null,
     server_now: new Date().toISOString(),
   });
@@ -3651,8 +3638,6 @@ const liveDropInput = (body) => {
       video_url: text(body.video_url, 1000),
       stream_embed_url: text(body.stream_embed_url, 1000),
       terms: text(body.terms, 2000),
-      host_script_intro: text(body.host_script_intro, 4000),
-      host_script_reveal: text(body.host_script_reveal, 2000),
     },
   };
 };
@@ -3754,8 +3739,6 @@ app.get("/api/admin/live-drops", admin, (req, res) => {
       preroll_video_url: row.preroll_video_url || "",
       video_url: row.video_url || "",
       stream_embed_url: row.stream_embed_url || "",
-      host_script_intro: row.host_script_intro || "",
-      host_script_reveal: row.host_script_reveal || "",
       stock_is_live: Boolean(row.stock_verified_at && now - Date.parse(row.stock_verified_at) <= 2 * 60 * 1000),
       click_label: liveDropLabel(row.drop_key),
       };
@@ -3772,11 +3755,11 @@ app.post("/api/admin/live-drops", admin, (req, res) => {
   db.prepare(`INSERT INTO live_drops(
     drop_key,market,title,brand,retailer_name,image_url,secondary_image_url,retail_price,drop_price,currency,
     quantity_total,quantity_remaining,start_at,end_at,member_early_access_seconds,
-    affiliate_url,preroll_video_url,video_url,stream_embed_url,terms,host_script_intro,host_script_reveal,published,created_at,updated_at
+    affiliate_url,preroll_video_url,video_url,stream_embed_url,terms,published,created_at,updated_at
   ) VALUES(
     @drop_key,@market,@title,@brand,@retailer_name,@image_url,@secondary_image_url,@retail_price,@drop_price,@currency,
     @quantity_total,@quantity_remaining,@start_at,@end_at,@member_early_access_seconds,
-    @affiliate_url,@preroll_video_url,@video_url,@stream_embed_url,@terms,@host_script_intro,@host_script_reveal,0,@created_at,@updated_at
+    @affiliate_url,@preroll_video_url,@video_url,@stream_embed_url,@terms,0,@created_at,@updated_at
   )`).run({...drop, drop_key:dropKey, created_at:nowIso, updated_at:nowIso});
 
   /* Drafted, not announced. Writing a drop and advertising it are separate
@@ -3952,7 +3935,6 @@ app.patch("/api/admin/live-drops/:key/media", admin, express.json({limit:"8kb"})
   return res.json({ok:true, ...fields});
 });
 
-/* The host console: what only the admin side may see and do. See src/liveHost.js. */
 /**
  * What people looked for, and what they looked for and did not find.
  *
@@ -4030,7 +4012,7 @@ app.post("/api/admin/odd-live/:key/preview-turn", admin, async (req, res) => {
 
 /**
  * ODD Live GPU producer API. OFF unless ODD_LIVE_WORKER_ENABLED=true.
- * This is separate from Tavus. Never expose the worker secret to the browser.
+ * Never expose the worker secret to the browser.
  * A message remains queued until the worker confirms its completed clip was aired.
  */
 const oddProducerLeases = require("./oddLiveQueue").createProducerLeases();
