@@ -249,13 +249,50 @@ debounced.requestSnapshot();
 debounced.requestSnapshot();
 debounced.requestSnapshot();
 
-setTimeout(() => {
+setTimeout(async () => {
   debounced.stop();
   assert.strictEqual(
     listSnapshots(hookedShared).length,
     1,
     "A burst of personal writes produced more than one snapshot",
   );
+  // Hold a completed local backup open while a second personal write arrives.
+  // Requests must remain runnable and the final durable copy must include it.
+  let release;
+  let started;
+  const waiting = new Promise(resolve => { release = resolve; });
+  const firstStarted = new Promise(resolve => { started = resolve; });
+  let backups = 0;
+  const onlineDb = {
+    backup: async (...args) => {
+      backups += 1;
+      await hooked.backup(...args);
+      if (backups === 1) {
+        started();
+        await waiting;
+      }
+    },
+    exec: () => { throw new Error("Scheduled backups must not use synchronous VACUUM"); },
+  };
+  const scheduled = startSnapshotSchedule(onlineDb, hookedShared, { intervalMs: 60_000, logger: quiet });
+  const firstBackup = scheduled.snapshotNow();
+  await firstStarted;
+  let responsive = false;
+  await new Promise(resolve => setImmediate(() => { responsive = true; resolve(); }));
+  assert(responsive, "The request thread must run while a backup is pending");
+  hooked.exec("CREATE TABLE backup_late_write (value TEXT)");
+  hooked.prepare("INSERT INTO backup_late_write VALUES (?)").run("kept");
+  const secondBackup = scheduled.snapshotNow("personal write during transfer");
+  release();
+  const finalFile = await secondBackup;
+  await firstBackup;
+  scheduled.stop();
+  assert.strictEqual(backups, 2, "A write during a transfer needs a serialized follow-up backup");
+  const durable = new Database(finalFile, { readonly: true });
+  assert.strictEqual(durable.prepare("SELECT value FROM backup_late_write").get().value, "kept");
+  assert.strictEqual(durable.pragma("integrity_check", { simple: true }), "ok");
+  durable.close();
+  assert(!fs.readdirSync(snapshotDir(hookedShared)).some(name => name.endsWith(".partial")));
   hooked.close();
 
   fs.rmSync(workspace, { recursive: true, force: true });

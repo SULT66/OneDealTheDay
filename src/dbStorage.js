@@ -1,5 +1,6 @@
 const fs = require("fs");
 const path = require("path");
+const os = require("os");
 
 /**
  * Keeps the database off Azure's network share.
@@ -13,8 +14,9 @@ const path = require("path");
  *
  * So the live database moves to the container's own disk, where writes behave
  * like writes, and the share goes back to being what it is good at: holding
- * files nobody is writing to concurrently. Snapshots are taken with
- * VACUUM INTO, which produces a complete consistent copy rather than a
+ * files nobody is writing to concurrently. Scheduled snapshots use SQLite
+ * online backup to a local file, then an asynchronous copy to the share.
+ * This produces a consistent copy rather than a
  * byte-for-byte image of a file that may be mid-write, and each one is written
  * under a temporary name and renamed into place, so a snapshot interrupted
  * halfway is never mistaken for a good one.
@@ -204,6 +206,33 @@ function writeSnapshot(db, sharedDir, { keep = DEFAULT_SNAPSHOT_KEEP, logger = c
   return target;
 }
 
+/** Back up in small local chunks, then transfer off the request thread. */
+async function writeSnapshotAsync(db, sharedDir, { keep = DEFAULT_SNAPSHOT_KEEP, logger = console } = {}) {
+  const temporary = await fs.promises.mkdtemp(path.join(os.tmpdir(), "odd-snapshot-"));
+  const local = path.join(temporary, "snapshot.db");
+  const dir = snapshotDir(sharedDir);
+  const target = path.join(dir, snapshotName());
+  const partial = `${target}${PARTIAL_SUFFIX}`;
+  try {
+    await db.backup(local, { progress: () => 100 });
+    await fs.promises.mkdir(dir, { recursive: true });
+    await fs.promises.copyFile(local, partial);
+    await fs.promises.rename(partial, target);
+    const names = (await fs.promises.readdir(dir))
+      .filter(name => name.startsWith(SNAPSHOT_PREFIX) && name.endsWith(SNAPSHOT_SUFFIX))
+      .sort().reverse().slice(Math.max(1, keep));
+    for (const name of names) {
+      await fs.promises.rm(path.join(dir, name), { force: true }).catch(error => {
+        logger.warn(`[db] could not remove old snapshot ${name}: ${error.message}`);
+      });
+    }
+    return target;
+  } finally {
+    await fs.promises.rm(partial, { force: true }).catch(() => {});
+    await fs.promises.rm(temporary, { recursive: true, force: true });
+  }
+}
+
 /**
  * Snapshots on a timer for as long as the process lives.
  *
@@ -225,15 +254,29 @@ function startSnapshotSchedule(
     personalWriteDelayMs = PERSONAL_WRITE_SNAPSHOT_DELAY_MS,
   } = {},
 ) {
+  let inFlight = null;
+  let pendingReason = null;
   const take = (reason) => {
-    try {
-      const file = writeSnapshot(db, sharedDir, { keep, logger });
-      logger.log(`[db] snapshot ${path.basename(file)} (${reason})`);
+    // A write during a backup needs a fresh copy after that backup finishes.
+    // Serialize transfers so an older copy can never replace a newer one.
+    pendingReason = reason;
+    if (inFlight) return inFlight;
+    inFlight = (async () => {
+      let file = null;
+      while (pendingReason) {
+        const currentReason = pendingReason;
+        pendingReason = null;
+        try {
+          file = await writeSnapshotAsync(db, sharedDir, { keep, logger });
+          logger.log(`[db] snapshot ${path.basename(file)} (${currentReason})`);
+        } catch (error) {
+          logger.warn(`[db] snapshot failed (${currentReason}): ${error.message}`);
+          file = null;
+        }
+      }
       return file;
-    } catch (error) {
-      logger.warn(`[db] snapshot failed (${reason}): ${error.message}`);
-      return null;
-    }
+    })().finally(() => { inFlight = null; });
+    return inFlight;
   };
 
   const timer = setInterval(() => take("scheduled"), intervalMs);
@@ -273,6 +316,8 @@ function startSnapshotSchedule(
     requestSnapshot,
     stop: () => {
       clearInterval(timer);
+      process.removeListener("SIGTERM", onExit);
+      process.removeListener("SIGINT", onExit);
       if (personalTimer) clearTimeout(personalTimer);
       personalTimer = null;
     },
@@ -332,4 +377,5 @@ module.exports = {
   snapshotName,
   startSnapshotSchedule,
   writeSnapshot,
+  writeSnapshotAsync,
 };
