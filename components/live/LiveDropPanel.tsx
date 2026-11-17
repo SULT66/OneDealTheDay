@@ -860,9 +860,7 @@ export function BroadcastStage({
             ) : null}
             <p className="text-xl font-black text-white">OneDailyDrop Live</p>
             <p className="mt-2 max-w-sm text-sm leading-relaxed text-white/65">
-              {drop.state === "waiting"
-                ? tr("app.live.hostJoinsSoon")
-                : tr("app.live.offerLiveBelow")}
+              {tr("app.live.offerLiveBelow")}
             </p>
           </div>
         )}
