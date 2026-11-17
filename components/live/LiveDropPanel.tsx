@@ -743,7 +743,7 @@ export function BroadcastStage({
   const tr = useCopy();
   const showable = drop.state === "waiting" || drop.state === "live";
   if (!showable) return null;
-  if (drop.state === "waiting" && !watching) {
+  if (drop.state === "waiting") {
     return <PreShow drop={drop} untilStart={untilStart} />;
   }
   /* The price band under the picture, whichever presenter holds the stage. */
