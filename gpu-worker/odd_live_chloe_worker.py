@@ -197,7 +197,7 @@ def main():
             "question_id":response.get("question_id"),
             "lease_token":response["lease_token"],
             "lease_expires_at":expiry,
-            "play_after":datetime.fromisoformat(prepared["play_after"].replace("Z","+00:00")).timestamp() if prepared.get("play_after") else 0,
+            "play_after":datetime.fromisoformat((prepared.get("play_after") or response.get("play_after") or "").replace("Z","+00:00")).timestamp() if (prepared.get("play_after") or response.get("play_after")) else 0,
         }
         target=ready/(jobdir.name+".ready.json")
         temp=ready/(jobdir.name+".tmp")
