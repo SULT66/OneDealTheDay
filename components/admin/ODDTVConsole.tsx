@@ -37,6 +37,15 @@ export function ODDTVConsole({adminKey}:{adminKey:string}) {
   const [controlBusy,setControlBusy]=useState(false);
 
   useEffect(()=>{
+    try{
+      const pending=Number(window.sessionStorage.getItem("odd-live-pending-show"));
+      if(Number.isSafeInteger(pending)&&pending>0){
+        setShowId(pending);setRetryShowId(pending);setNotice("DIANA_CONTROLLER_OFFLINE");
+      }
+    }catch{}
+  },[]);
+
+  useEffect(()=>{
     let active=true;
     const term=query.trim();
     setMatches([]);
@@ -146,9 +155,13 @@ export function ODDTVConsole({adminKey}:{adminKey:string}) {
       const result=await start.json().catch(()=>({}));
       if(!start.ok)throw new Error(result.error||"Show was created but could not be started.");
       setRetryShowId(null);
+      try{window.sessionStorage.removeItem("odd-live-pending-show");}catch{}
       setNotice("Preparing the host and product segments. The show goes live when the opening is ready.");
     }catch(error){
-      if(createdShowId!==null&&error instanceof Error&&error.message==="DIANA_CONTROLLER_OFFLINE")setRetryShowId(createdShowId);
+      if(createdShowId!==null&&error instanceof Error&&error.message==="DIANA_CONTROLLER_OFFLINE"){
+        setRetryShowId(createdShowId);
+        try{window.sessionStorage.setItem("odd-live-pending-show",String(createdShowId));}catch{}
+      }
       setNotice(error instanceof Error?error.message:"Could not start the show.");
     }finally{setBusy(false);}
   }
@@ -172,6 +185,7 @@ export function ODDTVConsole({adminKey}:{adminKey:string}) {
       const result=await response.json().catch(()=>({}));
       if(!response.ok)throw new Error(result.error||"Could not start the saved show.");
       setRetryShowId(null);
+      try{window.sessionStorage.removeItem("odd-live-pending-show");}catch{}
       setNotice("Preparing the host and product segments. The show goes live when the opening is ready.");
     }catch(error){
       setNotice(error instanceof Error?error.message:"Could not start the saved show.");
