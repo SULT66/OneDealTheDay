@@ -111,7 +111,7 @@ function cleanScripts(scripts) {
   if(scripts==null)return ["",""];
   if(!Array.isArray(scripts)||scripts.length!==2||scripts.some(value=>typeof value!=="string"||value.length>12000))
     throw new Error("INVALID_PRODUCT_SCRIPTS");
-  return scripts.map(value=>value.replace(/[\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f]/g,"").trim());
+  return scripts.map(value=>value.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g,"").trim());
 }
 function createShow(db,{market="us",productIds,scripts,now=Date.now()}) {
   const ids=validateProducts(db,market,productIds==null?pickProducts(db,market):productIds);
