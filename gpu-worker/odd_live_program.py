@@ -46,9 +46,9 @@ def launch_ffmpeg(width,height,url):
         "ffmpeg","-nostdin","-hide_banner","-loglevel","warning",
         # Raw video carries its exact dimensions and pixel format, avoiding
         # image2pipe stream probing before FFmpeg can publish the RTSP path.
-        "-thread_queue_size","32","-f","rawvideo","-pixel_format","bgr24",
+        "-thread_queue_size","32","-probesize","32","-analyzeduration","100000","-f","rawvideo","-pixel_format","bgr24",
         "-video_size",f"{width}x{height}","-framerate",str(FPS),"-i",f"pipe:{vr}",
-        "-thread_queue_size","64","-f","s16le","-ar",str(AUDIO_RATE),
+        "-thread_queue_size","64","-probesize","32","-analyzeduration","100000","-f","s16le","-ar",str(AUDIO_RATE),
         "-ac","1","-i",f"pipe:{ar}",
         "-map","0:v:0","-map","1:a:0",
         "-c:v","h264_nvenc","-preset","p4","-pix_fmt","yuv420p",
