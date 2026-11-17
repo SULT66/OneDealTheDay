@@ -24,6 +24,8 @@ type CatalogProduct={
 export function ODDTVConsole({adminKey}:{adminKey:string}) {
   const [market,setMarket]=useState("us");
   const [products,setProducts]=useState<CatalogProduct[]>([]);
+  const [matches,setMatches]=useState<CatalogProduct[]>([]);
+  const [productSearchBusy,setProductSearchBusy]=useState(false);
   const [query,setQuery]=useState("");
   const [selected,setSelected]=useState<number[]>([]);
   const [scripts,setScripts]=useState<Record<number,string>>({});
@@ -34,23 +36,40 @@ export function ODDTVConsole({adminKey}:{adminKey:string}) {
   const [controlBusy,setControlBusy]=useState(false);
 
   useEffect(()=>{
-    setProducts([]);
-    if(!adminKey)return;
     let active=true;
-    fetch("/api/products?market="+encodeURIComponent(market),{cache:"no-store"})
-      .then(async response=>{
-        if(!response.ok)throw new Error("Could not load published products.");
-        return response.json();
+    const term=query.trim();
+    setMatches([]);
+    if(!adminKey||term.length<2){setProductSearchBusy(false);return()=>{active=false;};}
+    const controller=new AbortController();
+    const timer=window.setTimeout(()=>{
+      setProductSearchBusy(true);
+      setNotice("");
+      fetch("/api/admin/odd-tv/products?market="+encodeURIComponent(market)+"&q="+encodeURIComponent(term),{
+        headers:{"X-Admin-Key":adminKey},cache:"no-store",signal:controller.signal,
       })
-      .then((data:unknown)=>{
-        if(active)setProducts(Array.isArray(data)?data.filter((item):item is CatalogProduct=>
-          typeof item==="object"&&item!==null&&"id" in item&&"title" in item&&
-          Number.isSafeInteger(item.id)&&Number(item.id)>0&&typeof item.title==="string"
-        ):[]);
-      })
-      .catch(error=>{if(active)setNotice(error instanceof Error?error.message:"Could not load products.");});
-    return()=>{active=false;};
-  },[adminKey,market]);
+        .then(async response=>{
+          if(!response.ok)throw new Error("Could not search published products.");
+          return response.json();
+        })
+        .then((data:unknown)=>{
+          const found=Array.isArray(data)?data.filter((item):item is CatalogProduct=>
+            typeof item==="object"&&item!==null&&"id" in item&&"title" in item&&
+            Number.isSafeInteger(item.id)&&Number(item.id)>0&&typeof item.title==="string"
+          ):[];
+          if(active){
+            setMatches(found);
+            setProducts(current=>{
+              const byId=new Map(current.map(product=>[product.id,product]));
+              for(const product of found)byId.set(product.id,product);
+              return [...byId.values()];
+            });
+          }
+        })
+        .catch(error=>{if(active&&error?.name!=="AbortError")setNotice(error instanceof Error?error.message:"Could not load products.");})
+        .finally(()=>{if(active)setProductSearchBusy(false);});
+    },250);
+    return()=>{active=false;window.clearTimeout(timer);controller.abort();};
+  },[adminKey,market,query]);
 
   async function refreshBroadcast() {
     if(!adminKey)return;
@@ -94,10 +113,10 @@ export function ODDTVConsole({adminKey}:{adminKey:string}) {
 
   const visible=useMemo(()=>{
     const term=query.trim().toLowerCase();
-    return products.filter(product=>
+    return matches.filter(product=>
       !term||[product.title,product.brand,product.retailer_name].some(value=>String(value||"").toLowerCase().includes(term))
     ).slice(0,8);
-  },[products,query]);
+  },[matches,query]);
 
   function toggle(id:number) {
     setSelected(current=>current.includes(id)?current.filter(value=>value!==id):current.length>=2?current:[...current,id]);
@@ -159,7 +178,7 @@ export function ODDTVConsole({adminKey}:{adminKey:string}) {
             <option value="us">United States</option><option value="ca">Canada</option><option value="uk">United Kingdom</option><option value="de">Germany</option><option value="fr">France</option>
           </select>
         </label>
-        <label className="min-w-56 flex-1"><span className="text-xs font-semibold uppercase tracking-[0.1em] text-fg-subtle">Search products ({products.length})</span>
+        <label className="min-w-56 flex-1"><span className="text-xs font-semibold uppercase tracking-[0.1em] text-fg-subtle">Search published products</span>
           <input value={query} onChange={event=>setQuery(event.target.value)} placeholder="Type a product or store name" className="mt-1 h-10 w-full rounded-full border border-border bg-surface-2 px-4 text-sm text-fg"/>
         </label>
       </div>
@@ -169,7 +188,7 @@ export function ODDTVConsole({adminKey}:{adminKey:string}) {
           <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{product.title}</span><span className="text-xs text-fg-muted">{product.brand||product.retailer_name||"Published product"} · {product.currency||"USD"} {product.price??product.current_price??""}</span></span>
           {index>=0?<button type="button" onClick={()=>removeProduct(product.id)} className="rounded-full border border-border px-3 py-1.5 text-xs">Remove</button>:<button type="button" disabled={selected.length>=2||busy} onClick={()=>addProduct(product.id)} className="rounded-full bg-lime px-3 py-1.5 text-xs font-bold text-ink disabled:opacity-50">Add product {selected.length+1}</button>}
         </div>;})}
-        {visible.length===0?<p className="p-4 text-sm text-fg-muted">No published products match.</p>:null}
+        {visible.length===0?<p className="p-4 text-sm text-fg-muted">{productSearchBusy?"Searching products…":query.trim().length<2?"Enter at least 2 characters to search.":"No published products match."}</p>:null}
       </div>:null}
       <div className="mt-4 grid gap-3 md:grid-cols-2">
         {[0,1].map(index=>{const product=selectedProducts[index];return <div key={index} className="rounded-xl border border-border bg-surface-2 p-4">
