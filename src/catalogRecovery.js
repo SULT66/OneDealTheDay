@@ -6,8 +6,8 @@ const { providersForMarket } = require("./providers/registry");
 // Reimport only the affected sources on the first startup after a feed change.
 const REIMPORT_AFTER = {
   "feed-everblog-us":"2026-11-17T06:58:22.000Z",
-  "feed-meowant-us":"2026-11-17T07:18:00.000Z",
-  "feed-big-horn-outdoors-us":"2026-11-17T07:18:00.000Z",
+  "feed-meowant-us":"2026-11-17T07:35:00.000Z",
+  "feed-big-horn-outdoors-us":"2026-11-17T07:35:00.000Z",
 };
 
 function countLiveProducts(marketCode = "") {

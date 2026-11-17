@@ -486,32 +486,44 @@ async function loadCuratedAwinProducts(definition, market, fetchImpl, signal) {
   // Selected products may be missing from the Awin feed or carry older prices.
   const { productMetadataFromHtml } = require("../shoppingAssistant");
   const products = await Promise.all(curated.products.map(async (item, index) => {
+    const url = safeFeedUrl(item.url);
+    let offer;
     try {
-      const url = safeFeedUrl(item.url);
       const timeout = AbortSignal.timeout(15000);
       const response = await fetchImpl(url.href, {
         redirect:"error",
-        headers:{accept:"text/html"},
+        headers:{accept:"text/html", "user-agent":"Mozilla/5.0 (compatible; OneDailyDrop/1.0; product metadata)"},
         signal:signal ? AbortSignal.any([signal, timeout]) : timeout,
       });
-      if (!response.ok) return null;
-      const offer = productMetadataFromHtml(await response.text(), url.href, market.currency);
-      if (!offer || !/^https:\/\//i.test(offer.image_url) || !(offer.price_value > 0) ||
-          !/^in[ _-]?stock$/i.test(offer.availability)) return null;
-      const affiliateUrl = new URL("https://www.awin1.com/cread.php");
-      affiliateUrl.search = new URLSearchParams({
-        awinmid:curated.advertiserId, awinaffid:"3018019", ued:url.href,
-      });
-      return normalize({
-        id:item.id, mpn:item.model, brand:definition.retailerName,
-        title:offer.title, category:curated.category, description:item.description,
-        price:offer.price_value, currency:offer.currency, availability:"In stock",
-        image_url:offer.image_url, affiliate_url:affiliateUrl.href, retailer_shop_url:url.href,
-      }, definition, market, index, {});
+      if (response.status === 404 || response.status === 410) return null;
+      if (response.ok) offer = productMetadataFromHtml(await response.text(), url.href, market.currency);
     } catch (error) {
       if (signal?.aborted) throw error;
-      return null;
     }
+
+    // A recent storefront observation can seed the card if the shop does
+    // not answer the server. Preserve its actual verification timestamp.
+    let checkedAt;
+    if (!offer && Date.now() - Date.parse(curated.verifiedAt) < 24 * 3600 * 1000) {
+      checkedAt = curated.verifiedAt;
+      offer = {title:item.title, price_value:item.price, image_url:item.image,
+        currency:market.currency, availability:""};
+    }
+    if (!offer || !/^https:\/\//i.test(offer.image_url) || !(offer.price_value > 0)) return null;
+    const inStock = /^in[ _-]?stock$/i.test(offer.availability);
+    const affiliateUrl = new URL("https://www.awin1.com/cread.php");
+    affiliateUrl.search = new URLSearchParams({
+      awinmid:curated.advertiserId, awinaffid:"3018019", ued:url.href,
+    });
+    const product = normalize({
+      id:item.id, mpn:item.model, brand:definition.retailerName,
+      title:offer.title, category:curated.category, description:item.description,
+      price:offer.price_value, currency:offer.currency,
+      availability:inStock ? "In stock" : offer.availability ? "Unavailable" : "",
+      image_url:offer.image_url, affiliate_url:affiliateUrl.href, retailer_shop_url:url.href,
+    }, definition, market, index, {});
+    if (checkedAt) product.checked_at = checkedAt;
+    return product;
   }));
   return products.filter(Boolean);
 }

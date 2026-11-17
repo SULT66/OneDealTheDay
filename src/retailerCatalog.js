@@ -231,16 +231,21 @@ const RETAILERS = Object.freeze([
     curatedProducts:{
       advertiserId:"55213",
       category:"Pet Supplies",
+      verifiedAt:"2026-11-17T07:18:00.000Z",
       products:[
         {
           id:"53440957743401", model:"MW-PF06",
           url:"https://meowant.com/products/meowant-automatic-wet-food-cat-feeder-mw-pf06",
-          description:"An automatic cat feeder designed to serve wet food on a schedule."
+          description:"An automatic cat feeder designed to serve wet food on a schedule.",
+          title:"Meowant Automatic Wet Food Cat Feeder-MW-PF06", price:159.99,
+          image:"https://meowant.com/cdn/shop/files/PF06.png?v=1794555880&width=1024"
         },
         {
           id:"53426304450857", model:"MW-DF03",
           url:"https://meowant.com/products/meowant-sensor-mode-clean-waste-water-separation-fountain-df03",
-          description:"A sensor-activated pet fountain with separate clean-water and waste-water tanks."
+          description:"A sensor-activated pet fountain with separate clean-water and waste-water tanks.",
+          title:"Meowant Sensor Mode Clean & Waste Water Separation Fountain-DF03", price:99.99,
+          image:"https://meowant.com/cdn/shop/files/DF03.png?v=1789461996&width=1024"
         }
       ]
     },
@@ -255,21 +260,28 @@ const RETAILERS = Object.freeze([
     curatedProducts:{
       advertiserId:"117809",
       category:"Sports & Outdoors",
+      verifiedAt:"2026-11-17T07:18:00.000Z",
       products:[
         {
           id:"HGB16R2", model:"HGB16R2",
           url:"https://bighornoutdoor.com/products/16-gas-outdoor-pizza-oven",
-          description:"An outdoor gas pizza oven with a 16-inch rotating stone and a digital thermometer."
+          description:"An outdoor gas pizza oven with a 16-inch rotating stone and a digital thermometer.",
+          title:"16” Gas Pizza Oven - Outdoor Professional Pizza Maker with Auto-Rotating Stone & Digital Thermometer", price:599.99,
+          image:"https://bighornoutdoor.com/cdn/shop/files/01_bb190e61-d1e3-49d3-9ec3-1e5738bad59d.jpg?v=1767492057&width=1024"
         },
         {
           id:"VM-KS02-ID", model:"VM-KS02-ID",
           url:"https://bighornoutdoor.com/products/butane-camping-stove-portable-folding-gas-burner-for-camping",
-          description:"A folding, single-burner butane stove designed for outdoor cooking and camping."
+          description:"A folding, single-burner butane stove designed for outdoor cooking and camping.",
+          title:"Butane Camping Stove, Portable Folding Gas Burner for Camping", price:79.99,
+          image:"https://bighornoutdoor.com/cdn/shop/files/1_dab54204-196d-4786-ac9c-5f37e9947556.jpg?v=1781055625&width=1024"
         },
         {
           id:"LPESL18003", model:"LPESL18003",
           url:"https://bighornoutdoor.com/products/big-horn-outdoors-metal-pizza-peel-13x9-5-inch-set-pizza-paddle-with-fordable-handle",
-          description:"A stainless steel paddle for loading and removing pizzas, with a folding handle for storage."
+          description:"A stainless steel paddle for loading and removing pizzas, with a folding handle for storage.",
+          title:"Stainless Steel Pizza Peel", price:35.99,
+          image:"https://bighornoutdoor.com/cdn/shop/files/61uDnmYRs8L._AC_SL1500.jpg?v=1730106590&width=1024"
         }
       ]
     },
