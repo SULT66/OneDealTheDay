@@ -4372,8 +4372,9 @@ app.post("/api/odd-live/worker/ack", oddWorkerAuth, (req,res)=>{
 const oddTv=require("./oddTvChannel");
 const oddTvEnabled=process.env.ODD_TV_ENABLED==="true";
 if(oddTvEnabled) oddTv.init(db);
-// MuseTalk rendering can exceed two minutes; keep one TV turn leased while GPU renders.
-const oddTvLeases=require("./oddLiveQueue").createProducerLeases({ttlMs:10*60*1000});
+// Keep delivery acknowledgements valid for the full one-hour show. A queued
+// clip releases the render slot but retains its token until playback is proven.
+const oddTvLeases=require("./oddLiveQueue").createProducerLeases({ttlMs:60*60*1000});
 const currentTv=(marketCode)=>oddTvEnabled
   ? oddTv.currentShow(db,marketCode,Date.now()) : null;
 
@@ -4403,7 +4404,8 @@ app.post("/api/odd-tv/chat",(req,res)=>{
   const sessionId=analyticsToken(req.body?.session_id);
   if(!sessionId)return res.status(400).json({error:"Invalid viewer session."});
   try{
-    const id=oddTv.postQuestion(db,{showId:show.id,sessionId,text:req.body?.text,now:Date.now()});
+    const product=oddTv.currentProduct(db,show,Date.now()).product;
+    const id=oddTv.postQuestion(db,{showId:show.id,sessionId,text:req.body?.text,productId:product?.id??null,now:Date.now()});
     return res.status(201).json({ok:true,question_id:id});
   }catch(error){
     return res.status(error.message.includes("RATE")||error.message.includes("QUEUE")?429:400)
@@ -4494,17 +4496,31 @@ app.post("/api/odd-tv/worker/next",oddWorkerAuth,async(req,res)=>{
   const {show,opening}=workerState;
   const key="tv:"+show.id;
   if(oddTvLeases.has(key))return res.json({kind:"busy"});
-  const questions=oddTv.nextQuestions(db,show.id,50)
-    .filter(item=>!oddTvLeases.hasPendingQuestion(key,item.id)).slice(0,3);
-  const question=questions[0]||null;
-  const listing=oddTv.currentProduct(db,show,Date.now()).product;
+
+  // Work oldest-first, but batch only questions about the same product. The
+  // question's product is captured at submit time, so a slow render cannot
+  // accidentally answer it using the next product after the 30-minute switch.
+  const queued=oddTv.nextQuestions(db,show.id,50)
+    .filter(item=>!oddTvLeases.hasPendingQuestion(key,item.id));
+  const first=queued[0]||null;
+  const productId=first?.product_id
+    ? Number(first.product_id)
+    : oddTv.currentProduct(db,show,Date.now()).product?.id;
+  const questions=first
+    ? queued.filter(item=>!item.product_id||Number(item.product_id)===productId).slice(0,3)
+    : [];
+  const questionIds=questions.map(item=>item.id);
+  const listing=first
+    ? oddTv.productById(db,show,productId,Date.now()).product
+    : oddTv.currentProduct(db,show,Date.now()).product;
   if(!listing)return res.status(503).json({error:"No current published product."});
-  // Viewer questions take priority. When the queue is empty, narrate each
-  // featured product once so the show opens with Chloe instead of silent idle.
-  if(!question&&(oddTvLeases.hasPendingPresentation(key,listing.id)||!oddTv.productPresentationDue(db,show.id,listing.id)))return res.json({kind:"idle"});
-  const questionIds=question?questions.map(item=>item.id):[];
-  const lease=oddTvLeases.acquire(key,question?questionIds:null,{
-    kind:question?"question":"presentation",productId:listing.id,opening,
+
+  // Viewer questions take priority. When the queue is empty, narrate the
+  // current featured product; do not repeat a presentation already in flight.
+  if(!first&&(oddTvLeases.hasPendingPresentation(key,listing.id)||!oddTv.productPresentationDue(db,show.id,listing.id)))
+    return res.json({kind:"idle"});
+  const lease=oddTvLeases.acquire(key,first?questionIds:null,{
+    kind:first?"question":"presentation",productId:listing.id,opening,
   });
   if(!lease)return res.json({kind:"busy"});
   try {
@@ -4522,12 +4538,17 @@ app.post("/api/odd-tv/worker/next",oddWorkerAuth,async(req,res)=>{
       };
     }
     const speech=await composeHostTurn({
-      product:listing,question:question?questions.map((item,index)=>String(index+1)+". "+item.text).join(" "):"",locale:"en-US",generateText
+      product:listing,
+      question:first?questions.map((item,index)=>String(index+1)+". "+item.text).join(" "):"",
+      locale:"en-US",generateText
     });
     return res.json({
-      kind:question?"question":"presentation",
-      show_id:show.id,drop_key:key,question_id:question?.id||null,opening,
-      product_id:listing.id,spoken_text:speech,
+      kind:first?"question":"presentation",
+      show_id:show.id,drop_key:key,
+      question_id:first?questionIds:null,
+      question_count:questionIds.length,
+      product_id:listing.id,opening,
+      spoken_text:speech,
       lease_token:lease.token,
       lease_expires_at:new Date(lease.expiresAt).toISOString(),
     });
