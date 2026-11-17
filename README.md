@@ -225,7 +225,7 @@ Without `OPENAI_API_KEY`, the site remains usable and the assistant endpoint rep
 
 ODD Live TV is the self-hosted, one-hour shopping show. The admin selects two published products, adds optional host notes for each 30-minute segment, and starts the show. The local worker grounds narration and answers in verified catalog facts. Viewer questions are collected in the ODD Live chat and queued for scheduled Q&A breaks.
 
-The broadcaster runs on the configured Diana workstation and publishes to MediaMTX. Follow `docs/odd-live-diana-launch.md` for setup and playback checks. The old Tavus host integration has been removed from this repository.
+The broadcaster runs on the configured Diana workstation and publishes to MediaMTX. Follow `docs/odd-live-diana-launch.md` for setup and playback checks.
 
 ## eBay account-deletion compliance
 
