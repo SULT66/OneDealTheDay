@@ -4454,6 +4454,22 @@ app.get("/api/admin/odd-tv/broadcast/status",admin,(req,res)=>{
   if(!oddTvEnabled)return res.status(503).json({error:"ODD TV disabled."});
   return res.json(oddTv.getBroadcastControl(db,Date.now()));
 });
+app.post("/api/odd-tv/worker/start",oddWorkerAuth,express.json({limit:"5kb"}),(req,res)=>{
+  res.set("Cache-Control","no-store");
+  if(!oddTvEnabled)return res.status(503).json({error:"ODD TV disabled."});
+  const marketCode=normalizeMarket(req.body?.market)||"us";
+  const now=Date.now();
+  try{
+    // No product_ids means oddTv.createShow selects 8-10 eligible published products.
+    const id=oddTv.createShow(db,{market:marketCode,now});
+    const state=oddTv.startShow(db,id,{now,warmupMs:5*60*1000});
+    const broadcast=oddTv.setBroadcastDesired(db,"running",Date.now());
+    return res.status(201).json({...state,broadcast});
+  }catch(error){
+    const conflict=error.message==="ANOTHER_SHOW_ACTIVE";
+    return res.status(conflict?409:400).json({error:error.message});
+  }
+});
 app.post("/api/odd-tv/worker/control",oddWorkerAuth,(req,res)=>{
   res.set("Cache-Control","no-store");
   if(!oddTvEnabled)return res.status(503).json({error:"ODD TV disabled."});
