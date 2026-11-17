@@ -225,6 +225,38 @@ const RETAILERS = Object.freeze([
     storefrontHost:"sunaofe.com", awinFeedId:"F2716", maxCatalogProducts:100,
     feedPolicy:{spreadAcrossFeed:true, excludeTitleTerms:["custom payment", "price difference link", "purchase protection", "gift card", "not sold separately", "not for sale", "non-delivery"]}
   },
+  {
+    id:"meowant", name:"MeoWant", network:"Awin", markets:["us"],
+    storefrontHost:"meowant.com", awinFeedId:"F734", maxCatalogProducts:50,
+    feedPolicy:{
+      titleTerms:["litter box", "feeder", "fountain"],
+      excludeTitleTerms:["warranty", "protection", "replacement", "filters", "liners", "bags", "gift card"]
+    }
+  },
+  {
+    id:"big-horn-outdoors", name:"Big Horn Outdoors", network:"Awin", markets:["us"],
+    storefrontHost:"bighornoutdoor.com", awinFeedId:"106686", awinFeedFormat:"legacy", maxCatalogProducts:50,
+    feedPolicy:{
+      titleTerms:["pizza oven", "grill", "smoker"],
+      excludeTitleTerms:["cover", "carry bag", "replacement", "gift card"]
+    }
+  },
+  {
+    id:"everblog", name:"Everblog", network:"Awin", markets:["us"],
+    storefrontHost:"everblog.com", awinFeedId:"F4120", maxCatalogProducts:50,
+    feedPolicy:{
+      titleTerms:["fridgecal", "homecal", "digital calendar", "family calendar"],
+      excludeTitleTerms:["stylus", "mounting plate", "charging dock", "screen protector", "warranty", "gift card"]
+    }
+  },
+  {
+    id:"radiofence", name:"RadioFence.com", network:"Awin", markets:["us"],
+    storefrontHost:"radiofence.com", awinFeedId:"105980", awinFeedFormat:"legacy", maxCatalogProducts:50,
+    feedPolicy:{
+      titleTerms:["feeder", "fountain"],
+      excludeTitleTerms:["filter", "adapter", "replacement", "pump", "gift card"]
+    }
+  },
   {id:"currys", name:"Currys", network:"Awin", markets:["uk"]},
   {id:"ao", name:"AO.com", network:"Awin", markets:["uk"]},
   {id:"fnac", name:"Fnac", network:"Awin", markets:["fr"]},
