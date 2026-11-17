@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Diana-side supervisor controlled by the authenticated ODD Live admin buttons.
 
-Only starts/stops the fixed MediaMTX, Chloe worker, and RTSP broadcaster.
+Only starts/stops the fixed MediaMTX, host worker, and RTSP broadcaster.
 It never accepts shell commands or executable paths from the website.
 """
 import json
@@ -89,7 +89,7 @@ def start_processes(log):
     stream_dir = ROOT / "stream-server"
     media = stream_dir / "mediamtx"
     config = stream_dir / "mediamtx.yml"
-    worker = ROOT / "gpu-worker" / "odd_live_chloe_worker.py"
+    worker = ROOT / "gpu-worker" / "odd_live_host_worker.py"
     broadcaster = ROOT / "gpu-worker" / "odd_live_program.py"
     if not (media.is_file() and config.is_file() and worker.is_file() and broadcaster.is_file()):
         raise RuntimeError("ODD_LIVE_FILES_MISSING")
@@ -200,7 +200,7 @@ def main():
                             if not stream_missing_since:
                                 stream_missing_since = now_mono
                             elif now_mono - stream_missing_since >= 20:
-                                last_detail = "RTSP publisher missing; restarting Chloe broadcaster"
+                                last_detail = "RTSP publisher missing; restarting host broadcaster"
                                 print("ODD_LIVE_RTSP_MISSING_RESTARTING", flush=True)
                                 old = processes.get("broadcaster")
                                 stop_process_group(old, timeout=5)
