@@ -530,8 +530,6 @@ db.exec(`
   CREATE UNIQUE INDEX IF NOT EXISTS idx_live_drop_events_unique
     ON live_drop_events(drop_id, event_type, session_id);
 
-  /* One shared Chloe per drop, and the chat everybody watching shares.
-     See src/liveHost.js. */
   /* What the same product costs somewhere else, and what its buyers there
      said about it. One row per product; see src/comparables.js. */
   CREATE TABLE IF NOT EXISTS product_comparables(
@@ -552,28 +550,6 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_product_comparables_checked
     ON product_comparables(checked_at);
 
-  CREATE TABLE IF NOT EXISTS live_host_broadcasts(
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    drop_id INTEGER NOT NULL,
-    conversation_id TEXT NOT NULL UNIQUE,
-    conversation_url TEXT NOT NULL,
-    secret TEXT NOT NULL,
-    created_at TEXT NOT NULL,
-    ended_at TEXT,
-    FOREIGN KEY(drop_id) REFERENCES live_drops(id)
-  );
-  CREATE TABLE IF NOT EXISTS live_chat_messages(
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    drop_id INTEGER NOT NULL,
-    session_id TEXT NOT NULL,
-    author TEXT NOT NULL,
-    text TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'queued',
-    created_at TEXT NOT NULL,
-    sent_at TEXT,
-    FOREIGN KEY(drop_id) REFERENCES live_drops(id)
-  );
-  CREATE INDEX IF NOT EXISTS idx_live_chat_drop ON live_chat_messages(drop_id, id);
 
   /* "It's live now", once per address per drop. See sendLiveNowNotices. */
   CREATE TABLE IF NOT EXISTS live_drop_live_notices(
@@ -702,17 +678,9 @@ db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_google_sub ON users(google_
    Two — the product itself, and the product in use — is what a shopping
    channel actually shows. */
 const liveDropColumns = new Set(db.prepare("PRAGMA table_info(live_drops)").all().map(column => column.name));
-/* host_script_intro and host_script_reveal: what Chloe reads when she goes on
-   air, and when the price opens. Written by the host; see src/liveHost.js. */
-for (const column of ["preroll_video_url", "video_url", "stream_embed_url", "secondary_image_url", "host_script_intro", "host_script_reveal"]) {
+for (const column of ["preroll_video_url", "video_url", "stream_embed_url", "secondary_image_url"]) {
   if (!liveDropColumns.has(column)) db.exec(`ALTER TABLE live_drops ADD COLUMN ${column} TEXT NOT NULL DEFAULT ""`);
 }
-
-/* phase: what the host console last said Chloe is doing — "presenting" the
-   script or "answering" questions — so the chat can tell viewers why their
-   question is waiting. */
-const liveHostBroadcastColumns = new Set(db.prepare("PRAGMA table_info(live_host_broadcasts)").all().map(column => column.name));
-if (!liveHostBroadcastColumns.has("phase")) db.exec(`ALTER TABLE live_host_broadcasts ADD COLUMN phase TEXT NOT NULL DEFAULT ""`);
 
 const retailerIconColumns = new Set(db.prepare("PRAGMA table_info(retailer_icons)").all().map(column => column.name));
 if (!retailerIconColumns.has("pinned")) db.exec("ALTER TABLE retailer_icons ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0");

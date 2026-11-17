@@ -1,83 +1,43 @@
-# ODD Live / Diana — staged installation and acceptance
+# ODD Live TV — Diana workstation test
 
-ODD Live TV is an **independent** 60-minute channel on the OneDailyDrop backend. Existing 10-minute Live Drop and its Tavus host remain unchanged.
+ODD Live TV is a self-hosted, one-hour show. The admin selects **exactly two** published products, 30 minutes each, with optional talking points. This is separate from the old Live Drop presenter flow.
 
-## Current implementation
+## What the pilot does
 
-- `src/oddTvChannel.js`: draft/start/stop a show, 8–10 published products with merchant diversification, time-based rotation (60 minutes), separate moderated/rate-limited question queue.
-- `src/oddLiveBrain.js`: grounded response prompt and fallback that cannot fabricate unknown price or stock.
-- `src/oddLiveQueue.js`: single-lease producer handshake; question not marked `sent` until affirmative broadcast acknowledgement.
-- `gpu-worker/odd_live_chloe_worker.py`: processes one queued viewer question, generates Azure Speech + a MuseTalk v1.5 lip-synced MP4; `--watch` supervises repeated checks.
-- `gpu-worker/odd_live_program.py`: keeps a local RTSP H.264/AAC stream, switches to lip-synced answers, and can play occasional short motion MP4s between answers.
-- `components/live/ODDLiveTvExperience.tsx`: shows current on-air product, merchant link, shared chat below the **external HTTPS viewer embed**.
+- Plays the configured entrance motion once, then uses idle motion while the speech worker prepares clips.
+- Presents product 1 for minutes 0–30 and product 2 for minutes 30–60.
+- Opens question preparation windows at minutes 3–8, 12–17, 21–26, 33–38, 42–47, and 51–56. Each spoken answer may include up to three queued questions; overflow waits for the next slot.
+- Creates each Azure Speech + MuseTalk response during the show. The full hour is not pre-rendered, so GPU/render delays can still cause gaps.
+- Shows the viewer chat, product, LIVE timer, viewer count, expand/fullscreen, and mini-player in the public experience.
 
-## Separate service feature flags
+The admin notes are guidance for generated narration, not a word-for-word timed script. Browser audio and lip-sync must be checked on a real client before calling the pilot successful.
 
-All default to **OFF**:
-- `ODD_TV_ENABLED=true`: create TV tables + read/chat/show scheduling routes.
-- `ODD_LIVE_WORKER_ENABLED=true` and `ODD_LIVE_WORKER_KEY=<strong random secret>`: allow authenticated GPU worker routes.
-- `OPENAI_API_KEY=<server-side secret>`: enable live grounded language responses; without it, safe fallback speech.
-- `ODD_LIVE_AI_MODEL`: optional model selection.
-- `ODD_LIVE_EMBED_URL=https://...`: public *viewer* endpoint, NOT the RTSP ingest URL and NOT `localhost`.
-- `ODD_LIVE_AI_PREVIEW=true`: optional **admin-only** old Live Drop rehearsal endpoint; unrelated to hourly TV.
+## Diana-only files
 
-All worker keys, Azure Speech credentials and model tokens belong in secure server-side environment variables. Never expose them to browser JS or a public repository.
+Use the existing WSL2 Ubuntu installation, Conda environment `odd-ai-test`, MuseTalk v1.5, MediaMTX, and RTX 5070 Ti. Do not overwrite the MuseTalk fork. The worker discovers an existing local avatar unless `ODD_LIVE_AVATAR_SOURCE` and `ODD_LIVE_AVATAR_ID` explicitly select one.
 
-### Show API (admin key)
+Credentials stay only on Diana:
 
-- `POST /api/admin/odd-tv/show` with `X-Admin-Key`: `{"market":"us"}` automatically selects 8–10 eligible published products across merchants. For a hand-picked lineup, send exactly 8–10 published product IDs as `{"market":"us","product_ids":[101,202,...]}`. The admin console's ODD Live TV tab can search published products and start a show from a hand-picked list.
-- `POST /api/admin/odd-tv/show/:id/start` starts a 60-minute show immediately.
-- `POST /api/admin/odd-tv/show/:id/stop` ends it.
+- `~/.config/odd-live/worker.env`: `ODD_LIVE_API_BASE=https://www.onedailydrop.com`, `ODD_LIVE_WORKER_KEY`, and optional `ODD_LIVE_ACK_DELIVERED=0`.
+- `~/.config/odd-live/speech.env`: `AZURE_SPEECH_KEY` and `AZURE_SPEECH_REGION`; permissions must be `chmod 600`.
+- Voice defaults to `en-US-SaraNeural`; set `ODD_LIVE_VOICE` only if you have verified that voice on the workstation.
 
-**Do not start a show until media and chat can be viewed by an external test browser.** Start/stop is not an OBS or GPU command.
+Do not paste credentials into chat or commit them.
 
-### Public read/chat endpoints
+## Test sequence
 
-- `GET /api/odd-tv/live?market=us`
-- `GET /api/odd-tv/chat?market=us`
-- `POST /api/odd-tv/chat` with `{"market":"us","text":"Does it have a timer?","session_id":"<anonymous token>"}`
+1. Confirm `python -m py_compile gpu-worker/odd_live_host_worker.py gpu-worker/odd_live_program.py gpu-worker/odd_live_supervisor.py` passes.
+2. Start the supervisor on Diana. It starts MediaMTX, the host worker, and the broadcaster when the backend controller is set to running.
+3. Create a two-product test show from the ODD Live TV admin and wait for its scheduled start. Do not create a second show while one is active.
+4. Check local ingest with `ffprobe` and confirm **both H.264 and AAC**. This confirms RTSP tracks only; it does not prove the public player can play audio.
+5. Open the public live page in Chrome, unmute the player, and confirm continuous audible speech, synchronized lips, and a viewer question answered at an expected Q&A window.
+6. Only after the public audio check succeeds, set `ODD_LIVE_ACK_DELIVERED=1` in the private worker config and restart the supervisor. This lets the broadcaster mark a queued response delivered after it sends the clip into RTSP. It still cannot confirm what a remote browser heard.
 
-### Diana, WSL2 staged rehearsal
+To stop, use the admin **Stop stream** control or stop the supervisor with Ctrl+C. The viewer player and the GPU publisher are separate checks.
 
-Already installed: Ubuntu `odd-ai-test` Conda, RTX 5070 Ti, MuseTalk v1.5, prepared avatar `chloe_closeup_01`, MediaMTX local port 8554.
+## Limits before production
 
-Copy only the Python files from the reviewed GitHub branch into `~/odd-ai-humans/gpu-worker`; do not overwrite the existing MuseTalk fork or the running `odd-live-main` controller. Use a **new** RTSP path `odd-live-smart`.
-
-Required *Diana-only* environment:
-
-```text
-ODD_LIVE_API_BASE=https://<backend-host>
-ODD_LIVE_WORKER_KEY=<same secret as backend>
-ODD_LIVE_MODE=tv
-AZURE_SPEECH_KEY=<existing Azure Speech secret>
-AZURE_SPEECH_REGION=<region from Speech resource>
-ODD_LIVE_VOICE=en-US-SaraNeural
-```
-
-On Diana, the worker also reads `~/.config/odd-live/speech.env` (`chmod 600`) for `AZURE_SPEECH_KEY` and `AZURE_SPEECH_REGION`, without overriding explicit environment variables. That file has already been created on Diana. Do not commit or paste credentials. The selected default Sara voice uses `cheerful` style, subject to later user approval. The TV worker lease lasts 10 minutes to accommodate batched MuseTalk; do not enable unattended polling until timeout and failed-turn retry logic are tested.
-
-1. First confirm `python -m py_compile gpu-worker/odd_live_chloe_worker.py gpu-worker/odd_live_program.py`.
-2. In WSL start `python gpu-worker/odd_live_program.py` (local RTSP only; do not pass `--ack-delivered` before the public audio/video check).
-3. With a test show live, run `python gpu-worker/odd_live_chloe_worker.py --once` to render one queued answer.
-4. Confirm the public viewer receives Chloe's synchronized mouth movement and audible speech; unmute the viewer for the audio check.
-5. Start supervised question polling with `python gpu-worker/odd_live_chloe_worker.py --watch`; it polls every 8 seconds, makes no speech/model calls while the queue is empty, and stops with Ctrl+C.
-6. After the public audio/video check passes, restart the broadcaster with `--ack-delivered`. This marks a chat question answered after its clip is sent to the live encoder.
-
-
-### Optional walk/gesture clips
-
-Put short Chloe motion videos in `~/odd-ai-humans/assets/chloe/motions/` on Diana. Use 16:9 clips with Chloe's approved appearance, clothes, and studio; 5–10 seconds, 10–60 fps, MP4. Audio is ignored. The broadcaster scales them to the stream size and plays one every 50 seconds while no answer is being spoken. File names sort alphabetically, so number them (for example `01-walk-to-table.mp4`, `02-turn-and-present.mp4`, `03-walk-back.mp4`). Keep the walk clips silent or treat their sound as discarded; spoken answers still use the MuseTalk lip-sync path.
-
-## Operational safety / next gates
-
-**Do not merge / publish before:**
-
-- GitHub unit/integration test suite + Python `py_compile` passes.
-- GPU smoke test with actual Azure Speech and MuseTalk succeeds on Diana.
-- Tune encoding FPS, AV sync, lip/face realism and latency on a real client device.
-- Configure public HTTPS delivery (e.g., LL-HLS/WebRTC relay), access restrictions, health probes and TLS; RTSP `127.0.0.1` is **local only**.
-- Separate GPU role, Azure API, affiliate-click and hosted media spend is measured against $200/month operational ceiling.
-- Add a persistent turn/outbox log or DB-based delivery state before enabling unattended production; an in-memory lease alone cannot guarantee exactly-once across process restart.
-- Control AI replies to avoid repetitive filler; make sure show-product rotation does not split a spoken sentence.
-
-**Known MVP limitations:** the RTSP compositor is a proof-of-concept, not a public broadcaster; one turn uses batched MuseTalk, not zero-latency real-time video. The scheduled show is automatic; autonomous repeated polling requires a supervised runner and robust stop conditions. Automated final audio delivery acknowledgement is not yet production-safe.
+- A real Diana GPU smoke test and public browser audio test are required. CI cannot validate CUDA, Azure Speech credentials, MuseTalk timing, or external HLS audio.
+- The first pilot is a rehearsal; keep `ODD_LIVE_ACK_DELIVERED=0` until the audible browser check succeeds.
+- RTSP on `127.0.0.1:8554` is local ingest. The storefront must reach MediaMTX through the configured public HTTPS viewer endpoint; a local RTSP probe alone is insufficient.
+- Measure end-to-end delay, audio level, A/V sync, and recovery after a rendered speech clip before starting an unattended show.

@@ -16,13 +16,12 @@ const c = require("./config");
 const { refreshProducts, localDate } = require("./refresh");
 const { runLinkHealthCheck } = require("./linkHealth");
 const {
-  dropState, hostGreeting, hostRevealLine, presentDrop,
+  dropState, presentDrop,
   sendDueReminders, sendStagedReminders, announceDropToSubscribers, sendLiveNowNotices,
   remindSubscribersBeforeStart,
 } = require("./liveDrop");
 const { sendDuePriceDrops } = require("./priceWatches");
 const { cacheKey, readCachedAnswer, writeCachedAnswer } = require("./deliaCache");
-const { tavusProductDetails } = require("./tavusProductTool");
 const {
   fetchRetailerIcon,
   normalizeIconHost,
@@ -89,11 +88,6 @@ const { indexEvidence, isIndexableProduct } = require("./indexability");
 const { missingQueries, pruneSearches, searchDemand } = require("./searchQueries");
 const { overview } = require("./overview");
 const { pageViewRow, recordPageView } = require("./pageViews");
-const {
-  chatMessageInput, chatMessages, endFinishedBroadcasts, ensureBroadcast,
-  hostInstructionCue, idleCue, postChatMessage, questionsCue, revealCue, takeNextQuestions,
-  HOST_PHASES, chatStatus, queuePosition, setBroadcastPhase,
-} = require("./liveHost");
 const {
   ensureWeeklySnapshot, listWeeklySnapshots, nextWeekClose, notInternal, periodMetrics,
   REPORT_TIMEZONE, lastCompletedWeek,
@@ -1217,274 +1211,11 @@ app.get("/api/live/current", (req, res) => {
   res.set("Cache-Control", "no-store").json({
     drop: presented ? {
       ...presented,
-      /* Chloe's tool is currently grounded to the US market in Tavus. Do not
-         offer her in another market until that tool receives a market input.
-
-         And off unless switched on: a private call each is not a broadcast.
-         Twenty viewers would be twenty different shows, and every one of them
-         a paid video call. What an audience watches together is the recorded
-         presentation in video_url or the stream in stream_embed_url. */
-      tavus_available:Boolean(
-        c.liveHostChatEnabled && c.tavusApiKey && c.tavusPalId && selectedMarket.code === "us",
-      ),
       /* Counted, not decorated. Every one of these is a page open right now. */
       watching: watchingNow(drop.id),
-      /* Empty until the drop opens, then the line the host is handed so she
-         announces the reveal instead of missing it. Her greeting is fixed when
-         the conversation starts, so somebody who began chatting in the waiting
-         room heard "the price opens in a moment" while the price was already
-         on the screen beside her. */
-      host_reveal_line: hostRevealLine(presented),
-      host_phase:chatStatus(db, drop.id).phase,
     } : null,
     server_now: new Date().toISOString(),
   });
-});
-
-/*
- * A Tavus conversation is created server-side so the API key never reaches a
- * shopper's browser. The returned Daily room URL is short-lived and is the
- * only Tavus value the page needs in order to embed Chloe.
- *
- * Sessions are deliberately opt-in instead of starting on page load: Tavus
- * bills live conversations, browsers block surprise microphone access, and a
- * crawler or an abandoned tab must not consume a live slot. One active room
- * per IP and a small global ceiling also keep a public endpoint from becoming
- * an unbounded spend path during the MVP.
- */
-const tavusConversations = new Map();
-
-/* What Chloe is told about the drop, whether she is talking to one viewer or
-   presenting to all of them. */
-const chloeContext = (selectedMarket, view) => [
-  `This session is the OneDailyDrop Live event for market ${String(selectedMarket).toUpperCase()}.`,
-  `The current published drop key is ${view.drop_key}.`,
-  "Use get_product_details before stating any product, price, discount, stock or purchase fact.",
-  "Remaining-time estimates expire immediately: never reuse a duration from an earlier turn. Use only the CURRENT COUNTDOWN supplied with the current instruction, or ask viewers to check the on-screen timer. Never invent a duration.",
-  "Never ask the shopper for a product ID. Keep answers brief and suitable for a live shopping broadcast.",
-  /* Urgency is the format and she should sell it. What she may not sell is
-     scarcity: she closed a rehearsal with "grab yours before they are gone",
-     a claim about a shelf we cannot see. The shop holds the stock and reports
-     none of it to us, so that sentence is invented — and inventing it is what
-     affiliate programmes reject applications over. The countdown does the
-     same work honestly. */
-  "Be urgent about the countdown: the price is live for a few minutes only and you should say so. Never say or imply how many are left, how fast they are selling, or that they will run out; you cannot see the retailer's stock, and this offer ends when the clock does, not when it sells out.",
-].join(" ");
-
-/* ----------------------------------------------------------------------
- * The shared broadcast: one Chloe for every viewer, and one chat.
- * See src/liveHost.js for why questions reach her through the host console.
- * The admin half of it is registered after the admin guard, further down.
- * -------------------------------------------------------------------- */
-const broadcastsBeingCreated = new Map();
-const chloeConfigured = (marketCode) =>
-  Boolean(c.liveHostChatEnabled && c.tavusApiKey && c.tavusPalId && marketCode === "us");
-
-/* Opens the drop's shared conversation when the waiting room or the drop is on. */
-const openBroadcast = async (drop) => {
-  const view = presentDrop(drop, Date.now());
-  if (!view || !["waiting", "live"].includes(view.state) || !chloeConfigured(drop.market)) return null;
-  return ensureBroadcast(db, {
-    drop,
-    view,
-    apiKey: c.tavusApiKey,
-    palId: c.tavusPalId,
-    /* With a script, she opens with one short line and the console reads the
-       host's words next; without one, her own greeting names the product.
-       The script is also her briefing, so her answers agree with it. */
-    conversationalContext: drop.host_script_intro
-      ? `${chloeContext(drop.market, view)} The host wrote this opening script, which you will read first; keep your answers consistent with it and never state a price before the price opens: ${String(drop.host_script_intro).slice(0, 2000)}`
-      : chloeContext(drop.market, view),
-    greeting: drop.host_script_intro ? "Hi everyone, welcome to OneDailyDrop Live!" : hostGreeting(view),
-    maxViewers: Number(process.env.LIVE_HOST_MAX_VIEWERS) || 150,
-    creating: broadcastsBeingCreated,
-  });
-};
-
-/* A viewer joining: the shared conversation's address, nothing else. The
-   marker that lets a message through to her never leaves the admin side. */
-app.get("/api/live/host", async (req, res) => {
-  res.set("Cache-Control", "no-store");
-  const selectedMarket = normalizeMarket(req.query?.market) || "us";
-  const drop = currentLiveDrop(selectedMarket);
-  if (!drop) return res.status(404).json({error:"There is no Live Drop right now."});
-  try {
-    const broadcast = await openBroadcast(drop);
-    if (!broadcast) return res.status(409).json({error:"Chloe joins when the waiting room opens."});
-    return res.json({conversation_url:broadcast.conversation_url, drop_key:drop.drop_key});
-  } catch (error) {
-    console.error(`[live-host] broadcast could not start: ${error.message}`);
-    return res.status(503).json({error:"Chloe could not join. Please try again in a moment."});
-  }
-});
-
-app.get("/api/live/chat", (req, res) => {
-  res.set("Cache-Control", "no-store");
-  const drop = db.prepare("SELECT id FROM live_drops WHERE drop_key=? AND published=1").get(String(req.query?.drop_key || ""));
-  if (!drop) return res.json({messages:[]});
-  res.json({
-    messages:chatMessages(db, drop.id, {afterId:Number(req.query?.after) || 0}),
-    ...chatStatus(db, drop.id),
-  });
-});
-
-app.post("/api/live/chat", (req, res) => {
-  const drop = db.prepare("SELECT * FROM live_drops WHERE drop_key=? AND published=1").get(String(req.body?.drop_key || ""));
-  const view = presentDrop(drop, Date.now());
-  if (!view || !["waiting", "live"].includes(view.state)) {
-    return res.status(409).json({error:"The chat opens with the waiting room."});
-  }
-  const sessionId = analyticsToken(req.body?.session_id);
-  if (!sessionId) return res.status(400).json({error:"Refresh the page and try again."});
-  const input = chatMessageInput(req.body?.text);
-  if (input.error) return res.status(400).json({error:input.error});
-  const posted = postChatMessage(db, {dropId:drop.id, sessionId, text:input.text});
-  if (posted.error) return res.status(429).json({error:posted.error});
-  return res.status(201).json({
-    ok:true,
-    id:posted.id,
-    position:queuePosition(db, drop.id, posted.id),
-    phase:chatStatus(db, drop.id).phase,
-  });
-});
-const endTavusConversation = async conversationId => {
-  if (!c.tavusApiKey || !/^c[a-zA-Z0-9_-]{4,100}$/.test(conversationId)) return false;
-  const response = await fetch(`https://tavusapi.com/v2/conversations/${conversationId}/end`, {
-    method:"POST",
-    headers:{"x-api-key":c.tavusApiKey},
-    signal:AbortSignal.timeout(10000),
-  });
-  return response.ok || response.status === 204 || response.status === 404;
-};
-
-app.post("/api/integrations/tavus/conversations", authRateLimit, async (req, res) => {
-  res.set("Cache-Control", "no-store");
-  if (!req.is("application/json")) {
-    return res.status(415).json({error:"A JSON request is required."});
-  }
-  if (!c.liveHostChatEnabled) {
-    return res.status(503).json({error:"Chloe is presenting the drop rather than taking questions one at a time."});
-  }
-  if (!c.tavusApiKey || !c.tavusPalId) {
-    return res.status(503).json({error:"Chloe is not connected yet."});
-  }
-
-  const selectedMarket = normalizeMarket(req.body?.market) || "us";
-  if (selectedMarket !== "us") {
-    return res.status(409).json({error:"Chloe is currently available for the US Live Drop."});
-  }
-  const drop = currentLiveDrop(selectedMarket);
-  const view = presentDrop(drop, Date.now());
-  if (!view || !["waiting", "live"].includes(view.state)) {
-    return res.status(409).json({error:"Chloe is available when the Live Drop waiting room opens."});
-  }
-  const requestedDropKey = String(req.body?.drop_key || "").trim();
-  if (requestedDropKey && requestedDropKey !== view.drop_key) {
-    return res.status(409).json({error:"The Live Drop changed. Refresh the page and try again."});
-  }
-
-  const ipKey = String(req.ip || "unknown");
-  const now = Date.now();
-  for (const [id, session] of tavusConversations) {
-    if (now - session.startedAt > 15 * 60 * 1000) {
-      tavusConversations.delete(id);
-      void endTavusConversation(id).catch(error => console.error("Stale Tavus conversation cleanup failed:", error.message));
-    }
-  }
-  if ([...tavusConversations.values()].some(session => session.ipKey === ipKey)) {
-    return res.status(409).json({error:"A Chloe session is already active in this browser."});
-  }
-  if (tavusConversations.size >= c.liveHostMaxSessions) {
-    return res.status(503).json({error:"Chloe is helping other shoppers. Please try again shortly."});
-  }
-
-  try {
-    const tavusResponse = await fetch("https://tavusapi.com/v2/conversations", {
-      method:"POST",
-      headers:{"Content-Type":"application/json", "x-api-key":c.tavusApiKey},
-      body:JSON.stringify({
-        pal_id:c.tavusPalId,
-        conversation_name:`OneDailyDrop Live · ${view.drop_key}`,
-        conversational_context:chloeContext(selectedMarket, view),
-        /* Built from the drop she is actually presenting. One sentence at every
-           drop, naming nothing, left a shopper who came to see a monitor with a
-           host who appeared not to know what she was there for, and made them
-           ask before anything happened. */
-        custom_greeting:hostGreeting(view),
-      }),
-      signal:AbortSignal.timeout(15000),
-    });
-    const data = await tavusResponse.json().catch(() => ({}));
-    if (!tavusResponse.ok) {
-      const tavusMessage = String(data?.message || data?.error || "Unknown error");
-      console.error("Tavus conversation creation failed:", tavusResponse.status, tavusMessage);
-      if (tavusResponse.status === 429 || /concurr|active.+conversation|limit/i.test(tavusMessage)) {
-        return res.status(409).json({error:"Another Chloe session is still active. End it in Tavus Conversations, then try again."});
-      }
-      return res.status(tavusResponse.status >= 400 && tavusResponse.status < 500 ? 502 : 503)
-        .json({error:"Chloe could not join. Please try again."});
-    }
-    const conversationId = String(data.conversation_id || "");
-    const conversationUrl = String(data.conversation_url || "");
-    if (!/^c[a-zA-Z0-9_-]{4,100}$/.test(conversationId) || !/^https:\/\/[^/]+\.daily\.co\//i.test(conversationUrl)) {
-      return res.status(502).json({error:"Tavus returned an invalid conversation."});
-    }
-    tavusConversations.set(conversationId, {ipKey, startedAt:now, dropKey:view.drop_key});
-    return res.status(201).json({conversation_id:conversationId, conversation_url:conversationUrl});
-  } catch (error) {
-    console.error("Tavus conversation request failed:", error.message);
-    return res.status(503).json({error:"Chloe could not join. Please try again."});
-  }
-});
-
-app.post("/api/integrations/tavus/conversations/:id/end", async (req, res) => {
-  res.set("Cache-Control", "no-store");
-  const conversationId = String(req.params.id || "");
-  const session = tavusConversations.get(conversationId);
-  if (!session || session.ipKey !== String(req.ip || "unknown")) {
-    return res.status(404).json({ended:false});
-  }
-  tavusConversations.delete(conversationId);
-  try {
-    const ended = await endTavusConversation(conversationId);
-    return res.json({ended});
-  } catch (error) {
-    console.error("Tavus conversation cleanup failed:", error.message);
-    return res.status(502).json({ended:false});
-  }
-});
-
-/**
- * Verified product context for Chloe, the OneDailyDrop Live PAL.
- *
- * Tavus calls this server-to-server through its get_product_details tool. The
- * shared bearer secret is separate from ADMIN_KEY: a presentation tool may
- * read one published offer, but it must never inherit permission to publish,
- * edit stock or run a catalogue refresh.
- *
- * presentDrop remains the disclosure boundary. Before a drop opens it removes
- * the drop price and buy URL, so connecting an LLM cannot accidentally undo
- * the timed reveal already enforced for browsers.
- */
-app.post("/api/integrations/tavus/get-product-details", (req, res) => {
-  res.set("Cache-Control", "no-store");
-  if (!c.tavusToolSecret) {
-    return res.status(503).json({error:"The Tavus product tool is not configured."});
-  }
-
-  const authorization = String(req.get("authorization") || "");
-  const bearer = /^Bearer\s+(.+)$/i.exec(authorization)?.[1] || "";
-  if (!secretMatches(bearer, c.tavusToolSecret)) {
-    return res.status(401).json({error:"Unauthorized"});
-  }
-
-  const selectedMarket = normalizeMarket(req.body?.market) || "us";
-  const dropKey = String(req.body?.drop_key || "").trim().slice(0, 80);
-  const drop = dropKey
-    ? db.prepare("SELECT * FROM live_drops WHERE drop_key=? AND market=? AND published=1").get(dropKey, selectedMarket)
-    : currentLiveDrop(selectedMarket);
-
-  return res.json(tavusProductDetails(drop, Date.now()));
 });
 
 /**
@@ -3907,8 +3638,6 @@ const liveDropInput = (body) => {
       video_url: text(body.video_url, 1000),
       stream_embed_url: text(body.stream_embed_url, 1000),
       terms: text(body.terms, 2000),
-      host_script_intro: text(body.host_script_intro, 4000),
-      host_script_reveal: text(body.host_script_reveal, 2000),
     },
   };
 };
@@ -4010,8 +3739,6 @@ app.get("/api/admin/live-drops", admin, (req, res) => {
       preroll_video_url: row.preroll_video_url || "",
       video_url: row.video_url || "",
       stream_embed_url: row.stream_embed_url || "",
-      host_script_intro: row.host_script_intro || "",
-      host_script_reveal: row.host_script_reveal || "",
       stock_is_live: Boolean(row.stock_verified_at && now - Date.parse(row.stock_verified_at) <= 2 * 60 * 1000),
       click_label: liveDropLabel(row.drop_key),
       };
@@ -4028,11 +3755,11 @@ app.post("/api/admin/live-drops", admin, (req, res) => {
   db.prepare(`INSERT INTO live_drops(
     drop_key,market,title,brand,retailer_name,image_url,secondary_image_url,retail_price,drop_price,currency,
     quantity_total,quantity_remaining,start_at,end_at,member_early_access_seconds,
-    affiliate_url,preroll_video_url,video_url,stream_embed_url,terms,host_script_intro,host_script_reveal,published,created_at,updated_at
+    affiliate_url,preroll_video_url,video_url,stream_embed_url,terms,published,created_at,updated_at
   ) VALUES(
     @drop_key,@market,@title,@brand,@retailer_name,@image_url,@secondary_image_url,@retail_price,@drop_price,@currency,
     @quantity_total,@quantity_remaining,@start_at,@end_at,@member_early_access_seconds,
-    @affiliate_url,@preroll_video_url,@video_url,@stream_embed_url,@terms,@host_script_intro,@host_script_reveal,0,@created_at,@updated_at
+    @affiliate_url,@preroll_video_url,@video_url,@stream_embed_url,@terms,0,@created_at,@updated_at
   )`).run({...drop, drop_key:dropKey, created_at:nowIso, updated_at:nowIso});
 
   /* Drafted, not announced. Writing a drop and advertising it are separate
@@ -4208,7 +3935,6 @@ app.patch("/api/admin/live-drops/:key/media", admin, express.json({limit:"8kb"})
   return res.json({ok:true, ...fields});
 });
 
-/* The host console: what only the admin side may see and do. See src/liveHost.js. */
 /**
  * What people looked for, and what they looked for and did not find.
  *
@@ -4286,7 +4012,7 @@ app.post("/api/admin/odd-live/:key/preview-turn", admin, async (req, res) => {
 
 /**
  * ODD Live GPU producer API. OFF unless ODD_LIVE_WORKER_ENABLED=true.
- * This is separate from Tavus. Never expose the worker secret to the browser.
+ * Never expose the worker secret to the browser.
  * A message remains queued until the worker confirms its completed clip was aired.
  */
 const oddProducerLeases = require("./oddLiveQueue").createProducerLeases();
@@ -4372,8 +4098,9 @@ app.post("/api/odd-live/worker/ack", oddWorkerAuth, (req,res)=>{
 const oddTv=require("./oddTvChannel");
 const oddTvEnabled=process.env.ODD_TV_ENABLED==="true";
 if(oddTvEnabled) oddTv.init(db);
-// MuseTalk rendering can exceed two minutes; keep one TV turn leased while GPU renders.
-const oddTvLeases=require("./oddLiveQueue").createProducerLeases({ttlMs:10*60*1000});
+// Keep delivery acknowledgements valid for the full one-hour show. A queued
+// clip releases the render slot but retains its token until playback is proven.
+const oddTvLeases=require("./oddLiveQueue").createProducerLeases({ttlMs:60*60*1000});
 const currentTv=(marketCode)=>oddTvEnabled
   ? oddTv.currentShow(db,marketCode,Date.now()) : null;
 
@@ -4382,6 +4109,34 @@ app.get("/api/odd-tv/live",(req,res)=>{
   if(!oddTvEnabled)return res.json({show:null});
   const marketCode=normalizeMarket(req.query?.market)||"us";
   return res.json({show:oddTv.publicShow(db,marketCode,Date.now())});
+});
+app.post("/api/odd-tv/viewers",(req,res)=>{
+  res.set("Cache-Control","no-store");
+  if(!oddTvEnabled)return res.status(503).json({error:"ODD TV is not enabled."});
+  const marketCode=normalizeMarket(req.body?.market)||"us";
+  const sessionId=analyticsToken(req.body?.session_id);
+  if(!sessionId)return res.status(400).json({error:"Invalid viewer session."});
+  const sessionHash=crypto.createHash("sha256").update(sessionId).digest("hex");
+  const now=Date.now();
+  const active=req.body?.active!==false;
+  if(active){
+    const show=currentTv(marketCode);
+    if(!show)return res.json({viewer_count:0,show_id:null});
+    db.prepare("DELETE FROM odd_tv_viewers WHERE show_id=? AND last_seen<?")
+      .run(show.id,new Date(now-45*1000).toISOString());
+    db.prepare("INSERT INTO odd_tv_viewers(show_id,session_hash,last_seen) VALUES(?,?,?) " +
+      "ON CONFLICT(show_id,session_hash) DO UPDATE SET last_seen=excluded.last_seen")
+      .run(show.id,sessionHash,new Date(now).toISOString());
+    return res.json({show_id:show.id,viewer_count:oddTv.activeViewerCount(db,show.id,now)});
+  }
+  const showId=Number(req.body?.show_id);
+  if(!Number.isSafeInteger(showId)||showId<=0)return res.status(400).json({error:"Invalid show identifier."});
+  const show=db.prepare("SELECT id FROM odd_tv_shows WHERE id=? AND market=?").get(showId,marketCode);
+  if(show){
+    db.prepare("DELETE FROM odd_tv_viewers WHERE show_id=? AND session_hash=?").run(showId,sessionHash);
+    return res.json({show_id:showId,viewer_count:oddTv.activeViewerCount(db,showId,now)});
+  }
+  return res.json({viewer_count:0});
 });
 app.get("/api/odd-tv/chat",(req,res)=>{
   res.set("Cache-Control","no-store");
@@ -4403,19 +4158,20 @@ app.post("/api/odd-tv/chat",(req,res)=>{
   const sessionId=analyticsToken(req.body?.session_id);
   if(!sessionId)return res.status(400).json({error:"Invalid viewer session."});
   try{
-    const id=oddTv.postQuestion(db,{showId:show.id,sessionId,text:req.body?.text,now:Date.now()});
+    const product=oddTv.currentProduct(db,show,Date.now()).product;
+    const id=oddTv.postQuestion(db,{showId:show.id,sessionId,text:req.body?.text,productId:product?.id??null,now:Date.now()});
     return res.status(201).json({ok:true,question_id:id});
   }catch(error){
     return res.status(error.message.includes("RATE")||error.message.includes("QUEUE")?429:400)
       .json({error:error.message});
   }
 });
-app.post("/api/admin/odd-tv/show",admin,express.json({limit:"5kb"}),(req,res)=>{
+app.post("/api/admin/odd-tv/show",admin,express.json({limit:"30kb"}),(req,res)=>{
   res.set("Cache-Control","no-store");
   if(!oddTvEnabled)return res.status(503).json({error:"ODD TV disabled."});
   const marketCode=normalizeMarket(req.body?.market)||"us";
   try{
-    const id=oddTv.createShow(db,{market:marketCode,productIds:req.body?.product_ids,now:Date.now()});
+    const id=oddTv.createShow(db,{market:marketCode,productIds:req.body?.product_ids,scripts:req.body?.scripts,now:Date.now()});
     return res.status(201).json({show_id:id,state:"draft"});
   }catch(error){return res.status(400).json({error:error.message});}
 });
@@ -4461,7 +4217,8 @@ app.post("/api/odd-tv/worker/start",oddWorkerAuth,express.json({limit:"5kb"}),(r
   const now=Date.now();
   try{
     // No product_ids means oddTv.createShow selects 8-10 eligible published products.
-    const id=oddTv.createShow(db,{market:marketCode,now});
+    const productIds=Array.isArray(req.body?.product_ids)?req.body.product_ids:undefined;
+    const id=oddTv.createShow(db,{market:marketCode,productIds,now});
     const state=oddTv.startShow(db,id,{now,warmupMs:5*60*1000});
     const broadcast=oddTv.setBroadcastDesired(db,"running",Date.now());
     return res.status(201).json({...state,broadcast});
@@ -4493,14 +4250,34 @@ app.post("/api/odd-tv/worker/next",oddWorkerAuth,async(req,res)=>{
   const {show,opening}=workerState;
   const key="tv:"+show.id;
   if(oddTvLeases.has(key))return res.json({kind:"busy"});
-  const question=oddTv.nextQuestion(db,show.id);
-  const listing=oddTv.currentProduct(db,show,Date.now()).product;
+
+  const schedule=require("./oddTvRunOfShow");
+  const window=schedule.questionWindow(show,Date.now());
+  const productIds=JSON.parse(show.product_ids);
+  const slotProductId=window?Number(productIds[window.productIndex]):null;
+  let question=null,questions=[];
+  // Open one batch of at most three questions per scheduled Q&A slot. More
+  // questions stay queued for the next slot; a slot cannot be overbooked by
+  // multiple MuseTalk renders that would all arrive at the same time.
+  if(window&&!oddTvLeases.hasPendingSlot(key,window.slotMinute)){
+    questions=oddTv.nextQuestions(db,show.id,50,slotProductId)
+      .filter(item=>!oddTvLeases.hasPendingQuestion(key,item.id)).slice(0,3);
+    question=questions[0]||null;
+  }
+  const listing=question
+    ? oddTv.productById(db,show,slotProductId,Date.now()).product
+    : oddTv.currentProduct(db,show,Date.now()).product;
   if(!listing)return res.status(503).json({error:"No current published product."});
-  // Viewer questions take priority. When the queue is empty, narrate each
-  // featured product once so the show opens with Chloe instead of silent idle.
-  if(!question&&!oddTv.productPresentationDue(db,show.id,listing.id))return res.json({kind:"idle"});
-  const lease=oddTvLeases.acquire(key,question?.id||null,{
+
+  // Viewer questions take priority in their timed preparation window. Between
+  // windows, keep the show's product narration moving without replaying a
+  // presentation clip that is already queued or recently aired.
+  if(!question&&(oddTvLeases.hasPendingPresentation(key,listing.id)||!oddTv.productPresentationDue(db,show.id,listing.id)))
+    return res.json({kind:"idle"});
+  const questionIds=question?questions.map(item=>item.id):[];
+  const lease=oddTvLeases.acquire(key,question?questionIds:null,{
     kind:question?"question":"presentation",productId:listing.id,opening,
+    slotMinute:question?window.slotMinute:null,
   });
   if(!lease)return res.json({kind:"busy"});
   try {
@@ -4518,12 +4295,19 @@ app.post("/api/odd-tv/worker/next",oddWorkerAuth,async(req,res)=>{
       };
     }
     const speech=await composeHostTurn({
-      product:listing,question:question?.text||"",locale:"en-US",generateText
+      product:listing,
+      question:question?questions.map((item,index)=>String(index+1)+". "+item.text).join(" "):"",
+      hostScript:question?"":oddTv.scriptForProduct(show,listing.id),
+      locale:"en-US",generateText
     });
     return res.json({
       kind:question?"question":"presentation",
-      show_id:show.id,drop_key:key,question_id:question?.id||null,opening,
-      product_id:listing.id,spoken_text:speech,
+      show_id:show.id,drop_key:key,
+      question_id:question?questionIds:null,
+      question_count:questionIds.length,
+      product_id:listing.id,opening,
+      play_after:question?window.playAfter:null,
+      spoken_text:speech,
       lease_token:lease.token,
       lease_expires_at:new Date(lease.expiresAt).toISOString(),
     });
@@ -4552,6 +4336,19 @@ app.post("/api/odd-tv/worker/prepared",oddWorkerAuth,(req,res)=>{
     .run(new Date(start).toISOString(),new Date(end).toISOString(),id);
   return res.json({ok:true,play_after:new Date(start).toISOString()});
 });
+app.post("/api/odd-tv/worker/queued",oddWorkerAuth,(req,res)=>{
+  res.set("Cache-Control","no-store");
+  const id=Number(String(req.body?.drop_key||"").match(/^tv:([0-9]+)$/)?.[1]);
+  if(!oddTvEnabled||!Number.isSafeInteger(id)||id<=0)
+    return res.status(400).json({error:"Invalid show identifier."});
+  const key="tv:"+id;
+  const token=String(req.body?.lease_token||"");
+  const lease=oddTvLeases.check(key,token);
+  if(!lease)return res.status(409).json({error:"Expired or invalid lease."});
+  if(!oddTvLeases.release(key,token,{keepForAck:true}))
+    return res.status(409).json({error:"Unable to release queued turn."});
+  return res.json({ok:true,awaiting_delivery:true});
+});
 app.post("/api/odd-tv/worker/ack",oddWorkerAuth,(req,res)=>{
   res.set("Cache-Control","no-store");
   const id=Number(String(req.body?.drop_key||"").match(/^tv:([0-9]+)$/)?.[1]);
@@ -4578,90 +4375,6 @@ app.post("/api/odd-tv/worker/ack",oddWorkerAuth,(req,res)=>{
   }
   oddTvLeases.release(key,token);
   return res.json({ok:true,question_id:lease.questionId});
-});
-
-app.get("/api/admin/live-host/:key", admin, async (req, res) => {
-  res.set("Cache-Control", "no-store");
-  const drop = db.prepare("SELECT * FROM live_drops WHERE drop_key=?").get(String(req.params.key || ""));
-  if (!drop || drop.deleted_at) return res.status(404).json({error:"No such drop."});
-  const view = presentDrop(drop, Date.now());
-  if (!chloeConfigured(drop.market)) {
-    return res.status(503).json({error:"Chloe is not connected: TAVUS_API_KEY is not set, or this drop is not in the US market."});
-  }
-  let broadcast = null;
-  try {
-    broadcast = await openBroadcast(drop);
-    if (!broadcast && ["ended", "sold_out"].includes(view?.state)) {
-      broadcast = db.prepare("SELECT * FROM live_host_broadcasts WHERE drop_id=? AND ended_at IS NULL ORDER BY id DESC LIMIT 1").get(drop.id);
-    }
-  } catch (error) {
-    return res.status(503).json({error:`Tavus refused to start Chloe: ${error.message}`});
-  }
-  const queued = db.prepare("SELECT COUNT(*) AS n FROM live_chat_messages WHERE drop_id=? AND status='queued'").get(drop.id).n;
-  res.json({
-    state:view?.state || "ended",
-    phase:broadcast?.phase || "",
-    seconds_until_start:view?.seconds_until_start ?? null,
-    seconds_until_end:view?.seconds_until_end ?? null,
-    conversation_url:broadcast?.conversation_url || "",
-    conversation_id:broadcast?.conversation_id || "",
-    reveal_cue:broadcast && view?.state === "live" ? revealCue(broadcast.secret, hostRevealLine(view)) : "",
-    idle_cue:broadcast ? idleCue(broadcast.secret) : "",
-    /* The host's own words, read out by the console: the opening when she
-       goes on air, and the reveal when the price opens. */
-    intro_script:drop.host_script_intro || "",
-    reveal_script:view?.state === "live" ? (drop.host_script_reveal || "") : "",
-    queued,
-    messages:chatMessages(db, drop.id, {limit:30}),
-  });
-});
-
-/* Hands Chloe the next few questions, and says what to send her. */
-app.post("/api/admin/live-host/:key/next", admin, (req, res) => {
-  const drop = db.prepare("SELECT * FROM live_drops WHERE drop_key=?").get(String(req.params.key || ""));
-  if (!drop || drop.deleted_at) return res.status(404).json({error:"No such drop."});
-  const broadcast = db.prepare("SELECT * FROM live_host_broadcasts WHERE drop_id=? AND ended_at IS NULL ORDER BY id DESC LIMIT 1").get(drop.id);
-  if (!broadcast) return res.status(409).json({error:"Chloe is not on air for this drop."});
-  const questions = takeNextQuestions(db, drop.id);
-  res.json({cue:questions.length ? questionsCue(broadcast.secret, questions) : "", questions});
-});
-
-/* Chloe's script for a drop, editable at any time: it is what she will say,
-   not something anybody has been told yet. */
-app.patch("/api/admin/live-drops/:key/script", admin, express.json({limit:"16kb"}), (req, res) => {
-  const drop = db.prepare("SELECT id, deleted_at FROM live_drops WHERE drop_key=?").get(String(req.params.key || ""));
-  if (!drop || drop.deleted_at) return res.status(404).json({error:"No such drop."});
-  const intro = String(req.body?.host_script_intro ?? "").trim().slice(0, 4000);
-  const reveal = String(req.body?.host_script_reveal ?? "").trim().slice(0, 2000);
-  db.prepare("UPDATE live_drops SET host_script_intro=?, host_script_reveal=?, updated_at=? WHERE id=?")
-    .run(intro, reveal, new Date().toISOString(), drop.id);
-  res.json({ok:true});
-});
-
-/* Your own instruction to Chloe, typed in the host console. Wrapped in the
-   drop's marker here so the marker itself never reaches the browser. */
-app.post("/api/admin/live-host/:key/instruction", admin, express.json({limit:"4kb"}), (req, res) => {
-  const drop = db.prepare("SELECT * FROM live_drops WHERE drop_key=?").get(String(req.params.key || ""));
-  if (!drop || drop.deleted_at) return res.status(404).json({error:"No such drop."});
-  const broadcast = db.prepare("SELECT * FROM live_host_broadcasts WHERE drop_id=? AND ended_at IS NULL ORDER BY id DESC LIMIT 1").get(drop.id);
-  if (!broadcast) return res.status(409).json({error:"Chloe is not on air for this drop."});
-  const text = String(req.body?.text || "").replace(/\s+/g, " ").trim().slice(0, 1000);
-  if (!text) return res.status(400).json({error:"Type something for Chloe first."});
-  res.json({cue:hostInstructionCue(broadcast.secret, text)});
-});
-
-/* The console saying what Chloe is doing, for the chat to show viewers. */
-app.post("/api/admin/live-host/:key/phase", admin, express.json({limit:"1kb"}), (req, res) => {
-  const drop = db.prepare("SELECT id, deleted_at FROM live_drops WHERE drop_key=?").get(String(req.params.key || ""));
-  if (!drop || drop.deleted_at) return res.status(404).json({error:"No such drop."});
-  if (!HOST_PHASES.includes(req.body?.phase)) return res.status(400).json({error:"Unknown phase."});
-  res.json({ok:setBroadcastPhase(db, drop.id, req.body.phase)});
-});
-
-app.post("/api/admin/live-host/:key/hide/:id", admin, (req, res) => {
-  db.prepare("UPDATE live_chat_messages SET status='hidden' WHERE id=? AND drop_id=(SELECT id FROM live_drops WHERE drop_key=?)")
-    .run(Number(req.params.id) || 0, String(req.params.key || ""));
-  res.json({ok:true});
 });
 
 app.delete("/api/admin/live-drops/:key", admin, (req, res) => {
@@ -5165,13 +4878,6 @@ cron.schedule("7 * * * *", () => {
   }
 });
 
-/* The shared Chloe stops being billed once her drop is over. */
-cron.schedule("* * * * *", () => {
-  if (!c.tavusApiKey) return;
-  endFinishedBroadcasts(db, { apiKey: c.tavusApiKey })
-    .then((ended) => ended.length && console.log(`[live-host] ended ${ended.length} broadcast(s)`))
-    .catch((error) => console.error(`[live-host] could not end broadcasts: ${error.message}`));
-});
 /*
  * Sunday morning in New York, which is where the readers are.
  *

@@ -440,13 +440,10 @@ async function main() {
      escapes the check below entirely — which is the one thing this exists to
      prevent, and it nearly happened the day the media route was added. */
   const adminRoutes = serverSource.match(/app\.(?:get|post|patch|delete)\("\/api\/admin\/live-drops[^"]*", *[a-z]+/g) || [];
-  /* Eight since Chloe's script became editable on its own route. */
-  assert.strictEqual(adminRoutes.length, 8, "the set of admin Live Drop routes changed");
+  /* The legacy host-script route was moved to the independent ODD Live TV show. */
+  assert.strictEqual(adminRoutes.length, 7, "the set of admin Live Drop routes changed");
   const hostRoutes = serverSource.match(/app\.(?:get|post|patch|delete)\("\/api\/admin\/live-host[^"]*", *[a-z]+/g) || [];
-  assert(hostRoutes.length >= 4, "the host console routes are missing");
-  for (const route of hostRoutes) {
-    assert(/, *admin$/.test(route), `a host console route is not behind the key: ${route}`);
-  }
+  assert.strictEqual(hostRoutes.length, 0, "legacy Live Drop host routes remain");
   for (const route of adminRoutes) {
     assert(/, *admin$/.test(route), `an admin Live Drop route is not behind the key: ${route}`);
   }
@@ -523,41 +520,25 @@ async function main() {
     "the panel prints the retailer link straight into the page again",
   );
 
-  /*
-   * And a private host is not how a Live Drop reaches an audience. One Tavus
-   * conversation is one paid video call per viewer, so a hundred viewers would
-   * be a hundred calls and no longer one shared event. The audience is served
-   * by stream_embed_url, which BroadcastStage prefers; this ceiling only
-   * matches whatever the Tavus plan allows.
-   */
+  /* The independent ODD Live TV no longer leaves provider-specific host
+     routes or page code in the Live Drop viewer. */
   const configSource = fs.readFileSync(path.join(__dirname, "..", "src", "config.js"), "utf8");
-  assert(
-    /LIVE_HOST_MAX_SESSIONS/.test(configSource),
-    "the private-host ceiling is hard-coded again instead of matching the Tavus plan",
-  );
-  assert(
-    !/tavusConversations\.size >= 10/.test(serverSource),
-    "the bare 10 is back in the conversation endpoint",
-  );
-  /* The price band prints the drop price only once the drop is live and the
-     server has sent it, and it sits under whichever presenter has the stage. */
+  assert(!/tavus|chloe/i.test(serverSource + configSource + panel),
+    "legacy presenter integration remains in the Live Drop code");
+
   const board = fs.readFileSync(path.join(__dirname, "..", "components", "live", "PriceBoard.tsx"), "utf8");
   assert(
     /const revealed = live && drop\.drop_price != null;/.test(board) && /\{revealed \? \(\s*<p[\s\S]*?money\(drop\.drop_price as number\)/.test(board),
     "the price band can show the drop price before the reveal",
   );
-  /* To the closing brace on a line of its own: the props now span lines. */
   const stage = /function BroadcastStage\([\s\S]*?\r?\n\}\r?\n/.exec(panel);
   assert(stage, "BroadcastStage moved out of the Live panel");
   assert(
-    stage[0].includes("if (!hasStream && drop.tavus_available)"),
-    "a live stream no longer outranks Chloe, or Chloe no longer gets the stage",
+    stage[0].includes('if (drop.state === "waiting")'),
+    "the scheduled pre-show screen is missing",
   );
-  /* Watching in the small player still counts, and only the Live page's own
-     leaving is skipped for it. */
-  const broadcastSource = fs.readFileSync(path.join(__dirname, "..", "components", "live", "LiveBroadcast.tsx"), "utf8");
-  assert(broadcastSource.includes("sendPresence(presenceKey)") && /pagehide/.test(broadcastSource), "the small player stopped counting as watching");
-  assert(panel.includes("broadcastDropRef.current !== dropKey) leave()"), "leaving the Live page for a category takes a watching viewer out of the count");
+  assert(panel.includes("sendPresence(dropKey)") && /pagehide/.test(panel),
+    "the Live Drop viewer count heartbeat was removed");
 
   /*
    * "Asked to be reminded" and "was reminded" are different numbers.

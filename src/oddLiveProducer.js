@@ -1,19 +1,18 @@
 "use strict";
 const {composeHostTurn} = require("./oddLiveBrain");
-const {tavusProductDetails} = require("./tavusProductTool");
+const {presentDrop} = require("./liveDrop");
 
 // Read-only producer preview. The queue is not acknowledged until a downstream
 // audio/video worker confirms delivery, which is not yet wired.
 function productForHost(drop, now = Date.now()) {
-  const details = tavusProductDetails(drop, now);
-  if (!details.presentation_allowed || !details.product) throw new Error("DROP_NOT_LIVE");
-  const p = details.product;
+  const view = presentDrop(drop, now);
+  if (!view || view.state !== "live") throw new Error("DROP_NOT_LIVE");
   return {
-    title: p.title,
-    brand: p.brand,
-    retailer_name: p.retailer,
-    price: p.current_price,
-    currency: p.currency,
+    title: view.title,
+    brand: view.brand,
+    retailer_name: view.retailer_name,
+    price: view.drop_price,
+    currency: view.currency,
     stock_status: "unknown",
   };
 }

@@ -18,46 +18,6 @@ const rakutenNeweggKeywords = String(process.env.RAKUTEN_NEWEGG_KEYWORDS || "gra
   .split(",")
   .map(value => value.trim())
   .filter(Boolean);
-const tavusToolSecret = String(process.env.TAVUS_TOOL_SECRET || "").trim();
-const tavusApiKey = String(process.env.TAVUS_API_KEY || "").trim();
-const tavusPalId = String(process.env.TAVUS_PAL_ID || "p5362d6973ab").trim();
-/*
- * How many shoppers may hold a private conversation with Chloe at once.
- *
- * This is not the size of the audience, and raising it is not how a Live Drop
- * reaches more people. A Tavus conversation is one paid video call per viewer,
- * so a hundred viewers would mean a hundred simultaneous calls — which is also
- * no longer one shared event. An audience is served by putting a broadcast in
- * the drop's stream_embed_url: everybody watches the same one, at no
- * per-viewer cost and with no ceiling, and BroadcastStage already prefers it
- * whenever it is set.
- *
- * So this stays a modest number. It lives in configuration only so it can be
- * matched to whatever the Tavus plan actually allows, rather than guessed at
- * in code as a bare 10.
- */
-const liveHostMaxSessions = Math.max(
-  1,
-  Math.min(200, Number(process.env.LIVE_HOST_MAX_SESSIONS) || 10),
-);
-/*
- * Whether a shopper may open a conversation with Chloe.
- *
- * On, and it took a wrong turn to work out why. Switching it off was right
- * about the principle — a private call each is not a broadcast, and twenty
- * viewers would be twenty different shows at twenty times the cost — but it
- * answered the wrong question. Turning her off did not produce a broadcast. It
- * produced an empty stage with a placeholder on it, because the recording that
- * was supposed to replace her does not exist yet.
- *
- * The stage already prefers a live stream, then a recording, and only then
- * her. So she fills the stage exactly when nothing better is on it, and steps
- * off the moment a recording is added — no setting to remember either way.
- * liveHostMaxSessions is what actually holds the cost, and it is still there.
- *
- * Set LIVE_HOST_CHAT_ENABLED=false to keep her off a market entirely.
- */
-const liveHostChatEnabled = String(process.env.LIVE_HOST_CHAT_ENABLED || "").trim().toLowerCase() !== "false";
 const demoMode = false;
 
 function boundedNumber(value, fallback, minimum, maximum = Number.MAX_SAFE_INTEGER) {
@@ -363,11 +323,6 @@ module.exports = {
   rakutenPublisherSid,
   rakutenNeweggMid,
   rakutenNeweggKeywords,
-  tavusToolSecret,
-  tavusApiKey,
-  tavusPalId,
-  liveHostMaxSessions,
-  liveHostChatEnabled,
   ebayEnvironment: String(process.env.EBAY_ENVIRONMENT || "production").trim().toLowerCase(),
   affiliateTag: String(process.env.AFFILIATE_TAG || "").trim(),
   affiliateTagConfigured: markets.some(code => Boolean(affiliateTagForMarket(code))),

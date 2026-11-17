@@ -21,7 +21,7 @@ $bootstrap = @'
 set -e
 umask 077
 mkdir -p "$HOME/.config/odd-live" "$HOME/odd-ai-humans/gpu-worker"
-curl -fsSL https://raw.githubusercontent.com/SULT66/OneDealTheDay/main/gpu-worker/odd_live_chloe_worker.py -o "$HOME/odd-ai-humans/gpu-worker/odd_live_chloe_worker.py"
+curl -fsSL https://raw.githubusercontent.com/SULT66/OneDealTheDay/main/gpu-worker/odd_live_host_worker.py -o "$HOME/odd-ai-humans/gpu-worker/odd_live_host_worker.py"
 curl -fsSL https://raw.githubusercontent.com/SULT66/OneDealTheDay/main/gpu-worker/odd_live_program.py -o "$HOME/odd-ai-humans/gpu-worker/odd_live_program.py"
 curl -fsSL https://raw.githubusercontent.com/SULT66/OneDealTheDay/main/gpu-worker/odd_live_supervisor.py -o "$HOME/odd-ai-humans/gpu-worker/odd_live_supervisor.py"
 read -rsp "Enter ODD_LIVE_WORKER_KEY (input hidden): " ODD_LIVE_WORKER_KEY

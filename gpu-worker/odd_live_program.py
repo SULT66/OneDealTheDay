@@ -28,9 +28,13 @@ SAMPLES_PER_FRAME=AUDIO_RATE//FPS
 AUDIO_BYTES_PER_FRAME=SAMPLES_PER_FRAME*2  # s16le mono
 
 ROOT=Path.home()/"odd-ai-humans"
-IDLE=ROOT/"MuseTalk/results/v15/avatars/chloe_closeup_01/full_imgs"
-READY=ROOT/"output/chloe-smart/ready"
-MOTION_DIR=Path(os.getenv("ODD_LIVE_MOTION_DIR",str(ROOT/"assets/chloe/motions")))
+AVATAR_RESULTS=ROOT/"MuseTalk/results/v15/avatars"
+AVATAR_ID=os.getenv("ODD_LIVE_AVATAR_ID") or next((p.name for p in sorted(AVATAR_RESULTS.iterdir()) if (p/"full_imgs").is_dir()),"")
+IDLE=AVATAR_RESULTS/AVATAR_ID/"full_imgs"
+OUTPUT=Path(os.getenv("ODD_LIVE_OUTPUT_DIR",str(ROOT/"output/odd-live-host"))).expanduser()
+READY=OUTPUT/"ready"
+MOTION_DEFAULT=next((p for p in sorted((ROOT/"assets").glob("*/motions")) if p.is_dir()),ROOT/"assets/host/motions")
+MOTION_DIR=Path(os.getenv("ODD_LIVE_MOTION_DIR",str(MOTION_DEFAULT))).expanduser()
 
 def write_all(fd, data):
     view=memoryview(data)
@@ -69,7 +73,7 @@ def read_job():
         try:
             info=json.loads(path.read_text(encoding="utf-8"))
             video=Path(info["video"]).resolve(strict=True)
-            clips_root=(ROOT/"output/chloe-smart").resolve(strict=True)
+            clips_root=OUTPUT.resolve(strict=True)
             if clips_root not in video.parents or video.suffix.lower()!=".mp4":
                 raise ValueError("UNTRUSTED_VIDEO_PATH")
             if info.get("lease_expires_at",0) and time.time()>float(info["lease_expires_at"]):
@@ -151,16 +155,16 @@ def main():
     parser.add_argument("--ack-delivered",action="store_true",
                         help="Acknowledge chat only after the clip has been sent to the live encoder.")
     parser.add_argument("--motion-dir",default=str(MOTION_DIR),
-                        help="Directory containing short Chloe idle-motion MP4s.")
+                        help="Directory containing short host idle-motion MP4s.")
     parser.add_argument("--motion-every-seconds",type=int,default=3,
-                        help="Pause between distinct idle-motion clips while Chloe is not speaking.")
+                        help="Pause between distinct idle-motion clips while the host is not speaking.")
     args=parser.parse_args()
     if not 1<=args.motion_every_seconds<=600:
         parser.error("--motion-every-seconds must be between 1 and 600.")
     if not args.rtsp.startswith("rtsp://127.0.0.1:8554/"):
         raise ValueError("LOCAL_RTMP_ONLY_DISABLED")
     images=sorted(IDLE.glob("*.png"))
-    if not images: raise RuntimeError("NO_CHLOE_IDLE_FRAMES")
+    if not images: raise RuntimeError("NO_HOST_IDLE_FRAMES")
     first=cv2.imread(str(images[0]))
     if first is None: raise RuntimeError("BAD_IDLE_IMAGE")
     height,width=first.shape[:2]
@@ -259,7 +263,7 @@ def main():
                 current=(name,info,frames,audio)
                 frame_count=0
                 speech_started=False
-                print("CHLOE_SPEECH_READY",name.name,flush=True)
+                print("HOST_SPEECH_READY",name.name,flush=True)
             if current is None and time.monotonic()>=next_job_check:
                 if decode_thread is None or not decode_thread.is_alive():
                     decode_thread=threading.Thread(target=prepare_next_job,daemon=True)
@@ -269,7 +273,7 @@ def main():
                       time.time()>=float(current[1].get("play_after",0)))
             if can_play:
                 if not speech_started:
-                    print("CHLOE_SPEAKING",current[0].name,flush=True)
+                    print("HOST_SPEAKING",current[0].name,flush=True)
                     speech_started=True
                 path,info,frames,audio=current
                 index=min(frame_count,len(frames)-1)
@@ -343,7 +347,7 @@ def main():
                 path,info,_,_=current
                 aired=path.with_name(path.name.replace(".playing.json",".aired.json"))
                 path.rename(aired)
-                print("CHLOE_CLIP_SENT",aired.name,flush=True)
+                print("HOST_CLIP_SENT",aired.name,flush=True)
                 if args.ack_delivered:
                     try: ack(info); print("QUESTION_ACKNOWLEDGED",flush=True)
                     except Exception as exc: print("ACK_ERROR",type(exc).__name__,flush=True)

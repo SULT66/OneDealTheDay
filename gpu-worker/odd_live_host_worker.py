@@ -21,9 +21,19 @@ import wave
 
 ROOT = Path.home() / "odd-ai-humans"
 MUSETALK = ROOT / "MuseTalk"
-OUTPUT = ROOT / "output" / "chloe-smart"
+OUTPUT = Path(os.environ.get("ODD_LIVE_OUTPUT_DIR", str(ROOT / "output" / "odd-live-host"))).expanduser()
 CONFIG = MUSETALK / "models" / "musetalkV15"
-MODEL_AVATAR = "chloe_closeup_01"
+AVATAR_SOURCE = Path(os.environ["ODD_LIVE_AVATAR_SOURCE"]).expanduser() if os.environ.get("ODD_LIVE_AVATAR_SOURCE") else next(
+    iter(sorted((ROOT / "avatars").glob("*/closeup/source.mp4"))), None
+)
+if AVATAR_SOURCE is None or not AVATAR_SOURCE.is_file():
+    raise FileNotFoundError("Set ODD_LIVE_AVATAR_SOURCE to the approved host source video.")
+avatar_slug = AVATAR_SOURCE.parent.parent.name
+avatar_candidates = [f"{avatar_slug}_closeup_01", f"{avatar_slug}_motion_01", f"{avatar_slug}_01"]
+avatar_models = MUSETALK / "results" / "v15" / "avatars"
+MODEL_AVATAR = os.environ.get("ODD_LIVE_AVATAR_ID") or next(
+    (name for name in avatar_candidates if (avatar_models / name).is_dir()), avatar_candidates[0]
+)
 SPEECH_CONFIG = Path.home() / ".config" / "odd-live" / "speech.env"
 
 def load_speech_config():
@@ -74,7 +84,7 @@ def synthesize_azure(text, dest):
             "Ocp-Apim-Subscription-Key":speech_key,
             "Content-Type":"application/ssml+xml",
             "X-Microsoft-OutputFormat":"riff-48khz-16bit-mono-pcm",
-            "User-Agent":"ODDLiveChloeWorker/0.1",
+            "User-Agent":"ODDLiveHostWorker/0.1",
         },
     )
     with urllib.request.urlopen(request, timeout=40) as result:
@@ -91,7 +101,7 @@ def render_musetalk(audio, jobdir, timeout_seconds=180):
     # Use path serialization: json strings are valid YAML scalars.
     config_path.write_text(
         MODEL_AVATAR + ":\n  preparation: False\n  bbox_shift: 0\n"
-        "  video_path: " + json.dumps(str(ROOT / "avatars/chloe/closeup/source.mp4")) + "\n"
+        "  video_path: " + json.dumps(str(AVATAR_SOURCE)) + "\n"
         "  audio_clips:\n    audio_0: " + json.dumps(str(audio)) + "\n",
         encoding="utf-8",
     )
@@ -111,7 +121,7 @@ def render_musetalk(audio, jobdir, timeout_seconds=180):
     generated = MUSETALK / ("results/v15/avatars/" + MODEL_AVATAR + "/vid_output/audio_0.mp4")
     if not generated.exists() or generated.stat().st_size < 4096:
         raise RuntimeError("MUSETALK_OUTPUT_MISSING")
-    destination = jobdir / "chloe_reply.mp4"
+    destination = jobdir / "host_reply.mp4"
     shutil.copy2(generated, destination)
     # Verify at least one video and one audio track.
     info = json.loads(subprocess.check_output([
@@ -137,7 +147,7 @@ def main():
         p.error("--poll-seconds must be between 2 and 60.")
     if args.watch:
         command=[sys.executable,str(Path(__file__).resolve()),"--once","--market",args.market]
-        print("CHLOE_WORKER_WATCHING: Ctrl+C stops polling.",flush=True)
+        print("HOST_WORKER_WATCHING: Ctrl+C stops polling.",flush=True)
         try:
             while True:
                 try:
@@ -146,7 +156,7 @@ def main():
                     print("WORKER_LAUNCH_FAILED:",type(exc).__name__,file=sys.stderr,flush=True)
                 time.sleep(args.poll_seconds)
         except KeyboardInterrupt:
-            print("\nCHLOE_WORKER_STOPPED",flush=True)
+            print("\nHOST_WORKER_STOPPED",flush=True)
         return
     load_speech_config()
     base=os.environ["ODD_LIVE_API_BASE"].rstrip("/")
@@ -197,20 +207,32 @@ def main():
             "question_id":response.get("question_id"),
             "lease_token":response["lease_token"],
             "lease_expires_at":expiry,
-            "play_after":datetime.fromisoformat(prepared["play_after"].replace("Z","+00:00")).timestamp() if prepared.get("play_after") else 0,
+            "play_after":datetime.fromisoformat((prepared.get("play_after") or response.get("play_after") or "").replace("Z","+00:00")).timestamp() if (prepared.get("play_after") or response.get("play_after")) else 0,
         }
         target=ready/(jobdir.name+".ready.json")
         temp=ready/(jobdir.name+".tmp")
         temp.write_text(json.dumps(meta),encoding="utf-8")
         temp.chmod(0o600)
         os.replace(temp,target)
-        print("CHLOE_PREVIEW_READY:",video)
+        if mode=="tv":
+            try:
+                queued=post_json(base,"/api/odd-tv/worker/queued",key,{
+                    "drop_key":response["drop_key"],
+                    "lease_token":response["lease_token"],
+                })
+                if queued.get("ok"):
+                    print("TURN_QUEUED_FOR_AIR: render slot released; delivery remains pending.",flush=True)
+            except Exception as queue_error:
+                # The clip is already safely queued locally. If this control call
+                # fails, its lease remains locked until the broadcaster ACKs it.
+                print("TURN_QUEUE_RELEASE_ERROR:",type(queue_error).__name__,flush=True)
+        print("HOST_PREVIEW_READY:",video)
         print("LOCAL_CLIP_QUEUED:",target.name)
         print("NOT_ACKNOWLEDGED: delivery confirmation belongs to the broadcaster.")
     except BaseException as exc:
         # The API holds this show turn for up to ten minutes. If TTS or MuseTalk
         # fails before a ready clip is queued, release the lease immediately so
-        # the next watcher poll can retry instead of leaving Chloe stuck on idle.
+        # the next watcher poll can retry instead of leaving host stuck on idle.
         lease_token=response.get("lease_token")
         drop_key=response.get("drop_key")
         if lease_token and drop_key:

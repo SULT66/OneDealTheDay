@@ -8,7 +8,6 @@ import { formatPrice } from "@/lib/format";
 import { DeliaTrigger } from "@/components/delia/DeliaTrigger";
 import { LiveDropSignup } from "@/components/site/LiveDropSignup";
 import { analyticsSessionId, recordLiveDropEvent } from "@/lib/analyticsSession";
-import { BroadcastVideo, EnableStageSound, MusicToggle, SwapStage, useLiveBroadcast, sendPresence } from "./LiveBroadcast";
 import { PriceBoard } from "./PriceBoard";
 import { useCopy } from "@/components/site/CopyProvider";
 
@@ -25,6 +24,11 @@ import { useCopy } from "@/components/site/CopyProvider";
  * without a request every second, and every poll re-syncs them. Drift can only
  * accumulate for as long as one polling interval.
  */
+
+const sendPresence=(dropKey:string)=>fetch("/api/live/watching",{
+  method:"POST",headers:{"Content-Type":"application/json"},
+  body:JSON.stringify({drop_key:dropKey,session_id:analyticsSessionId()}),
+}).catch(()=>undefined);
 
 export type LiveDropView = {
   drop_key: string;
@@ -55,7 +59,6 @@ export type LiveDropView = {
   stream_embed_url: string;
   /* The line the AI host is handed when the price opens. Empty until then. */
   host_reveal_line: string;
-  tavus_available: boolean;
   /* Pages open right now, counted rather than decorated. */
   watching: number;
   terms: string;
@@ -196,17 +199,9 @@ export function LiveDropPanel({
    * fifty seconds. Explicit Leave stops both heartbeats immediately.
    */
   const dropKey = drop?.drop_key;
-  /* Somebody watching Chloe keeps being counted by the broadcast itself when
-     they leave this page for a category, so this page must not say goodbye
-     for them. */
-  const broadcast = useLiveBroadcast();
-  const broadcastDropRef = useRef("");
-  broadcastDropRef.current = broadcast.session?.dropKey || "";
   const onAir = drop?.state === "waiting" || drop?.state === "live";
-  const leftThisDrop = broadcast.leftDropKey === dropKey;
-  const broadcastOwnsPresence = broadcast.session?.dropKey === dropKey;
   useEffect(() => {
-    if (!dropKey || !onAir || leftThisDrop || broadcastOwnsPresence) return;
+    if (!dropKey || !onAir) return;
     const beat = () => {
       sendPresence(dropKey);
     };
@@ -226,9 +221,9 @@ export function LiveDropPanel({
     return () => {
       clearInterval(timer);
       window.removeEventListener("pagehide", leave);
-      if (broadcastDropRef.current !== dropKey) leave();
+      leave();
     };
-  }, [dropKey, onAir, leftThisDrop, broadcastOwnsPresence]);
+  }, [dropKey, onAir]);
 
   useEffect(() => {
     const update = (event: Event) => {
@@ -720,8 +715,7 @@ export function PreShow({ drop, untilStart }: { drop: LiveDropView; untilStart: 
   const hasAd = Boolean(drop.preroll_video_url) && !failed;
   return <div className="relative mt-4 aspect-[4/3] overflow-hidden rounded-2xl bg-[#061224] text-white sm:aspect-video">
     {hasAd ? <div className="absolute inset-0" onError={() => setFailed(true)}>
-      <BroadcastVideo src={drop.preroll_video_url} loop label={tr("app.live.advertisement")} className="h-full w-full object-contain" onNeedsPlay={setNeedsSound} />
-      {needsSound ? <EnableStageSound onEnabled={() => setNeedsSound(false)} /> : null}
+      <video src={drop.preroll_video_url} loop autoPlay muted playsInline controls aria-label={tr("app.live.advertisement")} className="h-full w-full object-contain" />
     </div> : <div className="flex h-full flex-col items-center justify-center gap-4 px-6 pb-20 text-center">
       {drop.image_url ? <img src={drop.image_url} alt={drop.title} className="h-24 max-w-[60%] object-contain sm:h-40" /> : null}
       <p className="text-xl font-black sm:text-3xl">OneDailyDrop Live</p>
@@ -747,14 +741,9 @@ export function BroadcastStage({
   untilEnd: number | null;
 }) {
   const tr = useCopy();
-  const broadcast = useLiveBroadcast();
-  const retainedDrop = useRef(drop);
-  if (!broadcast.session || broadcast.session.dropKey === drop.drop_key) retainedDrop.current = drop;
-  else if (broadcast.session.dropKey === retainedDrop.current.drop_key) drop = retainedDrop.current;
-  const watching = broadcast.session?.dropKey === drop.drop_key;
-  const showable = drop.state === "waiting" || drop.state === "live" || watching;
+  const showable = drop.state === "waiting" || drop.state === "live";
   if (!showable) return null;
-  if (drop.state === "waiting" && !watching) {
+  if (drop.state === "waiting") {
     return <PreShow drop={drop} untilStart={untilStart} />;
   }
   /* The price band under the picture, whichever presenter holds the stage. */
@@ -777,7 +766,7 @@ export function BroadcastStage({
    * there is.
    */
   /*
-   * Chloe is a presenter, and she was treated as the last resort.
+   * the host is a presenter, and she was treated as the last resort.
    *
    * The host slot took a stream or a recording, and she appeared only when
    * there was neither — so supplying product footage silently removed her, and
@@ -797,16 +786,6 @@ export function BroadcastStage({
      publish. */
   const showsProduct = hasDemo || Boolean(drop.image_url);
 
-  /* A live stream outranks Chloe; with none, she has the whole stage and
-     shares it with the product herself — see SwapStage. */
-  if (!hasStream && drop.tavus_available) {
-    return (
-      <div className="mt-4 overflow-hidden rounded-2xl border border-white/10 bg-[#061224] shadow-2xl">
-        <TavusHost market={market} drop={drop} board={board} />
-      </div>
-    );
-  }
-
   return (
     <div
       className={cn(
@@ -824,13 +803,13 @@ export function BroadcastStage({
           *
           * This branch draws the stream iframe, and it was keyed on hasHost —
           * which was fine while hasHost meant "a stream or a recording", and
-          * became a bug the moment Chloe was added to it: she made hasHost true,
+          * became a bug the moment the host was added to it: she made hasHost true,
           * fell into the iframe, and the page rendered an <iframe> with no src.
           * A black rectangle where the host should be, on a live drop, and she
           * never got the chance to load at all.
           */}
         {hasStream && isVideoFile(drop.stream_embed_url) ? (
-          /* Chloe's recording uploaded as a file rather than a link to a
+          /* the host's recording uploaded as a file rather than a link to a
              player. An iframe pointed at an .mp4 shows a bare browser player,
              or nothing; a video element is what a file needs. Muted so the
              browser will start it, with controls to turn the sound on. */
@@ -881,9 +860,7 @@ export function BroadcastStage({
             ) : null}
             <p className="text-xl font-black text-white">OneDailyDrop Live</p>
             <p className="mt-2 max-w-sm text-sm leading-relaxed text-white/65">
-              {drop.state === "waiting"
-                ? tr("app.live.hostJoinsSoon")
-                : tr("app.live.offerLiveBelow")}
+              {tr("app.live.offerLiveBelow")}
             </p>
           </div>
         )}
@@ -894,7 +871,7 @@ export function BroadcastStage({
       </div>
 
       {showsProduct && (
-        /* On a phone the footage gets a whole 16:9 frame under Chloe and is
+        /* On a phone the footage gets a whole 16:9 frame under the host and is
            shown uncropped: squeezed into a strip and cropped to fill it, it
            was a grey close-up of nothing. Stills keep a shorter two-up row. */
         <div
@@ -968,338 +945,6 @@ function ProductStillMissing({ inUse }: { inUse?: boolean }) {
       <p className="text-xs leading-relaxed text-white/40">
         {inUse ? tr("app.live.photoInUseMissing") : tr("app.live.photoMissing")}
       </p>
-    </div>
-  );
-}
-
-type SharedChatMessage = {
-  id: string;
-  kind: "viewer" | "chloe" | "note";
-  author: string;
-  text: string;
-  at: number;
-  sent?: boolean;
-  mine?: boolean;
-};
-
-type ServerChatMessage = { id: number; author: string; text: string; status: string; created_at: string };
-
-/* What the host console says Chloe is doing: reading the script, or taking
-   questions. Empty when no console has said anything yet. */
-type HostPhase = "presenting" | "answering" | "";
-
-/*
- * Chloe, shared by everybody watching, and the chat they share.
- *
- * Every viewer joins the same conversation to watch, with no camera or
- * microphone, and questions go into one chat on this site that everybody
- * sees. They reach Chloe through the host console, never from a viewer's
- * browser: see src/liveHost.js.
- *
- * The call itself is held by LiveBroadcastProvider in the layout, so leaving
- * this page for a category does not hang up on her; she moves to a small
- * player in the corner instead.
- *
- * Questions wait while she presents. A chat where nothing is answered looks
- * dead and people leave, so the wait is said out loud: the chat shows what
- * she is doing and how many questions are in line, a question posted during
- * the presentation gets its place in the line straight back, and the console
- * has her acknowledge the questions between script lines.
- */
-export function TavusHost({ market, drop, board }: { market: string; drop: LiveDropView; board?: React.ReactNode }) {
-  const tr = useCopy();
-  const live = useLiveBroadcast();
-  const watching = live.session?.dropKey === drop.drop_key;
-  const [starting, setStarting] = useState(false);
-  const [resume, setResume] = useState(false);
-  const [error, setError] = useState("");
-  const [needsPlay, setNeedsPlay] = useState(false);
-  const [question, setQuestion] = useState("");
-  const [postError, setPostError] = useState("");
-  const [posting, setPosting] = useState(false);
-  const [chat, setChat] = useState<SharedChatMessage[]>([]);
-  const [phase, setPhase] = useState<HostPhase>("");
-  const [queued, setQueued] = useState(0);
-  const lastIdRef = useRef(0);
-  const mineRef = useRef(new Set<string>());
-  const listRef = useRef<HTMLDivElement | null>(null);
-
-  /* Everybody's questions, every few seconds, for as long as the drop is on. */
-  useEffect(() => {
-    let cancelled = false;
-    const poll = async () => {
-      const response = await fetch(
-        `/api/live/chat?drop_key=${encodeURIComponent(drop.drop_key)}&after=${lastIdRef.current}`,
-      ).catch(() => null);
-      if (cancelled || !response?.ok) return;
-      const body = (await response.json().catch(() => ({}))) as {
-        messages?: ServerChatMessage[];
-        phase?: HostPhase;
-        queued?: number;
-        sent_ids?: number[];
-      };
-      setPhase(body.phase === "presenting" || body.phase === "answering" ? body.phase : "");
-      setQueued(Math.max(0, Number(body.queued) || 0));
-      const sentIds = new Set((body.sent_ids || []).map((id) => `m${id}`));
-      const rows = body.messages || [];
-      if (rows.length) lastIdRef.current = Math.max(lastIdRef.current, ...rows.map((row) => row.id));
-      setChat((current) => {
-        const known = new Set(current.map((message) => message.id));
-        const updated = current.map((message) => (sentIds.has(message.id) ? { ...message, sent: true } : message));
-        const incoming = rows
-          .map((row) => ({
-            id: `m${row.id}`,
-            kind: "viewer" as const,
-            author: mineRef.current.has(`m${row.id}`) ? tr("app.live.you") : row.author,
-            text: row.text,
-            at: Date.parse(row.created_at),
-            sent: row.status === "sent",
-            mine: mineRef.current.has(`m${row.id}`),
-          }))
-          .filter((message) => !known.has(message.id));
-        return [...updated, ...incoming].slice(-80);
-      });
-    };
-    void poll();
-    const timer = setInterval(poll, 3000);
-    return () => {
-      cancelled = true;
-      clearInterval(timer);
-    };
-  }, [drop.drop_key]);
-
-  /* The chat and Chloe's captions, in the order they happened. */
-  const lines = [
-    ...chat,
-    ...(watching
-      ? live.captions.map((caption) => ({ id: caption.id, kind: "chloe" as const, author: "Chloe", text: caption.text, at: caption.at }))
-      : []),
-  ]
-    .sort((left, right) => left.at - right.at)
-    .slice(-60);
-
-  useEffect(() => {
-    const list = listRef.current;
-    if (list) list.scrollTop = list.scrollHeight;
-  }, [lines.length]);
-
-  useEffect(() => {
-    if (watching) { setResume(false); return; }
-    if ((live.leftDropKey === drop.drop_key && !resume) || drop.state !== "live") return;
-    let cancelled = false;
-    let retry: ReturnType<typeof setTimeout> | undefined;
-    const controller = new AbortController();
-    const connect = async () => {
-      setStarting(true);
-      const response = await fetch(`/api/live/host?market=${encodeURIComponent(market)}`, { signal: controller.signal }).catch(() => null);
-      const body = await response?.json().catch(() => ({}));
-      if (cancelled) return;
-      if (!response?.ok || !body?.conversation_url || body.drop_key !== drop.drop_key) {
-        setError(body?.error || tr("app.live.couldNotJoin"));
-        retry = setTimeout(connect, 5000);
-        return;
-      }
-      setStarting(false);
-      setError("");
-      live.join({ conversationUrl: body.conversation_url, dropKey: drop.drop_key, title: drop.title,
-        market, productVideo: drop.video_url, productImage: drop.image_url });
-      recordLiveDropEvent(drop.drop_key, "host_started");
-    };
-    void connect();
-    return () => { cancelled = true; controller.abort(); if (retry) clearTimeout(retry); };
-  }, [watching, resume, live.leftDropKey, live.join, drop.drop_key, drop.state, drop.title, drop.video_url, drop.image_url, market, tr]);
-
-  const ask = async (event: React.FormEvent) => {
-    event.preventDefault();
-    const text = question.trim();
-    if (!text || posting) return;
-    setPosting(true);
-    setPostError("");
-    const response = await fetch("/api/live/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ drop_key: drop.drop_key, session_id: analyticsSessionId(), text }),
-    }).catch(() => null);
-    const body = await response?.json().catch(() => ({}));
-    setPosting(false);
-    if (!response?.ok) {
-      setPostError(body?.error || tr("app.live.didntSend"));
-      return;
-    }
-    setQuestion("");
-    const id = `m${body.id}`;
-    mineRef.current.add(id);
-    const position = Number(body.position) || 0;
-    const presenting = body.phase === "presenting";
-    /* Straight back, so nobody sits wondering whether anybody saw it. */
-    setChat((current) => [
-      ...current.map((message) => (message.id === id ? { ...message, author: tr("app.live.you"), mine: true } : message)),
-      {
-        id: `note-${body.id}`,
-        kind: "note" as const,
-        author: "",
-        text: presenting
-          ? tr("app.live.gotItPresenting", { position: position || 1 })
-          : tr("app.live.gotIt", { position: position || 1 }),
-        at: new Date().getTime() + 1,
-      },
-    ].slice(-80));
-  };
-
-  const inLineText = queued === 1 ? tr("app.live.questionsOne") : tr("app.live.questionsMany", { count: queued });
-  const status =
-    phase === "presenting"
-      ? { tone: "bg-white/10 text-white", dot: "bg-lime", text: `${tr("app.live.statusPresenting")}${queued ? ` · ${inLineText}` : ""}` }
-      : phase === "answering"
-        ? { tone: "bg-lime text-ink", dot: "bg-ink", text: queued ? `${tr("app.live.qaOpen")} · ${inLineText}` : tr("app.live.qaAskAnything") }
-        : null;
-
-  /*
-   * The chat, on the picture, the way a phone live stream shows it.
-   *
-   * It was a dark panel under the video, which read as a comments box on a
-   * web page rather than an audience in the room. Now the last few lines sit
-   * over the lower left of the stage with no background at all (white text
-   * with a shadow to stay readable on any frame), fading out as they rise, and
-   * the question box is a clear pill along the bottom edge.
-   */
-  const shadow = "[text-shadow:0_1px_2px_rgba(0,0,0,0.95),0_0_10px_rgba(0,0,0,0.55)]";
-  const recent = lines.slice(-6);
-  const chatOverlay = (onPhone: boolean) => (
-    <>
-      <div
-        ref={listRef}
-        aria-live="polite"
-        className={cn(
-          "pointer-events-none absolute bottom-14 left-3 z-30 max-h-[52%] w-[62%] flex-col justify-end gap-1 overflow-hidden sm:bottom-16 sm:left-4 sm:w-[48%]",
-          onPhone ? "flex" : "hidden sm:flex",
-          shadow,
-        )}
-        style={{ maskImage: "linear-gradient(to top, black 70%, transparent)", WebkitMaskImage: "linear-gradient(to top, black 70%, transparent)" }}
-      >
-        {status ? (
-          <p className="mb-0.5 flex items-center gap-1.5 text-[11px] font-bold text-white">
-            <span className={cn("h-1.5 w-1.5 animate-pulse rounded-full", phase === "answering" ? "bg-lime" : "bg-white")} aria-hidden="true" />
-            {status.text}
-          </p>
-        ) : null}
-        {recent.length ? (
-          recent.map((message) =>
-            message.kind === "note" ? (
-              <p key={message.id} className="text-xs font-semibold leading-snug text-lime sm:text-sm">
-                {message.text}
-              </p>
-            ) : (
-              <p key={message.id} className="text-xs leading-snug text-white sm:text-sm">
-                <span className={message.kind === "chloe" ? "font-black text-lime" : "font-bold text-white/90"}>
-                  {message.author}
-                </span>{" "}
-                {message.text}
-                {"sent" in message && message.sent ? (
-                  <span className="ml-1 text-[10px] font-semibold text-lime">{tr("app.live.chloeHasIt")}</span>
-                ) : "mine" in message && message.mine ? (
-                  <span className="ml-1 text-[10px] text-white/70">{tr("app.live.inLine")}</span>
-                ) : null}
-              </p>
-            ),
-          )
-        ) : (
-          <p className="text-xs text-white/90 sm:text-sm">{tr("app.live.askAnything")}</p>
-        )}
-      </div>
-      <form onSubmit={ask} className="absolute inset-x-3 bottom-3 z-30 flex gap-2 sm:inset-x-4">
-        <input
-          type="text"
-          value={question}
-          onChange={(event) => setQuestion(event.target.value)}
-          maxLength={200}
-          placeholder={postError || tr("app.live.askPlaceholder")}
-          aria-label={tr("app.live.questionLabel")}
-          className={cn(
-            "h-9 min-w-0 flex-1 rounded-full border bg-black/10 px-4 text-sm text-white outline-none placeholder:text-white/80 focus:border-white/80 sm:h-10",
-            postError ? "border-[#ff7a68]" : "border-white/45",
-            shadow,
-          )}
-        />
-        <button
-          type="submit"
-          disabled={!question.trim() || posting}
-          className="h-9 rounded-full bg-lime px-4 text-xs font-black text-ink shadow-lg disabled:opacity-50 sm:h-10"
-        >
-          {tr("app.live.send")}
-        </button>
-      </form>
-    </>
-  );
-
-  if (watching) {
-    return (
-      <div className={`relative flex w-full min-w-0 flex-col bg-[#07172b] transition-opacity duration-700 ${live.fading ? "opacity-0" : "opacity-100"}`}>
-        <div className="relative">
-          <SwapStage
-            closing={live.closing || ["ended", "sold_out"].includes(drop.state)}
-            talking={live.talking}
-            productVideo={drop.video_url}
-            productImage={drop.image_url}
-            productAlt={drop.title}
-            host={
-              <>
-                <BroadcastVideo
-                  stream={live.stream}
-                  className="h-full w-full object-cover"
-                  label={tr("app.live.chloeLabel")}
-                  onNeedsPlay={setNeedsPlay}
-                />
-                {!live.joined ? (
-                  <div className="absolute inset-0 flex items-center justify-center bg-[#07172b] text-sm font-bold text-white/75">
-                    {tr("app.live.connectingChloe")}
-                  </div>
-                ) : null}
-              </>
-            }
-          />
-          {needsPlay ? <EnableStageSound onEnabled={() => setNeedsPlay(false)} /> : null}
-          <div className="absolute right-3 top-3 z-30 flex gap-1.5">
-            <MusicToggle on={live.musicOn} onChange={live.setMusicOn} />
-            <button
-              type="button"
-              onClick={live.leave}
-              className="rounded-full border border-white/20 bg-black/70 px-3 py-1.5 text-xs font-bold text-white backdrop-blur hover:bg-black"
-            >
-              {tr("app.live.leave")}
-            </button>
-          </div>
-          {!live.closing && !["ended", "sold_out"].includes(drop.state) && chatOverlay(true)}
-        </div>
-        {error || live.error ? <p className="px-3 pt-2 text-xs font-semibold text-red-300">{error || live.error}</p> : null}
-        {board}
-      </div>
-    );
-  }
-
-  return (
-    <div className="relative flex w-full min-w-0 flex-col">
-      <div className="relative">
-        <SwapStage
-          talking
-          productVideo={drop.video_url}
-          productImage={drop.image_url}
-          productAlt={drop.title}
-          host={
-            <div className="flex h-full w-full flex-col items-center justify-center bg-[radial-gradient(circle_at_50%_20%,#123b69_0%,#07172b_48%,#030914_100%)] px-4 pb-10 text-center">
-              <p className="hidden text-base font-black text-white sm:block sm:text-xl">{tr("app.live.presentingLive")}</p>
-              <p className="mt-1.5 hidden max-w-xs text-xs leading-relaxed text-white/65 sm:block sm:text-sm">
-                {tr("app.live.watchWithEveryone")}
-              </p>
-              {live.leftDropKey === drop.drop_key && !resume ? <button type="button" onClick={() => setResume(true)} className="mt-3 rounded-full bg-lime px-5 py-2 text-sm font-bold text-ink">{tr("app.live.watchChloe")}</button> : <p role="status" className="mt-3 text-sm font-bold text-white">{starting ? tr("app.live.connectingChloe") : tr("app.live.presentingLive")}</p>}
-              {error ? <p className="relative z-20 mt-2 text-xs font-semibold text-red-300">{error}</p> : null}
-            </div>
-          }
-        />
-        {/* Connection is automatic; the shared chat remains available. */}
-        {chatOverlay(false)}
-      </div>
-      {board}
     </div>
   );
 }
