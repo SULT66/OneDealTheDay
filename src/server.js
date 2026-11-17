@@ -4445,7 +4445,7 @@ app.post("/api/admin/odd-tv/show",admin,express.json({limit:"5kb"}),(req,res)=>{
   if(!oddTvEnabled)return res.status(503).json({error:"ODD TV disabled."});
   const marketCode=normalizeMarket(req.body?.market)||"us";
   try{
-    const id=oddTv.createShow(db,{market:marketCode,productIds:req.body?.product_ids,now:Date.now()});
+    const id=oddTv.createShow(db,{market:marketCode,productIds:req.body?.product_ids,scripts:req.body?.scripts,now:Date.now()});
     return res.status(201).json({show_id:id,state:"draft"});
   }catch(error){return res.status(400).json({error:error.message});}
 });
@@ -4571,6 +4571,7 @@ app.post("/api/odd-tv/worker/next",oddWorkerAuth,async(req,res)=>{
     const speech=await composeHostTurn({
       product:listing,
       question:question?questions.map((item,index)=>String(index+1)+". "+item.text).join(" "):"",
+      hostScript:question?"":oddTv.scriptForProduct(show,listing.id),
       locale:"en-US",generateText
     });
     return res.json({
