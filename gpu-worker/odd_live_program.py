@@ -44,13 +44,10 @@ def launch_ffmpeg(width,height,url):
     ar,aw=os.pipe()
     cmd=[
         "ffmpeg","-nostdin","-hide_banner","-loglevel","warning",
-        # JPEG image2pipe frames are self-delimiting. POSIX pipes can return
-        # short writes; rawvideo treated those chunks like whole frames and
-        # stalled before FFmpeg opened the RTSP publisher.
-        "-probesize","5000000","-analyzeduration","1000000",
-        "-thread_queue_size","32","-f","image2pipe","-vcodec","mjpeg",
-        "-framerate",str(FPS),"-i",f"pipe:{vr}",
-        "-probesize","5000000","-analyzeduration","1000000",
+        # Raw video carries its exact dimensions and pixel format, avoiding
+        # image2pipe stream probing before FFmpeg can publish the RTSP path.
+        "-thread_queue_size","32","-f","rawvideo","-pixel_format","bgr24",
+        "-video_size",f"{width}x{height}","-framerate",str(FPS),"-i",f"pipe:{vr}",
         "-thread_queue_size","64","-f","s16le","-ar",str(AUDIO_RATE),
         "-ac","1","-i",f"pipe:{ar}",
         "-map","0:v:0","-map","1:a:0",
@@ -318,9 +315,7 @@ def main():
                         raise RuntimeError("AUDIO_ENCODER_FAILED") from audio_error[0]
                     if process.poll() is not None:
                         raise RuntimeError("ENCODER_TERMINATED")
-            ok,encoded=cv2.imencode(".jpg",frame,[cv2.IMWRITE_JPEG_QUALITY,90])
-            if not ok: raise RuntimeError("JPEG_FRAME_ENCODE_FAILED")
-            write_all(video_fd,encoded.tobytes())
+            write_all(video_fd,frame.tobytes())
             if can_play and frame_count>=total:
                 path,info,_,_=current
                 aired=path.with_name(path.name.replace(".playing.json",".aired.json"))
