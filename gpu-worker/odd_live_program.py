@@ -47,10 +47,10 @@ def launch_ffmpeg(width,height,url):
         # JPEG image2pipe frames are self-delimiting. POSIX pipes can return
         # short writes; rawvideo treated those chunks like whole frames and
         # stalled before FFmpeg opened the RTSP publisher.
-        "-probesize","32","-analyzeduration","0",
+        "-probesize","5000000","-analyzeduration","1000000",
         "-thread_queue_size","32","-f","image2pipe","-vcodec","mjpeg",
         "-framerate",str(FPS),"-i",f"pipe:{vr}",
-        "-probesize","32","-analyzeduration","0",
+        "-probesize","5000000","-analyzeduration","1000000",
         "-thread_queue_size","64","-f","s16le","-ar",str(AUDIO_RATE),
         "-ac","1","-i",f"pipe:{ar}",
         "-map","0:v:0","-map","1:a:0",
@@ -58,7 +58,11 @@ def launch_ffmpeg(width,height,url):
         "-b:v","3M","-g","50","-c:a","aac","-b:a","128k",
         "-f","rtsp","-rtsp_transport","tcp",url
     ]
-    process=subprocess.Popen(cmd,pass_fds=(vr,ar),stdin=subprocess.DEVNULL)
+    env=os.environ.copy()
+    wsl_cuda=Path("/usr/lib/wsl/lib")
+    if (wsl_cuda/"libcuda.so.1").exists():
+        env["LD_LIBRARY_PATH"]=str(wsl_cuda)+(":"+env["LD_LIBRARY_PATH"] if env.get("LD_LIBRARY_PATH") else "")
+    process=subprocess.Popen(cmd,pass_fds=(vr,ar),stdin=subprocess.DEVNULL,env=env)
     os.close(vr);os.close(ar)
     return process,vw,aw
 
