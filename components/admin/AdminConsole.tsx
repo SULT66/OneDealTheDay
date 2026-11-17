@@ -8,7 +8,6 @@ import { Numbers } from "./Numbers";
 import { SearchDemand } from "./SearchDemand";
 import { Weekly } from "./Weekly";
 import { MediaUpload } from "./MediaUpload";
-import { LiveHostConsole } from "./LiveHostConsole";
 import { ODDTVConsole } from "./ODDTVConsole";
 import { MerchandisingPanel } from "./MerchandisingPanel";
 import { MerchantHealth } from "./MerchantHealth";
@@ -746,7 +745,6 @@ function DropRow({
   const [stock, setStock] = useState(String(drop.quantity_remaining));
   const [rowMessage, setRowMessage] = useState("");
   const [publishing, setPublishing] = useState(false);
-  const [hostOpen, setHostOpen] = useState(false);
   const [script, setScript] = useState({
     host_script_intro: drop.host_script_intro || "",
     host_script_reveal: drop.host_script_reveal || "",
@@ -978,20 +976,8 @@ function DropRow({
           Open the page
         </a>
 
-        {/* Chloe takes the chat's questions only through this console, so it
-            is offered for any drop that has not finished. */}
-        {drop.published && !["ended", "sold_out"].includes(drop.state) && (
-          <button
-            type="button"
-            onClick={() => setHostOpen((open) => !open)}
-            className="inline-flex h-9 cursor-pointer items-center rounded-full bg-lime px-4 text-xs font-bold text-ink transition-opacity hover:opacity-88"
-          >
-            {hostOpen ? "Close host console" : "Open host console"}
-          </button>
-        )}
-      </div>
 
-      {hostOpen && <LiveHostConsole adminKey={adminKey} dropKey={drop.drop_key} />}
+      </div>
 
       {rowMessage && (
         <p className="mt-3 text-xs font-semibold text-fg-muted" role="status">
