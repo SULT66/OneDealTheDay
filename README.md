@@ -221,28 +221,11 @@ Set these values only in the hosting provider's encrypted app settings:
 
 Without `OPENAI_API_KEY`, the site remains usable and the assistant endpoint reports that the connection is pending.
 
-## OneDailyDrop Live AI host
+## ODD Live TV
 
-The Tavus `get_product_details` tool calls:
+ODD Live TV is the self-hosted, one-hour shopping show. The admin selects two published products, adds optional host notes for each 30-minute segment, and starts the show. The local worker grounds narration and answers in verified catalog facts. Viewer questions are collected in the ODD Live chat and queued for scheduled Q&A breaks.
 
-`POST https://www.onedailydrop.com/api/integrations/tavus/get-product-details`
-
-Configure Tavus API delivery with bearer authentication. Store the same strong
-random value as `TAVUS_TOOL_SECRET` in Azure App Settings and in the Tavus tool
-authentication field; never reuse `ADMIN_KEY`. The request body may contain a
-market (`us`, `ca`, `uk`, `fr` or `de`) and an optional published `drop_key`.
-The response withholds the deal price, scarcity and buy URL until the server's
-Live Drop state is actually live, and it omits facts the database cannot verify.
-
-To embed Chloe on `/:market/live`, set the server-only `TAVUS_API_KEY` and the
-Chloe `TAVUS_PAL_ID` in Azure App Settings. The browser calls the OneDailyDrop
-backend, the backend creates a Tavus conversation, and only Tavus's short-lived
-`conversation_url` is returned to the receive-only media client. A conversation starts only after
-the shopper presses **Watch & chat with Chloe** and is ended when they leave
-the page. The browser joins receive-only: it publishes no camera or microphone
-tracks, and typed questions are sent as Tavus `conversation.respond` events.
-
-Before public launch, use HTTPS, protect `.env`, add Privacy/Terms/Contact pages, and comply with Amazon Associates and product-data provider rules. Do not scrape Amazon directly.
+The broadcaster runs on the configured Diana workstation and publishes to MediaMTX. Follow `docs/odd-live-diana-launch.md` for setup and playback checks. The old Tavus host integration has been removed from this repository.
 
 ## eBay account-deletion compliance
 
