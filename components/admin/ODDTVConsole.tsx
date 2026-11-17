@@ -44,6 +44,27 @@ export function ODDTVConsole({adminKey}:{adminKey:string}) {
       }
     }catch{}
   },[]);
+  useEffect(()=>{
+    if(!adminKey)return;
+    let active=true;
+    const controller=new AbortController();
+    fetch("/api/admin/odd-tv/show/pending",{
+      headers:{"X-Admin-Key":adminKey},cache:"no-store",signal:controller.signal,
+    })
+      .then(async response=>{
+        if(!response.ok)throw new Error("Could not check for a saved show.");
+        return response.json();
+      })
+      .then((data:{show_id?:number|null})=>{
+        const pending=Number(data?.show_id);
+        if(active&&Number.isSafeInteger(pending)&&pending>0){
+          setShowId(pending);setRetryShowId(pending);setNotice("DIANA_CONTROLLER_OFFLINE");
+          try{window.sessionStorage.setItem("odd-live-pending-show",String(pending));}catch{}
+        }
+      })
+      .catch(error=>{if(active&&error?.name!=="AbortError")setNotice(error instanceof Error?error.message:"Could not check for a saved show.");});
+    return()=>{active=false;controller.abort();};
+  },[adminKey]);
 
   useEffect(()=>{
     let active=true;
