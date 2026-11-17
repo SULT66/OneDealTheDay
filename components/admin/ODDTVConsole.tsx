@@ -99,14 +99,14 @@ export function ODDTVConsole({adminKey}:{adminKey:string}) {
   },[products,query]);
 
   function toggle(id:number) {
-    setSelected(current=>current.includes(id)?current.filter(value=>value!==id):current.length>=10?current:[...current,id]);
+    setSelected(current=>current.includes(id)?current.filter(value=>value!==id):current.length>=2?current:[...current,id]);
   }
 
   async function launch(manual:boolean) {
     if(!adminKey){setNotice("Enter the admin key above first.");return;}
     if(!broadcast){setNotice("Waiting for Diana’s controller status.");return;}
     if(!broadcast.controller_online){setNotice("Diana controller is offline. Start the stream and finish its one-time setup first.");return;}
-    if(manual&&(selected.length<2||selected.length>10)){setNotice("Choose 2 to 10 products.");return;}
+    if(manual&&selected.length!==2){setNotice("Choose exactly 2 products for the 30/30 pilot.");return;}
     setBusy(true);setNotice("");setShowId(null);
     try{
       const headers={"Content-Type":"application/json","X-Admin-Key":adminKey};
@@ -156,7 +156,7 @@ export function ODDTVConsole({adminKey}:{adminKey:string}) {
         </div>
       </div>
       <p className="mt-1 max-w-prose text-sm text-fg-muted">
-        Published products are already in the catalog. Choose 2–10 for a custom show; two products stay on air for 30 minutes each. ODD Live divides the one-hour show evenly across the selected products.
+        Published products are already in the catalog. Choose exactly 2 products for this pilot: the first is on air for minutes 0–30, the second for minutes 30–60. Viewer questions are prepared during the product segments and answered in scheduled Q&A windows.
       </p>
       <div className="mt-5 flex flex-wrap items-end gap-3">
         <label className="block">
@@ -173,12 +173,12 @@ export function ODDTVConsole({adminKey}:{adminKey:string}) {
           <span className="text-xs font-semibold uppercase tracking-[0.1em] text-fg-subtle">Find published products ({products.length})</span>
           <input value={query} onChange={event=>setQuery(event.target.value)} placeholder="Search title or store" className="mt-1 h-10 w-full rounded-full border border-border bg-surface-2 px-4 text-sm text-fg" />
         </label>
-        <span className="text-sm font-semibold text-fg-muted">{selected.length}/10 selected</span>
+        <span className="text-sm font-semibold text-fg-muted">{selected.length}/2 selected</span>
       </div>
       <div className="mt-3 max-h-80 overflow-y-auto rounded-xl border border-border">
         {visible.map(product=>(
           <label key={product.id} className="flex cursor-pointer items-center gap-3 border-b border-border p-3 last:border-b-0 hover:bg-surface-2">
-            <input type="checkbox" checked={selected.includes(product.id)} disabled={!selected.includes(product.id)&&selected.length>=10||busy} onChange={()=>toggle(product.id)} />
+            <input type="checkbox" checked={selected.includes(product.id)} disabled={!selected.includes(product.id)&&selected.length>=2||busy} onChange={()=>toggle(product.id)} />
             {product.image_url?<img src={product.image_url} alt="" className="h-12 w-12 rounded-lg bg-white object-contain" loading="lazy"/>:null}
             <span className="min-w-0 flex-1">
               <span className="block text-sm font-semibold text-fg">{product.title}</span>
@@ -190,11 +190,11 @@ export function ODDTVConsole({adminKey}:{adminKey:string}) {
         {visible.length===0?<p className="p-4 text-sm text-fg-muted">No published products match.</p>:null}
       </div>
       <div className="mt-4 flex flex-wrap gap-2">
-        <button type="button" disabled={busy||selected.length<2||selected.length>10} onClick={()=>void launch(true)} className="rounded-full bg-lime px-4 py-2 text-sm font-bold text-ink disabled:opacity-50">
+        <button type="button" disabled={busy||selected.length!==2} onClick={()=>void launch(true)} className="rounded-full bg-lime px-4 py-2 text-sm font-bold text-ink disabled:opacity-50">
           {busy?"Starting…":"Start with selected products"}
         </button>
         <button type="button" disabled={busy} onClick={()=>void launch(false)} className="rounded-full border border-border px-4 py-2 text-sm font-semibold text-fg disabled:opacity-50">
-          Auto-select products and start
+          Auto-select 2 products and start
         </button>
       </div>
       {notice?<p role="status" className="mt-3 text-sm text-fg-muted">{notice}{showId?(" · Show "+showId):""}</p>:null}
