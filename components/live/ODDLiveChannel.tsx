@@ -42,7 +42,7 @@ export function ODDLiveChannel({embedUrl,market}:{embedUrl?:string;market:string
       aria-label="ODD Live TV"
       className={compact
         ?"fixed bottom-4 right-4 z-[80] w-[min(92vw,360px)] overflow-hidden rounded-xl border border-white/20 bg-[#061224] text-white shadow-2xl"
-        :"mx-auto w-full px-3 pt-5 sm:px-6"}
+        :"mx-auto w-full px-3 pt-5 sm:px-6 "+(expanded?"max-w-7xl":"max-w-5xl")}
     >
       <div className={"relative overflow-hidden bg-[#061224] text-white "+(compact?"":"rounded-2xl border border-white/10 shadow-xl")}>
         {!compact?<div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
