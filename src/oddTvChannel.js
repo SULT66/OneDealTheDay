@@ -42,6 +42,8 @@ function init(db) {
     INSERT OR IGNORE INTO odd_tv_broadcast_control(id,desired_state,actual_state,requested_at)
       VALUES(1,'stopped','offline',CURRENT_TIMESTAMP);
   `);
+  if(!db.pragma("table_info(odd_tv_chat)").some(column=>column.name==="product_id"))
+    db.exec("ALTER TABLE odd_tv_chat ADD COLUMN product_id INTEGER");
 }
 function validateProducts(db,market,ids) {
   if(!Array.isArray(ids)||ids.length<2||ids.length>10||new Set(ids).size!==ids.length||
@@ -121,11 +123,10 @@ function workerShow(db,market="us",now=Date.now(),lookaheadMs=10*60*1000) {
   ).get(market,nowIso,new Date(now+lookaheadMs).toISOString(),nowIso)||null;
   return upcoming?{show:upcoming,opening:true}:null;
 }
-function currentProduct(db,show,now=Date.now()) {
+function productById(db,show,productId,now=Date.now()) {
   const ids=JSON.parse(show.product_ids);
-  const start=Date.parse(show.start_at);
-  const elapsed=Math.min(SHOW_MINUTES*60000-1,Math.max(0,now-start));
-  const index=Math.min(ids.length-1,Math.floor(elapsed/(SHOW_MINUTES*60000/ids.length)));
+  const index=ids.indexOf(Number(productId));
+  if(index<0)return {index:-1,product:null};
   const product=db.prepare(
     "SELECT id,title,brand,retailer_name,description,current_price,currency,checked_at,image_url,affiliate_url,availability FROM products WHERE id=? AND market=? AND status='published'"
   ).get(ids[index],show.market);
@@ -141,6 +142,13 @@ function currentProduct(db,show,now=Date.now()) {
     price_verified:priceVerified
   }};
 }
+function currentProduct(db,show,now=Date.now()) {
+  const ids=JSON.parse(show.product_ids);
+  const start=Date.parse(show.start_at);
+  const elapsed=Math.min(SHOW_MINUTES*60000-1,Math.max(0,now-start));
+  const index=Math.min(ids.length-1,Math.floor(elapsed/(SHOW_MINUTES*60000/ids.length)));
+  return productById(db,show,ids[index],now);
+}
 function publicShow(db,market,now=Date.now()) {
   const show=currentShow(db,market,now);
   if(!show)return null;
@@ -152,10 +160,14 @@ function publicShow(db,market,now=Date.now()) {
     product,
   };
 }
-function postQuestion(db,{showId,sessionId,text,now=Date.now()}) {
+function postQuestion(db,{showId,sessionId,text,productId=null,now=Date.now()}) {
   const checked=chatMessageInput(text);
   if(checked.error)throw new Error(checked.error);
   if(!sessionId||sessionId.length>128)throw new Error("INVALID_SESSION");
+  if(productId!==null) {
+    const show=db.prepare("SELECT product_ids FROM odd_tv_shows WHERE id=?").get(showId);
+    if(!show||!JSON.parse(show.product_ids).includes(Number(productId)))throw new Error("INVALID_PRODUCT_FOR_SHOW");
+  }
   const recent=db.prepare(
     "SELECT created_at FROM odd_tv_chat WHERE show_id=? AND session_id=? ORDER BY id DESC LIMIT 1"
   ).get(showId,sessionId);
@@ -165,8 +177,8 @@ function postQuestion(db,{showId,sessionId,text,now=Date.now()}) {
   ).get(showId,sessionId).n;
   if(queued>=3)throw new Error("CHAT_QUEUE_FULL");
   const inserted=db.prepare(
-    "INSERT INTO odd_tv_chat(show_id,session_id,author,text,status,created_at) VALUES(?,?,?,?,'queued',?)"
-  ).run(showId,sessionId,viewerTag(sessionId),checked.text,new Date(now).toISOString());
+    "INSERT INTO odd_tv_chat(show_id,session_id,author,text,status,created_at,product_id) VALUES(?,?,?,?,'queued',?,?)"
+  ).run(showId,sessionId,viewerTag(sessionId),checked.text,new Date(now).toISOString(),productId===null?null:Number(productId));
   return Number(inserted.lastInsertRowid);
 }
 function messages(db,showId,after=0) {
@@ -174,9 +186,12 @@ function messages(db,showId,after=0) {
     "SELECT id,author,text,status,created_at FROM odd_tv_chat WHERE show_id=? AND id>? AND status!='hidden' ORDER BY id DESC LIMIT 50"
   ).all(showId,Math.max(0,Number(after)||0)).reverse();
 }
-function nextQuestions(db,showId,limit=3) {
-  const count=Math.max(1,Math.min(3,Math.floor(Number(limit)||3)));
-  return db.prepare("SELECT id,text FROM odd_tv_chat WHERE show_id=? AND status='queued' ORDER BY id ASC LIMIT ?")
+function nextQuestions(db,showId,limit=3,productId=null) {
+  const count=Math.max(1,Math.min(50,Math.floor(Number(limit)||3)));
+  if(productId!==null)return db.prepare(
+    "SELECT id,text,product_id FROM odd_tv_chat WHERE show_id=? AND status='queued' AND (product_id=? OR product_id IS NULL) ORDER BY id ASC LIMIT ?"
+  ).all(showId,Number(productId),count);
+  return db.prepare("SELECT id,text,product_id FROM odd_tv_chat WHERE show_id=? AND status='queued' ORDER BY id ASC LIMIT ?")
     .all(showId,count);
 }
 function nextQuestion(db,showId) {
@@ -240,4 +255,4 @@ function markSent(db,showId,questionIds,now=Date.now()) {
     })();
   } catch { return false; }
 }
-module.exports={SHOW_MINUTES,init,validateProducts,pickProducts,createShow,startShow,currentShow,workerShow,currentProduct,publicShow,postQuestion,messages,nextQuestion,nextQuestions,productPresentationDue,markProductPresented,setBroadcastDesired,getBroadcastControl,updateBroadcastHeartbeat,markSent};
+module.exports={SHOW_MINUTES,init,validateProducts,pickProducts,createShow,startShow,currentShow,workerShow,currentProduct,productById,publicShow,postQuestion,messages,nextQuestion,nextQuestions,productPresentationDue,markProductPresented,setBroadcastDesired,getBroadcastControl,updateBroadcastHeartbeat,markSent};
