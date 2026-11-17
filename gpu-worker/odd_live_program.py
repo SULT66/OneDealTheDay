@@ -165,6 +165,19 @@ def main():
     if first is None: raise RuntimeError("BAD_IDLE_IMAGE")
     height,width=first.shape[:2]
     process,video_fd,audio_fd=launch_ffmpeg(width,height,args.rtsp)
+    video_queue=queue.Queue(maxsize=64)
+    video_error=[]
+    def send_video():
+        try:
+            while True:
+                frame_bytes=video_queue.get()
+                if frame_bytes is None:return
+                write_all(video_fd,frame_bytes)
+        except Exception as exc:
+            video_error.append(exc)
+    video_thread=threading.Thread(target=send_video,daemon=True)
+    video_thread.start()
+
     audio_queue=queue.Queue(maxsize=64)
     audio_error=[]
     def send_audio():
@@ -235,6 +248,7 @@ def main():
     print("ODD_LIVE_PROGRAM_STARTING",args.rtsp,flush=True)
     try:
         while process.poll() is None:
+            if video_error: raise RuntimeError("VIDEO_ENCODER_FAILED") from video_error[0]
             if audio_error: raise RuntimeError("AUDIO_ENCODER_FAILED") from audio_error[0]
             try:
                 prepared=decoded_jobs.get_nowait()
@@ -315,7 +329,16 @@ def main():
                         raise RuntimeError("AUDIO_ENCODER_FAILED") from audio_error[0]
                     if process.poll() is not None:
                         raise RuntimeError("ENCODER_TERMINATED")
-            write_all(video_fd,frame.tobytes())
+            frame_bytes=frame.tobytes()
+            while True:
+                try:
+                    video_queue.put(frame_bytes,timeout=0.25)
+                    break
+                except queue.Full:
+                    if video_error:
+                        raise RuntimeError("VIDEO_ENCODER_FAILED") from video_error[0]
+                    if process.poll() is not None:
+                        raise RuntimeError("ENCODER_TERMINATED")
             if can_play and frame_count>=total:
                 path,info,_,_=current
                 aired=path.with_name(path.name.replace(".playing.json",".aired.json"))
@@ -332,6 +355,8 @@ def main():
             elif pause< -1: next_tick=time.monotonic()
         raise RuntimeError("ENCODER_TERMINATED")
     finally:
+        try:video_queue.put(None,timeout=2)
+        except queue.Full:pass
         try:audio_queue.put(None,timeout=2)
         except queue.Full:pass
         for fd in (video_fd,audio_fd):
