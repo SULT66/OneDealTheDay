@@ -4199,6 +4199,15 @@ app.post("/api/admin/odd-tv/show",admin,express.json({limit:"30kb"}),(req,res)=>
     return res.status(201).json({show_id:id,state:"draft"});
   }catch(error){return res.status(400).json({error:error.message});}
 });
+app.get("/api/admin/odd-tv/show/pending",admin,(req,res)=>{
+  res.set("Cache-Control","no-store");
+  if(!oddTvEnabled)return res.status(503).json({error:"ODD TV disabled."});
+  const cutoff=new Date(Date.now()-2*60*60*1000).toISOString();
+  const show=db.prepare(
+    "SELECT id,created_at FROM odd_tv_shows WHERE status='draft' AND created_at>? ORDER BY id DESC LIMIT 1"
+  ).get(cutoff);
+  return res.json(show?{show_id:Number(show.id),created_at:show.created_at}:{show_id:null});
+});
 app.post("/api/admin/odd-tv/show/:id/start",admin,(req,res)=>{
   res.set("Cache-Control","no-store");
   if(!oddTvEnabled)return res.status(503).json({error:"ODD TV disabled."});
