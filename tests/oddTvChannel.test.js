@@ -11,9 +11,13 @@ function setup(){
  tv.init(db);
  return db;
 }
-test("requires 8 to 10 existing published products",()=>{
+test("accepts a two-product pilot and rejects unpublished products",()=>{
  const db=setup();
- assert.throws(()=>tv.createShow(db,{productIds:[1,2]}),/REQUIRE_8/);
+ const id=tv.createShow(db,{productIds:[1,2],now:time});
+ const show=db.prepare("SELECT * FROM odd_tv_shows WHERE id=?").get(id);
+ tv.startShow(db,id,{now:time});
+ assert.equal(tv.publicShow(db,"us",time+29*60000).product.id,1);
+ assert.equal(tv.publicShow(db,"us",time+30*60000).product.id,2);
  assert.throws(()=>tv.createShow(db,{productIds:[1,2,3,4,5,6,7,99]}),/PRODUCT_NOT_PUBLISHED/);
  db.close();
 });
