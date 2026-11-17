@@ -4461,7 +4461,8 @@ app.post("/api/odd-tv/worker/start",oddWorkerAuth,express.json({limit:"5kb"}),(r
   const now=Date.now();
   try{
     // No product_ids means oddTv.createShow selects 8-10 eligible published products.
-    const id=oddTv.createShow(db,{market:marketCode,now});
+    const productIds=Array.isArray(req.body?.product_ids)?req.body.product_ids:undefined;
+    const id=oddTv.createShow(db,{market:marketCode,productIds,now});
     const state=oddTv.startShow(db,id,{now,warmupMs:5*60*1000});
     const broadcast=oddTv.setBroadcastDesired(db,"running",Date.now());
     return res.status(201).json({...state,broadcast});
@@ -4493,13 +4494,15 @@ app.post("/api/odd-tv/worker/next",oddWorkerAuth,async(req,res)=>{
   const {show,opening}=workerState;
   const key="tv:"+show.id;
   if(oddTvLeases.has(key))return res.json({kind:"busy"});
-  const question=oddTv.nextQuestion(db,show.id);
+  const questions=oddTv.nextQuestions(db,show.id,3);
+  const question=questions[0]||null;
   const listing=oddTv.currentProduct(db,show,Date.now()).product;
   if(!listing)return res.status(503).json({error:"No current published product."});
   // Viewer questions take priority. When the queue is empty, narrate each
   // featured product once so the show opens with Chloe instead of silent idle.
   if(!question&&!oddTv.productPresentationDue(db,show.id,listing.id))return res.json({kind:"idle"});
-  const lease=oddTvLeases.acquire(key,question?.id||null,{
+  const questionIds=question?questions.map(item=>item.id):[];
+  const lease=oddTvLeases.acquire(key,question?questionIds:null,{
     kind:question?"question":"presentation",productId:listing.id,opening,
   });
   if(!lease)return res.json({kind:"busy"});
@@ -4518,7 +4521,7 @@ app.post("/api/odd-tv/worker/next",oddWorkerAuth,async(req,res)=>{
       };
     }
     const speech=await composeHostTurn({
-      product:listing,question:question?.text||"",locale:"en-US",generateText
+      product:listing,question:question?questions.map((item,index)=>String(index+1)+". "+item.text).join(" "):"",locale:"en-US",generateText
     });
     return res.json({
       kind:question?"question":"presentation",
