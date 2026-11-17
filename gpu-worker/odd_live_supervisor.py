@@ -211,7 +211,7 @@ def main():
                                 print("ODD_LIVE_RTSP_MISSING_RESTARTING", flush=True)
                                 old = processes.get("broadcaster")
                                 stop_process_group(old, timeout=5)
-                                processes["broadcaster"] = start_broadcaster(log)
+                                processes["broadcaster"] = start_broadcaster(log, ack_delivered)
                                 publisher_started_at = now_mono
                                 stream_missing_since = 0.0
                                 publisher_ok = False
