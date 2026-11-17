@@ -2,10 +2,10 @@
 const crypto = require("crypto");
 const CHAT_MAX_LENGTH = 200;
 function chatMessageInput(value) {
-  const text=String(value||"").replace(/[\\x00-\\x1f\\x7f]+/g," ").replace(/\\s+/g," ").trim();
+  const text=String(value||"").replace(/[\x00-\x1f\x7f]+/g," ").replace(/\s+/g," ").trim();
   if(text.length<2)return {error:"Type a question first."};
-  if(text.length>CHAT_MAX_LENGTH)return {error:`Keep it under ${CHAT_MAX_LENGTH} characters.`};
-  if(/(?:https?:\\/\\/|www\\.|\\b[a-z0-9-]+\\.(?:com|net|org|io|co|ru|xyz|shop|link|ly)\\b)/i.test(text))return {error:"Links can't be posted in the chat."};
+  if(text.length>CHAT_MAX_LENGTH)return {error:"Keep it under 200 characters."};
+  if(/(?:https?:\/\/|www\.|\b[a-z0-9-]+\.(?:com|net|org|io|co|ru|xyz|shop|link|ly)\b)/i.test(text))return {error:"Links can't be posted in the chat."};
   return {text};
 }
 function viewerTag(sessionId) {
