@@ -21,9 +21,19 @@ import wave
 
 ROOT = Path.home() / "odd-ai-humans"
 MUSETALK = ROOT / "MuseTalk"
-OUTPUT = ROOT / "output" / "chloe-smart"
+OUTPUT = Path(os.environ.get("ODD_LIVE_OUTPUT_DIR", str(ROOT / "output" / "odd-live-host"))).expanduser()
 CONFIG = MUSETALK / "models" / "musetalkV15"
-MODEL_AVATAR = "chloe_closeup_01"
+AVATAR_SOURCE = Path(os.environ["ODD_LIVE_AVATAR_SOURCE"]).expanduser() if os.environ.get("ODD_LIVE_AVATAR_SOURCE") else next(
+    iter(sorted((ROOT / "avatars").glob("*/closeup/source.mp4"))), None
+)
+if AVATAR_SOURCE is None or not AVATAR_SOURCE.is_file():
+    raise FileNotFoundError("Set ODD_LIVE_AVATAR_SOURCE to the approved host source video.")
+avatar_slug = AVATAR_SOURCE.parent.parent.name
+avatar_candidates = [f"{avatar_slug}_closeup_01", f"{avatar_slug}_motion_01", f"{avatar_slug}_01"]
+avatar_models = MUSETALK / "results" / "v15" / "avatars"
+MODEL_AVATAR = os.environ.get("ODD_LIVE_AVATAR_ID") or next(
+    (name for name in avatar_candidates if (avatar_models / name).is_dir()), avatar_candidates[0]
+)
 SPEECH_CONFIG = Path.home() / ".config" / "odd-live" / "speech.env"
 
 def load_speech_config():
@@ -74,7 +84,7 @@ def synthesize_azure(text, dest):
             "Ocp-Apim-Subscription-Key":speech_key,
             "Content-Type":"application/ssml+xml",
             "X-Microsoft-OutputFormat":"riff-48khz-16bit-mono-pcm",
-            "User-Agent":"ODDLivehostWorker/0.1",
+            "User-Agent":"ODDLiveHostWorker/0.1",
         },
     )
     with urllib.request.urlopen(request, timeout=40) as result:
@@ -91,7 +101,7 @@ def render_musetalk(audio, jobdir, timeout_seconds=180):
     # Use path serialization: json strings are valid YAML scalars.
     config_path.write_text(
         MODEL_AVATAR + ":\n  preparation: False\n  bbox_shift: 0\n"
-        "  video_path: " + json.dumps(str(ROOT / "avatars/chloe/closeup/source.mp4")) + "\n"
+        "  video_path: " + json.dumps(str(AVATAR_SOURCE)) + "\n"
         "  audio_clips:\n    audio_0: " + json.dumps(str(audio)) + "\n",
         encoding="utf-8",
     )
