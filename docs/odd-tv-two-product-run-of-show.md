@@ -7,7 +7,7 @@
 - Product 2: minute 30:00 through 60:00.
 - Viewer questions are stored with the product that was on screen when they were submitted.
 - The GPU takes one batch of up to three questions per Q&A slot. It starts the MuseTalk render during the preceding five-minute product narration and stamps the clip with its Q&A start time.
-- A batch is marked answered only after the broadcaster confirms that its clip finished airing. Questions beyond the three-question batch stay queued for the next available Q&A slot; the queue does not silently discard them.
+- A batch is marked answered only after the local broadcaster reports that the full clip was sent to the RTSP output. This confirms encoder delivery, not that every viewer's browser played audible sound. Each Q&A slot takes at most three questions. Unanswered questions remain queued on that show's record and are not marked answered. The current pilot does not yet transfer overflow into a later show's queue automatically.
 
 This pilot is two products only. The admin console and server reject a different number so the 30/30 split stays exact.
 
@@ -158,7 +158,7 @@ A product visible in the latest pilot screens was **“11 PC Resistance Bands Se
 2. Before starting, build the script fields from the listing title, brand, retailer, description, and a price verified within the last hour. Do not add unlisted claims.
 3. Start the one-hour show. Product 1 occupies minutes 00–30; Product 2 occupies minutes 30–60.
 4. During each five-minute narration lead-in, the worker freezes no more than three queued questions for the upcoming slot, renders one combined answer clip, and queues it with the slot start time.
-5. Confirm in logs that the clip was queued, then confirm it played through before the worker marks its questions answered.
+5. Confirm in logs that the full clip was sent to RTSP. Separately check the public HLS page for audible playback; the current broadcaster ACK proves encoder delivery, not browser audio.
 6. If a render misses its five-minute lead, keep product video on screen and carry the answer to the next Q&A window. Never play a lip-sync clip before its audio is ready, and never mark an unheard answer as delivered.
 
 ## Operational limit of this pilot
