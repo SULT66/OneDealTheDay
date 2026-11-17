@@ -34,14 +34,14 @@ test("60-minute pilot keeps each of two products on air for 30 minutes",()=>{
 });
 test("only one show may be live at a time",()=>{
  const db=setup();
- const one=tv.createShow(db,{productIds:[1,2,3,4,5,6,7,8],now:time});
+ const one=tv.createShow(db,{productIds:[1,2],now:time});
  tv.startShow(db,one,{now:time});
- assert.throws(()=>tv.createShow(db,{productIds:[1,2,3,4,5,6,7,8],now:time}),/ANOTHER_SHOW_ACTIVE/);
+ assert.throws(()=>tv.createShow(db,{productIds:[1,2],now:time}),/ANOTHER_SHOW_ACTIVE/);
  db.close();
 });
 test("chat rate limits and remains queued until ACK",()=>{
  const db=setup();
- const id=tv.createShow(db,{productIds:[1,2,3,4,5,6,7,8],now:time});
+ const id=tv.createShow(db,{productIds:[1,2],now:time});
  tv.startShow(db,id,{now:time});
  const q=tv.postQuestion(db,{showId:id,sessionId:"safe-session",text:"Is this BPA free?",now:time});
  assert.equal(tv.nextQuestion(db,id).id,q);
@@ -54,7 +54,7 @@ test("chat rate limits and remains queued until ACK",()=>{
 });
 test("stale product price is not spoken as current",()=>{
  const db=setup();
- const id=tv.createShow(db,{productIds:[1,2,3,4,5,6,7,8],now:time});
+ const id=tv.createShow(db,{productIds:[1,2],now:time});
  tv.startShow(db,id,{now:time});
  db.prepare("UPDATE products SET checked_at=? WHERE id=1").run(new Date(time-2*60*60000).toISOString());
  const at=tv.currentShow(db,"us",time+1000);
