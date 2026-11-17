@@ -31,6 +31,13 @@ function init(db) {
       presented_at TEXT NOT NULL,
       PRIMARY KEY(show_id,product_id)
     );
+    CREATE TABLE IF NOT EXISTS odd_tv_viewers(
+      show_id INTEGER NOT NULL REFERENCES odd_tv_shows(id),
+      session_hash TEXT NOT NULL,
+      last_seen TEXT NOT NULL,
+      PRIMARY KEY(show_id,session_hash)
+    );
+    CREATE INDEX IF NOT EXISTS idx_odd_tv_viewers_seen ON odd_tv_viewers(show_id,last_seen);
     CREATE TABLE IF NOT EXISTS odd_tv_broadcast_control(
       id INTEGER PRIMARY KEY CHECK(id=1),
       desired_state TEXT NOT NULL DEFAULT 'stopped' CHECK(desired_state IN ('running','stopped')),
@@ -149,6 +156,12 @@ function currentProduct(db,show,now=Date.now()) {
   const index=Math.min(ids.length-1,Math.floor(elapsed/(SHOW_MINUTES*60000/ids.length)));
   return productById(db,show,ids[index],now);
 }
+function activeViewerCount(db,showId,now=Date.now(),ttlMs=45*1000) {
+  const cutoff=new Date(now-ttlMs).toISOString();
+  db.prepare("DELETE FROM odd_tv_viewers WHERE show_id=? AND last_seen<?").run(showId,cutoff);
+  return Number(db.prepare("SELECT COUNT(*) AS n FROM odd_tv_viewers WHERE show_id=? AND last_seen>=?")
+    .get(showId,cutoff).n)||0;
+}
 function publicShow(db,market,now=Date.now()) {
   const show=currentShow(db,market,now);
   if(!show)return null;
@@ -156,6 +169,9 @@ function publicShow(db,market,now=Date.now()) {
   return {
     show_id:show.id,state:"live",market:show.market,
     start_at:show.start_at,end_at:show.end_at,
+    seconds_remaining:Math.max(0,Math.ceil((Date.parse(show.end_at)-now)/1000)),
+    viewer_count:activeViewerCount(db,show.id,now),
+    server_now:new Date(now).toISOString(),
     product_index:index+1,product_count:JSON.parse(show.product_ids).length,
     product,
   };
@@ -255,4 +271,4 @@ function markSent(db,showId,questionIds,now=Date.now()) {
     })();
   } catch { return false; }
 }
-module.exports={SHOW_MINUTES,init,validateProducts,pickProducts,createShow,startShow,currentShow,workerShow,currentProduct,productById,publicShow,postQuestion,messages,nextQuestion,nextQuestions,productPresentationDue,markProductPresented,setBroadcastDesired,getBroadcastControl,updateBroadcastHeartbeat,markSent};
+module.exports={SHOW_MINUTES,init,validateProducts,pickProducts,createShow,startShow,currentShow,workerShow,currentProduct,productById,publicShow,activeViewerCount,postQuestion,messages,nextQuestion,nextQuestions,productPresentationDue,markProductPresented,setBroadcastDesired,getBroadcastControl,updateBroadcastHeartbeat,markSent};
