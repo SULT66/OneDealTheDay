@@ -55,7 +55,6 @@
     "test:merchandising": "node scripts/test-holiday-catalog.js && node scripts/test-merchandising-focus.js && node scripts/test-halloween-collection.js && node scripts/test-merchandising-calendar.js && node scripts/test-merchandising-trends.js && node scripts/test-merchandising-selection.js && node scripts/test-merchandising.js && node scripts/test-merchandising-api.js && node scripts/test-merchandising-discovery.js"
   },
   "dependencies": {
-    "@daily-co/daily-js": "^0.92.2",
     "@phosphor-icons/react": "^2.1.10",
     "better-sqlite3": "^12.11.1",
     "dotenv": "^16.4.7",
