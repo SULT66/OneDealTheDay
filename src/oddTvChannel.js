@@ -44,8 +44,8 @@ function init(db) {
   `);
 }
 function validateProducts(db,market,ids) {
-  if(!Array.isArray(ids)||ids.length<8||ids.length>10||new Set(ids).size!==ids.length||
-     ids.some(id=>!Number.isSafeInteger(id)||id<=0)) throw new Error("REQUIRE_8_TO_10_UNIQUE_PRODUCT_IDS");
+  if(!Array.isArray(ids)||ids.length<2||ids.length>10||new Set(ids).size!==ids.length||
+     ids.some(id=>!Number.isSafeInteger(id)||id<=0)) throw new Error("REQUIRE_2_TO_10_UNIQUE_PRODUCT_IDS");
   const stmt=db.prepare("SELECT id FROM products WHERE id=? AND market=? AND status='published'");
   if(ids.some(id=>!stmt.get(id,market)))throw new Error("PRODUCT_NOT_PUBLISHED_IN_MARKET");
   return ids;
@@ -174,8 +174,13 @@ function messages(db,showId,after=0) {
     "SELECT id,author,text,status,created_at FROM odd_tv_chat WHERE show_id=? AND id>? AND status!='hidden' ORDER BY id DESC LIMIT 50"
   ).all(showId,Math.max(0,Number(after)||0)).reverse();
 }
+function nextQuestions(db,showId,limit=3) {
+  const count=Math.max(1,Math.min(3,Math.floor(Number(limit)||3)));
+  return db.prepare("SELECT id,text FROM odd_tv_chat WHERE show_id=? AND status='queued' ORDER BY id ASC LIMIT ?")
+    .all(showId,count);
+}
 function nextQuestion(db,showId) {
-  return db.prepare("SELECT id,text FROM odd_tv_chat WHERE show_id=? AND status='queued' ORDER BY id ASC LIMIT 1").get(showId)||null;
+  return nextQuestions(db,showId,1)[0]||null;
 }
 function productPresentationDue(db,showId,productId,now=Date.now(),intervalMs=75*1000) {
   const row=db.prepare(
@@ -222,9 +227,17 @@ function updateBroadcastHeartbeat(db,{state,detail=""},now=Date.now()) {
   ).run(state,new Date(now).toISOString(),String(detail||"").slice(0,240));
   return getBroadcastControl(db,now);
 }
-function markSent(db,showId,questionId,now=Date.now()) {
-  return db.prepare(
-    "UPDATE odd_tv_chat SET status='sent',sent_at=? WHERE id=? AND show_id=? AND status='queued'"
-  ).run(new Date(now).toISOString(),questionId,showId).changes===1;
+function markSent(db,showId,questionIds,now=Date.now()) {
+  const ids=Array.isArray(questionIds)?questionIds:[questionIds];
+  if(!ids.length||ids.some(id=>!Number.isSafeInteger(Number(id))||Number(id)<=0)||new Set(ids.map(Number)).size!==ids.length)return false;
+  try {
+    return db.transaction(()=>{
+      const update=db.prepare("UPDATE odd_tv_chat SET status='sent',sent_at=? WHERE id=? AND show_id=? AND status='queued'");
+      for(const id of ids) {
+        if(update.run(new Date(now).toISOString(),Number(id),showId).changes!==1)throw new Error("QUESTION_STATE_CHANGED");
+      }
+      return true;
+    })();
+  } catch { return false; }
 }
-module.exports={SHOW_MINUTES,init,validateProducts,pickProducts,createShow,startShow,currentShow,workerShow,currentProduct,publicShow,postQuestion,messages,nextQuestion,productPresentationDue,markProductPresented,setBroadcastDesired,getBroadcastControl,updateBroadcastHeartbeat,markSent};
+module.exports={SHOW_MINUTES,init,validateProducts,pickProducts,createShow,startShow,currentShow,workerShow,currentProduct,publicShow,postQuestion,messages,nextQuestion,nextQuestions,productPresentationDue,markProductPresented,setBroadcastDesired,getBroadcastControl,updateBroadcastHeartbeat,markSent};
