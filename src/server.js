@@ -4384,6 +4384,34 @@ app.get("/api/odd-tv/live",(req,res)=>{
   const marketCode=normalizeMarket(req.query?.market)||"us";
   return res.json({show:oddTv.publicShow(db,marketCode,Date.now())});
 });
+app.post("/api/odd-tv/viewers",(req,res)=>{
+  res.set("Cache-Control","no-store");
+  if(!oddTvEnabled)return res.status(503).json({error:"ODD TV is not enabled."});
+  const marketCode=normalizeMarket(req.body?.market)||"us";
+  const sessionId=analyticsToken(req.body?.session_id);
+  if(!sessionId)return res.status(400).json({error:"Invalid viewer session."});
+  const sessionHash=crypto.createHash("sha256").update(sessionId).digest("hex");
+  const now=Date.now();
+  const active=req.body?.active!==false;
+  if(active){
+    const show=currentTv(marketCode);
+    if(!show)return res.json({viewer_count:0,show_id:null});
+    db.prepare("DELETE FROM odd_tv_viewers WHERE show_id=? AND last_seen<?")
+      .run(show.id,new Date(now-45*1000).toISOString());
+    db.prepare("INSERT INTO odd_tv_viewers(show_id,session_hash,last_seen) VALUES(?,?,?) " +
+      "ON CONFLICT(show_id,session_hash) DO UPDATE SET last_seen=excluded.last_seen")
+      .run(show.id,sessionHash,new Date(now).toISOString());
+    return res.json({show_id:show.id,viewer_count:oddTv.activeViewerCount(db,show.id,now)});
+  }
+  const showId=Number(req.body?.show_id);
+  if(!Number.isSafeInteger(showId)||showId<=0)return res.status(400).json({error:"Invalid show identifier."});
+  const show=db.prepare("SELECT id FROM odd_tv_shows WHERE id=? AND market=?").get(showId,marketCode);
+  if(show){
+    db.prepare("DELETE FROM odd_tv_viewers WHERE show_id=? AND session_hash=?").run(showId,sessionHash);
+    return res.json({show_id:showId,viewer_count:oddTv.activeViewerCount(db,showId,now)});
+  }
+  return res.json({viewer_count:0});
+});
 app.get("/api/odd-tv/chat",(req,res)=>{
   res.set("Cache-Control","no-store");
   if(!oddTvEnabled)return res.json({messages:[]});
