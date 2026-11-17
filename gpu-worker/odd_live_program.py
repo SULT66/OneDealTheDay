@@ -33,7 +33,8 @@ AVATAR_ID=os.getenv("ODD_LIVE_AVATAR_ID") or next((p.name for p in sorted(AVATAR
 IDLE=AVATAR_RESULTS/AVATAR_ID/"full_imgs"
 OUTPUT=Path(os.getenv("ODD_LIVE_OUTPUT_DIR",str(ROOT/"output/odd-live-host"))).expanduser()
 READY=OUTPUT/"ready"
-MOTION_DIR=Path(os.getenv("ODD_LIVE_MOTION_DIR",str(ROOT/"assets/host/motions"))).expanduser()
+MOTION_DEFAULT=next((p for p in sorted((ROOT/"assets").glob("*/motions")) if p.is_dir()),ROOT/"assets/host/motions")
+MOTION_DIR=Path(os.getenv("ODD_LIVE_MOTION_DIR",str(MOTION_DEFAULT))).expanduser()
 
 def write_all(fd, data):
     view=memoryview(data)
