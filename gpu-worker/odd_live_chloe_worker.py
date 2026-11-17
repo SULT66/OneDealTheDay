@@ -204,6 +204,18 @@ def main():
         temp.write_text(json.dumps(meta),encoding="utf-8")
         temp.chmod(0o600)
         os.replace(temp,target)
+        if mode=="tv":
+            try:
+                queued=post_json(base,"/api/odd-tv/worker/queued",key,{
+                    "drop_key":response["drop_key"],
+                    "lease_token":response["lease_token"],
+                })
+                if queued.get("ok"):
+                    print("TURN_QUEUED_FOR_AIR: render slot released; delivery remains pending.",flush=True)
+            except Exception as queue_error:
+                # The clip is already safely queued locally. If this control call
+                # fails, its lease remains locked until the broadcaster ACKs it.
+                print("TURN_QUEUE_RELEASE_ERROR:",type(queue_error).__name__,flush=True)
         print("CHLOE_PREVIEW_READY:",video)
         print("LOCAL_CLIP_QUEUED:",target.name)
         print("NOT_ACKNOWLEDGED: delivery confirmation belongs to the broadcaster.")
