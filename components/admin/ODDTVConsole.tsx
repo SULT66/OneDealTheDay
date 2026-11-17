@@ -106,7 +106,7 @@ export function ODDTVConsole({adminKey}:{adminKey:string}) {
     if(!adminKey){setNotice("Enter the admin key above first.");return;}
     if(!broadcast){setNotice("Waiting for Diana’s controller status.");return;}
     if(!broadcast.controller_online){setNotice("Diana controller is offline. Start the stream and finish its one-time setup first.");return;}
-    if(manual&&(selected.length<8||selected.length>10)){setNotice("Choose 8 to 10 products.");return;}
+    if(manual&&(selected.length<2||selected.length>10)){setNotice("Choose 2 to 10 products.");return;}
     setBusy(true);setNotice("");setShowId(null);
     try{
       const headers={"Content-Type":"application/json","X-Admin-Key":adminKey};
@@ -156,7 +156,7 @@ export function ODDTVConsole({adminKey}:{adminKey:string}) {
         </div>
       </div>
       <p className="mt-1 max-w-prose text-sm text-fg-muted">
-        Published products are already in the catalog. Choose 8–10 for a custom show, or let ODD Live select an eligible lineup across merchants. The live page changes its featured product about every six minutes during the one-hour show.
+        Published products are already in the catalog. Choose 2–10 for a custom show; two products stay on air for 30 minutes each. ODD Live divides the one-hour show evenly across the selected products.
       </p>
       <div className="mt-5 flex flex-wrap items-end gap-3">
         <label className="block">
@@ -190,7 +190,7 @@ export function ODDTVConsole({adminKey}:{adminKey:string}) {
         {visible.length===0?<p className="p-4 text-sm text-fg-muted">No published products match.</p>:null}
       </div>
       <div className="mt-4 flex flex-wrap gap-2">
-        <button type="button" disabled={busy||selected.length<8||selected.length>10} onClick={()=>void launch(true)} className="rounded-full bg-lime px-4 py-2 text-sm font-bold text-ink disabled:opacity-50">
+        <button type="button" disabled={busy||selected.length<2||selected.length>10} onClick={()=>void launch(true)} className="rounded-full bg-lime px-4 py-2 text-sm font-bold text-ink disabled:opacity-50">
           {busy?"Starting…":"Start with selected products"}
         </button>
         <button type="button" disabled={busy} onClick={()=>void launch(false)} className="rounded-full border border-border px-4 py-2 text-sm font-semibold text-fg disabled:opacity-50">
