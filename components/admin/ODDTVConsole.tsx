@@ -32,6 +32,7 @@ export function ODDTVConsole({adminKey}:{adminKey:string}) {
   const [busy,setBusy]=useState(false);
   const [notice,setNotice]=useState("");
   const [showId,setShowId]=useState<number|null>(null);
+  const [retryShowId,setRetryShowId]=useState<number|null>(null);
   const [broadcast,setBroadcast]=useState<BroadcastStatus|null>(null);
   const [controlBusy,setControlBusy]=useState(false);
 
@@ -127,7 +128,8 @@ export function ODDTVConsole({adminKey}:{adminKey:string}) {
     if(!broadcast){setNotice("Waiting for Diana’s controller status.");return;}
     if(!broadcast.controller_online){setNotice("Diana controller is offline. Start the stream and finish its one-time setup first.");return;}
     if(manual&&selected.length!==2){setNotice("Choose exactly 2 products for the 30/30 pilot.");return;}
-    setBusy(true);setNotice("");setShowId(null);
+    setBusy(true);setNotice("");setShowId(null);setRetryShowId(null);
+    let createdShowId:number|null=null;
     try{
       const headers={"Content-Type":"application/json","X-Admin-Key":adminKey};
       const create=await fetch("/api/admin/odd-tv/show",{
@@ -136,15 +138,43 @@ export function ODDTVConsole({adminKey}:{adminKey:string}) {
       });
       const draft=await create.json().catch(()=>({}));
       if(!create.ok)throw new Error(draft.error||"Could not create the ODD Live show.");
-      setShowId(draft.show_id);
+      createdShowId=Number(draft.show_id);
+      setShowId(createdShowId);
       const start=await fetch("/api/admin/odd-tv/show/"+encodeURIComponent(String(draft.show_id))+"/start",{
         method:"POST",headers,
       });
       const result=await start.json().catch(()=>({}));
       if(!start.ok)throw new Error(result.error||"Show was created but could not be started.");
+      setRetryShowId(null);
       setNotice("Preparing the host and product segments. The show goes live when the opening is ready.");
     }catch(error){
+      if(createdShowId!==null&&error instanceof Error&&error.message==="DIANA_CONTROLLER_OFFLINE")setRetryShowId(createdShowId);
       setNotice(error instanceof Error?error.message:"Could not start the show.");
+    }finally{setBusy(false);}
+  }
+
+  async function retryStart(show:number) {
+    if(!adminKey){setNotice("Enter the admin key above first.");return;}
+    setBusy(true);setNotice("");
+    try{
+      const headers={"Content-Type":"application/json","X-Admin-Key":adminKey};
+      const statusResponse=await fetch("/api/admin/odd-tv/broadcast/status",{headers,cache:"no-store"});
+      const status=await statusResponse.json().catch(()=>({}));
+      if(!statusResponse.ok)throw new Error(status.error||"Could not refresh controller status.");
+      setBroadcast(status as BroadcastStatus);
+      if(!status.controller_online){
+        setNotice("Diana controller is offline. Show "+show+" is saved; start the controller, then retry this show.");
+        return;
+      }
+      const response=await fetch("/api/admin/odd-tv/show/"+encodeURIComponent(String(show))+"/start",{
+        method:"POST",headers,
+      });
+      const result=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(result.error||"Could not start the saved show.");
+      setRetryShowId(null);
+      setNotice("Preparing the host and product segments. The show goes live when the opening is ready.");
+    }catch(error){
+      setNotice(error instanceof Error?error.message:"Could not start the saved show.");
     }finally{setBusy(false);}
   }
 
@@ -199,7 +229,8 @@ export function ODDTVConsole({adminKey}:{adminKey:string}) {
         </div>;})}
       </div>
       <div className="mt-4 flex flex-wrap items-center gap-3">
-        <button type="button" disabled={busy||selected.length!==2} onClick={()=>void launch(true)} className="rounded-full bg-lime px-5 py-2.5 text-sm font-bold text-ink disabled:opacity-50">{busy?"Preparing show…":"Save scripts and start"}</button>
+        <button type="button" disabled={busy||selected.length!==2||retryShowId!==null} onClick={()=>void launch(true)} className="rounded-full bg-lime px-5 py-2.5 text-sm font-bold text-ink disabled:opacity-50">{busy?"Preparing show…":retryShowId!==null?"Show "+retryShowId+" saved":"Save scripts and start"}</button>
+        {retryShowId!==null?<button type="button" disabled={busy} onClick={()=>void retryStart(retryShowId)} className="rounded-full border border-border px-4 py-2.5 text-sm font-semibold text-fg disabled:opacity-50">Retry Show {retryShowId}</button>:null}
         <span className="text-sm text-fg-muted">{selected.length}/2 products selected</span>
       </div>
       {notice?<p role="status" className="mt-3 text-sm text-fg-muted">{notice}{showId?(" · Show "+showId):""}</p>:null}
