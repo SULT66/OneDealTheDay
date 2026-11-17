@@ -164,3 +164,11 @@ A product visible in the latest pilot screens was **“11 PC Resistance Bands Se
 ## Operational limit of this pilot
 
 The answer schedule and background queue are implemented in the pilot branch. The exact run-of-show above is the production plan; continuous, minute-by-minute product narration still depends on preparing and airing the narration clips before launch. MuseTalk is not instantaneous. A late render can miss its intended slot, and excess questions can roll to a later slot/show. Verify audio and playback on the public HLS page before treating this as a finished customer-facing broadcast.
+
+## Live player requirements in the pilot
+
+- The red pulsing LIVE badge sits over the video and shows the show time remaining.
+- The audience count is based on anonymous per-tab heartbeats. It updates while the page is visible, removes a viewer immediately on page exit where possible, and expires a disconnected tab after 45 seconds.
+- Viewer chat and the question form sit on top of the video, so viewers can ask without scrolling below the player.
+- The expand button widens the player; fullscreen uses the browser Fullscreen API. The minimize button keeps the stream playing in a fixed corner player on the same page, with a restore control and compact chat toggle.
+- The iframe allows the underlying MediaMTX player to offer browser Picture-in-Picture where supported. The in-page corner player is the consistent fallback.
