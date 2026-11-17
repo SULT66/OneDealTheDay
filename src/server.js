@@ -4494,13 +4494,14 @@ app.post("/api/odd-tv/worker/next",oddWorkerAuth,async(req,res)=>{
   const {show,opening}=workerState;
   const key="tv:"+show.id;
   if(oddTvLeases.has(key))return res.json({kind:"busy"});
-  const questions=oddTv.nextQuestions(db,show.id,3);
+  const questions=oddTv.nextQuestions(db,show.id,50)
+    .filter(item=>!oddTvLeases.hasPendingQuestion(key,item.id)).slice(0,3);
   const question=questions[0]||null;
   const listing=oddTv.currentProduct(db,show,Date.now()).product;
   if(!listing)return res.status(503).json({error:"No current published product."});
   // Viewer questions take priority. When the queue is empty, narrate each
   // featured product once so the show opens with Chloe instead of silent idle.
-  if(!question&&!oddTv.productPresentationDue(db,show.id,listing.id))return res.json({kind:"idle"});
+  if(!question&&(oddTvLeases.hasPendingPresentation(key,listing.id)||!oddTv.productPresentationDue(db,show.id,listing.id)))return res.json({kind:"idle"});
   const questionIds=question?questions.map(item=>item.id):[];
   const lease=oddTvLeases.acquire(key,question?questionIds:null,{
     kind:question?"question":"presentation",productId:listing.id,opening,
@@ -4554,6 +4555,19 @@ app.post("/api/odd-tv/worker/prepared",oddWorkerAuth,(req,res)=>{
   db.prepare("UPDATE odd_tv_shows SET start_at=?,end_at=? WHERE id=? AND status='live'")
     .run(new Date(start).toISOString(),new Date(end).toISOString(),id);
   return res.json({ok:true,play_after:new Date(start).toISOString()});
+});
+app.post("/api/odd-tv/worker/queued",oddWorkerAuth,(req,res)=>{
+  res.set("Cache-Control","no-store");
+  const id=Number(String(req.body?.drop_key||"").match(/^tv:([0-9]+)$/)?.[1]);
+  if(!oddTvEnabled||!Number.isSafeInteger(id)||id<=0)
+    return res.status(400).json({error:"Invalid show identifier."});
+  const key="tv:"+id;
+  const token=String(req.body?.lease_token||"");
+  const lease=oddTvLeases.check(key,token);
+  if(!lease)return res.status(409).json({error:"Expired or invalid lease."});
+  if(!oddTvLeases.release(key,token,{keepForAck:true}))
+    return res.status(409).json({error:"Unable to release queued turn."});
+  return res.json({ok:true,awaiting_delivery:true});
 });
 app.post("/api/odd-tv/worker/ack",oddWorkerAuth,(req,res)=>{
   res.set("Cache-Control","no-store");
