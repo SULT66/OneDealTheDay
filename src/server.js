@@ -4497,30 +4497,33 @@ app.post("/api/odd-tv/worker/next",oddWorkerAuth,async(req,res)=>{
   const key="tv:"+show.id;
   if(oddTvLeases.has(key))return res.json({kind:"busy"});
 
-  // Work oldest-first, but batch only questions about the same product. The
-  // question's product is captured at submit time, so a slow render cannot
-  // accidentally answer it using the next product after the 30-minute switch.
-  const queued=oddTv.nextQuestions(db,show.id,50)
-    .filter(item=>!oddTvLeases.hasPendingQuestion(key,item.id));
-  const first=queued[0]||null;
-  const productId=first?.product_id
-    ? Number(first.product_id)
-    : oddTv.currentProduct(db,show,Date.now()).product?.id;
-  const questions=first
-    ? queued.filter(item=>!item.product_id||Number(item.product_id)===productId).slice(0,3)
-    : [];
-  const questionIds=questions.map(item=>item.id);
-  const listing=first
-    ? oddTv.productById(db,show,productId,Date.now()).product
+  const schedule=require("./oddTvRunOfShow");
+  const window=schedule.questionWindow(show,Date.now());
+  const productIds=JSON.parse(show.product_ids);
+  const slotProductId=window?Number(productIds[window.productIndex]):null;
+  let question=null,questions=[];
+  // Open one batch of at most three questions per scheduled Q&A slot. More
+  // questions stay queued for the next slot; a slot cannot be overbooked by
+  // multiple MuseTalk renders that would all arrive at the same time.
+  if(window&&!oddTvLeases.hasPendingSlot(key,window.slotMinute)){
+    questions=oddTv.nextQuestions(db,show.id,50,slotProductId)
+      .filter(item=>!oddTvLeases.hasPendingQuestion(key,item.id)).slice(0,3);
+    question=questions[0]||null;
+  }
+  const listing=question
+    ? oddTv.productById(db,show,slotProductId,Date.now()).product
     : oddTv.currentProduct(db,show,Date.now()).product;
   if(!listing)return res.status(503).json({error:"No current published product."});
 
-  // Viewer questions take priority. When the queue is empty, narrate the
-  // current featured product; do not repeat a presentation already in flight.
-  if(!first&&(oddTvLeases.hasPendingPresentation(key,listing.id)||!oddTv.productPresentationDue(db,show.id,listing.id)))
+  // Viewer questions take priority in their timed preparation window. Between
+  // windows, keep the show's product narration moving without replaying a
+  // presentation clip that is already queued or recently aired.
+  if(!question&&(oddTvLeases.hasPendingPresentation(key,listing.id)||!oddTv.productPresentationDue(db,show.id,listing.id)))
     return res.json({kind:"idle"});
-  const lease=oddTvLeases.acquire(key,first?questionIds:null,{
-    kind:first?"question":"presentation",productId:listing.id,opening,
+  const questionIds=question?questions.map(item=>item.id):[];
+  const lease=oddTvLeases.acquire(key,question?questionIds:null,{
+    kind:question?"question":"presentation",productId:listing.id,opening,
+    slotMinute:question?window.slotMinute:null,
   });
   if(!lease)return res.json({kind:"busy"});
   try {
@@ -4539,15 +4542,16 @@ app.post("/api/odd-tv/worker/next",oddWorkerAuth,async(req,res)=>{
     }
     const speech=await composeHostTurn({
       product:listing,
-      question:first?questions.map((item,index)=>String(index+1)+". "+item.text).join(" "):"",
+      question:question?questions.map((item,index)=>String(index+1)+". "+item.text).join(" "):"",
       locale:"en-US",generateText
     });
     return res.json({
-      kind:first?"question":"presentation",
+      kind:question?"question":"presentation",
       show_id:show.id,drop_key:key,
-      question_id:first?questionIds:null,
+      question_id:question?questionIds:null,
       question_count:questionIds.length,
       product_id:listing.id,opening,
+      play_after:question?window.playAfter:null,
       spoken_text:speech,
       lease_token:lease.token,
       lease_expires_at:new Date(lease.expiresAt).toISOString(),
