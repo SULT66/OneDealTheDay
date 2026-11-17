@@ -190,18 +190,6 @@ export function ODDLiveTvExperience({
         </div>:null}
       </div>
 
-      {!compact?<div className="border-t border-white/10 p-4">
-        <p className="mb-2 text-xs font-black tracking-wider text-lime-300">ON AIR · PRODUCT {show?.product_index||1} OF {show?.product_count||2}</p>
-        {product?<div className="flex gap-4 rounded-xl bg-white/10 p-3">
-          {product.image_url?<img src={product.image_url} alt={product.title} className="h-24 w-24 shrink-0 rounded-lg bg-white object-contain" loading="lazy"/>:null}
-          <div className="min-w-0">
-            <h3 className="font-bold">{product.title}</h3>
-            <p className="mt-1 text-sm text-white/70">{product.brand||product.retailer_name||"Featured product"}</p>
-            {price?<p className="mt-2 font-semibold">{price}</p>:<p className="mt-2 text-xs text-white/70">Check retailer for current price</p>}
-            {product.affiliate_url?<a href={product.affiliate_url} target="_blank" rel="noopener sponsored" className="mt-3 inline-block rounded-full bg-lime-300 px-4 py-2 text-sm font-bold text-black">See at retailer</a>:null}
-          </div>
-        </div>:<p className="text-sm text-white/70">{show?"Featured product information is currently unavailable.":"The next ODD Live shopping show has not started yet."}</p>}
-      </div>:null}
     </>
   );
 }
