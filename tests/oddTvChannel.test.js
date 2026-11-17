@@ -18,16 +18,17 @@ test("accepts a two-product pilot and rejects unpublished products",()=>{
  tv.startShow(db,id,{now:time});
  assert.equal(tv.publicShow(db,"us",time+29*60000).product.id,1);
  assert.equal(tv.publicShow(db,"us",time+30*60000).product.id,2);
- assert.throws(()=>tv.createShow(db,{productIds:[1,2,3,4,5,6,7,99]}),/PRODUCT_NOT_PUBLISHED/);
+ assert.throws(()=>tv.createShow(db,{productIds:[1,99]}),/PRODUCT_NOT_PUBLISHED/);
  db.close();
 });
-test("60-minute program rotates through 8 products",()=>{
+test("60-minute pilot keeps each of two products on air for 30 minutes",()=>{
  const db=setup();
- const showId=tv.createShow(db,{productIds:[1,2,3,4,5,6,7,8],now:time});
+ const showId=tv.createShow(db,{productIds:[1,2],now:time});
  const started=tv.startShow(db,showId,{now:time});
  assert.equal(Date.parse(started.end_at)-time,60*60000);
  assert.equal(tv.publicShow(db,"us",time).product.id,1);
- assert.equal(tv.publicShow(db,"us",time+59*60000).product.id,8);
+ assert.equal(tv.publicShow(db,"us",time+29*60000).product.id,1);
+ assert.equal(tv.publicShow(db,"us",time+30*60000).product.id,2);
  assert.equal(tv.publicShow(db,"us",time+61*60000),null);
  db.close();
 });
