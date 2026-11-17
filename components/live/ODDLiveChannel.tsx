@@ -36,16 +36,24 @@ export function ODDLiveChannel({embedUrl,market}:{embedUrl?:string;market:string
     }catch{}
   }
 
+  function toggleCompact(){
+    if(document.fullscreenElement)void document.exitFullscreen().catch(()=>{});
+    setCompact(value=>!value);
+    setChatOpen(false);
+  }
+
   return (
     <section
       ref={stageRef}
       aria-label="ODD Live TV"
-      className={compact
-        ?"fixed bottom-4 right-4 z-[80] w-[min(92vw,360px)] overflow-hidden rounded-xl border border-white/20 bg-[#061224] text-white shadow-2xl"
-        :"mx-auto w-full px-3 pt-5 sm:px-6 "+(expanded?"max-w-7xl":"max-w-5xl")}
+      className={fullscreen
+        ?"fixed inset-0 z-[100] h-screen w-screen overflow-auto bg-black p-0 text-white"
+        :compact
+          ?"fixed bottom-4 right-4 z-[80] w-[min(92vw,360px)] overflow-hidden rounded-xl border border-white/20 bg-[#061224] text-white shadow-2xl"
+          :"mx-auto w-full px-3 pt-5 sm:px-6 "+(expanded?"max-w-7xl":"max-w-5xl")}
     >
-      <div className={"relative overflow-hidden bg-[#061224] text-white "+(compact?"":"rounded-2xl border border-white/10 shadow-xl")}>
-        {!compact?<div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+      <div className={"relative overflow-hidden bg-[#061224] text-white "+(compact||fullscreen?"":"rounded-2xl border border-white/10 shadow-xl")}>
+        {!compact&&!fullscreen?<div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
           <div>
             <h2 className="text-lg font-black tracking-tight sm:text-xl">ODD Live TV</h2>
             <p className="text-xs text-white/65">AI shopping television — watch products as they are presented</p>
@@ -65,12 +73,12 @@ export function ODDLiveChannel({embedUrl,market}:{embedUrl?:string;market:string
         </div>
         <ODDLiveTvExperience
           market={market}
-          compact={compact}
+          compact={compact||fullscreen}
           chatOpen={chatOpen}
           onChatToggle={()=>setChatOpen(value=>!value)}
           onFullscreen={()=>void toggleFullscreen()}
           onSizeToggle={()=>setExpanded(value=>!value)}
-          onCompactToggle={()=>{setCompact(value=>!value);setChatOpen(false);}}
+          onCompactToggle={toggleCompact}
           expanded={expanded}
         />
       </div>
