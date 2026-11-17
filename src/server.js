@@ -4440,7 +4440,7 @@ app.post("/api/odd-tv/chat",(req,res)=>{
       .json({error:error.message});
   }
 });
-app.post("/api/admin/odd-tv/show",admin,express.json({limit:"5kb"}),(req,res)=>{
+app.post("/api/admin/odd-tv/show",admin,express.json({limit:"30kb"}),(req,res)=>{
   res.set("Cache-Control","no-store");
   if(!oddTvEnabled)return res.status(503).json({error:"ODD TV disabled."});
   const marketCode=normalizeMarket(req.body?.market)||"us";
