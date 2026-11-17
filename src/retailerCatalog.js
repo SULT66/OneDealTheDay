@@ -243,11 +243,7 @@ const RETAILERS = Object.freeze([
   },
   {
     id:"everblog", name:"Everblog", network:"Awin", markets:["us"],
-    storefrontHost:"everblog.com", awinFeedId:"F4120", maxCatalogProducts:50,
-    feedPolicy:{
-      titleTerms:["fridgecal", "homecal", "digital calendar", "family calendar"],
-      excludeTitleTerms:["stylus", "mounting plate", "charging dock", "screen protector", "warranty", "gift card"]
-    }
+    storefrontHost:"everblog.com", awinFeedId:"F4120", maxCatalogProducts:2000
   },
   {
     id:"radiofence", name:"RadioFence.com", network:"Awin", markets:["us"],

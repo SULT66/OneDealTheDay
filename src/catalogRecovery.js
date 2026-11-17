@@ -43,7 +43,7 @@ function missingConfiguredProviders(config, marketCode) {
     "SELECT DISTINCT LOWER(source) AS source FROM products WHERE market=? AND status='published'"
   ).all(marketCode).map(row => String(row.source || "").toLowerCase()));
   const latestSuccessfulRun = db.prepare(`
-    SELECT found_count
+    SELECT found_count, started_at
     FROM source_refresh_runs
     WHERE provider_id=? AND market=? AND status='success'
     ORDER BY id DESC
@@ -54,13 +54,16 @@ function missingConfiguredProviders(config, marketCode) {
       if (!catalogSources.has(String(provider.source || "").toLowerCase())) return true;
       const sourceLimit = Number(provider.catalogLimit) || 0;
       const sharedLimit = Number(config.maxProductsPerSource) || 500;
-      if (sourceLimit <= sharedLimit) return false;
+      const everblog = provider.id === "feed-everblog-us";
+      if (!everblog && sourceLimit <= sharedLimit) return false;
       const latest = latestSuccessfulRun.get(provider.id, marketCode);
+      // Reimport Everblog on the first startup with its full US feed enabled.
+      if (everblog && (!latest || latest.started_at < "2026-11-17T06:58:22.000Z")) return true;
       // A source that previously returned exactly the shared ceiling was
       // truncated, not exhausted. Refresh it once after a larger per-feed
       // limit is deployed. The next run records the real count and prevents
       // repeated refreshes on future application restarts.
-      return Number(latest?.found_count) === sharedLimit;
+      return sourceLimit > sharedLimit && Number(latest?.found_count) === sharedLimit;
     })
     .map(provider => provider.id);
 }
