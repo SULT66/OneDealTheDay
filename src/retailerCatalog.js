@@ -228,6 +228,22 @@ const RETAILERS = Object.freeze([
   {
     id:"meowant", name:"MeoWant", network:"Awin", markets:["us"],
     storefrontHost:"meowant.com", awinFeedId:"F734", maxCatalogProducts:50,
+    curatedProducts:{
+      advertiserId:"55213",
+      category:"Pet Supplies",
+      products:[
+        {
+          id:"53440957743401", model:"MW-PF06",
+          url:"https://meowant.com/products/meowant-automatic-wet-food-cat-feeder-mw-pf06",
+          description:"An automatic cat feeder designed to serve wet food on a schedule."
+        },
+        {
+          id:"53426304450857", model:"MW-DF03",
+          url:"https://meowant.com/products/meowant-sensor-mode-clean-waste-water-separation-fountain-df03",
+          description:"A sensor-activated pet fountain with separate clean-water and waste-water tanks."
+        }
+      ]
+    },
     feedPolicy:{
       titleTerms:["litter box", "feeder", "fountain"],
       excludeTitleTerms:["warranty", "protection", "replacement", "filters", "liners", "bags", "gift card"]
@@ -236,6 +252,27 @@ const RETAILERS = Object.freeze([
   {
     id:"big-horn-outdoors", name:"Big Horn Outdoors", network:"Awin", markets:["us"],
     storefrontHost:"bighornoutdoor.com", awinFeedId:"106686", awinFeedFormat:"legacy", maxCatalogProducts:50,
+    curatedProducts:{
+      advertiserId:"117809",
+      category:"Sports & Outdoors",
+      products:[
+        {
+          id:"HGB16R2", model:"HGB16R2",
+          url:"https://bighornoutdoor.com/products/16-gas-outdoor-pizza-oven",
+          description:"An outdoor gas pizza oven with a 16-inch rotating stone and a digital thermometer."
+        },
+        {
+          id:"VM-KS02-ID", model:"VM-KS02-ID",
+          url:"https://bighornoutdoor.com/products/butane-camping-stove-portable-folding-gas-burner-for-camping",
+          description:"A folding, single-burner butane stove designed for outdoor cooking and camping."
+        },
+        {
+          id:"LPESL18003", model:"LPESL18003",
+          url:"https://bighornoutdoor.com/products/big-horn-outdoors-metal-pizza-peel-13x9-5-inch-set-pizza-paddle-with-fordable-handle",
+          description:"A stainless steel paddle for loading and removing pizzas, with a folding handle for storage."
+        }
+      ]
+    },
     feedPolicy:{
       titleTerms:["pizza oven", "grill", "smoker"],
       excludeTitleTerms:["cover", "carry bag", "replacement", "gift card"]
@@ -374,6 +411,7 @@ function feedDefinitions(env = process.env) {
         fieldMapJson:String(env[`${prefix}_FIELD_MAP_JSON`] || "").trim(),
         maxProducts:optionalProductLimit(env[`${prefix}_MAX_PRODUCTS`], retailer.maxCatalogProducts),
         feedPolicy:retailer.feedPolicy || null,
+        curatedProducts:market === "us" ? retailer.curatedProducts : undefined,
         shipping:optionalShippingTerms(env[`${prefix}_SHIPPING_JSON`], `${prefix}_SHIPPING_JSON`)
           || retailer.shipping || null,
         returns:optionalReturnsTerms(env[`${prefix}_RETURNS`]) || retailer.returns || null

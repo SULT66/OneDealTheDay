@@ -479,6 +479,43 @@ function awaitWithSignal(promise, signal) {
   });
 }
 
+async function loadCuratedAwinProducts(definition, market, fetchImpl, signal) {
+  const curated = definition.curatedProducts;
+  if (!curated?.products.length) return [];
+
+  // Selected products may be missing from the Awin feed or carry older prices.
+  const { productMetadataFromHtml } = require("../shoppingAssistant");
+  const products = await Promise.all(curated.products.map(async (item, index) => {
+    try {
+      const url = safeFeedUrl(item.url);
+      const timeout = AbortSignal.timeout(15000);
+      const response = await fetchImpl(url.href, {
+        redirect:"error",
+        headers:{accept:"text/html"},
+        signal:signal ? AbortSignal.any([signal, timeout]) : timeout,
+      });
+      if (!response.ok) return null;
+      const offer = productMetadataFromHtml(await response.text(), url.href, market.currency);
+      if (!offer || !/^https:\/\//i.test(offer.image_url) || !(offer.price_value > 0) ||
+          !/^in[ _-]?stock$/i.test(offer.availability)) return null;
+      const affiliateUrl = new URL("https://www.awin1.com/cread.php");
+      affiliateUrl.search = new URLSearchParams({
+        awinmid:curated.advertiserId, awinaffid:"3018019", ued:url.href,
+      });
+      return normalize({
+        id:item.id, mpn:item.model, brand:definition.retailerName,
+        title:offer.title, category:curated.category, description:item.description,
+        price:offer.price_value, currency:offer.currency, availability:"In stock",
+        image_url:offer.image_url, affiliate_url:affiliateUrl.href, retailer_shop_url:url.href,
+      }, definition, market, index, {});
+    } catch (error) {
+      if (signal?.aborted) throw error;
+      return null;
+    }
+  }));
+  return products.filter(Boolean);
+}
+
 async function searchProducts({definition, market, keywords = [], fetchImpl = global.fetch, signal}) {
   if (!definition?.markets?.includes(market?.code)) return [];
   const useCache = fetchImpl === global.fetch;
@@ -502,10 +539,14 @@ async function searchProducts({definition, market, keywords = [], fetchImpl = gl
         .map(([key, value]) => [String(key).trim().toLowerCase(), String(value).trim().toLowerCase()]));
       const downloaded = await download(definition, fetchImpl, 0, signal);
       const records = parseRecords(downloaded, definition.format).map(normalizedRecord);
-      const loaded = records
+      const curated = await loadCuratedAwinProducts(definition, market, fetchImpl, signal);
+      const selectedIds = new Set(definition.curatedProducts?.products.map(item => item.id));
+      const fromFeed = records
         .map((record, index) => normalize(record, definition, market, index, map))
-        .filter(product => hasDescriptiveTitle(product.title) && product.image_url && product.affiliate_url && product.current_price > 0)
+        .filter(product => !selectedIds.has(product.external_id))
         .filter(product => allowedByFeedPolicy(product, definition));
+      const loaded = [...curated, ...fromFeed]
+        .filter(product => hasDescriptiveTitle(product.title) && product.image_url && product.affiliate_url && product.current_price > 0);
       if (!loaded.length) throw new Error(`${definition.retailerName} feed returned no usable commissionable products`);
       return loaded;
     })();

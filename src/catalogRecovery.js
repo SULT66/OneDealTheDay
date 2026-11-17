@@ -3,6 +3,13 @@ const { refreshProducts } = require("./refresh");
 const { sourceSql } = require("./publicCatalog");
 const { providersForMarket } = require("./providers/registry");
 
+// Reimport only the affected sources on the first startup after a feed change.
+const REIMPORT_AFTER = {
+  "feed-everblog-us":"2026-11-17T06:58:22.000Z",
+  "feed-meowant-us":"2026-11-17T07:18:00.000Z",
+  "feed-big-horn-outdoors-us":"2026-11-17T07:18:00.000Z",
+};
+
 function countLiveProducts(marketCode = "") {
   const marketFilter = marketCode ? " AND market=?" : "";
   const params = marketCode ? [marketCode] : [];
@@ -54,11 +61,10 @@ function missingConfiguredProviders(config, marketCode) {
       if (!catalogSources.has(String(provider.source || "").toLowerCase())) return true;
       const sourceLimit = Number(provider.catalogLimit) || 0;
       const sharedLimit = Number(config.maxProductsPerSource) || 500;
-      const everblog = provider.id === "feed-everblog-us";
-      if (!everblog && sourceLimit <= sharedLimit) return false;
+      const reimportAfter = REIMPORT_AFTER[provider.id];
+      if (!reimportAfter && sourceLimit <= sharedLimit) return false;
       const latest = latestSuccessfulRun.get(provider.id, marketCode);
-      // Reimport Everblog on the first startup with its full US feed enabled.
-      if (everblog && (!latest || latest.started_at < "2026-11-17T06:58:22.000Z")) return true;
+      if (reimportAfter && (!latest || latest.started_at < reimportAfter)) return true;
       // A source that previously returned exactly the shared ceiling was
       // truncated, not exhausted. Refresh it once after a larger per-feed
       // limit is deployed. The next run records the real count and prevents
