@@ -70,17 +70,17 @@ export function ODDLiveChannel({embedUrl,market}:{embedUrl?:string;market:string
             referrerPolicy="strict-origin-when-cross-origin"
             className="absolute inset-0 h-full w-full border-0"
           />
+          <ODDLiveTvExperience
+            market={market}
+            compact={compact||fullscreen}
+            chatOpen={chatOpen}
+            onChatToggle={()=>setChatOpen(value=>!value)}
+            onFullscreen={()=>void toggleFullscreen()}
+            onSizeToggle={()=>setExpanded(value=>!value)}
+            onCompactToggle={toggleCompact}
+            expanded={expanded}
+          />
         </div>
-        <ODDLiveTvExperience
-          market={market}
-          compact={compact||fullscreen}
-          chatOpen={chatOpen}
-          onChatToggle={()=>setChatOpen(value=>!value)}
-          onFullscreen={()=>void toggleFullscreen()}
-          onSizeToggle={()=>setExpanded(value=>!value)}
-          onCompactToggle={toggleCompact}
-          expanded={expanded}
-        />
       </div>
     </section>
   );
