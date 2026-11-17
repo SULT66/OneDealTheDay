@@ -32,7 +32,7 @@ def load_worker_config():
         if not line or line.lstrip().startswith("#") or "=" not in line:
             continue
         name, value = line.split("=", 1)
-        if name in {"ODD_LIVE_API_BASE", "ODD_LIVE_WORKER_KEY"} and value:
+        if name in {"ODD_LIVE_API_BASE", "ODD_LIVE_WORKER_KEY", "ODD_LIVE_ACK_DELIVERED"} and value:
             os.environ.setdefault(name, value.strip())
     base = os.environ.get("ODD_LIVE_API_BASE", "").rstrip("/")
     key = os.environ.get("ODD_LIVE_WORKER_KEY", "")
@@ -71,21 +71,26 @@ def stream_available():
             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
             text=True, timeout=4, check=False,
         )
-        return result.returncode == 0 and "h264" in result.stdout.split()
+        codecs = set(result.stdout.split())
+        return result.returncode == 0 and {"h264", "aac"}.issubset(codecs)
     except (OSError, subprocess.TimeoutExpired):
         return False
 
 
-def start_broadcaster(log):
+def start_broadcaster(log, ack_delivered=False):
+    command = [
+        sys.executable, "-u", str(ROOT / "gpu-worker" / "odd_live_program.py"),
+        "--rtsp", RTSP_URL,
+    ]
+    if ack_delivered:
+        command.append("--ack-delivered")
     return subprocess.Popen(
-        [sys.executable, "-u", str(ROOT / "gpu-worker" / "odd_live_program.py"),
-         "--rtsp", RTSP_URL, "--ack-delivered"],
-        cwd=str(ROOT), env=os.environ.copy(), stdout=log, stderr=subprocess.STDOUT,
-        start_new_session=True,
+        command, cwd=str(ROOT), env=os.environ.copy(),
+        stdout=log, stderr=subprocess.STDOUT, start_new_session=True,
     )
 
 
-def start_processes(log):
+def start_processes(log, ack_delivered=False):
     stream_dir = ROOT / "stream-server"
     media = stream_dir / "mediamtx"
     config = stream_dir / "mediamtx.yml"
@@ -116,7 +121,7 @@ def start_processes(log):
         cwd=str(ROOT), env=os.environ.copy(), stdout=log, stderr=subprocess.STDOUT,
         start_new_session=True,
     )
-    processes["broadcaster"] = start_broadcaster(log)
+    processes["broadcaster"] = start_broadcaster(log, ack_delivered)
     return processes
 
 
@@ -147,6 +152,7 @@ def stop_processes(processes):
 
 def main():
     base, key = load_worker_config()
+    ack_delivered = os.environ.get("ODD_LIVE_ACK_DELIVERED", "0").strip() == "1"
     log_dir = ROOT / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
     log = open(log_dir / "odd-live-control.log", "ab", buffering=0)
@@ -157,6 +163,7 @@ def main():
     last_stream_check = 0.0
     stream_missing_since = 0.0
     publisher_ok = False
+    print("ODD_LIVE_ACK_DELIVERED", str(ack_delivered).lower(), flush=True)
     print("ODD_LIVE_SUPERVISOR_READY", flush=True)
     try:
         while True:
@@ -172,7 +179,7 @@ def main():
                         processes = {}
                     if not processes and time.monotonic() - last_restart >= 5:
                         try:
-                            processes = start_processes(log)
+                            processes = start_processes(log, ack_delivered)
                             last_restart = time.monotonic()
                             publisher_started_at = last_restart
                             last_stream_check = 0.0
