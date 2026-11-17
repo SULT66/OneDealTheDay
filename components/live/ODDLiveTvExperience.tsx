@@ -151,7 +151,7 @@ export function ODDLiveTvExperience({
         ):null}
 
         {(!compact||chatOpen)?(
-          <aside aria-label="ODD Live audience chat" className="pointer-events-auto absolute bottom-10 right-2 flex max-h-[47%] w-[min(78%,330px)] flex-col overflow-hidden rounded-xl border border-white/25 bg-[#061224]/85 p-2.5 text-white shadow-xl backdrop-blur-md sm:bottom-12 sm:right-4 sm:p-3">
+          <aside aria-label="ODD Live audience chat" className="pointer-events-auto absolute bottom-10 right-2 flex max-h-[47%] w-[min(44%,330px)] flex-col overflow-hidden rounded-xl border border-white/25 bg-[#061224]/85 p-2.5 text-white shadow-xl backdrop-blur-md sm:bottom-12 sm:right-4 sm:p-3">
             <div className="flex items-center justify-between gap-2">
               <div>
                 <h3 className="text-sm font-black">Ask Chloe live</h3>
@@ -180,7 +180,7 @@ export function ODDLiveTvExperience({
 
         {!show?<div className="pointer-events-auto absolute bottom-4 left-4 rounded-lg bg-black/70 px-3 py-2 text-xs text-white">Waiting for the next scheduled ODD Live show.</div>:null}
 
-        {!compact&&product?<div className="pointer-events-auto absolute bottom-10 left-2 max-h-[34%] w-[min(55%,440px)] overflow-hidden rounded-xl border border-white/20 bg-[#061224]/85 p-2.5 text-white shadow-xl backdrop-blur-md sm:bottom-12 sm:left-4 sm:w-[min(52%,480px)] sm:p-3">
+        {!compact&&product?<div className="pointer-events-auto absolute bottom-10 left-2 max-h-[34%] w-[min(44%,480px)] overflow-hidden rounded-xl border border-white/20 bg-[#061224]/85 p-2.5 text-white shadow-xl backdrop-blur-md sm:bottom-12 sm:left-4 sm:w-[min(48%,480px)] sm:p-3">
           <p className="mb-1 text-[9px] font-black tracking-wider text-lime-300 sm:text-[10px]">PRODUCT {show?.product_index||1} OF {show?.product_count||2}</p>
           <h3 className="line-clamp-2 text-[11px] font-bold leading-snug sm:text-sm">{product.title}</h3>
           <div className="mt-1 flex items-center justify-between gap-2">
