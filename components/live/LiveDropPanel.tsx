@@ -8,7 +8,6 @@ import { formatPrice } from "@/lib/format";
 import { DeliaTrigger } from "@/components/delia/DeliaTrigger";
 import { LiveDropSignup } from "@/components/site/LiveDropSignup";
 import { analyticsSessionId, recordLiveDropEvent } from "@/lib/analyticsSession";
-import { sendPresence } from "./livePresence";
 import { PriceBoard } from "./PriceBoard";
 import { useCopy } from "@/components/site/CopyProvider";
 
@@ -25,6 +24,11 @@ import { useCopy } from "@/components/site/CopyProvider";
  * without a request every second, and every poll re-syncs them. Drift can only
  * accumulate for as long as one polling interval.
  */
+
+const sendPresence=(dropKey:string)=>fetch("/api/live/watching",{
+  method:"POST",headers:{"Content-Type":"application/json"},
+  body:JSON.stringify({drop_key:dropKey,session_id:analyticsSessionId()}),
+}).catch(()=>undefined);
 
 export type LiveDropView = {
   drop_key: string;
