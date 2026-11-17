@@ -8,6 +8,7 @@ function init(db) {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       market TEXT NOT NULL,
       product_ids TEXT NOT NULL,
+      scripts_json TEXT NOT NULL DEFAULT '[]',
       status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','live','ended')),
       start_at TEXT,
       end_at TEXT,
@@ -51,6 +52,8 @@ function init(db) {
   `);
   if(!db.pragma("table_info(odd_tv_chat)").some(column=>column.name==="product_id"))
     db.exec("ALTER TABLE odd_tv_chat ADD COLUMN product_id INTEGER");
+  if(!db.pragma("table_info(odd_tv_shows)").some(column=>column.name==="scripts_json"))
+    db.exec("ALTER TABLE odd_tv_shows ADD COLUMN scripts_json TEXT NOT NULL DEFAULT '[]'");
 }
 function validateProducts(db,market,ids) {
   if(!Array.isArray(ids)||ids.length!==2||new Set(ids).size!==ids.length||
@@ -92,15 +95,28 @@ function pickProducts(db,market) {
   if(selected.length<2)throw new Error("NOT_ENOUGH_ELIGIBLE_PRODUCTS");
   return selected;
 }
-function createShow(db,{market="us",productIds,now=Date.now()}) {
+function cleanScripts(scripts) {
+  if(scripts==null)return ["",""];
+  if(!Array.isArray(scripts)||scripts.length!==2||scripts.some(value=>typeof value!=="string"||value.length>12000))
+    throw new Error("INVALID_PRODUCT_SCRIPTS");
+  return scripts.map(value=>value.replace(/[\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f]/g,"").trim());
+}
+function createShow(db,{market="us",productIds,scripts,now=Date.now()}) {
   const ids=validateProducts(db,market,productIds==null?pickProducts(db,market):productIds);
+  const scriptList=cleanScripts(scripts);
   const existing=db.prepare("SELECT id FROM odd_tv_shows WHERE status='live' AND end_at>? LIMIT 1")
     .get(new Date(now).toISOString());
   if(existing)throw new Error("ANOTHER_SHOW_ACTIVE");
   const result=db.prepare(
-    "INSERT INTO odd_tv_shows(market,product_ids,status,created_at) VALUES(?,?,'draft',?)"
-  ).run(market,JSON.stringify(ids),new Date(now).toISOString());
+    "INSERT INTO odd_tv_shows(market,product_ids,scripts_json,status,created_at) VALUES(?,?,?,'draft',?)"
+  ).run(market,JSON.stringify(ids),JSON.stringify(scriptList),new Date(now).toISOString());
   return Number(result.lastInsertRowid);
+}
+function scriptForProduct(show,productId) {
+  const ids=JSON.parse(show?.product_ids||"[]");
+  const scripts=JSON.parse(show?.scripts_json||"[]");
+  const index=ids.indexOf(Number(productId));
+  return index>=0?String(scripts[index]||""):"";
 }
 function startShow(db,id,{now=Date.now(),warmupMs=0}={}) {
   const show=db.prepare("SELECT * FROM odd_tv_shows WHERE id=? AND status='draft'").get(id);
