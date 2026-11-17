@@ -46,15 +46,15 @@ function init(db) {
     db.exec("ALTER TABLE odd_tv_chat ADD COLUMN product_id INTEGER");
 }
 function validateProducts(db,market,ids) {
-  if(!Array.isArray(ids)||ids.length<2||ids.length>10||new Set(ids).size!==ids.length||
-     ids.some(id=>!Number.isSafeInteger(id)||id<=0)) throw new Error("REQUIRE_2_TO_10_UNIQUE_PRODUCT_IDS");
+  if(!Array.isArray(ids)||ids.length!==2||new Set(ids).size!==ids.length||
+     ids.some(id=>!Number.isSafeInteger(id)||id<=0)) throw new Error("REQUIRE_EXACTLY_TWO_UNIQUE_PRODUCT_IDS");
   const stmt=db.prepare("SELECT id FROM products WHERE id=? AND market=? AND status='published'");
   if(ids.some(id=>!stmt.get(id,market)))throw new Error("PRODUCT_NOT_PUBLISHED_IN_MARKET");
   return ids;
 }
 /**
- * Pick up to ten currently published, purchasable listings, diversifying
- * across retailers so one highly-scored marketplace does not fill the show.
+ * Pick two currently published, purchasable listings from different
+ * retailers when possible for the 30/30 pilot.
  */
 function pickProducts(db,market) {
   const {sourceSql}=require("./publicCatalog");
@@ -73,16 +73,16 @@ function pickProducts(db,market) {
     if(count>=2)continue;
     selected.push(row.id);used.add(row.id);
     perRetailer.set(retailer,count+1);
-    if(selected.length===10)break;
+    if(selected.length===2)break;
   }
-  if(selected.length<8){
+  if(selected.length<2){
     for(const row of rows){
       if(used.has(row.id))continue;
       selected.push(row.id);used.add(row.id);
-      if(selected.length===10)break;
+      if(selected.length===2)break;
     }
   }
-  if(selected.length<8)throw new Error("NOT_ENOUGH_ELIGIBLE_PRODUCTS");
+  if(selected.length<2)throw new Error("NOT_ENOUGH_ELIGIBLE_PRODUCTS");
   return selected;
 }
 function createShow(db,{market="us",productIds,now=Date.now()}) {
