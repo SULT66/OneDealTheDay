@@ -154,7 +154,7 @@ export function ODDLiveTvExperience({
           <aside aria-label="ODD Live audience chat" className="pointer-events-auto absolute bottom-10 right-2 flex max-h-[47%] w-[min(44%,330px)] flex-col overflow-hidden rounded-xl border border-white/25 bg-[#061224]/85 p-2.5 text-white shadow-xl backdrop-blur-md sm:bottom-12 sm:right-4 sm:p-3">
             <div className="flex items-center justify-between gap-2">
               <div>
-                <h3 className="text-sm font-black">Ask Chloe live</h3>
+                <h3 className="text-sm font-black">Ask the host live</h3>
                 <p className="text-[10px] text-white/65">Questions are answered in scheduled breaks</p>
               </div>
               {compact?<button type="button" onClick={onChatToggle} className="rounded-full px-2 py-1 text-lg leading-none text-white/80" aria-label="Close chat">×</button>:null}
