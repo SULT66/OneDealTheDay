@@ -16,7 +16,7 @@ This pilot is two products only. The admin console and server reject a different
 | Show clock | On-air segment | Question/render operation |
 |---|---|---|
 | 00:00–03:00 | Welcome, introduce Product 1 | Questions start collecting |
-| 03:00–08:00 | Product 1 overview | At 03:00, freeze up to three Product 1 questions; render answers while Chloe speaks; play at 08:00 |
+| 03:00–08:00 | Product 1 overview | At 03:00, freeze up to three Product 1 questions; render answers while the host speaks; play at 08:00 |
 | 08:00–12:00 | Q&A 1 for Product 1 | Questions continue collecting for the next slot |
 | 12:00–17:00 | Product 1 use-case and listing details | At 12:00, freeze the next batch; render during narration; play at 17:00 |
 | 17:00–21:00 | Q&A 2 for Product 1 | Questions continue collecting |
@@ -40,7 +40,7 @@ The run-of-show holds the order and cue times. Fill bracketed fields from the tw
 
 ### 00:00–03:00 — Welcome and Product 1 reveal
 
-“Hi, everyone, and welcome to ODD Live. I’m Chloe. We have two products in today’s show, with the first one featured for the first half hour and the second one for the next half hour. I’ll walk through what each retailer listing actually says, and I’ll take your questions in scheduled Q&A breaks so I can give them proper attention.
+“Hi, everyone, and welcome to ODD Live. I’m the host. We have two products in today’s show, with the first one featured for the first half hour and the second one for the next half hour. I’ll walk through what each retailer listing actually says, and I’ll take your questions in scheduled Q&A breaks so I can give them proper attention.
 
 “First up is **[Product 1 title]**, listed by **[retailer]**. The listing shows **[current verified price, if checked within the last hour]**. I’m going to start with the details we can confirm, then we’ll pause for your questions. If you’re watching live, send a short question about this first product now. I’m collecting them while we take a closer look.”
 
