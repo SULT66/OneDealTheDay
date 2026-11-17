@@ -34,7 +34,6 @@ export default async function MarketLayout({
     <CopyProvider language={language}>
     <NavigationProgress>
     <DeliaProvider market={market} language={language}>
-      {/* Holds Chloe's call above the pages, so she follows the viewer. */}
       {/* Stamps the visitor's session onto outbound links in the browser.
           Must not be rendered into the href on the server: these pages are
           cached, and a baked-in id would be shared by every later visitor. */}
