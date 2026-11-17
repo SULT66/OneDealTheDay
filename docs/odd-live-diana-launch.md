@@ -1,13 +1,13 @@
 # ODD Live / Diana — staged installation and acceptance
 
-ODD Live TV is an **independent** 60-minute channel on the OneDailyDrop backend. Existing 10-minute Live Drop and its Tavus host remain unchanged.
+ODD Live TV is an **independent** 60-minute channel on the OneDailyDrop backend. The Live Drop offer page no longer uses the legacy hosted presenter.
 
 ## Current implementation
 
 - `src/oddTvChannel.js`: draft/start/stop a show, 8–10 published products with merchant diversification, time-based rotation (60 minutes), separate moderated/rate-limited question queue.
 - `src/oddLiveBrain.js`: grounded response prompt and fallback that cannot fabricate unknown price or stock.
 - `src/oddLiveQueue.js`: single-lease producer handshake; question not marked `sent` until affirmative broadcast acknowledgement.
-- `gpu-worker/odd_live_chloe_worker.py`: processes one queued viewer question, generates Azure Speech + a MuseTalk v1.5 lip-synced MP4; `--watch` supervises repeated checks.
+- `gpu-worker/odd_live_host_worker.py`: processes one queued viewer question, generates Azure Speech + a MuseTalk v1.5 lip-synced MP4; `--watch` supervises repeated checks.
 - `gpu-worker/odd_live_program.py`: keeps a local RTSP H.264/AAC stream, switches to lip-synced answers, and can play occasional short motion MP4s between answers.
 - `components/live/ODDLiveTvExperience.tsx`: shows current on-air product, merchant link, shared chat below the **external HTTPS viewer embed**.
 
@@ -39,7 +39,7 @@ All worker keys, Azure Speech credentials and model tokens belong in secure serv
 
 ### Diana, WSL2 staged rehearsal
 
-Already installed: Ubuntu `odd-ai-test` Conda, RTX 5070 Ti, MuseTalk v1.5, prepared avatar `chloe_closeup_01`, MediaMTX local port 8554.
+Already installed: Ubuntu `odd-ai-test` Conda, RTX 5070 Ti, MuseTalk v1.5, prepared avatar `the prepared local avatar`, MediaMTX local port 8554.
 
 Copy only the Python files from the reviewed GitHub branch into `~/odd-ai-humans/gpu-worker`; do not overwrite the existing MuseTalk fork or the running `odd-live-main` controller. Use a **new** RTSP path `odd-live-smart`.
 
@@ -56,17 +56,17 @@ ODD_LIVE_VOICE=en-US-SaraNeural
 
 On Diana, the worker also reads `~/.config/odd-live/speech.env` (`chmod 600`) for `AZURE_SPEECH_KEY` and `AZURE_SPEECH_REGION`, without overriding explicit environment variables. That file has already been created on Diana. Do not commit or paste credentials. The selected default Sara voice uses `cheerful` style, subject to later user approval. The TV worker lease lasts 10 minutes to accommodate batched MuseTalk; do not enable unattended polling until timeout and failed-turn retry logic are tested.
 
-1. First confirm `python -m py_compile gpu-worker/odd_live_chloe_worker.py gpu-worker/odd_live_program.py`.
+1. First confirm `python -m py_compile gpu-worker/odd_live_host_worker.py gpu-worker/odd_live_program.py`.
 2. In WSL start `python gpu-worker/odd_live_program.py` (local RTSP only; do not pass `--ack-delivered` before the public audio/video check).
-3. With a test show live, run `python gpu-worker/odd_live_chloe_worker.py --once` to render one queued answer.
-4. Confirm the public viewer receives Chloe's synchronized mouth movement and audible speech; unmute the viewer for the audio check.
-5. Start supervised question polling with `python gpu-worker/odd_live_chloe_worker.py --watch`; it polls every 8 seconds, makes no speech/model calls while the queue is empty, and stops with Ctrl+C.
+3. With a test show live, run `python gpu-worker/odd_live_host_worker.py --once` to render one queued answer.
+4. Confirm the public viewer receives the presenter's synchronized mouth movement and audible speech; unmute the viewer for the audio check.
+5. Start supervised question polling with `python gpu-worker/odd_live_host_worker.py --watch`; it polls every 8 seconds, makes no speech/model calls while the queue is empty, and stops with Ctrl+C.
 6. After the public audio/video check passes, restart the broadcaster with `--ack-delivered`. This marks a chat question answered after its clip is sent to the live encoder.
 
 
 ### Optional walk/gesture clips
 
-Put short Chloe motion videos in `~/odd-ai-humans/assets/chloe/motions/` on Diana. Use 16:9 clips with Chloe's approved appearance, clothes, and studio; 5–10 seconds, 10–60 fps, MP4. Audio is ignored. The broadcaster scales them to the stream size and plays one every 50 seconds while no answer is being spoken. File names sort alphabetically, so number them (for example `01-walk-to-table.mp4`, `02-turn-and-present.mp4`, `03-walk-back.mp4`). Keep the walk clips silent or treat their sound as discarded; spoken answers still use the MuseTalk lip-sync path.
+Put short presenter motion videos in `~/odd-ai-humans/assets/host/motions/` on Diana. Use 16:9 clips with the approved presenter appearance, clothes, and studio; 5–10 seconds, 10–60 fps, MP4. Audio is ignored. The broadcaster scales them to the stream size and plays one every 50 seconds while no answer is being spoken. File names sort alphabetically, so number them (for example `01-walk-to-table.mp4`, `02-turn-and-present.mp4`, `03-walk-back.mp4`). Keep the walk clips silent or treat their sound as discarded; spoken answers still use the MuseTalk lip-sync path.
 
 ## Operational safety / next gates
 
