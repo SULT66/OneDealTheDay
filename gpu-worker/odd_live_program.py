@@ -310,15 +310,9 @@ def main():
                         # replaying the walk-in scene or freezing on a still frame.
                         next_motion_at=time.monotonic()
                 else:
-                    frame=cv2.imread(str(images[idle_idx%len(images)]))
-                    idle_idx+=1
-                    if frame is None:
-                        frame=first
-                    elif frame.shape[:2]!=(height,width):
-                        # All rawvideo writes must have the exact dimensions
-                        # passed to FFmpeg at startup; a single mismatched idle
-                        # PNG can desynchronize the stream indefinitely.
-                        frame=cv2.resize(frame,(width,height),interpolation=cv2.INTER_AREA)
+                    # Hold a single idle frame while the GPU renders the next
+                    # spoken turn; never replay extracted source-video frames.
+                    frame=first
                 segment=b"\0"*AUDIO_BYTES_PER_FRAME
             # Preserve one 40 ms audio slice for every video frame. If FFmpeg
             # temporarily back-pressures its audio input, pause the shared
