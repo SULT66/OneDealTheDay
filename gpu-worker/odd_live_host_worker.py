@@ -198,8 +198,8 @@ def main():
     mode.add_argument("--watch",action="store_true",
                       help="Poll for viewer questions until stopped with Ctrl+C.")
     p.add_argument("--market",default="us")
-    p.add_argument("--poll-seconds",type=float,default=8,
-                   help="Idle delay between checks in --watch mode (default: 8).")
+    p.add_argument("--poll-seconds",type=float,default=2,
+                   help="Idle delay between checks in --watch mode (default: 2).")
     args=p.parse_args()
     if not 2 <= args.poll_seconds <= 60:
         p.error("--poll-seconds must be between 2 and 60.")
