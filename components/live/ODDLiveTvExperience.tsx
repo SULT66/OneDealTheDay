@@ -20,13 +20,6 @@ type Props = {
   onFullscreen?:()=>void;onSizeToggle?:()=>void;onCompactToggle?:()=>void;expanded?:boolean;
 };
 
-const clock=(seconds:number)=>{
-  const total=Math.max(0,Math.floor(seconds));
-  const hh=Math.floor(total/3600),mm=Math.floor((total%3600)/60),ss=total%60;
-  const pad=(n:number)=>String(n).padStart(2,"0");
-  return hh?hh+":"+pad(mm)+":"+pad(ss):pad(mm)+":"+pad(ss);
-};
-
 export function ODDLiveTvExperience({
   children,market,compact=false,chatOpen=false,onChatToggle,onFullscreen,onSizeToggle,
   onCompactToggle,expanded=false,
@@ -36,7 +29,6 @@ export function ODDLiveTvExperience({
   const [draft,setDraft]=useState("");
   const [sending,setSending]=useState(false);
   const [notice,setNotice]=useState("");
-  const [remaining,setRemaining]=useState(0);
   const [viewerCount,setViewerCount]=useState(0);
 
   const refresh=useCallback(async()=>{
@@ -46,7 +38,6 @@ export function ODDLiveTvExperience({
     const next=data.show||null;
     setShow(next);
     if(next){
-      setRemaining(Number(next.seconds_remaining)||0);
       setViewerCount(Number(next.viewer_count)||0);
       const chat=await fetch("/api/odd-tv/chat?market="+encodeURIComponent(market),{cache:"no-store"}).catch(()=>null);
       if(chat?.ok){
@@ -64,11 +55,6 @@ export function ODDLiveTvExperience({
     const timer=setInterval(()=>void refresh(),5000);
     return()=>clearInterval(timer);
   },[refresh]);
-
-  useEffect(()=>{
-    const timer=setInterval(()=>setRemaining(value=>Math.max(0,value-1)),1000);
-    return()=>clearInterval(timer);
-  },[]);
 
   useEffect(()=>{
     if(!show?.show_id)return;
@@ -129,8 +115,7 @@ export function ODDLiveTvExperience({
       <div className={styles.stage}>
         {children}
         <div className={styles.onAir} aria-live="polite">
-          <span className={live?styles.liveBadge:styles.offlineBadge}><span/>{live?"LIVE":"STANDBY"}</span>
-          {show?<span className={styles.timer} aria-label="Time remaining">{clock(remaining)}</span>:null}
+          <span className={live?styles.liveBadge:styles.offlineBadge}><span/>{live?"Live":"Standby"}</span>
         </div>
         {show?<span className={styles.viewers}><LiveIcon name="viewers"/>{viewerCount}<span> watching</span></span>:null}
         {!show?<p className={styles.waiting}>The next discovery is coming soon.</p>:null}
