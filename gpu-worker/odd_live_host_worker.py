@@ -230,7 +230,11 @@ def main():
         return
     if response.get("kind") not in {"presentation","question"}:
         raise RuntimeError("UNEXPECTED_WORKER_RESPONSE")
-    speech=generate_local_speech(response)
+    # TV speech is composed once by the server. Do not send the same turn
+    # through local Ollama again: that added up to 90 seconds and could replace
+    # the answer that the server had already prepared. Keep this only for the
+    # separate legacy Live Drop mode.
+    speech=response.get("spoken_text","") if mode=="tv" else generate_local_speech(response)
     if not isinstance(speech,str) or not (5<=len(speech)<=520):
         raise RuntimeError("INVALID_SPEECH_LENGTH")
     # Do not leak server credentials or secret lease tokens into logs.
@@ -265,6 +269,8 @@ def main():
             "question_id":response.get("question_id"),
             "lease_token":response["lease_token"],
             "lease_expires_at":expiry,
+            "opening":response.get("opening") is True,
+            "kind":response.get("kind"),
             "play_after":datetime.fromisoformat((prepared.get("play_after") or response.get("play_after") or "").replace("Z","+00:00")).timestamp() if (prepared.get("play_after") or response.get("play_after")) else 0,
         }
         target=ready/(jobdir.name+".ready.json")
