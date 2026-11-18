@@ -36,6 +36,23 @@ READY=OUTPUT/"ready"
 MOTION_DEFAULT=next((p for p in sorted((ROOT/"assets").glob("*/motions")) if p.is_dir()),ROOT/"assets/host/motions")
 MOTION_DIR=Path(os.getenv("ODD_LIVE_MOTION_DIR",str(MOTION_DEFAULT))).expanduser()
 
+def landscape_frame(frame,width=1280,height=720):
+    """Compose any MuseTalk portrait output into a true 16:9 stream frame."""
+    source_h,source_w=frame.shape[:2]
+    # Fill the wide canvas with a dimmed, softly blurred enlargement of this
+    # exact live frame; keep the presenter upright and fully visible in front.
+    small=cv2.resize(frame,(320,180),interpolation=cv2.INTER_AREA)
+    background=cv2.GaussianBlur(small,(0,0),sigmaX=12,sigmaY=12)
+    background=cv2.resize(background,(width,height),interpolation=cv2.INTER_LINEAR)
+    background=cv2.convertScaleAbs(background,alpha=0.42)
+    scale=min(width/source_w,height/source_h)
+    foreground=cv2.resize(frame,(max(1,round(source_w*scale)),max(1,round(source_h*scale))),
+                          interpolation=cv2.INTER_AREA if scale<1 else cv2.INTER_LINEAR)
+    x=(width-foreground.shape[1])//2
+    y=(height-foreground.shape[0])//2
+    background[y:y+foreground.shape[0],x:x+foreground.shape[1]]=foreground
+    return background
+
 def write_all(fd, data):
     view=memoryview(data)
     while view:
@@ -104,8 +121,7 @@ def decode_clip(video,width,height):
         while True:
             ok,frame=capture.read()
             if not ok: break
-            if frame.shape[:2]!=(height,width):
-                frame=cv2.resize(frame,(width,height))
+            frame=landscape_frame(frame,width,height)
             frames.append(frame)
             if len(frames)>FPS*90: raise RuntimeError("CLIP_TOO_LONG")
     finally: capture.release()
@@ -125,8 +141,7 @@ def decode_motion(video,width,height):
         while True:
             ok,frame=capture.read()
             if not ok: break
-            if frame.shape[:2]!=(height,width):
-                frame=cv2.resize(frame,(width,height))
+            frame=landscape_frame(frame,width,height)
             frames.append(frame)
             if len(frames)>FPS*20: raise RuntimeError("MOTION_CLIP_TOO_LONG")
     finally:
@@ -167,7 +182,8 @@ def main():
     if not images: raise RuntimeError("NO_HOST_IDLE_FRAMES")
     first=cv2.imread(str(images[0]))
     if first is None: raise RuntimeError("BAD_IDLE_IMAGE")
-    height,width=first.shape[:2]
+    width,height=1280,720
+    first=landscape_frame(first,width,height)
     process,video_fd,audio_fd=launch_ffmpeg(width,height,args.rtsp)
     video_queue=queue.Queue(maxsize=64)
     video_error=[]
