@@ -49,17 +49,20 @@ function speechText(value) {
   return text;
 }
 
-function fallback(product, question) {
+function fallback(product, question, opening = false) {
   const p = productFacts(product);
-  return question
-    ? "I can't confirm that detail for " + p.title + " from the available listing. Please check the retailer's product page for the latest information."
-    : question ? "Coming up: " + p.title + ". Let's look at its listed features and see whether it's right for you." : "Welcome to ODD Live. Today we're taking a closer look at " + p.title + " and the details confirmed in its listing.";
+  if (question) {
+    return "I can't confirm that detail for " + p.title + " from the available listing. Please check the retailer's product page for the latest information.";
+  }
+  return opening
+    ? "Welcome to ODD Live. Today we're taking a closer look at " + p.title + " and the details confirmed in its listing."
+    : "Let's take a look at " + p.title + " and the features confirmed in its listing.";
 }
 
 /** generateText is a server-only LLM adapter. The caller owns TTS, queues and authorisation. */
 async function composeHostTurn({product, question = "", locale = "en-US", opening = false, generateText, timeoutMs = 12000}) {
   const prompt = hostPrompt({product, question, locale, opening});
-  if (typeof generateText !== "function") return speechText(fallback(product, question));
+  if (typeof generateText !== "function") return speechText(fallback(product, question, opening));
   let timer;
   try {
     const result = await Promise.race([
