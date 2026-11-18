@@ -1,5 +1,4 @@
-/* Landscape TV framing in every viewing mode. The video preserves its
-   proportions and crops from the top so the host’s head stays in view. */
+/* Show the complete incoming frame in the requested 16:9 TV viewport. */
 .channel { width:100%; max-width:1440px; margin:0 auto; padding:28px 24px 0; color:var(--fg); }
 .expanded { max-width:1680px; }
 .shell { overflow:hidden; border:1px solid var(--border); border-radius:24px; background:var(--surface); box-shadow:var(--shadow-card); }
@@ -13,7 +12,7 @@
 .experience { position:relative; padding-right:320px; }
 .stage { position:relative; min-width:0; min-height:0; aspect-ratio:16/9; overflow:hidden; background:#101110; color:white; }
 .player,.fallbackPlayer { position:absolute; inset:0; width:100%; height:100%; border:0; }
-.player { object-fit:cover; object-position:center top; }
+.player { object-fit:fill; object-position:center; }
 .connecting { position:absolute; top:50%; left:16px; right:16px; margin:0; transform:translateY(-50%); color:white; font-size:13px; text-align:center; pointer-events:none; }
 .onAir { position:absolute; top:18px; left:18px; pointer-events:none; }
 .liveBadge,.offlineBadge { display:inline-flex; align-items:center; gap:5px; color:#ff443d; font-size:12px; font-weight:600; line-height:1.5; }
