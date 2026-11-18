@@ -4339,6 +4339,7 @@ app.post("/api/odd-tv/worker/next",oddWorkerAuth,async(req,res)=>{
       questions:question?questions.map(item=>item.text):[],
       play_after:null,
       spoken_text:speech,
+      speech_source:process.env.OPENAI_API_KEY?"openai":"fallback",
       lease_token:lease.token,
       lease_expires_at:new Date(lease.expiresAt).toISOString(),
     });
