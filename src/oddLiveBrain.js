@@ -60,9 +60,12 @@ function fallback(product, question, opening = false) {
 }
 
 /** generateText is a server-only LLM adapter. The caller owns TTS, queues and authorisation. */
-async function composeHostTurn({product, question = "", locale = "en-US", opening = false, generateText, timeoutMs = 12000}) {
+async function composeHostTurn({product, question = "", locale = "en-US", opening = false, generateText, timeoutMs = 12000, onFallback}) {
   const prompt = hostPrompt({product, question, locale, opening});
-  if (typeof generateText !== "function") return speechText(fallback(product, question, opening));
+  if (typeof generateText !== "function") {
+    if (typeof onFallback === "function") onFallback();
+    return speechText(fallback(product, question, opening));
+  }
   let timer;
   try {
     const result = await Promise.race([
