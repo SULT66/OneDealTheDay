@@ -98,7 +98,7 @@ export function ODDLiveTvExperience({
       });
       const body=await res.json().catch(()=>({}));
       if(!res.ok){setNotice(String(body.error||"Could not send question."));return;}
-      setDraft("");setNotice("Question sent — queued for the next Q&A break.");
+      setDraft("");setNotice("Question sent — the live host will answer it shortly.");
       void refresh();
     }catch{setNotice("Unable to connect to chat right now.");}
     finally{setSending(false);}
