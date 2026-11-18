@@ -4195,7 +4195,7 @@ app.post("/api/admin/odd-tv/show",admin,express.json({limit:"30kb"}),(req,res)=>
   if(!oddTvEnabled)return res.status(503).json({error:"ODD TV disabled."});
   const marketCode=normalizeMarket(req.body?.market)||"us";
   try{
-    const id=oddTv.createShow(db,{market:marketCode,productIds:req.body?.product_ids,scripts:req.body?.scripts,now:Date.now()});
+    const id=oddTv.createShow(db,{market:marketCode,productIds:req.body?.product_ids,now:Date.now()});
     return res.status(201).json({show_id:id,state:"draft"});
   }catch(error){return res.status(400).json({error:error.message});}
 });
@@ -4284,54 +4284,26 @@ app.post("/api/odd-tv/worker/next",oddWorkerAuth,async(req,res)=>{
   const key="tv:"+show.id;
   if(oddTvLeases.has(key))return res.json({kind:"busy"});
 
-  const schedule=require("./oddTvRunOfShow");
-  const window=schedule.questionWindow(show,Date.now());
-  const productIds=JSON.parse(show.product_ids);
-  const slotProductId=window?Number(productIds[window.productIndex]):null;
-  let question=null,questions=[];
-  // Open one batch of at most three questions per scheduled Q&A slot. More
-  // questions stay queued for the next slot; a slot cannot be overbooked by
-  // multiple MuseTalk renders that would all arrive at the same time.
-  if(window&&!oddTvLeases.hasPendingSlot(key,window.slotMinute)){
-    questions=oddTv.nextQuestions(db,show.id,50,slotProductId)
-      .filter(item=>!oddTvLeases.hasPendingQuestion(key,item.id)).slice(0,3);
-    question=questions[0]||null;
-  }
-  const listing=question
-    ? oddTv.productById(db,show,slotProductId,Date.now()).product
-    : oddTv.currentProduct(db,show,Date.now()).product;
+  const listing=oddTv.currentProduct(db,show,Date.now()).product;
   if(!listing)return res.status(503).json({error:"No current published product."});
-
-  // Viewer questions take priority in their timed preparation window. Between
-  // windows, keep the show's product narration moving without replaying a
-  // presentation clip that is already queued or recently aired.
+  // Viewer questions enter the next live turn immediately; there are no timed Q&A breaks.
+  const questions=oddTv.nextQuestions(db,show.id,3,listing.id)
+    .filter(item=>!oddTvLeases.hasPendingQuestion(key,item.id));
+  const question=questions[0]||null;
   if(!question&&(oddTvLeases.hasPendingPresentation(key,listing.id)||!oddTv.productPresentationDue(db,show.id,listing.id)))
     return res.json({kind:"idle"});
   const questionIds=question?questions.map(item=>item.id):[];
   const lease=oddTvLeases.acquire(key,question?questionIds:null,{
     kind:question?"question":"presentation",productId:listing.id,opening,
-    slotMinute:question?window.slotMinute:null,
   });
   if(!lease)return res.json({kind:"busy"});
   try {
     const {composeHostTurn}=require("./oddLiveBrain");
-    let generateText;
-    if(process.env.OPENAI_API_KEY){
-      generateText=async ({system,user})=>{
-        const OpenAI=require("openai");
-        const client=new OpenAI({apiKey:process.env.OPENAI_API_KEY,timeout:12000,maxRetries:0});
-        const response=await client.responses.create({
-          model:process.env.ODD_LIVE_AI_MODEL||"gpt-4.1-mini",
-          instructions:system,input:user,max_output_tokens:160
-        });
-        return response.output_text;
-      };
-    }
+    // Product narration and question answers are generated on Diana's local Ollama model.
     const speech=await composeHostTurn({
       product:listing,
       question:question?questions.map((item,index)=>String(index+1)+". "+item.text).join(" "):"",
-      hostScript:question?"":oddTv.scriptForProduct(show,listing.id),
-      locale:"en-US",generateText
+      locale:"en-US",
     });
     return res.json({
       kind:question?"question":"presentation",
@@ -4339,7 +4311,9 @@ app.post("/api/odd-tv/worker/next",oddWorkerAuth,async(req,res)=>{
       question_id:question?questionIds:null,
       question_count:questionIds.length,
       product_id:listing.id,opening,
-      play_after:question?window.playAfter:null,
+      product:listing,
+      questions:question?questions.map(item=>item.text):[],
+      play_after:null,
       spoken_text:speech,
       lease_token:lease.token,
       lease_expires_at:new Date(lease.expiresAt).toISOString(),
