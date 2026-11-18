@@ -144,7 +144,7 @@ export function ODDLiveTvExperience({
           </>:<div className={styles.emptyProduct}><LiveIcon name="bag"/><h3>Your next great find</h3><p>Featured product details will appear here when the show starts.</p></div>}
         </section>:null}
         <section className={styles.chat} aria-label="ODD Live audience chat">
-          <div className={styles.chatHeading}><div><h3>Ask the host <span>Q&A</span></h3><p>Answers during the show’s Q&A breaks</p></div>{compact?<button type="button" className={styles.closeChat} onClick={onChatToggle} aria-label="Close chat">×</button>:<LiveIcon name="chat"/>}</div>
+          <div className={styles.chatHeading}><div><h3>Ask the host <span>Q&A</span></h3><p>Ask now — the host answers while the show is live</p></div>{compact?<button type="button" className={styles.closeChat} onClick={onChatToggle} aria-label="Close chat">×</button>:<LiveIcon name="chat"/>}</div>
           <div role="log" aria-live="polite" className={styles.messages}>
             {messages.length===0?<div className={styles.emptyChat}><p>Curious about this find?</p><span>Ask a question and join the conversation.</span></div>:messages.slice(-8).map(msg=>
               <div key={msg.id} className={styles.message}><span className={styles.avatar} aria-hidden="true">{msg.author.slice(0,1).toUpperCase()}</span><div><p><strong>{msg.author}</strong><span>{msg.status==="sent"?"Answered":msg.status==="queued"?"Queued":""}</span></p><p>{msg.text}</p></div></div>
