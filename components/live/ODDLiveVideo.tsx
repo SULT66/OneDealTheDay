@@ -34,7 +34,15 @@ export function ODDLiveVideo({ embedUrl }: { embedUrl: string }) {
       void import("hls.js").then(({ default: HlsPlayer }) => {
         if (disposed) return;
         if (!HlsPlayer.isSupported()) { useFallback(); return; }
-        hls = new HlsPlayer({ lowLatencyMode: true, backBufferLength: 30 });
+        hls = new HlsPlayer({
+          lowLatencyMode: true,
+          liveSyncDurationCount: 1,
+          liveMaxLatencyDurationCount: 3,
+          maxLiveSyncPlaybackRate: 1.2,
+          maxBufferLength: 4,
+          maxMaxBufferLength: 8,
+          backBufferLength: 5,
+        });
         hls.on(HlsPlayer.Events.ERROR, (_event, data) => {
           if (data.fatal) useFallback();
         });
