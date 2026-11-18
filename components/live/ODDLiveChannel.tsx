@@ -1,13 +1,13 @@
 "use client";
 
 import {useEffect,useRef,useState} from "react";
+import {ODDLiveVideo} from "./ODDLiveVideo";
 import {ODDLiveTvExperience} from "./ODDLiveTvExperience";
 import styles from "./ODDLiveChannel.module.css";
 
 /**
- * Public ODD Live TV stage. The iframe keeps MediaMTX's HLS/WebRTC playback
- * and its built-in browser-compatible stream handling; the storefront adds the
- * social-live controls around it without exposing a publishing endpoint.
+ * Public ODD Live TV stage with landscape framing and storefront controls.
+ * Playback uses the public read endpoint, never the publishing endpoint.
  */
 export function ODDLiveChannel({embedUrl,market}:{embedUrl?:string;market:string}) {
   const [compact,setCompact]=useState(false);
@@ -70,15 +70,7 @@ export function ODDLiveChannel({embedUrl,market}:{embedUrl?:string;market:string
           onCompactToggle={toggleCompact}
           expanded={expanded}
         >
-          <iframe
-            src={playerUrl}
-            title="ODD Live shopping television stream"
-            loading="eager"
-            allow="autoplay; fullscreen; picture-in-picture"
-            allowFullScreen
-            referrerPolicy="strict-origin-when-cross-origin"
-            className={styles.player}
-          />
+          <ODDLiveVideo embedUrl={playerUrl} />
         </ODDLiveTvExperience>
       </div>
     </section>

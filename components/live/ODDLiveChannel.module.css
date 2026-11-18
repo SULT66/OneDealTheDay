@@ -1,7 +1,7 @@
-/* The live stream is 704 × 1216 (11:19). Size the stage to the frame,
-   rather than surrounding a portrait stream with a landscape viewport. */
-.channel { --video-width:min(440px,44dvh); width:100%; max-width:calc(var(--video-width) + 370px); margin:0 auto; padding:28px 24px 0; color:var(--fg); }
-.expanded { --video-width:min(500px,50dvh); }
+/* Landscape TV framing in every viewing mode. The video preserves its
+   proportions and crops from the top so the host’s head stays in view. */
+.channel { width:100%; max-width:1440px; margin:0 auto; padding:28px 24px 0; color:var(--fg); }
+.expanded { max-width:1680px; }
 .shell { overflow:hidden; border:1px solid var(--border); border-radius:24px; background:var(--surface); box-shadow:var(--shadow-card); }
 .header { display:flex; align-items:center; justify-content:space-between; gap:20px; padding:20px 24px; border-bottom:1px solid var(--border); }
 .heading { display:flex; align-items:center; gap:12px; }
@@ -11,8 +11,10 @@
 .heading h2 { margin:0; font-size:23px; font-weight:800; letter-spacing:-.8px; line-height:1.15; }
 .headerNote { margin:0; font-size:12px; color:var(--fg-muted); }
 .experience { position:relative; padding-right:320px; }
-.stage { position:relative; min-width:0; min-height:0; aspect-ratio:11/19; overflow:hidden; background:#101110; color:white; }
-.player { position:absolute; inset:0; width:100%; height:100%; border:0; }
+.stage { position:relative; min-width:0; min-height:0; aspect-ratio:16/9; overflow:hidden; background:#101110; color:white; }
+.player,.fallbackPlayer { position:absolute; inset:0; width:100%; height:100%; border:0; }
+.player { object-fit:cover; object-position:center top; }
+.connecting { position:absolute; top:50%; left:16px; right:16px; margin:0; transform:translateY(-50%); color:white; font-size:13px; text-align:center; pointer-events:none; }
 .onAir { position:absolute; top:18px; left:18px; pointer-events:none; }
 .liveBadge,.offlineBadge { display:inline-flex; align-items:center; gap:5px; color:#ff443d; font-size:12px; font-weight:600; line-height:1.5; }
 .liveBadge>span,.offlineBadge>span { height:6px; width:6px; border:1px solid currentColor; border-radius:50%; }
@@ -20,7 +22,7 @@
 .viewers { position:absolute; top:18px; right:18px; display:flex; align-items:center; gap:6px; padding:7px 10px; border:1px solid #ffffff28; border-radius:9px; background:#111c; font-size:11px; pointer-events:none; }
 .viewers svg { width:14px; height:14px; }
 .waiting { position:absolute; bottom:72px; left:16px; right:16px; margin:0; padding:12px; border-radius:10px; background:#111c; font-size:13px; text-align:center; }
-.toolbar { position:absolute; bottom:0; left:0; right:0; display:flex; align-items:center; justify-content:space-between; padding:32px 16px 14px; background:linear-gradient(transparent,#000b); pointer-events:none; }
+.toolbar { position:absolute; bottom:0; left:0; right:0; display:flex; align-items:center; justify-content:space-between; padding:22px 16px 52px; background:linear-gradient(transparent,#000b); pointer-events:none; }
 .stageLabel { font-size:11px; font-weight:800; letter-spacing:1.5px; }
 .stageLabel strong { margin-left:4px; color:var(--lime); }
 .controls { display:flex; gap:6px; pointer-events:auto; }
@@ -68,41 +70,55 @@
 .questionForm button:disabled { background:var(--border); color:var(--fg-subtle); cursor:default; }
 .notice { margin:9px 0 0; color:var(--fg-muted); font-size:11px; line-height:1.5; }
 .closeChat { width:28px; height:28px; background:var(--bg); color:var(--fg); border-color:var(--border); }
-.mini { position:fixed; bottom:16px; right:16px; z-index:80; max-width:220px; width:calc(100vw - 32px); padding:0; }
+.mini { position:fixed; bottom:16px; right:16px; z-index:80; max-width:360px; width:calc(100vw - 32px); padding:0; }
 .mini .shell { border-radius:18px; box-shadow:var(--shadow-lift); }
 .compact { padding-right:0; }
-.compact .stage { min-height:0; aspect-ratio:11/19; }
+.compact .stage { min-height:0; aspect-ratio:16/9; }
 .compact .sidebar { position:static; width:auto; max-height:260px; border-left:0; }
 .compact .chat { min-height:220px; }
 .compact .viewers span { display:none; }
 .fullscreen { position:fixed; inset:0; z-index:100; max-width:none; height:100dvh; margin:0; padding:0; overflow:auto; background:var(--surface); }
 .fullscreen .shell { min-height:100%; border:0; border-radius:0; }
-.fullscreen .experience { width:calc(57.894737dvh + 320px); max-width:100%; margin:0 auto; }
-.fullscreen .stage { min-height:0; aspect-ratio:11/19; }
+.fullscreen .experience { width:100%; max-width:calc(177.777778dvh + 320px); margin:0 auto; }
+.fullscreen .stage { min-height:0; aspect-ratio:16/9; }
 .fullscreen .sidebar { max-height:100dvh; overflow-y:auto; }
+@media (min-width:1101px) {
+  .productImage { float:left; width:90px; height:90px; margin:0 12px 10px 0; padding:8px; }
+  .productTitle { font-size:14px; }
+  .shopButton { clear:both; }
+  .chat { min-height:180px; }
+  .messages { min-height:40px; margin:12px 0; }
+}
+@media (max-width:1100px) {
+  .experience { padding-right:0; }
+  .sidebar { position:static; display:grid; grid-template-columns:1fr 1fr; width:auto; overflow:visible; border-left:0; border-top:1px solid var(--border); }
+  .chat { border-top:0; border-left:1px solid var(--border); }
+  .compact .sidebar { display:flex; }
+  .compact .chat { border-left:0; border-top:1px solid var(--border); }
+}
 @media (max-width:760px) {
-  .channel { max-width:520px; padding:16px 12px 0; }
+  .channel { max-width:none; padding:16px 12px 0; }
   .shell { border-radius:18px; }
   .header { padding:16px; }
   .heading h2 { font-size:20px; }
   .headerNote { display:none; }
   .experience { padding-right:0; }
-  .stage { min-height:0; aspect-ratio:11/19; }
-  .sidebar { position:static; width:auto; overflow:visible; border-left:0; }
+  .stage { min-height:0; aspect-ratio:16/9; }
+  .sidebar { display:flex; position:static; width:auto; overflow:visible; border-left:0; }
   .productSection { position:relative; padding:18px; border-top:1px solid var(--border); }
   .productImage { float:left; width:88px; height:100px; margin:0 14px 10px 0; padding:8px; border-radius:10px; }
   .productTitle { font-size:14px; -webkit-line-clamp:3; }
   .price { margin-top:5px; font-size:22px; }
   .shopButton { clear:both; margin-top:14px; }
   .shopNote { clear:both; }
-  .chat { min-height:225px; padding:18px; }
+  .chat { min-height:225px; padding:18px; border-left:0; border-top:1px solid var(--border); }
   .messages { max-height:220px; }
   .questionForm input { font-size:16px; }
   .mini { padding:0; }
-  .mini { max-width:220px; }
+  .mini { max-width:360px; }
   .mini .questionForm input { font-size:16px; }
   .fullscreen { padding:0; }
   .fullscreen .experience { width:100%; }
-  .fullscreen .stage { aspect-ratio:11/19; }
+  .fullscreen .stage { aspect-ratio:16/9; }
   .fullscreen .sidebar { max-height:none; }
 }

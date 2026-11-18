@@ -61,6 +61,7 @@
     "express": "^4.22.3",
     "geoip-lite": "^2.0.3",
     "helmet": "^8.0.0",
+    "hls.js": "1.7.4",
     "next": "16.4.3",
     "node-cron": "^4.6.0",
     "openai": "^7.4.0",
