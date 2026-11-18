@@ -4321,6 +4321,7 @@ app.post("/api/odd-tv/worker/next",oddWorkerAuth,async(req,res)=>{
           return response.output_text;
         }
       : undefined;
+    let speechSource=process.env.OPENAI_API_KEY?"openai":"fallback";
     const speech=await composeHostTurn({
       product:listing,
       question:questionText,
@@ -4328,6 +4329,7 @@ app.post("/api/odd-tv/worker/next",oddWorkerAuth,async(req,res)=>{
       opening,
       generateText,
       timeoutMs:10500,
+      onFallback:()=>{speechSource="fallback";},
     });
     return res.json({
       kind:question?"question":"presentation",
@@ -4339,7 +4341,7 @@ app.post("/api/odd-tv/worker/next",oddWorkerAuth,async(req,res)=>{
       questions:question?questions.map(item=>item.text):[],
       play_after:null,
       spoken_text:speech,
-      speech_source:process.env.OPENAI_API_KEY?"openai":"fallback",
+      speech_source:speechSource,
       lease_token:lease.token,
       lease_expires_at:new Date(lease.expiresAt).toISOString(),
     });
