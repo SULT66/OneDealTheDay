@@ -4299,11 +4299,37 @@ app.post("/api/odd-tv/worker/next",oddWorkerAuth,async(req,res)=>{
   if(!lease)return res.json({kind:"busy"});
   try {
     const {composeHostTurn}=require("./oddLiveBrain");
-    // Product narration and question answers are generated on Diana's local Ollama model.
+    const questionText=question?questions.map((item,index)=>String(index+1)+". "+item.text).join(" "):"";
+    const generateText=process.env.OPENAI_API_KEY
+      ? async ({system,user})=>{
+          const OpenAI=require("openai");
+          const client=new OpenAI({
+            apiKey:process.env.OPENAI_API_KEY,
+            timeout:10000,
+            maxRetries:0,
+          });
+          const isQuestion=Boolean(questionText);
+          const response=await client.responses.create({
+            model:process.env.ODD_LIVE_AI_MODEL||"gpt-6.1-terra",
+            instructions:system+(isQuestion
+              ? " If the supplied facts do not answer the viewer, use web search to check the official manufacturer or retailer page. Base claims on those sources. Never read citations or URLs aloud."
+              : ""),
+            input:user,
+            max_output_tokens:isQuestion?150:120,
+            ...(isQuestion?{tools:[{type:"web_search"}],tool_choice:"auto"}:{}),
+          });
+          return response.output_text;
+        }
+      : undefined;
+    let speechSource=process.env.OPENAI_API_KEY?"openai":"fallback";
     const speech=await composeHostTurn({
       product:listing,
-      question:question?questions.map((item,index)=>String(index+1)+". "+item.text).join(" "):"",
+      question:questionText,
       locale:"en-US",
+      opening,
+      generateText,
+      timeoutMs:10500,
+      onFallback:()=>{speechSource="fallback";},
     });
     return res.json({
       kind:question?"question":"presentation",
@@ -4315,6 +4341,7 @@ app.post("/api/odd-tv/worker/next",oddWorkerAuth,async(req,res)=>{
       questions:question?questions.map(item=>item.text):[],
       play_after:null,
       spoken_text:speech,
+      speech_source:speechSource,
       lease_token:lease.token,
       lease_expires_at:new Date(lease.expiresAt).toISOString(),
     });

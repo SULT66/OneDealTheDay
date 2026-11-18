@@ -62,7 +62,8 @@ def post_json(base, path, key, payload):
         return json.loads(response.read().decode("utf-8"))
 
 def load_local_llm_config():
-    """Read Diana's private local Ollama settings; never send viewer text to OpenAI."""
+    """Read private Ollama settings for the separate legacy Live Drop mode."""
+
     if not LLM_CONFIG.is_file():
         return None
     if LLM_CONFIG.stat().st_mode & 0o077:
@@ -225,12 +226,18 @@ def main():
     if mode not in {"tv","drop"}: raise ValueError("INVALID_WORKER_MODE")
     path="/api/odd-tv/worker/next" if mode=="tv" else "/api/odd-live/worker/next"
     response=post_json(base,path,key,{"market":args.market})
+    if mode=="tv":
+        print("HOST_TEXT_SOURCE:",response.get("speech_source","unknown"),flush=True)
     if response.get("kind") in {"busy","not_live","idle"}:
         print("NO_TURN:",response["kind"])
         return
     if response.get("kind") not in {"presentation","question"}:
         raise RuntimeError("UNEXPECTED_WORKER_RESPONSE")
-    speech=generate_local_speech(response)
+    # TV speech is composed once by the server. Do not send the same turn
+    # through local Ollama again: that added up to 90 seconds and could replace
+    # the answer that the server had already prepared. Keep this only for the
+    # separate legacy Live Drop mode.
+    speech=response.get("spoken_text","") if mode=="tv" else generate_local_speech(response)
     if not isinstance(speech,str) or not (5<=len(speech)<=520):
         raise RuntimeError("INVALID_SPEECH_LENGTH")
     # Do not leak server credentials or secret lease tokens into logs.
@@ -265,6 +272,8 @@ def main():
             "question_id":response.get("question_id"),
             "lease_token":response["lease_token"],
             "lease_expires_at":expiry,
+            "opening":response.get("opening") is True,
+            "kind":response.get("kind"),
             "play_after":datetime.fromisoformat((prepared.get("play_after") or response.get("play_after") or "").replace("Z","+00:00")).timestamp() if (prepared.get("play_after") or response.get("play_after")) else 0,
         }
         target=ready/(jobdir.name+".ready.json")
