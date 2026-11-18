@@ -28,7 +28,6 @@ export function ODDTVConsole({adminKey}:{adminKey:string}) {
   const [productSearchBusy,setProductSearchBusy]=useState(false);
   const [query,setQuery]=useState("");
   const [selected,setSelected]=useState<number[]>([]);
-  const [scripts,setScripts]=useState<Record<number,string>>({});
   const [busy,setBusy]=useState(false);
   const [notice,setNotice]=useState("");
   const [showId,setShowId]=useState<number|null>(null);
@@ -164,7 +163,7 @@ export function ODDTVConsole({adminKey}:{adminKey:string}) {
       const headers={"Content-Type":"application/json","X-Admin-Key":adminKey};
       const create=await fetch("/api/admin/odd-tv/show",{
         method:"POST",headers,
-        body:JSON.stringify(manual?{market,product_ids:selected,scripts:selected.map(id=>scripts[id]||"")}:{market}),
+        body:JSON.stringify(manual?{market,product_ids:selected}:{market}),
       });
       const draft=await create.json().catch(()=>({}));
       if(!create.ok)throw new Error(draft.error||"Could not create the ODD Live show.");
@@ -177,7 +176,7 @@ export function ODDTVConsole({adminKey}:{adminKey:string}) {
       if(!start.ok)throw new Error(result.error||"Show was created but could not be started.");
       setRetryShowId(null);
       try{window.sessionStorage.removeItem("odd-live-pending-show");}catch{}
-      setNotice("Preparing the host and product segments. The show goes live when the opening is ready.");
+      setNotice("Preparing the live host. The show goes on air when the opening is ready.");
     }catch(error){
       if(createdShowId!==null&&error instanceof Error&&error.message==="DIANA_CONTROLLER_OFFLINE"){
         setRetryShowId(createdShowId);
@@ -207,7 +206,7 @@ export function ODDTVConsole({adminKey}:{adminKey:string}) {
       if(!response.ok)throw new Error(result.error||"Could not start the saved show.");
       setRetryShowId(null);
       try{window.sessionStorage.removeItem("odd-live-pending-show");}catch{}
-      setNotice("Preparing the host and product segments. The show goes live when the opening is ready.");
+      setNotice("Preparing the live host. The show goes on air when the opening is ready.");
     }catch(error){
       setNotice(error instanceof Error?error.message:"Could not start the saved show.");
     }finally{setBusy(false);}
@@ -215,7 +214,7 @@ export function ODDTVConsole({adminKey}:{adminKey:string}) {
 
   const selectedProducts=selected.map(id=>products.find(product=>product.id===id)).filter((product):product is CatalogProduct=>Boolean(product));
   function addProduct(id:number){setSelected(current=>current.includes(id)||current.length>=2?current:[...current,id]);}
-  function removeProduct(id:number){setSelected(current=>current.filter(value=>value!==id));setScripts(current=>{const next={...current};delete next[id];return next;});}
+  function removeProduct(id:number){setSelected(current=>current.filter(value=>value!==id));}
 
   return (
     <section className="mt-6 rounded-card border border-border bg-surface p-6 sm:p-8">
@@ -236,10 +235,10 @@ export function ODDTVConsole({adminKey}:{adminKey:string}) {
           <button type="button" disabled={controlBusy||broadcast?.desired_state==="stopped"} onClick={()=>void setBroadcastState("stopped")} className="rounded-full border border-red-300 px-4 py-2 text-sm font-semibold text-red-700 disabled:opacity-50">Stop stream</button>
         </div>
       </div>
-      <p className="mt-2 text-sm text-fg-muted">Choose two products. Add optional talking points; the local host uses your notes and verified product facts.</p>
+      <p className="mt-2 text-sm text-fg-muted">Choose two products. The host builds each live segment from verified listing details and answers viewer questions from chat.</p>
       <div className="mt-4 flex flex-wrap items-end gap-3">
         <label className="block"><span className="text-xs font-semibold uppercase tracking-[0.1em] text-fg-subtle">Market</span>
-          <select value={market} onChange={event=>{setMarket(event.target.value);setSelected([]);setScripts({});}} className="mt-1 block h-10 rounded-full border border-border bg-surface-2 px-4 text-sm text-fg">
+          <select value={market} onChange={event=>{setMarket(event.target.value);setSelected([]);}} className="mt-1 block h-10 rounded-full border border-border bg-surface-2 px-4 text-sm text-fg">
             <option value="us">United States</option><option value="ca">Canada</option><option value="uk">United Kingdom</option><option value="de">Germany</option><option value="fr">France</option>
           </select>
         </label>
@@ -259,12 +258,11 @@ export function ODDTVConsole({adminKey}:{adminKey:string}) {
         {[0,1].map(index=>{const product=selectedProducts[index];return <div key={index} className="rounded-xl border border-border bg-surface-2 p-4">
           <p className="text-xs font-bold uppercase tracking-wider text-fg-subtle">Product {index+1} · minutes {index===0?"00–30":"30–60"}</p>
           {product?<><div className="mt-2 flex items-center gap-3">{product.image_url?<img src={product.image_url} alt="" className="h-12 w-12 rounded-lg bg-white object-contain"/>:null}<p className="min-w-0 flex-1 text-sm font-semibold">{product.title}</p><button type="button" disabled={busy} onClick={()=>removeProduct(product.id)} className="text-xs underline">Remove</button></div>
-            <label className="mt-3 block"><span className="text-xs font-semibold text-fg-muted">Talking points (optional)</span><textarea maxLength={12000} value={scripts[product.id]||""} onChange={event=>setScripts(current=>({...current,[product.id]:event.target.value}))} placeholder="Paste the product script or key points for the host." className="mt-1 min-h-24 w-full resize-y rounded-xl border border-border bg-surface px-3 py-2 text-sm"/></label>
           </>:<p className="mt-3 text-sm text-fg-muted">Search above and add a product here.</p>}
         </div>;})}
       </div>
       <div className="mt-4 flex flex-wrap items-center gap-3">
-        <button type="button" disabled={busy||selected.length!==2||retryShowId!==null} onClick={()=>void launch(true)} className="rounded-full bg-lime px-5 py-2.5 text-sm font-bold text-ink disabled:opacity-50">{busy?"Preparing show…":retryShowId!==null?"Show "+retryShowId+" saved":"Save scripts and start"}</button>
+        <button type="button" disabled={busy||selected.length!==2||retryShowId!==null} onClick={()=>void launch(true)} className="rounded-full bg-lime px-5 py-2.5 text-sm font-bold text-ink disabled:opacity-50">{busy?"Preparing show…":retryShowId!==null?"Show "+retryShowId+" saved":"Save products and start"}</button>
         {retryShowId!==null?<button type="button" disabled={busy} onClick={()=>void retryStart(retryShowId)} className="rounded-full border border-border px-4 py-2.5 text-sm font-semibold text-fg disabled:opacity-50">Retry Show {retryShowId}</button>:null}
         <span className="text-sm text-fg-muted">{selected.length}/2 products selected</span>
       </div>
