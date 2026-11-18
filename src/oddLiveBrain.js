@@ -23,7 +23,7 @@ function productFacts(product) {
   };
 }
 
-function hostPrompt({product, question = "", locale = "en-US"}) {
+function hostPrompt({product, question = "", locale = "en-US", opening = false}) {
   const facts = productFacts(product);
   const q = clean(question, 600);
   return {
@@ -35,9 +35,10 @@ function hostPrompt({product, question = "", locale = "en-US"}) {
       "For viewer questions, use supplied facts first. If a requested detail is missing, use available web search to check the product manufacturer's or retailer's official listing before answering. If it still cannot be confirmed, say so briefly.",
       "Start speaking with the useful answer or product fact; do not begin with filler such as Thanks for asking. Create fresh narration from verified facts. Avoid repeating phrasing. Never invent product details.",
       "Never invent product claims or pressure anyone to buy. Do not read personal data or URLs aloud.",
+      ...(opening ? ["This is the first on-air line. Welcome viewers in one short sentence, name the featured product, and begin the presentation immediately."] : []),
       "Answer the viewer directly. Keep the reply natural, concise, and factual, about 25-65 words. Plain speech, no markdown, citations, URLs, or stage directions.",
     ].join(" "),
-    user: JSON.stringify({task: q ? "answer_viewer" : "present_product", product_facts: facts, viewer_question: q || null}),
+    user: JSON.stringify({task: q ? "answer_viewer" : opening ? "open_show_and_present_product" : "present_product", product_facts: facts, viewer_question: q || null}),
   };
 }
 
@@ -52,12 +53,12 @@ function fallback(product, question) {
   const p = productFacts(product);
   return question
     ? "I can't confirm that detail for " + p.title + " from the available listing. Please check the retailer's product page for the latest information."
-    : "Coming up: " + p.title + ". Let's look at its listed features and see whether it's right for you.";
+    : question ? "Coming up: " + p.title + ". Let's look at its listed features and see whether it's right for you." : "Welcome to ODD Live. Today we're taking a closer look at " + p.title + " and the details confirmed in its listing.";
 }
 
 /** generateText is a server-only LLM adapter. The caller owns TTS, queues and authorisation. */
-async function composeHostTurn({product, question = "", locale = "en-US", generateText, timeoutMs = 10000}) {
-  const prompt = hostPrompt({product, question, locale});
+async function composeHostTurn({product, question = "", locale = "en-US", opening = false, generateText, timeoutMs = 12000}) {
+  const prompt = hostPrompt({product, question, locale, opening});
   if (typeof generateText !== "function") return speechText(fallback(product, question));
   let timer;
   try {
