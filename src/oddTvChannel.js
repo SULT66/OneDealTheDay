@@ -225,7 +225,7 @@ function nextQuestions(db,showId,limit=3,productId=null) {
 function nextQuestion(db,showId) {
   return nextQuestions(db,showId,1)[0]||null;
 }
-function productPresentationDue(db,showId,productId,now=Date.now(),intervalMs=75*1000) {
+function productPresentationDue(db,showId,productId,now=Date.now(),intervalMs=45*1000) {
   const row=db.prepare(
     "SELECT presented_at FROM odd_tv_product_presentations WHERE show_id=? AND product_id=?"
   ).get(showId,productId);
