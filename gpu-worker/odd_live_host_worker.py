@@ -62,7 +62,8 @@ def post_json(base, path, key, payload):
         return json.loads(response.read().decode("utf-8"))
 
 def load_local_llm_config():
-    """Read Diana's private local Ollama settings; never send viewer text to OpenAI."""
+    """Read private Ollama settings for the separate legacy Live Drop mode."""
+
     if not LLM_CONFIG.is_file():
         return None
     if LLM_CONFIG.stat().st_mode & 0o077:
@@ -225,6 +226,8 @@ def main():
     if mode not in {"tv","drop"}: raise ValueError("INVALID_WORKER_MODE")
     path="/api/odd-tv/worker/next" if mode=="tv" else "/api/odd-live/worker/next"
     response=post_json(base,path,key,{"market":args.market})
+    if mode=="tv":
+        print("HOST_TEXT_SOURCE:",response.get("speech_source","unknown"),flush=True)
     if response.get("kind") in {"busy","not_live","idle"}:
         print("NO_TURN:",response["kind"])
         return
