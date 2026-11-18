@@ -1,7 +1,9 @@
 # ODD Live TV stream path
 
-ODD Live TV is a self-hosted local broadcast. The selected local host worker prepares short speech segments from verified product facts and optional admin notes. The broadcaster sends video and AAC audio to MediaMTX over RTSP; the storefront player reads the public HTTPS MediaMTX stream.
+ODD Live TV is a self-hosted live broadcast. The local GPU worker reads verified product details and queued viewer questions from OneDailyDrop, generates each spoken turn with local Ollama, creates speech, and renders lip-synced video with MuseTalk. No admin script is stored or read.
 
-The public page and admin control stay separate: the admin selects two products, writes optional notes, and starts or stops the show. Viewer questions are queued by ODD Live TV and handled in scheduled Q&A windows. Live Drop remains a product offer page; the separate ODD Live TV show owns its host, script, and viewer chat.
+The broadcaster publishes one continuous H.264/AAC RTSP feed to MediaMTX. OneDailyDrop's public player reads the HTTPS HLS stream. It is a live program feed, not a prerecorded MP4 played in a loop. The default broadcaster holds an idle avatar frame while the next on-demand spoken segment is rendered; it does not loop prerecorded idle-motion clips.
 
-Before an эфир, confirm the workstation controller is online, the RTSP path has H.264 and AAC, the public player loads both audio and video, and an actual browser playback check confirms audible sound. RTSP publisher readiness alone does not prove that public HLS audio plays.
+Questions from the public live chat are handled on the next available host turn, rather than waiting for a scheduled Q&A window. The viewer page presents the active product, chat, audience count, and live video. The player starts muted for browser autoplay policy and provides a clear button for turning on audio.
+
+Before an эфир, confirm the workstation controller is online, the RTSP path has H.264 and AAC, the public player loads both tracks, and a browser playback check confirms audible sound and synchronized lips. RTSP publisher readiness alone does not prove that a remote browser can hear the stream.

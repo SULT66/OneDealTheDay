@@ -9,6 +9,7 @@ export function ODDLiveVideo({ embedUrl }: { embedUrl: string }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [fallback, setFallback] = useState(false);
   const [playing, setPlaying] = useState(false);
+  const [audioEnabled, setAudioEnabled] = useState(false);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -55,6 +56,15 @@ export function ODDLiveVideo({ embedUrl }: { embedUrl: string }) {
     };
   }, [embedUrl, fallback]);
 
+  function enableAudio() {
+    const video=videoRef.current;
+    if(!video)return;
+    video.muted=false;
+    video.volume=1;
+    setAudioEnabled(true);
+    void video.play().catch(()=>{});
+  }
+
   if (fallback) return <iframe
     src={embedUrl}
     title="ODD Live shopping television stream"
@@ -66,6 +76,7 @@ export function ODDLiveVideo({ embedUrl }: { embedUrl: string }) {
   return <>
     <video ref={videoRef} className={styles.player} autoPlay muted playsInline controls
       aria-label="ODD Live shopping television stream" />
+    {!audioEnabled?<button type="button" className={styles.audioButton} onClick={enableAudio}>Turn on live sound</button>:null}
     {!playing?<p className={styles.connecting} role="status">Connecting to the live show…</p>:null}
   </>;
 }

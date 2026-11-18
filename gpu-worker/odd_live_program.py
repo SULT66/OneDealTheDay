@@ -154,8 +154,8 @@ def main():
     parser.add_argument("--rtsp",default="rtsp://127.0.0.1:8554/odd-live-smart")
     parser.add_argument("--ack-delivered",action="store_true",
                         help="Acknowledge chat only after the clip has been sent to the live encoder.")
-    parser.add_argument("--motion-dir",default=str(MOTION_DIR),
-                        help="Directory containing short host idle-motion MP4s.")
+    parser.add_argument("--motion-dir",default="",
+                        help="Optional idle-motion directory. Omit to avoid looping prerecorded clips.")
     parser.add_argument("--motion-every-seconds",type=int,default=3,
                         help="Pause between distinct idle-motion clips while the host is not speaking.")
     args=parser.parse_args()
@@ -198,12 +198,12 @@ def main():
     current=None
     frame_count=0
     speech_started=False
-    motion_dir=Path(args.motion_dir).expanduser()
-    motion_paths=sorted(motion_dir.glob("*.mp4")) if motion_dir.is_dir() else []
+    motion_dir=Path(args.motion_dir).expanduser() if args.motion_dir else None
+    motion_paths=sorted(motion_dir.glob("*.mp4")) if motion_dir and motion_dir.is_dir() else []
     # idle_05.mp4 is the prepared walk-in scene: play it once at stream start,
     # then exclude it from the recurring breathing/blinking/gesture rotation.
-    entrance_path=motion_dir/"idle_05.mp4"
-    if not entrance_path.is_file():
+    entrance_path=motion_dir/"idle_05.mp4" if motion_dir else None
+    if not entrance_path or not entrance_path.is_file():
         entrance_path=None
     if entrance_path:
         motion_paths=[path for path in motion_paths if path!=entrance_path]
@@ -310,15 +310,9 @@ def main():
                         # replaying the walk-in scene or freezing on a still frame.
                         next_motion_at=time.monotonic()
                 else:
-                    frame=cv2.imread(str(images[idle_idx%len(images)]))
-                    idle_idx+=1
-                    if frame is None:
-                        frame=first
-                    elif frame.shape[:2]!=(height,width):
-                        # All rawvideo writes must have the exact dimensions
-                        # passed to FFmpeg at startup; a single mismatched idle
-                        # PNG can desynchronize the stream indefinitely.
-                        frame=cv2.resize(frame,(width,height),interpolation=cv2.INTER_AREA)
+                    # Hold a single idle frame while the GPU renders the next
+                    # spoken turn; never replay extracted source-video frames.
+                    frame=first
                 segment=b"\0"*AUDIO_BYTES_PER_FRAME
             # Preserve one 40 ms audio slice for every video frame. If FFmpeg
             # temporarily back-pressures its audio input, pause the shared
