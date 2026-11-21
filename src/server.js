@@ -4186,8 +4186,9 @@ app.post("/api/odd-tv/chat",(req,res)=>{
     const id=oddTv.postQuestion(db,{showId:show.id,sessionId,text:req.body?.text,productId:product?.id??null,now:Date.now()});
     return res.status(201).json({ok:true,question_id:id});
   }catch(error){
-    return res.status(error.message.includes("RATE")||error.message.includes("QUEUE")?429:400)
-      .json({error:error.message});
+    const status=error.message.includes("RATE")||error.message.includes("QUEUE")||error.message.includes("LIMIT")?429:
+      error.message==="QUESTION_WINDOW_NOT_OPEN"?409:400;
+    return res.status(status).json({error:error.message});
   }
 });
 app.post("/api/admin/odd-tv/show",admin,express.json({limit:"30kb"}),(req,res)=>{
@@ -4247,14 +4248,26 @@ app.post("/api/odd-tv/worker/start",oddWorkerAuth,express.json({limit:"5kb"}),(r
   res.set("Cache-Control","no-store");
   if(!oddTvEnabled)return res.status(503).json({error:"ODD TV disabled."});
   const marketCode=normalizeMarket(req.body?.market)||"us";
+  const pilotMode=req.body?.pilot_mode===true||Number(req.body?.pilot_minutes)===6;
+  if(req.body?.pilot_minutes!==undefined&&Number(req.body.pilot_minutes)!==6)
+    return res.status(400).json({error:"Only the six-minute pilot is supported."});
   const now=Date.now();
   try{
-    // No product_ids means oddTv.createShow selects 8-10 eligible published products.
-    const productIds=Array.isArray(req.body?.product_ids)?req.body.product_ids:undefined;
-    const id=oddTv.createShow(db,{market:marketCode,productIds,now});
-    const state=oddTv.startShow(db,id,{now,warmupMs:5*60*1000});
+    let productIds=Array.isArray(req.body?.product_ids)?req.body.product_ids:undefined;
+    if(pilotMode&&!productIds){
+      const query=String(req.body?.product_query||"").replace(/\\s+/g," ").trim().slice(0,160);
+      if(query.length<3)return res.status(400).json({error:"A product_id or product_query is required for the pilot."});
+      const match=db.prepare(
+        "SELECT id FROM products WHERE market=? AND status='published' AND lower(title) LIKE lower(?) " +
+        "ORDER BY CASE WHEN lower(title)=lower(?) THEN 0 ELSE 1 END,COALESCE(ranking_score,score,0) DESC,id DESC LIMIT 1"
+      ).get(marketCode,"%"+query+"%",query);
+      if(!match)return res.status(404).json({error:"PUBLISHED_PRODUCT_NOT_FOUND"});
+      productIds=[Number(match.id)];
+    }
+    const id=oddTv.createShow(db,{market:marketCode,productIds,pilotMode,now});
+    const state=oddTv.startShow(db,id,{now,warmupMs:pilotMode?90*1000:5*60*1000});
     const broadcast=oddTv.setBroadcastDesired(db,"running",Date.now());
-    return res.status(201).json({...state,broadcast});
+    return res.status(201).json({...state,pilot_mode:pilotMode,broadcast});
   }catch(error){
     const conflict=error.message==="ANOTHER_SHOW_ACTIVE";
     return res.status(conflict?409:400).json({error:error.message});
@@ -4263,7 +4276,16 @@ app.post("/api/odd-tv/worker/start",oddWorkerAuth,express.json({limit:"5kb"}),(r
 app.post("/api/odd-tv/worker/control",oddWorkerAuth,(req,res)=>{
   res.set("Cache-Control","no-store");
   if(!oddTvEnabled)return res.status(503).json({error:"ODD TV disabled."});
-  return res.json(oddTv.getBroadcastControl(db,Date.now()));
+  const now=Date.now();
+  const nowIso=new Date(now).toISOString();
+  const ended=db.prepare(
+    "UPDATE odd_tv_shows SET status='ended' WHERE status='live' AND pilot_mode=1 AND end_at<=?"
+  ).run(nowIso);
+  if(ended.changes){
+    const active=db.prepare("SELECT id FROM odd_tv_shows WHERE status='live' AND end_at>? LIMIT 1").get(nowIso);
+    if(!active)oddTv.setBroadcastDesired(db,"stopped",now);
+  }
+  return res.json(oddTv.getBroadcastControl(db,now));
 });
 app.post("/api/odd-tv/worker/heartbeat",oddWorkerAuth,(req,res)=>{
   res.set("Cache-Control","no-store");
@@ -4278,7 +4300,8 @@ app.post("/api/odd-tv/worker/next",oddWorkerAuth,async(req,res)=>{
   res.set("Cache-Control","no-store");
   if(!oddTvEnabled)return res.json({kind:"not_live"});
   const marketCode=normalizeMarket(req.body?.market)||"us";
-  const workerState=oddTv.workerShow(db,marketCode,Date.now());
+  const now=Date.now();
+  const workerState=oddTv.workerShow(db,marketCode,now);
   if(!workerState)return res.json({kind:"not_live"});
   const {show,opening}=workerState;
   const key="tv:"+show.id;
@@ -4286,9 +4309,10 @@ app.post("/api/odd-tv/worker/next",oddWorkerAuth,async(req,res)=>{
 
   const listing=oddTv.currentProduct(db,show,Date.now()).product;
   if(!listing)return res.status(503).json({error:"No current published product."});
-  // Viewer questions enter the next live turn immediately; there are no timed Q&A breaks.
-  const questions=oddTv.nextQuestions(db,show.id,3,listing.id)
-    .filter(item=>!oddTvLeases.hasPendingQuestion(key,item.id));
+  // The six-minute terminal pilot reserves its first three minutes for product narration.
+  const qnaOpen=!show.pilot_mode||now>=Date.parse(show.start_at)+180*1000;
+  const questions=qnaOpen?oddTv.nextQuestions(db,show.id,3,listing.id)
+    .filter(item=>!oddTvLeases.hasPendingQuestion(key,item.id)):[];
   const question=questions[0]||null;
   if(!question&&(oddTvLeases.hasPendingPresentation(key,listing.id)||!oddTv.productPresentationDue(db,show.id,listing.id)))
     return res.json({kind:"idle"});
