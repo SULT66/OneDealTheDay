@@ -4311,8 +4311,14 @@ app.post("/api/odd-tv/worker/next",oddWorkerAuth,async(req,res)=>{
   if(!listing)return res.status(503).json({error:"No current published product."});
   // The six-minute terminal pilot reserves its first three minutes for product narration.
   const qnaOpen=!show.pilot_mode||now>=Date.parse(show.start_at)+180*1000;
-  const questions=qnaOpen?oddTv.nextQuestions(db,show.id,3,listing.id)
-    .filter(item=>!oddTvLeases.hasPendingQuestion(key,item.id)):[];
+  const answeredQuestions=show.pilot_mode
+    ? Number(db.prepare("SELECT COUNT(*) AS count FROM odd_tv_chat WHERE show_id=? AND status='sent'").get(show.id)?.count||0)
+    : 0;
+  const pilotQuestionsRemaining=show.pilot_mode?Math.max(0,5-answeredQuestions):3;
+  const questions=qnaOpen&&pilotQuestionsRemaining>0
+    ? oddTv.nextQuestions(db,show.id,Math.min(3,pilotQuestionsRemaining),listing.id)
+        .filter(item=>!oddTvLeases.hasPendingQuestion(key,item.id))
+    : [];
   const question=questions[0]||null;
   if(!question&&(oddTvLeases.hasPendingPresentation(key,listing.id)||!oddTv.productPresentationDue(db,show.id,listing.id)))
     return res.json({kind:"idle"});
