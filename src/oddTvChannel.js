@@ -14,6 +14,9 @@ function viewerTag(sessionId) {
 }
 
 const SHOW_MINUTES=60;
+const PILOT_MINUTES=6;
+const PILOT_QNA_START_SECONDS=180;
+const PILOT_MAX_QUESTIONS=5;
 function init(db) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS odd_tv_shows(
@@ -23,6 +26,8 @@ function init(db) {
       status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','live','ended')),
       start_at TEXT,
       end_at TEXT,
+      duration_minutes INTEGER NOT NULL DEFAULT 60,
+      pilot_mode INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_odd_tv_market_status ON odd_tv_shows(market,status);
@@ -63,10 +68,15 @@ function init(db) {
   `);
   if(!db.pragma("table_info(odd_tv_chat)").some(column=>column.name==="product_id"))
     db.exec("ALTER TABLE odd_tv_chat ADD COLUMN product_id INTEGER");
+  if(!db.pragma("table_info(odd_tv_shows)").some(column=>column.name==="duration_minutes"))
+    db.exec("ALTER TABLE odd_tv_shows ADD COLUMN duration_minutes INTEGER NOT NULL DEFAULT 60");
+  if(!db.pragma("table_info(odd_tv_shows)").some(column=>column.name==="pilot_mode"))
+    db.exec("ALTER TABLE odd_tv_shows ADD COLUMN pilot_mode INTEGER NOT NULL DEFAULT 0");
 }
-function validateProducts(db,market,ids) {
-  if(!Array.isArray(ids)||ids.length!==2||new Set(ids).size!==ids.length||
-     ids.some(id=>!Number.isSafeInteger(id)||id<=0)) throw new Error("REQUIRE_EXACTLY_TWO_UNIQUE_PRODUCT_IDS");
+function validateProducts(db,market,ids,{pilotMode=false}={}) {
+  const expected=pilotMode?1:2;
+  if(!Array.isArray(ids)||ids.length!==expected||new Set(ids).size!==ids.length||
+     ids.some(id=>!Number.isSafeInteger(id)||id<=0)) throw new Error(pilotMode?"PILOT_REQUIRES_EXACTLY_ONE_PRODUCT_ID":"REQUIRE_EXACTLY_TWO_UNIQUE_PRODUCT_IDS");
   const stmt=db.prepare("SELECT id FROM products WHERE id=? AND market=? AND status='published'");
   if(ids.some(id=>!stmt.get(id,market)))throw new Error("PRODUCT_NOT_PUBLISHED_IN_MARKET");
   return ids;
@@ -104,14 +114,16 @@ function pickProducts(db,market) {
   if(selected.length<2)throw new Error("NOT_ENOUGH_ELIGIBLE_PRODUCTS");
   return selected;
 }
-function createShow(db,{market="us",productIds,now=Date.now()}) {
-  const ids=validateProducts(db,market,productIds==null?pickProducts(db,market):productIds);
+function createShow(db,{market="us",productIds,pilotMode=false,now=Date.now()}) {
+  if(typeof pilotMode!=="boolean")throw new Error("INVALID_PILOT_MODE");
+  const ids=validateProducts(db,market,productIds==null?pickProducts(db,market):productIds,{pilotMode});
   const existing=db.prepare("SELECT id FROM odd_tv_shows WHERE status='live' AND end_at>? LIMIT 1")
     .get(new Date(now).toISOString());
   if(existing)throw new Error("ANOTHER_SHOW_ACTIVE");
+  const durationMinutes=pilotMode?PILOT_MINUTES:SHOW_MINUTES;
   const result=db.prepare(
-    "INSERT INTO odd_tv_shows(market,product_ids,status,created_at) VALUES(?,?,'draft',?)"
-  ).run(market,JSON.stringify(ids),new Date(now).toISOString());
+    "INSERT INTO odd_tv_shows(market,product_ids,duration_minutes,pilot_mode,status,created_at) VALUES(?,?,?,?, 'draft',?)"
+  ).run(market,JSON.stringify(ids),durationMinutes,pilotMode?1:0,new Date(now).toISOString());
   return Number(result.lastInsertRowid);
 }
 function startShow(db,id,{now=Date.now(),warmupMs=0}={}) {
@@ -121,7 +133,8 @@ function startShow(db,id,{now=Date.now(),warmupMs=0}={}) {
     .get(new Date(now).toISOString());
   if(active)throw new Error("ANOTHER_SHOW_ACTIVE");
   const start=now+Math.max(0,Math.min(10*60*1000,Number(warmupMs)||0));
-  const end=start+SHOW_MINUTES*60000;
+  const durationMinutes=Math.max(1,Math.min(SHOW_MINUTES,Number(show.duration_minutes)||SHOW_MINUTES));
+  const end=start+durationMinutes*60000;
   const result=db.prepare(
     "UPDATE odd_tv_shows SET status='live',start_at=?,end_at=? WHERE id=? AND status='draft'"
   ).run(new Date(start).toISOString(),new Date(end).toISOString(),id);
@@ -164,8 +177,9 @@ function productById(db,show,productId,now=Date.now()) {
 function currentProduct(db,show,now=Date.now()) {
   const ids=JSON.parse(show.product_ids);
   const start=Date.parse(show.start_at);
-  const elapsed=Math.min(SHOW_MINUTES*60000-1,Math.max(0,now-start));
-  const index=Math.min(ids.length-1,Math.floor(elapsed/(SHOW_MINUTES*60000/ids.length)));
+  const durationMs=Math.max(1,Math.min(SHOW_MINUTES,Number(show.duration_minutes)||SHOW_MINUTES))*60000;
+  const elapsed=Math.min(durationMs-1,Math.max(0,now-start));
+  const index=Math.min(ids.length-1,Math.floor(elapsed/(durationMs/ids.length)));
   return productById(db,show,ids[index],now);
 }
 function activeViewerCount(db,showId,now=Date.now(),ttlMs=45*1000) {
@@ -192,9 +206,17 @@ function postQuestion(db,{showId,sessionId,text,productId=null,now=Date.now()}) 
   const checked=chatMessageInput(text);
   if(checked.error)throw new Error(checked.error);
   if(!sessionId||sessionId.length>128)throw new Error("INVALID_SESSION");
-  if(productId!==null) {
-    const show=db.prepare("SELECT product_ids FROM odd_tv_shows WHERE id=?").get(showId);
-    if(!show||!JSON.parse(show.product_ids).includes(Number(productId)))throw new Error("INVALID_PRODUCT_FOR_SHOW");
+  const show=db.prepare("SELECT product_ids,start_at,end_at,pilot_mode FROM odd_tv_shows WHERE id=?").get(showId);
+  if(!show)throw new Error("SHOW_NOT_FOUND");
+  if(productId!==null&&!JSON.parse(show.product_ids).includes(Number(productId)))
+    throw new Error("INVALID_PRODUCT_FOR_SHOW");
+  if(show.pilot_mode){
+    const startsAt=Date.parse(show.start_at||"");
+    if(!Number.isFinite(startsAt)||now<startsAt+PILOT_QNA_START_SECONDS*1000)
+      throw new Error("QUESTION_WINDOW_NOT_OPEN");
+    if(now>=Date.parse(show.end_at||""))throw new Error("SHOW_ENDED");
+    const total=db.prepare("SELECT COUNT(*) AS n FROM odd_tv_chat WHERE show_id=?").get(showId).n;
+    if(total>=PILOT_MAX_QUESTIONS)throw new Error("PILOT_QUESTION_LIMIT_REACHED");
   }
   const recent=db.prepare(
     "SELECT created_at FROM odd_tv_chat WHERE show_id=? AND session_id=? ORDER BY id DESC LIMIT 1"
