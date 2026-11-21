@@ -4315,13 +4315,18 @@ app.post("/api/odd-tv/worker/next",oddWorkerAuth,async(req,res)=>{
     ? Number(db.prepare("SELECT COUNT(*) AS count FROM odd_tv_chat WHERE show_id=? AND status='sent'").get(show.id)?.count||0)
     : 0;
   const pilotQuestionsRemaining=show.pilot_mode?Math.max(0,5-answeredQuestions):3;
+  const questionBatchLimit=show.pilot_mode?1:3;
   const questions=qnaOpen&&pilotQuestionsRemaining>0
-    ? oddTv.nextQuestions(db,show.id,Math.min(3,pilotQuestionsRemaining),listing.id)
+    ? oddTv.nextQuestions(db,show.id,Math.min(questionBatchLimit,pilotQuestionsRemaining),listing.id)
         .filter(item=>!oddTvLeases.hasPendingQuestion(key,item.id))
     : [];
+  const narrationBufferLimit=show.pilot_mode?2:1;
+  const narrationIntervalMs=show.pilot_mode?8000:75000;
   const question=questions[0]||null;
-  if(!question&&(oddTvLeases.hasPendingPresentation(key,listing.id)||!oddTv.productPresentationDue(db,show.id,listing.id)))
-    return res.json({kind:"idle"});
+  if(!question&&(
+    oddTvLeases.pendingPresentationCount(key,listing.id)>=narrationBufferLimit||
+    !oddTv.productPresentationDue(db,show.id,listing.id,now,narrationIntervalMs)
+  )) return res.json({kind:"idle"});
   const questionIds=question?questions.map(item=>item.id):[];
   const lease=oddTvLeases.acquire(key,question?questionIds:null,{
     kind:question?"question":"presentation",productId:listing.id,opening,
@@ -4330,12 +4335,12 @@ app.post("/api/odd-tv/worker/next",oddWorkerAuth,async(req,res)=>{
   try {
     const {composeHostTurn}=require("./oddLiveBrain");
     const generateText=process.env.OPENAI_API_KEY
-      ? async ({system,user})=>{
+      ? async ({system,user,maxOutputTokens})=>{
           const OpenAI=require("openai");
           const client=new OpenAI({apiKey:process.env.OPENAI_API_KEY,timeout:12000,maxRetries:0});
           const response=await client.responses.create({
             model:process.env.ODD_LIVE_AI_MODEL||"gpt-4.1-mini",
-            instructions:system,input:user,max_output_tokens:160
+            instructions:system,input:user,max_output_tokens:maxOutputTokens||160
           });
           return response.output_text;
         }
