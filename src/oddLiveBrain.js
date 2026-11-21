@@ -35,14 +35,17 @@ function hostPrompt({product, question = "", locale = "en-US"}) {
       "If the facts do not answer a question, say that you cannot confirm and refer viewers to the retailer listing.",
       "Create fresh narration from the supplied verified product facts. Avoid repeating the same opening or phrasing. Do not invent product details.",
       "Never invent product claims or pressure anyone to buy. Do not read personal data or URLs aloud.",
-      "Answer every numbered viewer question briefly, up to three questions in one turn. Keep the whole reply natural, concise, and factual, about 30-80 words. Plain speech, no markdown or directions.",
+      q
+        ? "Answer only the viewer's current question directly in 15-30 spoken words. If the facts do not answer it, say so briefly. Plain speech, no markdown or directions."
+        : "Create one lively product-presentation segment of 90-120 spoken words, about 35-50 seconds. Cover confirmed features and who may find them useful. Do not add an opening filler sentence or invented details. Plain speech, no markdown or directions.",
     ].join(" "),
-    user: JSON.stringify({task: q ? "answer_viewer" : "present_product", product_facts: facts, viewer_question: q || null}),
+    user: JSON.stringify({task: q ? "answer_viewer" : "present_product_segment", product_facts: facts, viewer_question: q || null}),
+    maxOutputTokens: q ? 100 : 260,
   };
 }
 
 function speechText(value) {
-  const text = clean(value, 520).replace(/https?:\/\/\S+/gi, "").replace(/\bwww\.\S+/gi, "")
+  const text = clean(value, 1100).replace(/https?:\/\/\S+/gi, "").replace(/\bwww\.\S+/gi, "")
     .replace(/[*#`_<>\[\]{}]/g, "").replace(/\s+/g, " ").trim();
   if (!text) throw new Error("EMPTY_SPEECH");
   return text;
