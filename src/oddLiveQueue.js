@@ -45,10 +45,13 @@ function createProducerLeases({ttlMs=60*60*1000,now=()=>Date.now()}={}) {
       return true;
     },
     has(dropId) {cleanup();return active.has(dropId);},
-    hasPendingPresentation(dropId,productId) {
+    pendingPresentationCount(dropId,productId) {
       cleanup();
-      return [...pending.values()].some(lease=>lease.dropId===dropId&&lease.questionId===null&&
-        (productId==null||Number(lease.metadata?.productId)===Number(productId)));
+      return [...pending.values()].filter(lease=>lease.dropId===dropId&&lease.questionId===null&&
+        (productId==null||Number(lease.metadata?.productId)===Number(productId))).length;
+    },
+    hasPendingPresentation(dropId,productId) {
+      return this.pendingPresentationCount(dropId,productId)>0;
     },
     hasPendingQuestion(dropId,questionId) {
       cleanup();
