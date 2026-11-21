@@ -4323,11 +4323,22 @@ app.post("/api/odd-tv/worker/next",oddWorkerAuth,async(req,res)=>{
   if(!lease)return res.json({kind:"busy"});
   try {
     const {composeHostTurn}=require("./oddLiveBrain");
-    // Product narration and question answers are generated on Diana's local Ollama model.
+    const generateText=process.env.OPENAI_API_KEY
+      ? async ({system,user})=>{
+          const OpenAI=require("openai");
+          const client=new OpenAI({apiKey:process.env.OPENAI_API_KEY,timeout:12000,maxRetries:0});
+          const response=await client.responses.create({
+            model:process.env.ODD_LIVE_AI_MODEL||"gpt-4.1-mini",
+            instructions:system,input:user,max_output_tokens:160
+          });
+          return response.output_text;
+        }
+      : undefined;
     const speech=await composeHostTurn({
       product:listing,
       question:question?questions.map((item,index)=>String(index+1)+". "+item.text).join(" "):"",
       locale:"en-US",
+      generateText,
     });
     return res.json({
       kind:question?"question":"presentation",
@@ -4362,7 +4373,8 @@ app.post("/api/odd-tv/worker/prepared",oddWorkerAuth,(req,res)=>{
   if(!show||Date.parse(show.start_at)<=Date.now())
     return res.status(409).json({error:"Show is no longer preparing."});
   const start=Date.now()+10*1000;
-  const end=start+oddTv.SHOW_MINUTES*60*1000;
+  const durationMinutes=Math.max(1,Math.min(oddTv.SHOW_MINUTES,Number(show.duration_minutes)||oddTv.SHOW_MINUTES));
+  const end=start+durationMinutes*60*1000;
   db.prepare("UPDATE odd_tv_shows SET start_at=?,end_at=? WHERE id=? AND status='live'")
     .run(new Date(start).toISOString(),new Date(end).toISOString(),id);
   return res.json({ok:true,play_after:new Date(start).toISOString()});
