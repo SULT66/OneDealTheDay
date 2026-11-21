@@ -86,7 +86,14 @@ def launch_ffmpeg(width,height,url):
 
 def read_job():
     READY.mkdir(parents=True,exist_ok=True)
-    for path in sorted(READY.glob("*.ready.json")):
+    def queue_priority(path):
+        try:
+            item=json.loads(path.read_text(encoding="utf-8"))
+            # Answer a viewer before playing narration that is already waiting.
+            return (0 if item.get("question_id") else 1,path.name)
+        except (OSError,ValueError,json.JSONDecodeError):
+            return (2,path.name)
+    for path in sorted(READY.glob("*.ready.json"),key=queue_priority):
         try:
             info=json.loads(path.read_text(encoding="utf-8"))
             video=Path(info["video"]).resolve(strict=True)
