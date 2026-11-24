@@ -302,24 +302,26 @@ const RETAILERS = Object.freeze([
       excludeTitleTerms:["filter", "adapter", "replacement", "pump", "gift card"]
     }
   },
-  // Configure signed feed URLs only after accepting each program's terms.
-  // No automatic credential reuse: invitations are not active memberships.
+  // Memberships verified Joined on 2026-11-24. Reuse the existing server-side
+  // publisher credential for their current Google feeds, never legacy copies.
   {
     id:"dima-eyewear", name:"Dima Eyewear", network:"Awin", markets:["us"],
-    storefrontHost:"dimaeyewear.com",
-    feedPolicy:{spreadAcrossFeed:true, excludeTitleTerms:["gift card", "mystery box", "purchase protection", "extended warranty"]}
+    storefrontHost:"dimaeyewear.com", awinFeedId:"F4005", maxCatalogProducts:2000,
+    feedPolicy:{spreadAcrossFeed:true, excludeTitleTerms:["gift card", "gift box", "mystery box", "purchase protection", "extended warranty"]}
   },
   {
     id:"personalhour", name:"PersonalHour", network:"Awin", markets:["us"],
-    storefrontHost:"personalhour.com",
-    feedPolicy:{spreadAcrossFeed:true, excludeTitleTerms:["gift card", "warranty", "shipping", "delivery service", "assembly service", "order issue call", "custom payment", "price difference"]}
+    storefrontHost:"personalhour.com", awinFeedId:"F3280", maxCatalogProducts:2000,
+    feedPolicy:{spreadAcrossFeed:true, excludeTitleTerms:["gift card", "warranty", "shipping", "delivery service", "assembly service", "order issue call", "custom payment", "price difference", "on-demand", "on demand", "pre-order", "preorder", "custom color", "replacement", "spare part", "lubricant", "cleaner", "sanitizing"]}
   },
   {
     id:"brookwood-med", name:"Brookwood Med", network:"Awin", markets:["us"],
-    storefrontHost:"brookwoodmed.com",
+    storefrontHost:"brookwoodmed.com", awinFeedId:"F2671", maxCatalogProducts:2000,
     feedPolicy:{spreadAcrossFeed:true, excludeTitleTerms:["gift card", "purchase protection", "custom payment", "price difference"]}
   },
   {
+    // Joined, but absent from the publisher's available feed list. Keep opt-in
+    // until Awin grants feed access; never guess a feed ID or use a US feed.
     id:"lunzo", name:"Lunzo DE", network:"Awin", markets:["de"],
     storefrontHost:"lunzo.de",
     feedPolicy:{spreadAcrossFeed:true, excludeTitleTerms:["gift card", "geschenkgutschein", "purchase protection", "custom payment"]}

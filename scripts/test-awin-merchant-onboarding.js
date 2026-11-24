@@ -1,12 +1,20 @@
 const assert = require("node:assert/strict");
 const {feedDefinitions} = require("../src/retailerCatalog");
-const {searchProducts} = require("../src/providers/affiliateFeed");
+const {searchProducts,allowedByFeedPolicy} = require("../src/providers/affiliateFeed");
 
 async function main() {
-  const ids = ["dima-eyewear", "personalhour", "brookwood-med", "lunzo"];
-  // Merely having the publisher key must not activate unaccepted invitations.
+  // Only the three joined merchants with confirmed feeds auto-configure.
   const automatic = feedDefinitions({AWIN_PRODUCT_DATA_KEY:"a".repeat(32)});
-  assert(!automatic.some(feed => ids.includes(feed.retailerId)));
+  for (const [id,fid] of [["dima-eyewear","F4005"],["personalhour","F3280"],["brookwood-med","F2671"]]) {
+    const feed = automatic.find(feed => feed.retailerId === id);
+    assert(feed);
+    assert.deepEqual(feed.markets,["us"]);
+    assert(feed.url.endsWith(`/feed/${fid}.csv.gz`));
+  }
+  assert(!automatic.some(feed => feed.retailerId === "lunzo"));
+  const personal = automatic.find(feed => feed.retailerId === "personalhour");
+  assert(allowedByFeedPolicy({title:"In Stock Yoga Cork Block"},personal));
+  assert(!allowedByFeedPolicy({title:"Reformer [On-Demand] Custom Color"},personal));
 
   const lunzo = feedDefinitions({AFFILIATE_FEED_LUNZO_DE_URL:"https://feeds.example/lunzo.csv"})[0];
   assert.deepEqual(lunzo.markets, ["de"]);
@@ -22,7 +30,7 @@ async function main() {
 
   assert(!feedDefinitions({AFFILIATE_FEED_ROWABI_US_URL:"https://feeds.example/rowabi.csv"})
     .some(feed => feed.retailerId === "rowabi"), "Rowabi was excluded by the publisher");
-  console.log("Awin onboarding: opt-in, German market isolation and Rowabi exclusion passed.");
+  console.log("Awin onboarding: joined feeds, fulfillment filter, German isolation and Rowabi exclusion passed.");
 }
 
 main().catch(error => { console.error(error); process.exitCode = 1; });
