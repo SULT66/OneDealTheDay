@@ -553,7 +553,7 @@ async function searchProducts({definition, market, keywords = [], fetchImpl = gl
       const records = parseRecords(downloaded, definition.format).map(normalizedRecord);
       const curated = await loadCuratedAwinProducts(definition, market, fetchImpl, signal);
       const selectedIds = new Set(definition.curatedProducts?.products.map(item => item.id));
-      const fromFeed = records
+      const fromFeed = (definition.feedPolicy?.curatedOnly ? [] : records)
         .map((record, index) => normalize(record, definition, market, index, map))
         .filter(product => !selectedIds.has(product.external_id))
         .filter(product => allowedByFeedPolicy(product, definition));

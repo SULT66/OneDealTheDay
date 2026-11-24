@@ -302,6 +302,35 @@ const RETAILERS = Object.freeze([
       excludeTitleTerms:["filter", "adapter", "replacement", "pump", "gift card"]
     }
   },
+  // Configure signed feed URLs only after accepting each program's terms.
+  // No automatic credential reuse: invitations are not active memberships.
+  {
+    id:"rowabi", name:"Rowabi", network:"Awin", markets:["us"],
+    storefrontHost:"rowabi.com",
+    // The May 2026 feed has stale prices and stock. Only individually checked
+    // storefront selections may enter this catalog; raw feed rows stay out.
+    feedPolicy:{curatedOnly:true}
+  },
+  {
+    id:"dima-eyewear", name:"Dima Eyewear", network:"Awin", markets:["us"],
+    storefrontHost:"dimaeyewear.com",
+    feedPolicy:{spreadAcrossFeed:true, excludeTitleTerms:["gift card", "mystery box", "purchase protection", "extended warranty"]}
+  },
+  {
+    id:"personalhour", name:"PersonalHour", network:"Awin", markets:["us"],
+    storefrontHost:"personalhour.com",
+    feedPolicy:{spreadAcrossFeed:true, excludeTitleTerms:["gift card", "warranty", "shipping", "delivery service", "assembly service", "order issue call", "custom payment", "price difference"]}
+  },
+  {
+    id:"brookwood-med", name:"Brookwood Med", network:"Awin", markets:["us"],
+    storefrontHost:"brookwoodmed.com",
+    feedPolicy:{spreadAcrossFeed:true, excludeTitleTerms:["gift card", "purchase protection", "custom payment", "price difference"]}
+  },
+  {
+    id:"lunzo", name:"Lunzo DE", network:"Awin", markets:["de"],
+    storefrontHost:"lunzo.de",
+    feedPolicy:{spreadAcrossFeed:true, excludeTitleTerms:["gift card", "geschenkgutschein", "purchase protection", "custom payment"]}
+  },
   {id:"currys", name:"Currys", network:"Awin", markets:["uk"]},
   {id:"ao", name:"AO.com", network:"Awin", markets:["uk"]},
   {id:"fnac", name:"Fnac", network:"Awin", markets:["fr"]},
