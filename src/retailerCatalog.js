@@ -305,13 +305,6 @@ const RETAILERS = Object.freeze([
   // Configure signed feed URLs only after accepting each program's terms.
   // No automatic credential reuse: invitations are not active memberships.
   {
-    id:"rowabi", name:"Rowabi", network:"Awin", markets:["us"],
-    storefrontHost:"rowabi.com",
-    // The May 2026 feed has stale prices and stock. Only individually checked
-    // storefront selections may enter this catalog; raw feed rows stay out.
-    feedPolicy:{curatedOnly:true}
-  },
-  {
     id:"dima-eyewear", name:"Dima Eyewear", network:"Awin", markets:["us"],
     storefrontHost:"dimaeyewear.com",
     feedPolicy:{spreadAcrossFeed:true, excludeTitleTerms:["gift card", "mystery box", "purchase protection", "extended warranty"]}

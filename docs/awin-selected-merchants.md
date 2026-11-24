@@ -1,12 +1,11 @@
 # Selected Awin merchants — prepared, not activated
 
-The publisher selected these five programs. Joining the programs and activating
+The publisher selected these four programs. Joining the programs and activating
 their signed feed URLs remain pending; these definitions do not reuse the Awin
 key automatically and therefore cannot enable an unaccepted invitation.
 
 | Retailer | Advertiser | Market | Feed setting | Observed feed |
 | --- | --- | --- | --- | --- |
-| Rowabi | 46127 | US / USD | `AFFILIATE_FEED_ROWABI_US_URL` | Legacy 102653; stale, raw import prohibited |
 | Dima Eyewear | 128033 | US / USD | `AFFILIATE_FEED_DIMA_EYEWEAR_US_URL` | Google F4005 |
 | PersonalHour | 96347 | US / USD | `AFFILIATE_FEED_PERSONALHOUR_US_URL` | Resolve after program acceptance |
 | Brookwood Med | 124250 | US / USD | `AFFILIATE_FEED_BROOKWOOD_MED_US_URL` | Google F2671 |
@@ -18,7 +17,12 @@ activation. No additional ten-product cap is introduced. Existing importer
 limits and the public catalog's deduplication and editorial gates still apply.
 These safeguards do not independently prove product quality or buyer demand.
 
-## Rowabi comparison, November 23, 2026 (New York)
+## Excluded: Rowabi
+
+The publisher explicitly excluded Rowabi. It has no retailer/feed definition and
+will not be connected or imported. The observations below explain the decision.
+
+### Comparison, November 23, 2026 (New York)
 
 Downloaded legacy feed 102653 contained 151 variant rows across 42 product URLs.
 The Awin profile reports its last update as May 15, 2026. These spot checks are
@@ -36,11 +40,6 @@ Source URLs:
 - https://www.rowabi.com/products/aurelia-rattan-pendant-light-bundle
 - https://www.rowabi.com/pages/returns-exchanges
 - https://www.rowabi.com/pages/shipping-delivery
-
-Rowabi is `curatedOnly`: a configured feed URL alone cannot import the stale
-rows. Populate individually checked storefront selections only after program
-acceptance, with the exact size, shade-only/install-kit configuration and fresh
-price/availability. Do not imply a shade-only price includes wiring.
 
 Published returns terms observed: 45 days for eligible unused, uninstalled goods
 in original packaging; buyer pays ordinary return shipping; final-sale and custom

@@ -3,7 +3,7 @@ const {feedDefinitions} = require("../src/retailerCatalog");
 const {searchProducts} = require("../src/providers/affiliateFeed");
 
 async function main() {
-  const ids = ["rowabi", "dima-eyewear", "personalhour", "brookwood-med", "lunzo"];
+  const ids = ["dima-eyewear", "personalhour", "brookwood-med", "lunzo"];
   // Merely having the publisher key must not activate unaccepted invitations.
   const automatic = feedDefinitions({AWIN_PRODUCT_DATA_KEY:"a".repeat(32)});
   assert(!automatic.some(feed => ids.includes(feed.retailerId)));
@@ -20,10 +20,9 @@ async function main() {
   assert.deepEqual(await searchProducts({definition:lunzo, market:{code:"us",currency:"USD"}, fetchImpl}), []);
   assert.equal(requests, 0, "German feed must never be fetched for US shoppers");
 
-  const rowabi = feedDefinitions({AFFILIATE_FEED_ROWABI_US_URL:"https://feeds.example/rowabi.csv"})[0];
-  await assert.rejects(searchProducts({definition:rowabi, market:{code:"us",currency:"USD"}, fetchImpl}),
-    /no usable commissionable products/, "Stale feed rows must not publish as freshly checked Rowabi offers");
-  console.log("Awin onboarding: opt-in, German market isolation and stale Rowabi feed guards passed.");
+  assert(!feedDefinitions({AFFILIATE_FEED_ROWABI_US_URL:"https://feeds.example/rowabi.csv"})
+    .some(feed => feed.retailerId === "rowabi"), "Rowabi was excluded by the publisher");
+  console.log("Awin onboarding: opt-in, German market isolation and Rowabi exclusion passed.");
 }
 
 main().catch(error => { console.error(error); process.exitCode = 1; });
