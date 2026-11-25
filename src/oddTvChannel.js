@@ -18,6 +18,7 @@ const PILOT_MINUTES=6;
 const PILOT_QNA_START_SECONDS=180;
 const PILOT_MAX_QUESTIONS=5;
 const SCRIPT_QNA_MS=10*60*1000;
+const SCRIPT_PREPARATION_WINDOW_MS=60*60*1000;
 const SCRIPT_MIN_MINUTES=11;
 const SCRIPT_MAX_MINUTES=30;
 const SCRIPT_MAX_CHARS=24000;
@@ -80,6 +81,7 @@ function init(db) {
   for(const column of ["script_text","scheduled_at","qna_start_at","script_error"]){
     if(!columns.has(column))db.exec(`ALTER TABLE odd_tv_shows ADD COLUMN ${column} TEXT`);
   }
+  if(!columns.has("script_measured_ms"))db.exec("ALTER TABLE odd_tv_shows ADD COLUMN script_measured_ms INTEGER");
   if(!columns.has("script_target_minutes"))db.exec("ALTER TABLE odd_tv_shows ADD COLUMN script_target_minutes INTEGER");
 }
 function scriptTargetMinutes(value) {
@@ -159,7 +161,7 @@ function startShow(db,id,{now=Date.now(),warmupMs=0}={}) {
     ? Math.max(now+10000,Date.parse(show.scheduled_at||"")||0)
     : now+Math.max(0,Math.min(10*60*1000,Number(warmupMs)||0));
   const durationMinutes=Math.max(1,Math.min(SHOW_MINUTES,Number(show.duration_minutes)||SHOW_MINUTES));
-  const end=start+durationMinutes*60000;
+  const end=start+(show.script_text?SCRIPT_PREPARATION_WINDOW_MS:durationMinutes*60000);
   const result=db.prepare(
     "UPDATE odd_tv_shows SET status='live',start_at=?,end_at=? WHERE id=? AND status='draft'"
   ).run(new Date(start).toISOString(),new Date(end).toISOString(),id);
@@ -172,6 +174,7 @@ function prepareScriptedShow(db,show,durationMs,now=Date.now()) {
     throw new Error("INVALID_SCRIPT_PRESENTATION_DURATION");
   if(target!==null&&Math.abs(durationMs-target)>1000)throw new Error("SCRIPT_PRESENTATION_DURATION_MISMATCH");
   if(show.qna_start_at)return {start_at:show.start_at,qna_start_at:show.qna_start_at,end_at:show.end_at};
+  if(Date.parse(show.end_at)<=now)throw new Error("SCRIPT_PREPARATION_EXPIRED");
   const start=Math.max(now+10000,Date.parse(show.scheduled_at||"")||0);
   const startAt=new Date(start).toISOString();
   const qnaAt=new Date(start+(target??durationMs)).toISOString();
@@ -185,6 +188,23 @@ function currentShow(db,market="us",now=Date.now()) {
   return db.prepare(
     "SELECT * FROM odd_tv_shows WHERE market=? AND status='live' AND start_at<=? AND end_at>? AND (script_text IS NULL OR qna_start_at IS NOT NULL) ORDER BY id DESC LIMIT 1"
   ).get(market,new Date(now).toISOString(),new Date(now).toISOString())||null;
+}
+function publicChannelStatus(db,market,now=Date.now()) {
+  const live=currentShow(db,market,now);
+  if(live)return {state:"live"};
+  const nowIso=new Date(now).toISOString();
+  const show=db.prepare(`
+    SELECT start_at,scheduled_at,qna_start_at FROM odd_tv_shows
+    WHERE market=? AND status='live' AND script_text IS NOT NULL AND script_error IS NULL
+      AND end_at>? AND (qna_start_at IS NULL OR start_at>?)
+    ORDER BY id DESC LIMIT 1
+  `).get(market,nowIso,nowIso);
+  if(!show)return null;
+  if(show.qna_start_at)return {state:"scheduled",start_at:show.start_at};
+  return {
+    state:"preparing",
+    start_at:Date.parse(show.scheduled_at||"")>now?show.scheduled_at:null,
+  };
 }
 function workerShow(db,market="us",now=Date.now(),lookaheadMs=10*60*1000) {
   const live=currentShow(db,market,now);
@@ -348,4 +368,4 @@ function markSent(db,showId,questionIds,now=Date.now()) {
     })();
   } catch { return false; }
 }
-module.exports={SHOW_MINUTES,SCRIPT_MAX_CHARS,scriptTargetMinutes,init,validateProducts,pickProducts,createShow,startShow,prepareScriptedShow,currentShow,workerShow,currentProduct,productById,publicShow,activeViewerCount,postQuestion,messages,nextQuestion,nextQuestions,productPresentationDue,markProductPresented,setBroadcastDesired,getBroadcastControl,updateBroadcastHeartbeat,markSent};
+module.exports={SHOW_MINUTES,SCRIPT_MAX_CHARS,scriptTargetMinutes,init,validateProducts,pickProducts,createShow,startShow,prepareScriptedShow,currentShow,workerShow,publicChannelStatus,currentProduct,productById,publicShow,activeViewerCount,postQuestion,messages,nextQuestion,nextQuestions,productPresentationDue,markProductPresented,setBroadcastDesired,getBroadcastControl,updateBroadcastHeartbeat,markSent};

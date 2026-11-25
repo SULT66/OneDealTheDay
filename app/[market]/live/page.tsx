@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { BACKEND_URL, getImpulsePicks } from "@/lib/catalog";
-import { LiveDropPanel, type LiveDropView } from "@/components/live/LiveDropPanel";
-import { ODDLiveChannel } from "@/components/live/ODDLiveChannel";
+import { LiveDropPanel, type LiveDropView, type LiveTvStatus } from "@/components/live/LiveDropPanel";
 import { DealCard } from "@/components/deal/DealCard";
 import { SectionHeader } from "@/components/site/SectionHeader";
 import { formatPrice } from "@/lib/format";
@@ -35,24 +34,15 @@ export const dynamic = "force-dynamic";
  * page during an outage, and on the day of a drop that is the worst possible
  * thing to say.
  */
-async function currentTvShow(market: string): Promise<boolean> {
-  try {
-    const response = await fetch(`${BACKEND_URL}/api/odd-tv/live?market=${encodeURIComponent(market)}`,{ cache: "no-store", signal: AbortSignal.timeout(20000) });
-    if(!response.ok)return false;
-    const body=await response.json() as {show?: {state?:string}|null};
-    return body.show?.state==="live";
-  }catch{return false;}
-}
-
-async function currentDrop(market: string): Promise<{ drop: LiveDropView | null } | null> {
+async function currentDrop(market: string): Promise<{ drop: LiveDropView | null; tv: LiveTvStatus | null } | null> {
   try {
     const response = await fetch(
       `${BACKEND_URL}/api/live/current?market=${encodeURIComponent(market)}`,
       { cache: "no-store", signal: AbortSignal.timeout(3000) },
     );
     if (!response.ok) return null;
-    const body = (await response.json()) as { drop?: LiveDropView | null };
-    return { drop: body.drop ?? null };
+    const body = (await response.json()) as { drop?: LiveDropView | null; tv?: LiveTvStatus | null };
+    return { drop: body.drop ?? null, tv: body.tv ?? null };
   } catch {
     /* The panel asks again from the browser a moment later. One render without
        an answer is better than a page that fails to render. */
@@ -83,21 +73,16 @@ export default async function LivePage({
 }) {
   const { market } = await params;
   const language = await getLanguage(market);
-  const tvEmbedUrl = process.env.ODD_LIVE_EMBED_URL;
-  const [answered, tvOnAir] = await Promise.all([
-    currentDrop(market),
-    tvEmbedUrl ? currentTvShow(market) : false,
-  ]);
-  const activeDrop = answered?.drop?.state === "waiting" || answered?.drop?.state === "live";
-  const tvVisible = !activeDrop && tvEmbedUrl && tvOnAir;
+  const answered = await currentDrop(market);
   return (
     <>
-      {tvVisible && <ODDLiveChannel embedUrl={tvEmbedUrl} market={market} />}
-      {!tvVisible && <LiveDropPanel
+      <LiveDropPanel
         market={market}
         initialDrop={answered?.drop ?? null}
+        initialTv={answered?.tv ?? null}
+        tvEmbedUrl={process.env.ODD_LIVE_EMBED_URL}
         serverChecked={answered !== null}
-      />}
+      />
       <Suspense fallback={null}>
         <LivePicks market={market} language={language} />
       </Suspense>

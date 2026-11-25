@@ -129,3 +129,23 @@ test("product picker ranks names above stores and tolerates typos across brands"
   db.close();
  }
 });
+
+test("a delayed script remains available to the worker after the original end time",()=>{
+ const db=setup();
+ const scheduled=new Date(time+60000).toISOString();
+ const id=tv.createShow(db,{productIds:[1],scriptText:"The editable voice-over for the example item.",scriptTarget:12,scheduledAt:scheduled,now:time});
+ tv.startShow(db,id,{now:time});
+ assert.deepEqual(tv.publicChannelStatus(db,"us",time),{state:"preparing",start_at:scheduled});
+ assert.equal(tv.publicChannelStatus(db,"ca",time),null);
+ const delayed=time+20*60000;
+ assert.deepEqual(tv.publicChannelStatus(db,"us",delayed),{state:"preparing",start_at:null});
+ assert.equal(tv.publicShow(db,"us",delayed),null);
+ const job=tv.workerShow(db,"us",delayed);
+ assert.equal(job.show.id,id);
+ const timing=tv.prepareScriptedShow(db,job.show,120000,delayed);
+ assert.deepEqual(tv.publicChannelStatus(db,"us",delayed),{state:"scheduled",start_at:timing.start_at});
+ assert.deepEqual(tv.publicChannelStatus(db,"us",Date.parse(timing.start_at)),{state:"live"});
+ assert.equal(Date.parse(timing.end_at)-Date.parse(timing.start_at),720000);
+ assert.equal(tv.publicChannelStatus(db,"us",Date.parse(timing.end_at)),null);
+ db.close();
+});

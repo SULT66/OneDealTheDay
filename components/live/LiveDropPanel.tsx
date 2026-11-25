@@ -9,7 +9,8 @@ import { DeliaTrigger } from "@/components/delia/DeliaTrigger";
 import { LiveDropSignup } from "@/components/site/LiveDropSignup";
 import { analyticsSessionId, recordLiveDropEvent } from "@/lib/analyticsSession";
 import { PriceBoard } from "./PriceBoard";
-import { useCopy } from "@/components/site/CopyProvider";
+import { ODDLiveChannel } from "./ODDLiveChannel";
+import { useCopy, useLanguage } from "@/components/site/CopyProvider";
 
 /**
  * The Live Drop, as a shopper sees it.
@@ -65,6 +66,10 @@ export type LiveDropView = {
   server_now: string;
 };
 
+export type LiveTvStatus =
+  | { state: "live" }
+  | { state: "preparing" | "scheduled"; start_at: string | null };
+
 /* Often while the clock is about to move the page from one state to the next,
    rarely while nothing is going to happen for hours. A drop that opens without
    the page noticing is the one failure this whole design exists to avoid. */
@@ -91,6 +96,8 @@ export function LiveDropPanel({
      this the first thing anybody received — a crawler included — was "Checking
      for a drop..." and no heading. */
   initialDrop = null,
+  initialTv = null,
+  tvEmbedUrl,
   /* Whether the server got an answer at all. A drop of null with this true is
      "nothing scheduled"; with it false it is "we could not ask", and those
      must not look the same — announcing "No drop scheduled" during an outage,
@@ -99,10 +106,15 @@ export function LiveDropPanel({
 }: {
   market: string;
   initialDrop?: LiveDropView | null;
+  initialTv?: LiveTvStatus | null;
+  tvEmbedUrl?: string;
   serverChecked?: boolean;
 }) {
   const tr = useCopy();
+  const language = useLanguage();
   const [drop, setDrop] = useState<LiveDropView | null>(initialDrop);
+  const [tv, setTv] = useState<LiveTvStatus | null>(initialTv);
+  const [showLocalTime, setShowLocalTime] = useState(false);
   const [loaded, setLoaded] = useState(serverChecked);
   const [untilStart, setUntilStart] = useState<number | null>(
     initialDrop?.seconds_until_start ?? null,
@@ -114,6 +126,7 @@ export function LiveDropPanel({
      signed-in shopper never sees the sign-up button flash in place of Buy. */
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
   useEffect(() => {
+    setShowLocalTime(true);
     fetch("/api/me")
       .then((response) => response.json())
       .then((body) => setSignedIn(Boolean(body?.user)))
@@ -128,9 +141,10 @@ export function LiveDropPanel({
       setLoaded(true);
       return;
     }
-    const body = (await response.json().catch(() => ({}))) as { drop?: LiveDropView | null };
-    pollStateRef.current = {state: body.drop?.state ?? "upcoming", secondsUntilStart: body.drop?.seconds_until_start ?? null};
+    const body = (await response.json().catch(() => ({}))) as { drop?: LiveDropView | null; tv?: LiveTvStatus | null };
+    pollStateRef.current = {state: body.tv ? "live" : body.drop?.state ?? "upcoming", secondsUntilStart: body.drop?.seconds_until_start ?? null};
     setDrop(body.drop || null);
+    setTv(body.tv ?? null);
     setUntilStart(body.drop?.seconds_until_start ?? null);
     setUntilEnd(body.drop?.seconds_until_end ?? null);
     setLoaded(true);
@@ -159,9 +173,11 @@ export function LiveDropPanel({
    * only thing that knows the state changed. The server keeps one row per
    * session per stage, so a tab left open through the whole drop counts once.
    */
+  const legacyOnAir = drop?.state === "waiting" || drop?.state === "live";
+  const tvVisible = Boolean(!legacyOnAir && tvEmbedUrl && tv);
   const reported = useRef(new Set<string>());
   useEffect(() => {
-    if (!drop) return;
+    if (!drop || tvVisible) return;
     /*
      * Somebody who opens the page days early counts too.
      *
@@ -189,7 +205,7 @@ export function LiveDropPanel({
     if (reported.current.has(seen)) return;
     reported.current.add(seen);
     recordLiveDropEvent(drop.drop_key, stage);
-  }, [drop]);
+  }, [drop, tvVisible]);
 
   /*
    * The heartbeat behind "watching now".
@@ -199,7 +215,7 @@ export function LiveDropPanel({
    * fifty seconds. Explicit Leave stops both heartbeats immediately.
    */
   const dropKey = drop?.drop_key;
-  const onAir = drop?.state === "waiting" || drop?.state === "live";
+  const onAir = legacyOnAir;
   useEffect(() => {
     if (!dropKey || !onAir) return;
     const beat = () => {
@@ -252,6 +268,23 @@ export function LiveDropPanel({
     }, 1000);
     return () => clearInterval(ticking);
   }, []);
+
+  if (tvVisible && tv) {
+    if (tv.state === "live") return <ODDLiveChannel market={market} embedUrl={tvEmbedUrl} />;
+    return (
+      <Frame>
+        <div role="status">
+          <h1 className="text-2xl font-bold text-fg sm:text-3xl">
+            {tr(tv.state === "scheduled" ? "app.live.tvScheduled" : "app.live.tvPreparing")}
+          </h1>
+          {showLocalTime && tv.start_at && <p className="mt-3 text-sm text-fg-muted"><time dateTime={tv.start_at}>
+            {new Date(tv.start_at).toLocaleString(language)}
+          </time></p>}
+          <p className="mt-3 text-sm text-fg-muted">{tr("app.live.tvAutoStart")}</p>
+        </div>
+      </Frame>
+    );
+  }
 
   if (!loaded) {
     return (

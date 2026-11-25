@@ -118,7 +118,7 @@ def generate_local_speech(response):
         raise RuntimeError("LOCAL_LLM_EMPTY_RESPONSE")
     return speech
 
-def synthesize_azure(text, dest):
+def synthesize_azure(text, dest, *, rate_percent=2):
     speech_key = os.environ["AZURE_SPEECH_KEY"]
     region = os.environ["AZURE_SPEECH_REGION"]
     if not region.replace("-","").isalnum():
@@ -127,7 +127,7 @@ def synthesize_azure(text, dest):
     if not voice.startswith("en-US-"):
         raise ValueError("VOICE_MUST_BE_EN_US")
     safe = html.escape(text, quote=True)
-    spoken = "<prosody rate='+2%'>" + safe + "</prosody>"
+    spoken = f"<prosody rate='{rate_percent:+d}%'>{safe}</prosody>"
     if voice == "en-US-SaraNeural":
         spoken = "<mstts:express-as style='cheerful' styledegree='1.1'>" + spoken + "</mstts:express-as>"
     ssml = (

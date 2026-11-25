@@ -1208,14 +1208,18 @@ app.get("/api/live/current", (req, res) => {
   /* Early access is a Drop Pass benefit. Nobody has one yet, so this is zero
      for everybody: the lane exists in the state machine and is not sold. */
   const earlyAccessSeconds = 0;
-  const presented = presentDrop(drop, Date.now(), { earlyAccessSeconds });
+  const now = Date.now();
+  const presented = presentDrop(drop, now, { earlyAccessSeconds });
+  const tv = oddTvEnabled && process.env.ODD_LIVE_EMBED_URL
+    ? oddTv.publicChannelStatus(db, selectedMarket.code, now) : null;
   res.set("Cache-Control", "no-store").json({
     drop: presented ? {
       ...presented,
       /* Counted, not decorated. Every one of these is a page open right now. */
       watching: watchingNow(drop.id),
     } : null,
-    server_now: new Date().toISOString(),
+    tv,
+    server_now: new Date(now).toISOString(),
   });
 });
 
@@ -4259,11 +4263,13 @@ app.get("/api/admin/odd-tv/broadcast/status",admin,(req,res)=>{
   res.set("Cache-Control","no-store");
   if(!oddTvEnabled)return res.status(503).json({error:"ODD TV disabled."});
   const now=Date.now();
-  const show=db.prepare("SELECT id,script_text,script_error,start_at,qna_start_at,end_at FROM odd_tv_shows WHERE status='live' AND end_at>? ORDER BY id DESC LIMIT 1")
+  const show=db.prepare("SELECT id,script_text,script_error,script_measured_ms,script_target_minutes,start_at,qna_start_at,end_at FROM odd_tv_shows WHERE status='live' AND end_at>? ORDER BY id DESC LIMIT 1")
     .get(new Date(now).toISOString());
   return res.json({...oddTv.getBroadcastControl(db,now),show:show?{
     id:show.id,start_at:show.start_at,qna_start_at:show.qna_start_at,end_at:show.end_at,
     error:show.script_error||null,
+    measured_seconds:show.script_measured_ms?Math.round(show.script_measured_ms/1000):null,
+    presentation_seconds:show.script_target_minutes?(show.script_target_minutes-10)*60:null,
     phase:show.script_error?"error":show.script_text&&!show.qna_start_at?"rendering":now<Date.parse(show.start_at)?"scheduled":
       show.qna_start_at&&now>=Date.parse(show.qna_start_at)?"questions":"live",
   }:null});
@@ -4468,8 +4474,10 @@ app.post("/api/odd-tv/worker/ack",oddWorkerAuth,(req,res)=>{
   if(req.body?.aired!==true){
     if(req.body?.script_preparation_failed===true&&lease.metadata?.opening===true){
       const reason=req.body?.script_error==="script_length"?"script_length":"render_failed";
-      db.prepare("UPDATE odd_tv_shows SET script_error=?,qna_start_at=NULL WHERE id=? AND status='live' AND script_text IS NOT NULL AND (qna_start_at IS NULL OR start_at>?)")
-        .run(reason,id,new Date().toISOString());
+      const duration=req.body?.script_measured_ms;
+      const measuredMs=reason==="script_length"&&Number.isSafeInteger(duration)&&duration>0&&duration<=3600000?duration:null;
+      db.prepare("UPDATE odd_tv_shows SET script_error=?,script_measured_ms=?,qna_start_at=NULL WHERE id=? AND status='live' AND script_text IS NOT NULL AND (qna_start_at IS NULL OR start_at>?)")
+        .run(reason,measuredMs,id,new Date().toISOString());
     }
     oddTvLeases.release(key,token);
     return res.json({ok:true,retryable:true});

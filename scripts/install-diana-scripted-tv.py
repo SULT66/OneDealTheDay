@@ -10,7 +10,42 @@ import wave
 
 
 class ScriptLengthError(ValueError):
-    pass
+    def __init__(self, message, measured_ms=None):
+        super().__init__(message)
+        self.measured_ms = measured_ms
+
+
+def synthesize_script(synthesize, phrases, job, rate_percent=2):
+    speech = []
+    for index, phrase in enumerate(phrases):
+        part = job / f"part-{index:03d}"
+        part.mkdir(exist_ok=True, mode=0o700)
+        wav = part / "speech.wav"
+        if rate_percent == 2:
+            synthesize(phrase, wav)
+        else:
+            synthesize(phrase, wav, rate_percent=rate_percent)
+        with wave.open(str(wav), "rb") as audio:
+            if (audio.getframerate(), audio.getnchannels(), audio.getsampwidth()) != (48000, 1, 2):
+                raise ValueError("SCRIPT_AUDIO_FORMAT")
+            speech.append((wav, audio.getnframes()))
+    return speech
+
+
+def timed_script(synthesize, phrases, job, target_ms):
+    speech = synthesize_script(synthesize, phrases, job)
+    if not target_ms:
+        return speech
+    original_ms = sum(samples for _, samples in speech) / 48
+    ratio = original_ms / target_ms
+    if not 0.8 <= ratio <= 1.25:
+        # Adjust the voice before the pitch-preserving final audio fit.
+        rate_percent = min(30, max(-20, round(102 * ratio - 100)))
+        speech = synthesize_script(synthesize, phrases, job, rate_percent)
+    try:
+        return fit_speech(speech, target_ms)
+    except ScriptLengthError as error:
+        raise ScriptLengthError(str(error), round(original_ms)) from error
 
 
 def fit_speech(parts, target_ms):
@@ -71,20 +106,8 @@ def prepare_presentation(worker, base, key, response):
         ]
         if not phrases or len(phrases) > 160:
             raise ValueError("SCRIPT_SEGMENT_LIMIT")
-        speech = []
+        speech = timed_script(worker["synthesize_azure"], phrases, job, response.get("presentation_target_ms"))
         duration = 0
-        for index, phrase in enumerate(phrases):
-            part = job / f"part-{index:03d}"
-            part.mkdir(mode=0o700)
-            wav = part / "speech.wav"
-            worker["synthesize_azure"](phrase, wav)
-            with wave.open(str(wav), "rb") as source:
-                if (source.getframerate(), source.getnchannels(), source.getsampwidth()) != (48000, 1, 2):
-                    raise ValueError("SCRIPT_AUDIO_FORMAT")
-                speech.append((wav, source.getnframes()))
-        target_ms = response.get("presentation_target_ms")
-        if target_ms:
-            speech = fit_speech(speech, target_ms)
         for index, (wav, samples) in enumerate(speech):
             seconds = samples / 48000
             if not 0 < seconds <= 30:
@@ -122,7 +145,8 @@ def prepare_presentation(worker, base, key, response):
         try:
             post(base, "/api/odd-tv/worker/ack", key, {**lease, "aired": False,
                  "script_preparation_failed": True,
-                 "script_error": "script_length" if isinstance(error, ScriptLengthError) else "render_failed"})
+                 "script_error": "script_length" if isinstance(error, ScriptLengthError) else "render_failed",
+                 "script_measured_ms": getattr(error, "measured_ms", None)})
         except Exception:
             print("SCRIPTED_LEASE_RELEASE_FAILED", flush=True)
         raise
@@ -174,6 +198,14 @@ def install():
         source = source.replace(signature, 'def render_musetalk(audio, jobdir, timeout_seconds=300, *, render_fps=None):', 1)
         source = source.replace(render_job, render_job+'\n            "render_fps": render_fps,', 1)
         source = source.replace(answer, 'video=render_musetalk(audio,partdir,render_fps=25 if response.get("scripted_qna") else None)', 1)
+    speech_signature = "def synthesize_azure(text, dest, *, rate_percent=2):"
+    if speech_signature not in source:
+        old_signature = "def synthesize_azure(text, dest):"
+        old_prosody = '''    spoken = "<prosody rate='+2%'>" + safe + "</prosody>"'''
+        if any(source.count(item) != 1 for item in (old_signature, old_prosody)):
+            raise SystemExit("Unexpected Diana speech worker version. No files changed.")
+        source = source.replace(old_signature, speech_signature, 1).replace(
+            old_prosody, '    spoken = f"<prosody rate=\'{rate_percent:+d}%\'>{safe}</prosody>"', 1)
     if 'request.get("render_fps")' not in render_source:
         anchor = 'encode_speech_clip(avatar, audio_path, generated_clip, args.fps)'
         if render_source.count(anchor) != 1:

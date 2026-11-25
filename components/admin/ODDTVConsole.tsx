@@ -8,7 +8,7 @@ type BroadcastStatus={
   controller_online:boolean;
   last_seen:string|null;
   detail:string;
-  show?:{id:number;start_at:string;qna_start_at:string|null;end_at:string;error?:string|null;phase:"rendering"|"scheduled"|"live"|"questions"|"error"}|null;
+  show?:{id:number;start_at:string;qna_start_at:string|null;end_at:string;error?:string|null;measured_seconds?:number|null;presentation_seconds?:number|null;phase:"rendering"|"scheduled"|"live"|"questions"|"error"}|null;
 };
 
 type CatalogProduct={
@@ -198,7 +198,7 @@ export function ODDTVConsole({adminKey}:{adminKey:string}) {
       if(!start.ok)throw new Error(result.error||"Show was created but could not be started.");
       setRetryShowId(null);
       try{window.sessionStorage.removeItem("odd-live-pending-show");}catch{}
-      setNotice(scripted?"Diana is rendering the full presentation. The show starts when ready and at or after the selected time."
+      setNotice(scripted?"Show submitted. Check the status above for its progress."
         :"Preparing the live host. The show goes on air when the opening is ready.");
       await refreshBroadcast();
     }catch(error){
@@ -261,7 +261,8 @@ export function ODDTVConsole({adminKey}:{adminKey:string}) {
       </div>
       {broadcast?.show?<p role="status" className="mt-3 text-sm font-semibold">
         {broadcast.show.phase==="error"?(broadcast.show.error==="script_length"
-          ?"The recorded script does not fit the presentation time. Stop the stream and adjust the script or duration."
+          ?`The recorded script does not fit the presentation time.${broadcast.show.measured_seconds && broadcast.show.presentation_seconds
+            ?` Recorded: ${broadcast.show.measured_seconds}s. Target: ${broadcast.show.presentation_seconds}s.`:""} Stop the stream and adjust the script or duration.`
           :broadcast.show.error==="update_required"?"Update the Diana worker to render this show."
           :"Diana could not render the presentation. Stop the stream before retrying.")
           :broadcast.show.phase==="rendering"?"Rendering the presentation on Diana"
@@ -308,7 +309,7 @@ export function ODDTVConsole({adminKey}:{adminKey:string}) {
           <label className="block"><span className="text-sm font-semibold">Total show length (min)</span>
             <input type="number" min={11} max={30} step={1} value={duration} disabled={busy||generating} onChange={event=>setDuration(event.target.value)} className="mt-1 block w-32 rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm"/>
           </label>
-          <span className="text-sm text-fg-muted">{validDuration?`${totalMinutes-10} min presentation + 10 min live Q&A.`:"Choose 11–30 minutes."} Leave the start time blank to go live when ready.</span>
+          <span className="text-sm text-fg-muted">{validDuration?`${totalMinutes-10} min presentation + 10 min live Q&A.`:"Choose 11–30 minutes."} The show opens once the video is ready and the chosen time has arrived.</span>
         </div>
         <div className="flex items-center justify-between gap-3">
           <label htmlFor="odd-tv-script" className="text-sm font-semibold">Chloe’s script</label>
