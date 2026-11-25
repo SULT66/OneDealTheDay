@@ -18,6 +18,8 @@ assert(/productLimit=scripted\?1:2/.test(consoleSource),
   "the admin must select one scripted product or two live products");
 assert(/product_ids:selected,script,scheduled_at:/.test(consoleSource),
   "the admin must submit the edited script and start time");
+assert(/duration_minutes:totalMinutes/.test(consoleSource) && !/id: "drops", label: "Live Drops"/.test(admin),
+  "the ODD Live TV admin must submit the show duration and own the broadcast controls");
 assert(server.includes('app.post("/api/admin/odd-tv/script",admin,'),
   "script generation must require the admin key");
 assert(!packageJson.dependencies?.["@daily-co/daily-js"],

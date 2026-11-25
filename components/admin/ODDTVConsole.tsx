@@ -8,7 +8,7 @@ type BroadcastStatus={
   controller_online:boolean;
   last_seen:string|null;
   detail:string;
-  show?:{id:number;start_at:string;qna_start_at:string|null;end_at:string;phase:"rendering"|"scheduled"|"live"|"questions"|"error"}|null;
+  show?:{id:number;start_at:string;qna_start_at:string|null;end_at:string;error?:string|null;phase:"rendering"|"scheduled"|"live"|"questions"|"error"}|null;
 };
 
 type CatalogProduct={
@@ -39,8 +39,12 @@ export function ODDTVConsole({adminKey}:{adminKey:string}) {
   const [scripted,setScripted]=useState(true);
   const [script,setScript]=useState("");
   const [scheduledAt,setScheduledAt]=useState("");
+  const [duration,setDuration]=useState("12");
   const [generating,setGenerating]=useState(false);
   const productLimit=scripted?1:2;
+  const totalMinutes=Number(duration);
+  const validDuration=Number.isInteger(totalMinutes)&&totalMinutes>=11&&totalMinutes<=30;
+  const scriptWords=script.trim()?script.trim().split(/\s+/).length:0;
 
   useEffect(()=>{
     try{
@@ -153,12 +157,12 @@ export function ODDTVConsole({adminKey}:{adminKey:string}) {
   const visible=matches.slice(0,8);
 
   async function generateScript() {
-    if(!adminKey||selected.length!==1)return;
+    if(!adminKey||selected.length!==1||!validDuration)return;
     setGenerating(true);setNotice("");
     try{
       const response=await fetch("/api/admin/odd-tv/script",{
         method:"POST",headers:{"Content-Type":"application/json","X-Admin-Key":adminKey},
-        body:JSON.stringify({market,product_id:selected[0]}),
+        body:JSON.stringify({market,product_id:selected[0],duration_minutes:totalMinutes}),
       });
       const result=await response.json().catch(()=>({}));
       if(!response.ok||typeof result.script!=="string")throw new Error(result.error||"Could not generate the script.");
@@ -182,7 +186,7 @@ export function ODDTVConsole({adminKey}:{adminKey:string}) {
       const headers={"Content-Type":"application/json","X-Admin-Key":adminKey};
       const create=await fetch("/api/admin/odd-tv/show",{
         method:"POST",headers,
-        body:JSON.stringify(scripted?{market,product_ids:selected,script,scheduled_at:scheduled?.toISOString()??null}
+        body:JSON.stringify(scripted?{market,product_ids:selected,script,scheduled_at:scheduled?.toISOString()??null,duration_minutes:totalMinutes}
           :manual?{market,product_ids:selected}:{market}),
       });
       const draft=await create.json().catch(()=>({}));
@@ -258,7 +262,10 @@ export function ODDTVConsole({adminKey}:{adminKey:string}) {
         </div>
       </div>
       {broadcast?.show?<p role="status" className="mt-3 text-sm font-semibold">
-        {broadcast.show.phase==="error"?"Diana could not render the presentation. Stop the stream before retrying."
+        {broadcast.show.phase==="error"?(broadcast.show.error==="script_length"
+          ?"The recorded script does not fit the presentation time. Stop the stream and adjust the script or duration."
+          :broadcast.show.error==="update_required"?"Update the Diana worker to render this show."
+          :"Diana could not render the presentation. Stop the stream before retrying.")
           :broadcast.show.phase==="rendering"?"Rendering the presentation on Diana"
           :broadcast.show.phase==="scheduled"?`Scheduled for ${new Date(broadcast.show.start_at).toLocaleString()}`
           :broadcast.show.phase==="questions"?"Live Q&A":"Presentation on air"}
@@ -300,17 +307,20 @@ export function ODDTVConsole({adminKey}:{adminKey:string}) {
           <label className="block"><span className="text-sm font-semibold">Start time (local)</span>
             <input type="datetime-local" value={scheduledAt} disabled={busy} onChange={event=>setScheduledAt(event.target.value)} className="mt-1 block rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm"/>
           </label>
-          <span className="text-sm text-fg-muted">Leave blank to start when the video is ready. The final 10 minutes are live Q&A.</span>
+          <label className="block"><span className="text-sm font-semibold">Total show length (min)</span>
+            <input type="number" min={11} max={30} step={1} value={duration} disabled={busy||generating} onChange={event=>setDuration(event.target.value)} className="mt-1 block w-32 rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm"/>
+          </label>
+          <span className="text-sm text-fg-muted">{validDuration?`${totalMinutes-10} min presentation + 10 min live Q&A.`:"Choose 11–30 minutes."} Leave the start time blank to go live when ready.</span>
         </div>
         <div className="flex items-center justify-between gap-3">
           <label htmlFor="odd-tv-script" className="text-sm font-semibold">Chloe’s script</label>
-          <button type="button" disabled={busy||generating||selected.length!==1} onClick={()=>void generateScript()} className="rounded-full border border-border px-4 py-2 text-sm font-semibold disabled:opacity-50">{generating?"Generating…":script?"Regenerate script":"Generate with AI"}</button>
+          <button type="button" disabled={busy||generating||!validDuration||selected.length!==1} onClick={()=>void generateScript()} className="rounded-full border border-border px-4 py-2 text-sm font-semibold disabled:opacity-50">{generating?"Generating…":script?"Regenerate script":"Generate with AI"}</button>
         </div>
-        <textarea id="odd-tv-script" rows={8} maxLength={2400} disabled={busy||generating} value={script} onChange={event=>setScript(event.target.value)} className="w-full rounded-lg border border-border bg-surface-2 p-3 text-sm" placeholder="Generate a draft or paste your own script."/>
-        <p className="text-xs text-fg-muted">{script.length}/2400 characters</p>
+        <textarea id="odd-tv-script" rows={8} maxLength={24000} disabled={busy||generating} value={script} onChange={event=>setScript(event.target.value)} className="w-full rounded-lg border border-border bg-surface-2 p-3 text-sm" placeholder="Generate a draft or paste your own script."/>
+        <p className="text-xs text-fg-muted">{scriptWords} words{validDuration?` · aim for about ${(totalMinutes-10)*150}`:""}</p>
       </div>:null}
       <div className="mt-4 flex flex-wrap items-center gap-3">
-        <button type="button" disabled={busy||generating||selected.length!==productLimit||(scripted&&script.trim().length<20)||retryShowId!==null||Boolean(broadcast?.show)} onClick={()=>void launch(true)} className="rounded-full bg-lime px-5 py-2.5 text-sm font-bold text-ink disabled:opacity-50">{busy?"Preparing show…":retryShowId!==null?"Show "+retryShowId+" saved":scripted?(scheduledAt?"Schedule show":"Prepare and start show"):"Save products and start"}</button>
+        <button type="button" disabled={busy||generating||selected.length!==productLimit||(scripted&&(!validDuration||script.trim().length<20))||retryShowId!==null||Boolean(broadcast?.show)} onClick={()=>void launch(true)} className="rounded-full bg-lime px-5 py-2.5 text-sm font-bold text-ink disabled:opacity-50">{busy?"Preparing show…":retryShowId!==null?"Show "+retryShowId+" saved":scripted?(scheduledAt?"Schedule show":"Prepare and start show"):"Save products and start"}</button>
         {retryShowId!==null?<button type="button" disabled={busy} onClick={()=>void retryStart(retryShowId)} className="rounded-full border border-border px-4 py-2.5 text-sm font-semibold text-fg disabled:opacity-50">Retry Show {retryShowId}</button>:null}
         <span className="text-sm text-fg-muted">{selected.length}/{productLimit} products selected</span>
       </div>
