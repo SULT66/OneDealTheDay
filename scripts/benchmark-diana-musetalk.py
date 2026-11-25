@@ -1,4 +1,5 @@
-"""Compare warm MuseTalk throughput at two batch sizes without going live."""
+"""Compare warm MuseTalk throughput without going live."""
+import argparse
 import json
 import os
 from pathlib import Path
@@ -53,11 +54,12 @@ def request(process, queue, audio, job_id, log):
     raise TimeoutError(f"{job_id} timed out. Log: {log}")
 
 
-def measure(batch, audio, duration, directory, config):
-    queue = directory / f"batch-{batch}"
+def measure(batch, fps, audio, duration, directory, config):
+    label = f"batch-{batch}-fps-{fps}"
+    queue = directory / label
     (queue / "inbox").mkdir(parents=True)
     (queue / "out").mkdir()
-    log = HOST / "renderer" / f"benchmark-batch-{batch}-{os.getpid()}.log"
+    log = HOST / "renderer" / f"benchmark-{label}-{os.getpid()}.log"
     env = dict(os.environ, TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD="1")
     env["PYTHONPATH"] = str(MUSE) + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
     import sys
@@ -66,17 +68,18 @@ def measure(batch, audio, duration, directory, config):
         "--inference_config", str(config),
         "--unet_model_path", "models/musetalkV15/unet.pth",
         "--unet_config", "models/musetalkV15/musetalk.json",
-        "--version", "v15", "--fps", str(FPS), "--batch_size", str(batch),
+        "--version", "v15", "--fps", str(fps), "--batch_size", str(batch),
         "--daemon", "--daemon-queue", str(queue),
     ]
-    print(f"Testing batch={batch}, same {duration:.2f}s WAV. Log: {log}", flush=True)
-    job_prefix = f"benchmark-{os.getpid()}-{batch}"
+    print(f"Testing batch={batch} fps={fps}, same {duration:.2f}s WAV. Log: {log}", flush=True)
+    job_prefix = f"benchmark-{os.getpid()}-{batch}-{fps}"
     with log.open("w") as stream:
         process = subprocess.Popen(command, cwd=MUSE, env=env, stdin=subprocess.DEVNULL,
                                    stdout=stream, stderr=subprocess.STDOUT,
                                    start_new_session=True)
         try:
             cold = request(process, queue, audio, job_prefix + "-cold", log)
+            print(f"First render complete ({cold:.2f}s). Measuring warm render now.", flush=True)
             warm = request(process, queue, audio, job_prefix + "-warm", log)
         finally:
             import signal
@@ -89,7 +92,7 @@ def measure(batch, audio, duration, directory, config):
             except subprocess.TimeoutExpired:
                 os.killpg(process.pid, signal.SIGKILL)
                 process.wait()
-    print(f"BENCHMARK batch={batch} audio_s={duration:.2f} cold_s={cold:.2f} "
+    print(f"BENCHMARK batch={batch} fps={fps} audio_s={duration:.2f} cold_s={cold:.2f} "
           f"warm_s={warm:.2f} render_to_audio={warm/duration:.2f}", flush=True)
     for line in log.read_text(errors="replace").splitlines():
         if line.startswith("LIVE_PROFILE"):
@@ -98,6 +101,11 @@ def measure(batch, audio, duration, directory, config):
 
 def main():
     import yaml
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--fps", type=int, nargs="+", choices=(10, 12, 15, 25),
+                        help="Compare these render rates at batch size 8.")
+    options = parser.parse_args()
+    scenarios = [(8, fps) for fps in options.fps] if options.fps else [(4, FPS), (8, FPS)]
     check_idle()
     if "DAEMON_DIRECT_ENCODE_V1" not in RENDERER.read_text():
         raise SystemExit("This benchmark expects the DIRECT_RENDER_SET patch.")
@@ -118,9 +126,9 @@ def main():
         spec = dict(spec, preparation=False, audio_clips={})
         local_config = directory / "benchmark.yaml"
         local_config.write_text(yaml.safe_dump({avatar: spec}))
-        for batch in (4, 8):
+        for batch, fps in scenarios:
             check_idle()
-            measure(batch, audio, duration, directory, local_config)
+            measure(batch, fps, audio, duration, directory, local_config)
 
 
 if __name__ == "__main__":
