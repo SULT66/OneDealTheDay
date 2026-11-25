@@ -7,6 +7,7 @@ const source = fs.readFileSync('components/live/LiveDropPanel.tsx','utf8');
 const effects = [];
 const timers = [];
 let current = {state:'upcoming', seconds_until_start:3600};
+let tv = null;
 const noop = () => null;
 const react = {
   useState: value => [value,noop], useRef:value => ({current:value}),
@@ -18,7 +19,7 @@ const context = {
   require:name => name === 'react' ? react : name === 'react/jsx-runtime' ? {jsx:noop,jsxs:noop} :
     name.includes('CopyProvider') ? {useCopy:() => value => value} :
     name.includes('LiveBroadcast') ? {useLiveBroadcast:() => ({session:null})} : {},
-  fetch:async url => ({ok:true,json:async () => String(url).includes('/api/me') ? {user:null} : {drop:current}}),
+  fetch:async url => ({ok:true,json:async () => String(url).includes('/api/me') ? {user:null} : {drop:current,tv}}),
   setTimeout:(callback,ms) => {timers.push({callback,ms});return timers.length;},clearTimeout:noop,
   setInterval:noop,clearInterval:noop,console,
 };
@@ -37,6 +38,15 @@ moduleObject.exports.LiveDropPanel({market:'us'});
   await timers.at(-1).callback();
   assert.strictEqual(timers.at(-1).ms,5000);
   current = {state:'ended',seconds_until_start:0};
+  await timers.at(-1).callback();
+  assert.strictEqual(timers.at(-1).ms,60000);
+  tv = {state:'preparing',start_at:null};
+  await timers.at(-1).callback();
+  assert.strictEqual(timers.at(-1).ms,5000,'scripted TV preparation must keep the page polling');
+  tv = {state:'live'};
+  await timers.at(-1).callback();
+  assert.strictEqual(timers.at(-1).ms,5000);
+  tv = null;
   await timers.at(-1).callback();
   assert.strictEqual(timers.at(-1).ms,60000);
   console.log('Live polling follows current API state: ok');

@@ -10,7 +10,7 @@ import { LiveDropSignup } from "@/components/site/LiveDropSignup";
 import { analyticsSessionId, recordLiveDropEvent } from "@/lib/analyticsSession";
 import { PriceBoard } from "./PriceBoard";
 import { ODDLiveChannel } from "./ODDLiveChannel";
-import { useCopy, useLanguage } from "@/components/site/CopyProvider";
+import { useCopy } from "@/components/site/CopyProvider";
 
 /**
  * The Live Drop, as a shopper sees it.
@@ -111,7 +111,6 @@ export function LiveDropPanel({
   serverChecked?: boolean;
 }) {
   const tr = useCopy();
-  const language = useLanguage();
   const [drop, setDrop] = useState<LiveDropView | null>(initialDrop);
   const [tv, setTv] = useState<LiveTvStatus | null>(initialTv);
   const [showLocalTime, setShowLocalTime] = useState(false);
@@ -278,7 +277,7 @@ export function LiveDropPanel({
             {tr(tv.state === "scheduled" ? "app.live.tvScheduled" : "app.live.tvPreparing")}
           </h1>
           {showLocalTime && tv.start_at && <p className="mt-3 text-sm text-fg-muted"><time dateTime={tv.start_at}>
-            {new Date(tv.start_at).toLocaleString(language)}
+            {new Date(tv.start_at).toLocaleString()}
           </time></p>}
           <p className="mt-3 text-sm text-fg-muted">{tr("app.live.tvAutoStart")}</p>
         </div>
