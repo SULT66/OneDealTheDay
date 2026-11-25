@@ -1,6 +1,6 @@
 "use client";
 
-import {useEffect,useMemo,useState} from "react";
+import {useEffect,useState} from "react";
 
 type BroadcastStatus={
   desired_state:"running"|"stopped";
@@ -27,6 +27,7 @@ export function ODDTVConsole({adminKey}:{adminKey:string}) {
   const [products,setProducts]=useState<CatalogProduct[]>([]);
   const [matches,setMatches]=useState<CatalogProduct[]>([]);
   const [productSearchBusy,setProductSearchBusy]=useState(false);
+  const [productSearchError,setProductSearchError]=useState("");
   const [query,setQuery]=useState("");
   const [selected,setSelected]=useState<number[]>([]);
   const [busy,setBusy]=useState(false);
@@ -75,23 +76,25 @@ export function ODDTVConsole({adminKey}:{adminKey:string}) {
     let active=true;
     const term=query.trim();
     setMatches([]);
+    setProductSearchError("");
     if(!adminKey||term.length<2){setProductSearchBusy(false);return()=>{active=false;};}
+    setProductSearchBusy(true);
     const controller=new AbortController();
     const timer=window.setTimeout(()=>{
-      setProductSearchBusy(true);
-      setNotice("");
       fetch("/api/admin/odd-tv/products?market="+encodeURIComponent(market)+"&q="+encodeURIComponent(term),{
         headers:{"X-Admin-Key":adminKey},cache:"no-store",signal:controller.signal,
       })
         .then(async response=>{
+          if(response.status===401)throw new Error("The admin key was not accepted. Check the key above.");
           if(!response.ok)throw new Error("Could not search published products.");
           return response.json();
         })
         .then((data:unknown)=>{
-          const found=Array.isArray(data)?data.filter((item):item is CatalogProduct=>
+          if(!Array.isArray(data))throw new Error("The catalogue did not return search results. Try again.");
+          const found=data.filter((item):item is CatalogProduct=>
             typeof item==="object"&&item!==null&&"id" in item&&"title" in item&&
             Number.isSafeInteger(item.id)&&Number(item.id)>0&&typeof item.title==="string"
-          ):[];
+          );
           if(active){
             setMatches(found);
             setProducts(current=>{
@@ -101,7 +104,7 @@ export function ODDTVConsole({adminKey}:{adminKey:string}) {
             });
           }
         })
-        .catch(error=>{if(active&&error?.name!=="AbortError")setNotice(error instanceof Error?error.message:"Could not load products.");})
+        .catch(error=>{if(active&&error?.name!=="AbortError")setProductSearchError(error instanceof Error?error.message:"Could not load products.");})
         .finally(()=>{if(active)setProductSearchBusy(false);});
     },250);
     return()=>{active=false;window.clearTimeout(timer);controller.abort();};
@@ -147,12 +150,7 @@ export function ODDTVConsole({adminKey}:{adminKey:string}) {
     }finally{setControlBusy(false);}
   }
 
-  const visible=useMemo(()=>{
-    const term=query.trim().toLowerCase();
-    return matches.filter(product=>
-      !term||[product.title,product.brand,product.retailer_name].some(value=>String(value||"").toLowerCase().includes(term))
-    ).slice(0,8);
-  },[matches,query]);
+  const visible=matches.slice(0,8);
 
   async function generateScript() {
     if(!adminKey||selected.length!==1)return;
@@ -278,16 +276,17 @@ export function ODDTVConsole({adminKey}:{adminKey:string}) {
           </select>
         </label>
         <label className="min-w-56 flex-1"><span className="text-xs font-semibold uppercase tracking-[0.1em] text-fg-subtle">Search published products</span>
-          <input value={query} onChange={event=>setQuery(event.target.value)} placeholder="Type a product or store name" className="mt-1 h-10 w-full rounded-full border border-border bg-surface-2 px-4 text-sm text-fg"/>
+          <input value={query} disabled={!adminKey} onChange={event=>setQuery(event.target.value)} placeholder={adminKey?"Type a product or store name":"Enter the admin key to search"} className="mt-1 h-10 w-full rounded-full border border-border bg-surface-2 px-4 text-sm text-fg disabled:opacity-60"/>
         </label>
       </div>
-      {query.trim()?<div className="mt-3 max-h-56 overflow-y-auto rounded-xl border border-border">
+      {!adminKey?<p className="mt-3 text-sm text-fg-muted"><button type="button" onClick={()=>document.getElementById("admin-access-key")?.focus()} className="font-semibold underline">Enter the admin key</button> to search published products.</p>:null}
+      {adminKey&&query.trim()?<div className="mt-3 max-h-56 overflow-y-auto rounded-xl border border-border" aria-busy={productSearchBusy}>
         {visible.map(product=>{const index=selected.indexOf(product.id);return <div key={product.id} className="flex items-center gap-3 border-b border-border p-3 last:border-0">
           {product.image_url?<img src={product.image_url} alt="" className="h-11 w-11 rounded-lg bg-white object-contain" loading="lazy"/>:null}
           <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{product.title}</span><span className="text-xs text-fg-muted">{product.brand||product.retailer_name||"Published product"} · {product.currency||"USD"} {product.price??product.current_price??""}</span></span>
           {index>=0?<button type="button" disabled={busy||generating} onClick={()=>removeProduct(product.id)} className="rounded-full border border-border px-3 py-1.5 text-xs">Remove</button>:<button type="button" disabled={selected.length>=productLimit||busy||generating} onClick={()=>addProduct(product.id)} className="rounded-full bg-lime px-3 py-1.5 text-xs font-bold text-ink disabled:opacity-50">Add product {selected.length+1}</button>}
         </div>;})}
-        {visible.length===0?<p className="p-4 text-sm text-fg-muted">{productSearchBusy?"Searching products…":query.trim().length<2?"Enter at least 2 characters to search.":"No published products match."}</p>:null}
+        {visible.length===0?<p role="status" className="p-4 text-sm text-fg-muted">{productSearchBusy?"Searching products…":productSearchError|| (query.trim().length<2?"Enter at least 2 characters to search.":"No published products match in this market.")}</p>:null}
       </div>:null}
       <div className="mt-4 grid gap-3 md:grid-cols-2">
         {(scripted?[0]:[0,1]).map(index=>{const product=selectedProducts[index];return <div key={index} className="rounded-xl border border-border bg-surface-2 p-4">
