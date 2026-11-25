@@ -11,7 +11,6 @@ import html
 import json
 import os
 from pathlib import Path
-import shutil
 import subprocess
 import sys
 import time
@@ -36,6 +35,8 @@ MODEL_AVATAR = os.environ.get("ODD_LIVE_AVATAR_ID") or next(
 )
 SPEECH_CONFIG = Path.home() / ".config" / "odd-live" / "speech.env"
 LLM_CONFIG = Path.home() / ".config" / "odd-live" / "llm.env"
+# Match the server's ODD TV speechText contract in src/oddLiveBrain.js.
+MAX_SPEECH_LENGTH = 1100
 
 def load_speech_config():
     """Load Diana-only credentials; never print them or override explicit env."""
@@ -78,10 +79,7 @@ def load_local_llm_config():
         return None
     return values
 
-def generate_local_speech(response):
-    config=load_local_llm_config()
-    if not config:
-        return response.get("spoken_text","")
+def generate_local_speech(response, config):
     base=config.get("ODD_LIVE_LLM_BASE_URL","http://127.0.0.1:11434/v1").rstrip("/")
     root=base[:-3] if base.endswith("/v1") else base
     product=response.get("product") or {}
@@ -111,12 +109,27 @@ def generate_local_speech(response):
     key=config.get("ODD_LIVE_LLM_API_KEY")
     if key:headers["Authorization"]="Bearer "+key
     req=urllib.request.Request(root+"/api/chat",data=body,method="POST",headers=headers)
-    with urllib.request.urlopen(req,timeout=90) as result:
+    with urllib.request.urlopen(req,timeout=12) as result:
         data=json.loads(result.read().decode("utf-8"))
     speech=data.get("message",{}).get("content","").strip()
     if not speech:
         raise RuntimeError("LOCAL_LLM_EMPTY_RESPONSE")
     return speech
+
+def prepare_speech(response):
+    speech = response.get("spoken_text", "")
+    try:
+        config = load_local_llm_config()
+        if config and response.get("product"):
+            local_speech = generate_local_speech(response, config)
+            if not 5 <= len(local_speech) <= MAX_SPEECH_LENGTH:
+                raise ValueError("INVALID_LOCAL_SPEECH_LENGTH")
+            speech = local_speech
+    except (OSError, ValueError, RuntimeError, AttributeError) as error:
+        print("LOCAL_LLM_USING_SERVER_SPEECH:", type(error).__name__, flush=True)
+    if not isinstance(speech, str) or not 5 <= len(speech.strip()) <= MAX_SPEECH_LENGTH:
+        raise ValueError("INVALID_SPEECH_LENGTH")
+    return speech.strip()
 
 def synthesize_azure(text, dest):
     speech_key = os.environ["AZURE_SPEECH_KEY"]
@@ -151,8 +164,10 @@ def synthesize_azure(text, dest):
         raise RuntimeError("INVALID_AZURE_WAV")
     dest.write_bytes(audio)
     with wave.open(str(dest),"rb") as wav:
-        if wav.getframerate()!=48000 or wav.getnchannels()!=1:
+        if wav.getframerate()!=48000 or wav.getnchannels()!=1 or wav.getsampwidth()!=2:
             raise RuntimeError("UNEXPECTED_SPEECH_FORMAT")
+        if not any(wav.readframes(wav.getnframes())):
+            raise RuntimeError("SILENT_SPEECH_WAV")
 
 def render_musetalk(audio, jobdir, timeout_seconds=180):
     config_path = jobdir / "input.yaml"
@@ -180,14 +195,13 @@ def render_musetalk(audio, jobdir, timeout_seconds=180):
     if not generated.exists() or generated.stat().st_size < 4096:
         raise RuntimeError("MUSETALK_OUTPUT_MISSING")
     destination = jobdir / "host_reply.mp4"
-    shutil.copy2(generated, destination)
-    # Verify at least one video and one audio track.
-    info = json.loads(subprocess.check_output([
-        "ffprobe","-v","error","-show_streams","-of","json",str(destination)
-    ], timeout=15))
-    kinds = {s["codec_type"] for s in info.get("streams",[])}
-    if not {"video","audio"}.issubset(kinds):
-        raise RuntimeError("OUTPUT_MISSING_VIDEO_OR_AUDIO")
+    # Use the same speech WAV for lip sync and playback, including when
+    # the workstation's MuseTalk renderer outputs a video-only clip.
+    subprocess.run([
+        "ffmpeg", "-nostdin", "-v", "error", "-i", str(generated), "-i", str(audio),
+        "-map", "0:v:0", "-map", "1:a:0", "-c:v", "copy", "-c:a", "aac",
+        str(destination),
+    ], timeout=45, check=True)
     return destination
 
 def main():
@@ -230,17 +244,21 @@ def main():
         return
     if response.get("kind") not in {"presentation","question"}:
         raise RuntimeError("UNEXPECTED_WORKER_RESPONSE")
-    speech=generate_local_speech(response)
-    if not isinstance(speech,str) or not (5<=len(speech)<=520):
-        raise RuntimeError("INVALID_SPEECH_LENGTH")
-    # Do not leak server credentials or secret lease tokens into logs.
-    OUTPUT.mkdir(parents=True,exist_ok=True)
-    jobdir=OUTPUT / ("turn-" + str(int(time.time())) + "-" + os.urandom(3).hex())
-    jobdir.mkdir(mode=0o700)
+    stage = "speech_text"
     try:
+        speech = prepare_speech(response)
+        # Do not leak server credentials or secret lease tokens into logs.
+        stage = "job_directory"
+        OUTPUT.mkdir(parents=True,exist_ok=True)
+        jobdir=OUTPUT / ("turn-" + str(int(time.time())) + "-" + os.urandom(3).hex())
+        jobdir.mkdir(mode=0o700)
         audio=jobdir / "speech.wav"
+        stage = "azure_speech"
         synthesize_azure(speech,audio)
+        print("HOST_TTS_READY:", jobdir.name, flush=True)
+        stage = "musetalk"
         video=render_musetalk(audio,jobdir)
+        stage = "queue"
         prepared={}
         if mode=="tv" and response.get("opening") is True:
             prepared=post_json(base,"/api/odd-tv/worker/prepared",key,{
@@ -303,8 +321,8 @@ def main():
                     print("TURN_LEASE_RELEASED_AFTER_FAILURE",flush=True)
             except Exception as release_error:
                 print("TURN_LEASE_RELEASE_FAILED:",type(release_error).__name__,file=sys.stderr,flush=True)
-        print("REHEARSAL_FAILED; question stays queued. See per-turn render.log.",file=sys.stderr)
-        raise exc
+        print("HOST_TURN_FAILED:", stage, type(exc).__name__, file=sys.stderr, flush=True)
+        raise
 
 if __name__=="__main__":
     main()

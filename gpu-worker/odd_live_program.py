@@ -5,8 +5,8 @@ Prototype for Diana (WSL Ubuntu): one long-lived FFmpeg encoder sends H264/AAC
 to the local MediaMTX RTSP endpoint. Clips are switched inside the Python
 producer without restarting FFmpeg, so they share a single audience stream.
 
-This program does not publicly expose MediaMTX. It does not ACK questions until
---ack-delivered is explicitly enabled after downstream player verification.
+This program does not publicly expose MediaMTX. It tracks aired TV narration
+and only ACKs viewer questions when --ack-delivered is enabled.
 """
 import argparse
 import json
@@ -156,12 +156,12 @@ def decode_motion(video,width,height):
     if not frames: raise RuntimeError("EMPTY_MOTION_CLIP")
     return frames
 
-def ack(info):
+def ack(info, *, aired=True):
     base=os.getenv("ODD_LIVE_API_BASE","").rstrip("/")
     key=os.getenv("ODD_LIVE_WORKER_KEY","")
     if not (base.startswith("https://") and key and info.get("lease_token")):
         raise RuntimeError("ACK_REQUIRES_HTTPS_AND_SECRET")
-    payload=json.dumps({"drop_key":info["drop_key"],"lease_token":info["lease_token"],"aired":True}).encode()
+    payload=json.dumps({"drop_key":info["drop_key"],"lease_token":info["lease_token"],"aired":aired}).encode()
     endpoint="/api/odd-tv/worker/ack" if str(info["drop_key"]).startswith("tv:") else "/api/odd-live/worker/ack"
     req=urllib.request.Request(
         base+endpoint,method="POST",data=payload,
@@ -170,6 +170,14 @@ def ack(info):
     with urllib.request.urlopen(req,timeout=12) as response:
         result=json.loads(response.read().decode())
         if not result.get("ok"): raise RuntimeError("ACK_REJECTED")
+
+def report_clip(info, *, aired):
+    try:
+        ack(info, aired=aired)
+        event = "HOST_CLIP_ACKNOWLEDGED" if aired else "HOST_CLIP_RELEASED_AFTER_FAILURE"
+        print(event, flush=True)
+    except Exception as exc:
+        print("ACK_ERROR", type(exc).__name__, flush=True)
 
 def main():
     parser=argparse.ArgumentParser()
@@ -271,6 +279,7 @@ def main():
             except OSError:
                 pass
             print("CLIP_FAILED",type(exc).__name__,flush=True)
+            report_clip(info, aired=False)
 
     print("ODD_LIVE_PROGRAM_STARTING",args.rtsp,flush=True)
     try:
@@ -365,9 +374,9 @@ def main():
                 aired=path.with_name(path.name.replace(".playing.json",".aired.json"))
                 path.rename(aired)
                 print("HOST_CLIP_SENT",aired.name,flush=True)
-                if args.ack_delivered:
-                    try: ack(info); print("QUESTION_ACKNOWLEDGED",flush=True)
-                    except Exception as exc: print("ACK_ERROR",type(exc).__name__,flush=True)
+                tv_narration = str(info.get("drop_key", "")).startswith("tv:") and not info.get("question_id")
+                if args.ack_delivered or tv_narration:
+                    threading.Thread(target=report_clip, args=(info,), kwargs={"aired": True}, daemon=True).start()
                 current=None
                 speech_started=False
             next_tick+=1/FPS
