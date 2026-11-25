@@ -26,22 +26,20 @@ class HostWorkerTest(unittest.TestCase):
 
     def test_accepts_server_narration_longer_than_old_limit(self):
         speech = ("Take a closer look at this product and its listed features. " * 12).strip()
-        with patch.object(self.worker, "load_local_llm_config", return_value=None):
-            self.assertEqual(self.worker.prepare_speech({"spoken_text": speech}), speech)
+        self.assertEqual(self.worker.prepare_speech({"spoken_text": speech}), speech)
 
-    def test_local_model_timeout_uses_catalog_grounded_server_reply(self):
+    def test_uses_prepared_server_reply_without_another_model_request(self):
         speech = "The retailer listing shows that this model includes a removable drip tray."
         response = {"spoken_text": speech, "product": {"title": "Coffee machine"}}
-        with patch.object(self.worker, "load_local_llm_config", return_value={"model": "local"}), \
-             patch.object(self.worker, "generate_local_speech", side_effect=TimeoutError):
+        with patch.object(self.worker.urllib.request, "urlopen") as urlopen:
             self.assertEqual(self.worker.prepare_speech(response), speech)
+            urlopen.assert_not_called()
 
     def test_invalid_speech_releases_leased_turn(self):
         response = {"kind": "presentation", "drop_key": "tv:1", "lease_token": "test-token"}
         with patch.dict(os.environ, {"ODD_LIVE_API_BASE": "https://example.invalid", "ODD_LIVE_WORKER_KEY": "test"}), \
              patch("sys.argv", ["worker", "--once"]), \
              patch.object(self.worker, "load_speech_config"), \
-             patch.object(self.worker, "load_local_llm_config", return_value=None), \
              patch.object(self.worker, "post_json", side_effect=[response, {"ok": True}]) as post:
             with self.assertRaisesRegex(ValueError, "INVALID_SPEECH_LENGTH"):
                 self.worker.main()

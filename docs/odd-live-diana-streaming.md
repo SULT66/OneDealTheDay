@@ -1,6 +1,6 @@
 # ODD Live TV stream path
 
-ODD Live TV is a self-hosted live broadcast. The local GPU worker reads verified product details and queued viewer questions from OneDailyDrop, generates each spoken turn with local Ollama, creates speech, and renders lip-synced video with MuseTalk. No admin script is stored or read.
+ODD Live TV is a self-hosted live broadcast. The OneDailyDrop server gives OpenAI the current product's verified details and queued viewer questions to prepare each turn. The local GPU worker receives the prepared text, creates the voice through Azure Speech, and renders lip-synced video with MuseTalk. No admin script is stored or read.
 
 The broadcaster publishes one continuous H.264/AAC RTSP feed to MediaMTX. OneDailyDrop's public player reads the HTTPS HLS stream. It is a live program feed, not a prerecorded MP4 played in a loop. The default broadcaster holds an idle avatar frame while the next on-demand spoken segment is rendered; it does not loop prerecorded idle-motion clips.
 

@@ -34,7 +34,6 @@ MODEL_AVATAR = os.environ.get("ODD_LIVE_AVATAR_ID") or next(
     (name for name in avatar_candidates if (avatar_models / name).is_dir()), avatar_candidates[0]
 )
 SPEECH_CONFIG = Path.home() / ".config" / "odd-live" / "speech.env"
-LLM_CONFIG = Path.home() / ".config" / "odd-live" / "llm.env"
 # Match the server's ODD TV speechText contract in src/oddLiveBrain.js.
 MAX_SPEECH_LENGTH = 1100
 
@@ -62,71 +61,8 @@ def post_json(base, path, key, payload):
     with urllib.request.urlopen(req, timeout=30) as response:
         return json.loads(response.read().decode("utf-8"))
 
-def load_local_llm_config():
-    """Read Diana's private local Ollama settings; never send viewer text to OpenAI."""
-    if not LLM_CONFIG.is_file():
-        return None
-    if LLM_CONFIG.stat().st_mode & 0o077:
-        raise PermissionError("LLM_CONFIG_MUST_BE_PRIVATE_CHMOD_600")
-    values={}
-    for line in LLM_CONFIG.read_text(encoding="utf-8").splitlines():
-        if not line or line.lstrip().startswith("#") or "=" not in line:
-            continue
-        name,value=line.split("=",1)
-        if name in {"ODD_LIVE_LLM_BASE_URL","ODD_LIVE_LLM_MODEL","ODD_LIVE_LLM_API_KEY"} and value:
-            values[name]=value
-    if not values.get("ODD_LIVE_LLM_MODEL"):
-        return None
-    return values
-
-def generate_local_speech(response, config):
-    base=config.get("ODD_LIVE_LLM_BASE_URL","http://127.0.0.1:11434/v1").rstrip("/")
-    root=base[:-3] if base.endswith("/v1") else base
-    product=response.get("product") or {}
-    questions=response.get("questions") or []
-    facts={name:product.get(name) for name in (
-        "title","brand","retailer_name","description","price","currency",
-        "stock_status","price_verified"
-    )}
-    system=(
-        "You are the live shopping host on OneDailyDrop. Speak naturally in English. "
-        "Use only verified product facts in the supplied data. Never guess price, stock, "
-        "condition, shipping, warranty, or features. If a detail is absent, say you cannot "
-        "confirm it. Answer viewer questions directly and briefly. For a product presentation, "
-        "create fresh concise narration and avoid repeating a canned opening. Output only the "
-        "words to speak; no reasoning, labels, or stage directions."
-    )
-    user=json.dumps({
-        "task":"answer viewer questions" if questions else "present the product",
-        "product_facts":facts,"viewer_questions":questions
-    },ensure_ascii=False)
-    body=json.dumps({
-        "model":config["ODD_LIVE_LLM_MODEL"],"think":False,
-        "messages":[{"role":"system","content":system},{"role":"user","content":user}],
-        "stream":False,"options":{"num_predict":100,"temperature":0.55},
-    }).encode("utf-8")
-    headers={"Content-Type":"application/json"}
-    key=config.get("ODD_LIVE_LLM_API_KEY")
-    if key:headers["Authorization"]="Bearer "+key
-    req=urllib.request.Request(root+"/api/chat",data=body,method="POST",headers=headers)
-    with urllib.request.urlopen(req,timeout=12) as result:
-        data=json.loads(result.read().decode("utf-8"))
-    speech=data.get("message",{}).get("content","").strip()
-    if not speech:
-        raise RuntimeError("LOCAL_LLM_EMPTY_RESPONSE")
-    return speech
-
 def prepare_speech(response):
     speech = response.get("spoken_text", "")
-    try:
-        config = load_local_llm_config()
-        if config and response.get("product"):
-            local_speech = generate_local_speech(response, config)
-            if not 5 <= len(local_speech) <= MAX_SPEECH_LENGTH:
-                raise ValueError("INVALID_LOCAL_SPEECH_LENGTH")
-            speech = local_speech
-    except (OSError, ValueError, RuntimeError, AttributeError) as error:
-        print("LOCAL_LLM_USING_SERVER_SPEECH:", type(error).__name__, flush=True)
     if not isinstance(speech, str) or not 5 <= len(speech.strip()) <= MAX_SPEECH_LENGTH:
         raise ValueError("INVALID_SPEECH_LENGTH")
     return speech.strip()
