@@ -83,3 +83,16 @@ test("scripted broadcasts wait for media, honor the schedule, and have ten minut
  assert.equal(tv.publicShow(db,"us",Date.parse(timing.end_at)),null);
  db.close();
 });
+
+test("configured runtime includes exactly ten minutes of questions and rejects a mismatched clip",()=>{
+ const db=setup();
+ const id=tv.createShow(db,{productIds:[1],scriptText:"An editable script at the requested duration.",scriptTarget:18,now:time});
+ tv.startShow(db,id,{now:time});
+ const show=tv.workerShow(db,"us",time).show;
+ assert.throws(()=>tv.prepareScriptedShow(db,show,300000,time),/SCRIPT_PRESENTATION_DURATION_MISMATCH/);
+ const prepared=tv.prepareScriptedShow(db,show,480000,time);
+ assert.equal(Date.parse(prepared.qna_start_at)-Date.parse(prepared.start_at),8*60000);
+ assert.equal(Date.parse(prepared.end_at)-Date.parse(prepared.start_at),18*60000);
+ assert.throws(()=>tv.createShow(db,{productIds:[1],scriptText:"A longer edited script for a new show.",scriptTarget:10,now:time}),/SCRIPT_SHOW_DURATION_MUST_BE_11_TO_30_MINUTES/);
+ db.close();
+});

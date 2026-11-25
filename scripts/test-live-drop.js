@@ -343,12 +343,9 @@ assert(
   /src=\{drop\.stream_embed_url\}/.test(panelSource) && /src=\{drop\.video_url\}/.test(panelSource),
   "one of the two broadcast media inputs is no longer rendered",
 );
-/* Named for what each panel shows rather than for the arrangement. A presenter
-   cannot hold up a monitor, so one panel is whoever is talking and the other
-   is where the product is actually seen. */
 assert(
-  /Presenter video/.test(adminSource) && /Product footage/.test(adminSource),
-  "the operator console no longer explains which live media belongs in each field",
+  !/<TabPanel id="drops"/.test(adminSource) && /ODDTVConsole/.test(adminSource),
+  "the operator console must use ODD Live TV for broadcast management",
 );
 
 console.log("Live Drop funnel, one-row-per-session and reveal-safety checks passed.");
@@ -480,12 +477,9 @@ async function main() {
     !/dangerouslySetInnerHTML/.test(adminPage),
     "the admin console writes HTML out of values it was handed",
   );
-  /* Until the key has been accepted there is no market list, and a submission
-     without one is answered with a complaint about the market rather than
-     about the missing key. */
   assert(
-    /<fieldset disabled=\{!unlocked/.test(adminPage),
-    "the drop form can be submitted before the server has said which markets exist",
+    /fetch\("\/api\/admin\/access"/.test(adminPage) && /app\.get\("\/api\/admin\/access",admin,/.test(serverSource),
+    "the admin console must verify its key against a guarded endpoint",
   );
   /* The key lives in component state and nowhere that outlives the tab. */
   assert(

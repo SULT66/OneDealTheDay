@@ -7,13 +7,12 @@ import { ShopIcons } from "./ShopIcons";
 import { Numbers } from "./Numbers";
 import { SearchDemand } from "./SearchDemand";
 import { Weekly } from "./Weekly";
-import { MediaUpload } from "./MediaUpload";
 import { ODDTVConsole } from "./ODDTVConsole";
 import { MerchandisingPanel } from "./MerchandisingPanel";
 import { MerchantHealth } from "./MerchantHealth";
 
 /**
- * The admin console: scheduling a Live Drop, and the catalogue refresh.
+ * The admin console for ODD Live TV, reporting, email, and the catalogue.
  *
  * The key is held in React state and nothing else. Not localStorage, not a
  * cookie: it is the one credential that can publish to the live site, and a
@@ -23,98 +22,25 @@ import { MerchantHealth } from "./MerchantHealth";
  * is a product title and never markup.
  */
 
-type AdminDrop = {
-  drop_key: string;
-  market: string;
-  title: string;
-  brand: string;
-  retailer_name: string;
-  currency: string;
-  retail_price: number | null;
-  drop_price: number | null;
-  quantity_total: number;
-  quantity_remaining: number;
-  state: "upcoming" | "waiting" | "live" | "sold_out" | "ended";
-  start_at: string;
-  published: boolean;
-  reminders: number;
-  /* Optional: absent from a server deployed before they were sent. */
-  reminder_emails_sent?: number;
-  reminders_sent?: number;
-  reminder_day_before_sent?: number;
-  reminder_hour_before_sent?: number;
-  live_now_sent?: number;
-  ever_published?: boolean;
-  funnel: Record<string, number>;
-  reached: number;
-  announced: number;
-  watching_now: number;
-  stock_is_live: boolean;
-  stock_verified_at: string | null;
-  stock_checked_at: string | null;
-  image_url: string;
-  secondary_image_url?: string;
-  preroll_video_url?: string;
-  video_url: string;
-  stream_embed_url: string;
-  click_label: string;
-};
-
-const BLANK = {
-  title: "",
-  brand: "",
-  retailer_name: "",
-  market: "us",
-  retail_price: "",
-  drop_price: "",
-  currency: "USD",
-  quantity_total: "20",
-  start_at: "",
-  duration_minutes: "10",
-  member_early_access_seconds: "0",
-  image_url: "",
-  secondary_image_url: "",
-  affiliate_url: "",
-  preroll_video_url: "",
-  video_url: "",
-  stream_embed_url: "",
-  terms: "",
-};
-
 type EmailStep = { step: string; done: boolean | null; detail: string };
-
-type FormState = typeof BLANK;
-
-/* A datetime-local field speaks local wall clock and the server speaks ISO
-   with an offset. The same drop is watched from five markets, so 20:00 on its
-   own means five different moments. */
-const toIso = (local: string) => (local ? new Date(local).toISOString() : "");
-const readable = (iso: string) => new Date(iso).toLocaleString();
 
 export function AdminConsole() {
   const [adminKey, setAdminKey] = useState("");
-  const [drops, setDrops] = useState<AdminDrop[] | null>(null);
-  const [markets, setMarkets] = useState<string[]>([]);
-  const [form, setForm] = useState<FormState>(BLANK);
+  const [unlocked, setUnlocked] = useState(false);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [refreshOutput, setRefreshOutput] = useState("");
   const [emailSteps, setEmailSteps] = useState<EmailStep[] | null>(null);
   const [testTo, setTestTo] = useState("");
 
-  const headers = useCallback(
-    () => ({ "Content-Type": "application/json", "X-Admin-Key": adminKey }),
-    [adminKey],
-  );
-
   const load = useCallback(async () => {
-    if (!adminKey) return;
-    const response = await fetch("/api/admin/live-drops", {
+    if (!adminKey) { setUnlocked(false); return; }
+    const response = await fetch("/api/admin/access", {
       headers: { "X-Admin-Key": adminKey },
     }).catch(() => null);
     const body = await response?.json().catch(() => ({}));
     if (!response?.ok) {
-      setDrops(null);
+      setUnlocked(false);
       /* Three different problems used to share one sentence, and "not
          accepted" sends somebody to retype a key that may be perfectly right
          while the server is restarting or has no key set at all. */
@@ -129,14 +55,8 @@ export function AdminConsole() {
       );
       return;
     }
-    setMarkets(body.markets || ["us"]);
-    setDrops(body.drops || []);
+    setUnlocked(true);
     setMessage("");
-    setForm((current) =>
-      current.market && (body.markets || []).includes(current.market)
-        ? current
-        : { ...current, market: (body.markets || ["us"])[0] },
-    );
   }, [adminKey]);
 
   /* Loading is what proves the key, so it happens on entry rather than behind
@@ -180,45 +100,6 @@ export function AdminConsole() {
     }
   };
 
-  const act = async (url: string, body: unknown, method = "POST") => {
-    setBusy(true);
-    const response = await fetch(url, {
-      method,
-      headers: headers(),
-      body: body ? JSON.stringify(body) : undefined,
-    }).catch(() => null);
-    const result = await response?.json().catch(() => ({}));
-    setBusy(false);
-    const failure = response?.ok ? "" : result?.error || "That did not go through.";
-    const warning = response?.ok && Array.isArray(result?.warnings)
-      ? result.warnings.filter((value: unknown) => typeof value === "string").join(" ") : "";
-    setMessage(failure || warning || "Done.");
-    load();
-    /* Returned so the row that was clicked can say what happened next to the
-       button. A refusal printed at the top of a long console reads as a button
-       that does nothing — which is exactly how the delete guard was reported. */
-    return failure || warning;
-  };
-
-  const create = async (event: React.FormEvent) => {
-    event.preventDefault();
-    setBusy(true);
-    const response = await fetch("/api/admin/live-drops", {
-      method: "POST",
-      headers: headers(),
-      body: JSON.stringify({ ...form, start_at: toIso(form.start_at) }),
-    }).catch(() => null);
-    const result = await response?.json().catch(() => ({}));
-    setBusy(false);
-    if (response?.ok) {
-      setMessage(`Drafted ${result.drop_key}. Nobody can see it until you publish it.`);
-      setForm({ ...BLANK, market: form.market });
-    } else {
-      setMessage(result?.error || "That did not go through.");
-    }
-    load();
-  };
-
   const runRefresh = async () => {
     setRefreshOutput("Searching...");
     const response = await fetch("/api/admin/refresh", {
@@ -228,8 +109,6 @@ export function AdminConsole() {
     const result = await response?.json().catch(() => ({}));
     setRefreshOutput(JSON.stringify(result, null, 2));
   };
-
-  const unlocked = drops !== null;
 
   /*
    * One job per tab.
@@ -245,16 +124,17 @@ export function AdminConsole() {
      Only the tab name: the key never goes anywhere near the URL. */
   useEffect(() => {
     const fromHash = window.location.hash.replace("#", "");
-    if (TABS.some((item) => item.id === fromHash)) setTab(fromHash as TabId);
+    if (fromHash === "drops") {
+      setTab("tv");
+      window.history.replaceState(null, "", "#tv");
+    }
+    else if (TABS.some((item) => item.id === fromHash)) setTab(fromHash as TabId);
   }, []);
   const choose = (id: TabId) => {
     setTab(id);
     setMessage("");
     window.history.replaceState(null, "", `#${id}`);
   };
-  const upcoming = (drops || []).filter((drop) => drop.published && ["upcoming", "waiting", "live"].includes(drop.state)).length;
-  const liveNow = (drops || []).some((drop) => drop.published && drop.state === "live");
-
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-10 sm:px-6 sm:py-14">
       <div className="flex flex-wrap items-end justify-between gap-4">
@@ -313,12 +193,6 @@ export function AdminConsole() {
               )}
             >
               {item.label}
-              {item.id === "drops" && liveNow && (
-                <span className="h-2 w-2 animate-pulse rounded-full bg-danger" aria-label="live now" />
-              )}
-              {item.id === "drops" && !liveNow && upcoming > 0 && (
-                <span className="rounded-full bg-surface-2 px-1.5 text-[0.65rem] font-bold text-fg-muted tnum">{upcoming}</span>
-              )}
             </button>
           );
         })}
@@ -444,110 +318,6 @@ export function AdminConsole() {
         <ODDTVConsole adminKey={adminKey} />
       </TabPanel>
 
-      <TabPanel id="drops" active={tab}>
-      <Card className="mt-6">
-        <Legend>Schedule</Legend>
-        <p className="mt-1 max-w-prose text-sm leading-relaxed text-fg-muted">
-          Every drop, drafts included. Publishing is a separate, deliberate step, because
-          writing a drop and announcing it are different decisions and this site is live.
-        </p>
-        <div className="mt-6 space-y-3">
-          {!unlocked && (
-            <p className="text-sm text-fg-subtle">Enter the admin key to load the schedule.</p>
-          )}
-          {unlocked && !drops.length && <p className="text-sm text-fg-subtle">Nothing scheduled yet.</p>}
-          {(drops || []).map((drop) => (
-            <DropRow key={drop.drop_key} drop={drop} busy={busy} act={act} adminKey={adminKey} />
-          ))}
-        </div>
-      </Card>
-
-      <Card className="mt-6">
-        <Legend>New drop</Legend>
-        <p className="mt-1 max-w-prose text-sm leading-relaxed text-fg-muted">
-          Saved as a draft that nobody can see until you publish it. Times are in the
-          timezone of this computer.
-        </p>
-
-        <form onSubmit={create} className="mt-6">
-          <fieldset disabled={!unlocked || busy} className="border-0 p-0 disabled:opacity-55">
-            {/* In the order the drop is thought through: what it is, what it
-                costs, when it runs, what people see. Fifteen fields in one grid
-                had no order at all. */}
-            <FormGroup title="Product">
-              <Field label="Product title" required value={form.title} onChange={(v) => setForm({ ...form, title: v })} />
-              <Field label="Brand" value={form.brand} onChange={(v) => setForm({ ...form, brand: v })} />
-              <Field label="Retailer" value={form.retailer_name} onChange={(v) => setForm({ ...form, retailer_name: v })} />
-              <Field label="Buy link" type="url" value={form.affiliate_url} onChange={(v) => setForm({ ...form, affiliate_url: v })} />
-            </FormGroup>
-
-            <FormGroup title="Price and stock">
-              <label className="block py-2">
-                <span className="text-xs font-semibold uppercase tracking-[0.1em] text-fg-subtle">Market</span>
-                <select
-                  value={form.market}
-                  onChange={(event) => setForm({ ...form, market: event.target.value })}
-                  className="mt-1.5 h-11 w-full rounded-xl border border-border bg-surface-2 px-3 text-sm text-fg outline-none focus:border-border-strong"
-                >
-                  {(markets.length ? markets : [form.market]).map((market) => (
-                    <option key={market} value={market}>
-                      {market.toUpperCase()}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <Field label="Currency" value={form.currency} onChange={(v) => setForm({ ...form, currency: v })} />
-              <Field label="Normal price" type="number" step="0.01" value={form.retail_price} onChange={(v) => setForm({ ...form, retail_price: v })} />
-              <Field label="Drop price" type="number" step="0.01" value={form.drop_price} onChange={(v) => setForm({ ...form, drop_price: v })} />
-              <Field label="Units" type="number" required value={form.quantity_total} onChange={(v) => setForm({ ...form, quantity_total: v })} />
-              {/* Shoppers see this number, so it has to be a real one. */}
-              <p className="self-end pb-3 text-xs leading-relaxed text-fg-subtle sm:col-span-2 lg:col-span-3">
-                Shoppers see Units as &ldquo;15 units at this price&rdquo;, then &ldquo;12 left of 15&rdquo; while it runs.
-                Use a real number you can sell at the drop price, and lower it with Set stock as they go.
-                Drop price must be the price the shop will actually charge.
-              </p>
-            </FormGroup>
-
-            <FormGroup title="When">
-              <Field label="Starts" type="datetime-local" required value={form.start_at} onChange={(v) => setForm({ ...form, start_at: v })} />
-              <Field label="Minutes open" type="number" required value={form.duration_minutes} onChange={(v) => setForm({ ...form, duration_minutes: v })} />
-              <Field label="Member head start (seconds)" type="number" value={form.member_early_access_seconds} onChange={(v) => setForm({ ...form, member_early_access_seconds: v })} />
-            </FormGroup>
-
-            {/* Files, not links. the host presents live on the left, so there is
-                no presenter video to upload here: the right panel is where the
-                product is actually seen. */}
-            <FormGroup title="What people see" columns={2}>
-              <MediaUpload adminKey={adminKey} kind="image" label="Product photo" hint="The product on its own, clean background." value={form.image_url} onChange={(v) => setForm({ ...form, image_url: v })} disabled={!unlocked || busy} />
-              <MediaUpload adminKey={adminKey} kind="image" label="Product in use - photo" hint="Somebody using it. Optional." value={form.secondary_image_url} onChange={(v) => setForm({ ...form, secondary_image_url: v })} disabled={!unlocked || busy} />
-              <MediaUpload adminKey={adminKey} kind="video" label="Pre-show advertisement" hint="Optional. Plays automatically in the five minutes before the start. The show starts on schedule." value={form.preroll_video_url} onChange={(v) => setForm({ ...form, preroll_video_url: v })} disabled={!unlocked || busy} />
-              <MediaUpload adminKey={adminKey} kind="video" label="Product footage" hint="The product up close. Plays beside the host." value={form.video_url} onChange={(v) => setForm({ ...form, video_url: v })} disabled={!unlocked || busy} />
-            </FormGroup>
-
-            
-
-            <label className="mt-2 block py-2">
-              <span className="text-xs font-semibold uppercase tracking-[0.1em] text-fg-subtle">Terms</span>
-              <textarea
-                rows={2}
-                value={form.terms}
-                onChange={(event) => setForm({ ...form, terms: event.target.value })}
-                className="mt-1.5 w-full rounded-xl border border-border bg-surface-2 px-3 py-2.5 text-sm text-fg outline-none focus:border-border-strong"
-              />
-            </label>
-
-            <button
-              type="submit"
-              className="mt-4 inline-flex h-12 cursor-pointer items-center rounded-full bg-lime px-7 text-sm font-bold text-ink transition-opacity hover:opacity-88 disabled:opacity-60"
-            >
-              Create draft
-            </button>
-          </fieldset>
-        </form>
-      </Card>
-      </TabPanel>
-
       <TabPanel id="icons" active={tab}>
       <Card className="mt-6">
         <Legend>Shop icons</Legend>
@@ -596,7 +366,6 @@ const TABS = [
   { id: "numbers", label: "Numbers" },
   { id: "weekly", label: "Weekly" },
   { id: "merchants", label: "Merchants" },
-  { id: "drops", label: "Live Drops" },
   { id: "tv", label: "ODD Live TV" },
   { id: "email", label: "Email" },
   { id: "icons", label: "Shop icons" },
@@ -626,333 +395,4 @@ function Card({ children, className }: { children: React.ReactNode; className?: 
 
 function Legend({ children }: { children: React.ReactNode }) {
   return <h2 className="text-lg font-bold text-fg">{children}</h2>;
-}
-
-function FormGroup({
-  title,
-  children,
-  columns = 3,
-}: {
-  title: string;
-  children: React.ReactNode;
-  columns?: 2 | 3;
-}) {
-  return (
-    <div className="mt-2 border-t border-border pt-4 first:mt-0 first:border-t-0 first:pt-0">
-      <p className="text-sm font-bold text-fg">{title}</p>
-      <div className={cn("mt-1 grid gap-x-4 gap-y-1 sm:grid-cols-2", columns === 3 && "lg:grid-cols-4")}>{children}</div>
-    </div>
-  );
-}
-
-function Field({
-  label,
-  value,
-  onChange,
-  type = "text",
-  step,
-  required,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  type?: string;
-  step?: string;
-  required?: boolean;
-}) {
-  return (
-    <label className="block py-2">
-      <span className="text-xs font-semibold uppercase tracking-[0.1em] text-fg-subtle">{label}</span>
-      <input
-        type={type}
-        step={step}
-        required={required}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="mt-1.5 h-11 w-full rounded-xl border border-border bg-surface-2 px-3 text-sm text-fg outline-none transition-colors focus:border-border-strong"
-      />
-    </label>
-  );
-}
-
-function DropRow({
-  drop,
-  busy,
-  act,
-  adminKey,
-}: {
-  drop: AdminDrop;
-  adminKey: string;
-  busy: boolean;
-  act: (url: string, body: unknown, method?: string) => Promise<string>;
-}) {
-  const [stock, setStock] = useState(String(drop.quantity_remaining));
-  const [rowMessage, setRowMessage] = useState("");
-  const [publishing, setPublishing] = useState(false);
-  /* Media can be corrected without recreating a drop. */
-  const [media, setMedia] = useState({
-    image_url: drop.image_url || "",
-    secondary_image_url: drop.secondary_image_url || "",
-    preroll_video_url: drop.preroll_video_url || "",
-    video_url: drop.video_url || "",
-    stream_embed_url: drop.stream_embed_url || "",
-  });
-  /* A published drop shows where it is in its own life. An unpublished one is
-     a draft whatever the clock says, because nobody can see it. */
-  /* Keep the unpublished label for a previous public drop. */
-  const everPublished = drop.published || Boolean(drop.ever_published);
-  const state = drop.published ? drop.state : everPublished ? "unpublished" : "draft";
-  const live = drop.published && drop.state === "live";
-
-  return (
-    <div className="rounded-2xl border border-border p-4">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <span
-          className={cn(
-            "inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-bold uppercase tracking-[0.1em]",
-            live ? "bg-danger/10 text-danger" : "bg-surface-2 text-fg-muted",
-          )}
-        >
-          {live && <span className="h-2 w-2 animate-pulse rounded-full bg-danger" aria-hidden="true" />}
-          {state.replace(/_/g, " ")}
-        </span>
-        <h3 className="min-w-0 flex-1 truncate text-sm font-semibold text-fg">{drop.title}</h3>
-        {/* Only while it is running: "0 watching" on a drop that ended last
-            week is not information. */}
-        {live && (
-          <span className="shrink-0 text-xs font-semibold text-fg-muted tnum">
-            {drop.watching_now} watching now
-          </span>
-        )}
-      </div>
-
-      <p className="mt-2 text-xs leading-relaxed text-fg-muted">
-        {drop.market.toUpperCase()} · {readable(drop.start_at)} ·{" "}
-        <span className="tnum">
-          {drop.quantity_remaining}/{drop.quantity_total}
-        </span>{" "}
-        left ·{" "}
-        {drop.drop_price ? (
-          <span className="tnum">
-            {drop.currency} {drop.drop_price}
-          </span>
-        ) : (
-          "no price set"
-        )}
-        {drop.retailer_name ? ` · ${drop.retailer_name}` : ""}
-      </p>
-
-      {/*
-        * Whether it worked, beside the drop rather than on a second screen.
-        *
-        * It was one dense line of four numbers with no rates, which answers
-        * "what happened" and not "did it work" — 40 of 200 and 40 of 45 read
-        * identically there. Each step now carries what share of the one above
-        * it got through, which is the only form in which these numbers say
-        * anything.
-        */}
-      <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-fg-muted sm:grid-cols-3 lg:grid-cols-6">
-        {[
-          /*
-           * One step per real question, in the order a person moves through the
-           * drop, each measured against the step above it.
-           *
-           * "Pressed buy" and "sent to the shop" are deliberately separate.
-           * They used to be written under one event name and so could never
-           * disagree — but a blocked script loses the first and an abandoned
-           * navigation loses the second, and the gap between them is the only
-           * place that ever shows.
-           */
-          /*
-           * Each rate names what it is a share of. "% of above" was wrong in
-           * two places: "saw the price" was measured against everyone who
-           * arrived while the column above it was "waited", so 3 of 0 read as
-           * 100%; and "arrived" was measured against the people emailed, when
-           * most arrivals never came from that email at all.
-           */
-          { label: "told", value: drop.announced, of: 0, ofLabel: "" },
-          { label: "arrived", value: drop.reached, of: 0, ofLabel: "" },
-          { label: "waited", value: drop.funnel.waiting_room || 0, of: drop.reached, ofLabel: "arrived" },
-          { label: "saw the price", value: drop.funnel.reveal || 0, of: drop.reached, ofLabel: "arrived" },
-          { label: "pressed buy", value: drop.funnel.buy_click || 0, of: drop.funnel.reveal || 0, ofLabel: "saw the price" },
-          { label: "sent to the shop", value: drop.funnel.buy_handoff || 0, of: drop.funnel.buy_click || 0, ofLabel: "pressed buy" },
-        ].map((step) => (
-          <div key={step.label}>
-            <dt className="text-[0.65rem] uppercase tracking-[0.12em] text-fg-subtle">
-              {step.label}
-            </dt>
-            {/* The rate sits under the count rather than beside it. Side by
-                side they ran together — "3" next to "75%" reads as 375% at a
-                glance, which is the one way these numbers could mislead the
-                person they exist for. */}
-            <dd className="font-semibold text-fg tnum">
-              {step.value}
-              {step.of > 0 && step.value > 0 ? (
-                <span className="block text-[0.65rem] font-normal text-fg-subtle">
-                  {Math.round((step.value / step.of) * 100)}% of {step.ofLabel}
-                </span>
-              ) : null}
-            </dd>
-          </div>
-        ))}
-      </dl>
-
-      {/*
-        * The step this site cannot measure, said plainly rather than left as a
-        * gap somebody fills in with a guess.
-        *
-        * A purchase happens on the shop's own checkout. Nothing here ever
-        * learns about it, and no amount of analytics on this side will change
-        * that. The label below is the whole thread: it rides out on the Buy
-        * click and comes back on the sale in the network's own report, which
-        * is where the last two steps of the funnel actually live.
-        */}
-      {/* Where the remaining count comes from. A drop whose listing gives no
-          exact quantity still runs; it just never shows a countdown, and this
-          is where that is visible before the drop rather than after. */}
-      <p className="mt-2 text-xs text-fg-subtle">
-        {/* Three states, because two of them were being reported as one: a
-            drop nobody had asked the shop about looked exactly like a drop
-            whose seller publishes no quantity. */}
-        {drop.stock_is_live
-          ? "Stock is confirmed by the shop; the page shows a live count."
-          : drop.stock_checked_at
-            ? "The shop gives no live count; the page shows the offer size, not a countdown."
-            : "Not checked with the shop yet. The answer arrives within a minute of publishing."}
-      </p>
-      <p className="mt-2 text-xs text-fg-subtle">
-        {/* People and emails, never one standing in for the other: one person
-            gets up to three reminders (a day, an hour, ten minutes before). */}
-        {drop.reminders} {drop.reminders === 1 ? "person" : "people"} asked for a reminder
-        {drop.reminder_emails_sent != null ? ` · ${drop.reminder_emails_sent} reminder ${drop.reminder_emails_sent === 1 ? "email" : "emails"} sent` : ""}
-        {" · "}told = people emailed the announcement, once each. <strong>Bought: not knowable here.</strong>{" "}
-        Purchases are only visible in the network report; search it for{" "}
-        <code className="rounded bg-surface-2 px-1 py-0.5 font-mono text-[0.7rem] text-fg">
-          {drop.click_label}
-        </code>
-      </p>
-
-      <details className="mt-3 rounded-xl bg-surface-2 p-3 text-xs text-fg-muted">
-        <summary className="cursor-pointer font-semibold text-fg">Email timing and send status</summary>
-        <p className="mt-2">Checks run every minute. Counts mean accepted by the email provider, not confirmed inbox delivery.</p>
-        <ul className="mt-2 space-y-1">
-          <li>Subscriber announcement: 72 hours to 1 hour before start · {drop.announced} accepted.</li>
-          <li>Requested day-before reminder: 36 to 12 hours before start · {drop.reminder_day_before_sent ?? 0} accepted.</li>
-          <li>Requested hour-before reminder: 90 to 20 minutes before start · {drop.reminder_hour_before_sent ?? 0} accepted.</li>
-          <li>Requested final reminder: within 10 minutes before start · {drop.reminders_sent ?? 0} accepted.</li>
-          <li>Live now: first 4 minutes, while the drop is open · {drop.live_now_sent ?? 0} accepted.</li>
-          <li>No automatic email after the drop ends.</li>
-        </ul>
-        <p className="mt-2">Only published drops send alerts. General subscribers receive the announcement and live-now email; the three earlier reminders require pressing Remind me for this drop.</p>
-      </details>
-
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          disabled={busy}
-          onClick={async () => {
-            setRowMessage("");
-            setPublishing(true);
-            try {
-              setRowMessage(await act(`/api/admin/live-drops/${drop.drop_key}/publish`, { published: !drop.published }));
-            } finally {
-              setPublishing(false);
-            }
-          }}
-          className="inline-flex h-9 cursor-pointer items-center rounded-full border border-border px-4 text-xs font-semibold text-fg transition-colors hover:bg-surface-2 disabled:opacity-55"
-        >
-          {publishing ? "Publishing…" : drop.published ? "Unpublish" : "Publish"}
-        </button>
-
-        {drop.published ? (
-          <>
-            {/* Stock is the one number worth correcting while a drop runs, and
-                setting it to zero is also how one is closed early and
-                honestly. */}
-            <input
-              type="number"
-              min={0}
-              max={drop.quantity_total}
-              value={stock}
-              onChange={(event) => setStock(event.target.value)}
-              aria-label={`Units left for ${drop.title}`}
-              className="h-9 w-20 rounded-full border border-border bg-surface-2 px-3 text-xs text-fg outline-none focus:border-border-strong"
-            />
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() =>
-                act(`/api/admin/live-drops/${drop.drop_key}/stock`, {
-                  quantity_remaining: Number(stock),
-                })
-              }
-              className="inline-flex h-9 cursor-pointer items-center rounded-full border border-border px-4 text-xs font-semibold text-fg transition-colors hover:bg-surface-2 disabled:opacity-55"
-            >
-              Set stock
-            </button>
-          </>
-        ) : null}
-
-        {(!drop.published || ["ended", "sold_out"].includes(drop.state)) && (
-          <button
-            type="button"
-            disabled={busy}
-            onClick={async () => {
-              if (!window.confirm(`Remove "${drop.title}" from the schedule and public page?`)) return;
-              setRowMessage(await act(`/api/admin/live-drops/${drop.drop_key}`, null, "DELETE"));
-            }}
-            className="inline-flex h-9 cursor-pointer items-center rounded-full border border-border px-4 text-xs font-semibold text-fg-muted transition-colors hover:bg-surface-2 disabled:opacity-55"
-          >
-            {everPublished ? "Delete drop" : "Delete draft"}
-          </button>
-        )}
-
-        <a
-          href={`/${drop.market}/live`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex h-9 items-center px-2 text-xs font-semibold text-fg-muted underline underline-offset-4 transition-colors hover:text-fg"
-        >
-          Open the page
-        </a>
-
-
-      </div>
-
-      {rowMessage && (
-        <p className="mt-3 text-xs font-semibold text-fg-muted" role="status">
-          {rowMessage}
-        </p>
-      )}
-
-      {/* What the drop shows, editable after it is published. The offer
-          itself — price, quantity, hour — is deliberately not here: people
-          were told those, and changing them quietly is a different act. */}
-      <div className="mt-3 grid gap-x-4 sm:grid-cols-2">
-        <MediaUpload adminKey={adminKey} kind="image" label="Product photo" value={media.image_url} onChange={(v) => setMedia({ ...media, image_url: v })} disabled={busy} />
-        <MediaUpload adminKey={adminKey} kind="image" label="Product in use - photo" value={media.secondary_image_url} onChange={(v) => setMedia({ ...media, secondary_image_url: v })} disabled={busy} />
-        <MediaUpload adminKey={adminKey} kind="video" label="Pre-show advertisement" hint="Optional. Ends automatically when the drop starts." value={media.preroll_video_url} onChange={(v) => setMedia({ ...media, preroll_video_url: v })} disabled={busy} />
-        <MediaUpload adminKey={adminKey} kind="video" label="Product footage" value={media.video_url} onChange={(v) => setMedia({ ...media, video_url: v })} disabled={busy} />
-        {/* Only shown to take one away: a presenter video replaces live the host
-            on the page, and an old drop may still carry one. */}
-        {media.stream_embed_url ? (
-          <MediaUpload adminKey={adminKey} kind="video" label="Presenter video (replaces live the host - remove it to use her)" value={media.stream_embed_url} onChange={(v) => setMedia({ ...media, stream_embed_url: v })} disabled={busy} />
-        ) : null}
-      </div>
-      <button
-        type="button"
-        disabled={busy}
-        onClick={async () =>
-          setRowMessage(
-            (await act(`/api/admin/live-drops/${drop.drop_key}/media`, media, "PATCH")) || "Saved.",
-          )
-        }
-        className="mt-2 inline-flex h-9 cursor-pointer items-center rounded-full border border-border px-4 text-xs font-semibold text-fg transition-colors hover:bg-surface-2 disabled:opacity-55"
-      >
-        Save media
-      </button>
-
-
-    </div>
-  );
 }
