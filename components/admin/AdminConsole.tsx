@@ -266,6 +266,7 @@ export function AdminConsole() {
             Admin key {unlocked ? "· unlocked" : ""}
           </span>
           <input
+            id="admin-access-key"
             type="password"
             autoComplete="off"
             value={adminKey}
