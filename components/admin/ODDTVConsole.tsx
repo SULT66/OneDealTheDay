@@ -8,6 +8,7 @@ type BroadcastStatus={
   controller_online:boolean;
   last_seen:string|null;
   detail:string;
+  show?:{id:number;start_at:string;qna_start_at:string|null;end_at:string;phase:"rendering"|"scheduled"|"live"|"questions"|"error"}|null;
 };
 
 type CatalogProduct={
@@ -34,6 +35,11 @@ export function ODDTVConsole({adminKey}:{adminKey:string}) {
   const [retryShowId,setRetryShowId]=useState<number|null>(null);
   const [broadcast,setBroadcast]=useState<BroadcastStatus|null>(null);
   const [controlBusy,setControlBusy]=useState(false);
+  const [scripted,setScripted]=useState(true);
+  const [script,setScript]=useState("");
+  const [scheduledAt,setScheduledAt]=useState("");
+  const [generating,setGenerating]=useState(false);
+  const productLimit=scripted?1:2;
 
   useEffect(()=>{
     try{
@@ -148,22 +154,38 @@ export function ODDTVConsole({adminKey}:{adminKey:string}) {
     ).slice(0,8);
   },[matches,query]);
 
-  function toggle(id:number) {
-    setSelected(current=>current.includes(id)?current.filter(value=>value!==id):current.length>=2?current:[...current,id]);
+  async function generateScript() {
+    if(!adminKey||selected.length!==1)return;
+    setGenerating(true);setNotice("");
+    try{
+      const response=await fetch("/api/admin/odd-tv/script",{
+        method:"POST",headers:{"Content-Type":"application/json","X-Admin-Key":adminKey},
+        body:JSON.stringify({market,product_id:selected[0]}),
+      });
+      const result=await response.json().catch(()=>({}));
+      if(!response.ok||typeof result.script!=="string")throw new Error(result.error||"Could not generate the script.");
+      setScript(result.script);
+    }catch(error){setNotice(error instanceof Error?error.message:"Could not generate the script.");}
+    finally{setGenerating(false);}
   }
 
   async function launch(manual:boolean) {
     if(!adminKey){setNotice("Enter the admin key above first.");return;}
     if(!broadcast){setNotice("Waiting for Diana’s controller status.");return;}
     if(!broadcast.controller_online){setNotice("Diana controller is offline. Start the stream and finish its one-time setup first.");return;}
-    if(manual&&selected.length!==2){setNotice("Choose exactly 2 products for the 30/30 pilot.");return;}
+    if(manual&&selected.length!==productLimit){setNotice("Choose the products required for this format.");return;}
+    const scheduled=scheduledAt?new Date(scheduledAt):null;
+    if(scripted&&scheduled&&(!Number.isFinite(scheduled.getTime())||scheduled.getTime()<=Date.now())){
+      setNotice("Choose a future start time or leave it blank.");return;
+    }
     setBusy(true);setNotice("");setShowId(null);setRetryShowId(null);
     let createdShowId:number|null=null;
     try{
       const headers={"Content-Type":"application/json","X-Admin-Key":adminKey};
       const create=await fetch("/api/admin/odd-tv/show",{
         method:"POST",headers,
-        body:JSON.stringify(manual?{market,product_ids:selected}:{market}),
+        body:JSON.stringify(scripted?{market,product_ids:selected,script,scheduled_at:scheduled?.toISOString()??null}
+          :manual?{market,product_ids:selected}:{market}),
       });
       const draft=await create.json().catch(()=>({}));
       if(!create.ok)throw new Error(draft.error||"Could not create the ODD Live show.");
@@ -176,7 +198,9 @@ export function ODDTVConsole({adminKey}:{adminKey:string}) {
       if(!start.ok)throw new Error(result.error||"Show was created but could not be started.");
       setRetryShowId(null);
       try{window.sessionStorage.removeItem("odd-live-pending-show");}catch{}
-      setNotice("Preparing the live host. The show goes on air when the opening is ready.");
+      setNotice(scripted?"Diana is rendering the full presentation. The show starts when ready and at or after the selected time."
+        :"Preparing the live host. The show goes on air when the opening is ready.");
+      await refreshBroadcast();
     }catch(error){
       if(createdShowId!==null&&error instanceof Error&&error.message==="DIANA_CONTROLLER_OFFLINE"){
         setRetryShowId(createdShowId);
@@ -213,8 +237,8 @@ export function ODDTVConsole({adminKey}:{adminKey:string}) {
   }
 
   const selectedProducts=selected.map(id=>products.find(product=>product.id===id)).filter((product):product is CatalogProduct=>Boolean(product));
-  function addProduct(id:number){setSelected(current=>current.includes(id)||current.length>=2?current:[...current,id]);}
-  function removeProduct(id:number){setSelected(current=>current.filter(value=>value!==id));}
+  function addProduct(id:number){setSelected(current=>current.includes(id)||current.length>=productLimit?current:[...current,id]);}
+  function removeProduct(id:number){setSelected(current=>current.filter(value=>value!==id));if(scripted)setScript("");}
 
   return (
     <section className="mt-6 rounded-card border border-border bg-surface p-6 sm:p-8">
@@ -235,10 +259,21 @@ export function ODDTVConsole({adminKey}:{adminKey:string}) {
           <button type="button" disabled={controlBusy||broadcast?.desired_state==="stopped"} onClick={()=>void setBroadcastState("stopped")} className="rounded-full border border-red-300 px-4 py-2 text-sm font-semibold text-red-700 disabled:opacity-50">Stop stream</button>
         </div>
       </div>
-      <p className="mt-2 text-sm text-fg-muted">Choose two products. The host builds each live segment from verified listing details and answers viewer questions from chat.</p>
+      {broadcast?.show?<p role="status" className="mt-3 text-sm font-semibold">
+        {broadcast.show.phase==="error"?"Diana could not render the presentation. Stop the stream before retrying."
+          :broadcast.show.phase==="rendering"?"Rendering the presentation on Diana"
+          :broadcast.show.phase==="scheduled"?`Scheduled for ${new Date(broadcast.show.start_at).toLocaleString()}`
+          :broadcast.show.phase==="questions"?"Live Q&A":"Presentation on air"}
+        {broadcast.show.qna_start_at?` · Q&A ${new Date(broadcast.show.qna_start_at).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"})}`:""}
+      </p>:null}
       <div className="mt-4 flex flex-wrap items-end gap-3">
+        <label className="block"><span className="text-xs font-semibold uppercase tracking-[0.1em] text-fg-subtle">Show format</span>
+          <select disabled={busy||generating} value={scripted?"scripted":"live"} onChange={event=>{setScripted(event.target.value==="scripted");setSelected([]);setScript("");}} className="mt-1 block h-10 rounded-full border border-border bg-surface-2 px-4 text-sm text-fg">
+            <option value="scripted">Scripted presentation + live Q&A</option><option value="live">Two-product live narration</option>
+          </select>
+        </label>
         <label className="block"><span className="text-xs font-semibold uppercase tracking-[0.1em] text-fg-subtle">Market</span>
-          <select value={market} onChange={event=>{setMarket(event.target.value);setSelected([]);}} className="mt-1 block h-10 rounded-full border border-border bg-surface-2 px-4 text-sm text-fg">
+          <select disabled={busy||generating} value={market} onChange={event=>{setMarket(event.target.value);setSelected([]);setScript("");}} className="mt-1 block h-10 rounded-full border border-border bg-surface-2 px-4 text-sm text-fg">
             <option value="us">United States</option><option value="ca">Canada</option><option value="uk">United Kingdom</option><option value="de">Germany</option><option value="fr">France</option>
           </select>
         </label>
@@ -250,21 +285,35 @@ export function ODDTVConsole({adminKey}:{adminKey:string}) {
         {visible.map(product=>{const index=selected.indexOf(product.id);return <div key={product.id} className="flex items-center gap-3 border-b border-border p-3 last:border-0">
           {product.image_url?<img src={product.image_url} alt="" className="h-11 w-11 rounded-lg bg-white object-contain" loading="lazy"/>:null}
           <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{product.title}</span><span className="text-xs text-fg-muted">{product.brand||product.retailer_name||"Published product"} · {product.currency||"USD"} {product.price??product.current_price??""}</span></span>
-          {index>=0?<button type="button" onClick={()=>removeProduct(product.id)} className="rounded-full border border-border px-3 py-1.5 text-xs">Remove</button>:<button type="button" disabled={selected.length>=2||busy} onClick={()=>addProduct(product.id)} className="rounded-full bg-lime px-3 py-1.5 text-xs font-bold text-ink disabled:opacity-50">Add product {selected.length+1}</button>}
+          {index>=0?<button type="button" disabled={busy||generating} onClick={()=>removeProduct(product.id)} className="rounded-full border border-border px-3 py-1.5 text-xs">Remove</button>:<button type="button" disabled={selected.length>=productLimit||busy||generating} onClick={()=>addProduct(product.id)} className="rounded-full bg-lime px-3 py-1.5 text-xs font-bold text-ink disabled:opacity-50">Add product {selected.length+1}</button>}
         </div>;})}
         {visible.length===0?<p className="p-4 text-sm text-fg-muted">{productSearchBusy?"Searching products…":query.trim().length<2?"Enter at least 2 characters to search.":"No published products match."}</p>:null}
       </div>:null}
       <div className="mt-4 grid gap-3 md:grid-cols-2">
-        {[0,1].map(index=>{const product=selectedProducts[index];return <div key={index} className="rounded-xl border border-border bg-surface-2 p-4">
-          <p className="text-xs font-bold uppercase tracking-wider text-fg-subtle">Product {index+1} · minutes {index===0?"00–30":"30–60"}</p>
-          {product?<><div className="mt-2 flex items-center gap-3">{product.image_url?<img src={product.image_url} alt="" className="h-12 w-12 rounded-lg bg-white object-contain"/>:null}<p className="min-w-0 flex-1 text-sm font-semibold">{product.title}</p><button type="button" disabled={busy} onClick={()=>removeProduct(product.id)} className="text-xs underline">Remove</button></div>
+        {(scripted?[0]:[0,1]).map(index=>{const product=selectedProducts[index];return <div key={index} className="rounded-xl border border-border bg-surface-2 p-4">
+          <p className="text-xs font-bold uppercase tracking-wider text-fg-subtle">{scripted?"Featured product":`Product ${index+1} · minutes ${index===0?"00–30":"30–60"}`}</p>
+          {product?<><div className="mt-2 flex items-center gap-3">{product.image_url?<img src={product.image_url} alt="" className="h-12 w-12 rounded-lg bg-white object-contain"/>:null}<p className="min-w-0 flex-1 text-sm font-semibold">{product.title}</p><button type="button" disabled={busy||generating} onClick={()=>removeProduct(product.id)} className="text-xs underline">Remove</button></div>
           </>:<p className="mt-3 text-sm text-fg-muted">Search above and add a product here.</p>}
         </div>;})}
       </div>
+      {scripted?<div className="mt-4 space-y-3 rounded-xl border border-border p-4">
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="block"><span className="text-sm font-semibold">Start time (local)</span>
+            <input type="datetime-local" value={scheduledAt} disabled={busy} onChange={event=>setScheduledAt(event.target.value)} className="mt-1 block rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm"/>
+          </label>
+          <span className="text-sm text-fg-muted">Leave blank to start when the video is ready. The final 10 minutes are live Q&A.</span>
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <label htmlFor="odd-tv-script" className="text-sm font-semibold">Chloe’s script</label>
+          <button type="button" disabled={busy||generating||selected.length!==1} onClick={()=>void generateScript()} className="rounded-full border border-border px-4 py-2 text-sm font-semibold disabled:opacity-50">{generating?"Generating…":script?"Regenerate script":"Generate with AI"}</button>
+        </div>
+        <textarea id="odd-tv-script" rows={8} maxLength={2400} disabled={busy||generating} value={script} onChange={event=>setScript(event.target.value)} className="w-full rounded-lg border border-border bg-surface-2 p-3 text-sm" placeholder="Generate a draft or paste your own script."/>
+        <p className="text-xs text-fg-muted">{script.length}/2400 characters</p>
+      </div>:null}
       <div className="mt-4 flex flex-wrap items-center gap-3">
-        <button type="button" disabled={busy||selected.length!==2||retryShowId!==null} onClick={()=>void launch(true)} className="rounded-full bg-lime px-5 py-2.5 text-sm font-bold text-ink disabled:opacity-50">{busy?"Preparing show…":retryShowId!==null?"Show "+retryShowId+" saved":"Save products and start"}</button>
+        <button type="button" disabled={busy||generating||selected.length!==productLimit||(scripted&&script.trim().length<20)||retryShowId!==null||Boolean(broadcast?.show)} onClick={()=>void launch(true)} className="rounded-full bg-lime px-5 py-2.5 text-sm font-bold text-ink disabled:opacity-50">{busy?"Preparing show…":retryShowId!==null?"Show "+retryShowId+" saved":scripted?(scheduledAt?"Schedule show":"Prepare and start show"):"Save products and start"}</button>
         {retryShowId!==null?<button type="button" disabled={busy} onClick={()=>void retryStart(retryShowId)} className="rounded-full border border-border px-4 py-2.5 text-sm font-semibold text-fg disabled:opacity-50">Retry Show {retryShowId}</button>:null}
-        <span className="text-sm text-fg-muted">{selected.length}/2 products selected</span>
+        <span className="text-sm text-fg-muted">{selected.length}/{productLimit} products selected</span>
       </div>
       {notice?<p role="status" className="mt-3 text-sm text-fg-muted">{notice}{showId?(" · Show "+showId):""}</p>:null}
     </section>

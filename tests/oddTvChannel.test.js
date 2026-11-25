@@ -63,3 +63,23 @@ test("stale product price is not spoken as current",()=>{
  assert.equal(p.price,null);
  db.close();
 });
+
+test("scripted broadcasts wait for media, honor the schedule, and have ten minutes of live Q&A",()=>{
+ const db=setup();
+ const scheduled=new Date(time+45*60000).toISOString();
+ const id=tv.createShow(db,{productIds:[1],scriptText:"A finished presentation for one item.",scheduledAt:scheduled,now:time});
+ assert.equal(tv.startShow(db,id,{now:time}).state,"preparing");
+ const work=tv.workerShow(db,"us",time);
+ assert.equal(work.show.id,id);
+ assert.equal(tv.publicShow(db,"us",Date.parse(scheduled)),null);
+ const timing=tv.prepareScriptedShow(db,work.show,74000,time+60000);
+ const questionsStart=Date.parse(timing.qna_start_at);
+ assert.equal(timing.start_at,scheduled);
+ assert.equal(questionsStart-Date.parse(scheduled),74000);
+ assert.equal(Date.parse(timing.end_at)-questionsStart,600000);
+ assert.equal(tv.publicShow(db,"us",Date.parse(scheduled)).product.id,1);
+ assert.throws(()=>tv.postQuestion(db,{showId:id,sessionId:"viewer",text:"How large is it?",now:questionsStart-1}),/QUESTION_WINDOW_NOT_OPEN/);
+ assert.ok(tv.postQuestion(db,{showId:id,sessionId:"viewer",text:"How large is it?",now:questionsStart}));
+ assert.equal(tv.publicShow(db,"us",Date.parse(timing.end_at)),null);
+ db.close();
+});
