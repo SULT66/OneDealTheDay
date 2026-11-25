@@ -5,13 +5,13 @@ function words(text) {
     .toLowerCase().match(/[\p{L}\p{N}]+/gu) || [];
 }
 
-function wordMatch(token, word, allowTypos, allowPartialTypo) {
-  if (word === token) return 6;
-  if (word.startsWith(token)) return 5;
-  if (allowTypos && token.length >= 4 && /\p{L}/u.test(token) && !/\p{N}/u.test(token)) {
-    if (editDistance(token, word, 1) === 1) return 4;
-    if (allowPartialTypo && word.length > token.length && token[0] === word[0] &&
-        editDistance(token, word.slice(0, token.length), 1) === 1) return 3;
+function wordMatch(token, word, isSingleWordBrand = false) {
+  if (word === token) return 8;
+  if (word.startsWith(token)) return isSingleWordBrand ? 7 : 5;
+  if (token.length >= 4 && /^\p{L}+$/u.test(token)) {
+    if (editDistance(token, word, 1) === 1) return isSingleWordBrand ? 6 : 4;
+    if (isSingleWordBrand && word.length === token.length + 1 && token[0] === word[0] &&
+        editDistance(token, word.slice(0, token.length), 1) === 1) return 6;
   }
   return word.includes(token) ? 1 : 0;
 }
@@ -21,14 +21,17 @@ function tokenMatcher(token) {
   const brandMatches = new Map();
 
   return function match(productWords, brandWords, storeWords) {
-    for (const word of brandWords) {
-      if (!brandMatches.has(word)) brandMatches.set(word, wordMatch(token, word, true, true));
+    const brandWord = brandWords.length === 1 ? brandWords[0] : null;
+    if (brandWord && !brandMatches.has(brandWord)) {
+      brandMatches.set(brandWord, wordMatch(token, brandWord, true));
     }
-    for (const word of productWords) {
-      if (!productMatches.has(word)) productMatches.set(word, wordMatch(token, word, true, false));
+    const listingWords = new Set([...productWords, ...brandWords]);
+    for (const word of listingWords) {
+      if (!productMatches.has(word)) productMatches.set(word, wordMatch(token, word));
     }
-    return Math.max(0, ...brandWords.map(word => brandMatches.get(word)),
+    return Math.max(brandMatches.get(brandWord) || 0,
       ...productWords.map(word => productMatches.get(word)),
+      ...brandWords.map(word => Math.max(0, productMatches.get(word) - 1)),
       storeWords.some(word => word.includes(token)) ? 1 : 0);
   };
 }

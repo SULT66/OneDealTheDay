@@ -111,7 +111,7 @@ test("product picker ranks names above stores and tolerates typos across brands"
     VALUES (?,?,?,?,?,?,?,?)
   `);
   insert.run(1, "us", "published", "Nano Portable Espresso Machine", "OutIn", "OutIn", 10, "approved");
-  insert.run(2, "us", "published", "Paper Shredder", "", "Fast Premium Outlet", 100, "approved");
+  insert.run(2, "us", "published", "Paper Shredder", "Fast Premium Outlet", "eBay", 100, "approved");
   insert.run(3, "us", "published", "Outdoor Power Outlet", "", "Example", 80, "approved");
   insert.run(4, "us", "published", "Wireless Earbuds", "Sony", "Example", 10, "approved");
   insert.run(5, "ca", "published", "Nano Portable Espresso Machine", "OutIn", "OutIn", 100, "approved");
@@ -121,7 +121,7 @@ test("product picker ranks names above stores and tolerates typos across brands"
   const find = query => searchOddTvProducts(db, { market:"us", query, sourceFilter:"source='approved'" }).map(row => row.id);
   assert.deepEqual(find("outin nano"), [1]);
   assert.deepEqual(find("outln nano"), [1]);
-  assert.deepEqual(find("outl"), [3, 1, 2]);
+  assert.deepEqual(find("outl"), [1, 3, 2]);
   assert.deepEqual(find("outlet"), [3, 2]);
   assert.deepEqual(find("sonny wireless earbdus"), [4]);
   assert.deepEqual(find("fast premium"), [2]);
