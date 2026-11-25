@@ -96,3 +96,36 @@ test("configured runtime includes exactly ten minutes of questions and rejects a
  assert.throws(()=>tv.createShow(db,{productIds:[1],scriptText:"A longer edited script for a new show.",scriptTarget:10,now:time}),/SCRIPT_SHOW_DURATION_MUST_BE_11_TO_30_MINUTES/);
  db.close();
 });
+
+test("product picker ranks names above stores and tolerates typos across brands", () => {
+ const { searchOddTvProducts } = require("../src/oddTvProductSearch");
+ const db = new Database(":memory:");
+ try {
+  db.exec(`CREATE TABLE products(
+    id INTEGER PRIMARY KEY, market TEXT, status TEXT, title TEXT, brand TEXT,
+    retailer_name TEXT, current_price REAL, currency TEXT, image_url TEXT,
+    ranking_score REAL, score REAL, updated_at TEXT, source TEXT
+  )`);
+  const insert = db.prepare(`
+    INSERT INTO products (id,market,status,title,brand,retailer_name,ranking_score,source)
+    VALUES (?,?,?,?,?,?,?,?)
+  `);
+  insert.run(1, "us", "published", "Nano Portable Espresso Machine", "OutIn", "OutIn", 10, "approved");
+  insert.run(2, "us", "published", "Paper Shredder", "", "Fast Premium Outlet", 100, "approved");
+  insert.run(3, "us", "published", "Outdoor Power Outlet", "", "Example", 80, "approved");
+  insert.run(4, "us", "published", "Wireless Earbuds", "Sony", "Example", 10, "approved");
+  insert.run(5, "ca", "published", "Nano Portable Espresso Machine", "OutIn", "OutIn", 100, "approved");
+  insert.run(6, "us", "draft", "Nano Portable Espresso Machine", "OutIn", "OutIn", 100, "approved");
+  insert.run(7, "us", "published", "Nano Portable Espresso Machine", "OutIn", "OutIn", 100, "hidden");
+
+  const find = query => searchOddTvProducts(db, { market:"us", query, sourceFilter:"source='approved'" }).map(row => row.id);
+  assert.deepEqual(find("outin nano"), [1]);
+  assert.deepEqual(find("outln nano"), [1]);
+  assert.deepEqual(find("outl"), [3, 1, 2]);
+  assert.deepEqual(find("outlet"), [3, 2]);
+  assert.deepEqual(find("sonny wireless earbdus"), [4]);
+  assert.deepEqual(find("fast premium"), [2]);
+ } finally {
+  db.close();
+ }
+});
