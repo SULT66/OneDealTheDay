@@ -14,15 +14,15 @@ assert(!/LiveBroadcast|TavusHost|\/api\/live\/host/.test(panel),
   "the Live Drop page still loads the old hosted-presenter flow");
 assert(/ODDTVConsole/.test(admin),
   "the admin does not expose the self-hosted ODD Live TV console");
-assert(/Choose exactly 2 products/.test(consoleSource),
-  "the two-product pilot is not enforced in the admin");
-assert(/scripts:selected\.map\(id=>scripts\[id\]||""\)/.test(consoleSource),
-  "the product talking points are not sent with the show");
-assert(/30\/30 pilot/.test(consoleSource),
-  "the admin does not identify the two 30-minute product blocks");
+assert(/productLimit=scripted\?1:2/.test(consoleSource),
+  "the admin must select one scripted product or two live products");
+assert(/product_ids:selected,script,scheduled_at:/.test(consoleSource),
+  "the admin must submit the edited script and start time");
+assert(server.includes('app.post("/api/admin/odd-tv/script",admin,'),
+  "script generation must require the admin key");
 assert(!packageJson.dependencies?.["@daily-co/daily-js"],
   "the old hosted-video client dependency remains installed");
 assert(!/\/api\/admin\/live-host|\/api\/admin\/live-drops\/[^\s]*\/script/.test(server),
   "legacy presenter or presenter-script admin routes remain");
 
-console.log("Live Drop stays separate; ODD Live TV admin requires two products and sends their notes.");
+console.log("Live Drop stays separate; ODD Live TV submits its script and schedule through admin.");

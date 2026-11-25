@@ -17,6 +17,7 @@ const SHOW_MINUTES=60;
 const PILOT_MINUTES=6;
 const PILOT_QNA_START_SECONDS=180;
 const PILOT_MAX_QUESTIONS=5;
+const SCRIPT_QNA_MS=10*60*1000;
 function init(db) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS odd_tv_shows(
@@ -72,11 +73,15 @@ function init(db) {
     db.exec("ALTER TABLE odd_tv_shows ADD COLUMN duration_minutes INTEGER NOT NULL DEFAULT 60");
   if(!db.pragma("table_info(odd_tv_shows)").some(column=>column.name==="pilot_mode"))
     db.exec("ALTER TABLE odd_tv_shows ADD COLUMN pilot_mode INTEGER NOT NULL DEFAULT 0");
+  const columns=new Set(db.pragma("table_info(odd_tv_shows)").map(column=>column.name));
+  for(const column of ["script_text","scheduled_at","qna_start_at","script_error"]){
+    if(!columns.has(column))db.exec(`ALTER TABLE odd_tv_shows ADD COLUMN ${column} TEXT`);
+  }
 }
-function validateProducts(db,market,ids,{pilotMode=false}={}) {
-  const expected=pilotMode?1:2;
+function validateProducts(db,market,ids,{pilotMode=false,scripted=false}={}) {
+  const expected=pilotMode||scripted?1:2;
   if(!Array.isArray(ids)||ids.length!==expected||new Set(ids).size!==ids.length||
-     ids.some(id=>!Number.isSafeInteger(id)||id<=0)) throw new Error(pilotMode?"PILOT_REQUIRES_EXACTLY_ONE_PRODUCT_ID":"REQUIRE_EXACTLY_TWO_UNIQUE_PRODUCT_IDS");
+     ids.some(id=>!Number.isSafeInteger(id)||id<=0)) throw new Error(scripted?"SCRIPT_REQUIRES_ONE_PRODUCT":pilotMode?"PILOT_REQUIRES_EXACTLY_ONE_PRODUCT_ID":"REQUIRE_EXACTLY_TWO_UNIQUE_PRODUCT_IDS");
   const stmt=db.prepare("SELECT id FROM products WHERE id=? AND market=? AND status='published'");
   if(ids.some(id=>!stmt.get(id,market)))throw new Error("PRODUCT_NOT_PUBLISHED_IN_MARKET");
   return ids;
@@ -114,16 +119,21 @@ function pickProducts(db,market) {
   if(selected.length<2)throw new Error("NOT_ENOUGH_ELIGIBLE_PRODUCTS");
   return selected;
 }
-function createShow(db,{market="us",productIds,pilotMode=false,now=Date.now()}) {
+function createShow(db,{market="us",productIds,pilotMode=false,scriptText=null,scheduledAt=null,now=Date.now()}) {
   if(typeof pilotMode!=="boolean")throw new Error("INVALID_PILOT_MODE");
-  const ids=validateProducts(db,market,productIds==null?pickProducts(db,market):productIds,{pilotMode});
+  const scripted=scriptText!==null;
+  if(scripted&&(pilotMode||typeof scriptText!=="string"||scriptText.trim().length<20||scriptText.length>2400))
+    throw new Error("SCRIPT_MUST_BE_20_TO_2400_CHARACTERS");
+  if(scheduledAt!==null&&(!scripted||typeof scheduledAt!=="string"||!Number.isFinite(Date.parse(scheduledAt))||Date.parse(scheduledAt)<now))
+    throw new Error("START_TIME_MUST_BE_IN_THE_FUTURE");
+  const ids=validateProducts(db,market,productIds==null&&!scripted?pickProducts(db,market):productIds,{pilotMode,scripted});
   const existing=db.prepare("SELECT id FROM odd_tv_shows WHERE status='live' AND end_at>? LIMIT 1")
     .get(new Date(now).toISOString());
   if(existing)throw new Error("ANOTHER_SHOW_ACTIVE");
   const durationMinutes=pilotMode?PILOT_MINUTES:SHOW_MINUTES;
   const result=db.prepare(
-    "INSERT INTO odd_tv_shows(market,product_ids,duration_minutes,pilot_mode,status,created_at) VALUES(?,?,?,?, 'draft',?)"
-  ).run(market,JSON.stringify(ids),durationMinutes,pilotMode?1:0,new Date(now).toISOString());
+    "INSERT INTO odd_tv_shows(market,product_ids,duration_minutes,pilot_mode,status,created_at,script_text,scheduled_at) VALUES(?,?,?,?, 'draft',?,?,?)"
+  ).run(market,JSON.stringify(ids),durationMinutes,pilotMode?1:0,new Date(now).toISOString(),scripted?scriptText.trim():null,scheduledAt);
   return Number(result.lastInsertRowid);
 }
 function startShow(db,id,{now=Date.now(),warmupMs=0}={}) {
@@ -132,7 +142,9 @@ function startShow(db,id,{now=Date.now(),warmupMs=0}={}) {
   const active=db.prepare("SELECT id FROM odd_tv_shows WHERE status='live' AND end_at>? LIMIT 1")
     .get(new Date(now).toISOString());
   if(active)throw new Error("ANOTHER_SHOW_ACTIVE");
-  const start=now+Math.max(0,Math.min(10*60*1000,Number(warmupMs)||0));
+  const start=show.script_text
+    ? Math.max(now+10000,Date.parse(show.scheduled_at||"")||0)
+    : now+Math.max(0,Math.min(10*60*1000,Number(warmupMs)||0));
   const durationMinutes=Math.max(1,Math.min(SHOW_MINUTES,Number(show.duration_minutes)||SHOW_MINUTES));
   const end=start+durationMinutes*60000;
   const result=db.prepare(
@@ -141,9 +153,22 @@ function startShow(db,id,{now=Date.now(),warmupMs=0}={}) {
   if(result.changes!==1)throw new Error("SHOW_START_RACE");
   return {show_id:id,state:start>now?"preparing":"live",start_at:new Date(start).toISOString(),end_at:new Date(end).toISOString()};
 }
+function prepareScriptedShow(db,show,durationMs,now=Date.now()) {
+  if(!show.script_text||show.status!=="live"||!Number.isInteger(durationMs)||durationMs<1000||durationMs>5*60*1000)
+    throw new Error("INVALID_SCRIPT_PRESENTATION_DURATION");
+  if(show.qna_start_at)return {start_at:show.start_at,qna_start_at:show.qna_start_at,end_at:show.end_at};
+  const start=Math.max(now+10000,Date.parse(show.scheduled_at||"")||0);
+  const startAt=new Date(start).toISOString();
+  const qnaAt=new Date(start+durationMs).toISOString();
+  const endAt=new Date(start+durationMs+SCRIPT_QNA_MS).toISOString();
+  const result=db.prepare("UPDATE odd_tv_shows SET start_at=?,qna_start_at=?,end_at=? WHERE id=? AND status='live' AND qna_start_at IS NULL")
+    .run(startAt,qnaAt,endAt,show.id);
+  if(result.changes!==1)throw new Error("SHOW_PREPARATION_RACE");
+  return {start_at:startAt,qna_start_at:qnaAt,end_at:endAt};
+}
 function currentShow(db,market="us",now=Date.now()) {
   return db.prepare(
-    "SELECT * FROM odd_tv_shows WHERE market=? AND status='live' AND start_at<=? AND end_at>? ORDER BY id DESC LIMIT 1"
+    "SELECT * FROM odd_tv_shows WHERE market=? AND status='live' AND start_at<=? AND end_at>? AND (script_text IS NULL OR qna_start_at IS NOT NULL) ORDER BY id DESC LIMIT 1"
   ).get(market,new Date(now).toISOString(),new Date(now).toISOString())||null;
 }
 function workerShow(db,market="us",now=Date.now(),lookaheadMs=10*60*1000) {
@@ -151,7 +176,7 @@ function workerShow(db,market="us",now=Date.now(),lookaheadMs=10*60*1000) {
   if(live)return {show:live,opening:false};
   const nowIso=new Date(now).toISOString();
   const upcoming=db.prepare(
-    "SELECT * FROM odd_tv_shows WHERE market=? AND status='live' AND start_at>? AND start_at<=? AND end_at>? ORDER BY id DESC LIMIT 1"
+    "SELECT * FROM odd_tv_shows WHERE market=? AND status='live' AND ((script_text IS NOT NULL AND qna_start_at IS NULL) OR (start_at>? AND start_at<=?)) AND end_at>? ORDER BY id DESC LIMIT 1"
   ).get(market,nowIso,new Date(now+lookaheadMs).toISOString(),nowIso)||null;
   return upcoming?{show:upcoming,opening:true}:null;
 }
@@ -195,6 +220,7 @@ function publicShow(db,market,now=Date.now()) {
   return {
     show_id:show.id,state:"live",market:show.market,
     start_at:show.start_at,end_at:show.end_at,
+    qna_start_at:show.qna_start_at||null,
     seconds_remaining:Math.max(0,Math.ceil((Date.parse(show.end_at)-now)/1000)),
     viewer_count:activeViewerCount(db,show.id,now),
     server_now:new Date(now).toISOString(),
@@ -206,10 +232,12 @@ function postQuestion(db,{showId,sessionId,text,productId=null,now=Date.now()}) 
   const checked=chatMessageInput(text);
   if(checked.error)throw new Error(checked.error);
   if(!sessionId||sessionId.length>128)throw new Error("INVALID_SESSION");
-  const show=db.prepare("SELECT product_ids,start_at,end_at,pilot_mode FROM odd_tv_shows WHERE id=?").get(showId);
+  const show=db.prepare("SELECT product_ids,start_at,end_at,pilot_mode,script_text,qna_start_at FROM odd_tv_shows WHERE id=?").get(showId);
   if(!show)throw new Error("SHOW_NOT_FOUND");
   if(productId!==null&&!JSON.parse(show.product_ids).includes(Number(productId)))
     throw new Error("INVALID_PRODUCT_FOR_SHOW");
+  if(show.script_text&&(!show.qna_start_at||now<Date.parse(show.qna_start_at)))throw new Error("QUESTION_WINDOW_NOT_OPEN");
+  if(show.script_text&&now>=Date.parse(show.end_at))throw new Error("SHOW_ENDED");
   if(show.pilot_mode){
     const startsAt=Date.parse(show.start_at||"");
     if(!Number.isFinite(startsAt)||now<startsAt+PILOT_QNA_START_SECONDS*1000)
@@ -305,4 +333,4 @@ function markSent(db,showId,questionIds,now=Date.now()) {
     })();
   } catch { return false; }
 }
-module.exports={SHOW_MINUTES,init,validateProducts,pickProducts,createShow,startShow,currentShow,workerShow,currentProduct,productById,publicShow,activeViewerCount,postQuestion,messages,nextQuestion,nextQuestions,productPresentationDue,markProductPresented,setBroadcastDesired,getBroadcastControl,updateBroadcastHeartbeat,markSent};
+module.exports={SHOW_MINUTES,init,validateProducts,pickProducts,createShow,startShow,prepareScriptedShow,currentShow,workerShow,currentProduct,productById,publicShow,activeViewerCount,postQuestion,messages,nextQuestion,nextQuestions,productPresentationDue,markProductPresented,setBroadcastDesired,getBroadcastControl,updateBroadcastHeartbeat,markSent};

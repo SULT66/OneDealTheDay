@@ -12,6 +12,7 @@ type Product = {
 type Show = {
   show_id:number;state:string;product_index:number;product_count:number;
   start_at:string;end_at:string;seconds_remaining:number;viewer_count:number;
+  qna_start_at?:string|null;
   product:Product|null;
 };
 type ChatLine = {id:number;author:string;text:string;created_at:string;status:string};
@@ -89,7 +90,7 @@ export function ODDLiveTvExperience({
   async function sendQuestion(event:FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const text=draft.trim();
-    if(!show||text.length<2||text.length>200||sending)return;
+    if(!show||questionsPending||text.length<2||text.length>200||sending)return;
     setSending(true);setNotice("");
     try{
       const res=await fetch("/api/odd-tv/chat",{
@@ -110,6 +111,7 @@ export function ODDLiveTvExperience({
     :null;
 
   const live=show?.state==="live";
+  const questionsPending=Boolean(show?.qna_start_at&&Date.now()<Date.parse(show.qna_start_at));
   return (
     <div className={[styles.experience,compact?styles.compact:""].join(" ")}>
       <div className={styles.stage}>
@@ -144,7 +146,7 @@ export function ODDLiveTvExperience({
           </>:<div className={styles.emptyProduct}><LiveIcon name="bag"/><h3>Your next great find</h3><p>Featured product details will appear here when the show starts.</p></div>}
         </section>:null}
         <section className={styles.chat} aria-label="ODD Live audience chat">
-          <div className={styles.chatHeading}><div><h3>Ask the host <span>Q&A</span></h3><p>Ask now — the host answers while the show is live</p></div>{compact?<button type="button" className={styles.closeChat} onClick={onChatToggle} aria-label="Close chat">×</button>:<LiveIcon name="chat"/>}</div>
+          <div className={styles.chatHeading}><div><h3>Ask the host <span>Q&A</span></h3><p>{questionsPending?"Questions open after the presentation for 10 minutes.":"Ask now — the host answers while the show is live"}</p></div>{compact?<button type="button" className={styles.closeChat} onClick={onChatToggle} aria-label="Close chat">×</button>:<LiveIcon name="chat"/>}</div>
           <div role="log" aria-live="polite" className={styles.messages}>
             {messages.length===0?<div className={styles.emptyChat}><p>Curious about this find?</p><span>Ask a question and join the conversation.</span></div>:messages.slice(-8).map(msg=>
               <div key={msg.id} className={styles.message}><span className={styles.avatar} aria-hidden="true">{msg.author.slice(0,1).toUpperCase()}</span><div><p><strong>{msg.author}</strong><span>{msg.status==="sent"?"Answered":msg.status==="queued"?"Queued":""}</span></p><p>{msg.text}</p></div></div>
@@ -152,8 +154,8 @@ export function ODDLiveTvExperience({
           </div>
           <form onSubmit={sendQuestion} className={styles.questionForm}>
             <label htmlFor="odd-tv-question" className="sr-only">Your product question</label>
-            <input id="odd-tv-question" placeholder={show?"Ask about this find…":"Chat opens when the show starts"} maxLength={200} value={draft} disabled={!show||sending} onChange={event=>setDraft(event.target.value)}/>
-            <button disabled={!show||sending||draft.trim().length<2} type="submit" aria-label="Send question">{sending?"…":<LiveIcon name="send"/>}</button>
+            <input id="odd-tv-question" placeholder={questionsPending?"Chat opens after the presentation":show?"Ask about this find…":"Chat opens when the show starts"} maxLength={200} value={draft} disabled={!show||questionsPending||sending} onChange={event=>setDraft(event.target.value)}/>
+            <button disabled={!show||questionsPending||sending||draft.trim().length<2} type="submit" aria-label="Send question">{sending?"…":<LiveIcon name="send"/>}</button>
           </form>
           {notice?<p role="status" className={styles.notice}>{notice}</p>:null}
         </section>
