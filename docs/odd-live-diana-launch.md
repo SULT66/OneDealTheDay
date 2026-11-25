@@ -6,7 +6,7 @@ ODD Live TV is a self-hosted, one-hour show. The admin selects two published pro
 
 - Uses the Diana WSL2 machine and RTX 5070 Ti to publish a continuous live feed.
 - Presents product 1 for minutes 0–30 and product 2 for minutes 30–60.
-- Generates speech locally through Ollama and renders matching lip-sync with MuseTalk during the show.
+- Generates presenter text on the OneDailyDrop server through OpenAI, synthesizes the voice with Azure Speech, and renders matching lip-sync with MuseTalk on Diana.
 - Answers questions from OneDailyDrop chat on the next available host turn.
 - Does not loop prerecorded idle-motion MP4s. The broadcaster holds the avatar idle frame while the next spoken segment is rendered.
 - Shows the live player, current product, chat, show timer, and viewer count on the public experience.
@@ -17,10 +17,11 @@ The browser player starts muted so autoplay works reliably. Viewers enable sound
 
 Use the existing WSL2 Ubuntu installation, Conda environment `odd-ai-test`, MuseTalk v1.5, MediaMTX, and RTX 5070 Ti. Do not overwrite the MuseTalk fork. The worker discovers an existing local avatar unless `ODD_LIVE_AVATAR_SOURCE` and `ODD_LIVE_AVATAR_ID` explicitly select one.
 
-Credentials stay only on Diana:
+Configure `OPENAI_API_KEY` on the OneDailyDrop server. The server uses `ODD_LIVE_AI_MODEL` when set and defaults to `gpt-4.1-mini`. When the model is unavailable, the server can return a short scripted fallback.
+
+Diana uses these private settings:
 
 - `~/.config/odd-live/worker.env`: `ODD_LIVE_API_BASE=https://www.onedailydrop.com` and `ODD_LIVE_WORKER_KEY`.
-- `~/.config/odd-live/llm.env`: local Ollama base URL and model name; the worker uses `/api/chat` with thinking disabled.
 - `~/.config/odd-live/speech.env`: `AZURE_SPEECH_KEY` and `AZURE_SPEECH_REGION`; permissions must be `chmod 600`.
 - Voice defaults to `en-US-SaraNeural`; set `ODD_LIVE_VOICE` only if you have verified that voice on the workstation.
 
