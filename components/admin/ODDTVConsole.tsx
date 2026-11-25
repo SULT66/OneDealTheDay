@@ -154,8 +154,6 @@ export function ODDTVConsole({adminKey}:{adminKey:string}) {
     }finally{setControlBusy(false);}
   }
 
-  const visible=matches.slice(0,8);
-
   async function generateScript() {
     if(!adminKey||selected.length!==1||!validDuration)return;
     setGenerating(true);setNotice("");
@@ -288,12 +286,12 @@ export function ODDTVConsole({adminKey}:{adminKey:string}) {
       </div>
       {!adminKey?<p className="mt-3 text-sm text-fg-muted"><button type="button" onClick={()=>document.getElementById("admin-access-key")?.focus()} className="font-semibold underline">Enter the admin key</button> to search published products.</p>:null}
       {adminKey&&query.trim()?<div className="mt-3 max-h-56 overflow-y-auto rounded-xl border border-border" aria-busy={productSearchBusy}>
-        {visible.map(product=>{const index=selected.indexOf(product.id);return <div key={product.id} className="flex items-center gap-3 border-b border-border p-3 last:border-0">
+        {matches.map(product=>{const index=selected.indexOf(product.id);return <div key={product.id} className="flex items-center gap-3 border-b border-border p-3 last:border-0">
           {product.image_url?<img src={product.image_url} alt="" className="h-11 w-11 rounded-lg bg-white object-contain" loading="lazy"/>:null}
           <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{product.title}</span><span className="text-xs text-fg-muted">{product.brand||product.retailer_name||"Published product"} · {product.currency||"USD"} {product.price??product.current_price??""}</span></span>
           {index>=0?<button type="button" disabled={busy||generating} onClick={()=>removeProduct(product.id)} className="rounded-full border border-border px-3 py-1.5 text-xs">Remove</button>:<button type="button" disabled={selected.length>=productLimit||busy||generating} onClick={()=>addProduct(product.id)} className="rounded-full bg-lime px-3 py-1.5 text-xs font-bold text-ink disabled:opacity-50">Add product {selected.length+1}</button>}
         </div>;})}
-        {visible.length===0?<p role="status" className="p-4 text-sm text-fg-muted">{productSearchBusy?"Searching products…":productSearchError|| (query.trim().length<2?"Enter at least 2 characters to search.":"No published products match in this market.")}</p>:null}
+        {matches.length===0?<p role="status" className="p-4 text-sm text-fg-muted">{productSearchBusy?"Searching products…":productSearchError|| (query.trim().length<2?"Enter at least 2 characters to search.":"No published products match in this market.")}</p>:null}
       </div>:null}
       <div className="mt-4 grid gap-3 md:grid-cols-2">
         {(scripted?[0]:[0,1]).map(index=>{const product=selectedProducts[index];return <div key={index} className="rounded-xl border border-border bg-surface-2 p-4">

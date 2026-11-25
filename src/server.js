@@ -51,6 +51,7 @@ const { PUBLIC_CATEGORIES, canonicalCategory, isPublicCategory } = require("./ca
 const { alternativesFor: endedAlternativesFor, endedProduct } = require("./endedOffer");
 const { deduplicationKeys, isDailyPickEligible, scoreOffers, selectUniqueProducts } = require("./ranker");
 const { parseSearchOptions, searchCatalogProducts } = require("./catalogSearch");
+const { searchOddTvProducts } = require("./oddTvProductSearch");
 const { applySearchIntent } = require("./searchIntent");
 const { offerIdentity, offerSummary, sourceKey } = require("./productOffers");
 const { rankingValidationReport } = require("./rankingValidation");
@@ -2510,26 +2511,7 @@ app.get("/api/admin/ranking-validation", admin, (req, res) => {
 });
 app.get("/api/admin/odd-tv/products", admin, (req,res) => {
   const selectedMarket = normalizeMarket(req.query.market) || requestMarket(req).code;
-  const term = String(req.query.q || "").trim().replace(/\\s+/g, " ").slice(0,120);
-  if (term.length < 2) return res.json([]);
-  const tokens = term.toLowerCase().match(/[a-z0-9]{2,}/g)?.slice(0,8) || [];
-  if (!tokens.length) return res.json([]);
-  const tokenConditions = tokens.map(() =>
-    "(LOWER(COALESCE(title,'')) LIKE ? OR LOWER(COALESCE(brand,'')) LIKE ? OR LOWER(COALESCE(retailer_name,'')) LIKE ?)"
-  );
-  const params = [selectedMarket];
-  for (const token of tokens) {
-    const pattern = `%${token}%`;
-    params.push(pattern, pattern, pattern);
-  }
-  const products = db.prepare(`
-    SELECT id,title,brand,retailer_name,current_price AS price,currency,image_url
-    FROM products
-    WHERE market=? AND status='published' AND ${sourceSql()}
-      AND ${tokenConditions.join(" AND ")}
-    ORDER BY COALESCE(ranking_score,score) DESC,score DESC,updated_at DESC
-    LIMIT 20
-  `).all(...params);
+  const products = searchOddTvProducts(db, {market:selectedMarket, query:req.query.q, sourceFilter:sourceSql()});
   res.set("Cache-Control","no-store").json(products);
 });
 app.get("/api/products", (req, res) => {
