@@ -7,6 +7,8 @@ import shutil
 import subprocess
 import tempfile
 import textwrap
+import time
+from urllib.error import HTTPError, URLError
 import wave
 
 
@@ -89,6 +91,24 @@ def verify_clip(clip, audio_seconds):
         raise ValueError("SCRIPT_CLIP_AUDIO_VIDEO_ALIGNMENT")
 
 
+def post_preparation_with_retry(post, base, key, payload):
+    """Keep the existing render and render lease during brief API outages."""
+    delays = (2, 5)
+    for attempt in range(len(delays) + 1):
+        try:
+            return post(base, "/api/odd-tv/worker/prepared", key, payload)
+        except HTTPError as error:
+            if error.code not in {502, 503, 504} or attempt == len(delays):
+                raise
+            reason = f"HTTP_{error.code}"
+        except (TimeoutError, URLError, ConnectionError) as error:
+            if attempt == len(delays):
+                raise
+            reason = type(error).__name__
+        print("SCRIPTED_PREPARE_RETRY", payload["drop_key"], attempt + 1, reason, flush=True)
+        time.sleep(delays[attempt])
+
+
 def prepare_presentation(worker, base, key, response):
     """Render every clip before releasing the scheduled opening to the public."""
     output = worker["OUTPUT"]
@@ -120,7 +140,7 @@ def prepare_presentation(worker, base, key, response):
             staged.append((clip, {"scripted_show": response["show_id"], "drop_key": lease["drop_key"], "lease_token": lease["lease_token"],
                                   "question_id": None, "final_segment": index == len(phrases) - 1}))
 
-        timing = post(base, "/api/odd-tv/worker/prepared", key, {
+        timing = post_preparation_with_retry(post, base, key, {
             **lease, "presentation_duration_ms": round(duration * 1000),
         })
         start = datetime.fromisoformat(timing["play_after"].replace("Z", "+00:00")).timestamp()
@@ -228,7 +248,7 @@ def active_scripted_show(show_id, environ):
         base + "/api/odd-tv/worker/control", data=b"{}", method="POST",
         headers={"Content-Type": "application/json", "X-ODD-Worker-Key": environ["ODD_LIVE_WORKER_KEY"]},
     )
-    with urllib.request.urlopen(request, timeout=5) as connection:
+    with urllib.request.urlopen(request, timeout=20) as connection:
         state = json.load(connection)
     return state.get("desired_state") == "running" and state.get("show_id") == show_id
 
