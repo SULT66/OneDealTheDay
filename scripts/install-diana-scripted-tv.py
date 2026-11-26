@@ -1,5 +1,6 @@
 """Install prepared ODD Live TV playback into Diana's existing host worker."""
 from datetime import datetime
+from http.client import IncompleteRead
 import json
 import re
 from pathlib import Path
@@ -102,7 +103,7 @@ def retry_script_request(send, label, item):
             if error.code not in {502, 503, 504} or attempt == len(delays):
                 raise
             reason = f"HTTP_{error.code}"
-        except (TimeoutError, URLError, ConnectionError) as error:
+        except (TimeoutError, URLError, ConnectionError, IncompleteRead) as error:
             if attempt == len(delays):
                 raise
             reason = type(error).__name__
