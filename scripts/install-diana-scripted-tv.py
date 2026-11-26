@@ -1,5 +1,6 @@
 """Install prepared ODD Live TV playback into Diana's existing host worker."""
 from datetime import datetime
+from http.client import IncompleteRead
 import json
 import re
 from pathlib import Path
@@ -7,6 +8,8 @@ import shutil
 import subprocess
 import tempfile
 import textwrap
+import time
+from urllib.error import HTTPError, URLError
 import wave
 
 
@@ -22,10 +25,11 @@ def synthesize_script(synthesize, phrases, job, rate_percent=2):
         part = job / f"part-{index:03d}"
         part.mkdir(exist_ok=True, mode=0o700)
         wav = part / "speech.wav"
-        if rate_percent == 2:
-            synthesize(phrase, wav)
-        else:
-            synthesize(phrase, wav, rate_percent=rate_percent)
+        options = {} if rate_percent == 2 else {"rate_percent": rate_percent}
+        retry_script_request(
+            lambda: synthesize(phrase, wav, **options),
+            "SCRIPTED_TTS_RETRY", f"clip={index + 1}",
+        )
         with wave.open(str(wav), "rb") as audio:
             if (audio.getframerate(), audio.getnchannels(), audio.getsampwidth()) != (48000, 1, 2):
                 raise ValueError("SCRIPT_AUDIO_FORMAT")
@@ -89,6 +93,24 @@ def verify_clip(clip, audio_seconds):
         raise ValueError("SCRIPT_CLIP_AUDIO_VIDEO_ALIGNMENT")
 
 
+def retry_script_request(send, label, item):
+    """Retry one speech or preparation request without replaying its job."""
+    delays = (2, 5)
+    for attempt in range(len(delays) + 1):
+        try:
+            return send()
+        except HTTPError as error:
+            if error.code not in {502, 503, 504} or attempt == len(delays):
+                raise
+            reason = f"HTTP_{error.code}"
+        except (TimeoutError, URLError, ConnectionError, IncompleteRead) as error:
+            if attempt == len(delays):
+                raise
+            reason = type(error).__name__
+        print(label, item, attempt + 1, reason, flush=True)
+        time.sleep(delays[attempt])
+
+
 def prepare_presentation(worker, base, key, response):
     """Render every clip before releasing the scheduled opening to the public."""
     output = worker["OUTPUT"]
@@ -120,9 +142,11 @@ def prepare_presentation(worker, base, key, response):
             staged.append((clip, {"scripted_show": response["show_id"], "drop_key": lease["drop_key"], "lease_token": lease["lease_token"],
                                   "question_id": None, "final_segment": index == len(phrases) - 1}))
 
-        timing = post(base, "/api/odd-tv/worker/prepared", key, {
-            **lease, "presentation_duration_ms": round(duration * 1000),
-        })
+        prepared = {**lease, "presentation_duration_ms": round(duration * 1000)}
+        timing = retry_script_request(
+            lambda: post(base, "/api/odd-tv/worker/prepared", key, prepared),
+            "SCRIPTED_PREPARE_RETRY", lease["drop_key"],
+        )
         start = datetime.fromisoformat(timing["play_after"].replace("Z", "+00:00")).timestamp()
         expires = datetime.fromisoformat(timing["qna_start_at"].replace("Z", "+00:00")).timestamp() + 30
         for index, (clip, metadata) in enumerate(staged):
@@ -218,6 +242,32 @@ def patch_qna(source, player):
     return source, player
 
 
+def patch_tv_delivery(source):
+    if 'payload["request_id"] = os.urandom(12).hex()' in source:
+        return source
+    poll_anchor = '    response=post_json(base,path,key,{"market":args.market,"scripted_presentation":True,"scripted_render_version":2})'
+    queue_anchor = '            os.replace(temp,target)'
+    if any(source.count(anchor) != 1 for anchor in (poll_anchor, queue_anchor)):
+        raise SystemExit("Unexpected Diana TV polling or queue version. No files changed.")
+    source = source.replace(poll_anchor, """    payload = {"market":args.market,"scripted_presentation":True,"scripted_render_version":2}
+    if mode == "tv":
+        from odd_live_scripted import retry_script_request
+        payload["request_id"] = os.urandom(12).hex()
+        response = retry_script_request(lambda: post_json(base,path,key,payload), "TV_POLL_RETRY", args.market)
+    else:
+        response = post_json(base,path,key,payload)""", 1)
+    return source.replace(queue_anchor, """            if scripted_qna:
+                lease = {"drop_key": response["drop_key"], "lease_token": response["lease_token"]}
+                confirmed = retry_script_request(
+                    lambda: post_json(base,"/api/odd-tv/worker/queued",key,lease),
+                    "QNA_QUEUE_RETRY", response.get("question_id"),
+                )
+                if not confirmed.get("ok"):
+                    raise RuntimeError("QNA_QUEUE_NOT_CONFIRMED")
+                queued_once = True
+""" + queue_anchor, 1)
+
+
 def active_scripted_show(show_id, environ):
     import urllib.request
 
@@ -228,7 +278,7 @@ def active_scripted_show(show_id, environ):
         base + "/api/odd-tv/worker/control", data=b"{}", method="POST",
         headers={"Content-Type": "application/json", "X-ODD-Worker-Key": environ["ODD_LIVE_WORKER_KEY"]},
     )
-    with urllib.request.urlopen(request, timeout=5) as connection:
+    with urllib.request.urlopen(request, timeout=20) as connection:
         state = json.load(connection)
     return state.get("desired_state") == "running" and state.get("show_id") == show_id
 
@@ -317,6 +367,7 @@ def install():
         play_source = play_source.replace(old_take, old_take + ' if current is None else None', 1)
         play_source = play_source.replace(old_poll, 'if decoded_jobs.empty() and time.monotonic()>=next_job_check:', 1)
     source, play_source = patch_qna(source, play_source)
+    source = patch_tv_delivery(source)
     changes = [(module, Path(__file__).read_text()), (renderer, render_source), (program, play_source), (path, source)]
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
     for target, code in changes:

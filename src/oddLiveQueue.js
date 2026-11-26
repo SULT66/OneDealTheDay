@@ -10,7 +10,7 @@ function createProducerLeases({ttlMs=60*60*1000,now=()=>Date.now()}={}) {
   const active=new Map();
   const pending=new Map();
   function cleanup() {
-    for(const [dropId,lease] of active) if(lease.expiresAt<=now()) active.delete(dropId);
+    for(const [dropId,lease] of active) if((lease.activeUntil??lease.expiresAt)<=now()) active.delete(dropId);
     for(const [token,lease] of pending) if(lease.expiresAt<=now()) pending.delete(token);
   }
   function equalToken(gotValue,expectedValue) {
@@ -27,21 +27,34 @@ function createProducerLeases({ttlMs=60*60*1000,now=()=>Date.now()}={}) {
     return null;
   }
   return {
-    acquire(dropId,questionId,metadata=null) {
+    acquire(dropId,questionId,metadata=null,{activeTtlMs=ttlMs,requestId=null}={}) {
       cleanup();
       if(active.has(dropId))return null;
       const token=crypto.randomBytes(24).toString("hex");
-      const lease={dropId,questionId:questionId??null,metadata:metadata&&typeof metadata==="object"?{...metadata}:null,token,expiresAt:now()+ttlMs};
+      const startedAt=now();
+      const lease={dropId,questionId:questionId??null,metadata:metadata&&typeof metadata==="object"?{...metadata}:null,
+        token,expiresAt:startedAt+ttlMs,activeUntil:startedAt+Math.min(activeTtlMs,ttlMs),requestId};
       active.set(dropId,lease);
       return {...lease};
     },
     check,
+    saveResponse(dropId,token,response) {
+      const lease=active.get(dropId);
+      if(lease?.requestId&&equalToken(token,lease.token))lease.response=response;
+    },
+    replayResponse(dropId,requestId) {
+      cleanup();
+      const lease=active.get(dropId);
+      return requestId&&lease?.requestId===requestId?lease.response:null;
+    },
     release(dropId,token,{keepForAck=false}={}) {
       const lease=check(dropId,token);
       if(!lease)return false;
       if(active.get(dropId)?.token===token)active.delete(dropId);
-      if(keepForAck)pending.set(token,lease);
-      else pending.delete(token);
+      if(keepForAck){
+        delete lease.response;
+        pending.set(token,lease);
+      }else pending.delete(token);
       return true;
     },
     has(dropId) {cleanup();return active.has(dropId);},
