@@ -1,6 +1,7 @@
 """Install prepared ODD Live TV playback into Diana's existing host worker."""
 from datetime import datetime
 import json
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -10,7 +11,42 @@ import wave
 
 
 class ScriptLengthError(ValueError):
-    pass
+    def __init__(self, message, measured_ms=None):
+        super().__init__(message)
+        self.measured_ms = measured_ms
+
+
+def synthesize_script(synthesize, phrases, job, rate_percent=2):
+    speech = []
+    for index, phrase in enumerate(phrases):
+        part = job / f"part-{index:03d}"
+        part.mkdir(exist_ok=True, mode=0o700)
+        wav = part / "speech.wav"
+        if rate_percent == 2:
+            synthesize(phrase, wav)
+        else:
+            synthesize(phrase, wav, rate_percent=rate_percent)
+        with wave.open(str(wav), "rb") as audio:
+            if (audio.getframerate(), audio.getnchannels(), audio.getsampwidth()) != (48000, 1, 2):
+                raise ValueError("SCRIPT_AUDIO_FORMAT")
+            speech.append((wav, audio.getnframes()))
+    return speech
+
+
+def timed_script(synthesize, phrases, job, target_ms):
+    speech = synthesize_script(synthesize, phrases, job)
+    if not target_ms:
+        return speech
+    original_ms = sum(samples for _, samples in speech) / 48
+    ratio = original_ms / target_ms
+    if not 0.8 <= ratio <= 1.25:
+        # Adjust the voice before the pitch-preserving final audio fit.
+        rate_percent = min(30, max(-20, round(102 * ratio - 100)))
+        speech = synthesize_script(synthesize, phrases, job, rate_percent)
+    try:
+        return fit_speech(speech, target_ms)
+    except ScriptLengthError as error:
+        raise ScriptLengthError(str(error), round(original_ms)) from error
 
 
 def fit_speech(parts, target_ms):
@@ -71,20 +107,8 @@ def prepare_presentation(worker, base, key, response):
         ]
         if not phrases or len(phrases) > 160:
             raise ValueError("SCRIPT_SEGMENT_LIMIT")
-        speech = []
+        speech = timed_script(worker["synthesize_azure"], phrases, job, response.get("presentation_target_ms"))
         duration = 0
-        for index, phrase in enumerate(phrases):
-            part = job / f"part-{index:03d}"
-            part.mkdir(mode=0o700)
-            wav = part / "speech.wav"
-            worker["synthesize_azure"](phrase, wav)
-            with wave.open(str(wav), "rb") as source:
-                if (source.getframerate(), source.getnchannels(), source.getsampwidth()) != (48000, 1, 2):
-                    raise ValueError("SCRIPT_AUDIO_FORMAT")
-                speech.append((wav, source.getnframes()))
-        target_ms = response.get("presentation_target_ms")
-        if target_ms:
-            speech = fit_speech(speech, target_ms)
         for index, (wav, samples) in enumerate(speech):
             seconds = samples / 48000
             if not 0 < seconds <= 30:
@@ -122,10 +146,76 @@ def prepare_presentation(worker, base, key, response):
         try:
             post(base, "/api/odd-tv/worker/ack", key, {**lease, "aired": False,
                  "script_preparation_failed": True,
-                 "script_error": "script_length" if isinstance(error, ScriptLengthError) else "render_failed"})
+                 "script_error": "script_length" if isinstance(error, ScriptLengthError) else "render_failed",
+                 "script_measured_ms": getattr(error, "measured_ms", None)})
         except Exception:
             print("SCRIPTED_LEASE_RELEASE_FAILED", flush=True)
         raise
+
+
+def concise_question_speech(response):
+    speech = " ".join(str(response.get("spoken_text") or "").split())
+    if not speech or len(speech) > 220 or len(speech.split()) > 28:
+        return "I don’t have that detail confirmed. Please check the product listing."
+    return speech
+
+
+def log_question_start(info):
+    if not info.get("scripted_qna"):
+        return
+    created = info.get("question_created_at")
+    if not created:
+        return
+    try:
+        from datetime import timezone
+
+        elapsed = (datetime.now(timezone.utc) - datetime.fromisoformat(created.replace("Z", "+00:00"))).total_seconds()
+    except (ValueError, TypeError, AttributeError):
+        return
+    if elapsed >= 0:
+        print("QNA_FIRST_FRAME", info.get("question_id"), f"from_question_s={elapsed:.2f}", flush=True)
+
+
+def patch_qna(source, player):
+    marker = "from odd_live_scripted import concise_question_speech"
+    if marker not in source:
+        speech_anchor = '    speech=response.get("spoken_text","")'
+        phrase_anchor = '        phrases=split_live_speech(speech)'
+        if any(source.count(anchor) != 1 for anchor in (speech_anchor, phrase_anchor)):
+            raise SystemExit("Unexpected Diana speech queue. No files changed.")
+        # Older Diana builds call OpenAI or a local LLM again after polling.
+        generator = re.compile(r'(?m)^( +\w+[ \t]*=[ \t]*)(generate_(?:openai|local)_speech\(response\))[ \t]*$')
+        source = generator.sub(lambda match: match[1] + "None if scripted_qna else " + match[2], source)
+        source = source.replace(speech_anchor, speech_anchor + """
+    scripted_qna = response.get("scripted_qna") is True
+    if scripted_qna:
+        from odd_live_scripted import concise_question_speech
+        speech = concise_question_speech(response)""", 1)
+        source = source.replace(phrase_anchor, "        phrases=[speech] if scripted_qna else split_live_speech(speech)", 1)
+        tag = '                "scripted_qna":response.get("scripted_qna") is True,'
+        source = source.replace(tag, tag + '\n                "question_created_at":response.get("question_created_at"),', 1)
+        render = '                video=render_musetalk(audio,partdir,render_fps=25 if response.get("scripted_qna") else None)'
+        if source.count(render) != 1:
+            raise SystemExit("Unexpected Diana Q&A renderer. No files changed.")
+        tts = '                synthesize_azure(phrase,audio)'
+        if source.count(tts + "\n" + render) != 1:
+            raise SystemExit("Unexpected Diana Q&A speech synthesis. No files changed.")
+        source = source.replace(tts + "\n" + render, """                tts_started = time.monotonic()
+""" + tts + """
+                render_started = time.monotonic()
+""" + render + """
+                if scripted_qna:
+                    print("QNA_CLIP_READY", response.get("question_id"), f"tts_s={render_started-tts_started:.2f}", f"render_s={time.monotonic()-render_started:.2f}", flush=True)""", 1)
+    marker = "from odd_live_scripted import log_question_start"
+    if marker not in player:
+        anchor = '                    print("HOST_SPEAKING",current[0].name,flush=True)'
+        if player.count(anchor) != 1:
+            raise SystemExit("Unexpected Diana playback marker. No files changed.")
+        player = player.replace(anchor, anchor + """
+                    if current[1].get("scripted_qna"):
+                        from odd_live_scripted import log_question_start
+                        log_question_start(current[1])""", 1)
+    return source, player
 
 
 def active_scripted_show(show_id, environ):
@@ -174,6 +264,14 @@ def install():
         source = source.replace(signature, 'def render_musetalk(audio, jobdir, timeout_seconds=300, *, render_fps=None):', 1)
         source = source.replace(render_job, render_job+'\n            "render_fps": render_fps,', 1)
         source = source.replace(answer, 'video=render_musetalk(audio,partdir,render_fps=25 if response.get("scripted_qna") else None)', 1)
+    speech_signature = "def synthesize_azure(text, dest, *, rate_percent=2):"
+    if speech_signature not in source:
+        old_signature = "def synthesize_azure(text, dest):"
+        old_prosody = '''    spoken = "<prosody rate='+2%'>" + safe + "</prosody>"'''
+        if any(source.count(item) != 1 for item in (old_signature, old_prosody)):
+            raise SystemExit("Unexpected Diana speech worker version. No files changed.")
+        source = source.replace(old_signature, speech_signature, 1).replace(
+            old_prosody, '    spoken = f"<prosody rate=\'{rate_percent:+d}%\'>{safe}</prosody>"', 1)
     if 'request.get("render_fps")' not in render_source:
         anchor = 'encode_speech_clip(avatar, audio_path, generated_clip, args.fps)'
         if render_source.count(anchor) != 1:
@@ -218,6 +316,7 @@ def install():
             raise SystemExit("Unexpected Diana clip buffer. No files changed.")
         play_source = play_source.replace(old_take, old_take + ' if current is None else None', 1)
         play_source = play_source.replace(old_poll, 'if decoded_jobs.empty() and time.monotonic()>=next_job_check:', 1)
+    source, play_source = patch_qna(source, play_source)
     changes = [(module, Path(__file__).read_text()), (renderer, render_source), (program, play_source), (path, source)]
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
     for target, code in changes:

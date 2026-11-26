@@ -26,3 +26,18 @@ test("failed model falls back", async () => {
  const text=await composeHostTurn({product,question:"Warranty?",generateText:async()=>{throw Error("offline");}});
  assert.match(text,/don't have that detail confirmed/);
 });
+test("scripted TV Q&A requests a concise reply and keeps a complete answer", async () => {
+ const reply = "Yes, this model includes a removable tray you can lift out to clean.";
+ const text = await composeHostTurn({product,question:"Can I remove the tray?",shortAnswer:true,generateText:async prompt=>{
+  assert.match(prompt.system,/12–22 spoken words/);
+  assert.equal(prompt.maxOutputTokens,72);
+  return reply;
+ }});
+ assert.equal(text,reply);
+});
+test("scripted TV Q&A uses a brief fallback if the model returns a monologue", async () => {
+ const reply = "A lengthy answer about a coffee machine. ".repeat(8).trim();
+ const generateText = async () => reply;
+ assert.match(await composeHostTurn({product,question:"Does it steam milk?",shortAnswer:true,generateText}), /product listing/);
+ assert.equal(await composeHostTurn({product,question:"Does it steam milk?",generateText}),reply);
+});

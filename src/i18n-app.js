@@ -148,6 +148,9 @@ const appCopy = {
 
     "app.live.checking": "Checking for a drop...",
     "app.live.noneTitle": "No drop scheduled",
+    "app.live.tvScheduled": "Live show scheduled",
+    "app.live.tvPreparing": "Preparing the live show",
+    "app.live.tvAutoStart": "The player will open here when the show starts.",
     "app.live.noneText": "A Live Drop is one product, at one price, for ten minutes. There is not one on the calendar right now.",
     "app.live.watching": "watching",
     "app.live.aiHost": "AI host",
@@ -483,6 +486,9 @@ const appCopy = {
 
     "app.live.checking": "Buscando un drop...",
     "app.live.noneTitle": "No hay ningún drop programado",
+    "app.live.tvScheduled": "Transmisión en directo programada",
+    "app.live.tvPreparing": "Preparando la transmisión en directo",
+    "app.live.tvAutoStart": "El reproductor se abrirá aquí cuando empiece la transmisión.",
     "app.live.noneText": "Un Live Drop es un producto, a un precio, durante diez minutos. Ahora mismo no hay ninguno en el calendario.",
     "app.live.watching": "viendo",
     "app.live.aiHost": "Presentadora IA",
