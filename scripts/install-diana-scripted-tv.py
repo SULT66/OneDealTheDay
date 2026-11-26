@@ -1,6 +1,7 @@
 """Install prepared ODD Live TV playback into Diana's existing host worker."""
 from datetime import datetime
 import json
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -152,6 +153,71 @@ def prepare_presentation(worker, base, key, response):
         raise
 
 
+def concise_question_speech(response):
+    speech = " ".join(str(response.get("spoken_text") or "").split())
+    if not speech or len(speech) > 220 or len(speech.split()) > 28:
+        return "I don’t have that detail confirmed. Please check the product listing."
+    return speech
+
+
+def log_question_start(info):
+    if not info.get("scripted_qna"):
+        return
+    created = info.get("question_created_at")
+    if not created:
+        return
+    try:
+        from datetime import timezone
+
+        elapsed = (datetime.now(timezone.utc) - datetime.fromisoformat(created.replace("Z", "+00:00"))).total_seconds()
+    except (ValueError, TypeError, AttributeError):
+        return
+    if elapsed >= 0:
+        print("QNA_FIRST_FRAME", info.get("question_id"), f"from_question_s={elapsed:.2f}", flush=True)
+
+
+def patch_qna(source, player):
+    marker = "from odd_live_scripted import concise_question_speech"
+    if marker not in source:
+        speech_anchor = '    speech=response.get("spoken_text","")'
+        phrase_anchor = '        phrases=split_live_speech(speech)'
+        if any(source.count(anchor) != 1 for anchor in (speech_anchor, phrase_anchor)):
+            raise SystemExit("Unexpected Diana speech queue. No files changed.")
+        # Older Diana builds call OpenAI or a local LLM again after polling.
+        generator = re.compile(r'(?m)^( +\w+[ \t]*=[ \t]*)(generate_(?:openai|local)_speech\(response\))[ \t]*$')
+        source = generator.sub(lambda match: match[1] + "None if scripted_qna else " + match[2], source)
+        source = source.replace(speech_anchor, speech_anchor + """
+    scripted_qna = response.get("scripted_qna") is True
+    if scripted_qna:
+        from odd_live_scripted import concise_question_speech
+        speech = concise_question_speech(response)""", 1)
+        source = source.replace(phrase_anchor, "        phrases=[speech] if scripted_qna else split_live_speech(speech)", 1)
+        tag = '                "scripted_qna":response.get("scripted_qna") is True,'
+        source = source.replace(tag, tag + '\n                "question_created_at":response.get("question_created_at"),', 1)
+        render = '                video=render_musetalk(audio,partdir,render_fps=25 if response.get("scripted_qna") else None)'
+        if source.count(render) != 1:
+            raise SystemExit("Unexpected Diana Q&A renderer. No files changed.")
+        tts = '                synthesize_azure(phrase,audio)'
+        if source.count(tts + "\n" + render) != 1:
+            raise SystemExit("Unexpected Diana Q&A speech synthesis. No files changed.")
+        source = source.replace(tts + "\n" + render, """                tts_started = time.monotonic()
+""" + tts + """
+                render_started = time.monotonic()
+""" + render + """
+                if scripted_qna:
+                    print("QNA_CLIP_READY", response.get("question_id"), f"tts_s={render_started-tts_started:.2f}", f"render_s={time.monotonic()-render_started:.2f}", flush=True)""", 1)
+    marker = "from odd_live_scripted import log_question_start"
+    if marker not in player:
+        anchor = '                    print("HOST_SPEAKING",current[0].name,flush=True)'
+        if player.count(anchor) != 1:
+            raise SystemExit("Unexpected Diana playback marker. No files changed.")
+        player = player.replace(anchor, anchor + """
+                    if current[1].get("scripted_qna"):
+                        from odd_live_scripted import log_question_start
+                        log_question_start(current[1])""", 1)
+    return source, player
+
+
 def active_scripted_show(show_id, environ):
     import urllib.request
 
@@ -250,6 +316,7 @@ def install():
             raise SystemExit("Unexpected Diana clip buffer. No files changed.")
         play_source = play_source.replace(old_take, old_take + ' if current is None else None', 1)
         play_source = play_source.replace(old_poll, 'if decoded_jobs.empty() and time.monotonic()>=next_job_check:', 1)
+    source, play_source = patch_qna(source, play_source)
     changes = [(module, Path(__file__).read_text()), (renderer, render_source), (program, play_source), (path, source)]
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
     for target, code in changes:

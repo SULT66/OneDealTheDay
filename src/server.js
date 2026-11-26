@@ -4397,8 +4397,10 @@ app.post("/api/odd-tv/worker/next",oddWorkerAuth,async(req,res)=>{
           return response.output_text;
         }
       : undefined;
+    const scriptedQna=Boolean(show.script_text&&question);
     const speech=await composeHostTurn({
       product:listing,
+      shortAnswer:scriptedQna,
       question:question?questions.map((item,index)=>String(index+1)+". "+item.text).join(" "):"",
       locale:"en-US",
       generateText,
@@ -4409,7 +4411,8 @@ app.post("/api/odd-tv/worker/next",oddWorkerAuth,async(req,res)=>{
       question_id:question?questionIds:null,
       question_count:questionIds.length,
       product_id:listing.id,opening,
-      scripted_qna:Boolean(show.script_text&&question),
+      scripted_qna:scriptedQna,
+      question_created_at:scriptedQna?question.created_at:null,
       product:listing,
       questions:question?questions.map(item=>item.text):[],
       play_after:null,

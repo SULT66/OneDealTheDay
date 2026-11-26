@@ -23,7 +23,9 @@ function productFacts(product) {
   };
 }
 
-function hostPrompt({product, question = "", locale = "en-US"}) {
+const SHORT_ANSWER_FALLBACK = "I don’t have that detail confirmed. Please check the product listing.";
+
+function hostPrompt({product, question = "", locale = "en-US", shortAnswer = false}) {
   const facts = productFacts(product);
   const q = clean(question, 600);
   return {
@@ -36,11 +38,13 @@ function hostPrompt({product, question = "", locale = "en-US"}) {
       "Create fresh narration from the supplied verified product facts. Avoid repeating the same opening or phrasing. Do not invent product details.",
       "Never invent product claims or pressure anyone to buy. Do not read personal data or URLs aloud.",
       q
-        ? "Answer only the viewer's current question directly in 15-30 spoken words. If the facts do not answer it, say so briefly. Plain speech, no markdown or directions."
+        ? shortAnswer
+          ? "Answer the question in one natural sentence using 12–22 spoken words. Start with the answer, preserve any important qualification, and avoid greetings or filler. If the facts do not answer it, say so briefly."
+          : "Answer only the viewer's current question directly in 15-30 spoken words. If the facts do not answer it, say so briefly. Plain speech, no markdown or directions."
         : "Create one lively product-presentation segment of 90-120 spoken words, about 35-50 seconds. Cover confirmed features and who may find them useful. Do not add an opening filler sentence or invented details. Plain speech, no markdown or directions.",
     ].join(" "),
     user: JSON.stringify({task: q ? "answer_viewer" : "present_product_segment", product_facts: facts, viewer_question: q || null}),
-    maxOutputTokens: q ? 100 : 260,
+    maxOutputTokens: q ? (shortAnswer ? 72 : 100) : 260,
   };
 }
 
@@ -59,18 +63,21 @@ function fallback(product, question) {
 }
 
 /** generateText is a server-only LLM adapter. The caller owns TTS, queues and authorisation. */
-async function composeHostTurn({product, question = "", locale = "en-US", generateText, timeoutMs = 10000}) {
-  const prompt = hostPrompt({product, question, locale});
-  if (typeof generateText !== "function") return speechText(fallback(product, question));
+async function composeHostTurn({product, question = "", locale = "en-US", generateText, timeoutMs = 10000, shortAnswer = false}) {
+  const prompt = hostPrompt({product, question, locale, shortAnswer});
+  const concise = shortAnswer && Boolean(clean(question));
+  const safeFallback = () => concise ? SHORT_ANSWER_FALLBACK : speechText(fallback(product, question));
+  if (typeof generateText !== "function") return safeFallback();
   let timer;
   try {
     const result = await Promise.race([
       Promise.resolve().then(() => generateText(prompt)),
       new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("MODEL_TIMEOUT")), timeoutMs); }),
     ]);
-    return speechText(typeof result === "string" ? result : result?.text);
+    const speech = speechText(typeof result === "string" ? result : result?.text);
+    return concise && (speech.length > 220 || speech.split(" ").length > 28) ? safeFallback() : speech;
   } catch {
-    return speechText(fallback(product, question));
+    return safeFallback();
   } finally {
     clearTimeout(timer);
   }

@@ -302,9 +302,9 @@ function messages(db,showId,after=0) {
 function nextQuestions(db,showId,limit=3,productId=null) {
   const count=Math.max(1,Math.min(50,Math.floor(Number(limit)||3)));
   if(productId!==null)return db.prepare(
-    "SELECT id,text,product_id FROM odd_tv_chat WHERE show_id=? AND status='queued' AND (product_id=? OR product_id IS NULL) ORDER BY id ASC LIMIT ?"
+    "SELECT id,text,product_id,created_at FROM odd_tv_chat WHERE show_id=? AND status='queued' AND (product_id=? OR product_id IS NULL) ORDER BY id ASC LIMIT ?"
   ).all(showId,Number(productId),count);
-  return db.prepare("SELECT id,text,product_id FROM odd_tv_chat WHERE show_id=? AND status='queued' ORDER BY id ASC LIMIT ?")
+  return db.prepare("SELECT id,text,product_id,created_at FROM odd_tv_chat WHERE show_id=? AND status='queued' ORDER BY id ASC LIMIT ?")
     .all(showId,count);
 }
 function nextQuestion(db,showId) {
