@@ -24,10 +24,11 @@ def synthesize_script(synthesize, phrases, job, rate_percent=2):
         part = job / f"part-{index:03d}"
         part.mkdir(exist_ok=True, mode=0o700)
         wav = part / "speech.wav"
-        if rate_percent == 2:
-            synthesize(phrase, wav)
-        else:
-            synthesize(phrase, wav, rate_percent=rate_percent)
+        options = {} if rate_percent == 2 else {"rate_percent": rate_percent}
+        retry_script_request(
+            lambda: synthesize(phrase, wav, **options),
+            "SCRIPTED_TTS_RETRY", f"clip={index + 1}",
+        )
         with wave.open(str(wav), "rb") as audio:
             if (audio.getframerate(), audio.getnchannels(), audio.getsampwidth()) != (48000, 1, 2):
                 raise ValueError("SCRIPT_AUDIO_FORMAT")
@@ -91,12 +92,12 @@ def verify_clip(clip, audio_seconds):
         raise ValueError("SCRIPT_CLIP_AUDIO_VIDEO_ALIGNMENT")
 
 
-def post_preparation_with_retry(post, base, key, payload):
-    """Keep the existing render and render lease during brief API outages."""
+def retry_script_request(send, label, item):
+    """Retry one speech or preparation request without replaying its job."""
     delays = (2, 5)
     for attempt in range(len(delays) + 1):
         try:
-            return post(base, "/api/odd-tv/worker/prepared", key, payload)
+            return send()
         except HTTPError as error:
             if error.code not in {502, 503, 504} or attempt == len(delays):
                 raise
@@ -105,7 +106,7 @@ def post_preparation_with_retry(post, base, key, payload):
             if attempt == len(delays):
                 raise
             reason = type(error).__name__
-        print("SCRIPTED_PREPARE_RETRY", payload["drop_key"], attempt + 1, reason, flush=True)
+        print(label, item, attempt + 1, reason, flush=True)
         time.sleep(delays[attempt])
 
 
@@ -140,9 +141,11 @@ def prepare_presentation(worker, base, key, response):
             staged.append((clip, {"scripted_show": response["show_id"], "drop_key": lease["drop_key"], "lease_token": lease["lease_token"],
                                   "question_id": None, "final_segment": index == len(phrases) - 1}))
 
-        timing = post_preparation_with_retry(post, base, key, {
-            **lease, "presentation_duration_ms": round(duration * 1000),
-        })
+        prepared = {**lease, "presentation_duration_ms": round(duration * 1000)}
+        timing = retry_script_request(
+            lambda: post(base, "/api/odd-tv/worker/prepared", key, prepared),
+            "SCRIPTED_PREPARE_RETRY", lease["drop_key"],
+        )
         start = datetime.fromisoformat(timing["play_after"].replace("Z", "+00:00")).timestamp()
         expires = datetime.fromisoformat(timing["qna_start_at"].replace("Z", "+00:00")).timestamp() + 30
         for index, (clip, metadata) in enumerate(staged):
