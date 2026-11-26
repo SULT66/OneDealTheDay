@@ -242,6 +242,32 @@ def patch_qna(source, player):
     return source, player
 
 
+def patch_tv_delivery(source):
+    if 'payload["request_id"] = os.urandom(12).hex()' in source:
+        return source
+    poll_anchor = '    response=post_json(base,path,key,{"market":args.market,"scripted_presentation":True,"scripted_render_version":2})'
+    queue_anchor = '            os.replace(temp,target)'
+    if any(source.count(anchor) != 1 for anchor in (poll_anchor, queue_anchor)):
+        raise SystemExit("Unexpected Diana TV polling or queue version. No files changed.")
+    source = source.replace(poll_anchor, """    payload = {"market":args.market,"scripted_presentation":True,"scripted_render_version":2}
+    if mode == "tv":
+        from odd_live_scripted import retry_script_request
+        payload["request_id"] = os.urandom(12).hex()
+        response = retry_script_request(lambda: post_json(base,path,key,payload), "TV_POLL_RETRY", args.market)
+    else:
+        response = post_json(base,path,key,payload)""", 1)
+    return source.replace(queue_anchor, """            if scripted_qna:
+                lease = {"drop_key": response["drop_key"], "lease_token": response["lease_token"]}
+                confirmed = retry_script_request(
+                    lambda: post_json(base,"/api/odd-tv/worker/queued",key,lease),
+                    "QNA_QUEUE_RETRY", response.get("question_id"),
+                )
+                if not confirmed.get("ok"):
+                    raise RuntimeError("QNA_QUEUE_NOT_CONFIRMED")
+                queued_once = True
+""" + queue_anchor, 1)
+
+
 def active_scripted_show(show_id, environ):
     import urllib.request
 
@@ -341,6 +367,7 @@ def install():
         play_source = play_source.replace(old_take, old_take + ' if current is None else None', 1)
         play_source = play_source.replace(old_poll, 'if decoded_jobs.empty() and time.monotonic()>=next_job_check:', 1)
     source, play_source = patch_qna(source, play_source)
+    source = patch_tv_delivery(source)
     changes = [(module, Path(__file__).read_text()), (renderer, render_source), (program, play_source), (path, source)]
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
     for target, code in changes:

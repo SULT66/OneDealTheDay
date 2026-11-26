@@ -4350,6 +4350,13 @@ app.post("/api/odd-tv/worker/next",oddWorkerAuth,async(req,res)=>{
   }else if(show.script_error)return res.json({kind:"idle"});
   if(show.script_text&&req.body?.scripted_presentation!==true)return res.json({kind:"idle"});
   const key="tv:"+show.id;
+  const requestId=typeof req.body?.request_id==="string"&&/^[a-f0-9]{24}$/.test(req.body.request_id)
+    ? req.body.request_id : null;
+  const replay=oddTvLeases.replayResponse(key,requestId);
+  if(replay){
+    try{return res.json(await replay);}
+    catch{return res.status(503).json({error:"Unable to prepare presenter turn."});}
+  }
   if(oddTvLeases.has(key))return res.json({kind:"busy"});
 
   const listing=oddTv.currentProduct(db,show,Date.now()).product;
@@ -4363,8 +4370,9 @@ app.post("/api/odd-tv/worker/next",oddWorkerAuth,async(req,res)=>{
   const pilotQuestionsRemaining=show.pilot_mode?Math.max(0,5-answeredQuestions):3;
   const questionBatchLimit=show.pilot_mode||show.script_text?1:3;
   const questions=qnaOpen&&pilotQuestionsRemaining>0
-    ? oddTv.nextQuestions(db,show.id,Math.min(questionBatchLimit,pilotQuestionsRemaining),listing.id)
+    ? oddTv.nextQuestions(db,show.id,show.script_text?50:Math.min(questionBatchLimit,pilotQuestionsRemaining),listing.id)
         .filter(item=>!oddTvLeases.hasPendingQuestion(key,item.id))
+        .slice(0,Math.min(questionBatchLimit,pilotQuestionsRemaining))
     : [];
   const narrationBufferLimit=show.pilot_mode?2:1;
   const narrationIntervalMs=show.pilot_mode?8000:75000;
@@ -4375,15 +4383,16 @@ app.post("/api/odd-tv/worker/next",oddWorkerAuth,async(req,res)=>{
     !oddTv.productPresentationDue(db,show.id,listing.id,now,narrationIntervalMs)
   )) return res.json({kind:"idle"});
   const questionIds=question?questions.map(item=>item.id):[];
+  const scriptedQna=Boolean(show.script_text&&question);
   const lease=oddTvLeases.acquire(key,question?questionIds:null,{
     kind:question?"question":"presentation",productId:listing.id,opening,
-  });
+  },{activeTtlMs:scriptedQna?120000:undefined,requestId});
   if(!lease)return res.json({kind:"busy"});
-  try {
+  const prepareResponse=async()=>{
     if(show.script_text&&!show.qna_start_at){
-      return res.json({kind:"presentation",show_id:show.id,drop_key:key,opening:true,
+      return {kind:"presentation",show_id:show.id,drop_key:key,opening:true,
         presentation_target_ms:show.script_target_minutes?(show.script_target_minutes-10)*60000:null,
-        script_text:show.script_text,lease_token:lease.token,lease_expires_at:new Date(lease.expiresAt).toISOString()});
+        script_text:show.script_text,lease_token:lease.token,lease_expires_at:new Date(lease.expiresAt).toISOString()};
     }
     const {composeHostTurn}=require("./oddLiveBrain");
     const generateText=process.env.OPENAI_API_KEY
@@ -4397,7 +4406,6 @@ app.post("/api/odd-tv/worker/next",oddWorkerAuth,async(req,res)=>{
           return response.output_text;
         }
       : undefined;
-    const scriptedQna=Boolean(show.script_text&&question);
     const speech=await composeHostTurn({
       product:listing,
       shortAnswer:scriptedQna,
@@ -4405,7 +4413,7 @@ app.post("/api/odd-tv/worker/next",oddWorkerAuth,async(req,res)=>{
       locale:"en-US",
       generateText,
     });
-    return res.json({
+    return {
       kind:question?"question":"presentation",
       show_id:show.id,drop_key:key,
       question_id:question?questionIds:null,
@@ -4419,8 +4427,12 @@ app.post("/api/odd-tv/worker/next",oddWorkerAuth,async(req,res)=>{
       spoken_text:speech,
       lease_token:lease.token,
       lease_expires_at:new Date(lease.expiresAt).toISOString(),
-    });
-  }catch(error){
+    };
+  };
+  const pending=prepareResponse();
+  oddTvLeases.saveResponse(key,lease.token,pending);
+  try{return res.json(await pending);}
+  catch(error){
     oddTvLeases.release(key,lease.token);
     console.error("[odd-tv] turn preparation failed",error.message);
     return res.status(503).json({error:"Unable to prepare presenter turn."});
