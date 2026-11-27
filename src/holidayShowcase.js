@@ -30,26 +30,27 @@ function holidayPreview(rows,limit=8){
 }
 
 const giftGroups = [
-  ['games', /\b(?:board games?|card games?|dominion|catan|monopoly|jigsaw|puzzles?)\b/i],
+  ['games', /\b(?:board games?|card games?|dominion|catan|monopoly|chess sets?|jigsaw|puzzles?)\b/i],
   ['coffee', /\b(?:coffee|espresso) (?:makers?|machines?|grinders?|press|mugs?|sets?)\b|\bportable espresso\b/i],
   ['kids', /\b(?:lego|building sets?|building blocks?|plush toys?|science kits?)\b/i],
-  ['tech', /\b(?:bluetooth speakers?|headphones|earbuds|power banks?|digital photo frames?)\b/i],
-  ['home', /\b(?:throw blankets?|photo blankets?|weighted blankets?|candles?|serving boards?|dinnerware sets?)\b/i],
+  ['tech', /\b(?:bluetooth speakers?|headphones|earbuds|power banks?|digital photo frames?|instant cameras?|mini projectors?|bluetooth trackers?)\b/i],
+  ['home', /\b(?:throw blankets?|photo blankets?|weighted blankets?|candles?|serving boards?|dinnerware sets?|picture frames?|salt lamps?|electric kettles?)\b/i],
   ['creative', /\b(?:craft kits?|watercolor sets?|paint sets?|knitting kits?|embroidery kits?)\b/i],
+  ['pet', /\b(?:interactive dog toys?|cat toys?|pet water fountains?|pet beds?)\b/i],
   ['travel', /\b(?:travel organizers?|travel pillows?|packing cubes?|passport holders?)\b/i],
   ['wellness', /\b(?:massage guns?|hand massagers?|eye massagers?)\b/i],
   ['personalized', /\b(?:custom|personalized|personalised)\b.{0,48}\b(?:mugs?|keyrings?|keychains?|aprons?|photo frames?|ornaments?)\b/i],
 ];
 const giftGroup = product => giftGroups.find(([, pattern]) => pattern.test(String(product.title)))?.[0];
 const giftEligible = product => Boolean(giftGroup(product)) &&
-  !/\b(?:for parts|replacement|repair kits?|spare parts?|empty boxes?|pre.?owned|refurbished|open box|used condition)\b/i.test(product.title) &&
+  !/\b(?:parts|replacement|repair kits?|empty boxes?|pre.?owned|refurbished|open box|used condition|carrying cases?|storage bags?|zipper file bags?|accessor(?:y|ies) only|compatible (?:with|for)|without (?:the )?(?:game|device|machine))\b/i.test(product.title) &&
   !/\b(?:used|open.box|refurbished)\b/i.test(product.condition || '') &&
   discoveryEligible(product);
 
 const partyGroups = [
-  ['table', /\b(?:table runners?|tablecloths?|tableware|placemats?|dinnerware|serving trays?|napkins?|champagne flutes?|party plates?|party cups?|cocktail shakers?)\b/i],
+  ['table', /\b(?:table runners?|tablecloths?|tableware|placemats?|dinnerware|serving (?:trays?|platters?|boards?)|charcuterie boards?|napkins?|champagne (?:flutes?|glasses)|wine glasses|party plates?|party cups?|cocktail (?:shakers?|sets?))\b/i],
   ['photos', /\b(?:photo (?:booth|props?)|backdrops?|fringe curtains?|foil curtains?)\b/i],
-  ['countdown', /\b(?:confetti|party (?:hats?|crowns?|tiaras?|horns?|favors?|decorations?)|balloons?|banners?|countdown|noisemakers?)\b/i],
+  ['countdown', /\b(?:confetti|party (?:hats?|crowns?|tiaras?|horns?|decorations?)|balloons?|banners?|countdown|noisemakers?)\b/i],
   ['lights', /\b(?:string lights?|fairy lights?|garland lights?|disco balls?|party lights?)\b/i],
 ];
 const partyGroup = product => partyGroups.find(([, pattern]) => pattern.test(String(product.title)))?.[0];
@@ -59,12 +60,14 @@ function curatedPicks(rows, classify, limit, balanceBudget = false) {
   const shops = new Map(), groups = new Map(), budgets = new Map();
   const picked = [];
   const shopOf = row => String(row.retailer_name || row.source).toLowerCase();
-  const budgetOf = row => [25,50,100].find(cap => row.current_price <= cap);
-  const shopCap = Math.max(2, Math.ceil(limit / new Set(ordered.map(shopOf)).size));
+  const budgetOf = row => [25,50,100,175].find(cap => row.current_price <= cap);
+  const shopCount = new Set(ordered.map(shopOf)).size;
+  if (!shopCount) return [];
+  const shopCap = Math.max(3, Math.ceil(limit / shopCount) + 1);
   const candidates = ordered.map((row, index) => ({row, index, shop:shopOf(row), group:classify(row), budget:budgetOf(row)}));
   while (picked.length < limit && candidates.length) {
     const penalty = item => (groups.get(item.group) || 0) * 16 + (shops.get(item.shop) || 0) * 7 +
-      (balanceBudget ? (budgets.get(item.budget) || 0) * 5 : 0) + item.index;
+      (balanceBudget ? (budgets.get(item.budget) || 0) * 5 + (item.budget === 175 ? 12 : 0) : 0) + item.index;
     candidates.sort((a,b) => penalty(a) - penalty(b));
     const index = candidates.findIndex(item => (shops.get(item.shop) || 0) < shopCap && (groups.get(item.group) || 0) < 3);
     if (index < 0) break;
@@ -77,6 +80,6 @@ function curatedPicks(rows, classify, limit, balanceBudget = false) {
   return picked;
 }
 
-const giftPicks = rows => curatedPicks(rows.filter(row => row.current_price <= 100 && giftEligible(row)), giftGroup, 12, true);
+const giftPicks = rows => curatedPicks(rows.filter(row => row.current_price >= 8 && row.current_price <= 175 && giftEligible(row)), giftGroup, 12, true);
 const partyPicks = rows => curatedPicks(rows.filter(row => partyGroup(row) && discoveryEligible(row)), partyGroup, 10);
 module.exports = {holidayPreview, giftGroup, giftEligible, giftPicks, partyGroup, partyPicks};
