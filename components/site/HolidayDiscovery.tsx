@@ -4,29 +4,70 @@ import {adaptProduct,type RawProduct} from '@/lib/backendAdapter';
 import {DealCard} from '@/components/deal/DealCard';
 import {SectionHeader} from './SectionHeader';
 import type {Language} from '@/lib/i18n';
-import {isHolidaySeason} from '@/src/holidayCatalog';
+import {isNewYearSpotlight} from '@/src/holidayCatalog';
+
 const COPY = {
-  en:{eyebrow:'Less scrolling. Better gifting.',title:'Find their kind of holiday magic.',all:'All holiday finds',budget:'A little gift. A big smile.',under:'Gifts under',kids:'For kids',home:'For the home',tech:'For tech lovers',creative:'For creative minds',decor:'Trees & decor',lights:'Make it glow',party:'New Year party',badge:'Holiday find',note:'Choose a budget or an interest. Keep exploring from there.'},
-  es:{eyebrow:'Encuentra el regalo',title:'Un poco de magia para todos.',all:'Ver todo',budget:'Pequeños regalos. Grandes sonrisas.',under:'Regalos por menos de',kids:'Para niños',home:'Para el hogar',tech:'Tecnología',creative:'Creatividad',decor:'Árboles y decoración',lights:'Luces',party:'Año Nuevo',badge:'Fiestas',note:'Elige un presupuesto o un interés.'},
-  fr:{eyebrow:'Des idées à offrir',title:'Un peu de magie pour chacun.',all:'Tout découvrir',budget:'Petits cadeaux. Grands sourires.',under:'Cadeaux à moins de',kids:'Pour les enfants',home:'Pour la maison',tech:'Passion tech',creative:'Créativité',decor:'Sapins et décoration',lights:'Lumières',party:'Nouvel An',badge:'Fêtes',note:'Choisissez un budget ou une envie.'},
-  de:{eyebrow:'Geschenke entdecken',title:'Ein wenig Festzauber für alle.',all:'Alle entdecken',budget:'Kleine Geschenke. Großes Lächeln.',under:'Geschenke unter',kids:'Für Kinder',home:'Für zu Hause',tech:'Für Technikfans',creative:'Für Kreative',decor:'Bäume und Deko',lights:'Lichter',party:'Silvester',badge:'Festliche Auswahl',note:'Wähle ein Budget oder ein Interesse.'},
+  en:{title:'Holiday gifts by budget',all:'All holiday finds',under:'Gifts under',party:'New Year’s Eve party',lastMinute:'Last-Minute Gifts',delivery:'Check delivery at the retailer',badge:'Gift pick',partyNote:'Table settings, photo backdrops, countdown decorations and party lights.'},
+  es:{title:'Regalos navideños por presupuesto',all:'Ver todo',under:'Regalos por menos de',party:'Fiesta de Año Nuevo',lastMinute:'Regalos de última hora',delivery:'Comprueba la entrega en la tienda',badge:'Idea de regalo',partyNote:'Mesa, fondos para fotos, decoración y luces para la fiesta.'},
+  fr:{title:'Cadeaux de fêtes par budget',all:'Tout découvrir',under:'Cadeaux à moins de',party:'Fête du Nouvel An',lastMinute:'Cadeaux de dernière minute',delivery:'Vérifiez la livraison chez le marchand',badge:'Idée cadeau',partyNote:'Décoration de table, fonds photo, accessoires et lumières de fête.'},
+  de:{title:'Geschenke nach Budget',all:'Alle entdecken',under:'Geschenke unter',party:'Silvesterparty',lastMinute:'Last-Minute-Geschenke',delivery:'Lieferung beim Händler prüfen',badge:'Geschenktipp',partyNote:'Tischdeko, Fotohintergründe, Countdown-Deko und Partylichter.'},
 };
+
+const RECIPIENTS = {
+  en:{games:'For game nights',coffee:'For coffee lovers',kids:'For kids',tech:'For tech lovers',home:'For the home',creative:'For creatives',travel:'For travelers',wellness:'For winding down',personalized:'For a personal touch'},
+  es:{games:'Para jugar en grupo',coffee:'Para amantes del café',kids:'Para niños',tech:'Para amantes de la tecnología',home:'Para el hogar',creative:'Para creativos',travel:'Para viajeros',wellness:'Para relajarse',personalized:'Para personalizar'},
+  fr:{games:'Pour les soirées jeux',coffee:'Pour les amateurs de café',kids:'Pour les enfants',tech:'Pour les passionnés de tech',home:'Pour la maison',creative:'Pour les créatifs',travel:'Pour les voyageurs',wellness:'Pour se détendre',personalized:'À personnaliser'},
+  de:{games:'Für Spieleabende',coffee:'Für Kaffeefans',kids:'Für Kinder',tech:'Für Technikfans',home:'Für zu Hause',creative:'Für Kreative',travel:'Für Reisende',wellness:'Zum Entspannen',personalized:'Für eine persönliche Note'},
+};
+type GiftGroup = keyof typeof RECIPIENTS.en;
+type Preview = {products:RawProduct[];giftGroups?:Record<string,GiftGroup>};
+
+async function getPreview(market:string, language:Language, q:string):Promise<Preview|null> {
+  const query = new URLSearchParams({market,lang:language,q,preview:'1'});
+  try {
+    const response = await fetch(`${BACKEND_URL}/api/holiday?${query}`, {cache:'no-store', signal:AbortSignal.timeout(10000)});
+    if (response.ok) return await response.json();
+  } catch {}
+  return null;
+}
+
 export async function HolidayDiscovery({market,language}:{market:string;language:Language}) {
-  if(!isHolidaySeason())return null;
-  const c=COPY[language];
-  let products:RawProduct[]=[];
-  try {const r=await fetch(`${BACKEND_URL}/api/holiday?${new URLSearchParams({market,lang:language,preview:'1'})}`,{cache:'no-store',signal:AbortSignal.timeout(15000)});if(r.ok)products=(await r.json()).products||[];}catch{}
-  const currency=market==='uk'?'GBP':market==='de'||market==='fr'?'EUR':market==='ca'?'CAD':'USD';
-  return <section aria-labelledby="holiday-discovery-title" className="mt-10 space-y-6">
-    <SectionHeader id="holiday-discovery-title" eyebrow={c.eyebrow} title={c.title} action={{href:`/${market}/holiday`,label:c.all}}/>
-    <div className="grid grid-cols-3 gap-2 sm:gap-4">
-      {[['decor',c.decor,'✦'],['lights',c.lights,'✺'],['new-year',c.party,'✧']].map(([q,label,icon],i)=><Link key={q} href={`/${market}/holiday?q=${q}`} className={`rounded-tile border border-border p-4 transition-transform hover:-translate-y-1 sm:p-6 ${i===1?'bg-lime text-ink':'bg-surface text-fg'}`}><span aria-hidden="true" className="text-3xl">{icon}</span><span className="mt-3 block text-sm font-bold sm:text-lg">{label} →</span></Link>)}
-    </div>
-    {products.length>0&&<ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">{products.map((raw,i)=><li key={raw.id}><DealCard market={market} deal={{...adaptProduct(raw),rank:i+1}} index={i} priority={i<4} campaignBadge={c.badge} tracking={{source:'home',placement:'seasonal_card'}}/></li>)}</ul>}
-    <div className="rounded-card border border-border bg-surface p-5 sm:p-7">
-      <h3 className="text-xl font-bold text-fg">{c.budget}</h3><p className="mt-2 text-sm text-fg-muted">{c.note}</p>
-      <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">{[25,50,100].map(max=><Link key={max} href={`/${market}/category/gifts?max=${max}`} className="rounded-xl bg-lime px-5 py-4 text-center font-bold text-ink">{c.under} {new Intl.NumberFormat(language,{style:'currency',currency,maximumFractionDigits:0}).format(max)} →</Link>)}</div>
-      <div className="mt-4 flex flex-wrap gap-2">{[['toys-games',c.kids],['home-kitchen',c.home],['electronics',c.tech],['arts-crafts',c.creative]].map(([slug,label])=><Link key={slug} href={`/${market}/category/${slug}`} className="rounded-full border border-border px-4 py-2 text-sm font-semibold text-fg hover:border-fg">{label} →</Link>)}</div>
-    </div>
-  </section>;
+  const copy = COPY[language];
+  const showParty = isNewYearSpotlight();
+  const [gifts, party] = await Promise.all([
+    getPreview(market, language, 'gift-guide'),
+    showParty ? getPreview(market, language, 'new-year') : {products:[]},
+  ]);
+  const currency = market==='uk'?'GBP':market==='de'||market==='fr'?'EUR':market==='ca'?'CAD':'USD';
+  const collection = `/${market}/holiday`;
+  const holidayHref = (q:string, max?:number) => `${collection}?${new URLSearchParams({q,lang:language,...(max ? {max:String(max)} : {})})}`;
+
+  return <div data-odd-transient={gifts === null || party === null ? '1' : undefined}>
+    <section aria-labelledby="holiday-discovery-title" className="mt-8 space-y-4">
+      <SectionHeader id="holiday-discovery-title" title={copy.title} action={{href:collection,label:copy.all}}/>
+      <div className="grid grid-cols-3 gap-2 sm:gap-3">
+        {[25,50,100].map(max=><Link key={max} href={holidayHref('gift-guide',max)} className="rounded-xl bg-lime px-2 py-3 text-center text-sm font-bold text-ink sm:px-5 sm:py-4 sm:text-base">
+          {copy.under} {new Intl.NumberFormat(language,{style:'currency',currency,maximumFractionDigits:0}).format(max)}
+        </Link>)}
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <Link href={holidayHref('new-year')} className="rounded-full border border-border px-4 py-2 text-sm font-semibold text-fg hover:border-fg">{copy.party}</Link>
+        {market==='us' && <Link href={holidayHref('last-minute')} className="rounded-full border border-border px-4 py-2 text-sm font-semibold text-fg hover:border-fg">{copy.lastMinute}</Link>}
+      </div>
+      {gifts && gifts.products.length > 0 && <><p className="text-sm text-fg-muted">{copy.delivery}</p><HolidayCards data={gifts} market={market} language={language} badge={copy.badge}/></>}
+    </section>
+    {party && party.products.length > 0 && <section aria-labelledby="holiday-party-title" className="mt-10 space-y-4">
+      <SectionHeader id="holiday-party-title" title={copy.party} action={{href:holidayHref('new-year'),label:copy.all}}/>
+      <p className="text-sm text-fg-muted">{copy.partyNote}</p>
+      <HolidayCards data={party} market={market} language={language} badge={copy.party}/>
+    </section>}
+  </div>;
+}
+
+function HolidayCards({data,market,language,badge}:{data:Preview;market:string;language:Language;badge:string}) {
+  return <ul className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">{data.products.map((raw,i)=>{
+    const group = data.giftGroups?.[raw.id];
+    return <li className="min-w-0" key={raw.id}>
+    <DealCard market={market} deal={{...adaptProduct(raw),rank:i+1}} index={i} priority={i<2} campaignBadge={group ? RECIPIENTS[language][group] : badge} tracking={{source:'home',placement:'seasonal_card'}}/>
+  </li>;})}</ul>;
 }

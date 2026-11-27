@@ -3302,7 +3302,7 @@ app.get('/api/holiday-progress', (req,res) => res.set('Cache-Control','no-store'
 app.get('/api/holiday', (req,res) => {
   const marketCode=normalizeMarket(req.query.market)||req.market||'us';
   const language=resolveLanguage(req,res,marketCode);
-  const collection=require('./holidayCatalog').getHolidayCollection(db,{market:marketCode,q:req.query.q,sort:req.query.sort,page:req.query.page,maxPrice:req.query.max,preview:req.query.preview==='1'});
+  const collection=require('./holidayCatalog').getHolidayCollection(db,{market:marketCode,q:req.query.q,sort:req.query.sort,page:req.query.page,maxPrice:req.query.max,zip:req.query.zip,preview:req.query.preview==='1'});
   res.set('Cache-Control','no-store').json({...collection,market:marketCode,
     products:collection.products.map(product=>presentProduct(localizeProduct({...product,deal_url:dealPath(product)},language),language))});
 });
