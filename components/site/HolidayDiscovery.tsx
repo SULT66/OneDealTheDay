@@ -14,10 +14,10 @@ const COPY = {
 };
 
 const RECIPIENTS = {
-  en:{games:'For game nights',coffee:'For coffee lovers',kids:'For kids',tech:'For tech lovers',home:'For the home',creative:'For creatives',travel:'For travelers',wellness:'For winding down',personalized:'For a personal touch'},
-  es:{games:'Para jugar en grupo',coffee:'Para amantes del café',kids:'Para niños',tech:'Para amantes de la tecnología',home:'Para el hogar',creative:'Para creativos',travel:'Para viajeros',wellness:'Para relajarse',personalized:'Para personalizar'},
-  fr:{games:'Pour les soirées jeux',coffee:'Pour les amateurs de café',kids:'Pour les enfants',tech:'Pour les passionnés de tech',home:'Pour la maison',creative:'Pour les créatifs',travel:'Pour les voyageurs',wellness:'Pour se détendre',personalized:'À personnaliser'},
-  de:{games:'Für Spieleabende',coffee:'Für Kaffeefans',kids:'Für Kinder',tech:'Für Technikfans',home:'Für zu Hause',creative:'Für Kreative',travel:'Für Reisende',wellness:'Zum Entspannen',personalized:'Für eine persönliche Note'},
+  en:{games:'For game nights',coffee:'For coffee lovers',kids:'For kids',tech:'For tech lovers',home:'For the home',creative:'For creatives',travel:'For travelers',pet:'For pet owners',wellness:'For winding down',personalized:'For a personal touch'},
+  es:{games:'Para jugar en grupo',coffee:'Para amantes del café',kids:'Para niños',tech:'Para amantes de la tecnología',home:'Para el hogar',creative:'Para creativos',travel:'Para viajeros',pet:'Para dueños de mascotas',wellness:'Para relajarse',personalized:'Para personalizar'},
+  fr:{games:'Pour les soirées jeux',coffee:'Pour les amateurs de café',kids:'Pour les enfants',tech:'Pour les passionnés de tech',home:'Pour la maison',creative:'Pour les créatifs',travel:'Pour les voyageurs',pet:'Pour les amis des animaux',wellness:'Pour se détendre',personalized:'À personnaliser'},
+  de:{games:'Für Spieleabende',coffee:'Für Kaffeefans',kids:'Für Kinder',tech:'Für Technikfans',home:'Für zu Hause',creative:'Für Kreative',travel:'Für Reisende',pet:'Für Haustierfans',wellness:'Zum Entspannen',personalized:'Für eine persönliche Note'},
 };
 type GiftGroup = keyof typeof RECIPIENTS.en;
 type Preview = {products:RawProduct[];giftGroups?:Record<string,GiftGroup>};

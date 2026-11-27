@@ -20,9 +20,9 @@ function matchesParty(row) {
   const title = String(row.title || '');
   const { partyGroup } = require('./holidayShowcase');
   const group = partyGroup(row);
-  if (!group || /\b(?:halloween|easter|baby shower|graduation|bachelorette)\b/i.test(title)) return false;
+  if (!group || /\b(?:halloween|easter|baby shower|graduation|bachelorette|dollhouse|miniature|santa|reindeer|stocking stuffer|cutlery bags?|tableware cases?|without dinnerware|crinkle confetti)\b/i.test(title)) return false;
   if (/\b(?:new year|nye|2027)\b/i.test(title)) return true;
-  if (/\b(?:christmas|xmas|santa|reindeer|thanksgiving|birthday|wedding)\b/i.test(title)) return false;
+  if (/\b(?:christmas|xmas|thanksgiving|birthday|wedding)\b/i.test(title)) return false;
   return group !== 'lights' || /\b(?:party lights?|disco balls?)\b/i.test(title);
 }
 
@@ -52,7 +52,7 @@ function getHolidayCollection(db, { market = 'us', q = '', sort = 'popular', pag
   const seasonalTitles = `title LIKE '%christmas%' OR title LIKE '%xmas%' OR title LIKE '%advent%' OR title LIKE '%nutcracker%'
     OR title LIKE '%stocking holder%' OR title LIKE '%tree skirt%' OR title LIKE '%tree topper%'
     OR title LIKE '%ornament set%' OR title LIKE '%new year%' OR title LIKE '%2027 party%'`;
-  const giftCategories = `'Gifts','Toys & Games','Home & Kitchen','Electronics','Arts & Crafts','Travel','Health & Beauty','Baby & Kids'`;
+  const giftCategories = `'Gifts','Toys & Games','Home & Kitchen','Electronics','Arts & Crafts','Travel','Health & Beauty','Baby & Kids','Pet Supplies'`;
   const theme = gifts ? `(${seasonalTitles} OR normalized_category IN (${giftCategories}))`
     : party ? `(${seasonalTitles} OR normalized_category IN ('Home & Kitchen','Other Deals','Gifts','Christmas & New Year'))`
     : `(${seasonalTitles})`;
