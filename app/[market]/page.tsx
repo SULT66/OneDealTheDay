@@ -5,6 +5,7 @@ import type { Language } from "@/lib/i18n";
 import { StructuredData } from "@/components/site/StructuredData";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { isHolidaySeason } from "@/src/holidayCatalog";
 import { HolidayDiscovery } from "@/components/site/HolidayDiscovery";
 import { HomeCampaigns } from "@/components/site/HomeCampaigns";
 import {
@@ -68,7 +69,7 @@ export default async function MarketHome({ params, searchParams }: PageProps<"/[
      itself and changes what it promises once the cutoff has passed. Black
      Friday appears from its preparation window, which is where the price
      records that make it worth anything are being written. */
-  const holidaySeason = Date.now() >= Date.parse("2026-10-28T04:00:00Z") && Date.now() < Date.parse("2027-01-08T05:00:00Z");
+  const holidaySeason = isHolidaySeason();
   const halloween = !holidaySeason && Boolean(activeHalloween({market}));
   const halloweenBanner = holidaySeason ? undefined : activeCampaign({eventKey:'halloween', market, throughEvent:true});
   const blackFriday = Boolean(activeCampaign({eventKey:'black-friday', market, fromPreparation:true}));
@@ -79,6 +80,7 @@ export default async function MarketHome({ params, searchParams }: PageProps<"/[
           halloweenLate={Boolean(halloweenBanner.pastDeliveryCutoff)} blackFriday={blackFriday} />
       </Suspense>
     ) : <HomeCampaigns market={market} language={language} blackFriday={blackFriday} />}
+    {holidaySeason && <Suspense fallback={null}><HolidayDiscovery market={market} language={language} /></Suspense>}
     <Suspense fallback={null}><HomeCatalog market={market} language={language} halloween={halloween} /></Suspense>
     <DeliaTrigger variant="floating" />
   </div>;
@@ -168,8 +170,6 @@ async function HomeCatalog({market,language,halloween}:{market:string;language:L
           ))}
         </ul>
       </section>
-
-      <Suspense fallback={null}><HolidayDiscovery market={market} language={language}/></Suspense>
 
       <Suspense fallback={null}><MerchandisingShelves market={market} language={language} excludeHalloween={halloween} /></Suspense>
 

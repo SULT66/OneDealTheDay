@@ -93,3 +93,40 @@ assert.equal(getThanksgivingCollection(thanksgivingDb,{now:hostingNow,market:'ca
 assert.equal(getThanksgivingCollection(thanksgivingDb,{now:Date.parse('2026-11-28')}).active,false);
 thanksgivingDb.close();
 console.log('Thanksgiving collection: real product matching, intent filters and regional expiry passed.');
+
+const holidayDb = new Database(':memory:');
+const checked = new Date().toISOString();
+const holidayRow = {...sample, checked_at:checked, delivery_estimated_at:'', delivery_country:'US',
+  delivery_postal_code:'11235'};
+holidayDb.exec(`CREATE TABLE products(${Object.entries(holidayRow).map(([key,value])=>`${key} ${typeof value==='number'?'REAL':'TEXT'}`).join(',')});`);
+const saveHolidayRow = holidayDb.prepare(`INSERT INTO products VALUES(${Object.keys(holidayRow).map(()=>'?').join(',')})`);
+const seedHolidayOffer = (id,title,normalized_category,changes={}) => saveHolidayRow.run(...Object.values({
+  ...holidayRow,id,title,normalized_category,affiliate_url:`https://www.ebay.com/itm/${323456789000 + id}`,...changes,
+}));
+seedHolidayOffer(100,'Dominion Board Game', 'Toys & Games', {delivery_estimated_at:'2026-12-20T18:00:00Z'});
+seedHolidayOffer(101,'Portable Espresso Machine', 'Home & Kitchen', {delivery_estimated_at:'2026-12-26T18:00:00Z', current_price:75});
+seedHolidayOffer(102,'Classic Weighted Blanket', 'Home & Kitchen', {delivery_estimated_at:'2026-12-20T18:00:00Z', delivery_postal_code:'10001'});
+seedHolidayOffer(103,'Bluetooth Speaker', 'Electronics', {delivery_estimated_at:'2026-12-21T18:00:00Z', availability:''});
+seedHolidayOffer(104,'Holiday Watercolor Paint Set', 'Arts & Crafts', {delivery_estimated_at:'2026-12-21T18:00:00Z', delivery_postal_code:''});
+seedHolidayOffer(105,'New Year Countdown Party Hats', 'Christmas & New Year');
+seedHolidayOffer(106,'Silver Photo Booth Backdrop', 'Home & Kitchen');
+seedHolidayOffer(107,'Gold Champagne Flutes', 'Home & Kitchen');
+seedHolidayOffer(108,'Standard Christmas String Lights', 'Christmas & New Year');
+seedHolidayOffer(109,'Halloween Photo Booth Backdrop', 'Home & Kitchen');
+assert.deepEqual(getHolidayCollection(holidayDb,{q:'gift-guide',maxPrice:25}).products.map(row=>row.id).sort(),[100,102,103,104]);
+assert.equal(getHolidayCollection(holidayDb,{q:'gift-guide',preview:true}).giftGroups[101],'coffee');
+assert.deepEqual(getHolidayCollection(holidayDb,{q:'new-year',preview:true}).products.map(row=>row.id).sort(),[105,106,107]);
+const deliveryNow = Date.parse('2026-11-27T14:00:00Z');
+holidayDb.prepare('UPDATE products SET checked_at=?').run('2026-11-27T12:00:00Z');
+const lastMinute = getHolidayCollection(holidayDb,{q:'last-minute',zip:'11235',now:deliveryNow});
+assert.deepEqual(lastMinute.products.map(row=>row.id),[100]);
+assert.deepEqual(lastMinute.arrivalDates,{100:'2026-12-20'});
+assert.equal(getHolidayCollection(holidayDb,{q:'last-minute',zip:'11235',now:deliveryNow+86400000}).total,0);
+assert.equal(getHolidayCollection(holidayDb,{q:'last-minute',zip:'112',now:deliveryNow}).total,0);
+assert.equal(getHolidayCollection(holidayDb,{q:'last-minute',zip:'11235',market:'ca',now:deliveryNow}).total,0);
+const {isNewYearSpotlight} = require('../src/holidayCatalog');
+assert.equal(isNewYearSpotlight(Date.parse('2026-12-01T04:59:59Z')),false);
+assert.equal(isNewYearSpotlight(Date.parse('2026-12-01T05:00:00Z')),true);
+assert.equal(isNewYearSpotlight(Date.parse('2027-01-01T05:00:00Z')),false);
+holidayDb.close();
+console.log('Gift budgets, party themes, ZIP-specific delivery, freshness and the New Year window passed.');
