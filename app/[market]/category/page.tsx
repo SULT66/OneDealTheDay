@@ -1,8 +1,10 @@
+import { Suspense } from "react";
+import { DirectoryGridPlaceholder } from "@/components/site/DirectoryLoading";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { CaretRight } from "@phosphor-icons/react/ssr";
 import { getCategoriesWithCounts, getMarket } from "@/lib/catalog";
-import { countryName, getLanguage, t } from "@/lib/i18n";
+import { countryName, getLanguage, t, type Language } from "@/lib/i18n";
 import { CategoryIcon } from "@/components/ui/CategoryIcon";
 
 export async function generateMetadata({
@@ -29,7 +31,6 @@ export default async function CategoryIndexPage({
 }: PageProps<"/[market]/category">) {
   const { market } = await params;
   const language = await getLanguage(market);
-  const categories = await getCategoriesWithCounts(market, language);
 
   return (
     <div className="mx-auto max-w-7xl px-4 pb-24 pt-8 sm:px-6">
@@ -55,7 +56,17 @@ export default async function CategoryIndexPage({
         </h1>
       </header>
 
-      <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+      <Suspense fallback={<div aria-busy="true"><DirectoryGridPlaceholder /></div>}>
+        <CategoryGrid market={market} language={language} />
+      </Suspense>
+    </div>
+  );
+}
+
+async function CategoryGrid({ market, language }: { market: string; language: Language }) {
+  const categories = await getCategoriesWithCounts(market, language);
+  return (
+    <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         {categories.map((c) => (
           <li key={c.slug}>
             <Link
@@ -73,6 +84,5 @@ export default async function CategoryIndexPage({
           </li>
         ))}
       </ul>
-    </div>
   );
 }

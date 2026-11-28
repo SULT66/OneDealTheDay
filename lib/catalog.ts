@@ -675,10 +675,13 @@ export async function getPriceBounds(
 export async function getConnectedShops(
   marketCode: string,
 ): Promise<Array<{ retailer: string; listings: number; host: string }>> {
-  const facets = await fetchFacets(marketCode);
-  return (facets.shops ?? [])
-    .filter((shop) => shop.listings > 0)
-    .map((shop) => ({ ...shop, host: shop.host ?? "" }));
+  const params = new URLSearchParams({ market: marketCode });
+  const response = await fetch(`${BACKEND_URL}/api/catalog-stores?${params}`, {
+    next: { revalidate: 60 },
+    signal: AbortSignal.timeout(8000),
+  });
+  if (!response.ok) throw new Error(`Failed to load stores for "${marketCode}" (${response.status}).`);
+  return await response.json();
 }
 
 /** Retailers present in the catalog, so the filter never offers an empty option. */
