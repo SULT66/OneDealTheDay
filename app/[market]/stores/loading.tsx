@@ -1,5 +1,5 @@
-import { DirectoryLoading } from "@/components/site/DirectoryLoading";
+import { StoresLoading } from "@/components/site/DirectoryLoading";
 
 export default function LoadingStores() {
-  return <DirectoryLoading section="stores" />;
+  return <StoresLoading />;
 }
