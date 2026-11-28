@@ -1,7 +1,6 @@
 import { comparisonItem } from "@/lib/comparison";
 import { CompareProvider } from "@/components/compare/CompareProvider";
 import { schemaAvailability } from "@/lib/schemaAvailability";
-import { productPhrase } from "@/lib/productPhrase";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -285,13 +284,6 @@ export default async function DealPage({
             <DeliaTrigger
               variant="inline"
               label={t(language, "app.deal.askDelia")}
-              /* The product travels as an id, not inside the sentence. Seeding
-                 the full retailer title made the question unanswerable: as a
-                 search query, "Power Bank 20000mAh 45W Charging Portable
-                 External Battery Backup For Cell Phone" matches nothing, and
-                 Delia answered that no shop sold it — from that product's own
-                 page. */
-              seed={t(language, "app.deal.deliaSeed", { product: productPhrase(deal.title, deal.brand) })}
               productId={deal.id}
               className="h-14 px-6 text-base"
             />

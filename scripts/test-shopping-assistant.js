@@ -235,6 +235,16 @@ assert.strictEqual(
   false,
   "An open-box product still passes a new-only request",
 );
+assert.equal(matchesExplicitConstraints(
+  {title: "Apple EarPods USB-C Wired", availability: "In stock"}, "wireless earbuds under $50"), false);
+assert.equal(matchesExplicitConstraints(
+  {title: "JBL Tune 530BT Wireless On-Ear Headphones", category: "Earbuds ANC", availability: "In stock"},
+  "headphones under $30", "Only wireless earbuds with active noise cancellation"), false);
+assert.equal(matchesExplicitConstraints(
+  {title: "JLab GO Pods ANC True Wireless Earbuds", availability: "In stock"},
+  "wireless earbuds with active noise cancellation"), true);
+assert.equal(matchesExplicitConstraints(
+  {title: "JLab GO Pods ANC True Wireless Earbuds"}, "find wireless earbuds in stock"), false);
 assert.strictEqual(
   summaryMatchesResultCount("I found three confirmed new laptops under $300.", 4),
   false,
@@ -2875,6 +2885,7 @@ const client = {
   );
 
   let providerFirstModelCalls = 0;
+  const providerPreviews = [];
   const providerFirstAssistant = createShoppingAssistant({
     db,
     sourceSql,
@@ -2953,6 +2964,7 @@ const client = {
   });
   const providerFirst = await providerFirstAssistant.respond({
     message: "Найди эргономичное офисное кресло в США до USD 500",
+    onPreview: preview => providerPreviews.push(preview),
     messages: [],
     marketCode: "us",
     language: "en",
@@ -2968,6 +2980,9 @@ const client = {
     providerFirstModelCalls > 1,
     "The catalogue answered without the web search ever running",
   );
+  assert(providerPreviews.length > 0, "Confirmed retailer offers must stream before the full answer");
+  assert(providerPreviews.every(preview => preview.partial && preview.recommendations.length <= 2 &&
+    preview.recommendations.every(offer => offer.availability === "In stock" && offer.price_value <= 500)));
   assert.strictEqual(providerFirst.currency, "USD");
   assert.strictEqual(providerFirst.language, "ru");
   const providerFirstOffers =
