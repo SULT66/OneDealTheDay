@@ -474,6 +474,11 @@ app.post("/api/shopping-assistant/stream", shoppingAssistantRateLimit, async (re
       language,
       signal: requestController.signal,
       onProgress: (event) => send({ type: "progress", ...event }),
+      onPreview: (result) => {
+        if (res.writableEnded || res.destroyed) return;
+        preview = {...result, message:t(language, "app.delia.earlyOffers")};
+        send({type:"preview",result:preview});
+      },
     });
     const hardTimeoutTask = new Promise(resolve => {
       hardTimeoutTimer = setTimeout(() => {

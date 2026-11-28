@@ -30,7 +30,7 @@ assert.strictEqual(
   "the same question written differently produced two keys",
 );
 assert(
-  cacheKey({ message: "candles", marketCode: "us", language: "en" }).startsWith("v7:"),
+  cacheKey({ message: "candles", marketCode: "us", language: "en" }).startsWith("v8:"),
   "A Delia behaviour change did not invalidate answers produced by older rules",
 );
 
@@ -202,8 +202,8 @@ const dealPage = fs.readFileSync(
   "utf8",
 );
 assert(
-  !/seed=\{`Is \$\{deal\.title\} a good price\?`\}/.test(dealPage),
-  "the deal page seeds the full retailer title again, which is what made the question unanswerable",
+  !/\bseed=/.test(dealPage),
+  "opening Delia from a product should leave the composer ready for the shopper’s question",
 );
 assert(
   /productId=\{deal\.id\}/.test(dealPage),
