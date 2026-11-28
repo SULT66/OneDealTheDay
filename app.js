@@ -55,6 +55,7 @@ const { categoryLabel } = require("./src/i18n");
 const { storefrontUrl } = require("./src/storefrontLinks");
 const { presentCatalogBatch } = require("./src/catalogBatch");
 const { catalogSnapshot } = require("./src/catalogSnapshot");
+const { createCatalogDirectory } = require("./src/catalogDirectory");
 const asyncRoute = handler => (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next);
 const { applySearchIntent } = require("./src/searchIntent");
 const createExpressApp = express;
@@ -735,40 +736,22 @@ function expressWithHomepage(...args) {
     return res.set("X-ODD-Cache", "MISS").json(facets);
   });
 
-  app.get("/api/categories", (req, res) => {
-    if (!config.isProduction) return res.json([]);
-    const selectedMarket = normalizeMarket(req.query.market) || marketFromIp(req).code;
-    const cacheKey = `categories:${selectedMarket}`;
-    const cached = cachedValue(cacheKey);
-    res.set("Cache-Control", "private, max-age=60, stale-while-revalidate=300");
-    if (cached) return res.set("X-ODD-Cache", "HIT").json(cached);
-    /* One aggregate query instead of shipping every product just to count
-       them — this is what the header/footer/homepage category tiles need,
-       and previously the only way to get it was downloading the whole
-       market catalog on every single page. */
-    /* Count what a shopper can actually reach.
-     *
-     * COUNT(*) over the table answered in one query instead of shipping every
-     * product just to count them. But every list on this site removes repeat
-     * listings on the way out and this count did not, so the tiles promised
-     * 1,845 where the pages behind them held 1,742. Asked which number was
-     * true, the answer is the smaller one: 104 of the promised listings were
-     * the same products counted twice.
-     *
-     * Deduplicating needs the rows, so this reads them — once a minute behind
-     * the cache below, not once a page, which is what the aggregate was there
-     * to avoid.
-     */
-    const counts = new Map();
-    for (const product of catalogSnapshot(searchRowsForMarket(selectedMarket))) {
-      counts.set(product.normalized_category, (counts.get(product.normalized_category) || 0) + 1);
-    }
-    const rows = [...counts.entries()]
-      .map(([category, count]) => ({category, count}))
-      .sort((left, right) => right.count - left.count);
-    cacheValue(cacheKey, rows, 60000);
-    return res.set("X-ODD-Cache", "MISS").json(rows);
+  // Counts and shop links use a shared deduplicated snapshot of published offers.
+  // Navigation does not need review scoring, historical prices or slider bounds.
+  const readDirectory = createCatalogDirectory({
+    readRows: market => db.prepare(`
+      SELECT * FROM products WHERE market=? AND status='published' AND ${sourceSql()}
+    `).all(market),
   });
+  const directoryRoute = key => (req, res) => {
+    if (!config.isProduction) return res.json([]);
+    const market = normalizeMarket(req.query.market) || marketFromIp(req).code;
+    const {data, cache} = readDirectory(market);
+    return res.set("Cache-Control", "private, max-age=60, stale-while-revalidate=240")
+      .set("X-ODD-Cache", cache).json(data[key]);
+  };
+  app.get("/api/categories", directoryRoute("categories"));
+  app.get("/api/catalog-stores", directoryRoute("shops"));
 
   app.get("/go/:id", (req, res, next) => {
     /*

@@ -45,7 +45,7 @@ export default async function StoresPage({
 }) {
   const { market } = await params;
   const info = getMarket(market);
-  const shops = await getConnectedShops(market);
+  const [shops, language] = await Promise.all([getConnectedShops(market), getLanguage(market)]);
   const total = shops.reduce((sum, shop) => sum + shop.listings, 0);
 
   /*
@@ -70,7 +70,7 @@ export default async function StoresPage({
       : []),
   ];
 
-  if ((await getLanguage(market)) === "es") {
+  if (language === "es") {
     return (
       <SpanishStores market={market} country={info ? countryName(market, "es") : "este mercado"} total={total} tiles={tiles} />
     );

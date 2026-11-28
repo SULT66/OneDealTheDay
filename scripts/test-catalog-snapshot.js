@@ -1,6 +1,7 @@
 const assert = require("node:assert/strict");
 const Database = require("better-sqlite3");
 const {catalogSnapshot} = require("../src/catalogSnapshot");
+const {createCatalogDirectory} = require("../src/catalogDirectory");
 const {uniqueProductsInOrder} = require("../src/publicCatalog");
 const {presentListingProduct, presentProduct} = require("../src/productPresentation");
 const db = new Database(":memory:");
@@ -27,6 +28,33 @@ assert.strictEqual(catalogSnapshot(raw),catalogSnapshot(raw),"navigation and fac
 const replaced=raw.map(p=>p.id===3?{...p,title:"Updated Lenovo Laptop"}:p);
 assert(catalogSnapshot(replaced).some(p=>p.title==="Updated Lenovo Laptop"),"new raw rows must invalidate old views");
 assert(!catalogSnapshot(raw).some(p=>p.title==="Updated Lenovo Laptop"));
+let directoryNow = 0;
+let reads = 0;
+let offers = raw;
+const refreshes = [];
+const directory = createCatalogDirectory({
+  readRows: market => { reads++; return market === "us" ? offers : []; },
+  now: () => directoryNow,
+  defer: callback => refreshes.push(callback),
+});
+const firstDirectory = directory("us");
+assert.equal(firstDirectory.cache, "MISS");
+assert.equal(firstDirectory.data.categories.reduce((sum, row) => sum + row.count, 0), catalogSnapshot(raw).length);
+assert.equal(firstDirectory.data.shops.reduce((sum, row) => sum + row.listings, 0), catalogSnapshot(raw).length);
+assert.equal(firstDirectory.data.shops.find(shop => shop.retailer === "eBay").listings, 2);
+assert.equal(directory("us").cache, "HIT");
+assert.equal(reads, 1, "both navigation tabs share one read per market");
+assert.deepEqual(directory("ca").data, {categories: [], shops: []});
+offers = [...raw, {id: 6, market: "us", source: "feed-grommet", retailer_name: "Grommet",
+  title: "Adjustable Laptop Stand", normalized_category: "Electronics", affiliate_url: "https://supplier.example/stand"}];
+directoryNow = 60_001;
+for (let request = 0; request < 3; request++) assert.deepEqual(directory("us"), {cache: "STALE", data: firstDirectory.data});
+assert.equal(refreshes.length, 1, "concurrent readers use the saved response and queue a single refresh");
+refreshes.shift()();
+assert.equal(directory("us").cache, "HIT");
+assert.equal(directory("us").data.shops.find(shop => shop.retailer === "Grommet").host, "thegrommet.com");
+directoryNow += 300_001;
+assert.equal(directory("us").cache, "MISS", "expired snapshots do not outlive the stale limit");
 db.close();
 
 for(const language of ["en","es","fr","de","ru","az"]){

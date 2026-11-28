@@ -113,15 +113,12 @@ assert(
  * the same products counted twice.
  */
 const appSource = read("app.js");
-const categoriesRoute = /app\.get\("\/api\/categories"[\s\S]*?\n  \}\);/.exec(appSource);
-assert(categoriesRoute, "the /api/categories route moved out of app.js");
+const catalogDirectorySource = read("src", "catalogDirectory.js");
+assert(/app\.get\("\/api\/categories", directoryRoute\("categories"\)\)/.test(appSource));
+assert(/app\.get\("\/api\/catalog-stores", directoryRoute\("shops"\)\)/.test(appSource));
 assert(
-  !/COUNT\(\*\) AS count/.test(categoriesRoute[0]),
-  "category counts are back to counting table rows, duplicates and all",
-);
-assert(
-  /catalogSnapshot\(/.test(categoriesRoute[0]) && /uniqueProductsInOrder\(selected\)/.test(read("src", "catalogSnapshot.js")),
-  "category counts no longer go through the deduplication the listings they describe use",
+  /catalogSnapshot\(rows\)/.test(catalogDirectorySource) && /uniqueProductsInOrder\(selected\)/.test(read("src", "catalogSnapshot.js")),
+  "directory counts no longer go through the deduplication the listings they describe use",
 );
 
 /*
@@ -472,7 +469,6 @@ assert.deepStrictEqual(projectDetail({id:1,coupons:sourceCoupons}).coupons,sourc
  * thirteen shops had no logo, and two of them were this.
  */
 const retailerCatalogSource = read("src", "retailerCatalog.js");
-const directorySource = read("app.js");
 assert(
   /storefrontHost:"thegrommet\.com"/.test(retailerCatalogSource),
   "Grommet's tile is back to pointing at whichever supplier a link landed on",
@@ -483,7 +479,7 @@ assert(
 );
 assert(
   /const declaredHost = retailer =>[\s\S]{0,400}storefrontHost/.test(appSource)
-    && /const shopHost = retailer => \{\s*\n\s*const declared = declaredHost\(retailer\);/.test(directorySource),
+    && /declaredHosts\.get\(retailer\.trim\(\)\.toLowerCase\(\)\)/.test(catalogDirectorySource),
   "the directory no longer lets a shop name its own front door",
 );
 
